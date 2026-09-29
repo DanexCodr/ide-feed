@@ -14,12 +14,13 @@ Pipeline for each article:
   6. The body is trimmed to the region between the first and last
      prose blocks.
   7. The body must contain at least MIN_PROSE_CONTENT characters
-     of real prose (complete sentences ending in . ! or ?).
-     Everything else is chrome and the item is dropped.
+     of real prose (sentences ending in . ! or ?). Everything
+     else is chrome and the item is dropped.
 
-The final check measures prose length, not total body length.
-This catches CMS pages that wrap related-content rows in <div>s
-or <table>s — the prose is what matters, not the markup shape.
+Curation filters also apply at fetch time:
+  - I Programmer Book Watch listings are skipped. They are book
+    catalogs, not news, and their URLs contain
+    /book-watch-archive/.
 
 No AI. No API keys. No model retirements. Deterministic output.
 """
@@ -55,11 +56,7 @@ BLOCK_TAGS = {
 
 STRIP_TAGS = ["script", "style", "noscript", "svg", "iframe", "form"]
 
-# Body-quality thresholds. MIN_PROSE_CONTENT is the amount of
-# text that must actually be sentences — not headings, not link
-# labels, not table rows. A real article has hundreds of
-# characters of this. A title + related-links page has almost
-# none.
+# Body-quality thresholds.
 MIN_PROSE_CONTENT = 200
 MIN_SENTENCE_LENGTH = 40
 
@@ -103,8 +100,7 @@ def prose_text(block):
 
     Prose means: at least one complete sentence of MIN_SENTENCE_
     LENGTH characters ending in . ! or ?. The terminator is
-    required. Without it, table row labels, dates, and link
-    anchors all masquerade as sentences.
+    required.
     """
     if not block:
         return ""
@@ -192,10 +188,7 @@ def ngrams(tokens, n):
 # ============================================================
 
 def is_layout_table(table_el):
-    """True if this table is site chrome rather than a data table.
-
-    Layout tables have one column. Data tables have two or more.
-    """
+    """True if this table is site chrome rather than a data table."""
     rows = table_el.find_all("tr")
     if not rows:
         return False
@@ -466,13 +459,6 @@ def strip_title_from_body(body, title):
 
 
 def total_prose_length(markdown):
-    """Sum the length of the prose portion of every block.
-
-    This is the amount of text in the body that is actually
-    sentences. Headings, link labels, dates, and table rows do
-    not contribute. If the total is tiny, the body has no
-    article — only chrome.
-    """
     if not markdown:
         return 0
     total = 0
@@ -482,7 +468,6 @@ def total_prose_length(markdown):
 
 
 def trim_to_prose_region(markdown):
-    """Keep only the region between the first and last prose blocks."""
     if not markdown:
         return markdown
 
@@ -505,12 +490,6 @@ def trim_to_prose_region(markdown):
 
 
 def looks_like_article(markdown):
-    """True if the body has enough real prose to be an article.
-
-    Measured by prose length, not total body length. A page that
-    is a title and a table of related links has almost no prose,
-    no matter how long the total body is.
-    """
     if not markdown:
         return False
     if total_prose_length(markdown) < MIN_PROSE_CONTENT:
@@ -582,7 +561,6 @@ def extract_article(url):
 
 
 def prepare_body(url, title):
-    """Extract, strip title, trim, and require enough prose."""
     body = extract_article(url)
     if body is None:
         return None
@@ -742,6 +720,13 @@ def fetch_i_programmer():
             title = decode_entities(item.find('title').text)
             link = item.find('link').text
             pub_date = item.find('pubDate').text
+
+            # Skip Book Watch listings. They are book catalogs, not
+            # news articles. Their URLs contain /book-watch-archive/.
+            if "/book-watch-archive/" in link:
+                print(f"  [Skip] Book Watch listing: {link}")
+                continue
+
             raw_items.append({
                 'id': f"iprog-{i}",
                 'title': title,
