@@ -24,8 +24,13 @@ jobs:
         with:
           python-version: '3.x'
 
+      - name: Install dependencies
+        run: pip install readability-lxml trafilatura
+
       - name: Generate feeds
         run: python3 tools/build-feeds.py
+        env:
+          DAILY_DEV_TOKEN: ${{ secrets.DAILY_DEV_TOKEN }}
 
       - name: Commit and push if changed
         run: |
