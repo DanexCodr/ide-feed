@@ -3,7 +3,7 @@
 Build static JSON feeds for DroidBuild.
 
 Pipeline for each article (in order):
-  1. AI extraction via Groq (Llama 3.3 70B).
+  1. AI extraction via Groq.
   2. Dual-pipeline extraction:
        a. trafilatura produces a plain-text mask of the article.
        b. BeautifulSoup walks the raw HTML into semantic blocks.
@@ -21,6 +21,11 @@ summarize, paraphrase, or rewrite.
 Groq is used because its free tier is permanent, requires no
 credit card, and offers an OpenAI-compatible endpoint that the
 openai Python SDK can talk to directly.
+
+The model IDs below are the current Groq production models as of
+September 2026. The Llama 3.x series was decommissioned in
+August 2026. groq/compound and the OpenAI gpt-oss models are the
+supported successors.
 """
 
 import json
@@ -55,10 +60,15 @@ except ImportError:
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY', '')
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 
+# Current Groq production models as of September 2026. The
+# previous Llama 3.x series was decommissioned in August 2026.
+# Order matters: the first model that responds to a probe is used
+# for the rest of the run.
 GROQ_MODELS = [
-    'llama-3.3-70b-versatile',
-    'llama-3.1-70b-versatile',
-    'llama-3.1-8b-instant',
+    'openai/gpt-oss-120b',
+    'openai/gpt-oss-20b',
+    'qwen/qwen3.8-27b',
+    'groq/compound-mini',
 ]
 
 GROQ_CLIENT = None
@@ -640,7 +650,6 @@ def fetch_hacker_news():
 
         final = []
         for item in selected:
-            # Ask HN / Show HN items ship their body inline.
             if item.get('text'):
                 body = item['text']
                 body += f"\n\n[Discuss on Hacker News](https://news.ycombinator.com/item?id={item['hn_id']})"
@@ -652,7 +661,6 @@ def fetch_hacker_news():
 
             body = extract_article(item['url'])
             if body is None:
-                # Every extractor failed. Drop.
                 continue
 
             body += f"\n\n[Discuss on Hacker News](https://news.ycombinator.com/item?id={item['hn_id']})"
@@ -773,7 +781,6 @@ def fetch_devto_full():
                 detail = json.loads(resp.read().decode('utf-8'))
 
             body = detail.get('body_markdown', '') or ''
-            # Dev.to always returns real content, but guard anyway.
             if not body.strip():
                 continue
 
