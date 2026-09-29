@@ -4,18 +4,16 @@ Build static JSON feeds for DroidBuild.
 
 Pipeline for each article:
   1. Fetch raw HTML.
-  2. trafilatura extracts a plain-text mask of the article content.
-  3. BeautifulSoup walks the raw HTML into semantic blocks
-     (paragraphs, headings, tables, code, lists, blockquotes).
+  2. trafilatura produces a plain-text mask of the article.
+  3. BeautifulSoup walks the raw HTML into semantic blocks.
   4. Blocks whose text appears in the mask are kept, in document
      order, and emitted as Markdown.
   5. Trailing navigation chrome is trimmed.
-  6. Items whose body does not look like an article are dropped.
+  6. Bodies with fewer than two sentences of real prose are dropped.
   7. If the dual-pipeline produces nothing, readability-lxml +
      html2text is used as a last resort.
 
-No AI. No API keys. No model retirements. Deterministic output
-every run.
+No AI. No API keys. No model retirements. Deterministic output.
 """
 
 import json
@@ -49,24 +47,65 @@ BLOCK_TAGS = {
 
 STRIP_TAGS = ["script", "style", "noscript", "svg", "iframe", "form"]
 
+# Body-quality thresholds.
+MIN_BODY_LENGTH = 300
+MIN_PROSE_SENTENCES = 2
+MIN_SENTENCE_LENGTH = 40
+
 
 # ============================================================
 # TEXT HELPERS
 # ============================================================
 
 def decode_entities(s):
-    """Decode HTML entities in a title or description string.
-
-    RSS and API sources frequently return '&amp;', '&#8217;',
-    '&quot;' and similar escapes in titles. They should be plain
-    characters by the time they reach the feed.
-    """
     if not s:
         return s
     try:
         return html.unescape(s)
     except Exception:
         return s
+
+
+def strip_links(text):
+    """Replace [label](url) with just label."""
+    return re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
+
+
+def strip_blocks_that_are_not_prose(text):
+    """Remove code fences, inline code, and markdown markers so a
+    sentence counter only sees readable words."""
+    # Code fences.
+    text = re.sub(r'```[\s\S]*?```', ' ', text)
+    # Inline code.
+    text = re.sub(r'`[^`]*`', ' ', text)
+    # Heading markers, emphasis, table pipes, list markers.
+    text = re.sub(r'[#*_>|]', ' ', text)
+    # Collapse whitespace.
+    text = re.sub(r'\s+', ' ', text)
+    return text.strip()
+
+
+def count_prose_sentences(markdown):
+    """Count sentences of real prose in the body.
+
+    A sentence counts only if it is at least MIN_SENTENCE_LENGTH
+    characters long. That filters out short labels, headings, and
+    list items that happen to end in a period.
+    """
+    if not markdown:
+        return 0
+
+    text = strip_links(markdown)
+    text = strip_blocks_that_are_not_prose(text)
+    if not text:
+        return 0
+
+    parts = re.split(r'(?<=[.!?])\s+', text)
+    count = 0
+    for part in parts:
+        if len(part.strip()) >= MIN_SENTENCE_LENGTH:
+            count += 1
+    return count
 
 
 # ============================================================
@@ -89,7 +128,7 @@ def fetch_html(url):
 
 
 # ============================================================
-# MASK (content-selection filter for the dual pipeline)
+# MASK
 # ============================================================
 
 def build_mask(html_text):
@@ -335,34 +374,9 @@ def align_blocks(blocks, mask_text):
 # BODY QUALITY FILTERS
 # ============================================================
 
-def is_trivial_element(text):
-    """True if this line, on its own, is footer chrome rather than
-    article content. Trivial means: a bare heading, a heading with
-    nothing under it, or a single short line with no sentence."""
-    s = text.strip()
-    if not s:
-        return True
-
-    if re.match(r'^#{1,6}\s+\S', s):
-        return True
-
-    if len(s) < 40 and not re.search(r'[.!?]', s):
-        return True
-
-    return False
-
-
-def trim_trailing_navigation(markdown):
-    """Drop trailing footer chrome from the extracted Markdown.
-
-    Walks from the bottom, dropping headings with no body and short
-    non-sentence lines. Stops at the first substantial paragraph.
-    Returns the original unchanged if trimming would remove
-    everything, so the caller can decide whether to drop the item.
-    """
+def split_into_blocks(markdown):
     if not markdown:
-        return markdown
-
+        return []
     lines = markdown.split('\n')
     blocks = []
     current = []
@@ -375,7 +389,44 @@ def trim_trailing_navigation(markdown):
             current.append(line)
     if current:
         blocks.append('\n'.join(current))
+    return blocks
 
+
+def is_trivial_line(text):
+    """True if this single line is chrome, not prose.
+
+    A line is chrome if it is a bare heading, very short and with
+    no sentence terminator, or almost entirely a Markdown link.
+    """
+    s = text.strip()
+    if not s:
+        return True
+
+    if re.match(r'^#{1,6}\s+\S', s):
+        return True
+
+    if len(s) < 60 and not re.search(r'[.!?]', s):
+        return True
+
+    link_chars = sum(len(m.group(0))
+                     for m in re.finditer(r'\[([^\]]+)\]\([^)]+\)', s))
+    if len(s) > 0 and link_chars / float(len(s)) > 0.4:
+        return True
+
+    return False
+
+
+def trim_trailing_navigation(markdown):
+    """Drop trailing chrome from the end of the body.
+
+    Walks from the bottom, removing every block whose lines are all
+    trivial, until a real prose block is reached. Returns the
+    original unchanged if trimming would remove everything.
+    """
+    if not markdown:
+        return markdown
+
+    blocks = split_into_blocks(markdown)
     if not blocks:
         return markdown
 
@@ -386,7 +437,7 @@ def trim_trailing_navigation(markdown):
         if not block_lines:
             end -= 1
             continue
-        if all(is_trivial_element(l) for l in block_lines):
+        if all(is_trivial_line(l) for l in block_lines):
             end -= 1
         else:
             break
@@ -395,49 +446,18 @@ def trim_trailing_navigation(markdown):
         return markdown
     if end == len(blocks):
         return markdown
-
     return '\n\n'.join(blocks[:end]).strip()
 
 
 def looks_like_article(markdown):
-    """Return True if the extracted Markdown looks like a real
-    article. Rejects bodies that are mostly link lists or non-prose.
-    """
+    """True if the body is a real article: at least two sentences
+    of prose, and long enough to matter."""
     if not markdown:
         return False
-
-    text = markdown.strip()
-
-    if len(text) < 400:
+    if len(markdown.strip()) < MIN_BODY_LENGTH:
         return False
-
-    link_chars = 0
-    for match in re.finditer(r'\[([^\]]+)\]\([^)]+\)', text):
-        link_chars += len(match.group(0))
-
-    if len(text) > 0 and link_chars / float(len(text)) > 0.6:
+    if count_prose_sentences(markdown) < MIN_PROSE_SENTENCES:
         return False
-
-    lines = [l for l in text.split('\n') if l.strip()]
-    if not lines:
-        return False
-
-    link_only_lines = 0
-    for line in lines:
-        stripped = line.strip()
-        cleaned = re.sub(r'\[([^\]]+)\]\([^)]+\)', '', stripped).strip()
-        if len(cleaned) < 15:
-            link_only_lines += 1
-
-    if link_only_lines / float(len(lines)) > 0.5:
-        return False
-
-    prose = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
-    prose = re.sub(r'[#*_`>|\-]', ' ', prose)
-    sentences = re.split(r'[.!?]\s', prose)
-    if len(sentences) < 3:
-        return False
-
     return True
 
 
@@ -480,8 +500,6 @@ def readability_extract(html_text):
 
 
 def extract_article(url):
-    """Returns Markdown on success, None on total failure. None
-    means the caller must drop the item."""
     if not url:
         return None
 
@@ -507,11 +525,7 @@ def extract_article(url):
 
 
 def prepare_body(url):
-    """Full body-preparation pipeline: extract, trim, and validate.
-
-    Returns the final Markdown on success, None if the item should
-    be dropped.
-    """
+    """Extract, trim the tail, and require two sentences of prose."""
     body = extract_article(url)
     if body is None:
         return None
@@ -522,7 +536,8 @@ def prepare_body(url):
         return None
 
     if not looks_like_article(body):
-        print(f"  [Drop] Body does not look like an article: {url}")
+        sentences = count_prose_sentences(body)
+        print(f"  [Drop] Only {sentences} sentence(s) of prose: {url}")
         return None
 
     return body
@@ -765,6 +780,7 @@ def fetch_daily_dev():
             else:
                 body = trim_trailing_navigation(body)
                 if not looks_like_article(body):
+                    print(f"  [Drop] daily.dev summary too short: {item['url']}")
                     continue
             item.pop('summary', None)
             item['body'] = body
