@@ -2,10 +2,13 @@
 """
 Build static JSON feeds for DroidBuild.
 
-This script uses a hybrid approach:
-1. AI-powered curation: Google Gemini (free tier) selects the most relevant articles.
-2. AI-powered extraction: Gemini converts raw HTML into clean Markdown.
-3. Deterministic fallback: readability-lxml + html2text if the AI fails.
+Pipeline:
+  1. Fetch raw HTML from RSS feeds and APIs.
+  2. AI curation: Google Gemini selects the most relevant articles.
+  3. AI extraction: Gemini converts raw HTML into clean Markdown.
+  4. Deterministic fallback: readability-lxml + html2text.
+
+Uses the google-genai SDK, the current Google GenAI Python SDK.
 """
 
 import json
@@ -24,106 +27,165 @@ import html2text
 # ============================================================
 # AI CONFIGURATION
 # ============================================================
+
+try:
+    from google import genai
+    from google.genai import types
+    HAS_GEMINI_SDK = True
+except ImportError:
+    HAS_GEMINI_SDK = False
+
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
-AI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
-AI_MODEL = 'gemini-2.5-flash'
+
+# Model fallback list. The first model that responds is used for
+# the remainder of the run. gemini-2.5-flash has a free-tier quota;
+# gemini-2.0-flash free-tier quotas were removed in 2026.
+GEMINI_MODELS = [
+    'gemini-2.5-flash',
+    'gemini-2.0-flash-lite',
+    'gemini-1.5-flash',
+]
+
+GEMINI_CLIENT = None
+GEMINI_ACTIVE_MODEL = None
+
+if HAS_GEMINI_SDK and GEMINI_API_KEY:
+    try:
+        GEMINI_CLIENT = genai.Client(api_key=GEMINI_API_KEY)
+    except Exception as e:
+        print(f"[AI Init Error] {e}")
+        GEMINI_CLIENT = None
 
 SEGMENTS = ['news', 'tutorials', 'ai', 'research']
 SOURCES_DIR = 'sources'
 FEEDS_DIR = 'feeds'
 
+
 # ============================================================
 # AI HELPERS
 # ============================================================
 
-def ai_query(prompt, max_tokens=2048, temperature=0.2):
-    """Send a query to the Gemini API and return the text response."""
-    if not GEMINI_API_KEY:
+def _pick_model():
+    """Return the first working model from GEMINI_MODELS, or None."""
+    global GEMINI_ACTIVE_MODEL
+    if GEMINI_ACTIVE_MODEL is not None:
+        return GEMINI_ACTIVE_MODEL
+    if GEMINI_CLIENT is None:
+        return None
+    for name in GEMINI_MODELS:
+        try:
+            # A tiny probe call to see if the model is reachable.
+            GEMINI_CLIENT.models.generate_content(
+                model=name,
+                contents="ping",
+                config=types.GenerateContentConfig(max_output_tokens=1),
+            )
+            GEMINI_ACTIVE_MODEL = name
+            print(f"[AI] Using model: {name}")
+            return name
+        except Exception as e:
+            print(f"[AI] Model {name} unavailable: {type(e).__name__}: {e}")
+            continue
+    return None
+
+
+def ai_query(prompt, max_tokens=2048, temperature=0.2, json_mode=False):
+    """Send a prompt to Gemini. Returns the text response, or None."""
+    model_name = _pick_model()
+    if model_name is None:
+        return None
+    try:
+        config = types.GenerateContentConfig(
+            temperature=temperature,
+            max_output_tokens=max_tokens,
+        )
+        if json_mode:
+            config.response_mime_type = "application/json"
+
+        response = GEMINI_CLIENT.models.generate_content(
+            model=model_name,
+            contents=prompt,
+            config=config,
+        )
+        if not response or not response.text:
+            return None
+        return response.text.strip()
+    except Exception as e:
+        print(f"  [AI Error] {type(e).__name__}: {e}")
         return None
 
-    payload = {
-        "model": AI_MODEL,
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": temperature,
-        "max_tokens": max_tokens,
-    }
-    
-    req = urllib.request.Request(
-        AI_API_URL,
-        data=json.dumps(payload).encode('utf-8'),
-        headers={
-            'Authorization': f'Bearer {GEMINI_API_KEY}',
-            'Content-Type': 'application/json',
-            'User-Agent': 'DroidBuild-Agent/1.0',
-        },
-        method='POST',
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=45) as resp:
-            data = json.loads(resp.read().decode('utf-8'))
-            return data['choices'][0]['message']['content'].strip()
-    except Exception as e:
-        print(f"  [AI Error] {e}")
-        return None
 
 def ai_select_items(items, segment, max_items=15):
-    """Use AI to select the most relevant items from a list."""
-    if not GEMINI_API_KEY or not items:
+    """Ask Gemini to pick the best N items from a candidate list."""
+    if GEMINI_CLIENT is None or not items:
         return items[:max_items]
 
     candidates = []
     for i, item in enumerate(items):
         title = item.get('title', 'No Title')
-        desc = item.get('desc', '')[:200]
-        candidates.append(f"{i+1}. {title} — {desc}")
-    candidate_text = "\n".join(candidates)
+        desc = (item.get('desc', '') or '')[:200]
+        candidates.append({
+            "index": i + 1,
+            "title": title,
+            "desc": desc,
+        })
 
-    prompt = f"""You are a curation assistant for a software developer news feed.
-Segment: "{segment}"
+    prompt = (
+        f'You are a curation assistant for a software developer news feed.\n'
+        f'Segment: "{segment}".\n\n'
+        f'Pick the {max_items} most relevant and high-quality articles for '
+        f'professional software developers. Prioritize programming, software '
+        f'engineering, AI/ML, compilers, algorithms, and systems design. '
+        f'Exclude promotional content, clickbait, low-quality items, and '
+        f'off-topic posts.\n\n'
+        f'Return ONLY a JSON object with this exact shape:\n'
+        f'{{"selected": [1, 3, 5, 7]}}\n\n'
+        f'Where the array contains the "index" values of the items you '
+        f'selected, in the order you want them to appear.\n\n'
+        f'Candidates:\n{json.dumps(candidates, ensure_ascii=False)}'
+    )
 
-Select the {max_items} most relevant and high-quality articles for professional software developers.
-Prioritize programming, software engineering, AI/ML, compilers, algorithms, and systems design.
-Exclude promotional content, clickbait, low-quality items, and off-topic posts.
-
-Return ONLY a comma-separated list of item numbers (e.g., "1, 3, 5, 7"). Do not include any other text.
-
-Candidates:
-{candidate_text}"""
-
-    response = ai_query(prompt, max_tokens=100, temperature=0.1)
+    response = ai_query(prompt, max_tokens=200, temperature=0.1, json_mode=True)
     if not response:
         return items[:max_items]
 
     try:
-        selected_indices = [int(x.strip()) - 1 for x in response.split(',') if x.strip().isdigit()]
-        selected = [items[i] for i in selected_indices if 0 <= i < len(items)]
+        parsed = json.loads(response)
+        selected_indices = parsed.get("selected", [])
+        selected = []
+        for idx in selected_indices:
+            if isinstance(idx, int) and 1 <= idx <= len(items):
+                selected.append(items[idx - 1])
         return selected if selected else items[:max_items]
-    except Exception:
+    except Exception as e:
+        print(f"  [AI Parse Error] {e}: {response[:200]}")
         return items[:max_items]
 
+
 def ai_extract_body(html, url):
-    """Use AI to extract the main article content as Markdown."""
-    if not GEMINI_API_KEY:
+    """Ask Gemini to convert raw HTML into clean article Markdown."""
+    if GEMINI_CLIENT is None:
         return None
 
-    # Truncate HTML to avoid token limits. Gemini has a huge context
-    # window, but 30k characters is plenty for an article and keeps
-    # responses fast.
-    html_snippet = html[:30000]
+    # Truncate to a size that fits comfortably in the context window
+    # without exhausting the model's output budget.
+    html_snippet = html[:60000]
 
-    prompt = f"""You are an expert web content extractor.
-Given the raw HTML of a web page, extract ONLY the main article content.
-Remove navigation, sidebars, footers, ads, comments, and any non-article elements.
-Convert the extracted content to clean Markdown.
-Preserve headings, paragraphs, lists, tables, code blocks, bold, and italic formatting.
+    prompt = (
+        "You are an expert web content extractor.\n"
+        "Given the raw HTML of a web page, extract ONLY the main article "
+        "content. Remove navigation, sidebars, footers, ads, comments, and "
+        "any non-article elements. Convert the extracted content to clean "
+        "Markdown. Preserve headings, paragraphs, lists, tables, code "
+        "blocks, bold, and italic formatting.\n\n"
+        "Return ONLY the Markdown. Do not include any commentary, "
+        "explanations, or the original HTML.\n\n"
+        f"Article URL: {url}\n\n"
+        f"Raw HTML:\n{html_snippet}"
+    )
 
-Return ONLY the Markdown. Do not include any commentary or explanations.
-Article URL: {url}
+    return ai_query(prompt, max_tokens=8192, temperature=0.0)
 
-Raw HTML:
-{html_snippet}"""
-
-    return ai_query(prompt, max_tokens=4096, temperature=0.0)
 
 # ============================================================
 # DETERMINISTIC FALLBACK EXTRACTION
@@ -143,6 +205,7 @@ def fetch_html(url):
             pass
     return raw.decode('utf-8', errors='replace')
 
+
 def fallback_extract(url):
     """Readability + html2text. Used only when AI extraction fails."""
     try:
@@ -157,11 +220,12 @@ def fallback_extract(url):
     except Exception:
         return ""
 
+
 def extract_article(url):
-    """Fetch and extract an article using AI, falling back to readability."""
+    """Fetch and extract an article: AI first, readability fallback."""
     if not url:
         return ""
-    
+
     html = ""
     try:
         html = fetch_html(url)
@@ -169,19 +233,18 @@ def extract_article(url):
         print(f"  [Fetch Error] {url}: {e}")
         return ""
 
-    # 1. Primary: AI Extraction
-    if GEMINI_API_KEY:
+    if GEMINI_CLIENT is not None:
         print(f"  [AI] Extracting {url}")
         ai_body = ai_extract_body(html, url)
         if ai_body:
             return ai_body
 
-    # 2. Fallback: Readability + html2text
     print(f"  [Fallback] Extracting {url}")
     return fallback_extract(url)
 
+
 # ============================================================
-# FETCHERS (WITH AI CURATION)
+# FETCHERS
 # ============================================================
 
 def fetch_hacker_news():
@@ -195,8 +258,7 @@ def fetch_hacker_news():
         with urllib.request.urlopen(req, timeout=10) as response:
             story_ids = json.loads(response.read().decode('utf-8'))
 
-        # Fetch top 30 to give the AI something to curate
-        for i, story_id in enumerate(story_ids[:30]):
+        for story_id in story_ids[:30]:
             req = urllib.request.Request(
                 f"https://hacker-news.firebaseio.com/v0/item/{story_id}.json",
                 headers={'User-Agent': 'DroidBuild-Agent/1.0'}
@@ -215,7 +277,6 @@ def fetch_hacker_news():
             time_unix = story.get('time', 0)
             pub_date = datetime.fromtimestamp(time_unix, tz=timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
-            # For AI curation, we just need title and score/desc.
             raw_items.append({
                 'id': f"hn-{story_id}",
                 'title': title,
@@ -223,32 +284,34 @@ def fetch_hacker_news():
                 'tag': 'news',
                 'published': pub_date,
                 'url': url,
-                'text': text
+                'text': text,
+                'hn_id': story_id,
             })
 
-        # AI Curation
         selected = ai_select_items(raw_items, 'news', max_items=15)
-        
-        # AI Extraction for selected items
-        for item in selected:
+
+        for order, item in enumerate(selected, start=1):
             if item.get('text'):
-                item['body'] = item['text'] + f"\n\n[Discuss on Hacker News](https://news.ycombinator.com/item?id={item['id'].replace('hn-', '')})"
+                body = item['text'] + \
+                    f"\n\n[Discuss on Hacker News](https://news.ycombinator.com/item?id={item['hn_id']})"
             else:
-                item['body'] = extract_article(item['url'])
-                if not item['body']:
-                    item['body'] = f"[Read the full article]({item['url']})"
-                item['body'] += f"\n\n[Discuss on Hacker News](https://news.ycombinator.com/item?id={item['id'].replace('hn-', '')})"
-            
-            # Remove the temporary 'text' field
+                body = extract_article(item['url'])
+                if not body:
+                    body = f"[Read the full article]({item['url']})"
+                body += \
+                    f"\n\n[Discuss on Hacker News](https://news.ycombinator.com/item?id={item['hn_id']})"
+
             item.pop('text', None)
-            # Fix order
-            item['order'] = selected.index(item) + 1
-            
+            item.pop('hn_id', None)
+            item['body'] = body
+            item['order'] = order
+
         print(f"Fetched {len(selected)} HN items.")
         return selected
     except Exception as e:
         print(f"Error fetching HN: {e}")
         return []
+
 
 def fetch_lobsters():
     print("Fetching Lobsters...")
@@ -275,18 +338,20 @@ def fetch_lobsters():
             })
 
         selected = ai_select_items(raw_items, 'news', max_items=15)
-        
-        for item in selected:
-            item['body'] = extract_article(item['url'])
-            if not item['body']:
-                item['body'] = f"[Read the full article]({item['url']})"
-            item['order'] = selected.index(item) + 1
+
+        for order, item in enumerate(selected, start=1):
+            body = extract_article(item['url'])
+            if not body:
+                body = f"[Read the full article]({item['url']})"
+            item['body'] = body
+            item['order'] = order
 
         print(f"Fetched {len(selected)} Lobsters items.")
         return selected
     except Exception as e:
         print(f"Error fetching Lobsters: {e}")
         return []
+
 
 def fetch_i_programmer():
     print("Fetching i-programmer...")
@@ -311,18 +376,20 @@ def fetch_i_programmer():
             })
 
         selected = ai_select_items(raw_items, 'news', max_items=15)
-        
-        for item in selected:
-            item['body'] = extract_article(item['url'])
-            if not item['body']:
-                item['body'] = f"[Read the full article]({item['url']})"
-            item['order'] = selected.index(item) + 1
+
+        for order, item in enumerate(selected, start=1):
+            body = extract_article(item['url'])
+            if not body:
+                body = f"[Read the full article]({item['url']})"
+            item['body'] = body
+            item['order'] = order
 
         print(f"Fetched {len(selected)} i-programmer items.")
         return selected
     except Exception as e:
         print(f"Error fetching i-programmer: {e}")
         return []
+
 
 def fetch_devto_full():
     print("Fetching Dev.to...")
@@ -334,8 +401,6 @@ def fetch_devto_full():
             articles = json.loads(resp.read().decode('utf-8'))
 
         for i, article in enumerate(articles):
-            # Dev.to already provides clean Markdown, so we skip AI extraction
-            # and just use the API's body_markdown.
             detail_url = f"https://dev.to/api/articles/{article['id']}"
             req = urllib.request.Request(detail_url, headers={'User-Agent': 'DroidBuild-Agent/1.0'})
             with urllib.request.urlopen(req, timeout=10) as resp:
@@ -357,13 +422,13 @@ def fetch_devto_full():
         print(f"Error fetching Dev.to: {e}")
         return []
 
+
 def fetch_daily_dev():
     print("Fetching daily.dev...")
-    items = []
     token = os.environ.get('DAILY_DEV_TOKEN', '')
     if not token:
         print("  DAILY_DEV_TOKEN not set; skipping daily.dev.")
-        return items
+        return []
 
     try:
         url = "https://api.daily.dev/public/v1/feeds"
@@ -383,22 +448,24 @@ def fetch_daily_dev():
                 'tag': 'ai',
                 'published': post.get('createdAt', ''),
                 'url': post.get('url', ''),
-                'summary': post.get('summary', '')
+                'summary': post.get('summary', ''),
             })
 
         selected = ai_select_items(raw_items, 'ai', max_items=15)
-        for item in selected:
-            item['body'] = item.get('summary', '')
-            if not item['body']:
-                item['body'] = extract_article(item['url'])
+        for order, item in enumerate(selected, start=1):
+            body = item.get('summary', '')
+            if not body:
+                body = extract_article(item['url'])
             item.pop('summary', None)
-            item['order'] = selected.index(item) + 1
+            item['body'] = body or f"[Read the full article]({item['url']})"
+            item['order'] = order
 
         print(f"Fetched {len(selected)} daily.dev items.")
         return selected
     except Exception as e:
         print(f"Error fetching daily.dev: {e}")
         return []
+
 
 def fetch_mit_news():
     print("Fetching MIT News CSAIL...")
@@ -423,12 +490,13 @@ def fetch_mit_news():
             })
 
         selected = ai_select_items(raw_items, 'research', max_items=15)
-        
-        for item in selected:
-            item['body'] = extract_article(item['url'])
-            if not item['body']:
-                item['body'] = f"[Read the full article]({item['url']})"
-            item['order'] = selected.index(item) + 1
+
+        for order, item in enumerate(selected, start=1):
+            body = extract_article(item['url'])
+            if not body:
+                body = f"[Read the full article]({item['url']})"
+            item['body'] = body
+            item['order'] = order
 
         print(f"Fetched {len(selected)} MIT News items.")
         return selected
@@ -436,14 +504,74 @@ def fetch_mit_news():
         print(f"Error fetching MIT News: {e}")
         return []
 
+
+# ============================================================
+# LOCAL MARKDOWN SOURCES
+# ============================================================
+
+def read_frontmatter(path):
+    with open(path, 'r', encoding='utf-8') as f:
+        text = f.read()
+    if not text.startswith('---\n'):
+        return {}, text
+    end = text.find('\n---\n', 4)
+    if end < 0:
+        return {}, text
+    meta = {}
+    for line in text[4:end].split('\n'):
+        if ':' not in line:
+            continue
+        key, value = line.split(':', 1)
+        meta[key.strip()] = value.strip()
+    body = text[end + 5:]
+    return meta, body
+
+
+def item_id_from_path(path):
+    name = os.path.basename(path)
+    if name.endswith('.md'):
+        name = name[:-3]
+    return name
+
+
+def build_segment_from_markdown(segment):
+    source_dir = os.path.join(SOURCES_DIR, segment)
+    if not os.path.isdir(source_dir):
+        return []
+    items = []
+    for path in sorted(glob.glob(os.path.join(source_dir, '*.md'))):
+        meta, body = read_frontmatter(path)
+        item_id = item_id_from_path(path)
+        try:
+            order = int(meta.get('order', 999))
+        except ValueError:
+            order = 999
+        items.append({
+            'id': item_id,
+            'title': meta.get('title', item_id),
+            'desc': meta.get('desc', ''),
+            'tag': meta.get('tag', segment.rstrip('s')),
+            'published': meta.get('date', ''),
+            'order': order,
+            'body': body.lstrip('\n'),
+        })
+    items.sort(key=lambda x: (x['order'], x['id']))
+    return items
+
+
 # ============================================================
 # MAIN
 # ============================================================
 
 def main():
-    if not GEMINI_API_KEY:
-        print("WARNING: GEMINI_API_KEY not set. AI curation and extraction will be skipped.")
-    
+    if GEMINI_CLIENT is None:
+        if not HAS_GEMINI_SDK:
+            print("WARNING: google-genai is not installed. AI features disabled.")
+        elif not GEMINI_API_KEY:
+            print("WARNING: GEMINI_API_KEY is not set. AI features disabled.")
+        else:
+            print("WARNING: Gemini client failed to initialize. AI features disabled.")
+
     os.makedirs(FEEDS_DIR, exist_ok=True)
     any_built = False
 
@@ -480,56 +608,6 @@ def main():
     if not any_built:
         print('no source directories found; nothing written')
 
-# ============================================================
-# LOCAL MARKDOWN SOURCES
-# ============================================================
-
-def read_frontmatter(path):
-    with open(path, 'r', encoding='utf-8') as f:
-        text = f.read()
-    if not text.startswith('---\n'):
-        return {}, text
-    end = text.find('\n---\n', 4)
-    if end < 0:
-        return {}, text
-    meta = {}
-    for line in text[4:end].split('\n'):
-        if ':' not in line:
-            continue
-        key, value = line.split(':', 1)
-        meta[key.strip()] = value.strip()
-    body = text[end + 5:]
-    return meta, body
-
-def item_id_from_path(path):
-    name = os.path.basename(path)
-    if name.endswith('.md'):
-        name = name[:-3]
-    return name
-
-def build_segment_from_markdown(segment):
-    source_dir = os.path.join(SOURCES_DIR, segment)
-    if not os.path.isdir(source_dir):
-        return []
-    items = []
-    for path in sorted(glob.glob(os.path.join(source_dir, '*.md'))):
-        meta, body = read_frontmatter(path)
-        item_id = item_id_from_path(path)
-        try:
-            order = int(meta.get('order', 999))
-        except ValueError:
-            order = 999
-        items.append({
-            'id': item_id,
-            'title': meta.get('title', item_id),
-            'desc': meta.get('desc', ''),
-            'tag': meta.get('tag', segment.rstrip('s')),
-            'published': meta.get('date', ''),
-            'order': order,
-            'body': body.lstrip('\n'),
-        })
-    items.sort(key=lambda x: (x['order'], x['id']))
-    return items
 
 if __name__ == '__main__':
     main()
