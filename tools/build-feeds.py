@@ -18,7 +18,8 @@ background so the card paints a blurry colored blob immediately,
 then fades the full image on top when it downloads.
 
 Pipeline for each article:
-  1. Fetch raw HTML.
+  1. Fetch raw HTML. Strip XML-incompatible control characters
+     before anyone downstream sees the string.
   2. trafilatura produces a plain-text mask.
   3. BeautifulSoup walks the raw HTML into semantic blocks.
   4. Blocks whose text appears in the mask are kept, in order, and
@@ -72,13 +73,45 @@ STRIP_TAGS = ["script", "style", "noscript", "svg", "iframe", "form"]
 MIN_PROSE_CONTENT = 200
 MIN_SENTENCE_LENGTH = 40
 
-# Preview generation. A 32px wide JPEG at quality 30 lands around
-# 1.2-1.8 KB. After base64 it is about 1.7-2.5 KB per item. The
-# cap below discards any preview that grows past that, on the
-# theory that an unusual image is not worth bloating the feed.
 PREVIEW_WIDTH = 32
 PREVIEW_QUALITY = 30
 PREVIEW_MAX_BASE64_BYTES = 4096
+
+
+# ============================================================
+# HTML SANITIZATION
+#
+# XML (and therefore lxml, which readability-lxml uses) refuses
+# to build text nodes that contain control characters below 0x20
+# except for tab, newline, and carriage return. Real-world HTML
+# occasionally carries these — usually a stray \x00 or \x0B that
+# came out of a content management system. When readability
+# encounters one, it raises ValueError and the whole article is
+# lost.
+#
+# We strip them at the source, in fetch_html, so every consumer
+# downstream (trafilatura, readability, BeautifulSoup) sees clean
+# text.
+#
+# The legal whitespace characters (tab 0x09, newline 0x0A, CR 0x0D)
+# are kept. C1 control characters (0x80-0x9F) are also removed;
+# they are almost always mojibake from a bad charset, and XML
+# does not allow them.
+# ============================================================
+
+_CONTROL_CHARS_RE = re.compile(
+    '[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\x80-\x9F]'
+)
+
+_REPLACEMENT_CHARS_RE = re.compile('\uFFFD')
+
+
+def sanitize_html_text(text):
+    """Remove XML-incompatible control characters from an HTML
+    string. Preserves tab, newline, and carriage return."""
+    if not text:
+        return text
+    return _CONTROL_CHARS_RE.sub('', text)
 
 
 # ============================================================
@@ -203,18 +236,24 @@ def is_prose_block(block):
 # ============================================================
 
 def fetch_html(url):
+    """Fetch URL and return decoded, control-character-stripped
+    HTML. The sanitization step is what keeps readability-lxml
+    from crashing on bad bytes."""
     req = urllib.request.Request(
         url, headers={'User-Agent': 'Mozilla/5.0 (compatible; DroidBuild/1.0)'})
     with urllib.request.urlopen(req, timeout=15) as resp:
         raw = resp.read()
     ctype = resp.headers.get('Content-Type', '')
     m = re.search(r'charset=([\w-]+)', ctype)
+    text = None
     if m:
         try:
-            return raw.decode(m.group(1), errors='replace')
+            text = raw.decode(m.group(1), errors='replace')
         except Exception:
-            pass
-    return raw.decode('utf-8', errors='replace')
+            text = None
+    if text is None:
+        text = raw.decode('utf-8', errors='replace')
+    return sanitize_html_text(text)
 
 
 def fetch_bytes(url, timeout=10):
@@ -235,10 +274,6 @@ def fetch_bytes(url, timeout=10):
 # ============================================================
 
 def extract_og_image(html_text, base_url):
-    """Pull og:image from the article HTML. Returns absolute URL
-    or empty string. Falls through several meta tag variants used
-    across the sites this pipeline reads.
-    """
     if not html_text or not base_url:
         return ""
 
@@ -273,14 +308,6 @@ def extract_og_image(html_text, base_url):
 # ============================================================
 
 def generate_preview_data_url(image_url):
-    """Download the image, downscale to PREVIEW_WIDTH px wide,
-    JPEG-encode at PREVIEW_QUALITY, base64-encode, and return a
-    data: URL. Returns '' on any failure.
-
-    The result is a short string that the app can set as a CSS
-    background. It paints in the card immediately, before the full
-    image has downloaded, giving the "blurry to clear" effect.
-    """
     if not image_url:
         return ""
     if not HAS_PIL:
@@ -297,8 +324,6 @@ def generate_preview_data_url(image_url):
         return ""
 
     try:
-        # Convert to RGB if the source is palette or alpha. JPEG
-        # cannot encode either.
         if img.mode not in ('RGB', 'L'):
             img = img.convert('RGB')
 
@@ -306,7 +331,6 @@ def generate_preview_data_url(image_url):
         if w <= 0 or h <= 0:
             return ""
 
-        # Downscale to PREVIEW_WIDTH, preserving aspect ratio.
         new_w = PREVIEW_WIDTH
         new_h = max(1, int(round(h * (PREVIEW_WIDTH / float(w)))))
 
@@ -359,7 +383,8 @@ def build_mask(html_text):
         try:
             summary_html = Document(html_text).summary()
             mask = BeautifulSoup(summary_html, "html.parser").get_text(" ")
-        except Exception:
+        except Exception as e:
+            print(f"    [Mask] readability failed: {type(e).__name__}")
             mask = ""
 
     return mask
@@ -692,14 +717,12 @@ def readability_extract(html_text):
         h.ignore_emphasis = False
         h.protect_links = True
         return h.handle(summary).strip()
-    except Exception:
+    except Exception as e:
+        print(f"    [Readability] {type(e).__name__}: {e}")
         return ""
 
 
 def extract_article(url):
-    """Return (body_markdown, og_image_url). Either may be empty.
-    Returns (None, '') if no extractor succeeded.
-    """
     if not url:
         return None, ""
 
@@ -727,8 +750,6 @@ def extract_article(url):
 
 
 def prepare_body(url, title):
-    """Returns (body, image, preview). body is None if the item
-    should be dropped."""
     body, image = extract_article(url)
     if body is None:
         return None, "", ""
