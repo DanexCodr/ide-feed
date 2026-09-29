@@ -1,0 +1,155 @@
+{
+  "updated": "2026-09-29T05:57:53Z",
+  "items": [
+    {
+      "id": "hn-49880411",
+      "title": "Phyllotaxis: An audio-reactive LED display",
+      "desc": "By evakhoury | 46 points | 5 comments",
+      "tag": "news",
+      "published": "2026-09-28T16:18:57Z",
+      "order": 1,
+      "body": "[Read the full article here](https://jagi.studio/posts/phyllotaxis/)\n\n[Discuss on Hacker News](https://news.ycombinator.com/item?id=49880411)",
+      "url": "https://jagi.studio/posts/phyllotaxis/"
+    },
+    {
+      "id": "hn-49880036",
+      "title": "Pirating the Pirates",
+      "desc": "By piotrgrabowski | 501 points | 244 comments",
+      "tag": "news",
+      "published": "2026-09-28T15:54:15Z",
+      "order": 2,
+      "body": "[Read the full article here](https://mubi.com/en/notebook/posts/pirating-the-pirates)\n\n[Discuss on Hacker News](https://news.ycombinator.com/item?id=49880036)",
+      "url": "https://mubi.com/en/notebook/posts/pirating-the-pirates"
+    },
+    {
+      "id": "hn-49883539",
+      "title": "California farmers are struggling to sell grapes as demand for wine drops",
+      "desc": "By randycupertino | 143 points | 321 comments",
+      "tag": "news",
+      "published": "2026-09-28T20:00:06Z",
+      "order": 3,
+      "body": "[Read the full article here](https://www.kqed.org/news/12101534/california-farmers-are-struggling-to-sell-grapes-as-demand-for-wine-drops)\n\n[Discuss on Hacker News](https://news.ycombinator.com/item?id=49883539)",
+      "url": "https://www.kqed.org/news/12101534/california-farmers-are-struggling-to-sell-grapes-as-demand-for-wine-drops"
+    },
+    {
+      "id": "hn-49882781",
+      "title": "MicroLLM Lab – Try 7 tiny LLM's in the browser",
+      "desc": "By logicallee | 197 points | 74 comments",
+      "tag": "news",
+      "published": "2026-09-28T18:58:53Z",
+      "order": 4,
+      "body": "[Read the full article here](https://stateofutopia.com/experiments/microllmlab/)\n\n[Discuss on Hacker News](https://news.ycombinator.com/item?id=49882781)",
+      "url": "https://stateofutopia.com/experiments/microllmlab/"
+    },
+    {
+      "id": "hn-49883844",
+      "title": "Jeff – Jev-compatible 0.8B decision models, trained at home, ~30 ms",
+      "desc": "By firelex | 423 points | 157 comments",
+      "tag": "news",
+      "published": "2026-09-28T20:23:36Z",
+      "order": 5,
+      "body": "[Read the full article here](https://github.com/firelex/jeff)\n\n[Discuss on Hacker News](https://news.ycombinator.com/item?id=49883844)",
+      "url": "https://github.com/firelex/jeff"
+    },
+    {
+      "id": "hn-49862602",
+      "title": "Simulating Airband Am Radios",
+      "desc": "By shellpipe | 14 points | 1 comments",
+      "tag": "news",
+      "published": "2026-09-27T02:01:35Z",
+      "order": 6,
+      "body": "[Read the full article here](https://bitbashing.io/am-radio.html)\n\n[Discuss on Hacker News](https://news.ycombinator.com/item?id=49862602)",
+      "url": "https://bitbashing.io/am-radio.html"
+    },
+    {
+      "id": "hn-49855059",
+      "title": "12,000-year-old Göbeklitepe burials explain scattered bones",
+      "desc": "By yusufaytas | 117 points | 27 comments",
+      "tag": "news",
+      "published": "2026-09-26T10:16:26Z",
+      "order": 7,
+      "body": "[Read the full article here](https://archaeologymag.com/2026/09/gobeklitepe-burials-hundreds-of-scattered-bones/)\n\n[Discuss on Hacker News](https://news.ycombinator.com/item?id=49855059)",
+      "url": "https://archaeologymag.com/2026/09/gobeklitepe-burials-hundreds-of-scattered-bones/"
+    },
+    {
+      "id": "hn-49886482",
+      "title": "Tank Body Problem",
+      "desc": "By jimbooonooo | 58 points | 13 comments",
+      "tag": "news",
+      "published": "2026-09-29T00:41:45Z",
+      "order": 8,
+      "body": "[Read the full article here](http://www.jimsitu.com)\n\n[Discuss on Hacker News](https://news.ycombinator.com/item?id=49886482)",
+      "url": "http://www.jimsitu.com"
+    },
+    {
+      "id": "hn-49884625",
+      "title": "ESP32S3 cluster running 1.58-bit (BitNet) Language model",
+      "desc": "By nkko | 68 points | 9 comments",
+      "tag": "news",
+      "published": "2026-09-28T21:26:41Z",
+      "order": 9,
+      "body": "[Read the full article here](https://github.com/Low-Zi-Hong/ESP32s3-LLM-Cluster)\n\n[Discuss on Hacker News](https://news.ycombinator.com/item?id=49884625)",
+      "url": "https://github.com/Low-Zi-Hong/ESP32s3-LLM-Cluster"
+    },
+    {
+      "id": "hn-49885493",
+      "title": "Show HN: Pac-Bench – How well can models one-shot a Pac-Man game?",
+      "desc": "By thefourthchime | 26 points | 18 comments",
+      "tag": "news",
+      "published": "2026-09-28T22:43:12Z",
+      "order": 10,
+      "body": "Benchmarks how well Harness+models can create a Pac-Man game from a single prompt:<p>“Create a Pac-Man game in a single HTML page”<p>Each model gets one shot — no follow-up prompts or fixes.\n\n[Discuss on Hacker News](https://news.ycombinator.com/item?id=49885493)",
+      "url": "https://jonclegg.github.io/pacman-bakeoff/"
+    },
+    {
+      "id": "hn-49881850",
+      "title": "Sonnet 5.5",
+      "desc": "By D2OQZG8l5BI1S06 | 702 points | 463 comments",
+      "tag": "news",
+      "published": "2026-09-28T17:58:11Z",
+      "order": 11,
+      "body": "[Read the full article here](https://www.anthropic.com/claude-sonnet-5-5)\n\n[Discuss on Hacker News](https://news.ycombinator.com/item?id=49881850)",
+      "url": "https://www.anthropic.com/claude-sonnet-5-5"
+    },
+    {
+      "id": "hn-49879702",
+      "title": "Hijacking the PS5's RTMP stream",
+      "desc": "By ibobev | 233 points | 72 comments",
+      "tag": "news",
+      "published": "2026-09-28T15:35:23Z",
+      "order": 12,
+      "body": "[Read the full article here](https://yashgarg.dev/posts/hijacking-ps5-rtmp-stream/)\n\n[Discuss on Hacker News](https://news.ycombinator.com/item?id=49879702)",
+      "url": "https://yashgarg.dev/posts/hijacking-ps5-rtmp-stream/"
+    },
+    {
+      "id": "hn-49883536",
+      "title": "Scientists solve 1840s space weather mystery",
+      "desc": "By gumby | 94 points | 42 comments",
+      "tag": "news",
+      "published": "2026-09-28T20:00:03Z",
+      "order": 13,
+      "body": "[Read the full article here](https://arstechnica.com/science/2026/09/scientists-solve-1840s-space-weather-mystery/)\n\n[Discuss on Hacker News](https://news.ycombinator.com/item?id=49883536)",
+      "url": "https://arstechnica.com/science/2026/09/scientists-solve-1840s-space-weather-mystery/"
+    },
+    {
+      "id": "hn-49886195",
+      "title": "1996 chat room simulator connected to Win95 and System 7 web desktops",
+      "desc": "By henrychannel | 85 points | 43 comments",
+      "tag": "news",
+      "published": "2026-09-29T00:06:48Z",
+      "order": 14,
+      "body": "[Read the full article here](https://lolchat.rip/)\n\n[Discuss on Hacker News](https://news.ycombinator.com/item?id=49886195)",
+      "url": "https://lolchat.rip/"
+    },
+    {
+      "id": "hn-49879697",
+      "title": "Kids turned low-traffic NPR Spotify comments into a secret group chat",
+      "desc": "By simonpure | 358 points | 202 comments",
+      "tag": "news",
+      "published": "2026-09-28T15:35:09Z",
+      "order": 15,
+      "body": "[Read the full article here](https://www.thisamericanlife.org/897/transcript)\n\n[Discuss on Hacker News](https://news.ycombinator.com/item?id=49879697)",
+      "url": "https://www.thisamericanlife.org/897/transcript"
+    }
+  ]
+}
