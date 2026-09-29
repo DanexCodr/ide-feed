@@ -8,14 +8,11 @@ Pipeline for each article:
   3. BeautifulSoup walks the raw HTML into semantic blocks
      (paragraphs, headings, tables, code, lists, blockquotes).
   4. Blocks whose text appears in the mask are kept, in document
-     order, and emitted as Markdown. This preserves tables, bold,
-     italic, code blocks, and links while dropping nav, sidebars,
-     ads, and comments.
-  5. If the dual-pipeline produces nothing, readability-lxml +
+     order, and emitted as Markdown.
+  5. Trailing navigation chrome is trimmed.
+  6. Items whose body does not look like an article are dropped.
+  7. If the dual-pipeline produces nothing, readability-lxml +
      html2text is used as a last resort.
-
-If all strategies fail, the item is DROPPED from the feed. No
-item is ever published with only a "read the full article" link.
 
 No AI. No API keys. No model retirements. Deterministic output
 every run.
@@ -24,6 +21,7 @@ every run.
 import json
 import os
 import glob
+import html
 import re
 import urllib.parse
 import urllib.request
@@ -53,6 +51,25 @@ STRIP_TAGS = ["script", "style", "noscript", "svg", "iframe", "form"]
 
 
 # ============================================================
+# TEXT HELPERS
+# ============================================================
+
+def decode_entities(s):
+    """Decode HTML entities in a title or description string.
+
+    RSS and API sources frequently return '&amp;', '&#8217;',
+    '&quot;' and similar escapes in titles. They should be plain
+    characters by the time they reach the feed.
+    """
+    if not s:
+        return s
+    try:
+        return html.unescape(s)
+    except Exception:
+        return s
+
+
+# ============================================================
 # FETCHING
 # ============================================================
 
@@ -72,17 +89,15 @@ def fetch_html(url):
 
 
 # ============================================================
-# MASK (used as the content-selection filter)
+# MASK (content-selection filter for the dual pipeline)
 # ============================================================
 
-def build_mask(html):
-    """Return the article's plain text. Used only as a filter key;
-    never emitted to the feed."""
+def build_mask(html_text):
     mask = ""
     if HAS_TRAFILATURA:
         try:
             mask = trafilatura.extract(
-                html,
+                html_text,
                 output_format="txt",
                 include_tables=True,
                 include_formatting=False,
@@ -93,7 +108,7 @@ def build_mask(html):
 
     if not mask.strip():
         try:
-            summary_html = Document(html).summary()
+            summary_html = Document(html_text).summary()
             mask = BeautifulSoup(summary_html, "html.parser").get_text(" ")
         except Exception:
             mask = ""
@@ -317,17 +332,127 @@ def align_blocks(blocks, mask_text):
 
 
 # ============================================================
+# BODY QUALITY FILTERS
+# ============================================================
+
+def is_trivial_element(text):
+    """True if this line, on its own, is footer chrome rather than
+    article content. Trivial means: a bare heading, a heading with
+    nothing under it, or a single short line with no sentence."""
+    s = text.strip()
+    if not s:
+        return True
+
+    if re.match(r'^#{1,6}\s+\S', s):
+        return True
+
+    if len(s) < 40 and not re.search(r'[.!?]', s):
+        return True
+
+    return False
+
+
+def trim_trailing_navigation(markdown):
+    """Drop trailing footer chrome from the extracted Markdown.
+
+    Walks from the bottom, dropping headings with no body and short
+    non-sentence lines. Stops at the first substantial paragraph.
+    Returns the original unchanged if trimming would remove
+    everything, so the caller can decide whether to drop the item.
+    """
+    if not markdown:
+        return markdown
+
+    lines = markdown.split('\n')
+    blocks = []
+    current = []
+    for line in lines:
+        if line.strip() == '':
+            if current:
+                blocks.append('\n'.join(current))
+                current = []
+        else:
+            current.append(line)
+    if current:
+        blocks.append('\n'.join(current))
+
+    if not blocks:
+        return markdown
+
+    end = len(blocks)
+    while end > 0:
+        block = blocks[end - 1]
+        block_lines = [l for l in block.split('\n') if l.strip()]
+        if not block_lines:
+            end -= 1
+            continue
+        if all(is_trivial_element(l) for l in block_lines):
+            end -= 1
+        else:
+            break
+
+    if end == 0:
+        return markdown
+    if end == len(blocks):
+        return markdown
+
+    return '\n\n'.join(blocks[:end]).strip()
+
+
+def looks_like_article(markdown):
+    """Return True if the extracted Markdown looks like a real
+    article. Rejects bodies that are mostly link lists or non-prose.
+    """
+    if not markdown:
+        return False
+
+    text = markdown.strip()
+
+    if len(text) < 400:
+        return False
+
+    link_chars = 0
+    for match in re.finditer(r'\[([^\]]+)\]\([^)]+\)', text):
+        link_chars += len(match.group(0))
+
+    if len(text) > 0 and link_chars / float(len(text)) > 0.6:
+        return False
+
+    lines = [l for l in text.split('\n') if l.strip()]
+    if not lines:
+        return False
+
+    link_only_lines = 0
+    for line in lines:
+        stripped = line.strip()
+        cleaned = re.sub(r'\[([^\]]+)\]\([^)]+\)', '', stripped).strip()
+        if len(cleaned) < 15:
+            link_only_lines += 1
+
+    if link_only_lines / float(len(lines)) > 0.5:
+        return False
+
+    prose = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
+    prose = re.sub(r'[#*_`>|\-]', ' ', prose)
+    sentences = re.split(r'[.!?]\s', prose)
+    if len(sentences) < 3:
+        return False
+
+    return True
+
+
+# ============================================================
 # EXTRACTION
 # ============================================================
 
-def dual_pipeline_extract(html, url):
-    if not html:
+def dual_pipeline_extract(html_text, url):
+    if not html_text:
         return ""
-    mask = build_mask(html)
+    mask = build_mask(html_text)
     if not mask.strip():
         return ""
 
-    soup = BeautifulSoup(html, "html.parser")
+    soup = BeautifulSoup(html_text, "html.parser")
     for tag in soup(STRIP_TAGS):
         tag.decompose()
     body = soup.body if soup.body else soup
@@ -341,9 +466,9 @@ def dual_pipeline_extract(html, url):
     return "\n\n".join(kept)
 
 
-def readability_extract(html):
+def readability_extract(html_text):
     try:
-        summary = Document(html).summary()
+        summary = Document(html_text).summary()
         h = html2text.HTML2Text()
         h.body_width = 0
         h.ignore_images = True
@@ -360,25 +485,47 @@ def extract_article(url):
     if not url:
         return None
 
-    html = ""
+    html_text = ""
     try:
-        html = fetch_html(url)
+        html_text = fetch_html(url)
     except Exception as e:
         print(f"  [Fetch Error] {url}: {e}")
         return None
 
     print(f"  [Dual] Extracting {url}")
-    dual_body = dual_pipeline_extract(html, url)
+    dual_body = dual_pipeline_extract(html_text, url)
     if dual_body and dual_body.strip():
         return dual_body
 
     print(f"  [Readability] Extracting {url}")
-    readability_body = readability_extract(html)
+    readability_body = readability_extract(html_text)
     if readability_body and readability_body.strip():
         return readability_body
 
     print(f"  [Drop] No extractor succeeded for {url}")
     return None
+
+
+def prepare_body(url):
+    """Full body-preparation pipeline: extract, trim, and validate.
+
+    Returns the final Markdown on success, None if the item should
+    be dropped.
+    """
+    body = extract_article(url)
+    if body is None:
+        return None
+
+    body = trim_trailing_navigation(body)
+    if not body or not body.strip():
+        print(f"  [Drop] Body empty after trim: {url}")
+        return None
+
+    if not looks_like_article(body):
+        print(f"  [Drop] Body does not look like an article: {url}")
+        return None
+
+    return body
 
 
 # ============================================================
@@ -406,7 +553,7 @@ def fetch_hacker_news():
             if not story:
                 continue
 
-            title = story.get('title', 'No Title')
+            title = decode_entities(story.get('title', 'No Title'))
             url = story.get('url', f"https://news.ycombinator.com/item?id={story_id}")
             by = story.get('by', 'unknown')
             score = story.get('score', 0)
@@ -427,8 +574,6 @@ def fetch_hacker_news():
                 'score': score,
             })
 
-        # HN's topstories already returns stories in score order,
-        # but sorting again makes the intent explicit.
         raw_items.sort(key=lambda x: x.get('score', 0), reverse=True)
 
         final = []
@@ -443,7 +588,7 @@ def fetch_hacker_news():
                 final.append(item)
                 continue
 
-            body = extract_article(item['url'])
+            body = prepare_body(item['url'])
             if body is None:
                 continue
 
@@ -476,7 +621,7 @@ def fetch_lobsters():
             root = ET.fromstring(response.read())
 
         for i, item in enumerate(root.findall('.//item')[:15]):
-            title = item.find('title').text
+            title = decode_entities(item.find('title').text)
             link = item.find('link').text
             pub_date = item.find('pubDate').text
             raw_items.append({
@@ -490,7 +635,7 @@ def fetch_lobsters():
 
         final = []
         for item in raw_items:
-            body = extract_article(item['url'])
+            body = prepare_body(item['url'])
             if body is None:
                 continue
             item['body'] = body
@@ -516,7 +661,7 @@ def fetch_i_programmer():
             root = ET.fromstring(response.read())
 
         for i, item in enumerate(root.findall('.//item')[:15]):
-            title = item.find('title').text
+            title = decode_entities(item.find('title').text)
             link = item.find('link').text
             pub_date = item.find('pubDate').text
             raw_items.append({
@@ -530,7 +675,7 @@ def fetch_i_programmer():
 
         final = []
         for item in raw_items:
-            body = extract_article(item['url'])
+            body = prepare_body(item['url'])
             if body is None:
                 continue
             item['body'] = body
@@ -567,7 +712,7 @@ def fetch_devto_full():
 
             items.append({
                 'id': f"devto-{article['id']}",
-                'title': article['title'],
+                'title': decode_entities(article['title']),
                 'desc': f"By {article['user']['name']} | {article['reading_time_minutes']} min read",
                 'tag': 'tutorial',
                 'published': article['published_at'],
@@ -602,7 +747,7 @@ def fetch_daily_dev():
         for i, post in enumerate(data.get('data', [])[:15]):
             raw_items.append({
                 'id': f"dailydev-{post.get('id', i)}",
-                'title': post.get('title', 'Untitled'),
+                'title': decode_entities(post.get('title', 'Untitled')),
                 'desc': f"Source: {post.get('source', {}).get('name', 'daily.dev')}",
                 'tag': 'ai',
                 'published': post.get('createdAt', ''),
@@ -614,8 +759,12 @@ def fetch_daily_dev():
         for item in raw_items:
             body = item.get('summary', '') or ''
             if not body.strip():
-                body = extract_article(item['url'])
+                body = prepare_body(item['url'])
                 if body is None:
+                    continue
+            else:
+                body = trim_trailing_navigation(body)
+                if not looks_like_article(body):
                     continue
             item.pop('summary', None)
             item['body'] = body
@@ -641,7 +790,7 @@ def fetch_mit_news():
             root = ET.fromstring(response.read())
 
         for i, item in enumerate(root.findall('.//item')[:15]):
-            title = item.find('title').text
+            title = decode_entities(item.find('title').text)
             link = item.find('link').text
             pub_date = item.find('pubDate').text
             raw_items.append({
@@ -655,7 +804,7 @@ def fetch_mit_news():
 
         final = []
         for item in raw_items:
-            body = extract_article(item['url'])
+            body = prepare_body(item['url'])
             if body is None:
                 continue
             item['body'] = body
@@ -714,8 +863,8 @@ def build_segment_from_markdown(segment):
             order = 999
         items.append({
             'id': item_id,
-            'title': meta.get('title', item_id),
-            'desc': meta.get('desc', ''),
+            'title': decode_entities(meta.get('title', item_id)),
+            'desc': decode_entities(meta.get('desc', '')),
             'tag': meta.get('tag', segment.rstrip('s')),
             'published': meta.get('date', ''),
             'order': order,
