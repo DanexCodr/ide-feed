@@ -2,36 +2,10 @@
 """
 Build static JSON feeds for DroidBuild.
 
-Content extraction strategy
----------------------------
-
-Each remote article goes through a two-pipeline extractor that
-preserves the formatting trafilatura alone would throw away.
-
-  Pipeline A ("mask")
-    trafilatura extracts the article as PLAIN TEXT. This is the
-    authoritative answer to "what content is in the article?"
-    It is not used as the output. It is used only as a filter.
-
-    If trafilatura fails, readability is used as a fallback mask.
-
-  Pipeline B ("blocks")
-    BeautifulSoup walks the raw HTML and cuts it into semantic
-    blocks: paragraphs, headings, tables, code blocks, lists,
-    blockquotes. Each block carries BOTH its plain text (for
-    alignment) and its Markdown form (for output).
-
-  Alignment
-    A block is kept if a substantial fraction of its 5-grams
-    appear in the mask. Kept blocks are emitted in document order
-    as Markdown. This preserves bold, italic, inline code, links,
-    tables, and fenced code while dropping navigation, sidebars,
-    comments, ad frames, and every other thing trafilatura would
-    have dropped.
-
-The result is article bodies that look like the source page's
-content — not a flattened text dump — while still being curated
-by trafilatura's content selection.
+This script uses a hybrid approach:
+1. AI-powered curation: Google Gemini (free tier) selects the most relevant articles.
+2. AI-powered extraction: Gemini converts raw HTML into clean Markdown.
+3. Deterministic fallback: readability-lxml + html2text if the AI fails.
 """
 
 import json
@@ -43,89 +17,116 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 
-try:
-    import trafilatura
-    HAS_TRAFILATURA = True
-except ImportError:
-    HAS_TRAFILATURA = False
-
 from readability import Document
-from bs4 import BeautifulSoup, NavigableString
+from bs4 import BeautifulSoup
 import html2text
 
+# ============================================================
+# AI CONFIGURATION
+# ============================================================
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
+AI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
+AI_MODEL = 'gemini-2.5-flash'
 
 SEGMENTS = ['news', 'tutorials', 'ai', 'research']
 SOURCES_DIR = 'sources'
 FEEDS_DIR = 'feeds'
 
-# Blocks that are extracted as complete units. Containers
-# (body, div, article, section, main) are recursed into; blocks
-# are not.
-BLOCK_TAGS = {
-    "p", "h1", "h2", "h3", "h4", "h5", "h6",
-    "table", "pre", "blockquote", "ul", "ol", "hr",
-}
-
-# Tags whose contents are never useful. Removed before walking.
-STRIP_TAGS = ["script", "style", "noscript", "svg", "iframe", "form"]
-
-
 # ============================================================
-# Markdown source logic (local files under sources/<segment>/)
+# AI HELPERS
 # ============================================================
 
-def read_frontmatter(path):
-    with open(path, 'r', encoding='utf-8') as f:
-        text = f.read()
-    if not text.startswith('---\n'):
-        return {}, text
-    end = text.find('\n---\n', 4)
-    if end < 0:
-        return {}, text
-    meta = {}
-    for line in text[4:end].split('\n'):
-        if ':' not in line:
-            continue
-        key, value = line.split(':', 1)
-        meta[key.strip()] = value.strip()
-    body = text[end + 5:]
-    return meta, body
+def ai_query(prompt, max_tokens=2048, temperature=0.2):
+    """Send a query to the Gemini API and return the text response."""
+    if not GEMINI_API_KEY:
+        return None
 
+    payload = {
+        "model": AI_MODEL,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+    
+    req = urllib.request.Request(
+        AI_API_URL,
+        data=json.dumps(payload).encode('utf-8'),
+        headers={
+            'Authorization': f'Bearer {GEMINI_API_KEY}',
+            'Content-Type': 'application/json',
+            'User-Agent': 'DroidBuild-Agent/1.0',
+        },
+        method='POST',
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=45) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            return data['choices'][0]['message']['content'].strip()
+    except Exception as e:
+        print(f"  [AI Error] {e}")
+        return None
 
-def item_id_from_path(path):
-    name = os.path.basename(path)
-    if name.endswith('.md'):
-        name = name[:-3]
-    return name
+def ai_select_items(items, segment, max_items=15):
+    """Use AI to select the most relevant items from a list."""
+    if not GEMINI_API_KEY or not items:
+        return items[:max_items]
 
+    candidates = []
+    for i, item in enumerate(items):
+        title = item.get('title', 'No Title')
+        desc = item.get('desc', '')[:200]
+        candidates.append(f"{i+1}. {title} — {desc}")
+    candidate_text = "\n".join(candidates)
 
-def build_segment_from_markdown(segment):
-    source_dir = os.path.join(SOURCES_DIR, segment)
-    if not os.path.isdir(source_dir):
-        return []
-    items = []
-    for path in sorted(glob.glob(os.path.join(source_dir, '*.md'))):
-        meta, body = read_frontmatter(path)
-        item_id = item_id_from_path(path)
-        try:
-            order = int(meta.get('order', 999))
-        except ValueError:
-            order = 999
-        items.append({
-            'id': item_id,
-            'title': meta.get('title', item_id),
-            'desc': meta.get('desc', ''),
-            'tag': meta.get('tag', segment.rstrip('s')),
-            'published': meta.get('date', ''),
-            'order': order,
-            'body': body.lstrip('\n'),
-        })
-    items.sort(key=lambda x: (x['order'], x['id']))
-    return items
+    prompt = f"""You are a curation assistant for a software developer news feed.
+Segment: "{segment}"
 
+Select the {max_items} most relevant and high-quality articles for professional software developers.
+Prioritize programming, software engineering, AI/ML, compilers, algorithms, and systems design.
+Exclude promotional content, clickbait, low-quality items, and off-topic posts.
+
+Return ONLY a comma-separated list of item numbers (e.g., "1, 3, 5, 7"). Do not include any other text.
+
+Candidates:
+{candidate_text}"""
+
+    response = ai_query(prompt, max_tokens=100, temperature=0.1)
+    if not response:
+        return items[:max_items]
+
+    try:
+        selected_indices = [int(x.strip()) - 1 for x in response.split(',') if x.strip().isdigit()]
+        selected = [items[i] for i in selected_indices if 0 <= i < len(items)]
+        return selected if selected else items[:max_items]
+    except Exception:
+        return items[:max_items]
+
+def ai_extract_body(html, url):
+    """Use AI to extract the main article content as Markdown."""
+    if not GEMINI_API_KEY:
+        return None
+
+    # Truncate HTML to avoid token limits. Gemini has a huge context
+    # window, but 30k characters is plenty for an article and keeps
+    # responses fast.
+    html_snippet = html[:30000]
+
+    prompt = f"""You are an expert web content extractor.
+Given the raw HTML of a web page, extract ONLY the main article content.
+Remove navigation, sidebars, footers, ads, comments, and any non-article elements.
+Convert the extracted content to clean Markdown.
+Preserve headings, paragraphs, lists, tables, code blocks, bold, and italic formatting.
+
+Return ONLY the Markdown. Do not include any commentary or explanations.
+Article URL: {url}
+
+Raw HTML:
+{html_snippet}"""
+
+    return ai_query(prompt, max_tokens=4096, temperature=0.0)
 
 # ============================================================
-# Fetching
+# DETERMINISTIC FALLBACK EXTRACTION
 # ============================================================
 
 def fetch_html(url):
@@ -133,7 +134,6 @@ def fetch_html(url):
         url, headers={'User-Agent': 'Mozilla/5.0 (compatible; DroidBuild/1.0)'})
     with urllib.request.urlopen(req, timeout=15) as resp:
         raw = resp.read()
-    # Try to honor the charset from Content-Type, default to UTF-8.
     ctype = resp.headers.get('Content-Type', '')
     m = re.search(r'charset=([\w-]+)', ctype)
     if m:
@@ -143,333 +143,50 @@ def fetch_html(url):
             pass
     return raw.decode('utf-8', errors='replace')
 
-
-# ============================================================
-# Pipeline A: mask
-# ============================================================
-
-def build_mask(html):
-    """Return the article's plain text, used as a filter key."""
-    mask = ""
-    if HAS_TRAFILATURA:
-        try:
-            mask = trafilatura.extract(
-                html,
-                output_format="txt",
-                include_tables=True,
-                include_formatting=False,
-                include_links=False,
-            ) or ""
-        except Exception:
-            mask = ""
-
-    if not mask.strip():
-        # Fallback: readability + strip tags.
-        try:
-            summary_html = Document(html).summary()
-            mask = BeautifulSoup(summary_html, "html.parser").get_text(" ")
-        except Exception:
-            mask = ""
-
-    return mask
-
-
-def tokenize(text):
-    """Lowercase word tokens. Numbers are preserved."""
-    if not text:
-        return []
-    return re.findall(r"\w+", text.lower())
-
-
-def ngrams(tokens, n):
-    if len(tokens) < n:
-        return set()
-    return set(tuple(tokens[i:i + n]) for i in range(len(tokens) - n + 1))
-
-
-# ============================================================
-# Pipeline B: block extraction
-# ============================================================
-
-def extract_language(code_el):
-    classes = code_el.get("class", []) or []
-    for c in classes:
-        if c.startswith("language-"):
-            return c[len("language-"):]
-        if c.startswith("lang-"):
-            return c[len("lang-"):]
-    return ""
-
-
-def absolute_url(base, href):
-    if not href:
-        return ""
-    try:
-        return urllib.parse.urljoin(base, href)
-    except Exception:
-        return href
-
-
-def inline_markdown(el, base_url):
-    """Convert the contents of a tag to inline Markdown."""
-    parts = []
-    for child in el.children:
-        if isinstance(child, NavigableString):
-            parts.append(str(child))
-            continue
-        if not hasattr(child, "name") or child.name is None:
-            continue
-
-        name = child.name
-        if name in ("strong", "b"):
-            parts.append("**" + inline_markdown(child, base_url) + "**")
-        elif name in ("em", "i"):
-            parts.append("*" + inline_markdown(child, base_url) + "*")
-        elif name == "code":
-            parts.append("`" + child.get_text() + "`")
-        elif name == "a":
-            href = absolute_url(base_url, child.get("href", ""))
-            label = inline_markdown(child, base_url).strip()
-            if href and label:
-                parts.append("[" + label + "](" + href + ")")
-            else:
-                parts.append(label)
-        elif name == "br":
-            parts.append("  \n")
-        elif name == "img":
-            src = absolute_url(base_url, child.get("src", ""))
-            alt = child.get("alt", "") or ""
-            if src:
-                parts.append("![" + alt + "](" + src + ")")
-        elif name in ("sub", "sup", "del", "s", "kbd", "mark", "small"):
-            parts.append("<" + name + ">" +
-                         inline_markdown(child, base_url) +
-                         "</" + name + ">")
-        else:
-            parts.append(inline_markdown(child, base_url))
-    return "".join(parts)
-
-
-def table_to_markdown(table_el, base_url):
-    rows = []
-    for tr in table_el.find_all("tr"):
-        cells = []
-        for cell in tr.find_all(["td", "th"], recursive=False):
-            text = inline_markdown(cell, base_url).strip()
-            text = text.replace("|", "\\|")
-            text = re.sub(r"\s+", " ", text).strip()
-            cells.append(text)
-        if cells:
-            rows.append(cells)
-
-    if not rows:
-        return ""
-
-    width = max(len(r) for r in rows)
-    rows = [r + [""] * (width - len(r)) for r in rows]
-
-    out = []
-    out.append("| " + " | ".join(rows[0]) + " |")
-    out.append("| " + " | ".join(["---"] * width) + " |")
-    for r in rows[1:]:
-        out.append("| " + " | ".join(r) + " |")
-    return "\n".join(out)
-
-
-def list_to_markdown(list_el, base_url, depth=0):
-    lines = []
-    ordered = list_el.name == "ol"
-    items = list_el.find_all("li", recursive=False)
-
-    for i, li in enumerate(items):
-        prefix = ("%d. " % (i + 1)) if ordered else "- "
-        prefix = "  " * depth + prefix
-
-        # Extract the item's direct inline content, skipping nested
-        # lists (they get emitted separately).
-        inline_parts = []
-        nested_lists = []
-        for child in li.children:
-            if hasattr(child, "name") and child.name in ("ul", "ol"):
-                nested_lists.append(child)
-            elif isinstance(child, NavigableString):
-                inline_parts.append(str(child))
-            else:
-                inline_parts.append(inline_markdown(child, base_url))
-
-        content = "".join(inline_parts)
-        content = re.sub(r"\s+", " ", content).strip()
-        lines.append(prefix + content)
-
-        for nested in nested_lists:
-            lines.append(list_to_markdown(nested, base_url, depth + 1))
-
-    return "\n".join(lines)
-
-
-def block_to_markdown(el, base_url):
-    """Convert a single semantic block to Markdown."""
-    name = el.name
-
-    if name == "pre":
-        code = el.find("code")
-        if code is not None:
-            lang = extract_language(code)
-            text = code.get_text()
-        else:
-            lang = ""
-            text = el.get_text()
-        # Strip exactly one trailing newline; preserve inner ones.
-        if text.endswith("\n"):
-            text = text[:-1]
-        return "```" + lang + "\n" + text + "\n```"
-
-    if name == "table":
-        return table_to_markdown(el, base_url)
-
-    if name == "blockquote":
-        # Recurse into the blockquote's children as blocks, then
-        # prefix every line with ">".
-        inner_blocks = []
-        walk(el, inner_blocks, base_url)
-        inner_md = "\n\n".join(b["md"] for b in inner_blocks)
-        if not inner_md:
-            inner_md = inline_markdown(el, base_url).strip()
-        return "\n".join("> " + line if line else ">" for line in inner_md.split("\n"))
-
-    if name in ("ul", "ol"):
-        return list_to_markdown(el, base_url)
-
-    if name == "hr":
-        return "---"
-
-    if name in ("h1", "h2", "h3", "h4", "h5", "h6"):
-        level = int(name[1])
-        text = inline_markdown(el, base_url).strip()
-        return ("#" * level) + " " + text
-
-    # Default: paragraph and anything else treated as a paragraph.
-    text = inline_markdown(el, base_url)
-    text = text.strip()
-    return text
-
-
-def walk(node, out, base_url):
-    """Walk the DOM, emitting one block per BLOCK_TAG, recursing
-    into container tags otherwise."""
-    for child in list(node.children):
-        if not hasattr(child, "name") or child.name is None:
-            continue
-
-        if child.name in STRIP_TAGS:
-            continue
-
-        if child.name in BLOCK_TAGS:
-            plain = child.get_text(" ", strip=True)
-            md = block_to_markdown(child, base_url)
-            if md:
-                out.append({"text": plain, "md": md, "tag": child.name})
-        else:
-            walk(child, out, base_url)
-
-
-# ============================================================
-# Alignment
-# ============================================================
-
-def align_blocks(blocks, mask_text):
-    """Return the markdown for blocks whose text appears in mask_text."""
-    mask_tokens = tokenize(mask_text)
-    mask_normalized = " " + " ".join(mask_tokens) + " "
-    mask_grams = ngrams(mask_tokens, 5)
-
-    kept = []
-    for block in blocks:
-        tokens = tokenize(block["text"])
-        if not tokens:
-            continue
-
-        if len(tokens) < 5:
-            # Short block: require an exact normalized substring.
-            needle = " " + " ".join(tokens) + " "
-            if needle in mask_normalized:
-                kept.append(block["md"])
-        else:
-            grams = ngrams(tokens, 5)
-            if not grams:
-                continue
-            overlap = len(grams & mask_grams) / float(len(grams))
-            if overlap >= 0.5:
-                kept.append(block["md"])
-
-    return kept
-
-
-# ============================================================
-# Top-level article extraction
-# ============================================================
-
-def extract_article(url):
-    """Fetch url and return the article body as Markdown."""
-    if not url:
-        return ""
+def fallback_extract(url):
+    """Readability + html2text. Used only when AI extraction fails."""
     try:
         html = fetch_html(url)
+        summary = Document(html).summary()
+        h = html2text.HTML2Text()
+        h.body_width = 0
+        h.ignore_images = True
+        h.ignore_emphasis = False
+        h.protect_links = True
+        return h.handle(summary).strip()
     except Exception:
         return ""
 
-    mask = build_mask(html)
+def extract_article(url):
+    """Fetch and extract an article using AI, falling back to readability."""
+    if not url:
+        return ""
+    
+    html = ""
+    try:
+        html = fetch_html(url)
+    except Exception as e:
+        print(f"  [Fetch Error] {url}: {e}")
+        return ""
 
-    # If we have no mask at all, fall back to readability + html2text
-    # on the whole page. Better than nothing.
-    if not mask.strip():
-        try:
-            summary = Document(html).summary()
-            h = html2text.HTML2Text()
-            h.body_width = 0
-            h.inline_links = True
-            h.protect_links = False
-            h.ignore_images = False
-            h.unicode_snob = True
-            return h.handle(summary).strip()
-        except Exception:
-            return ""
+    # 1. Primary: AI Extraction
+    if GEMINI_API_KEY:
+        print(f"  [AI] Extracting {url}")
+        ai_body = ai_extract_body(html, url)
+        if ai_body:
+            return ai_body
 
-    soup = BeautifulSoup(html, "html.parser")
-    for tag in soup(STRIP_TAGS):
-        tag.decompose()
-    body = soup.body if soup.body else soup
-
-    blocks = []
-    walk(body, blocks, url)
-
-    kept = align_blocks(blocks, mask)
-
-    if not kept:
-        # Mask existed but nothing aligned; use readability as a
-        # last resort rather than returning empty.
-        try:
-            summary = Document(html).summary()
-            h = html2text.HTML2Text()
-            h.body_width = 0
-            h.inline_links = True
-            h.protect_links = False
-            h.ignore_images = False
-            h.unicode_snob = True
-            return h.handle(summary).strip()
-        except Exception:
-            return ""
-
-    return "\n\n".join(kept)
-
+    # 2. Fallback: Readability + html2text
+    print(f"  [Fallback] Extracting {url}")
+    return fallback_extract(url)
 
 # ============================================================
-# Fetchers for each live source
+# FETCHERS (WITH AI CURATION)
 # ============================================================
 
 def fetch_hacker_news():
     print("Fetching Hacker News...")
-    items = []
+    raw_items = []
     try:
         req = urllib.request.Request(
             "https://hacker-news.firebaseio.com/v0/topstories.json",
@@ -478,7 +195,8 @@ def fetch_hacker_news():
         with urllib.request.urlopen(req, timeout=10) as response:
             story_ids = json.loads(response.read().decode('utf-8'))
 
-        for i, story_id in enumerate(story_ids[:15]):
+        # Fetch top 30 to give the AI something to curate
+        for i, story_id in enumerate(story_ids[:30]):
             req = urllib.request.Request(
                 f"https://hacker-news.firebaseio.com/v0/item/{story_id}.json",
                 headers={'User-Agent': 'DroidBuild-Agent/1.0'}
@@ -497,33 +215,44 @@ def fetch_hacker_news():
             time_unix = story.get('time', 0)
             pub_date = datetime.fromtimestamp(time_unix, tz=timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
-            if text:
-                body = text + "\n\n[Discuss on Hacker News](https://news.ycombinator.com/item?id=%d)" % story_id
-            else:
-                body = extract_article(url)
-                if not body:
-                    body = "[Read the full article](%s)" % url
-                body += "\n\n[Discuss on Hacker News](https://news.ycombinator.com/item?id=%d)" % story_id
-
-            items.append({
+            # For AI curation, we just need title and score/desc.
+            raw_items.append({
                 'id': f"hn-{story_id}",
                 'title': title,
                 'desc': f"By {by} | {score} points | {descendants} comments",
                 'tag': 'news',
                 'published': pub_date,
-                'order': i + 1,
-                'body': body,
                 'url': url,
+                'text': text
             })
-        print(f"Fetched {len(items)} HN items.")
+
+        # AI Curation
+        selected = ai_select_items(raw_items, 'news', max_items=15)
+        
+        # AI Extraction for selected items
+        for item in selected:
+            if item.get('text'):
+                item['body'] = item['text'] + f"\n\n[Discuss on Hacker News](https://news.ycombinator.com/item?id={item['id'].replace('hn-', '')})"
+            else:
+                item['body'] = extract_article(item['url'])
+                if not item['body']:
+                    item['body'] = f"[Read the full article]({item['url']})"
+                item['body'] += f"\n\n[Discuss on Hacker News](https://news.ycombinator.com/item?id={item['id'].replace('hn-', '')})"
+            
+            # Remove the temporary 'text' field
+            item.pop('text', None)
+            # Fix order
+            item['order'] = selected.index(item) + 1
+            
+        print(f"Fetched {len(selected)} HN items.")
+        return selected
     except Exception as e:
         print(f"Error fetching HN: {e}")
-    return items
-
+        return []
 
 def fetch_lobsters():
     print("Fetching Lobsters...")
-    items = []
+    raw_items = []
     try:
         req = urllib.request.Request(
             "https://lobste.rs/rss",
@@ -532,66 +261,68 @@ def fetch_lobsters():
         with urllib.request.urlopen(req, timeout=10) as response:
             root = ET.fromstring(response.read())
 
-        for i, item in enumerate(root.findall('.//item')[:15]):
+        for i, item in enumerate(root.findall('.//item')[:30]):
             title = item.find('title').text
             link = item.find('link').text
             pub_date = item.find('pubDate').text
-
-            body = extract_article(link)
-            if not body:
-                desc = item.find('description')
-                body = desc.text if desc is not None and desc.text else ""
-
-            items.append({
+            raw_items.append({
                 'id': f"lobsters-{i}",
                 'title': title,
                 'desc': "Source: Lobsters",
                 'tag': 'news',
                 'published': pub_date,
-                'order': i + 1,
-                'body': body,
                 'url': link,
             })
-        print(f"Fetched {len(items)} Lobsters items.")
+
+        selected = ai_select_items(raw_items, 'news', max_items=15)
+        
+        for item in selected:
+            item['body'] = extract_article(item['url'])
+            if not item['body']:
+                item['body'] = f"[Read the full article]({item['url']})"
+            item['order'] = selected.index(item) + 1
+
+        print(f"Fetched {len(selected)} Lobsters items.")
+        return selected
     except Exception as e:
         print(f"Error fetching Lobsters: {e}")
-    return items
-
+        return []
 
 def fetch_i_programmer():
     print("Fetching i-programmer...")
-    items = []
+    raw_items = []
     try:
         url = "https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=3&format=raw"
         req = urllib.request.Request(url, headers={'User-Agent': 'DroidBuild-Agent/1.0'})
         with urllib.request.urlopen(req, timeout=10) as response:
             root = ET.fromstring(response.read())
 
-        for i, item in enumerate(root.findall('.//item')[:15]):
+        for i, item in enumerate(root.findall('.//item')[:30]):
             title = item.find('title').text
             link = item.find('link').text
             pub_date = item.find('pubDate').text
-
-            body = extract_article(link)
-            if not body:
-                desc = item.find('description')
-                body = desc.text if desc is not None and desc.text else ""
-
-            items.append({
+            raw_items.append({
                 'id': f"iprog-{i}",
                 'title': title,
                 'desc': "Source: I Programmer",
                 'tag': 'news',
                 'published': pub_date,
-                'order': i + 1,
-                'body': body,
                 'url': link,
             })
-        print(f"Fetched {len(items)} i-programmer items.")
+
+        selected = ai_select_items(raw_items, 'news', max_items=15)
+        
+        for item in selected:
+            item['body'] = extract_article(item['url'])
+            if not item['body']:
+                item['body'] = f"[Read the full article]({item['url']})"
+            item['order'] = selected.index(item) + 1
+
+        print(f"Fetched {len(selected)} i-programmer items.")
+        return selected
     except Exception as e:
         print(f"Error fetching i-programmer: {e}")
-    return items
-
+        return []
 
 def fetch_devto_full():
     print("Fetching Dev.to...")
@@ -603,6 +334,8 @@ def fetch_devto_full():
             articles = json.loads(resp.read().decode('utf-8'))
 
         for i, article in enumerate(articles):
+            # Dev.to already provides clean Markdown, so we skip AI extraction
+            # and just use the API's body_markdown.
             detail_url = f"https://dev.to/api/articles/{article['id']}"
             req = urllib.request.Request(detail_url, headers={'User-Agent': 'DroidBuild-Agent/1.0'})
             with urllib.request.urlopen(req, timeout=10) as resp:
@@ -619,10 +352,10 @@ def fetch_devto_full():
                 'url': article['url'],
             })
         print(f"Fetched {len(items)} Dev.to items.")
+        return items
     except Exception as e:
         print(f"Error fetching Dev.to: {e}")
-    return items
-
+        return []
 
 def fetch_daily_dev():
     print("Fetching daily.dev...")
@@ -641,91 +374,76 @@ def fetch_daily_dev():
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read().decode('utf-8'))
 
-        feed_items = data.get('data', [])
-        for i, post in enumerate(feed_items[:15]):
-            items.append({
+        raw_items = []
+        for i, post in enumerate(data.get('data', [])[:30]):
+            raw_items.append({
                 'id': f"dailydev-{post.get('id', i)}",
                 'title': post.get('title', 'Untitled'),
                 'desc': f"Source: {post.get('source', {}).get('name', 'daily.dev')}",
                 'tag': 'ai',
                 'published': post.get('createdAt', ''),
-                'order': i + 1,
-                'body': post.get('summary', ''),
                 'url': post.get('url', ''),
+                'summary': post.get('summary', '')
             })
-        print(f"Fetched {len(items)} daily.dev items.")
+
+        selected = ai_select_items(raw_items, 'ai', max_items=15)
+        for item in selected:
+            item['body'] = item.get('summary', '')
+            if not item['body']:
+                item['body'] = extract_article(item['url'])
+            item.pop('summary', None)
+            item['order'] = selected.index(item) + 1
+
+        print(f"Fetched {len(selected)} daily.dev items.")
+        return selected
     except Exception as e:
         print(f"Error fetching daily.dev: {e}")
-    return items
-
+        return []
 
 def fetch_mit_news():
     print("Fetching MIT News CSAIL...")
-    items = []
+    raw_items = []
     try:
         url = "https://news.mit.edu/topic/mitcomputer-science-and-artificial-intelligence-laboratory-csail-rss.xml"
         req = urllib.request.Request(url, headers={'User-Agent': 'DroidBuild-Agent/1.0'})
         with urllib.request.urlopen(req, timeout=10) as response:
             root = ET.fromstring(response.read())
 
-        for i, item in enumerate(root.findall('.//item')[:15]):
+        for i, item in enumerate(root.findall('.//item')[:30]):
             title = item.find('title').text
             link = item.find('link').text
             pub_date = item.find('pubDate').text
-
-            # MIT News' feeds ship the full article in content:encoded,
-            # which is already HTML with formatting. Run it through
-            # the same extractor so bold, links, and inline code
-            # survive.
-            content = item.find(
-                'content:encoded',
-                {'content': 'http://purl.org/rss/1.0/modules/content/'}
-            )
-            if content is not None and content.text:
-                body = extract_article_from_html(content.text, link)
-            else:
-                body = extract_article(link)
-
-            if not body:
-                desc = item.find('description')
-                body = desc.text if desc is not None and desc.text else ""
-
-            items.append({
+            raw_items.append({
                 'id': f"mit-{i}",
                 'title': title,
                 'desc': "Source: MIT News CSAIL",
                 'tag': 'research',
                 'published': pub_date,
-                'order': i + 1,
-                'body': body,
                 'url': link,
             })
-        print(f"Fetched {len(items)} MIT News items.")
+
+        selected = ai_select_items(raw_items, 'research', max_items=15)
+        
+        for item in selected:
+            item['body'] = extract_article(item['url'])
+            if not item['body']:
+                item['body'] = f"[Read the full article]({item['url']})"
+            item['order'] = selected.index(item) + 1
+
+        print(f"Fetched {len(selected)} MIT News items.")
+        return selected
     except Exception as e:
         print(f"Error fetching MIT News: {e}")
-    return items
-
-
-def extract_article_from_html(html, base_url):
-    """Run the two-pipeline extractor on HTML already in hand."""
-    if not html:
-        return ""
-    mask = build_mask(html)
-    soup = BeautifulSoup(html, "html.parser")
-    for tag in soup(STRIP_TAGS):
-        tag.decompose()
-    body = soup.body if soup.body else soup
-    blocks = []
-    walk(body, blocks, base_url)
-    kept = align_blocks(blocks, mask) if mask.strip() else [b["md"] for b in blocks]
-    return "\n\n".join(kept)
-
+        return []
 
 # ============================================================
-# Main
+# MAIN
 # ============================================================
 
 def main():
+    if not GEMINI_API_KEY:
+        print("WARNING: GEMINI_API_KEY not set. AI curation and extraction will be skipped.")
+    
     os.makedirs(FEEDS_DIR, exist_ok=True)
     any_built = False
 
@@ -762,6 +480,56 @@ def main():
     if not any_built:
         print('no source directories found; nothing written')
 
+# ============================================================
+# LOCAL MARKDOWN SOURCES
+# ============================================================
+
+def read_frontmatter(path):
+    with open(path, 'r', encoding='utf-8') as f:
+        text = f.read()
+    if not text.startswith('---\n'):
+        return {}, text
+    end = text.find('\n---\n', 4)
+    if end < 0:
+        return {}, text
+    meta = {}
+    for line in text[4:end].split('\n'):
+        if ':' not in line:
+            continue
+        key, value = line.split(':', 1)
+        meta[key.strip()] = value.strip()
+    body = text[end + 5:]
+    return meta, body
+
+def item_id_from_path(path):
+    name = os.path.basename(path)
+    if name.endswith('.md'):
+        name = name[:-3]
+    return name
+
+def build_segment_from_markdown(segment):
+    source_dir = os.path.join(SOURCES_DIR, segment)
+    if not os.path.isdir(source_dir):
+        return []
+    items = []
+    for path in sorted(glob.glob(os.path.join(source_dir, '*.md'))):
+        meta, body = read_frontmatter(path)
+        item_id = item_id_from_path(path)
+        try:
+            order = int(meta.get('order', 999))
+        except ValueError:
+            order = 999
+        items.append({
+            'id': item_id,
+            'title': meta.get('title', item_id),
+            'desc': meta.get('desc', ''),
+            'tag': meta.get('tag', segment.rstrip('s')),
+            'published': meta.get('date', ''),
+            'order': order,
+            'body': body.lstrip('\n'),
+        })
+    items.sort(key=lambda x: (x['order'], x['id']))
+    return items
 
 if __name__ == '__main__':
     main()
