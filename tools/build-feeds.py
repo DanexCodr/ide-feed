@@ -237,25 +237,6 @@ def is_prose_block(block):
 #
 # fetch_html is the boundary between raw bytes and text. It is
 # also the place where non-HTML responses are rejected.
-#
-# The list of things we refuse to parse is broad on purpose:
-#
-#   - PDFs. When HN or another source links directly to a PDF,
-#     reading the bytes as UTF-8 produces a stream of replacement
-#     characters and PDF syntax (/Type /Page, xref tables, streams)
-#     that decodes as garbage. trafilatura and readability then
-#     "succeed" on that garbage and emit it as the article body.
-#     Rejecting before decode keeps it out of the feed.
-#
-#   - Direct image links. An og:image that leaked into a URL field,
-#     or a source that returns an image instead of a page.
-#
-#   - Zip / gzip / octet-stream responses. Content that a site
-#     serves as a downloadable file rather than a document.
-#
-# The Content-Type header is the primary signal. When a server
-# lies about it, the magic-byte check below catches the two
-# most common lies.
 # ============================================================
 
 def _is_html_content_type(ctype):
@@ -278,12 +259,7 @@ def _is_html_content_type(ctype):
 
 
 def _looks_like_pdf_url(url):
-    """Cheap pre-check: does the URL's path component end in .pdf?
-
-    This saves a network round-trip when the answer is obvious.
-    The Content-Type check in fetch_html remains the authority —
-    this is just a fast path. Query strings and fragments are
-    stripped before the extension check."""
+    """Cheap pre-check: does the URL's path component end in .pdf?"""
     if not url:
         return False
     path = url.split('?', 1)[0].split('#', 1)[0].lower()
@@ -295,9 +271,7 @@ def fetch_html(url):
     HTML, or None when the response is not HTML.
 
     Returning None is a signal to the caller that this URL is
-    unfixable and should be skipped. Network errors continue to
-    raise, and callers keep catching them the same way they
-    always have."""
+    unfixable and should be skipped."""
     req = urllib.request.Request(
         url, headers={'User-Agent': 'Mozilla/5.0 (compatible; DroidBuild/1.0)'})
     with urllib.request.urlopen(req, timeout=15) as resp:
@@ -327,11 +301,7 @@ def fetch_html(url):
 
 
 def fetch_bytes(url, timeout=10, referer=None):
-    """Fetch raw bytes from url. Returns b'' on failure.
-
-    The referer argument is used for image fetches behind
-    hotlink-protected CDNs. Without it, many sites return 403
-    to a bare User-Agent request."""
+    """Fetch raw bytes from url. Returns b'' on failure."""
     if not url:
         return b''
     try:
@@ -356,11 +326,6 @@ def fetch_bytes(url, timeout=10, referer=None):
 # <img src>. The URL lives in srcset (responsive), data-src
 # (lazy-load), data-lazy-src (Jetpack), data-original (various
 # jQuery lazy loaders), or in a <picture><source srcset>.
-#
-# <img src> on those pages is usually a 1×1 GIF or a data: URL
-# placeholder. If we naively read src, we either emit a useless
-# markdown image or (worse) emit a data: URL that the sanitizer
-# strips, silently dropping the image from the reader.
 # ============================================================
 
 def _is_placeholder(url):
@@ -378,11 +343,49 @@ def _is_placeholder(url):
     return False
 
 
+def _is_usable_article_image(url):
+    """True if url plausibly points to an actual article image
+    (a hero photo, an inline figure), not a UI chrome asset.
+
+    Rejects:
+      - placeholders (data:, blank.gif)
+      - SVG files (logos, icons, share buttons)
+      - common icon paths (favicon, apple-touch, /icons/, /social/)
+      - small / thumbnailed names (thumb, icon, logo, avatar)
+    """
+    if _is_placeholder(url):
+        return False
+
+    lower = url.lower().split('?', 1)[0].split('#', 1)[0]
+
+    # SVG is almost never article content. It's logos, icons,
+    # share buttons, or site chrome.
+    if lower.endswith('.svg'):
+        return False
+
+    # Directories and filename patterns that are UI, not article.
+    ui_markers = (
+        '/icons/', '/icon/', '/social/', '/share/',
+        '/assets/img/social/', '/assets/icons/',
+        '/avatar', '/logo', '/favicon',
+        'apple-touch', 'sprite',
+    )
+    for m in ui_markers:
+        if m in lower:
+            return False
+
+    # Filename-level markers. Match on the last path segment.
+    name = lower.rsplit('/', 1)[-1]
+    for marker in ('icon', 'logo', 'avatar', 'badge', 'share'):
+        if marker in name:
+            return False
+
+    return True
+
+
 def _pick_from_srcset(srcset):
     """srcset is comma-separated: url1 w1, url2 w2, ...
-    Pick the largest candidate by width descriptor. If no
-    descriptors are present, prefer the last URL, which is the
-    convention for small-to-large ordering."""
+    Pick the largest candidate by width descriptor."""
     candidates = []
     for part in srcset.split(","):
         part = part.strip()
@@ -405,7 +408,6 @@ def _pick_from_srcset(srcset):
         return ""
     best = candidates[0]
     for c in candidates[1:]:
-        # >= so ties go to the later candidate.
         if c[0] >= best[0]:
             best = c
     return best[1]
@@ -414,7 +416,6 @@ def _pick_from_srcset(srcset):
 def extract_image_src(img_el, base_url):
     """Return the best real image URL from an <img>, preferring
     srcset over lazy-src over src, and rejecting placeholders."""
-    # 1. srcset / data-srcset — the real responsive source.
     for attr in ("srcset", "data-srcset"):
         srcset = img_el.get(attr)
         if srcset:
@@ -422,13 +423,11 @@ def extract_image_src(img_el, base_url):
             if best and not _is_placeholder(best):
                 return absolute_url(base_url, best)
 
-    # 2. Lazy-load attributes, in order of preference.
     for attr in ("data-src", "data-lazy-src", "data-original", "data-url"):
         url = img_el.get(attr)
         if url and not _is_placeholder(url):
             return absolute_url(base_url, url)
 
-    # 3. Plain src, if it isn't a placeholder.
     src = img_el.get("src", "")
     if src and not _is_placeholder(src):
         return absolute_url(base_url, src)
@@ -482,8 +481,9 @@ def extract_og_image(html_text, base_url):
             return _resolve_image_url(url, base_url)
 
     # 3. Fallback: scan the article / main container for the
-    # first real <img> or <picture>. Prefer the first one that
-    # isn't a placeholder.
+    # first real <img> or <picture>. Reject SVGs, icons, avatars,
+    # share buttons, and other UI chrome via
+    # _is_usable_article_image().
     for container_sel in ('article', 'main', '[role=main]',
                           '.post-content', '.entry-content',
                           '.article-body', '.story-body'):
@@ -495,11 +495,11 @@ def extract_og_image(html_text, base_url):
             continue
         for img in container.find_all('img'):
             src = extract_image_src(img, base_url)
-            if src and not _is_placeholder(src):
+            if src and _is_usable_article_image(src):
                 return src
         for pic in container.find_all('picture'):
             src = extract_picture_src(pic, base_url)
-            if src and not _is_placeholder(src):
+            if src and _is_usable_article_image(src):
                 return src
 
     return ""
@@ -520,18 +520,6 @@ def _resolve_image_url(url, base_url):
 
 # ============================================================
 # PREVIEW GENERATION
-#
-# The card background is a 32px-wide JPEG, base64-encoded, inlined
-# directly into the feed JSON. It paints instantly, before any
-# network request, and gives the card a blurry color that matches
-# the full image that fades in on top.
-#
-# Not every image fits in PREVIEW_MAX_BASE64_BYTES at 32px.
-# High-frequency images (photographs of foliage, dense UI
-# screenshots, gradient-heavy art) can exceed the limit even at
-# quality 30. Rather than reject those images outright, we retry
-# at progressively smaller widths and lower qualities until one
-# fits.
 # ============================================================
 
 def generate_preview_data_url(image_url, referer=None):
@@ -787,9 +775,6 @@ def block_to_markdown(el, base_url):
     if name == "hr":
         return "---"
     if name == "figure":
-        # A <figure> usually contains an <img> or <picture>, and
-        # optionally a <figcaption>. Emit the image first, then
-        # the caption on its own line as italicised text.
         src = ""
         alt = ""
         picture = el.find("picture")
@@ -815,7 +800,6 @@ def block_to_markdown(el, base_url):
                 lines.append("*" + cap + "*")
 
         if not lines:
-            # No image, no caption. Fall back to any text content.
             text = inline_markdown(el, base_url).strip()
             return text
         return "\n\n".join(lines)
@@ -846,17 +830,6 @@ def walk(node, out, base_url):
 
 # ============================================================
 # ALIGNMENT
-#
-# The mask produced by trafilatura is the canonical article
-# text. Blocks whose content aligns with the mask are kept;
-# blocks that don't (nav, footers, related-article sidebars) are
-# dropped.
-#
-# Images are a special case: a block that contains only an
-# <img> has no tokens, so it never aligns with anything. And a
-# <figure> with a one-line caption often scores well below the
-# 0.5 threshold even though it is exactly what the reader
-# wants. Both cases are handled explicitly below.
 # ============================================================
 
 def _has_image_markdown(md):
@@ -872,10 +845,6 @@ def align_blocks(blocks, mask_text):
         has_image = _has_image_markdown(block["md"])
         tokens = tokenize(block["text"])
 
-        # Image-only blocks: no prose to match against the mask.
-        # Keep them unconditionally — they were inside the
-        # article body, which means the DOM walk already filtered
-        # the surrounding layout noise.
         if not tokens:
             if has_image:
                 kept.append(block["md"])
@@ -890,10 +859,6 @@ def align_blocks(blocks, mask_text):
             if not grams:
                 continue
             overlap = len(grams & mask_grams) / float(len(grams))
-            # Lower the bar when an image is present. A figure
-            # with a short caption often scores 0.2–0.4 against
-            # the trafilatura mask even though it is exactly what
-            # the reader wants.
             threshold = 0.3 if has_image else 0.5
             if overlap >= threshold:
                 kept.append(block["md"])
@@ -1022,10 +987,6 @@ def extract_article(url):
     if not url:
         return None, ""
 
-    # Fast path: URLs that obviously point to a PDF file. This
-    # avoids the network request entirely for the common case.
-    # The Content-Type check inside fetch_html remains the
-    # authority for PDFs served from extensionless URLs.
     if _looks_like_pdf_url(url):
         print(f"  [Skip] PDF link (by extension): {url}")
         return None, ""
