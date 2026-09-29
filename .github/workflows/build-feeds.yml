@@ -1,0 +1,40 @@
+name: Build feeds
+
+on:
+  push:
+    paths:
+      - 'sources/**'
+      - 'tools/**'
+      - '.github/workflows/build-feeds.yml'
+  schedule:
+    # Every six hours, on the hour.
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Generate feeds
+        run: python3 tools/build_feeds.py
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "droidbuild-feed-bot"
+          git config user.email "droidbuild-feed-bot@users.noreply.github.com"
+          git add feeds/
+          if git diff --staged --quiet; then
+            echo "no changes to commit"
+          else
+            git commit -m "regenerate feeds"
+            git push
+          fi
