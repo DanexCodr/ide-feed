@@ -8,9 +8,13 @@ Pipeline for each article:
   3. BeautifulSoup walks the raw HTML into semantic blocks.
   4. Blocks whose text appears in the mask are kept, in document
      order, and emitted as Markdown.
-  5. Trailing navigation chrome is trimmed.
-  6. Bodies with fewer than two sentences of prose are dropped.
-  7. If the dual-pipeline produces nothing, readability-lxml +
+  5. If the body contains the article title and removing it leaves
+     too little text, the item is dropped. This catches CMS
+     layouts where the whole body is a title box plus chrome.
+  6. The body is trimmed to the region between the first and last
+     prose blocks.
+  7. Bodies shorter than MIN_BODY_LENGTH are dropped.
+  8. If the dual-pipeline produces nothing, readability-lxml +
      html2text is used as a last resort.
 
 No AI. No API keys. No model retirements. Deterministic output.
@@ -49,7 +53,6 @@ STRIP_TAGS = ["script", "style", "noscript", "svg", "iframe", "form"]
 
 # Body-quality thresholds.
 MIN_BODY_LENGTH = 300
-MIN_PROSE_SENTENCES = 2
 MIN_SENTENCE_LENGTH = 40
 
 
@@ -67,13 +70,10 @@ def decode_entities(s):
 
 
 def strip_links(text):
-    """Replace [label](url) with just label."""
     return re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
 
 
 def strip_non_prose(text):
-    """Remove code fences, inline code, and Markdown markers so a
-    sentence counter only sees readable words."""
     text = re.sub(r'```[\s\S]*?```', ' ', text)
     text = re.sub(r'`[^`]*`', ' ', text)
     text = re.sub(r'[#*_>|]', ' ', text)
@@ -81,36 +81,31 @@ def strip_non_prose(text):
     return text.strip()
 
 
-def count_prose_sentences(markdown):
-    """Count sentences of real prose. A sentence counts only if it
-    is at least MIN_SENTENCE_LENGTH characters long."""
-    if not markdown:
-        return 0
-    text = strip_links(markdown)
+def normalize_for_compare(s):
+    """Lowercase, strip punctuation, collapse whitespace. Used for
+    comparing a block against the article title."""
+    if not s:
+        return ""
+    s = s.strip().lower()
+    s = re.sub(r'[^\w\s]', '', s)
+    s = re.sub(r'\s+', ' ', s)
+    return s
+
+
+def is_prose_block(block):
+    """True if this block contains at least one sentence of real
+    prose: MIN_SENTENCE_LENGTH characters ending in . ! or ?."""
+    if not block:
+        return False
+    text = strip_links(block)
     text = strip_non_prose(text)
     if not text:
-        return 0
+        return False
     parts = re.split(r'(?<=[.!?])\s+', text)
-    count = 0
     for part in parts:
         if len(part.strip()) >= MIN_SENTENCE_LENGTH:
-            count += 1
-    return count
-
-
-def count_links(block):
-    if not block:
-        return 0
-    return len(re.findall(r'\[([^\]]+)\]\([^)]+\)', block))
-
-
-def link_chars(block):
-    if not block:
-        return 0
-    total = 0
-    for match in re.finditer(r'\[([^\]]+)\]\([^)]+\)', block):
-        total += len(match.group(0))
-    return total
+            return True
+    return False
 
 
 # ============================================================
@@ -377,7 +372,7 @@ def align_blocks(blocks, mask_text):
 
 
 # ============================================================
-# BODY QUALITY FILTERS
+# BODY FILTERS
 # ============================================================
 
 def split_into_blocks(markdown):
@@ -398,52 +393,69 @@ def split_into_blocks(markdown):
     return blocks
 
 
-def block_is_chrome(block):
-    """True if this block is site navigation, related links, or
-    metadata rather than article content.
+def strip_title_from_body(body, title):
+    """Remove blocks whose content is the article title.
 
-    Signals, in order of strength:
-      - Three or more Markdown links in one block.
-      - Link syntax makes up more than 30% of the block.
-      - More than half the non-heading lines are short and have no
-        sentence terminator.
-      - The block is nothing but headings.
+    Many CMS layouts repeat the title inside the body. If the
+    title is a whole block or the first line, remove it. This is
+    what makes the Signals & Levers case droppable: the body is
+    the title box plus chrome, and once the title box is gone
+    there is nothing substantial left.
     """
-    if not block:
-        return True
-    lines = [l for l in block.split('\n') if l.strip()]
-    if not lines:
-        return True
+    if not body or not title:
+        return body
 
-    non_heading = [l for l in lines if not re.match(r'^#{1,6}\s+\S', l.strip())]
-    if not non_heading:
-        return True
+    title_norm = normalize_for_compare(title)
+    if not title_norm:
+        return body
 
-    if block.count('](') >= 3:
-        return True
+    # Drop any whole block that equals the title.
+    blocks = split_into_blocks(body)
+    out = []
+    for b in blocks:
+        b_norm = normalize_for_compare(strip_links(b))
+        if b_norm == title_norm:
+            continue
+        out.append(b)
+    body = '\n\n'.join(out).strip()
 
-    lc = link_chars(block)
-    if len(block) > 0 and lc / float(len(block)) > 0.3:
-        return True
+    # Drop the first line if it equals the title (handles the case
+    # where the title box was emitted as the first line of a larger
+    # block).
+    lines = body.split('\n')
+    if lines:
+        first_norm = normalize_for_compare(strip_links(lines[0]))
+        if first_norm == title_norm:
+            lines = lines[1:]
+            while lines and not lines[0].strip():
+                lines = lines[1:]
+            body = '\n'.join(lines).strip()
 
-    short_no_period = 0
-    for l in non_heading:
-        s = l.strip()
-        if len(s) < 60 and not re.search(r'[.!?]', s):
-            short_no_period += 1
-    if short_no_period / float(len(non_heading)) > 0.5:
-        return True
-
-    return False
+    return body
 
 
-def trim_trailing_navigation(markdown):
-    """Drop trailing chrome from the end of the body.
+def body_is_essentially_title(body, title):
+    """True if the body contains the title and stripping it leaves
+    too little text to be an article."""
+    if not body or not title:
+        return False
 
-    Walks from the bottom, removing every block that looks like
-    site chrome, until a real article block is reached. Returns
-    the original unchanged if trimming would remove everything.
-    """
+    body_norm = normalize_for_compare(strip_links(body))
+    title_norm = normalize_for_compare(title)
+    if not title_norm or not body_norm:
+        return False
+
+    if title_norm not in body_norm:
+        return False
+
+    remainder = body_norm.replace(title_norm, '', 1).strip()
+    return len(remainder) < MIN_BODY_LENGTH
+
+
+def trim_to_prose_region(markdown):
+    """Keep only the region between the first and last prose blocks.
+    Drops everything above the first paragraph of real article text
+    and everything below the last one."""
     if not markdown:
         return markdown
 
@@ -451,28 +463,25 @@ def trim_trailing_navigation(markdown):
     if not blocks:
         return markdown
 
-    end = len(blocks)
-    while end > 0:
-        if block_is_chrome(blocks[end - 1]):
-            end -= 1
-        else:
-            break
+    first = -1
+    last = -1
+    for i, b in enumerate(blocks):
+        if is_prose_block(b):
+            if first < 0:
+                first = i
+            last = i
 
-    if end == 0:
+    if first < 0 or last < 0:
         return markdown
-    if end == len(blocks):
-        return markdown
-    return '\n\n'.join(blocks[:end]).strip()
+
+    trimmed = blocks[first:last + 1]
+    return '\n\n'.join(trimmed).strip()
 
 
 def looks_like_article(markdown):
-    """True if the body is a real article: at least two sentences
-    of prose, and long enough to matter."""
     if not markdown:
         return False
     if len(markdown.strip()) < MIN_BODY_LENGTH:
-        return False
-    if count_prose_sentences(markdown) < MIN_PROSE_SENTENCES:
         return False
     return True
 
@@ -540,20 +549,31 @@ def extract_article(url):
     return None
 
 
-def prepare_body(url):
-    """Extract, trim the tail, and require two sentences of prose."""
+def prepare_body(url, title):
+    """Extract, drop title-only bodies, trim to the prose region,
+    and require a minimum body length."""
     body = extract_article(url)
     if body is None:
         return None
 
-    body = trim_trailing_navigation(body)
+    # If the body is the title plus a handful of chrome, there is
+    # no article here. Drop.
+    if body_is_essentially_title(body, title):
+        print(f"  [Drop] Body is essentially the title: {url}")
+        return None
+
+    body = strip_title_from_body(body, title)
     if not body or not body.strip():
-        print(f"  [Drop] Body empty after trim: {url}")
+        print(f"  [Drop] Body empty after stripping title: {url}")
+        return None
+
+    body = trim_to_prose_region(body)
+    if not body or not body.strip():
+        print(f"  [Drop] Body empty after prose trim: {url}")
         return None
 
     if not looks_like_article(body):
-        sentences = count_prose_sentences(body)
-        print(f"  [Drop] Only {sentences} sentence(s) of prose: {url}")
+        print(f"  [Drop] Body too short ({len(body.strip())} chars): {url}")
         return None
 
     return body
@@ -619,7 +639,7 @@ def fetch_hacker_news():
                 final.append(item)
                 continue
 
-            body = prepare_body(item['url'])
+            body = prepare_body(item['url'], item['title'])
             if body is None:
                 continue
 
@@ -666,7 +686,7 @@ def fetch_lobsters():
 
         final = []
         for item in raw_items:
-            body = prepare_body(item['url'])
+            body = prepare_body(item['url'], item['title'])
             if body is None:
                 continue
             item['body'] = body
@@ -706,7 +726,7 @@ def fetch_i_programmer():
 
         final = []
         for item in raw_items:
-            body = prepare_body(item['url'])
+            body = prepare_body(item['url'], item['title'])
             if body is None:
                 continue
             item['body'] = body
@@ -790,11 +810,15 @@ def fetch_daily_dev():
         for item in raw_items:
             body = item.get('summary', '') or ''
             if not body.strip():
-                body = prepare_body(item['url'])
+                body = prepare_body(item['url'], item['title'])
                 if body is None:
                     continue
             else:
-                body = trim_trailing_navigation(body)
+                if body_is_essentially_title(body, item['title']):
+                    print(f"  [Drop] daily.dev summary is title-only: {item['url']}")
+                    continue
+                body = strip_title_from_body(body, item['title'])
+                body = trim_to_prose_region(body)
                 if not looks_like_article(body):
                     print(f"  [Drop] daily.dev summary too short: {item['url']}")
                     continue
@@ -836,7 +860,7 @@ def fetch_mit_news():
 
         final = []
         for item in raw_items:
-            body = prepare_body(item['url'])
+            body = prepare_body(item['url'], item['title'])
             if body is None:
                 continue
             item['body'] = body
