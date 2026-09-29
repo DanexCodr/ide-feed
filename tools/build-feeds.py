@@ -4,32 +4,21 @@ Build static JSON feeds for DroidBuild.
 
 Pipeline for each article:
   1. Fetch raw HTML.
-  2. trafilatura extracts the article as clean HTML (nav, ads,
-     sidebars, comments removed; tables, links, emphasis kept).
-  3. html2text converts that HTML to Markdown with tables intact.
-  4. AI (Groq) polishes the Markdown: fixes spacing, ensures code
-     fences, tidies tables. Does NOT rewrite wording.
-  5. If AI fails or is unavailable, the Markdown from step 3 is
-     used as-is.
+  2. trafilatura extracts a plain-text mask of the article content.
+  3. BeautifulSoup walks the raw HTML into semantic blocks
+     (paragraphs, headings, tables, code, lists, blockquotes).
+  4. Blocks whose text appears in the mask are kept, in document
+     order, and emitted as Markdown. This preserves tables, bold,
+     italic, code blocks, and links while dropping nav, sidebars,
+     ads, and comments.
+  5. If the dual-pipeline produces nothing, readability-lxml +
+     html2text is used as a last resort.
 
-If trafilatura produces nothing, readability-lxml is used as a
-last resort. If that also fails, the item is DROPPED from the feed.
-No item is ever published with only a "read the full article" link.
+If all strategies fail, the item is DROPPED from the feed. No
+item is ever published with only a "read the full article" link.
 
-GROQ FREE TIER CONSTRAINTS (as of September 2026):
-  - 8,000 tokens per minute per model, charged against the declared
-    max_tokens up front. A request with max_tokens=8192 fails even
-    if the prompt is 20 tokens.
-  - openai/gpt-oss-120b does not support response_format. JSON must
-    be requested in the prompt and parsed from the raw response.
-  - 30 RPM, 1,000 RPD per chat model.
-
-The script therefore:
-  - Pre-cleans HTML to Markdown before sending it to the AI. The
-    Markdown input is roughly 4-6k characters, well inside the
-    token budget.
-  - Caps max_tokens at 4,000 for polishing and 200 for curation.
-  - Never uses response_format.
+No AI. No API keys. No model retirements. Deterministic output
+every run.
 """
 
 import json
@@ -42,7 +31,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 
 from readability import Document
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, NavigableString
 import html2text
 
 try:
@@ -51,223 +40,20 @@ try:
 except ImportError:
     HAS_TRAFILATURA = False
 
-# ============================================================
-# AI CONFIGURATION
-# ============================================================
-
-try:
-    from openai import OpenAI
-    HAS_OPENAI_SDK = True
-except ImportError:
-    HAS_OPENAI_SDK = False
-
-GROQ_API_KEY = os.environ.get('GROQ_API_KEY', '')
-GROQ_BASE_URL = "https://api.groq.com/openai/v1"
-
-GROQ_MODELS = [
-    'openai/gpt-oss-120b',
-    'openai/gpt-oss-20b',
-    'qwen/qwen3.8-27b',
-    'groq/compound-mini',
-]
-
-GROQ_CLIENT = None
-GROQ_ACTIVE_MODEL = None
-
-if HAS_OPENAI_SDK and GROQ_API_KEY:
-    try:
-        GROQ_CLIENT = OpenAI(api_key=GROQ_API_KEY, base_url=GROQ_BASE_URL)
-    except Exception as e:
-        print(f"[AI Init Error] {e}")
-        GROQ_CLIENT = None
-
 SEGMENTS = ['news', 'tutorials', 'ai', 'research']
 SOURCES_DIR = 'sources'
 FEEDS_DIR = 'feeds'
 
-AI_POLISH_MAX_TOKENS = 4000
-AI_CURATE_MAX_TOKENS = 200
-AI_INPUT_CHAR_LIMIT = 16000
+BLOCK_TAGS = {
+    "p", "h1", "h2", "h3", "h4", "h5", "h6",
+    "table", "pre", "blockquote", "ul", "ol", "hr",
+}
+
+STRIP_TAGS = ["script", "style", "noscript", "svg", "iframe", "form"]
 
 
 # ============================================================
-# POLISH PROMPT
-#
-# The AI receives Markdown, not HTML. Its job is to make the
-# Markdown render cleanly, not to reconstruct lost structure.
-# ============================================================
-
-POLISH_PROMPT = """You are a Markdown formatting tool. You are not an editor, summarizer, or writer.
-
-You will receive a Markdown document that was extracted from an article. Your job is to make it render cleanly in a Markdown viewer. You are NOT to change the wording.
-
-ABSOLUTE RULES — VIOLATING ANY OF THESE IS A FAILURE:
-
-1. DO NOT rephrase, paraphrase, summarize, shorten, expand, or rewrite any sentence. The author's wording is final.
-
-2. DO NOT add any text of your own. No introductions, no conclusions, no TL;DRs, no editorial notes, no headings the source did not have.
-
-3. DO NOT remove content. Paragraphs, captions, subheadings, and block quotes all stay.
-
-4. DO NOT change capitalization, punctuation, or spacing inside sentences. Preserve em dashes (—), en dashes (–), curly quotes (" " ' '), ellipses (…), and every other typographic mark.
-
-5. DO NOT translate. If the document is in a language other than English, keep it in that language.
-
-WHAT YOU MAY FIX:
-
-- Spacing around headings, paragraphs, lists, and code blocks. Ensure a blank line separates block elements.
-- Headings: ensure top-level sections use `##` and subsections use `###`. Do not introduce `#`.
-- Code: ensure fenced code blocks use triple backticks. If a language tag is present in the source, keep it. If not, use a bare fence.
-- Tables: ensure pipe tables have a `---` separator row after the header. Ensure cells are separated by ` | `. Do not restructure tables beyond making them valid Markdown.
-- Lists: ensure a blank line before the first item and after the last. Nested lists indent by two spaces.
-- Links: ensure `[text](url)` formatting. If a URL is bare and Markdown-linkable, leave it as-is.
-- Block quotes: prefix each line with `> `.
-- Horizontal rules: use `---`.
-- Inline code: single backticks. Remove any stray backticks that are clearly errors.
-
-WHAT YOU MUST NOT DO:
-- Reorder paragraphs.
-- Rename headings.
-- Merge or split paragraphs.
-- Touch the content of code blocks.
-- Invent links or images.
-
-OUTPUT: The corrected Markdown, ready to render. No wrapper, no code fences around the whole document, no explanation, no commentary."""
-
-
-# ============================================================
-# AI HELPERS
-# ============================================================
-
-def _pick_model():
-    global GROQ_ACTIVE_MODEL
-    if GROQ_ACTIVE_MODEL is not None:
-        return GROQ_ACTIVE_MODEL
-    if GROQ_CLIENT is None:
-        return None
-    for name in GROQ_MODELS:
-        try:
-            GROQ_CLIENT.chat.completions.create(
-                model=name,
-                messages=[{"role": "user", "content": "ping"}],
-                max_tokens=1,
-            )
-            GROQ_ACTIVE_MODEL = name
-            print(f"[AI] Using model: {name}")
-            return name
-        except Exception as e:
-            print(f"[AI] Model {name} unavailable: {type(e).__name__}: {e}")
-            continue
-    return None
-
-
-def ai_query(prompt, max_tokens=2048, temperature=0.2):
-    """Send a prompt to Groq. Returns the text response, or None.
-
-    Never passes response_format. openai/gpt-oss-120b returns 400
-    json_validate_failed when it is set. JSON is requested in the
-    prompt and parsed by the caller.
-    """
-    model_name = _pick_model()
-    if model_name is None:
-        return None
-    try:
-        response = GROQ_CLIENT.chat.completions.create(
-            model=model_name,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-        if not response or not response.choices:
-            return None
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        print(f"  [AI Error] {type(e).__name__}: {e}")
-        return None
-
-
-def ai_polish_markdown(markdown, url):
-    """Ask the AI to make the extracted Markdown render cleanly.
-
-    The input is already Markdown. The AI does not reconstruct
-    structure; it corrects formatting.
-    """
-    if GROQ_CLIENT is None:
-        return None
-
-    snippet = markdown[:AI_INPUT_CHAR_LIMIT]
-
-    prompt = (
-        POLISH_PROMPT +
-        "\n\n---\n\n"
-        f"ARTICLE URL: {url}\n\n"
-        "MARKDOWN:\n" + snippet + "\n\n"
-        "Now output the corrected Markdown."
-    )
-
-    return ai_query(prompt, max_tokens=AI_POLISH_MAX_TOKENS, temperature=0.0)
-
-
-def ai_select_items(items, segment, max_items=15):
-    """Ask the AI to pick the best N items from a candidate list.
-
-    No response_format. The prompt asks for a bare JSON array and
-    the response is parsed with a tolerant regex extractor.
-    """
-    if GROQ_CLIENT is None or not items:
-        return items[:max_items]
-
-    candidates = []
-    for i, item in enumerate(items):
-        title = item.get('title', 'No Title')
-        desc = (item.get('desc', '') or '')[:120]
-        candidates.append({
-            "index": i + 1,
-            "title": title,
-            "desc": desc,
-        })
-
-    prompt = (
-        f'You are a curation assistant for a software developer news feed.\n'
-        f'Segment: "{segment}".\n\n'
-        f'Pick the {max_items} most relevant and high-quality articles for '
-        f'professional software developers. Prioritize programming, software '
-        f'engineering, AI/ML, compilers, algorithms, and systems design. '
-        f'Exclude promotional content, clickbait, low-quality items, and '
-        f'off-topic posts.\n\n'
-        f'Do not rewrite, reword, or summarize anything. You are only '
-        f'choosing indices.\n\n'
-        f'Respond with ONLY a JSON array of integer indices, in the order '
-        f'you want them to appear. Example: [1, 3, 5, 7]\n\n'
-        f'Candidates:\n{json.dumps(candidates, ensure_ascii=False)}'
-    )
-
-    response = ai_query(prompt, max_tokens=AI_CURATE_MAX_TOKENS, temperature=0.1)
-    if not response:
-        return items[:max_items]
-
-    try:
-        match = re.search(r'\[[\s,0-9]+\]', response)
-        if not match:
-            return items[:max_items]
-        selected_indices = json.loads(match.group(0))
-        selected = []
-        for idx in selected_indices:
-            if isinstance(idx, int) and 1 <= idx <= len(items):
-                selected.append(items[idx - 1])
-        return selected if selected else items[:max_items]
-    except Exception as e:
-        print(f"  [AI Parse Error] {e}: {response[:200]}")
-        return items[:max_items]
-
-
-# ============================================================
-# EXTRACTION
-#
-# trafilatura produces clean HTML; html2text converts it to
-# Markdown with tables, links, bold, and code intact. The result
-# is both what the AI sees and what the feed falls back to if the
-# AI is unavailable.
+# FETCHING
 # ============================================================
 
 def fetch_html(url):
@@ -285,63 +71,292 @@ def fetch_html(url):
     return raw.decode('utf-8', errors='replace')
 
 
-def html_to_markdown(html):
-    h = html2text.HTML2Text()
-    h.body_width = 0
-    h.ignore_images = True
-    h.ignore_emphasis = False
-    h.protect_links = True
+# ============================================================
+# MASK (used as the content-selection filter)
+# ============================================================
+
+def build_mask(html):
+    """Return the article's plain text. Used only as a filter key;
+    never emitted to the feed."""
+    mask = ""
+    if HAS_TRAFILATURA:
+        try:
+            mask = trafilatura.extract(
+                html,
+                output_format="txt",
+                include_tables=True,
+                include_formatting=False,
+                include_links=False,
+            ) or ""
+        except Exception:
+            mask = ""
+
+    if not mask.strip():
+        try:
+            summary_html = Document(html).summary()
+            mask = BeautifulSoup(summary_html, "html.parser").get_text(" ")
+        except Exception:
+            mask = ""
+
+    return mask
+
+
+def tokenize(text):
+    if not text:
+        return []
+    return re.findall(r"\w+", text.lower())
+
+
+def ngrams(tokens, n):
+    if len(tokens) < n:
+        return set()
+    return set(tuple(tokens[i:i + n]) for i in range(len(tokens) - n + 1))
+
+
+# ============================================================
+# BLOCK WALKER
+# ============================================================
+
+def extract_language(code_el):
+    classes = code_el.get("class", []) or []
+    for c in classes:
+        if c.startswith("language-"):
+            return c[len("language-"):]
+        if c.startswith("lang-"):
+            return c[len("lang-"):]
+    return ""
+
+
+def absolute_url(base, href):
+    if not href:
+        return ""
     try:
-        return h.handle(html).strip()
+        return urllib.parse.urljoin(base, href)
+    except Exception:
+        return href
+
+
+def inline_markdown(el, base_url):
+    parts = []
+    for child in el.children:
+        if isinstance(child, NavigableString):
+            parts.append(str(child))
+            continue
+        if not hasattr(child, "name") or child.name is None:
+            continue
+
+        name = child.name
+        if name in ("strong", "b"):
+            parts.append("**" + inline_markdown(child, base_url) + "**")
+        elif name in ("em", "i"):
+            parts.append("*" + inline_markdown(child, base_url) + "*")
+        elif name == "code":
+            parts.append("`" + child.get_text() + "`")
+        elif name == "a":
+            href = absolute_url(base_url, child.get("href", ""))
+            label = inline_markdown(child, base_url).strip()
+            if href and label:
+                parts.append("[" + label + "](" + href + ")")
+            else:
+                parts.append(label)
+        elif name == "br":
+            parts.append("  \n")
+        elif name == "img":
+            src = absolute_url(base_url, child.get("src", ""))
+            alt = child.get("alt", "") or ""
+            if src:
+                parts.append("![" + alt + "](" + src + ")")
+        elif name in ("sub", "sup", "del", "s", "kbd", "mark", "small"):
+            parts.append("<" + name + ">" +
+                         inline_markdown(child, base_url) +
+                         "</" + name + ">")
+        else:
+            parts.append(inline_markdown(child, base_url))
+    return "".join(parts)
+
+
+def table_to_markdown(table_el, base_url):
+    rows = []
+    for tr in table_el.find_all("tr"):
+        cells = []
+        for cell in tr.find_all(["td", "th"], recursive=False):
+            text = inline_markdown(cell, base_url).strip()
+            text = text.replace("|", "\\|")
+            text = re.sub(r"\s+", " ", text).strip()
+            cells.append(text)
+        if cells:
+            rows.append(cells)
+
+    if not rows:
+        return ""
+
+    width = max(len(r) for r in rows)
+    rows = [r + [""] * (width - len(r)) for r in rows]
+
+    out = []
+    out.append("| " + " | ".join(rows[0]) + " |")
+    out.append("| " + " | ".join(["---"] * width) + " |")
+    for r in rows[1:]:
+        out.append("| " + " | ".join(r) + " |")
+    return "\n".join(out)
+
+
+def list_to_markdown(list_el, base_url, depth=0):
+    lines = []
+    ordered = list_el.name == "ol"
+    items = list_el.find_all("li", recursive=False)
+
+    for i, li in enumerate(items):
+        prefix = ("%d. " % (i + 1)) if ordered else "- "
+        prefix = "  " * depth + prefix
+
+        inline_parts = []
+        nested_lists = []
+        for child in li.children:
+            if hasattr(child, "name") and child.name in ("ul", "ol"):
+                nested_lists.append(child)
+            elif isinstance(child, NavigableString):
+                inline_parts.append(str(child))
+            else:
+                inline_parts.append(inline_markdown(child, base_url))
+
+        content = "".join(inline_parts)
+        content = re.sub(r"\s+", " ", content).strip()
+        lines.append(prefix + content)
+
+        for nested in nested_lists:
+            lines.append(list_to_markdown(nested, base_url, depth + 1))
+
+    return "\n".join(lines)
+
+
+def block_to_markdown(el, base_url):
+    name = el.name
+
+    if name == "pre":
+        code = el.find("code")
+        if code is not None:
+            lang = extract_language(code)
+            text = code.get_text()
+        else:
+            lang = ""
+            text = el.get_text()
+        if text.endswith("\n"):
+            text = text[:-1]
+        return "```" + lang + "\n" + text + "\n```"
+
+    if name == "table":
+        return table_to_markdown(el, base_url)
+
+    if name == "blockquote":
+        inner_blocks = []
+        walk(el, inner_blocks, base_url)
+        inner_md = "\n\n".join(b["md"] for b in inner_blocks)
+        if not inner_md:
+            inner_md = inline_markdown(el, base_url).strip()
+        return "\n".join("> " + line if line else ">" for line in inner_md.split("\n"))
+
+    if name in ("ul", "ol"):
+        return list_to_markdown(el, base_url)
+
+    if name == "hr":
+        return "---"
+
+    if name in ("h1", "h2", "h3", "h4", "h5", "h6"):
+        level = int(name[1])
+        text = inline_markdown(el, base_url).strip()
+        return ("#" * level) + " " + text
+
+    text = inline_markdown(el, base_url)
+    return text.strip()
+
+
+def walk(node, out, base_url):
+    for child in list(node.children):
+        if not hasattr(child, "name") or child.name is None:
+            continue
+        if child.name in STRIP_TAGS:
+            continue
+        if child.name in BLOCK_TAGS:
+            plain = child.get_text(" ", strip=True)
+            md = block_to_markdown(child, base_url)
+            if md:
+                out.append({"text": plain, "md": md, "tag": child.name})
+        else:
+            walk(child, out, base_url)
+
+
+# ============================================================
+# ALIGNMENT
+# ============================================================
+
+def align_blocks(blocks, mask_text):
+    mask_tokens = tokenize(mask_text)
+    mask_normalized = " " + " ".join(mask_tokens) + " "
+    mask_grams = ngrams(mask_tokens, 5)
+
+    kept = []
+    for block in blocks:
+        tokens = tokenize(block["text"])
+        if not tokens:
+            continue
+
+        if len(tokens) < 5:
+            needle = " " + " ".join(tokens) + " "
+            if needle in mask_normalized:
+                kept.append(block["md"])
+        else:
+            grams = ngrams(tokens, 5)
+            if not grams:
+                continue
+            overlap = len(grams & mask_grams) / float(len(grams))
+            if overlap >= 0.5:
+                kept.append(block["md"])
+
+    return kept
+
+
+# ============================================================
+# EXTRACTION
+# ============================================================
+
+def dual_pipeline_extract(html, url):
+    if not html:
+        return ""
+    mask = build_mask(html)
+    if not mask.strip():
+        return ""
+
+    soup = BeautifulSoup(html, "html.parser")
+    for tag in soup(STRIP_TAGS):
+        tag.decompose()
+    body = soup.body if soup.body else soup
+
+    blocks = []
+    walk(body, blocks, url)
+
+    kept = align_blocks(blocks, mask)
+    if not kept:
+        return ""
+    return "\n\n".join(kept)
+
+
+def readability_extract(html):
+    try:
+        summary = Document(html).summary()
+        h = html2text.HTML2Text()
+        h.body_width = 0
+        h.ignore_images = True
+        h.ignore_emphasis = False
+        h.protect_links = True
+        return h.handle(summary).strip()
     except Exception:
         return ""
 
 
-def extract_clean_markdown(html):
-    """Return the article as Markdown, or '' on failure.
-
-    trafilatura does the content selection (drops nav, ads,
-    sidebars, comments). html2text does the HTML→Markdown
-    conversion, which is what preserves tables, links, bold, and
-    code blocks. If trafilatura is unavailable or returns nothing,
-    readability-lxml is used as a last-resort cleaner.
-    """
-    if not html:
-        return ""
-
-    cleaned_html = ""
-
-    if HAS_TRAFILATURA:
-        try:
-            cleaned_html = trafilatura.extract(
-                html,
-                output_format="html",
-                include_tables=True,
-                include_formatting=True,
-                include_links=True,
-            ) or ""
-        except Exception:
-            cleaned_html = ""
-
-    if not cleaned_html.strip():
-        try:
-            cleaned_html = Document(html).summary()
-        except Exception:
-            return ""
-
-    if not cleaned_html.strip():
-        return ""
-
-    return html_to_markdown(cleaned_html)
-
-
 def extract_article(url):
-    """Fetch and extract an article, trying each strategy in order.
-
-    Returns a non-empty Markdown string if any strategy succeeded.
-    Returns None if every strategy failed. Callers MUST treat None
-    as "drop this item from the feed."
-    """
+    """Returns Markdown on success, None on total failure. None
+    means the caller must drop the item."""
     if not url:
         return None
 
@@ -352,19 +367,18 @@ def extract_article(url):
         print(f"  [Fetch Error] {url}: {e}")
         return None
 
-    markdown = extract_clean_markdown(html)
-    if not markdown or not markdown.strip():
-        print(f"  [Drop] No clean content for {url}")
-        return None
+    print(f"  [Dual] Extracting {url}")
+    dual_body = dual_pipeline_extract(html, url)
+    if dual_body and dual_body.strip():
+        return dual_body
 
-    if GROQ_CLIENT is not None:
-        print(f"  [AI] Polishing {url}")
-        polished = ai_polish_markdown(markdown, url)
-        if polished and polished.strip():
-            return polished
-        print(f"  [AI] Polish failed; using raw Markdown for {url}")
+    print(f"  [Readability] Extracting {url}")
+    readability_body = readability_extract(html)
+    if readability_body and readability_body.strip():
+        return readability_body
 
-    return markdown
+    print(f"  [Drop] No extractor succeeded for {url}")
+    return None
 
 
 # ============================================================
@@ -382,7 +396,7 @@ def fetch_hacker_news():
         with urllib.request.urlopen(req, timeout=10) as response:
             story_ids = json.loads(response.read().decode('utf-8'))
 
-        for story_id in story_ids[:12]:
+        for story_id in story_ids[:30]:
             req = urllib.request.Request(
                 f"https://hacker-news.firebaseio.com/v0/item/{story_id}.json",
                 headers={'User-Agent': 'DroidBuild-Agent/1.0'}
@@ -410,18 +424,22 @@ def fetch_hacker_news():
                 'url': url,
                 'text': text,
                 'hn_id': story_id,
+                'score': score,
             })
 
-        selected = ai_select_items(raw_items, 'news', max_items=15)
+        # HN's topstories already returns stories in score order,
+        # but sorting again makes the intent explicit.
+        raw_items.sort(key=lambda x: x.get('score', 0), reverse=True)
 
         final = []
-        for item in selected:
+        for item in raw_items[:15]:
             if item.get('text'):
                 body = item['text']
                 body += f"\n\n[Discuss on Hacker News](https://news.ycombinator.com/item?id={item['hn_id']})"
                 item['body'] = body
                 item.pop('text', None)
                 item.pop('hn_id', None)
+                item.pop('score', None)
                 final.append(item)
                 continue
 
@@ -433,12 +451,13 @@ def fetch_hacker_news():
             item['body'] = body
             item.pop('text', None)
             item.pop('hn_id', None)
+            item.pop('score', None)
             final.append(item)
 
         for order, item in enumerate(final, start=1):
             item['order'] = order
 
-        print(f"Fetched {len(final)} HN items (dropped {len(selected) - len(final)}).")
+        print(f"Fetched {len(final)} HN items.")
         return final
     except Exception as e:
         print(f"Error fetching HN: {e}")
@@ -456,7 +475,7 @@ def fetch_lobsters():
         with urllib.request.urlopen(req, timeout=10) as response:
             root = ET.fromstring(response.read())
 
-        for i, item in enumerate(root.findall('.//item')[:12]):
+        for i, item in enumerate(root.findall('.//item')[:15]):
             title = item.find('title').text
             link = item.find('link').text
             pub_date = item.find('pubDate').text
@@ -469,10 +488,8 @@ def fetch_lobsters():
                 'url': link,
             })
 
-        selected = ai_select_items(raw_items, 'news', max_items=15)
-
         final = []
-        for item in selected:
+        for item in raw_items:
             body = extract_article(item['url'])
             if body is None:
                 continue
@@ -482,7 +499,7 @@ def fetch_lobsters():
         for order, item in enumerate(final, start=1):
             item['order'] = order
 
-        print(f"Fetched {len(final)} Lobsters items (dropped {len(selected) - len(final)}).")
+        print(f"Fetched {len(final)} Lobsters items.")
         return final
     except Exception as e:
         print(f"Error fetching Lobsters: {e}")
@@ -498,7 +515,7 @@ def fetch_i_programmer():
         with urllib.request.urlopen(req, timeout=10) as response:
             root = ET.fromstring(response.read())
 
-        for i, item in enumerate(root.findall('.//item')[:12]):
+        for i, item in enumerate(root.findall('.//item')[:15]):
             title = item.find('title').text
             link = item.find('link').text
             pub_date = item.find('pubDate').text
@@ -511,10 +528,8 @@ def fetch_i_programmer():
                 'url': link,
             })
 
-        selected = ai_select_items(raw_items, 'news', max_items=15)
-
         final = []
-        for item in selected:
+        for item in raw_items:
             body = extract_article(item['url'])
             if body is None:
                 continue
@@ -524,7 +539,7 @@ def fetch_i_programmer():
         for order, item in enumerate(final, start=1):
             item['order'] = order
 
-        print(f"Fetched {len(final)} i-programmer items (dropped {len(selected) - len(final)}).")
+        print(f"Fetched {len(final)} i-programmer items.")
         return final
     except Exception as e:
         print(f"Error fetching i-programmer: {e}")
@@ -584,7 +599,7 @@ def fetch_daily_dev():
             data = json.loads(resp.read().decode('utf-8'))
 
         raw_items = []
-        for i, post in enumerate(data.get('data', [])[:12]):
+        for i, post in enumerate(data.get('data', [])[:15]):
             raw_items.append({
                 'id': f"dailydev-{post.get('id', i)}",
                 'title': post.get('title', 'Untitled'),
@@ -595,10 +610,8 @@ def fetch_daily_dev():
                 'summary': post.get('summary', ''),
             })
 
-        selected = ai_select_items(raw_items, 'ai', max_items=15)
-
         final = []
-        for item in selected:
+        for item in raw_items:
             body = item.get('summary', '') or ''
             if not body.strip():
                 body = extract_article(item['url'])
@@ -611,7 +624,7 @@ def fetch_daily_dev():
         for order, item in enumerate(final, start=1):
             item['order'] = order
 
-        print(f"Fetched {len(final)} daily.dev items (dropped {len(selected) - len(final)}).")
+        print(f"Fetched {len(final)} daily.dev items.")
         return final
     except Exception as e:
         print(f"Error fetching daily.dev: {e}")
@@ -627,7 +640,7 @@ def fetch_mit_news():
         with urllib.request.urlopen(req, timeout=10) as response:
             root = ET.fromstring(response.read())
 
-        for i, item in enumerate(root.findall('.//item')[:12]):
+        for i, item in enumerate(root.findall('.//item')[:15]):
             title = item.find('title').text
             link = item.find('link').text
             pub_date = item.find('pubDate').text
@@ -640,10 +653,8 @@ def fetch_mit_news():
                 'url': link,
             })
 
-        selected = ai_select_items(raw_items, 'research', max_items=15)
-
         final = []
-        for item in selected:
+        for item in raw_items:
             body = extract_article(item['url'])
             if body is None:
                 continue
@@ -653,7 +664,7 @@ def fetch_mit_news():
         for order, item in enumerate(final, start=1):
             item['order'] = order
 
-        print(f"Fetched {len(final)} MIT News items (dropped {len(selected) - len(final)}).")
+        print(f"Fetched {len(final)} MIT News items.")
         return final
     except Exception as e:
         print(f"Error fetching MIT News: {e}")
@@ -719,16 +730,8 @@ def build_segment_from_markdown(segment):
 # ============================================================
 
 def main():
-    if GROQ_CLIENT is None:
-        if not HAS_OPENAI_SDK:
-            print("WARNING: openai is not installed. AI polish disabled.")
-        elif not GROQ_API_KEY:
-            print("WARNING: GROQ_API_KEY is not set. AI polish disabled.")
-        else:
-            print("WARNING: Groq client failed to initialize. AI polish disabled.")
-
     if not HAS_TRAFILATURA:
-        print("WARNING: trafilatura is not installed. Falling back to readability only.")
+        print("WARNING: trafilatura is not installed. Dual-pipeline mask will fall back to readability.")
 
     os.makedirs(FEEDS_DIR, exist_ok=True)
     any_built = False
