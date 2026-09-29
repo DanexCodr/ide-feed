@@ -9,7 +9,7 @@ Pipeline for each article:
   4. Blocks whose text appears in the mask are kept, in document
      order, and emitted as Markdown.
   5. Trailing navigation chrome is trimmed.
-  6. Bodies with fewer than two sentences of real prose are dropped.
+  6. Bodies with fewer than two sentences of prose are dropped.
   7. If the dual-pipeline produces nothing, readability-lxml +
      html2text is used as a last resort.
 
@@ -71,41 +71,46 @@ def strip_links(text):
     return re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
 
 
-def strip_blocks_that_are_not_prose(text):
-    """Remove code fences, inline code, and markdown markers so a
+def strip_non_prose(text):
+    """Remove code fences, inline code, and Markdown markers so a
     sentence counter only sees readable words."""
-    # Code fences.
     text = re.sub(r'```[\s\S]*?```', ' ', text)
-    # Inline code.
     text = re.sub(r'`[^`]*`', ' ', text)
-    # Heading markers, emphasis, table pipes, list markers.
     text = re.sub(r'[#*_>|]', ' ', text)
-    # Collapse whitespace.
     text = re.sub(r'\s+', ' ', text)
     return text.strip()
 
 
 def count_prose_sentences(markdown):
-    """Count sentences of real prose in the body.
-
-    A sentence counts only if it is at least MIN_SENTENCE_LENGTH
-    characters long. That filters out short labels, headings, and
-    list items that happen to end in a period.
-    """
+    """Count sentences of real prose. A sentence counts only if it
+    is at least MIN_SENTENCE_LENGTH characters long."""
     if not markdown:
         return 0
-
     text = strip_links(markdown)
-    text = strip_blocks_that_are_not_prose(text)
+    text = strip_non_prose(text)
     if not text:
         return 0
-
     parts = re.split(r'(?<=[.!?])\s+', text)
     count = 0
     for part in parts:
         if len(part.strip()) >= MIN_SENTENCE_LENGTH:
             count += 1
     return count
+
+
+def count_links(block):
+    if not block:
+        return 0
+    return len(re.findall(r'\[([^\]]+)\]\([^)]+\)', block))
+
+
+def link_chars(block):
+    if not block:
+        return 0
+    total = 0
+    for match in re.finditer(r'\[([^\]]+)\]\([^)]+\)', block):
+        total += len(match.group(0))
+    return total
 
 
 # ============================================================
@@ -141,6 +146,7 @@ def build_mask(html_text):
                 include_tables=True,
                 include_formatting=False,
                 include_links=False,
+                favor_precision=True,
             ) or ""
         except Exception:
             mask = ""
@@ -392,25 +398,40 @@ def split_into_blocks(markdown):
     return blocks
 
 
-def is_trivial_line(text):
-    """True if this single line is chrome, not prose.
+def block_is_chrome(block):
+    """True if this block is site navigation, related links, or
+    metadata rather than article content.
 
-    A line is chrome if it is a bare heading, very short and with
-    no sentence terminator, or almost entirely a Markdown link.
+    Signals, in order of strength:
+      - Three or more Markdown links in one block.
+      - Link syntax makes up more than 30% of the block.
+      - More than half the non-heading lines are short and have no
+        sentence terminator.
+      - The block is nothing but headings.
     """
-    s = text.strip()
-    if not s:
+    if not block:
+        return True
+    lines = [l for l in block.split('\n') if l.strip()]
+    if not lines:
         return True
 
-    if re.match(r'^#{1,6}\s+\S', s):
+    non_heading = [l for l in lines if not re.match(r'^#{1,6}\s+\S', l.strip())]
+    if not non_heading:
         return True
 
-    if len(s) < 60 and not re.search(r'[.!?]', s):
+    if block.count('](') >= 3:
         return True
 
-    link_chars = sum(len(m.group(0))
-                     for m in re.finditer(r'\[([^\]]+)\]\([^)]+\)', s))
-    if len(s) > 0 and link_chars / float(len(s)) > 0.4:
+    lc = link_chars(block)
+    if len(block) > 0 and lc / float(len(block)) > 0.3:
+        return True
+
+    short_no_period = 0
+    for l in non_heading:
+        s = l.strip()
+        if len(s) < 60 and not re.search(r'[.!?]', s):
+            short_no_period += 1
+    if short_no_period / float(len(non_heading)) > 0.5:
         return True
 
     return False
@@ -419,9 +440,9 @@ def is_trivial_line(text):
 def trim_trailing_navigation(markdown):
     """Drop trailing chrome from the end of the body.
 
-    Walks from the bottom, removing every block whose lines are all
-    trivial, until a real prose block is reached. Returns the
-    original unchanged if trimming would remove everything.
+    Walks from the bottom, removing every block that looks like
+    site chrome, until a real article block is reached. Returns
+    the original unchanged if trimming would remove everything.
     """
     if not markdown:
         return markdown
@@ -432,12 +453,7 @@ def trim_trailing_navigation(markdown):
 
     end = len(blocks)
     while end > 0:
-        block = blocks[end - 1]
-        block_lines = [l for l in block.split('\n') if l.strip()]
-        if not block_lines:
-            end -= 1
-            continue
-        if all(is_trivial_line(l) for l in block_lines):
+        if block_is_chrome(blocks[end - 1]):
             end -= 1
         else:
             break
