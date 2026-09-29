@@ -2,6 +2,10 @@
 """
 Build static JSON feeds for DroidBuild.
 
+Segments produced:
+  - news       : Hacker News + Lobsters + I Programmer + MIT News + daily.dev
+  - tutorials  : Dev.to (filtered to exclude personal/report posts)
+
 Pipeline for each article:
   1. Fetch raw HTML.
   2. trafilatura produces a plain-text mask of the article.
@@ -14,13 +18,15 @@ Pipeline for each article:
   6. The body is trimmed to the region between the first and last
      prose blocks.
   7. The body must contain at least MIN_PROSE_CONTENT characters
-     of real prose (sentences ending in . ! or ?). Everything
-     else is chrome and the item is dropped.
+     of real prose.
 
-Curation filters also apply at fetch time:
-  - I Programmer Book Watch listings are skipped. They are book
-    catalogs, not news, and their URLs contain
-    /book-watch-archive/.
+Curation filters applied at fetch time:
+  - I Programmer Book Watch listings are skipped (book catalogs,
+    not news). Their URLs contain /book-watch-archive/.
+  - Dev.to personal report posts are skipped. These are matched
+    by title pattern and by tag blocklist. Dev.to is a personal
+    blogging platform; "Monthly Dev Report" style posts are
+    diaries, not tutorials.
 
 No AI. No API keys. No model retirements. Deterministic output.
 """
@@ -45,7 +51,11 @@ try:
 except ImportError:
     HAS_TRAFILATURA = False
 
-SEGMENTS = ['news', 'tutorials', 'ai', 'research']
+# Only these two segments are written. The app's Learn page has
+# news and tutorials tabs. MIT News and daily.dev items go into
+# the news feed.
+SEGMENTS = ['news', 'tutorials']
+
 SOURCES_DIR = 'sources'
 FEEDS_DIR = 'feeds'
 
@@ -59,6 +69,58 @@ STRIP_TAGS = ["script", "style", "noscript", "svg", "iframe", "form"]
 # Body-quality thresholds.
 MIN_PROSE_CONTENT = 200
 MIN_SENTENCE_LENGTH = 40
+
+
+# ============================================================
+# DEV.TO FILTERS
+# ============================================================
+
+# Tags used by personal reports, discussions, and platform meta
+# posts. Dev.to is a personal blogging platform; these tags
+# reliably mark non-tutorial content.
+DEVTO_SKIP_TAGS = {
+    'devjournal',
+    'discuss',
+    'watercooler',
+    'career',
+    'meta',
+    'newbie',
+    'personal',
+    'monthly',
+    'thoughts',
+}
+
+# Title patterns for personal reports, recaps, and journeys.
+# These are matched case-insensitively against the article title.
+DEVTO_SKIP_TITLE_PATTERNS = [
+    r'\bmonthly\s+(dev|report|recap|update|summary|checkpoint|log|journal|special)\b',
+    r'\bmonth\s+in\s+review\b',
+    r'\bweek\s+in\s+review\b',
+    r'\bmy\s+(dev\s+|coding\s+|development\s+)?journey\b',
+    r'\bwhat\s+i\s+learned\b',
+    r'\bdev\s+(report|recap|journal|diary)\b',
+    r'\bnewsletter\s+#?\d+\b',
+    r'\b\d+\s+months?\s+of\b',
+    r'\bmy\s+\d{4}\s+(year|recap)\b',
+]
+
+
+def devto_should_skip(detail):
+    """Return (skip, reason) for a Dev.to article detail response."""
+    title = (detail.get('title') or '').lower()
+
+    for pat in DEVTO_SKIP_TITLE_PATTERNS:
+        if re.search(pat, title):
+            return True, f"title matches /{pat}/"
+
+    tags = detail.get('tag_list') or []
+    if isinstance(tags, str):
+        tags = [t.strip() for t in tags.split(',')]
+    for t in tags:
+        if isinstance(t, str) and t.lower() in DEVTO_SKIP_TAGS:
+            return True, f"tag '{t}'"
+
+    return False, ""
 
 
 # ============================================================
@@ -99,8 +161,7 @@ def prose_text(block):
     """Return the prose portion of a block, or empty string.
 
     Prose means: at least one complete sentence of MIN_SENTENCE_
-    LENGTH characters ending in . ! or ?. The terminator is
-    required.
+    LENGTH characters ending in . ! or ?.
     """
     if not block:
         return ""
@@ -633,7 +694,7 @@ def fetch_hacker_news():
         raw_items.sort(key=lambda x: x.get('score', 0), reverse=True)
 
         final = []
-        for item in raw_items[:15]:
+        for item in raw_items[:12]:
             if item.get('text'):
                 body = item['text']
                 body += f"\n\n[Discuss on Hacker News](https://news.ycombinator.com/item?id={item['hn_id']})"
@@ -676,7 +737,7 @@ def fetch_lobsters():
         with urllib.request.urlopen(req, timeout=10) as response:
             root = ET.fromstring(response.read())
 
-        for i, item in enumerate(root.findall('.//item')[:15]):
+        for i, item in enumerate(root.findall('.//item')[:10]):
             title = decode_entities(item.find('title').text)
             link = item.find('link').text
             pub_date = item.find('pubDate').text
@@ -722,7 +783,7 @@ def fetch_i_programmer():
             pub_date = item.find('pubDate').text
 
             # Skip Book Watch listings. They are book catalogs, not
-            # news articles. Their URLs contain /book-watch-archive/.
+            # news articles.
             if "/book-watch-archive/" in link:
                 print(f"  [Skip] Book Watch listing: {link}")
                 continue
@@ -758,19 +819,32 @@ def fetch_devto_full():
     print("Fetching Dev.to...")
     items = []
     try:
-        list_url = "https://dev.to/api/articles?per_page=15&top=7&tag=programming"
+        list_url = "https://dev.to/api/articles?per_page=30&top=14&tag=programming"
         req = urllib.request.Request(list_url, headers={'User-Agent': 'DroidBuild-Agent/1.0'})
         with urllib.request.urlopen(req, timeout=10) as resp:
             articles = json.loads(resp.read().decode('utf-8'))
 
-        for i, article in enumerate(articles):
+        skipped = 0
+        kept = 0
+
+        for article in articles:
+            if kept >= 15:
+                break
+
             detail_url = f"https://dev.to/api/articles/{article['id']}"
             req = urllib.request.Request(detail_url, headers={'User-Agent': 'DroidBuild-Agent/1.0'})
             with urllib.request.urlopen(req, timeout=10) as resp:
                 detail = json.loads(resp.read().decode('utf-8'))
 
+            skip, reason = devto_should_skip(detail)
+            if skip:
+                print(f"  [Skip] Dev.to: {reason} — {article['title'][:70]}")
+                skipped += 1
+                continue
+
             body = detail.get('body_markdown', '') or ''
             if not body.strip():
+                skipped += 1
                 continue
 
             items.append({
@@ -779,11 +853,13 @@ def fetch_devto_full():
                 'desc': f"By {article['user']['name']} | {article['reading_time_minutes']} min read",
                 'tag': 'tutorial',
                 'published': article['published_at'],
-                'order': i + 1,
+                'order': kept + 1,
                 'body': body,
                 'url': article['url'],
             })
-        print(f"Fetched {len(items)} Dev.to items.")
+            kept += 1
+
+        print(f"Fetched {len(items)} Dev.to items (skipped {skipped}).")
         return items
     except Exception as e:
         print(f"Error fetching Dev.to: {e}")
@@ -807,7 +883,7 @@ def fetch_daily_dev():
             data = json.loads(resp.read().decode('utf-8'))
 
         raw_items = []
-        for i, post in enumerate(data.get('data', [])[:15]):
+        for i, post in enumerate(data.get('data', [])[:10]):
             raw_items.append({
                 'id': f"dailydev-{post.get('id', i)}",
                 'title': decode_entities(post.get('title', 'Untitled')),
@@ -854,7 +930,7 @@ def fetch_mit_news():
         with urllib.request.urlopen(req, timeout=10) as response:
             root = ET.fromstring(response.read())
 
-        for i, item in enumerate(root.findall('.//item')[:15]):
+        for i, item in enumerate(root.findall('.//item')[:10]):
             title = decode_entities(item.find('title').text)
             link = item.find('link').text
             pub_date = item.find('pubDate').text
@@ -955,13 +1031,20 @@ def main():
         live_items = []
 
         if segment == 'news':
-            live_items = fetch_hacker_news() + fetch_lobsters() + fetch_i_programmer()
+            # News draws from five sources. MIT News and daily.dev
+            # used to have their own segments; the app's Learn page
+            # has no tab for them, so their items go into the news
+            # feed with their original tags preserved for the card
+            # badges.
+            live_items = (
+                fetch_hacker_news()
+                + fetch_lobsters()
+                + fetch_i_programmer()
+                + fetch_mit_news()
+                + fetch_daily_dev()
+            )
         elif segment == 'tutorials':
             live_items = fetch_devto_full()
-        elif segment == 'ai':
-            live_items = fetch_daily_dev()
-        elif segment == 'research':
-            live_items = fetch_mit_news()
 
         all_items = live_items + local_items
         if not all_items:
