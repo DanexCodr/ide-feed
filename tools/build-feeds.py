@@ -4,7 +4,7 @@ Build static JSON feeds for DroidBuild.
 
 Segments produced:
   - news       : Hacker News + Lobsters + I Programmer + MIT News + daily.dev
-  - tutorials  : Dev.to (filtered to exclude personal/report posts)
+  - tutorials  : Dev.to (filtered to exclude posts with emoji titles)
 
 Pipeline for each article:
   1. Fetch raw HTML.
@@ -21,12 +21,10 @@ Pipeline for each article:
      of real prose.
 
 Curation filters applied at fetch time:
-  - I Programmer Book Watch listings are skipped (book catalogs,
-    not news). Their URLs contain /book-watch-archive/.
-  - Dev.to personal report posts are skipped. These are matched
-    by title pattern and by tag blocklist. Dev.to is a personal
-    blogging platform; "Monthly Dev Report" style posts are
-    diaries, not tutorials.
+  - I Programmer Book Watch listings are skipped.
+  - Dev.to posts with emoji in the title are skipped. Emoji are
+    a reliable signal for personal reports, monthly recaps, and
+    platform-meta posts; real tutorials rarely carry them.
 
 No AI. No API keys. No model retirements. Deterministic output.
 """
@@ -51,11 +49,7 @@ try:
 except ImportError:
     HAS_TRAFILATURA = False
 
-# Only these two segments are written. The app's Learn page has
-# news and tutorials tabs. MIT News and daily.dev items go into
-# the news feed.
 SEGMENTS = ['news', 'tutorials']
-
 SOURCES_DIR = 'sources'
 FEEDS_DIR = 'feeds'
 
@@ -66,60 +60,51 @@ BLOCK_TAGS = {
 
 STRIP_TAGS = ["script", "style", "noscript", "svg", "iframe", "form"]
 
-# Body-quality thresholds.
 MIN_PROSE_CONTENT = 200
 MIN_SENTENCE_LENGTH = 40
 
 
 # ============================================================
-# DEV.TO FILTERS
+# EMOJI DETECTION
 # ============================================================
 
-# Tags used by personal reports, discussions, and platform meta
-# posts. Dev.to is a personal blogging platform; these tags
-# reliably mark non-tutorial content.
-DEVTO_SKIP_TAGS = {
-    'devjournal',
-    'discuss',
-    'watercooler',
-    'career',
-    'meta',
-    'newbie',
-    'personal',
-    'monthly',
-    'thoughts',
-}
-
-# Title patterns for personal reports, recaps, and journeys.
-# These are matched case-insensitively against the article title.
-DEVTO_SKIP_TITLE_PATTERNS = [
-    r'\bmonthly\s+(dev|report|recap|update|summary|checkpoint|log|journal|special)\b',
-    r'\bmonth\s+in\s+review\b',
-    r'\bweek\s+in\s+review\b',
-    r'\bmy\s+(dev\s+|coding\s+|development\s+)?journey\b',
-    r'\bwhat\s+i\s+learned\b',
-    r'\bdev\s+(report|recap|journal|diary)\b',
-    r'\bnewsletter\s+#?\d+\b',
-    r'\b\d+\s+months?\s+of\b',
-    r'\bmy\s+\d{4}\s+(year|recap)\b',
-]
+# Unicode blocks that emoji are drawn from. A single character in
+# any of these ranges is enough to flag a title. Dev.to personal
+# reports, monthly recaps, and diary posts almost always carry at
+# least one; tutorials almost never do.
+EMOJI_RANGES = (
+    (0x1F300, 0x1F5FF),   # Miscellaneous Symbols and Pictographs
+    (0x1F600, 0x1F64F),   # Emoticons
+    (0x1F680, 0x1F6FF),   # Transport and Map Symbols
+    (0x1F700, 0x1F77F),   # Alchemical Symbols
+    (0x1F780, 0x1F7FF),   # Geometric Shapes Extended
+    (0x1F800, 0x1F8FF),   # Supplemental Arrows-C
+    (0x1F900, 0x1F9FF),   # Supplemental Symbols and Pictographs
+    (0x1FA00, 0x1FA6F),   # Chess Symbols
+    (0x1FA70, 0x1FAFF),   # Symbols and Pictographs Extended-A
+    (0x2600,  0x26FF),    # Miscellaneous Symbols
+    (0x2700,  0x27BF),    # Dingbats
+    (0x2B00,  0x2BFF),    # Miscellaneous Symbols and Arrows
+    (0x1F1E6, 0x1F1FF),   # Regional Indicator Symbols (flags)
+)
 
 
-def devto_should_skip(detail):
-    """Return (skip, reason) for a Dev.to article detail response."""
-    title = (detail.get('title') or '').lower()
+def contains_emoji(s):
+    """True if the string contains any emoji character."""
+    if not s:
+        return False
+    for ch in s:
+        cp = ord(ch)
+        for lo, hi in EMOJI_RANGES:
+            if lo <= cp <= hi:
+                return True
+    return False
 
-    for pat in DEVTO_SKIP_TITLE_PATTERNS:
-        if re.search(pat, title):
-            return True, f"title matches /{pat}/"
 
-    tags = detail.get('tag_list') or []
-    if isinstance(tags, str):
-        tags = [t.strip() for t in tags.split(',')]
-    for t in tags:
-        if isinstance(t, str) and t.lower() in DEVTO_SKIP_TAGS:
-            return True, f"tag '{t}'"
-
+def devto_should_skip(title):
+    """Return (skip, reason) for a Dev.to article."""
+    if contains_emoji(title):
+        return True, "emoji in title"
     return False, ""
 
 
@@ -158,11 +143,6 @@ def normalize_for_compare(s):
 
 
 def prose_text(block):
-    """Return the prose portion of a block, or empty string.
-
-    Prose means: at least one complete sentence of MIN_SENTENCE_
-    LENGTH characters ending in . ! or ?.
-    """
     if not block:
         return ""
 
@@ -249,7 +229,6 @@ def ngrams(tokens, n):
 # ============================================================
 
 def is_layout_table(table_el):
-    """True if this table is site chrome rather than a data table."""
     rows = table_el.find_all("tr")
     if not rows:
         return False
@@ -782,8 +761,6 @@ def fetch_i_programmer():
             link = item.find('link').text
             pub_date = item.find('pubDate').text
 
-            # Skip Book Watch listings. They are book catalogs, not
-            # news articles.
             if "/book-watch-archive/" in link:
                 print(f"  [Skip] Book Watch listing: {link}")
                 continue
@@ -831,16 +808,17 @@ def fetch_devto_full():
             if kept >= 15:
                 break
 
+            list_title = article.get('title', '')
+            skip, reason = devto_should_skip(list_title)
+            if skip:
+                print(f"  [Skip] Dev.to: {reason} — {list_title[:70]}")
+                skipped += 1
+                continue
+
             detail_url = f"https://dev.to/api/articles/{article['id']}"
             req = urllib.request.Request(detail_url, headers={'User-Agent': 'DroidBuild-Agent/1.0'})
             with urllib.request.urlopen(req, timeout=10) as resp:
                 detail = json.loads(resp.read().decode('utf-8'))
-
-            skip, reason = devto_should_skip(detail)
-            if skip:
-                print(f"  [Skip] Dev.to: {reason} — {article['title'][:70]}")
-                skipped += 1
-                continue
 
             body = detail.get('body_markdown', '') or ''
             if not body.strip():
@@ -1031,11 +1009,6 @@ def main():
         live_items = []
 
         if segment == 'news':
-            # News draws from five sources. MIT News and daily.dev
-            # used to have their own segments; the app's Learn page
-            # has no tab for them, so their items go into the news
-            # feed with their original tags preserved for the card
-            # badges.
             live_items = (
                 fetch_hacker_news()
                 + fetch_lobsters()
