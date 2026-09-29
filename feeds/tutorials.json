@@ -1,5 +1,5 @@
 {
-  "updated": "2026-09-29T05:57:53Z",
+  "updated": "2026-09-29T06:17:15Z",
   "items": [
     {
       "id": "devto-4702313",
@@ -52,24 +52,24 @@
       "url": "https://dev.to/tom_jones_230c4659491adcd/implementation-is-where-judgements-go-to-become-invisible-4p1h"
     },
     {
-      "id": "devto-4729141",
-      "title": "Python Thinks Different: What Actually Happens Inside Your Code (Visual Guide)",
-      "desc": "By S M Tahosin | 9 min read",
-      "tag": "tutorial",
-      "published": "2026-09-24T04:02:22Z",
-      "order": 6,
-      "body": "Stop thinking of Python variables as boxes. This visual deep-dive reveals how Python really stores your data, manages memory, and cleans up after you. Packed with diagrams, code experiments, and aha moments.",
-      "url": "https://dev.to/smtahosin/python-thinks-different-what-actually-happens-inside-your-code-visual-guide-241l"
-    },
-    {
       "id": "devto-4752615",
       "title": "I Got Rejected 2 Minutes After Applying. So Much for 'Skills-Based Hiring.'",
       "desc": "By Mika Flowers | 4 min read",
       "tag": "tutorial",
       "published": "2026-09-26T22:36:24Z",
-      "order": 7,
+      "order": 6,
       "body": "“Startup culture\" on the job listing. FANG-style ATS vetting in the inbox.   I applied for a Junior...",
       "url": "https://dev.to/mikachu/i-got-rejected-2-minutes-after-applying-so-much-for-skills-based-hiring-4315"
+    },
+    {
+      "id": "devto-4729141",
+      "title": "Python Thinks Different: What Actually Happens Inside Your Code (Visual Guide)",
+      "desc": "By S M Tahosin | 9 min read",
+      "tag": "tutorial",
+      "published": "2026-09-24T04:02:22Z",
+      "order": 7,
+      "body": "Stop thinking of Python variables as boxes. This visual deep-dive reveals how Python really stores your data, manages memory, and cleans up after you. Packed with diagrams, code experiments, and aha moments.",
+      "url": "https://dev.to/smtahosin/python-thinks-different-what-actually-happens-inside-your-code-visual-guide-241l"
     },
     {
       "id": "devto-4761284",
