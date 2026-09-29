@@ -234,17 +234,86 @@ def is_prose_block(block):
 
 # ============================================================
 # FETCHING
+#
+# fetch_html is the boundary between raw bytes and text. It is
+# also the place where non-HTML responses are rejected.
+#
+# The list of things we refuse to parse is broad on purpose:
+#
+#   - PDFs. When HN or another source links directly to a PDF,
+#     reading the bytes as UTF-8 produces a stream of replacement
+#     characters and PDF syntax (/Type /Page, xref tables, streams)
+#     that decodes as garbage. trafilatura and readability then
+#     "succeed" on that garbage and emit it as the article body.
+#     Rejecting before decode keeps it out of the feed.
+#
+#   - Direct image links. An og:image that leaked into a URL field,
+#     or a source that returns an image instead of a page.
+#
+#   - Zip / gzip / octet-stream responses. Content that a site
+#     serves as a downloadable file rather than a document.
+#
+# The Content-Type header is the primary signal. When a server
+# lies about it, the magic-byte check below catches the two
+# most common lies.
 # ============================================================
+
+def _is_html_content_type(ctype):
+    """True if the Content-Type header describes a document we
+    can parse as HTML. Everything else is rejected.
+
+    A missing Content-Type is treated as acceptable; the
+    magic-byte check in fetch_html will still reject obvious
+    binaries, and some perfectly fine sites omit the header."""
+    if not ctype:
+        return True
+    c = ctype.lower()
+    if 'text/html' in c:
+        return True
+    if 'application/xhtml' in c:
+        return True
+    if c.startswith('text/plain'):
+        return True
+    return False
+
+
+def _looks_like_pdf_url(url):
+    """Cheap pre-check: does the URL's path component end in .pdf?
+
+    This saves a network round-trip when the answer is obvious.
+    The Content-Type check in fetch_html remains the authority —
+    this is just a fast path. Query strings and fragments are
+    stripped before the extension check."""
+    if not url:
+        return False
+    path = url.split('?', 1)[0].split('#', 1)[0].lower()
+    return path.endswith('.pdf')
+
 
 def fetch_html(url):
     """Fetch URL and return decoded, control-character-stripped
-    HTML. The sanitization step is what keeps readability-lxml
-    from crashing on bad bytes."""
+    HTML, or None when the response is not HTML.
+
+    Returning None is a signal to the caller that this URL is
+    unfixable and should be skipped. Network errors continue to
+    raise, and callers keep catching them the same way they
+    always have."""
     req = urllib.request.Request(
         url, headers={'User-Agent': 'Mozilla/5.0 (compatible; DroidBuild/1.0)'})
     with urllib.request.urlopen(req, timeout=15) as resp:
+        ctype = resp.headers.get('Content-Type', '') or ''
+        if not _is_html_content_type(ctype):
+            return None
         raw = resp.read()
-    ctype = resp.headers.get('Content-Type', '')
+
+    # Servers sometimes mis-label binaries as text/html. The
+    # magic numbers below catch the two most common cases: PDF
+    # (starts with "%PDF-") and gzip (starts with 0x1F 0x8B).
+    if raw[:5] == b'%PDF-':
+        return None
+    if raw[:2] == b'\x1f\x8b':
+        return None
+
     m = re.search(r'charset=([\w-]+)', ctype)
     text = None
     if m:
@@ -262,8 +331,7 @@ def fetch_bytes(url, timeout=10, referer=None):
 
     The referer argument is used for image fetches behind
     hotlink-protected CDNs. Without it, many sites return 403
-    to a bare User-Agent request.
-    """
+    to a bare User-Agent request."""
     if not url:
         return b''
     try:
@@ -954,11 +1022,27 @@ def extract_article(url):
     if not url:
         return None, ""
 
-    html_text = ""
+    # Fast path: URLs that obviously point to a PDF file. This
+    # avoids the network request entirely for the common case.
+    # The Content-Type check inside fetch_html remains the
+    # authority for PDFs served from extensionless URLs.
+    if _looks_like_pdf_url(url):
+        print(f"  [Skip] PDF link (by extension): {url}")
+        return None, ""
+
+    html_text = None
     try:
         html_text = fetch_html(url)
     except Exception as e:
         print(f"  [Fetch Error] {url}: {e}")
+        return None, ""
+
+    if html_text is None:
+        print(f"  [Skip] Non-HTML response (PDF, image, or binary): {url}")
+        return None, ""
+
+    if not html_text.strip():
+        print(f"  [Skip] Empty response body: {url}")
         return None, ""
 
     og_image = extract_og_image(html_text, url)
