@@ -6,27 +6,36 @@ Segments produced:
   - news       : Hacker News + Lobsters + I Programmer + MIT News + daily.dev
   - tutorials  : Dev.to (filtered)
 
-Each item carries an `image` field when the source page exposes
-an og:image meta tag, and a `color` field naming the source so the
-client can render a fallback stripe when no image is available.
+Each item carries:
+  - image    : the article's og:image URL (may be empty)
+  - preview  : a data: URL carrying a 32px JPEG preview (may be empty)
+  - color    : a hex source color, used as fallback background
+
+The preview is generated in the workflow. A tiny 32px JPEG is
+downloaded, downscaled, JPEG-encoded at low quality, base64-encoded,
+and written inline into the feed. The app sets it as the card
+background so the card paints a blurry colored blob immediately,
+then fades the full image on top when it downloads.
 
 Pipeline for each article:
   1. Fetch raw HTML.
-  2. trafilatura produces a plain-text mask of the article.
+  2. trafilatura produces a plain-text mask.
   3. BeautifulSoup walks the raw HTML into semantic blocks.
-     Single-column tables are dropped.
-  4. Blocks whose text appears in the mask are kept, in document
-     order, and emitted as Markdown.
-  5. og:image is extracted from the same HTML for the card image.
-  6. Title stripped, body trimmed, minimum prose enforced.
+  4. Blocks whose text appears in the mask are kept, in order, and
+     emitted as Markdown.
+  5. The title is stripped, the body trimmed, prose enforced.
+  6. og:image is extracted. The image is fetched, downscaled to a
+     preview, and both URLs are written into the item.
 
 No AI. No API keys. No model retirements. Deterministic output.
 """
 
+import base64
 import json
 import os
 import glob
 import html
+import io
 import re
 import urllib.parse
 import urllib.request
@@ -36,6 +45,12 @@ from datetime import datetime, timezone
 from readability import Document
 from bs4 import BeautifulSoup, NavigableString
 import html2text
+
+try:
+    from PIL import Image
+    HAS_PIL = True
+except ImportError:
+    HAS_PIL = False
 
 try:
     import trafilatura
@@ -57,9 +72,17 @@ STRIP_TAGS = ["script", "style", "noscript", "svg", "iframe", "form"]
 MIN_PROSE_CONTENT = 200
 MIN_SENTENCE_LENGTH = 40
 
+# Preview generation. A 32px wide JPEG at quality 30 lands around
+# 1.2-1.8 KB. After base64 it is about 1.7-2.5 KB per item. The
+# cap below discards any preview that grows past that, on the
+# theory that an unusual image is not worth bloating the feed.
+PREVIEW_WIDTH = 32
+PREVIEW_QUALITY = 30
+PREVIEW_MAX_BASE64_BYTES = 4096
+
 
 # ============================================================
-# SOURCE COLORS (fallback stripe when no og:image)
+# SOURCE COLORS
 # ============================================================
 
 SOURCE_COLORS = {
@@ -194,6 +217,19 @@ def fetch_html(url):
     return raw.decode('utf-8', errors='replace')
 
 
+def fetch_bytes(url, timeout=10):
+    """Fetch raw bytes from url. Returns b'' on failure."""
+    if not url:
+        return b''
+    try:
+        req = urllib.request.Request(
+            url, headers={'User-Agent': 'Mozilla/5.0 (compatible; DroidBuild/1.0)'})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.read()
+    except Exception:
+        return b''
+
+
 # ============================================================
 # OG:IMAGE EXTRACTION
 # ============================================================
@@ -211,7 +247,6 @@ def extract_og_image(html_text, base_url):
     except Exception:
         return ""
 
-    # Open Graph preferred.
     for prop in ('og:image', 'og:image:url', 'og:image:secure_url'):
         tag = soup.find('meta', attrs={'property': prop})
         if tag is None:
@@ -219,7 +254,6 @@ def extract_og_image(html_text, base_url):
         if tag and tag.get('content'):
             return urllib.parse.urljoin(base_url, tag['content'].strip())
 
-    # Twitter card image.
     for name in ('twitter:image', 'twitter:image:src'):
         tag = soup.find('meta', attrs={'name': name})
         if tag is None:
@@ -227,12 +261,79 @@ def extract_og_image(html_text, base_url):
         if tag and tag.get('content'):
             return urllib.parse.urljoin(base_url, tag['content'].strip())
 
-    # Direct link rel image_src, used by some older sites.
     tag = soup.find('link', attrs={'rel': 'image_src'})
     if tag and tag.get('href'):
         return urllib.parse.urljoin(base_url, tag['href'].strip())
 
     return ""
+
+
+# ============================================================
+# PREVIEW GENERATION
+# ============================================================
+
+def generate_preview_data_url(image_url):
+    """Download the image, downscale to PREVIEW_WIDTH px wide,
+    JPEG-encode at PREVIEW_QUALITY, base64-encode, and return a
+    data: URL. Returns '' on any failure.
+
+    The result is a short string that the app can set as a CSS
+    background. It paints in the card immediately, before the full
+    image has downloaded, giving the "blurry to clear" effect.
+    """
+    if not image_url:
+        return ""
+    if not HAS_PIL:
+        return ""
+
+    raw = fetch_bytes(image_url, timeout=10)
+    if not raw:
+        return ""
+
+    try:
+        img = Image.open(io.BytesIO(raw))
+        img.load()
+    except Exception:
+        return ""
+
+    try:
+        # Convert to RGB if the source is palette or alpha. JPEG
+        # cannot encode either.
+        if img.mode not in ('RGB', 'L'):
+            img = img.convert('RGB')
+
+        w, h = img.size
+        if w <= 0 or h <= 0:
+            return ""
+
+        # Downscale to PREVIEW_WIDTH, preserving aspect ratio.
+        new_w = PREVIEW_WIDTH
+        new_h = max(1, int(round(h * (PREVIEW_WIDTH / float(w)))))
+
+        try:
+            resample = Image.Resampling.LANCZOS
+        except AttributeError:
+            resample = Image.LANCZOS
+
+        img = img.resize((new_w, new_h), resample)
+
+        buf = io.BytesIO()
+        img.save(buf, format='JPEG', quality=PREVIEW_QUALITY,
+                 optimize=True, progressive=False)
+        data = buf.getvalue()
+    except Exception:
+        return ""
+
+    if not data:
+        return ""
+
+    encoded = base64.b64encode(data).decode('ascii')
+    data_url = "data:image/jpeg;base64," + encoded
+
+    if len(data_url) > PREVIEW_MAX_BASE64_BYTES:
+        return ""
+
+    return data_url
 
 
 # ============================================================
@@ -626,29 +727,37 @@ def extract_article(url):
 
 
 def prepare_body(url, title):
-    """Returns (body, image). body is None if the item should be
-    dropped."""
+    """Returns (body, image, preview). body is None if the item
+    should be dropped."""
     body, image = extract_article(url)
     if body is None:
-        return None, ""
+        return None, "", ""
 
     body = strip_title_from_body(body, title)
     if not body or not body.strip():
         print(f"  [Drop] Body empty after stripping title: {url}")
-        return None, ""
+        return None, "", ""
 
     body = trim_to_prose_region(body)
     if not body or not body.strip():
         print(f"  [Drop] Body empty after prose trim: {url}")
-        return None, ""
+        return None, "", ""
 
     if not looks_like_article(body):
         chars = len(body.strip())
         prose = total_prose_length(body)
         print(f"  [Drop] Only {prose} chars of prose in {chars}-char body: {url}")
-        return None, ""
+        return None, "", ""
 
-    return body, image
+    preview = ""
+    if image:
+        preview = generate_preview_data_url(image)
+        if preview:
+            print(f"  [Preview] {len(preview)} bytes from {image}")
+        else:
+            print(f"  [Preview] Failed for {image}")
+
+    return body, image, preview
 
 
 # ============================================================
@@ -707,19 +816,21 @@ def fetch_hacker_news():
                 body += f"\n\n[Discuss on Hacker News](https://news.ycombinator.com/item?id={item['hn_id']})"
                 item['body'] = body
                 item['image'] = ""
+                item['preview'] = ""
                 item.pop('text', None)
                 item.pop('hn_id', None)
                 item.pop('score', None)
                 final.append(item)
                 continue
 
-            body, image = prepare_body(item['url'], item['title'])
+            body, image, preview = prepare_body(item['url'], item['title'])
             if body is None:
                 continue
 
             body += f"\n\n[Discuss on Hacker News](https://news.ycombinator.com/item?id={item['hn_id']})"
             item['body'] = body
             item['image'] = image
+            item['preview'] = preview
             item.pop('text', None)
             item.pop('hn_id', None)
             item.pop('score', None)
@@ -762,11 +873,12 @@ def fetch_lobsters():
 
         final = []
         for item in raw_items:
-            body, image = prepare_body(item['url'], item['title'])
+            body, image, preview = prepare_body(item['url'], item['title'])
             if body is None:
                 continue
             item['body'] = body
             item['image'] = image
+            item['preview'] = preview
             final.append(item)
 
         for order, item in enumerate(final, start=1):
@@ -809,11 +921,12 @@ def fetch_i_programmer():
 
         final = []
         for item in raw_items:
-            body, image = prepare_body(item['url'], item['title'])
+            body, image, preview = prepare_body(item['url'], item['title'])
             if body is None:
                 continue
             item['body'] = body
             item['image'] = image
+            item['preview'] = preview
             final.append(item)
 
         for order, item in enumerate(final, start=1):
@@ -859,11 +972,15 @@ def fetch_devto_full():
                 skipped += 1
                 continue
 
-            # Dev.to provides the cover image directly in the
-            # article detail response. No HTML scrape needed.
             image = detail.get('cover_image', '') or ''
             if not image:
                 image = detail.get('social_image', '') or ''
+
+            preview = ""
+            if image:
+                preview = generate_preview_data_url(image)
+                if preview:
+                    print(f"  [Preview] {len(preview)} bytes from {image}")
 
             items.append({
                 'id': f"devto-{article['id']}",
@@ -875,6 +992,7 @@ def fetch_devto_full():
                 'body': body,
                 'url': article['url'],
                 'image': image,
+                'preview': preview,
                 'color': SOURCE_COLORS['devto'],
             })
             kept += 1
@@ -920,17 +1038,22 @@ def fetch_daily_dev():
         for item in raw_items:
             body = item.get('summary', '') or ''
             if not body.strip():
-                body, image = prepare_body(item['url'], item['title'])
+                body, image, preview = prepare_body(item['url'], item['title'])
                 if body is None:
                     continue
                 if not item.get('image'):
                     item['image'] = image
+                item['preview'] = preview
             else:
                 body = strip_title_from_body(body, item['title'])
                 body = trim_to_prose_region(body)
                 if not looks_like_article(body):
                     print(f"  [Drop] daily.dev summary too short: {item['url']}")
                     continue
+                preview = ""
+                if item.get('image'):
+                    preview = generate_preview_data_url(item['image'])
+                item['preview'] = preview
             item.pop('summary', None)
             item['body'] = body
             final.append(item)
@@ -970,11 +1093,12 @@ def fetch_mit_news():
 
         final = []
         for item in raw_items:
-            body, image = prepare_body(item['url'], item['title'])
+            body, image, preview = prepare_body(item['url'], item['title'])
             if body is None:
                 continue
             item['body'] = body
             item['image'] = image
+            item['preview'] = preview
             final.append(item)
 
         for order, item in enumerate(final, start=1):
@@ -1028,6 +1152,12 @@ def build_segment_from_markdown(segment):
             order = int(meta.get('order', 999))
         except ValueError:
             order = 999
+
+        image = meta.get('image', '')
+        preview = ""
+        if image:
+            preview = generate_preview_data_url(image)
+
         items.append({
             'id': item_id,
             'title': decode_entities(meta.get('title', item_id)),
@@ -1036,7 +1166,8 @@ def build_segment_from_markdown(segment):
             'published': meta.get('date', ''),
             'order': order,
             'body': body.lstrip('\n'),
-            'image': meta.get('image', ''),
+            'image': image,
+            'preview': preview,
             'color': meta.get('color', '#333333'),
         })
     items.sort(key=lambda x: (x['order'], x['id']))
@@ -1050,6 +1181,8 @@ def build_segment_from_markdown(segment):
 def main():
     if not HAS_TRAFILATURA:
         print("WARNING: trafilatura is not installed. Dual-pipeline mask will fall back to readability.")
+    if not HAS_PIL:
+        print("WARNING: Pillow is not installed. Preview generation disabled.")
 
     os.makedirs(FEEDS_DIR, exist_ok=True)
     any_built = False
