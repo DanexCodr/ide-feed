@@ -2,15 +2,15 @@
 """
 Build static JSON feeds.
 1. Reads local markdown sources.
-2. Fetches live news from Hacker News (for 'news' segment).
-3. Fetches live tutorials from Dev.to (for 'tutorials' segment).
+2. Fetches live news from Hacker News API.
+3. Fetches live tutorials from Dev.to API.
 """
 
 import json
 import os
 import glob
 import urllib.request
-import xml.etree.ElementTree as ET
+import urllib.parse
 from datetime import datetime, timezone
 
 SEGMENTS = ['news', 'tutorials', 'games', 'docs']
@@ -67,28 +67,61 @@ def build_segment_from_markdown(segment):
 
 # --- 2. LIVE NEWS FETCHERS ---
 def fetch_hacker_news():
-    """Fetches top stories from Hacker News RSS."""
+    """Fetches top stories from the official Hacker News API."""
     print("Fetching Hacker News...")
-    url = "https://news.ycombinator.com/rss"
     items = []
     try:
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        # Step 1: Get the IDs of the top 15 stories
+        req = urllib.request.Request(
+            "https://hacker-news.firebaseio.com/v0/topstories.json",
+            headers={'User-Agent': 'DroidBuild-Agent/1.0'}
+        )
         with urllib.request.urlopen(req, timeout=10) as response:
-            xml_data = response.read()
-        root = ET.fromstring(xml_data)
-        for i, item in enumerate(root.findall('./channel/item')):
-            title = item.find('title').text if item.find('title') is not None else "No Title"
-            link = item.find('link').text if item.find('link') is not None else ""
-            pub_date = item.find('pubDate').text if item.find('pubDate') is not None else ""
+            story_ids = json.loads(response.read().decode('utf-8'))
+
+        # Step 2: Fetch details for each story
+        for i, story_id in enumerate(story_ids[:15]):
+            req = urllib.request.Request(
+                f"https://hacker-news.firebaseio.com/v0/item/{story_id}.json",
+                headers={'User-Agent': 'DroidBuild-Agent/1.0'}
+            )
+            with urllib.request.urlopen(req, timeout=10) as response:
+                story = json.loads(response.read().decode('utf-8'))
+
+            if not story:
+                continue
+
+            title = story.get('title', 'No Title')
+            url = story.get('url', f"https://news.ycombinator.com/item?id={story_id}")
+            by = story.get('by', 'unknown')
+            score = story.get('score', 0)
+            descendants = story.get('descendants', 0)
+            text = story.get('text', '')
+            time_unix = story.get('time', 0)
+
+            # Convert Unix timestamp to ISO 8601
+            pub_date = datetime.fromtimestamp(time_unix, tz=timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+            # Format the card description
+            desc = f"By {by} | {score} points | {descendants} comments"
+
+            # Format the viewer body
+            if text:
+                # It's a text post (Ask HN, Show HN, etc.)
+                body = text + f"\n\n[Discuss on Hacker News](https://news.ycombinator.com/item?id={story_id})"
+            else:
+                # It's a link post
+                body = f"[Read the full article here]({url})\n\n[Discuss on Hacker News](https://news.ycombinator.com/item?id={story_id})"
+
             items.append({
-                'id': f"hn-{i}",
+                'id': f"hn-{story_id}",
                 'title': title,
-                'desc': "Source: Hacker News",
+                'desc': desc,
                 'tag': 'news',
                 'published': pub_date,
                 'order': i + 1,
-                'body': f"[Read full article]({link})",
-                'url': link
+                'body': body,
+                'url': url
             })
         print(f"Fetched {len(items)} HN items.")
     except Exception as e:
