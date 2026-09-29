@@ -66,6 +66,7 @@ FEEDS_DIR = 'feeds'
 BLOCK_TAGS = {
     "p", "h1", "h2", "h3", "h4", "h5", "h6",
     "table", "pre", "blockquote", "ul", "ol", "hr",
+    "figure",
 }
 
 STRIP_TAGS = ["script", "style", "noscript", "svg", "iframe", "form"]
@@ -75,7 +76,7 @@ MIN_SENTENCE_LENGTH = 40
 
 PREVIEW_WIDTH = 32
 PREVIEW_QUALITY = 30
-PREVIEW_MAX_BASE64_BYTES = 4096
+PREVIEW_MAX_BASE64_BYTES = 8192
 
 
 # ============================================================
@@ -256,17 +257,130 @@ def fetch_html(url):
     return sanitize_html_text(text)
 
 
-def fetch_bytes(url, timeout=10):
-    """Fetch raw bytes from url. Returns b'' on failure."""
+def fetch_bytes(url, timeout=10, referer=None):
+    """Fetch raw bytes from url. Returns b'' on failure.
+
+    The referer argument is used for image fetches behind
+    hotlink-protected CDNs. Without it, many sites return 403
+    to a bare User-Agent request.
+    """
     if not url:
         return b''
     try:
-        req = urllib.request.Request(
-            url, headers={'User-Agent': 'Mozilla/5.0 (compatible; DroidBuild/1.0)'})
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Linux; Android 13) '
+                          'AppleWebKit/537.36 (KHTML, like Gecko) '
+                          'Chrome/120 Mobile Safari/537.36',
+        }
+        if referer:
+            headers['Referer'] = referer
+        req = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return resp.read()
     except Exception:
         return b''
+
+
+# ============================================================
+# IMAGE URL EXTRACTION HELPERS
+#
+# Modern article pages almost never put the real image URL in
+# <img src>. The URL lives in srcset (responsive), data-src
+# (lazy-load), data-lazy-src (Jetpack), data-original (various
+# jQuery lazy loaders), or in a <picture><source srcset>.
+#
+# <img src> on those pages is usually a 1×1 GIF or a data: URL
+# placeholder. If we naively read src, we either emit a useless
+# markdown image or (worse) emit a data: URL that the sanitizer
+# strips, silently dropping the image from the reader.
+# ============================================================
+
+def _is_placeholder(url):
+    """True if url is clearly not a real article image: a data:
+    URL, a known spacer/blank image, or empty."""
+    if not url:
+        return True
+    lower = url.lower().strip()
+    if lower.startswith("data:"):
+        return True
+    if "blank.gif" in lower or "spacer.gif" in lower:
+        return True
+    if lower.startswith("about:"):
+        return True
+    return False
+
+
+def _pick_from_srcset(srcset):
+    """srcset is comma-separated: url1 w1, url2 w2, ...
+    Pick the largest candidate by width descriptor. If no
+    descriptors are present, prefer the last URL, which is the
+    convention for small-to-large ordering."""
+    candidates = []
+    for part in srcset.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        tokens = part.split()
+        url = tokens[0]
+        weight = 0
+        if len(tokens) > 1:
+            desc = tokens[1]
+            try:
+                if desc.endswith("w"):
+                    weight = int(desc[:-1])
+                elif desc.endswith("x"):
+                    weight = int(float(desc[:-1]) * 1000)
+            except ValueError:
+                weight = 0
+        candidates.append((weight, url))
+    if not candidates:
+        return ""
+    best = candidates[0]
+    for c in candidates[1:]:
+        # >= so ties go to the later candidate.
+        if c[0] >= best[0]:
+            best = c
+    return best[1]
+
+
+def extract_image_src(img_el, base_url):
+    """Return the best real image URL from an <img>, preferring
+    srcset over lazy-src over src, and rejecting placeholders."""
+    # 1. srcset / data-srcset — the real responsive source.
+    for attr in ("srcset", "data-srcset"):
+        srcset = img_el.get(attr)
+        if srcset:
+            best = _pick_from_srcset(srcset)
+            if best and not _is_placeholder(best):
+                return absolute_url(base_url, best)
+
+    # 2. Lazy-load attributes, in order of preference.
+    for attr in ("data-src", "data-lazy-src", "data-original", "data-url"):
+        url = img_el.get(attr)
+        if url and not _is_placeholder(url):
+            return absolute_url(base_url, url)
+
+    # 3. Plain src, if it isn't a placeholder.
+    src = img_el.get("src", "")
+    if src and not _is_placeholder(src):
+        return absolute_url(base_url, src)
+
+    return ""
+
+
+def extract_picture_src(picture_el, base_url):
+    """Pick the largest <source> inside a <picture>, falling back
+    to the inner <img>."""
+    for source in picture_el.find_all("source"):
+        srcset = source.get("srcset") or source.get("data-srcset")
+        if srcset:
+            candidate = _pick_from_srcset(srcset)
+            if candidate and not _is_placeholder(candidate):
+                return absolute_url(base_url, candidate)
+    img = picture_el.find("img")
+    if img is not None:
+        return extract_image_src(img, base_url)
+    return ""
 
 
 # ============================================================
@@ -282,38 +396,83 @@ def extract_og_image(html_text, base_url):
     except Exception:
         return ""
 
-    for prop in ('og:image', 'og:image:url', 'og:image:secure_url'):
-        tag = soup.find('meta', attrs={'property': prop})
-        if tag is None:
-            tag = soup.find('meta', attrs={'name': prop})
+    # 1. Standard og:image / twitter:image meta tags.
+    for prop in ('og:image', 'og:image:url', 'og:image:secure_url',
+                 'twitter:image', 'twitter:image:src'):
+        tag = (soup.find('meta', attrs={'property': prop})
+               or soup.find('meta', attrs={'name': prop}))
         if tag and tag.get('content'):
-            return urllib.parse.urljoin(base_url, tag['content'].strip())
+            url = tag['content'].strip()
+            if not _is_placeholder(url):
+                return _resolve_image_url(url, base_url)
 
-    for name in ('twitter:image', 'twitter:image:src'):
-        tag = soup.find('meta', attrs={'name': name})
-        if tag is None:
-            tag = soup.find('meta', attrs={'property': name})
-        if tag and tag.get('content'):
-            return urllib.parse.urljoin(base_url, tag['content'].strip())
-
+    # 2. <link rel="image_src">.
     tag = soup.find('link', attrs={'rel': 'image_src'})
     if tag and tag.get('href'):
-        return urllib.parse.urljoin(base_url, tag['href'].strip())
+        url = tag['href'].strip()
+        if not _is_placeholder(url):
+            return _resolve_image_url(url, base_url)
+
+    # 3. Fallback: scan the article / main container for the
+    # first real <img> or <picture>. Prefer the first one that
+    # isn't a placeholder.
+    for container_sel in ('article', 'main', '[role=main]',
+                          '.post-content', '.entry-content',
+                          '.article-body', '.story-body'):
+        try:
+            container = soup.select_one(container_sel)
+        except Exception:
+            container = None
+        if not container:
+            continue
+        for img in container.find_all('img'):
+            src = extract_image_src(img, base_url)
+            if src and not _is_placeholder(src):
+                return src
+        for pic in container.find_all('picture'):
+            src = extract_picture_src(pic, base_url)
+            if src and not _is_placeholder(src):
+                return src
 
     return ""
 
 
+def _resolve_image_url(url, base_url):
+    """Resolve protocol-relative and relative URLs to absolute
+    HTTP(S) URLs."""
+    if not url:
+        return ""
+    url = url.strip()
+    if url.startswith('//'):
+        return 'https:' + url
+    if url.startswith(('http://', 'https://')):
+        return url
+    return urllib.parse.urljoin(base_url, url)
+
+
 # ============================================================
 # PREVIEW GENERATION
+#
+# The card background is a 32px-wide JPEG, base64-encoded, inlined
+# directly into the feed JSON. It paints instantly, before any
+# network request, and gives the card a blurry color that matches
+# the full image that fades in on top.
+#
+# Not every image fits in PREVIEW_MAX_BASE64_BYTES at 32px.
+# High-frequency images (photographs of foliage, dense UI
+# screenshots, gradient-heavy art) can exceed the limit even at
+# quality 30. Rather than reject those images outright, we retry
+# at progressively smaller widths and lower qualities until one
+# fits.
 # ============================================================
 
-def generate_preview_data_url(image_url):
+def generate_preview_data_url(image_url, referer=None):
     if not image_url:
         return ""
     if not HAS_PIL:
         return ""
 
-    raw = fetch_bytes(image_url, timeout=10)
+    raw = fetch_bytes(image_url, timeout=10, referer=referer)
     if not raw:
         return ""
 
@@ -331,33 +490,32 @@ def generate_preview_data_url(image_url):
         if w <= 0 or h <= 0:
             return ""
 
-        new_w = PREVIEW_WIDTH
-        new_h = max(1, int(round(h * (PREVIEW_WIDTH / float(w)))))
-
         try:
             resample = Image.Resampling.LANCZOS
         except AttributeError:
             resample = Image.LANCZOS
 
-        img = img.resize((new_w, new_h), resample)
+        for target_w in (32, 24, 16):
+            new_h = max(1, int(round(h * (target_w / float(w)))))
+            resized = img.resize((target_w, new_h), resample)
 
-        buf = io.BytesIO()
-        img.save(buf, format='JPEG', quality=PREVIEW_QUALITY,
-                 optimize=True, progressive=False)
-        data = buf.getvalue()
+            for quality in (30, 20, 10):
+                buf = io.BytesIO()
+                resized.save(buf, format='JPEG', quality=quality,
+                             optimize=True, progressive=True)
+                data = buf.getvalue()
+                if not data:
+                    continue
+
+                encoded = base64.b64encode(data).decode('ascii')
+                data_url = "data:image/jpeg;base64," + encoded
+
+                if len(data_url) <= PREVIEW_MAX_BASE64_BYTES:
+                    return data_url
     except Exception:
         return ""
 
-    if not data:
-        return ""
-
-    encoded = base64.b64encode(data).decode('ascii')
-    data_url = "data:image/jpeg;base64," + encoded
-
-    if len(data_url) > PREVIEW_MAX_BASE64_BYTES:
-        return ""
-
-    return data_url
+    return ""
 
 
 # ============================================================
@@ -466,8 +624,16 @@ def inline_markdown(el, base_url):
         elif name == "br":
             parts.append("  \n")
         elif name == "img":
-            src = absolute_url(base_url, child.get("src", ""))
-            alt = child.get("alt", "") or ""
+            src = extract_image_src(child, base_url)
+            alt = (child.get("alt", "") or "").replace("]", "\\]")
+            if src:
+                parts.append("![" + alt + "](" + src + ")")
+        elif name == "picture":
+            src = extract_picture_src(child, base_url)
+            inner = child.find("img")
+            alt = ""
+            if inner is not None:
+                alt = (inner.get("alt", "") or "").replace("]", "\\]")
             if src:
                 parts.append("![" + alt + "](" + src + ")")
         elif name in ("sub", "sup", "del", "s", "kbd", "mark", "small"):
@@ -552,6 +718,39 @@ def block_to_markdown(el, base_url):
         return list_to_markdown(el, base_url)
     if name == "hr":
         return "---"
+    if name == "figure":
+        # A <figure> usually contains an <img> or <picture>, and
+        # optionally a <figcaption>. Emit the image first, then
+        # the caption on its own line as italicised text.
+        src = ""
+        alt = ""
+        picture = el.find("picture")
+        if picture is not None:
+            src = extract_picture_src(picture, base_url)
+            inner = picture.find("img")
+            if inner is not None:
+                alt = (inner.get("alt", "") or "").replace("]", "\\]")
+        else:
+            img = el.find("img")
+            if img is not None:
+                src = extract_image_src(img, base_url)
+                alt = (img.get("alt", "") or "").replace("]", "\\]")
+
+        lines = []
+        if src:
+            lines.append("![" + alt + "](" + src + ")")
+
+        caption_el = el.find("figcaption")
+        if caption_el is not None:
+            cap = inline_markdown(caption_el, base_url).strip()
+            if cap:
+                lines.append("*" + cap + "*")
+
+        if not lines:
+            # No image, no caption. Fall back to any text content.
+            text = inline_markdown(el, base_url).strip()
+            return text
+        return "\n\n".join(lines)
     if name in ("h1", "h2", "h3", "h4", "h5", "h6"):
         level = int(name[1])
         text = inline_markdown(el, base_url).strip()
@@ -579,7 +778,22 @@ def walk(node, out, base_url):
 
 # ============================================================
 # ALIGNMENT
+#
+# The mask produced by trafilatura is the canonical article
+# text. Blocks whose content aligns with the mask are kept;
+# blocks that don't (nav, footers, related-article sidebars) are
+# dropped.
+#
+# Images are a special case: a block that contains only an
+# <img> has no tokens, so it never aligns with anything. And a
+# <figure> with a one-line caption often scores well below the
+# 0.5 threshold even though it is exactly what the reader
+# wants. Both cases are handled explicitly below.
 # ============================================================
+
+def _has_image_markdown(md):
+    return md is not None and "![" in md and "](" in md
+
 
 def align_blocks(blocks, mask_text):
     mask_tokens = tokenize(mask_text)
@@ -587,19 +801,33 @@ def align_blocks(blocks, mask_text):
     mask_grams = ngrams(mask_tokens, 5)
     kept = []
     for block in blocks:
+        has_image = _has_image_markdown(block["md"])
         tokens = tokenize(block["text"])
+
+        # Image-only blocks: no prose to match against the mask.
+        # Keep them unconditionally — they were inside the
+        # article body, which means the DOM walk already filtered
+        # the surrounding layout noise.
         if not tokens:
+            if has_image:
+                kept.append(block["md"])
             continue
+
         if len(tokens) < 5:
             needle = " " + " ".join(tokens) + " "
-            if needle in mask_normalized:
+            if needle in mask_normalized or has_image:
                 kept.append(block["md"])
         else:
             grams = ngrams(tokens, 5)
             if not grams:
                 continue
             overlap = len(grams & mask_grams) / float(len(grams))
-            if overlap >= 0.5:
+            # Lower the bar when an image is present. A figure
+            # with a short caption often scores 0.2–0.4 against
+            # the trafilatura mask even though it is exactly what
+            # the reader wants.
+            threshold = 0.3 if has_image else 0.5
+            if overlap >= threshold:
                 kept.append(block["md"])
     return kept
 
@@ -772,7 +1000,7 @@ def prepare_body(url, title):
 
     preview = ""
     if image:
-        preview = generate_preview_data_url(image)
+        preview = generate_preview_data_url(image, referer=url)
         if preview:
             print(f"  [Preview] {len(preview)} bytes from {image}")
         else:
@@ -999,7 +1227,7 @@ def fetch_devto_full():
 
             preview = ""
             if image:
-                preview = generate_preview_data_url(image)
+                preview = generate_preview_data_url(image, referer=article['url'])
                 if preview:
                     print(f"  [Preview] {len(preview)} bytes from {image}")
 
@@ -1073,7 +1301,8 @@ def fetch_daily_dev():
                     continue
                 preview = ""
                 if item.get('image'):
-                    preview = generate_preview_data_url(item['image'])
+                    preview = generate_preview_data_url(
+                        item['image'], referer=item.get('url'))
                 item['preview'] = preview
             item.pop('summary', None)
             item['body'] = body
