@@ -6,25 +6,19 @@ Segments produced:
   - news       : Hacker News + Lobsters + I Programmer + MIT News + daily.dev
   - tutorials  : Dev.to (filtered)
 
+Each item carries an `image` field when the source page exposes
+an og:image meta tag, and a `color` field naming the source so the
+client can render a fallback stripe when no image is available.
+
 Pipeline for each article:
   1. Fetch raw HTML.
   2. trafilatura produces a plain-text mask of the article.
   3. BeautifulSoup walks the raw HTML into semantic blocks.
-     Single-column tables (title boxes, date boxes, related-
-     links rows) are dropped.
+     Single-column tables are dropped.
   4. Blocks whose text appears in the mask are kept, in document
      order, and emitted as Markdown.
-  5. The title is stripped from the body if present.
-  6. The body is trimmed to the region between the first and last
-     prose blocks.
-  7. The body must contain at least MIN_PROSE_CONTENT characters
-     of real prose.
-
-Curation filters applied at fetch time:
-  - I Programmer Book Watch listings are skipped.
-  - Dev.to posts with an emoji in the title are skipped.
-  - Dev.to posts whose title contains "congrats" or
-    "congratulations" are skipped.
+  5. og:image is extracted from the same HTML for the card image.
+  6. Title stripped, body trimmed, minimum prose enforced.
 
 No AI. No API keys. No model retirements. Deterministic output.
 """
@@ -65,6 +59,20 @@ MIN_SENTENCE_LENGTH = 40
 
 
 # ============================================================
+# SOURCE COLORS (fallback stripe when no og:image)
+# ============================================================
+
+SOURCE_COLORS = {
+    'hackernews': '#FF6600',
+    'lobsters': '#AC130D',
+    'iprogrammer': '#2196F3',
+    'mitnews': '#8B0000',
+    'dailydev': '#7B61FF',
+    'devto': '#3B49DF',
+}
+
+
+# ============================================================
 # DEV.TO FILTERS
 # ============================================================
 
@@ -96,9 +104,6 @@ def contains_emoji(s):
     return False
 
 
-# Substrings that mark a Dev.to post as a congratulatory or
-# platform-meta post rather than a tutorial. Matched
-# case-insensitively against the title.
 DEVTO_SKIP_TITLE_SUBSTRINGS = [
     "congrats",
     "congratulations",
@@ -106,16 +111,13 @@ DEVTO_SKIP_TITLE_SUBSTRINGS = [
 
 
 def devto_should_skip(title):
-    """Return (skip, reason) for a Dev.to article."""
     if contains_emoji(title):
         return True, "emoji in title"
-
     if title:
         t = title.lower()
         for s in DEVTO_SKIP_TITLE_SUBSTRINGS:
             if s in t:
                 return True, f"title contains '{s}'"
-
     return False, ""
 
 
@@ -156,12 +158,10 @@ def normalize_for_compare(s):
 def prose_text(block):
     if not block:
         return ""
-
     text = strip_links(block)
     text = strip_non_prose(text)
     if not text:
         return ""
-
     parts = re.split(r'(?<=[.!?])\s+', text)
     good = []
     for p in parts:
@@ -192,6 +192,47 @@ def fetch_html(url):
         except Exception:
             pass
     return raw.decode('utf-8', errors='replace')
+
+
+# ============================================================
+# OG:IMAGE EXTRACTION
+# ============================================================
+
+def extract_og_image(html_text, base_url):
+    """Pull og:image from the article HTML. Returns absolute URL
+    or empty string. Falls through several meta tag variants used
+    across the sites this pipeline reads.
+    """
+    if not html_text or not base_url:
+        return ""
+
+    try:
+        soup = BeautifulSoup(html_text, "html.parser")
+    except Exception:
+        return ""
+
+    # Open Graph preferred.
+    for prop in ('og:image', 'og:image:url', 'og:image:secure_url'):
+        tag = soup.find('meta', attrs={'property': prop})
+        if tag is None:
+            tag = soup.find('meta', attrs={'name': prop})
+        if tag and tag.get('content'):
+            return urllib.parse.urljoin(base_url, tag['content'].strip())
+
+    # Twitter card image.
+    for name in ('twitter:image', 'twitter:image:src'):
+        tag = soup.find('meta', attrs={'name': name})
+        if tag is None:
+            tag = soup.find('meta', attrs={'property': name})
+        if tag and tag.get('content'):
+            return urllib.parse.urljoin(base_url, tag['content'].strip())
+
+    # Direct link rel image_src, used by some older sites.
+    tag = soup.find('link', attrs={'rel': 'image_src'})
+    if tag and tag.get('href'):
+        return urllib.parse.urljoin(base_url, tag['href'].strip())
+
+    return ""
 
 
 # ============================================================
@@ -282,7 +323,6 @@ def inline_markdown(el, base_url):
             continue
         if not hasattr(child, "name") or child.name is None:
             continue
-
         name = child.name
         if name in ("strong", "b"):
             parts.append("**" + inline_markdown(child, base_url) + "**")
@@ -324,13 +364,10 @@ def table_to_markdown(table_el, base_url):
             cells.append(text)
         if cells:
             rows.append(cells)
-
     if not rows:
         return ""
-
     width = max(len(r) for r in rows)
     rows = [r + [""] * (width - len(r)) for r in rows]
-
     out = []
     out.append("| " + " | ".join(rows[0]) + " |")
     out.append("| " + " | ".join(["---"] * width) + " |")
@@ -343,11 +380,9 @@ def list_to_markdown(list_el, base_url, depth=0):
     lines = []
     ordered = list_el.name == "ol"
     items = list_el.find_all("li", recursive=False)
-
     for i, li in enumerate(items):
         prefix = ("%d. " % (i + 1)) if ordered else "- "
         prefix = "  " * depth + prefix
-
         inline_parts = []
         nested_lists = []
         for child in li.children:
@@ -357,20 +392,16 @@ def list_to_markdown(list_el, base_url, depth=0):
                 inline_parts.append(str(child))
             else:
                 inline_parts.append(inline_markdown(child, base_url))
-
         content = "".join(inline_parts)
         content = re.sub(r"\s+", " ", content).strip()
         lines.append(prefix + content)
-
         for nested in nested_lists:
             lines.append(list_to_markdown(nested, base_url, depth + 1))
-
     return "\n".join(lines)
 
 
 def block_to_markdown(el, base_url):
     name = el.name
-
     if name == "pre":
         code = el.find("code")
         if code is not None:
@@ -382,10 +413,8 @@ def block_to_markdown(el, base_url):
         if text.endswith("\n"):
             text = text[:-1]
         return "```" + lang + "\n" + text + "\n```"
-
     if name == "table":
         return table_to_markdown(el, base_url)
-
     if name == "blockquote":
         inner_blocks = []
         walk(el, inner_blocks, base_url)
@@ -393,18 +422,14 @@ def block_to_markdown(el, base_url):
         if not inner_md:
             inner_md = inline_markdown(el, base_url).strip()
         return "\n".join("> " + line if line else ">" for line in inner_md.split("\n"))
-
     if name in ("ul", "ol"):
         return list_to_markdown(el, base_url)
-
     if name == "hr":
         return "---"
-
     if name in ("h1", "h2", "h3", "h4", "h5", "h6"):
         level = int(name[1])
         text = inline_markdown(el, base_url).strip()
         return ("#" * level) + " " + text
-
     text = inline_markdown(el, base_url)
     return text.strip()
 
@@ -415,10 +440,8 @@ def walk(node, out, base_url):
             continue
         if child.name in STRIP_TAGS:
             continue
-
         if child.name == "table" and is_layout_table(child):
             continue
-
         if child.name in BLOCK_TAGS:
             plain = child.get_text(" ", strip=True)
             md = block_to_markdown(child, base_url)
@@ -436,13 +459,11 @@ def align_blocks(blocks, mask_text):
     mask_tokens = tokenize(mask_text)
     mask_normalized = " " + " ".join(mask_tokens) + " "
     mask_grams = ngrams(mask_tokens, 5)
-
     kept = []
     for block in blocks:
         tokens = tokenize(block["text"])
         if not tokens:
             continue
-
         if len(tokens) < 5:
             needle = " " + " ".join(tokens) + " "
             if needle in mask_normalized:
@@ -454,7 +475,6 @@ def align_blocks(blocks, mask_text):
             overlap = len(grams & mask_grams) / float(len(grams))
             if overlap >= 0.5:
                 kept.append(block["md"])
-
     return kept
 
 
@@ -483,11 +503,9 @@ def split_into_blocks(markdown):
 def strip_title_from_body(body, title):
     if not body or not title:
         return body
-
     title_norm = normalize_for_compare(title)
     if not title_norm:
         return body
-
     blocks = split_into_blocks(body)
     out = []
     for b in blocks:
@@ -496,7 +514,6 @@ def strip_title_from_body(body, title):
             continue
         out.append(b)
     body = '\n\n'.join(out).strip()
-
     lines = body.split('\n')
     if lines:
         first_norm = normalize_for_compare(strip_links(lines[0]))
@@ -505,7 +522,6 @@ def strip_title_from_body(body, title):
             while lines and not lines[0].strip():
                 lines = lines[1:]
             body = '\n'.join(lines).strip()
-
     return body
 
 
@@ -521,11 +537,9 @@ def total_prose_length(markdown):
 def trim_to_prose_region(markdown):
     if not markdown:
         return markdown
-
     blocks = split_into_blocks(markdown)
     if not blocks:
         return markdown
-
     first = -1
     last = -1
     for i, b in enumerate(blocks):
@@ -533,10 +547,8 @@ def trim_to_prose_region(markdown):
             if first < 0:
                 first = i
             last = i
-
     if first < 0 or last < 0:
         return markdown
-
     return '\n\n'.join(blocks[first:last + 1]).strip()
 
 
@@ -558,15 +570,12 @@ def dual_pipeline_extract(html_text, url):
     mask = build_mask(html_text)
     if not mask.strip():
         return ""
-
     soup = BeautifulSoup(html_text, "html.parser")
     for tag in soup(STRIP_TAGS):
         tag.decompose()
     body = soup.body if soup.body else soup
-
     blocks = []
     walk(body, blocks, url)
-
     kept = align_blocks(blocks, mask)
     if not kept:
         return ""
@@ -587,52 +596,59 @@ def readability_extract(html_text):
 
 
 def extract_article(url):
+    """Return (body_markdown, og_image_url). Either may be empty.
+    Returns (None, '') if no extractor succeeded.
+    """
     if not url:
-        return None
+        return None, ""
 
     html_text = ""
     try:
         html_text = fetch_html(url)
     except Exception as e:
         print(f"  [Fetch Error] {url}: {e}")
-        return None
+        return None, ""
+
+    og_image = extract_og_image(html_text, url)
 
     print(f"  [Dual] Extracting {url}")
     dual_body = dual_pipeline_extract(html_text, url)
     if dual_body and dual_body.strip():
-        return dual_body
+        return dual_body, og_image
 
     print(f"  [Readability] Extracting {url}")
     readability_body = readability_extract(html_text)
     if readability_body and readability_body.strip():
-        return readability_body
+        return readability_body, og_image
 
     print(f"  [Drop] No extractor succeeded for {url}")
-    return None
+    return None, ""
 
 
 def prepare_body(url, title):
-    body = extract_article(url)
+    """Returns (body, image). body is None if the item should be
+    dropped."""
+    body, image = extract_article(url)
     if body is None:
-        return None
+        return None, ""
 
     body = strip_title_from_body(body, title)
     if not body or not body.strip():
         print(f"  [Drop] Body empty after stripping title: {url}")
-        return None
+        return None, ""
 
     body = trim_to_prose_region(body)
     if not body or not body.strip():
         print(f"  [Drop] Body empty after prose trim: {url}")
-        return None
+        return None, ""
 
     if not looks_like_article(body):
         chars = len(body.strip())
         prose = total_prose_length(body)
         print(f"  [Drop] Only {prose} chars of prose in {chars}-char body: {url}")
-        return None
+        return None, ""
 
-    return body
+    return body, image
 
 
 # ============================================================
@@ -679,6 +695,7 @@ def fetch_hacker_news():
                 'text': text,
                 'hn_id': story_id,
                 'score': score,
+                'color': SOURCE_COLORS['hackernews'],
             })
 
         raw_items.sort(key=lambda x: x.get('score', 0), reverse=True)
@@ -689,18 +706,20 @@ def fetch_hacker_news():
                 body = item['text']
                 body += f"\n\n[Discuss on Hacker News](https://news.ycombinator.com/item?id={item['hn_id']})"
                 item['body'] = body
+                item['image'] = ""
                 item.pop('text', None)
                 item.pop('hn_id', None)
                 item.pop('score', None)
                 final.append(item)
                 continue
 
-            body = prepare_body(item['url'], item['title'])
+            body, image = prepare_body(item['url'], item['title'])
             if body is None:
                 continue
 
             body += f"\n\n[Discuss on Hacker News](https://news.ycombinator.com/item?id={item['hn_id']})"
             item['body'] = body
+            item['image'] = image
             item.pop('text', None)
             item.pop('hn_id', None)
             item.pop('score', None)
@@ -738,14 +757,16 @@ def fetch_lobsters():
                 'tag': 'news',
                 'published': pub_date,
                 'url': link,
+                'color': SOURCE_COLORS['lobsters'],
             })
 
         final = []
         for item in raw_items:
-            body = prepare_body(item['url'], item['title'])
+            body, image = prepare_body(item['url'], item['title'])
             if body is None:
                 continue
             item['body'] = body
+            item['image'] = image
             final.append(item)
 
         for order, item in enumerate(final, start=1):
@@ -783,14 +804,16 @@ def fetch_i_programmer():
                 'tag': 'news',
                 'published': pub_date,
                 'url': link,
+                'color': SOURCE_COLORS['iprogrammer'],
             })
 
         final = []
         for item in raw_items:
-            body = prepare_body(item['url'], item['title'])
+            body, image = prepare_body(item['url'], item['title'])
             if body is None:
                 continue
             item['body'] = body
+            item['image'] = image
             final.append(item)
 
         for order, item in enumerate(final, start=1):
@@ -836,6 +859,12 @@ def fetch_devto_full():
                 skipped += 1
                 continue
 
+            # Dev.to provides the cover image directly in the
+            # article detail response. No HTML scrape needed.
+            image = detail.get('cover_image', '') or ''
+            if not image:
+                image = detail.get('social_image', '') or ''
+
             items.append({
                 'id': f"devto-{article['id']}",
                 'title': decode_entities(article['title']),
@@ -845,6 +874,8 @@ def fetch_devto_full():
                 'order': kept + 1,
                 'body': body,
                 'url': article['url'],
+                'image': image,
+                'color': SOURCE_COLORS['devto'],
             })
             kept += 1
 
@@ -881,15 +912,19 @@ def fetch_daily_dev():
                 'published': post.get('createdAt', ''),
                 'url': post.get('url', ''),
                 'summary': post.get('summary', ''),
+                'image': post.get('image', '') or '',
+                'color': SOURCE_COLORS['dailydev'],
             })
 
         final = []
         for item in raw_items:
             body = item.get('summary', '') or ''
             if not body.strip():
-                body = prepare_body(item['url'], item['title'])
+                body, image = prepare_body(item['url'], item['title'])
                 if body is None:
                     continue
+                if not item.get('image'):
+                    item['image'] = image
             else:
                 body = strip_title_from_body(body, item['title'])
                 body = trim_to_prose_region(body)
@@ -930,14 +965,16 @@ def fetch_mit_news():
                 'tag': 'research',
                 'published': pub_date,
                 'url': link,
+                'color': SOURCE_COLORS['mitnews'],
             })
 
         final = []
         for item in raw_items:
-            body = prepare_body(item['url'], item['title'])
+            body, image = prepare_body(item['url'], item['title'])
             if body is None:
                 continue
             item['body'] = body
+            item['image'] = image
             final.append(item)
 
         for order, item in enumerate(final, start=1):
@@ -999,6 +1036,8 @@ def build_segment_from_markdown(segment):
             'published': meta.get('date', ''),
             'order': order,
             'body': body.lstrip('\n'),
+            'image': meta.get('image', ''),
+            'color': meta.get('color', '#333333'),
         })
     items.sort(key=lambda x: (x['order'], x['id']))
     return items
