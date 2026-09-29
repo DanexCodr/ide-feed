@@ -4,7 +4,7 @@ Build static JSON feeds for DroidBuild.
 
 Segments produced:
   - news       : Hacker News + Lobsters + I Programmer + MIT News + daily.dev
-  - tutorials  : Dev.to (filtered to exclude posts with emoji titles)
+  - tutorials  : Dev.to (filtered)
 
 Pipeline for each article:
   1. Fetch raw HTML.
@@ -22,9 +22,9 @@ Pipeline for each article:
 
 Curation filters applied at fetch time:
   - I Programmer Book Watch listings are skipped.
-  - Dev.to posts with emoji in the title are skipped. Emoji are
-    a reliable signal for personal reports, monthly recaps, and
-    platform-meta posts; real tutorials rarely carry them.
+  - Dev.to posts with an emoji in the title are skipped.
+  - Dev.to posts whose title contains "congrats" or
+    "congratulations" are skipped.
 
 No AI. No API keys. No model retirements. Deterministic output.
 """
@@ -65,32 +65,27 @@ MIN_SENTENCE_LENGTH = 40
 
 
 # ============================================================
-# EMOJI DETECTION
+# DEV.TO FILTERS
 # ============================================================
 
-# Unicode blocks that emoji are drawn from. A single character in
-# any of these ranges is enough to flag a title. Dev.to personal
-# reports, monthly recaps, and diary posts almost always carry at
-# least one; tutorials almost never do.
 EMOJI_RANGES = (
-    (0x1F300, 0x1F5FF),   # Miscellaneous Symbols and Pictographs
-    (0x1F600, 0x1F64F),   # Emoticons
-    (0x1F680, 0x1F6FF),   # Transport and Map Symbols
-    (0x1F700, 0x1F77F),   # Alchemical Symbols
-    (0x1F780, 0x1F7FF),   # Geometric Shapes Extended
-    (0x1F800, 0x1F8FF),   # Supplemental Arrows-C
-    (0x1F900, 0x1F9FF),   # Supplemental Symbols and Pictographs
-    (0x1FA00, 0x1FA6F),   # Chess Symbols
-    (0x1FA70, 0x1FAFF),   # Symbols and Pictographs Extended-A
-    (0x2600,  0x26FF),    # Miscellaneous Symbols
-    (0x2700,  0x27BF),    # Dingbats
-    (0x2B00,  0x2BFF),    # Miscellaneous Symbols and Arrows
-    (0x1F1E6, 0x1F1FF),   # Regional Indicator Symbols (flags)
+    (0x1F300, 0x1F5FF),
+    (0x1F600, 0x1F64F),
+    (0x1F680, 0x1F6FF),
+    (0x1F700, 0x1F77F),
+    (0x1F780, 0x1F7FF),
+    (0x1F800, 0x1F8FF),
+    (0x1F900, 0x1F9FF),
+    (0x1FA00, 0x1FA6F),
+    (0x1FA70, 0x1FAFF),
+    (0x2600,  0x26FF),
+    (0x2700,  0x27BF),
+    (0x2B00,  0x2BFF),
+    (0x1F1E6, 0x1F1FF),
 )
 
 
 def contains_emoji(s):
-    """True if the string contains any emoji character."""
     if not s:
         return False
     for ch in s:
@@ -101,10 +96,26 @@ def contains_emoji(s):
     return False
 
 
+# Substrings that mark a Dev.to post as a congratulatory or
+# platform-meta post rather than a tutorial. Matched
+# case-insensitively against the title.
+DEVTO_SKIP_TITLE_SUBSTRINGS = [
+    "congrats",
+    "congratulations",
+]
+
+
 def devto_should_skip(title):
     """Return (skip, reason) for a Dev.to article."""
     if contains_emoji(title):
         return True, "emoji in title"
+
+    if title:
+        t = title.lower()
+        for s in DEVTO_SKIP_TITLE_SUBSTRINGS:
+            if s in t:
+                return True, f"title contains '{s}'"
+
     return False, ""
 
 
