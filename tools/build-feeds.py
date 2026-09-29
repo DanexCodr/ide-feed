@@ -6,16 +6,20 @@ Pipeline for each article:
   1. Fetch raw HTML.
   2. trafilatura produces a plain-text mask of the article.
   3. BeautifulSoup walks the raw HTML into semantic blocks.
+     Single-column tables (title boxes, date boxes, related-
+     links rows) are dropped.
   4. Blocks whose text appears in the mask are kept, in document
      order, and emitted as Markdown.
-  5. If the body contains the article title and removing it leaves
-     too little text, the item is dropped. This catches CMS
-     layouts where the whole body is a title box plus chrome.
+  5. The title is stripped from the body if present.
   6. The body is trimmed to the region between the first and last
      prose blocks.
-  7. Bodies shorter than MIN_BODY_LENGTH are dropped.
-  8. If the dual-pipeline produces nothing, readability-lxml +
-     html2text is used as a last resort.
+  7. The body must contain at least MIN_PROSE_CONTENT characters
+     of real prose (complete sentences ending in . ! or ?).
+     Everything else is chrome and the item is dropped.
+
+The final check measures prose length, not total body length.
+This catches CMS pages that wrap related-content rows in <div>s
+or <table>s — the prose is what matters, not the markup shape.
 
 No AI. No API keys. No model retirements. Deterministic output.
 """
@@ -51,8 +55,12 @@ BLOCK_TAGS = {
 
 STRIP_TAGS = ["script", "style", "noscript", "svg", "iframe", "form"]
 
-# Body-quality thresholds.
-MIN_BODY_LENGTH = 300
+# Body-quality thresholds. MIN_PROSE_CONTENT is the amount of
+# text that must actually be sentences — not headings, not link
+# labels, not table rows. A real article has hundreds of
+# characters of this. A title + related-links page has almost
+# none.
+MIN_PROSE_CONTENT = 200
 MIN_SENTENCE_LENGTH = 40
 
 
@@ -82,8 +90,6 @@ def strip_non_prose(text):
 
 
 def normalize_for_compare(s):
-    """Lowercase, strip punctuation, collapse whitespace. Used for
-    comparing a block against the article title."""
     if not s:
         return ""
     s = s.strip().lower()
@@ -92,20 +98,33 @@ def normalize_for_compare(s):
     return s
 
 
-def is_prose_block(block):
-    """True if this block contains at least one sentence of real
-    prose: MIN_SENTENCE_LENGTH characters ending in . ! or ?."""
+def prose_text(block):
+    """Return the prose portion of a block, or empty string.
+
+    Prose means: at least one complete sentence of MIN_SENTENCE_
+    LENGTH characters ending in . ! or ?. The terminator is
+    required. Without it, table row labels, dates, and link
+    anchors all masquerade as sentences.
+    """
     if not block:
-        return False
+        return ""
+
     text = strip_links(block)
     text = strip_non_prose(text)
     if not text:
-        return False
+        return ""
+
     parts = re.split(r'(?<=[.!?])\s+', text)
-    for part in parts:
-        if len(part.strip()) >= MIN_SENTENCE_LENGTH:
-            return True
-    return False
+    good = []
+    for p in parts:
+        p = p.strip()
+        if len(p) >= MIN_SENTENCE_LENGTH and p and p[-1] in '.!?':
+            good.append(p)
+    return " ".join(good)
+
+
+def is_prose_block(block):
+    return bool(prose_text(block))
 
 
 # ============================================================
@@ -166,6 +185,26 @@ def ngrams(tokens, n):
     if len(tokens) < n:
         return set()
     return set(tuple(tokens[i:i + n]) for i in range(len(tokens) - n + 1))
+
+
+# ============================================================
+# LAYOUT TABLE DETECTION
+# ============================================================
+
+def is_layout_table(table_el):
+    """True if this table is site chrome rather than a data table.
+
+    Layout tables have one column. Data tables have two or more.
+    """
+    rows = table_el.find_all("tr")
+    if not rows:
+        return False
+    max_cells = 0
+    for tr in rows:
+        cells = tr.find_all(["td", "th"], recursive=False)
+        if len(cells) > max_cells:
+            max_cells = len(cells)
+    return max_cells < 2
 
 
 # ============================================================
@@ -332,6 +371,10 @@ def walk(node, out, base_url):
             continue
         if child.name in STRIP_TAGS:
             continue
+
+        if child.name == "table" and is_layout_table(child):
+            continue
+
         if child.name in BLOCK_TAGS:
             plain = child.get_text(" ", strip=True)
             md = block_to_markdown(child, base_url)
@@ -394,14 +437,6 @@ def split_into_blocks(markdown):
 
 
 def strip_title_from_body(body, title):
-    """Remove blocks whose content is the article title.
-
-    Many CMS layouts repeat the title inside the body. If the
-    title is a whole block or the first line, remove it. This is
-    what makes the Signals & Levers case droppable: the body is
-    the title box plus chrome, and once the title box is gone
-    there is nothing substantial left.
-    """
     if not body or not title:
         return body
 
@@ -409,7 +444,6 @@ def strip_title_from_body(body, title):
     if not title_norm:
         return body
 
-    # Drop any whole block that equals the title.
     blocks = split_into_blocks(body)
     out = []
     for b in blocks:
@@ -419,9 +453,6 @@ def strip_title_from_body(body, title):
         out.append(b)
     body = '\n\n'.join(out).strip()
 
-    # Drop the first line if it equals the title (handles the case
-    # where the title box was emitted as the first line of a larger
-    # block).
     lines = body.split('\n')
     if lines:
         first_norm = normalize_for_compare(strip_links(lines[0]))
@@ -434,28 +465,24 @@ def strip_title_from_body(body, title):
     return body
 
 
-def body_is_essentially_title(body, title):
-    """True if the body contains the title and stripping it leaves
-    too little text to be an article."""
-    if not body or not title:
-        return False
+def total_prose_length(markdown):
+    """Sum the length of the prose portion of every block.
 
-    body_norm = normalize_for_compare(strip_links(body))
-    title_norm = normalize_for_compare(title)
-    if not title_norm or not body_norm:
-        return False
-
-    if title_norm not in body_norm:
-        return False
-
-    remainder = body_norm.replace(title_norm, '', 1).strip()
-    return len(remainder) < MIN_BODY_LENGTH
+    This is the amount of text in the body that is actually
+    sentences. Headings, link labels, dates, and table rows do
+    not contribute. If the total is tiny, the body has no
+    article — only chrome.
+    """
+    if not markdown:
+        return 0
+    total = 0
+    for b in split_into_blocks(markdown):
+        total += len(prose_text(b))
+    return total
 
 
 def trim_to_prose_region(markdown):
-    """Keep only the region between the first and last prose blocks.
-    Drops everything above the first paragraph of real article text
-    and everything below the last one."""
+    """Keep only the region between the first and last prose blocks."""
     if not markdown:
         return markdown
 
@@ -474,14 +501,19 @@ def trim_to_prose_region(markdown):
     if first < 0 or last < 0:
         return markdown
 
-    trimmed = blocks[first:last + 1]
-    return '\n\n'.join(trimmed).strip()
+    return '\n\n'.join(blocks[first:last + 1]).strip()
 
 
 def looks_like_article(markdown):
+    """True if the body has enough real prose to be an article.
+
+    Measured by prose length, not total body length. A page that
+    is a title and a table of related links has almost no prose,
+    no matter how long the total body is.
+    """
     if not markdown:
         return False
-    if len(markdown.strip()) < MIN_BODY_LENGTH:
+    if total_prose_length(markdown) < MIN_PROSE_CONTENT:
         return False
     return True
 
@@ -550,16 +582,9 @@ def extract_article(url):
 
 
 def prepare_body(url, title):
-    """Extract, drop title-only bodies, trim to the prose region,
-    and require a minimum body length."""
+    """Extract, strip title, trim, and require enough prose."""
     body = extract_article(url)
     if body is None:
-        return None
-
-    # If the body is the title plus a handful of chrome, there is
-    # no article here. Drop.
-    if body_is_essentially_title(body, title):
-        print(f"  [Drop] Body is essentially the title: {url}")
         return None
 
     body = strip_title_from_body(body, title)
@@ -573,7 +598,9 @@ def prepare_body(url, title):
         return None
 
     if not looks_like_article(body):
-        print(f"  [Drop] Body too short ({len(body.strip())} chars): {url}")
+        chars = len(body.strip())
+        prose = total_prose_length(body)
+        print(f"  [Drop] Only {prose} chars of prose in {chars}-char body: {url}")
         return None
 
     return body
@@ -814,9 +841,6 @@ def fetch_daily_dev():
                 if body is None:
                     continue
             else:
-                if body_is_essentially_title(body, item['title']):
-                    print(f"  [Drop] daily.dev summary is title-only: {item['url']}")
-                    continue
                 body = strip_title_from_body(body, item['title'])
                 body = trim_to_prose_region(body)
                 if not looks_like_article(body):
