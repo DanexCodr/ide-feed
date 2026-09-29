@@ -24,11 +24,12 @@ jobs:
           python-version: '3.x'
 
       - name: Install dependencies
-        run: pip install readability-lxml trafilatura beautifulsoup4 html2text
+        run: pip install readability-lxml beautifulsoup4 html2text
 
       - name: Generate feeds
         run: python3 tools/build-feeds.py
         env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           DAILY_DEV_TOKEN: ${{ secrets.DAILY_DEV_TOKEN }}
 
       - name: Commit and push if changed
