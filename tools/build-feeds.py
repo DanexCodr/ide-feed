@@ -53,7 +53,7 @@ from bs4 import BeautifulSoup, NavigableString
 import html2text
 
 try:
-    from PIL import Image
+    from PIL import Image, ImageStat
     HAS_PIL = True
 except ImportError:
     HAS_PIL = False
@@ -537,19 +537,24 @@ def _resolve_image_url(url, base_url):
 #      both in the preview and in the solid-color check.
 #
 #   2. The image is classified as "solid" or "not solid". A
-#      solid image is one whose pixel variance is below a
-#      small threshold after downsampling. Such images are
-#      useless as card visuals — they look identical to the
+#      solid image is one whose per-channel pixel variance is
+#      below a small threshold after downsampling. Such images
+#      are useless as card visuals — they look identical to the
 #      placeholder — so the pipeline clears both the image
 #      and preview fields on the item and lets the app fall
 #      back to its CSS placeholder.
 #
 # Threshold rationale: after LANCZOS downsampling to 16x16,
 # a true solid color (even through JPEG compression) has a
-# standard deviation under 4. A near-solid image with a small
-# logo or a single dot has stddev in the 15-30 range. Real
-# photographs are 30+. The cutoff is set at 8 to catch the
-# first category without touching the second.
+# per-channel standard deviation under 3. A near-solid image
+# with a small logo or a single dot has stddev in the 15-30
+# range. Real photographs are 30+. The cutoff is set at 8.
+#
+# The statistics are computed by ImageStat, which is a
+# long-stable Pillow module that runs in optimized C. It is
+# used instead of manual pixel iteration because the old
+# Image.Image.getdata() API is deprecated and will be removed
+# in Pillow 14 (October 2027).
 # ============================================================
 
 def _pil_image_is_solid(img):
@@ -557,8 +562,12 @@ def _pil_image_is_solid(img):
 
     The image is reduced to a 16x16 thumbnail first, which
     averages out JPEG compression noise while preserving any
-    real visual structure. If the standard deviation of the
-    resulting pixels is below 8, the image is treated as solid.
+    real visual structure. If no channel has a standard
+    deviation above 8, the image is treated as solid.
+
+    ImageStat computes per-channel standard deviation in C.
+    If any channel has meaningful variance, the image is not
+    a single flat color.
     """
     try:
         if img.mode not in ('RGB', 'L'):
@@ -570,40 +579,12 @@ def _pil_image_is_solid(img):
             resample = Image.LANCZOS
 
         small = img.resize((16, 16), resample)
-        pixels = list(small.getdata())
 
-        if not pixels:
+        stat = ImageStat.Stat(small)
+        stddevs = stat.stddev
+        if not stddevs:
             return False
-
-        n = len(pixels)
-        r_sum = 0
-        g_sum = 0
-        b_sum = 0
-        for px in pixels:
-            if isinstance(px, tuple):
-                r_sum += px[0]
-                g_sum += px[1]
-                b_sum += px[2]
-            else:
-                r_sum += px
-                g_sum += px
-                b_sum += px
-        r_mean = r_sum / float(n)
-        g_mean = g_sum / float(n)
-        b_mean = b_sum / float(n)
-
-        variance_sum = 0.0
-        for px in pixels:
-            if isinstance(px, tuple):
-                r, g, b = px[0], px[1], px[2]
-            else:
-                r = g = b = px
-            variance_sum += (r - r_mean) ** 2
-            variance_sum += (g - g_mean) ** 2
-            variance_sum += (b - b_mean) ** 2
-
-        stddev = (variance_sum / (3.0 * n)) ** 0.5
-        return stddev < 8.0
+        return max(stddevs) < 8.0
     except Exception:
         return False
 
