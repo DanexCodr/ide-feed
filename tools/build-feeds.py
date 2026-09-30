@@ -23,6 +23,15 @@ Retention:
   during busy periods and shrinks during quiet ones, without
   needing a database.
 
+Deduplication:
+  Items are deduplicated by both ID and normalized URL. ID-based
+  dedup catches the same source re-listing the same article.
+  URL-based dedup catches different sources linking to the same
+  article — Hacker News and Lobsters in particular overlap
+  heavily. The first occurrence in merge order wins, so fresh
+  items beat carried-over items, and within a single build the
+  fetchers run in a fixed order (HN before Lobsters, etc.).
+
 Pipeline for each article:
   1. Fetch raw HTML. Strip XML-incompatible control characters.
   2. trafilatura produces a plain-text mask.
@@ -1631,6 +1640,86 @@ def build_segment_from_markdown(segment):
 
 
 # ============================================================
+# URL DEDUPLICATION
+#
+# Two sources can link to the same article. Hacker News and
+# Lobsters overlap heavily in particular. Each assigns its own
+# ID, so the ID-based dedup that happens during the merge does
+# not catch them — they look like two different items. This
+# step collapses them by comparing normalized URLs.
+#
+# Normalization strips the parts of a URL that can differ
+# between two links to the same page:
+#
+#   - the fragment (#section) is dropped
+#   - known tracking query parameters (utm_*, fbclid, gclid,
+#     ref, source, campaign) are dropped
+#   - a trailing slash is removed
+#   - http:// is treated as equivalent to https://
+#   - the whole thing is lowercased
+#
+# Two URLs that differ only in those respects are treated as
+# the same article. The first occurrence in merge order wins,
+# which means freshly fetched items beat carried-over items,
+# and within a single build HN beats Lobsters because HN is
+# fetched first.
+# ============================================================
+
+def _normalize_url_for_dedupe(url):
+    """Normalize a URL for the purpose of deduplication. Two
+    URLs that differ only in tracking parameters, fragments,
+    scheme, or a trailing slash are treated as the same."""
+    if not url:
+        return ""
+    u = url.strip()
+    if '#' in u:
+        u = u.split('#', 1)[0]
+    if '?' in u:
+        base, query = u.split('?', 1)
+        keep = []
+        for part in query.split('&'):
+            if not part:
+                continue
+            k = part.split('=', 1)[0].lower()
+            if k in ('utm_source', 'utm_medium', 'utm_campaign',
+                     'utm_term', 'utm_content', 'fbclid', 'gclid',
+                     'ref', 'source', 'campaign'):
+                continue
+            keep.append(part)
+        if keep:
+            u = base + '?' + '&'.join(keep)
+        else:
+            u = base
+    if u.endswith('/'):
+        u = u[:-1]
+    if u.startswith('http://'):
+        u = 'https://' + u[7:]
+    return u.lower()
+
+
+def _dedupe_items_by_url(items):
+    """Remove duplicate items that point to the same article.
+
+    The first occurrence wins. Items without a URL are kept
+    as-is, because they cannot participate in URL comparison.
+    Both the ID and the URL are preserved on the surviving
+    item, so downstream code (the app, the retention sweep)
+    sees a complete record.
+    """
+    seen = set()
+    out = []
+    for item in items:
+        url = item.get('url', '')
+        key = _normalize_url_for_dedupe(url)
+        if key:
+            if key in seen:
+                continue
+            seen.add(key)
+        out.append(item)
+    return out
+
+
+# ============================================================
 # FEED WRITE WITH RETENTION
 # ============================================================
 
@@ -1641,8 +1730,8 @@ def _body_path_for(segment, item_id):
 
 def build_feed_with_retention(segment, new_items):
     """Merge new items with the previous feed, prune by age,
-    write bodies to disk, write the metadata-only feed JSON.
-    Returns the final item count."""
+    dedupe by URL, write bodies to disk, write the metadata-only
+    feed JSON. Returns the final item count."""
     feed_path = os.path.join(FEEDS_DIR, segment + '.json')
     bodies_dir = os.path.join(FEEDS_DIR, 'bodies', segment)
     os.makedirs(bodies_dir, exist_ok=True)
@@ -1689,6 +1778,15 @@ def build_feed_with_retention(segment, new_items):
                 pass
         seen.add(iid)
         merged.append(item)
+
+    # Dedupe by URL. Two sources can link to the same article
+    # (Hacker News and Lobsters in particular overlap heavily),
+    # and each assigns its own ID, so the ID-based dedup above
+    # does not catch them. First occurrence wins, which means
+    # freshly fetched items take precedence over carried-over
+    # items, and within a single build, HN takes precedence over
+    # Lobsters because it is fetched first.
+    merged = _dedupe_items_by_url(merged)
 
     for item in merged:
         body = item.pop('body', '') or ''
