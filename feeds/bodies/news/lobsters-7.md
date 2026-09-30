@@ -1,57 +1,57 @@
-Last week I published [What About Rails](https://jardo.dev/what-about-rails), a dive into DHH’s Rails World keynote. Smarter people than me had [interesting things to say](https://x.com/josevalim/status/2103751481757216781) about it:
+The only "intuitive" interface is the nipple.  After that it's
+  all learned.
 
-> You have the most powerful tool you ever had, you have become a 1000x maker, and you can’t think of how to make your stack 10x better?
+This is usually attributed to one [Bruce Ediger](http://www.users.qwest.net/~eballen1/)
+  (though at least one person thought it was originally said by [Steve Jobs](http://www.apple.com/pr/bios/jobs.html), a
+  manufacturer of fine computers), and refers to the frequent (and
+  invariably inaccurate) description of computer user interfaces as
+  "intuitive".  But in 2001, Bruce [denied
+  that it was original to him](http://groups.google.com/groups?selm=4mKd7.1048%248f5.454947%40news.uswest.net).  This made me wonder what the
+  history of the quote was.
 
-José Valim poses an excellent question. I tried to find an answer.
+My first stop was a [dictionary of quotations](http://isbn.nu/0198601735), but
+  that doesn't have it at all.  Perhaps it is indeed relatively
+  recent, then.
 
-## The Bottleneck Isn’t Gone
+I can get back as far as August 1994, where Scott Francis [suggests
+  the nipple](http://groups.google.com/groups?selm=Scott.Francis-230894132436%40198.99.205.138) as the only intuitive interface, in response to
+  "There really is no user interface metaphor that is truly
+  intuitive."  The idea is there, but the exact form is not.  (And of
+  course, nipples aren't metaphors, at least in this context.)  To get
+  close to the usually-quoted form of words, the earliest I can find
+  is [this
+  one from January 1995](http://groups.google.com/groups?selm=1994Dec31.185452.1036%40walter.cray.com), by one Jay Vollmer.  He said:
 
-> They’re not gonna be web apps much longer. They’re gonna be native applications, because the price of developing those things has gone to damn near zero.
+Actually, the only truly intuitive interface is the
+  nipple.
 
-The move to native apps for the frontend and Rust on the backend isn’t about any particular technology. It’s about cost. DHH isn’t the first to make this case.
+Did Bruce see this post and like it, or did he see the idea
+   somewhere else?  It's not really possible to tell from [Google's
+  archive](http://groups.google.com/).  At any rate, he started using variants of it shortly
+  afterwards.  [For
+  instance, in February 1995](http://groups.google.com/groups?selm=3j0e2s%247if%40news-2.csn.net):
 
-Back in August, Dan Luu posted [There’s no reason for software to be slow anymore](https://danluu.com/perf-opt/). In it, he argued that the cost of specialized performance work has dropped so significantly (because LLMs) that it’s now cheap enough for almost anyone to do.
+It's an old saw, I know, but the only really, truly "intuitive"
+interface is the human nipple.
 
-Luu is *much* more careful than DHH. He points out that agents overfit benchmarks, that they are poor at experimental design (without human assistance), and that the time to get a *rigorous* result hasn’t dropped, just the time to get an *interesting* one.
+[Slightly
+  later the same month](http://groups.google.com/groups?selm=3ihuip%243l3%40explorer.clark.net), we see a variant on the "it's all learned"
+  theme from one Taylor Hutt:
 
-Shortly after, Varun Gandhi posted a response of his own, titled [There continue to be reasons for software to be slow](https://typesanitizer.com/blog/performance-issues.html). He points out the shape of the argument: X cost too much, LLMs divide the cost by a large number, so people will now do X. Gandhi argues that while this holds true for people like Luu (experts working on their own projects), those cases are rare.
+I argue that no computer interface is intuitive -- none; they
+  are all learned.
 
-Substitute the Rust backend, six native apps, or a CLI by last Friday for X and you get DHH’s keynote pitch. DHH *is* an expert working on his own product, at a company he controls. This is the kind of scenario that Gandhi argues is most likely to work. There’s not even a manager to squeeze the budget here. If it works anywhere, it works here. He took a best-case result and generalized it to “virtually all programmers, virtually all companies, by December.”
+In [April
+  1995](http://groups.google.com/groups?selm=3m7duk%24hh9%40news-2.csn.net) Bruce is back:
 
-Gandhi’s most useful point is that writing<sup>[1](https://jardo.dev/hardly-promethean#block-222-fn1)</sup> the code was never the dominant cost. We also have to consider shipping the changes, maintaining them, and avoiding regressions. DHH’s experience with Hey Next is a week old. It’s not even a production system yet.
+By this definition, the nipple is the only "intuitive" user
+  interface.
 
-He showed us this himself. Basecamp 5’s “Swiss cheese” architecture was born out of the reality that code was cheap, but coordination wasn’t. Gandhi tells a version of the same story: Bun’s LLM-assisted fork of Zig that compiles 4x faster but [can’t be upstreamed](https://ziggit.dev/t/bun-s-zig-fork-got-4x-faster-compilation-times/15183/18), because no one<sup>[2](https://jardo.dev/hardly-promethean#block-222-fn2)</sup> wants a non-deterministic compiler.
+Basically, the only "intuitive" interface is the nipple.
+  After that, it's all learned.
 
-Removing a bottleneck doesn’t remove the queue; it just shows you where the next constraint is. With LLMs, we’re moving the bottleneck one step to the right, from writing code to everything that happens after. DHH’s solution is to skip it.
+So perhaps Bruce does have the best claim to this form after all?
+  Maybe.  At any rate, I think I prefer his 2001 version:
 
-## Intolerance
-
-> Now, part of that is that these programming languages like Rust are tremendously verbose and unappealing for humans to look at. So I don’t, and I allow the agent to just spit out more than was necessary, in a way I would never tolerate from my Ruby code.
-
-One of Gandhi’s reasons the cost argument fails is that people’s tolerance goes up. When work is asynchronous and agent-driven, we’re no longer face-to-face with slower git, laggier autocomplete, and longer builds. There’s no human sitting there waiting. If you still care about these things, you probably hate this.
-
-DHH skips it all. You hand the task off “like you would a coworker” and “go back and review when there’s something ready.” “Review” doesn’t mean code review here; it means checking whether the button does the thing.
-
-Maybe that’s okay for his personal one-shot projects. It sounds like it’s working, a week into Hey Next. But his tolerance going up doesn’t raise anyone else’s. He’s free to not care what’s in the Hey Next box, but lots of people care what’s in the Rails box. So much for “virtually all programmers.”
-
-## The Scarcity Is Still Here
-
-So, back to Valim’s question. You have infinite tokens. You’re a 1000x maker. You can create anything. Could you not find something, *anything* to create for Rails?
-
-This was never really about the budget. An increase in velocity doesn’t change priorities. Everything DHH built this year, he wanted for himself. Nothing he’s building needs Rails to be better, so he hasn’t made it better.
-
-> We can now want everything. We can now get everything.
-
-So, what is this everything? Turns out it’s a calculator. And a video editor. And some presentation software. Yet another Linux distro. And a rewrite of his own product. He’s been handed *unlimited* tokens, and this is all he could dream up. There’s some scarcity here. Scarcity of ideas.
-
-Look at that list. Not one single new idea. A microcosm of the industry right now. DHH’s wants are on display, and he wants nothing that isn’t his and nothing that didn’t already exist.
-
-LLMs are exceptional at making things that already exist. Luu admits this; earlier models overfit to the point of [comedy](https://chat.mistral.ai/chat/50900a4b-014a-4214-857b-36c18d5e0727)<sup>[3](https://jardo.dev/hardly-promethean#block-222-fn3)</sup>. A calculator is a safe ask. In 2004, Rails wasn’t. It was novel, and celebrated for it.
-
-DHH’s keynote has this backwards. The era of hand-written code isn’t some charming thing we’ve outgrown. Before LLMs, executing on an idea took a hell of a lot more legwork. But you needed a spark first, and you still need it now.
-
-In 2005, “Look at all the things I’m not doing” was a boast. He replayed it this year for the parallel. From where I’m sitting, the thing he’s no longer doing is coming up with new ideas.
-
-1. “Writing” includes design and debugging, not just typing. [↩](https://jardo.dev/hardly-promethean#block-222-fnref1)
-2. Well, except for Bun, whose fork only has to work for them. [↩](https://jardo.dev/hardly-promethean#block-222-fnref2)
-3. Further reading: [Like Humans, AI Can Jump to Conclusions, Mount Sinai Study Finds](https://www.mountsinai.org/about/newsroom/2025/like-humans-ai-can-jump-to-conclusions-mount-sinai-study-finds) [↩](https://jardo.dev/hardly-promethean#block-222-fnref3)
+There is no intuitive interface, not even the
+  nipple.  It's all learned.

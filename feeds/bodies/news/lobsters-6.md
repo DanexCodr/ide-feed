@@ -1,75 +1,157 @@
-We have shown that running mainline Linux on your phone is a real possibility for highly invested Linux enthusiasts. Now how do we get from there to making it usable for everybody else who just wants a working phone?
+This post describes the construction of an Aho-Corasick automaton for
+the simultaneous matching of substrings within a sequence. I’m fond of
+this algorithm because it constructs an automaton from an existing
+tree data structure in a rather pleasant way.
 
-Two important segments of the road towards this destination are [Duranium](https://postmarketos.org/blog/2026/03/17/introducing-duranium/) and [Hardware CI](https://postmarketos.org/blog/2026/01/21/hw-ci-mvp/). This blog post is about the third one: **reference devices!**
+### Tries
 
-Members of the Nura team have joined forces to build maintainer teams for three of the many devices Nura runs on to push them across the finishing line and make them suitable for everyday use with Nura. More on the actual workflow comes further below, let's start with defining the goal in detail.
+A trie (or “prefix tree”) is an $n$-ary tree that stores a set of
+strings. Each edge in the trie is labelled with a character and each
+node conceptually represents the concatenation of all the edge
+characters required to reach it (starting from the root).
 
-## [New "main" category](https://postmarketos.org/blog/2026/09/29/road-to-main-category/#new-main-category)
+Tries are designed to reduce redundancy by ensuring entries with
+common prefixes share these prefixes within the tree data
+structure.
 
-We [categorize devices](https://docs.nura.eco/pmaports/main/packaging/device-categorization.html) into "main", "community", "testing", "downstream" and "archived". The "main" category was [emptied](https://postmarketos.org/blog/2024/12/23/v24.12-release/#pinephone-and-librem-5) with the v24.12 release. With [PMCR-0009](https://docs.nura.eco/pmcr/main/0009-new-main-device-category.html) we have re-evaluated what we want to have in the "main" device category. Here is the summary:
+See the trie below that stores the strings ${\lbrace
+\text{suit}, \text{suited}, \text{suitable} \rbrace}$:
 
-> Set new requirements for the “main” device category to highlight selected device ports which are well-tested in hardware CI and set up to stay in “main” for a long time through strong maintainership.
->
-> Change the meaning of the “main” category to not only indicate that more features are working than in the “community” category, but also that the Nura team is highly invested in keeping the device in the “main” category and takes on responsibilities to make this likely.
->
-> Maintainers of devices in other categories are welcome to use some of these new requirements for “main” as blueprint for their devices as well, in order to get similar reliability and maintainership improvements for their devices.
+You can see that the common prefix of `suit` is shared by all entries. Also note that nodes representing complete entries in the trie are explicitly marked.
 
-### [Fully mainline](https://postmarketos.org/blog/2026/09/29/road-to-main-category/#fully-mainline)
+### Suffix Links
 
-After many discussions (the PMCR merge request had 151 comments), we have arrived at [high quality requirements](https://docs.nura.eco/pmaports/main/packaging/device-categorization.html#main) for ports in this category. Among others:
+Aho-Corasick automatons recover from transition failure by following
+so-called suffix links. These links preserve the longest suffix of the
+string represented by each node that happens to exist as a prefix of a
+pattern in the trie. This allows the machine to transition to a state
+that permits further matching of patterns that happen to have the
+failing node’s longest suffix as a prefix.
 
-- Boot via UEFI (e.g. through a second-stage bootloader on phones).
-- Must use upstream kernels with a strict and minimal policy for patches.
-- Must not depend on forked device-specific packages, such as alsa-ucm-conf.
-- Must use a generic device package for the target architecture.
+Consider the suffix links applied (in red) to the trie constructed for
+the strings $\lbrace \text{item}, \text{suits} \rbrace$ below:
 
-This means that the resulting ports are essentially fully mainlined and can not only be used with Nura, but also relatively easily with any other Linux distribution. There will be one UI-specific aarch64 image that can be flashed on all "main" aarch64 devices. Getting Linux kernel security patches will be trivial, as we only need to update our generic kernel packages and then get them for all devices in the "main" category at once.
+The majority of nodes have the root node as their suffix link. However, if we look at node $8$, representing the state reached by following suit, we see that its suffix link (node $3$) points to the node one would reach if, starting from the root, we had followed its suffix, it. This permits the potential for matching the patterns prefixed with it; in this case, only $\lbrace \text{item} \rbrace$.
 
-### [Device features](https://postmarketos.org/blog/2026/09/29/road-to-main-category/#device-features)
+For example, if we were scanning the input `suitems`, we would reach node $8$, see that there is no outgoing edge labelled `e`, we would transition via the suffix link and continue scanning from the failing character, eventually matching `su[item]s`.
 
-Regarding device features, "main" category requirements now have:
+The construction of suffix links is rather pleasant, they’re computed
+in a breadth-first traversal of the trie. The cases for each node are
+computed as follows:
 
-> **The working features should allow to use the device in most common use cases.** A phone for example would typically have calls, SMS, mobile data, Wi-Fi, audio, battery charging, Bluetooth and camera. Exceptions can be made by the device maintainer team, together with reasoning why they are necessary (e.g. fingerprint reader is not working because the driver is missing). The Nura team decides if the port is complete enough for the main category based on that list.
+- The root and its children have root as their suffix link.
+- To compute the suffix link for each other node, you start by looking at the node’s parent’s suffix link. For a pattern of characters $( c_1, c_2, c_3, \ldots, c_n)$, to compute a suffix link for a node $c_k$ ($k \geq 3$), you examine the suffix link of $c_{k-1}$. That suffix link preserves the longest suffix of $(c_1, \ldots, c_{k-1})$ that represents a prefix of a pattern in the trie. If the node at that suffix link has an outgoing edge labelled $c_k$, then the target of that edge is $c_k$’s suffix link. Otherwise, you continue to chase up the trie by following successive suffix links. If you reach the root, you stop (to avoid iterating indefinitely by following its suffix link to itself).
 
-### [Device maintainer team](https://postmarketos.org/blog/2026/09/29/road-to-main-category/#device-maintainer-team)
+Despite my best efforts to describe the suffix link construction process above formally, it’s best explained visually. Consider the trie constructed for the strings $\lbrace \text{cadence}, \text{facade} \rbrace$ with partially constructed suffix links below:
 
-In order to pull this off, each device must have a team of maintainers that consists of at least 5 people, of which the majority are part of the [Nura team](https://nura.eco/team/). Between these people, a list of responsibilities must be covered. As with the other requirements listed above, this is an ideal the team would be working towards for eventually getting the device into *main*. The team can consist of fewer people and have a smaller scope initially.
+The nodes are numbered with their breadth-first traversal order.
 
-From the [list of responsibilities](https://docs.nura.eco/pmaports/main/packaging/device-categorization.html#main), most importantly:
+After processing the nodes with suffix links computed above, the BFS
+queue will contain $[(c, 5), (d, 6)]$. If we examine $(c, 5)$, we look
+at its parent’s suffix link. In this case, it’s the root of the
+trie. We see that root has an outgoing edge labelled with $c$, so the
+node reached by that edge is the suffix link for node $5$:
 
-- Organize regular meetings.
-- Long-term commitment for the device.
-- Kernel maintenance (fixing regressions on the kernel side, new kernel developments).
-- Triage issues found by the community and HW CI regressions.
-- Documentation for this device.
-- Making sure Hardware CI works (wires are connected, preparing CI).
-- Manual testing where necessary.
+After the above, the queue will contain $[(d, 6), (a, 7)]$. The
+processing of $(d, 6)$ is straightforward. As before, its parent’s
+suffix link is the root. However, there is no outgoing edge labelled
+$d$, therefore node $6$’s suffix link is simply the root (capturing
+the idea that there’s no other pattern in the tree that has any of
+$\lbrace \text{c}, \text{ca}, \text{cad} \rbrace$ as a prefix). In
+operational terms, there’s no suffix to preserve as another pattern’s
+prefix if we get to node $6$ and the input character is not $e$. We
+dispose of the seen $\text{cad}$ and try the failing input character
+from the root. If a character fails to advance from the root, we stay
+at the root but advance the character stream (as it’s a non-starter
+for every pattern).
 
-## [Workflow](https://postmarketos.org/blog/2026/09/29/road-to-main-category/#workflow)
+The next interesting case is that of processing the $(a, 7)$
+edge. Node $7$’s parent’s suffix link is the previously computed,
+non-root, node $2$ - which does have an outgoing edge labelled $a$,
+therefore the suffix link of node $7$ is node $4$. This preserves the
+$\text{ca}$ suffix of $\text{faca}$ as being a valid prefix of the
+other pattern, $\text{cadence}$.
 
-So how can your favorite device get into the main category? We have thought hard about this and came up with the following workflow:
+When all nodes have been processed, the suffix links are as follows:
 
-- Become part of a team of device maintainers through issues in the [new-device-teams](https://gitlab.postmarketos.org/postmarketOS/new-device-teams/-/work_items) project. You can either apply to join an existing team by commenting in an existing issue or create a new one.
-- When creating a new issue, the [Nura infrastructure team](https://docs.nura.eco/policies-and-processes/governance/groups-and-teams.html#infrastructure-team) will create bridged Matrix and IRC channels for you, and a pmaports label for this new device will be created. (This is a manual process, if we don't do this within a week then please kindly ask in the devel chat.)
-- Wait until you have at least two people in the potential new team, then find a meeting time that works for everyone and start doing regular meetings. Use the meetings to figure out how to implement the requirements for the main category.
-- Once all requirements for *main* are fulfilled (this will take quite some time, but the device port will already improve significantly in this process!), make a merge request to move the device to the "main" category.
+For clarity, I’ve omitted the suffix links that go to the root node. Interestingly, you can see that node $12$ goes to node $2$, attempting to preserve prefix context for matching $\text{cadence}$, from a node reached by assuming it was making progress in matching $\text{cadence}$!
 
-## [Financing](https://postmarketos.org/blog/2026/09/29/road-to-main-category/#financing)
+### Output Links
 
-Most of the work done in Nura is volunteer-based. Therefore, we cannot really promise ETAs for this project. Still, donations make it possible to finance development and HW-CI hardware. In some specific cases we might even be able to directly fund development work (e.g. [q6voice(d)](https://postmarketos.org/blog/2026/05/08/q6voice-project/)) too. We are also working on applying for grants to potentially support part of this project.
+When a pattern is introduced into the trie, the last node traversed during insertion is annotated as being an “output” node (usually storing the inserted pattern). If a node has an output pattern associated with it, this identifies a match that should be output when entering the state represented by that node. However, it may be the case that a node with an output’s pattern has a suffix that also happens to be a pattern in the trie - and, so, must also be output at the same time.
 
-If you are interested in supporting this project, you can make sure that some of your [donations](https://postmarketos.org/donate) will go specifically to this project! If you want to get in touch for some bigger-targeted donations to directly support development, we would also be happy to hear from you at `board at postmarketos dot org` (emails are not migrated to nura.eco yet).
+In order to capture this information, Aho-Corasick employs output links. As with suffix links, it will always be the case that output links point to nodes representing shorter strings (visited first in the breadth-first algorithm).
 
-## [Initial candidates](https://postmarketos.org/blog/2026/09/29/road-to-main-category/#initial-candidates)
+Consider the trie below (with suffix links in red and output links in blue), constructed from the strings $\lbrace \text{spin}, \text{pin}, \text{in} \rbrace$.
 
-Together with this blog post, we have created three initial issues in the new-device-teams project:
+The blue links go between node with an associated output. It’s clear that on reaching state $9$ (representing that `spin` has been matched), the outputs for $8$ and $6$ must also be output (representing pattern suffixes `pin` and `in`, respectively). You can think of output links as being a linked list of nodes that must be iteratively output if one was interpreting this matcher directly.
 
-All of these are based on the [SM7325](https://wiki.nura.eco/wiki/Qualcomm_Snapdragon_778G/778G%2B/782G_(SM7325)) SoC for which significant mainline support exists already, to the point that we believe there is a good chance to eventually fulfill all requirements needed for the new main category. For all of these we are already able to use UART.
+The output link for a node (if it has one) can be computed directly after its suffix link has been computed. This makes sense because the suffix link attempts to capture the longest suffix of the current node’s pattern that happens to be a prefix of a pattern in the trie. So, the output link for a node is its suffix node if its suffix node has an associated output (is a pattern itself), otherwise a node’s output is its suffix node’s output link.
 
-The Radxa Dragon Q6A is a single-board computer, which means it will be much easier to get this moved to main first compared to actual phones. Fairphone as OEM is ideologically very aligned with our project, while the Edge 30 is a cheaper phone that is easier to obtain in some regions.
+### Algorithm Pseudocode
 
-## [Get involved](https://postmarketos.org/blog/2026/09/29/road-to-main-category/#get-involved)
+The pseudocode for computing suffix and output links is as follows:
 
-Now it's your turn. If you would like to see one of these devices become well maintained in Nura to the point that you can daily drive them without making compromises, consider joining their device maintainer teams. You don't even need to be a programmer to help out, there are many non-coding tasks such as testing, organization, triaging issues etc. that are super important as well and ensure that the programmers don't burn out.
+let Q be a queue of (char, node)
 
-If you are significantly interested in improving another device port (even if the end-goal is not main), look through the [existing issues](https://gitlab.postmarketos.org/postmarketOS/new-device-teams/-/work_items). If it is not there, consider creating a [new issue](https://gitlab.postmarketos.org/postmarketOS/new-device-teams/-/work_items/new) and get the ball rolling.
+```
+# root and its immediate children have root as their suffix link
+root.suffix <- root
+for each (char, child) in root.arrows {
+  child.suffix <- root
+
+  # queue root's grandchildren for traversal
+  add (char, child) to Q
+}
+
+while Q is not empty {
+  let (char, node) = Q.poll()
+
+  # start from parent's suffix link node
+  let suffix = node.parent.suffix
+
+  while suffix has no edge labelled char {
+    # follow its suffix link
+    suffix <- suffix.suffix
+
+    # avoid looping endlessly if we reach root
+    if suffix == root then
+      break
+  }
+
+  # capture case where root has outgoing edge labelled char
+  if suffix has edge (char, actual) then
+    node.suffix <- actual
+  else
+    node.suffix <- suffix 
+
+  # a node's output is its suffix if its suffix link is an output, 
+  # otherwise follow its suffix's output
+  if (node.suffix.pattern != null) then
+    node.output = node.suffix
+  else
+    node.output = node.suffix.output
+}
+```
+
+### The Automaton
+
+The computation of suffix and output links is the core of Aho-Corasick, but only an intermediary step as far as computing the automaton is concerned. Of course, the trie - augmented with these internal links - can be interpreted directly. However, due to the potential to repetitively chase up suffix links to resolve the next state to transition to on a given symbol, the amount of work for each transition is not constant.
+
+Once the suffix and output links are in place, the transitions and outputs are all statically resolvable into a deterministic finite automaton. To compute this, a final breadth first traversal is performed.
+
+First, the root node (the base case) is processed. For every symbol, $a$, if the root node has an edge reaching some state, $s$, labelled $a$, then that’s where the root transitions on $a$. If no such edge for $a$ exists, then you stay in the same place (self-looping on the root - effectively skipping over the symbol as it’s a non-starter for every pattern in the trie). All states reachable from the root are added to the traversal queue during this processing.
+
+For every other node processed in breadth-first fashion: for every symbol, $a$, you transition to the state reachable on an edge labelled $a$. If no such edge exists, then you transition to the state reached if you transitioned from the node’s suffix node. This encodes the idea that if no progress can be made on a certain path through the trie, then the state is transitioned into one that hopefully preserves the longest suffix of the current state that is also a prefix of a pattern in the trie. Often times, many transitions simply go to the root (preserving $\epsilon$), so a sparse matrix storage representation is recommendable for many offline Aho-Corasick automatons.
+
+For example, the trie with suffix and output links constructed from the strings $\lbrace \text{he}, \text{she}, \text{her} \rbrace$ would be as follows:
+
+The DFA computed from the above trie (by resolving transitions and merging outputs into sets) would be:
+
+### Demo
+
+Below you can build an Aho-Corasick trie from a set of strings:
+
+### Further Reading
+
+- Efficient String Matching: An Aid to Bibliographic Search - original paper describing entire algorithm.

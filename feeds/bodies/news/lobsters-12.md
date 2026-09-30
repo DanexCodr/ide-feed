@@ -1,232 +1,47 @@
-*Welcome to Internal Tech Emails: internal tech industry emails that surface in public records. 🔍 If you haven’t signed up, join 50,000+ others and get the newsletter:*
+***The Cuckoo's Egg: Tracking a Spy Through the Maze of Computer Espionage*** is a 1989 book written by [Clifford Stoll](https://en.wikipedia.org/wiki/Clifford_Stoll). It is his [first-person](https://en.wikipedia.org/wiki/First-person_narrative) account of the hunt for [Markus Hess](https://en.wikipedia.org/wiki/Markus_Hess), a [computer hacker](https://en.wikipedia.org/wiki/Hacker_(computer_security)) who broke into a computer at [Lawrence Berkeley National Laboratory](https://en.wikipedia.org/wiki/Lawrence_Berkeley_National_Laboratory) (LBNL).
 
-**From:** Bill Gates  
-**Sent:** Wednesday, January 15, 2003 10:05 AM  
-**To:** Jim Allchin  
-**Cc:** Chris Jones; Bharat Shah; Joe Peterson; Will Poole; Brian Valentine; Anoop Gupta  
-**Subject:** Windows Usability Systematic degradation flame
+| [![](https://upload.wikimedia.org/wikipedia/en/2/28/The_Cuckoo%27s_Egg.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail_unscaled)](https://en.wikipedia.org/wiki/File:The_Cuckoo's_Egg.jpg) |  |
+| --- | --- |
+| Author | [Clifford Stoll](https://en.wikipedia.org/wiki/Clifford_Stoll) |
+| Language | English |
+| Publisher | [Doubleday](https://en.wikipedia.org/wiki/Doubleday_(publisher)) |
+| Publication date | 1989 |
+| Publication place | United States |
+| Media type | Print |
+| Pages | 326 |
+| [ISBN](https://en.wikipedia.org/wiki/ISBN_(identifier)) | [0-385-24946-2](https://en.wikipedia.org/wiki/Special:BookSources/0-385-24946-2) |
+| [OCLC](https://en.wikipedia.org/wiki/OCLC_(identifier)) | [43977527](https://www.worldcat.org/oclc/43977527) |
+| [Dewey Decimal](https://en.wikipedia.org/wiki/Dewey_Decimal_Classification) | 364.16/8/0973 21 |
+| [LC Class](https://en.wikipedia.org/wiki/LCC_(identifier)) | UB271.R92 H477 2000 |
 
-I am quite disappointed at how Windows Usability has been going backwards and the program management groups don't drive usability issues.
+Stoll's use of the term extended the metaphor [*cuckoo's egg*](https://en.wikipedia.org/wiki/Cuckoo's_egg_(metaphor)) from [brood parasitism](https://en.wikipedia.org/wiki/Brood_parasitism) in birds to [malware](https://en.wikipedia.org/wiki/Malware).
 
-Let me give you my experience from yesterday.
+Author Clifford Stoll, an [astronomer](https://en.wikipedia.org/wiki/Astronomer) by training, managed computers at [Lawrence Berkeley National Laboratory](https://en.wikipedia.org/wiki/Lawrence_Berkeley_National_Laboratory) (LBNL) in California. One day in 1986 his supervisor asked him to resolve an accounting error of 75 cents in the computer usage accounts. Stoll traced the error to an unauthorized user who had apparently used nine seconds of computer time and not paid for it. Stoll eventually realized that the unauthorized user was a hacker who had acquired [superuser](https://en.wikipedia.org/wiki/Superuser) access to the LBNL system by exploiting a vulnerability in the [movemail](https://en.wikipedia.org/wiki/Movemail) function of the original [GNU Emacs](https://en.wikipedia.org/wiki/GNU_Emacs).
 
-I decided to download Moviemake and buy the Digital Plus pack r so I went to Microsoft.com. They have a download place so I went there.
+Early on, and over the course of a long weekend, Stoll rounded up fifty terminals, as well as [teleprinters](https://en.wikipedia.org/wiki/Teleprinter), mostly by "borrowing" them from the desks of co-workers away for the weekend. He physically attached them to the fifty incoming phone lines at LBNL. When the hacker dialed in that weekend, Stoll located the phone line used, which was coming from the [Tymnet](https://en.wikipedia.org/wiki/Tymnet) routing service. With the help of Tymnet, he eventually tracked the intrusion to a call center at [MITRE](https://en.wikipedia.org/wiki/Mitre_Corporation), a defense contractor in [McLean, Virginia](https://en.wikipedia.org/wiki/McLean,_Virginia). Over the next ten months, Stoll spent enormous amounts of time and effort tracing the hacker's origin. He saw that the hacker was using a 1200 [baud](https://en.wikipedia.org/wiki/Baud) connection and realized that the intrusion was coming through a telephone [modem](https://en.wikipedia.org/wiki/Modem) connection. Stoll's colleagues, Paul Murray and Lloyd Bellknap, assisted with the phone lines.
 
-The first 5 times I used the site it timed out while trying to bring up the download page. Then after an 8 second delay I got it to come up
+After returning his  "borrowed" terminals, Stoll left a teleprinter attached to the intrusion line in order to see and record everything the hacker did. He watched as the hacker sought — and sometimes gained — unauthorized access to military bases around the United States, looking for files that contained words such as "nuclear" or "[SDI](https://en.wikipedia.org/wiki/Strategic_Defense_Initiative)" (Strategic Defense Initiative). The hacker also copied password files (in order to make [dictionary attacks](https://en.wikipedia.org/wiki/Dictionary_attack)) and set up [Trojan horses](https://en.wikipedia.org/wiki/Trojan_horse_(computing)) to find passwords. Stoll was amazed that on many of these high-security sites the hacker could easily guess passwords, since many [system administrators](https://en.wikipedia.org/wiki/System_administrator) had never bothered to change the passwords from their factory [defaults](https://en.wikipedia.org/wiki/Default_password). Even on military bases, the hacker was sometimes able to log in as "guest" with no password.
 
-This site is so slow it is unusable.
+This was one of the first⁠—⁠if not *the* first⁠—documented cases of a computer break-in, and Stoll seems to have been the first to keep a daily logbook of the hacker's activities. Over the course of his investigation, Stoll contacted various agents at the [Federal Bureau of Investigation](https://en.wikipedia.org/wiki/Federal_Bureau_of_Investigation) (FBI), the [Central Intelligence Agency](https://en.wikipedia.org/wiki/Central_Intelligence_Agency) (CIA), the [National Security Agency](https://en.wikipedia.org/wiki/National_Security_Agency) (NSA), and the [United States Air Force Office of Special Investigations](https://en.wikipedia.org/wiki/United_States_Air_Force_Office_of_Special_Investigations) (OSI). At the very beginning there was confusion as to jurisdiction and a general reluctance to share information; the FBI in particular was uninterested as no large sum of money was involved and no [classified information](https://en.wikipedia.org/wiki/Classified_information) host was accessed.
 
-It wasn't in the top 5 so I expanded the other 45.
+Studying his log book, Stoll saw that the hacker was familiar with [VAX/VMS](https://en.wikipedia.org/wiki/VAX/VMS), as well as [AT&T Unix](https://en.wikipedia.org/wiki/Unix). He also noted that the hacker tended to be active around the middle of the day, [Pacific time](https://en.wikipedia.org/wiki/Pacific_Time_Zone). Eventually Stoll hypothesized that, since modem bills are cheaper at night and most people have school or a day job and would only have a lot of free time for hacking at night, the hacker was in a time zone some distance to the east, likely beyond the US East Coast.
 
-These 45 names are totally confusing. These names make stuff like: C:\Documents and Settings\billg\My Documents\My Pictures seem clear.
+With the help of Tymnet and agents from various agencies, Stoll found that the intrusion was coming from [West Germany](https://en.wikipedia.org/wiki/West_Germany) via satellite. The West German post office, the *[Deutsche Bundespost](https://en.wikipedia.org/wiki/Deutsche_Bundespost)*, had authority over the phone system there, and traced the calls to a university in [Bremen](https://en.wikipedia.org/wiki/Bremen). In order to entice the hacker to reveal himself, Stoll set up an elaborate hoax—known today as a [honeypot](https://en.wikipedia.org/wiki/Honeypot_(computing))—by inventing a fictitious department at LBNL that had supposedly been newly formed by an "SDI" contract, also fictitious. When he realized the hacker was particularly interested in the faux SDI entity, he filled the "SDInet" account (operated by an imaginary secretary named "Barbara Sherwin") with large files full of impressive-sounding [bureaucratese](https://en.wikipedia.org/wiki/Administratium). The ploy worked, and the *Deutsche Bundespost* finally located the hacker at his home in [Hanover](https://en.wikipedia.org/wiki/Hanover).
 
-They are not filtered by the system I can in on and so many of the things are strange.
+The hacker's name was [Markus Hess](https://en.wikipedia.org/wiki/Markus_Hess), and he had been engaged for some years in selling the results of his hacking to the [Soviet Union](https://en.wikipedia.org/wiki/Soviet_Union)'s civilian intelligence agency, the [KGB](https://en.wikipedia.org/wiki/KGB). There was ancillary proof of this when a Hungarian [agent](https://en.wikipedia.org/wiki/Espionage) contacted the fictitious SDInet at LBNL by mail, based on information he could only have obtained through Hess. Apparently this was the KGB's method of double-checking to see if Hess was just making up the information he was selling. Stoll later flew to West Germany to testify at the trial of Hess.
 
-I tried scoping to Media stuff. Still no moviemaker. I typed in moviemaker. Nothing. I typed in movie maker. Nothing.
+- The book was chronicled in an episode of WGBH's [NOVA](https://en.wikipedia.org/wiki/Nova_(American_TV_series)) entitled "The KGB, the Computer, and Me", which aired on PBS stations on October 3, 1990. Stoll and several of his co-workers participated in re-enactments of the events described.[*[citation needed](https://en.wikipedia.org/wiki/Wikipedia:Citation_needed)*][[1]](https://en.wikipedia.org/wiki/The_Cuckoo%27s_Egg_(book)#cite_note-stoll-adaptations-1)
+- Another documentary, Spycatcher, was made by Yorkshire Television.[[1]](https://en.wikipedia.org/wiki/The_Cuckoo%27s_Egg_(book)#cite_note-stoll-adaptations-1)
+- The number sequence mentioned in Chapter 48 has become a popular math puzzle, known as the Cuckoo's Egg, the Morris Number Sequence, or the look-and-say sequence.
+- In the summer of 2000 the name "Cuckoo's Egg" was used to describe a file sharing hack attempt that substituted white noise or sound effects files for legitimate song files on Napster and other networks.[[2]](https://en.wikipedia.org/wiki/The_Cuckoo%27s_Egg_(book)#cite_note-2)
+- These events are referenced in Cory Doctorow's speculative fiction short story "The Things that Make Me Weak and Strange Get Engineered Away", as "(a) sysadmin who'd tracked a $0.75 billing anomaly back to a foreign spy-ring that was using his systems to hack his military."[[3]](https://en.wikipedia.org/wiki/The_Cuckoo%27s_Egg_(book)#cite_note-3)
 
-So I gave up and sent mail to Amir saying - where is this Moviemaker download? Does it exist?
+1. [1](https://en.wikipedia.org/wiki/The_Cuckoo%27s_Egg_(book)#cite_ref-stoll-adaptations_1-0) [2](https://en.wikipedia.org/wiki/The_Cuckoo%27s_Egg_(book)#cite_ref-stoll-adaptations_1-1) [Richard Stoll's Personal Webpage on TV adaptations](http://www.ocf.berkeley.edu/~stoll/nova_show.html)( [Archived](https://web.archive.org/web/20110806122326/http://www.ocf.berkeley.edu/~stoll/nova_show.html) August 6, 2011, at the [Wayback Machine](https://en.wikipedia.org/wiki/Wayback_Machine))
+2. [↑](https://en.wikipedia.org/wiki/The_Cuckoo%27s_Egg_(book)#cite_ref-2) ["Cuckoo's Egg Project Home Page"](http://www.hand-2-mouth.com/). *www.hand-2-mouth.com*.
+3. [↑](https://en.wikipedia.org/wiki/The_Cuckoo%27s_Egg_(book)#cite_ref-3) ["The Things that Make Me Weak and Strange Get Engineered Away"](http://www.tor.com/2008/08/06/weak-and-strange/). Tor.com. Edited 2015-06-24.
 
-So they told me that using the download page to download something was not something they anticipated
-
-They told me to go to the main page search button and type movie maker (not moviemaker!).
-
-I tried that   The site was pathetically slow but after 6 seconds of waiting up it came.
-
-I thought for sure now I would see a button to just go do the download.
-
-In fact it is more like a puzzle that you get to solve. It told me to go to Windows Update and do a bunch of incantations.
-
-This struck me as completely odd. Why should I have to go somewhere else and do a scan to download moviemaker?
-
-So I went to Windows update. Windows Update decides I need to download a bunch of controls. Now just once but multiple times where I get to see weird dialog boxes.
-
-Doesn't Windows update know some key to talk to Windows?
-
-Then I did the scan. This took quite some time and I was told it was critical for me to download 17megs of stuff.
-
-This is after I was told we were doing delta patches to things but instead just to get 6 things that are labeled in the SCARIEST possible way I had to download 17meg.
-
-So I did the download. That part was fast. Then it wanted to do an install. This took 6 minutes and the machine was so slow I couldn't use it for anything else during this time.
-
-What the heck is going on during those 6 minutes? That is crazy. This is after the download was finished.
-
-Then it told me to reboot my machine. Why should I do that? I reboot every night - why should I reboot at that time?
-
-So I did the reboot because it INSISTED on it. Of course that meant completely getting rid of all my Outlook state.
-
-So I got back up and running and went to Windows Update again. I forgot why I was in Windows Update at all since all I wanted was to get Moviemaker.
-
-So I went back to Microsoft.com and looked at the instructions. I have to click on a folder called WindowsXP. Why should I do that? Windows Update knows I am on Windows XP.
-
-What does it mean to have to click on that folder? So I get a bunch of confusing stuff but sure enough one of them is Moviemaker.
-
-So I do the download. The download is fast but the Install takes many minutes. Amazing how slow this thing is.
-
-At some point I get told I need to go get Windows Media Series 9 to download.
-
-So I decide I will go do that. This time I get dialogs saying things like "Open" or "Save". No guidance in the instructions which to do. I have no clue which to do.
-
-The download is fast and the install takes 7 minutes for this thing.
-
-So now I think I am going to have Moviemaker. I go to my add/remove programs place to make sure it is there.
-
-It is not there.
-
-What is there? The following garbage is there. Microsoft Autoupdate Exclusive test package, Microsoft Autoupdate Reboot test package, Microsoft Autoupdate testpackage1, Microsoft AUtoupdate testpackage2, Microsoft Autoupdate Test package3.
-
-Someone decided to trash the one part of Windows that was usable? The file system is no longer usable. The registry is not usable. This program listing was one sane place but now it is all crapped up.
-
-But that is just the start of the crap. Later I have listed things like Windows XP Hotfix see Q329048 for more information. What is Q329048? Why are these series of patches listed here? Some of the patches just things like Q810655 instead of saying see Q329048 for more information.
-
-What an absolute mess.
-
-Moviemaker is just not there at all.
-
-So I give up on Moviemaker and decide to download the Digital Plus Package.
-
-I get told I need to go enter a bunch of information about myself.
-
-I enter it all in and because it decides I have mistyped something I have to try again. Of course it has cleared out most of what I typed
-
-I try tryping the right stuff in 5 times and it just keeps clearing things out for me to type them in again.
-
-So after more than an hour of craziness and making my programs list garbage and being scared and seeing that Microsoft.com is a terrible website I haven't run Moviemaker and I haven't got the plus package
-
-The lack of attention to usability represented by these experiences blows my mind. I thought we had reached a low with Windows Network places or the messages I get when I try to use 802.11. (don't you just love that root certificate message?)
-
-When I really get to use the stuff I am sure I will have more feedback.  
-
-**From:** Will Poole  
-**Sent:** Wednesday, January 15, 2003 1:27 PM  
-**To:** Amir Majidimehr; Chris Jones  
-**Cc:** Dave Fester; Rick Thompson  
-**Subject:** FW: Windows Usability Systematic degradation flame
-
-Guess we should start working on a list of things that need to be fixed w/ the web sites, WU, and with windows, and identify owners. Bill's frustration is not unreasonable.  
-
-**From:** Amir Majidimehr  
-**Sent:** Wednesday, January 15, 2003 3:55 PM  
-**To:** Mike Beckerman; Tim Lebel; Dave Fester  
-**Subject:** FW: Windows Usability Systematic degradation flame
-
-Can you guys coordinate between you on how to deal with this situation on our bits? Bill's situation is worse than my personal experience but still, this aspect of the system needs to be looked at carefully and become a sign off item for each release.
-
-Please let me know which one of you going to be BOL for this moving forward.
-
-Amir  
-
-**From:** Dave Fester  
-**Sent:** Wednesday, January 15, 2003 3:58 PM  
-**To:** Amir Majidimehr; Mike Beckerman; Tim Lebel  
-**Subject:** RE: Windows Usability Systematic degradation flame
-
-I replied as well. I am owning the website issues, but Mike should own the others.  
-
-**From:** Mike Beckerman  
-**Sent:** Wednesday, January 15, 2003 4:28 PM  
-**To:** Dave Fester; Amir Majidimehr; Tim Lebel  
-**Subject:** RE: Windows Usability Systematic degradation flame
-
-I'm thinking about this and am discussing with my team.
-
-I don't know what it means to "own website issues", nor am I yet sure the best way to handle the complex mess of coordinating between product teams, WU, and MS.COM. Dave, would you please forward the other reply you mentioned?
-
-I expect to send more on this thread in a day or two.  
-
-**From:** Dave Fester  
-**Sent:** Wednesday, January 15, 2003 4:31 PM  
-**To:** Mike Beckerman; Amir Majidimehr; Tim Lebel  
-**Subject:** RE: Windows Usability Systematic degradation flame
-
-I am working with MS.com to directly address the download/discoverability of our bits (both MP9S and MM2)  
-
-**From:** Mike Beckerman  
-**Sent:** Wednesday, January 15, 2003 4:39 PM  
-**To:** John Martin; lan Mercer; Michael Halcoussis; Linda Averett  
-**Cc:** Chadd Knowlton; Ming-Chieh Lee  
-**Subject**: FW: Windows Usability Systematic degradation flame
-
-More.  
-
-**From:** Mike Beckerman  
-**Sent:** Friday, January 17, 2003 7:36 AM  
-**To:** Mike Beckerman; John Martin; lan Mercer; Michael Halcoussis; Linda Averett  
-**Cc:** Chadd Knowlton; Ming-Chieh Lee  
-**Subject:** RE: Windows Usability Systematic degradation flame
-
-haven't heard anything from any of you on this.
-
-My take is that this web-experience mess spans many groups and deliverables (like Plus), that we need one person/team to own the overall picture, driving it, tracking the experience, etc., and that WMPG isn't really the right place. I'm thinking Dave's team. What do you think?  
-
-**From:** John Martin  
-**Sent:** Friday, January 17, 2003 11:52 AM  
-**To:** Mike Beckerman; Ian Mercer; Michael Halcoussis; Linda Averett  
-**Cc:** Chadd Knowlton; Ming-Chieh Lee  
-**Subject:** RE: Windows Usability Systematic degradation flame
-
-I have always been concerned about this and feel that this has a lot of engineering implications. I also feel that the reason is it such a mess is because marketing teams own release to web in this company. Frankly, we should be up in arms about this and want to program manager and develop whatever code we need to to ensure that every customer that even thinks they want to download our bits can do so in as easy and painless a way as possible. Downloading is the first step to setup and we should think of them equally or as one experience. But, if you want nothing revolutionary and want to band-aid (which is fine and understandable) then I agree with your plan to give it to Dave.
-
-John  
-
-**From:** Ian Mercer  
-**Sent:** Friday, January 17, 2003 5:02 PM  
-**To:** John Martin; Mike Beckerman; Michael Halcoussis; Linda Averett  
-**Cc:** Chadd Knowlton; Ming-Chieh Lee; Allan Poore  
-**Subject:** RE: Windows Usability Systematic degradation flame
-
-I don't think you can abdicate this entirely to marketing. If WU is the preferred way to deliver bits to end users we all need to drive WU to deliver what we need, both individually and as a collective request from DMD.
-
-One of the biggest issues today is that WU provides no way to *promote* a download to an end-user. We want to promote MM2 and WMP9S to end-users as something new and cool that they can get for Windows. Three lines of text describing it buried under "Windows XP" in a page that the user has to purposefully go find just isn't good enough. Why can't the WU client-side piece proactively display a bubble "Look! Cool, new features for Windows XP" and the option to display a much richer "advertisement" for the feature if the user wants to read more?
-
-Other issues -  
-    MUI - I guess this is getting fixed now but it's always been an issue for us  
-    Link to download through WU - why can't we send a user right in to WU to get MM2 without them having to wade through the whole site?  
-    Critical updates that aren't really critical - if you machine is behind a firewall many just aren't critical  
-    Too many fixes bombarding users all the time - I routinely ignore them now and perhaps update once a month as otherwise I'd be rebooting all the time  
-    WU's inflexible release schedule. If there is a major tradeshow at which we want to announce we need flexibility in timing the release
-
--Ian  
-
-**From:** Mike Beckerman  
-**Sent:** Friday, January 17, 2003 5:09 PM  
-**To:** lan Mercer; John Martin; Michael Halcoussis; Linda Averett  
-**Cc:** Chadd Knowlten; Ming-Chieh Lee; Allan Poore  
-**Subject:** RE: Windows Usability Systematic degradation flame
-
-So, I take from this that we have lots of opinions and input. However, no one appears to be saying that we, WMPG, are chartered and/or should own this. So my feedback on the thread would then be that Dave should take ownership for driving groups around today's inconsistencies, and that we should send this mail to Bharat (owns WU) as well and ask who in his team can take requirements from DMD.
-
-Any disagreement on this?  
-
-**[This document is from Comes v. Microsoft (2007).]**
-
-Previously: [Bill Gates: "The quality is giving us a bad name"](https://www.techemails.com/i/142894465/bill-gates-on-quality-experience) (October 19, 2000)
-
-Previously: [Bill Gates on iTunes Music Store](https://twitter.com/techemails/status/1413534752699830275) (April 30, 2003)
-
-Previously: [Bill Gates on the iPod](https://twitter.com/techemails/status/1423680978359312387) (November 2, 2003)
-
-If you **upgrade to a paid subscription**, you’ll receive access to the **[full archive of internal tech emails](https://files.techemails.com)**, with 250+ documents from Apple, Google, Meta, Microsoft, OpenAI, Tesla, and more. You’ll also support our work: every year, we track hundreds of court cases and review more than 10,000 filings to bring you @TechEmails.
-
-[More…](https://twitter.com/techemails)
-
-If it was Steve Jobs-
-
-He gets stuck once.
-
-“Why can’t I download Movie Maker?”
-
-Somebody explains:
-
-“Well, Steve, first you have to go to Windows Update, install the ActiveX controls, scan for updates, reboot, return to the website…”
-
-Jobs:
-
-“No.”
-
-the execs starts pointing fingers.
-
-Jobs:
-
-"I want my mother to type “Movie Maker,” click one button, and use Movie Maker.
-
-Everything between those two things is your problem.
+- Image of 1st Edition Cover—Doubleday
+- "Stalking the Wily Hacker"—The author's original article about the trap
+- *Booknotes* interview with Stoll on *The Cuckoo's Egg*, December 3, 1989
+- Reference to the book on Internet Storm Center
+- West German hackers use Columbia's Kermit software to break into dozens of US military computers and capture information for the KGB, Columbia University Computing History, 1986-1987 section.

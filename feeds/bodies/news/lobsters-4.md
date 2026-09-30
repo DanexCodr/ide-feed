@@ -1,157 +1,415 @@
-This post describes the construction of an Aho-Corasick automaton for
-the simultaneous matching of substrings within a sequence. I’m fond of
-this algorithm because it constructs an automaton from an existing
-tree data structure in a rather pleasant way.
+[Serde](https://serde.rs/) is an amazing serialization library for Rust and it
+has been a huge reason why I felt productive with it for years.  However already
+while at Sentry I got quite frustrated with some of the limitations with it but
+actually replacing Serde is tricky because of the might that it has in the
+ecosystem.  Also because it’s quite hard to actually do better without also
+making some potentially painful compromises.
 
-### Tries
+Here are three examples of Serde corner cases that show poor interactions of
+Serde features or unexpected limitations:
 
-A trie (or “prefix tree”) is an $n$-ary tree that stores a set of
-strings. Each edge in the trie is labelled with a character and each
-node conceptually represents the concatenation of all the edge
-characters required to reach it (starting from the root).
-
-Tries are designed to reduce redundancy by ensuring entries with
-common prefixes share these prefixes within the tree data
-structure.
-
-See the trie below that stores the strings ${\lbrace
-\text{suit}, \text{suited}, \text{suitable} \rbrace}$:
-
-You can see that the common prefix of `suit` is shared by all entries. Also note that nodes representing complete entries in the trie are explicitly marked.
-
-### Suffix Links
-
-Aho-Corasick automatons recover from transition failure by following
-so-called suffix links. These links preserve the longest suffix of the
-string represented by each node that happens to exist as a prefix of a
-pattern in the trie. This allows the machine to transition to a state
-that permits further matching of patterns that happen to have the
-failing node’s longest suffix as a prefix.
-
-Consider the suffix links applied (in red) to the trie constructed for
-the strings $\lbrace \text{item}, \text{suits} \rbrace$ below:
-
-The majority of nodes have the root node as their suffix link. However, if we look at node $8$, representing the state reached by following suit, we see that its suffix link (node $3$) points to the node one would reach if, starting from the root, we had followed its suffix, it. This permits the potential for matching the patterns prefixed with it; in this case, only $\lbrace \text{item} \rbrace$.
-
-For example, if we were scanning the input `suitems`, we would reach node $8$, see that there is no outgoing edge labelled `e`, we would transition via the suffix link and continue scanning from the failing character, eventually matching `su[item]s`.
-
-The construction of suffix links is rather pleasant, they’re computed
-in a breadth-first traversal of the trie. The cases for each node are
-computed as follows:
-
-- The root and its children have root as their suffix link.
-- To compute the suffix link for each other node, you start by looking at the node’s parent’s suffix link. For a pattern of characters $( c_1, c_2, c_3, \ldots, c_n)$, to compute a suffix link for a node $c_k$ ($k \geq 3$), you examine the suffix link of $c_{k-1}$. That suffix link preserves the longest suffix of $(c_1, \ldots, c_{k-1})$ that represents a prefix of a pattern in the trie. If the node at that suffix link has an outgoing edge labelled $c_k$, then the target of that edge is $c_k$’s suffix link. Otherwise, you continue to chase up the trie by following successive suffix links. If you reach the root, you stop (to avoid iterating indefinitely by following its suffix link to itself).
-
-Despite my best efforts to describe the suffix link construction process above formally, it’s best explained visually. Consider the trie constructed for the strings $\lbrace \text{cadence}, \text{facade} \rbrace$ with partially constructed suffix links below:
-
-The nodes are numbered with their breadth-first traversal order.
-
-After processing the nodes with suffix links computed above, the BFS
-queue will contain $[(c, 5), (d, 6)]$. If we examine $(c, 5)$, we look
-at its parent’s suffix link. In this case, it’s the root of the
-trie. We see that root has an outgoing edge labelled with $c$, so the
-node reached by that edge is the suffix link for node $5$:
-
-After the above, the queue will contain $[(d, 6), (a, 7)]$. The
-processing of $(d, 6)$ is straightforward. As before, its parent’s
-suffix link is the root. However, there is no outgoing edge labelled
-$d$, therefore node $6$’s suffix link is simply the root (capturing
-the idea that there’s no other pattern in the tree that has any of
-$\lbrace \text{c}, \text{ca}, \text{cad} \rbrace$ as a prefix). In
-operational terms, there’s no suffix to preserve as another pattern’s
-prefix if we get to node $6$ and the input character is not $e$. We
-dispose of the seen $\text{cad}$ and try the failing input character
-from the root. If a character fails to advance from the root, we stay
-at the root but advance the character stream (as it’s a non-starter
-for every pattern).
-
-The next interesting case is that of processing the $(a, 7)$
-edge. Node $7$’s parent’s suffix link is the previously computed,
-non-root, node $2$ - which does have an outgoing edge labelled $a$,
-therefore the suffix link of node $7$ is node $4$. This preserves the
-$\text{ca}$ suffix of $\text{faca}$ as being a valid prefix of the
-other pattern, $\text{cadence}$.
-
-When all nodes have been processed, the suffix links are as follows:
-
-For clarity, I’ve omitted the suffix links that go to the root node. Interestingly, you can see that node $12$ goes to node $2$, attempting to preserve prefix context for matching $\text{cadence}$, from a node reached by assuming it was making progress in matching $\text{cadence}$!
-
-### Output Links
-
-When a pattern is introduced into the trie, the last node traversed during insertion is annotated as being an “output” node (usually storing the inserted pattern). If a node has an output pattern associated with it, this identifies a match that should be output when entering the state represented by that node. However, it may be the case that a node with an output’s pattern has a suffix that also happens to be a pattern in the trie - and, so, must also be output at the same time.
-
-In order to capture this information, Aho-Corasick employs output links. As with suffix links, it will always be the case that output links point to nodes representing shorter strings (visited first in the breadth-first algorithm).
-
-Consider the trie below (with suffix links in red and output links in blue), constructed from the strings $\lbrace \text{spin}, \text{pin}, \text{in} \rbrace$.
-
-The blue links go between node with an associated output. It’s clear that on reaching state $9$ (representing that `spin` has been matched), the outputs for $8$ and $6$ must also be output (representing pattern suffixes `pin` and `in`, respectively). You can think of output links as being a linked list of nodes that must be iteratively output if one was interpreting this matcher directly.
-
-The output link for a node (if it has one) can be computed directly after its suffix link has been computed. This makes sense because the suffix link attempts to capture the longest suffix of the current node’s pattern that happens to be a prefix of a pattern in the trie. So, the output link for a node is its suffix node if its suffix node has an associated output (is a pattern itself), otherwise a node’s output is its suffix node’s output link.
-
-### Algorithm Pseudocode
-
-The pseudocode for computing suffix and output links is as follows:
-
-let Q be a queue of (char, node)
+An internally tagged enum, with `serde_json`‘s `arbitrary_precision` feature
+turned on:
 
 ```
-# root and its immediate children have root as their suffix link
-root.suffix <- root
-for each (char, child) in root.arrows {
-  child.suffix <- root
-
-  # queue root's grandchildren for traversal
-  add (char, child) to Q
+#[derive(Deserialize)]
+#[serde(tag = "type")]
+enum Shape {
+    Circle { radius: f64 },
 }
 
-while Q is not empty {
-  let (char, node) = Q.poll()
+serde_json::from_str::<Shape>(r#"{"type": "Circle", "radius": 1.5}"#)
+// error: invalid type: map, expected f64
+```
 
-  # start from parent's suffix link node
-  let suffix = node.parent.suffix
+Serde’s data model has no place for arbitrary precision numbers, so `serde_json`
+uses in-band signalling with a map with a magic key.  The enum has to buffer the
+fields until it has seen the tag, and the buffer does not know about the magic
+key.  Because Cargo features are unified, it’s enough for any crate in your
+dependency graph to turn the feature on.
 
-  while suffix has no edge labelled char {
-    # follow its suffix link
-    suffix <- suffix.suffix
+```
+#[derive(Deserialize)]
+struct Stats {
+    scores: HashMap<u32, u32>,
+}
 
-    # avoid looping endlessly if we reach root
-    if suffix == root then
-      break
-  }
+#[derive(Deserialize)]
+struct Report {
+    name: String,
+    #[serde(flatten)]
+    stats: Stats,
+}
 
-  # capture case where root has outgoing edge labelled char
-  if suffix has edge (char, actual) then
-    node.suffix <- actual
-  else
-    node.suffix <- suffix 
+serde_json::from_str::<Report>(r#"{"name": "x", "scores": {"42": 23}}"#)
+// error: invalid type: string "42", expected u32 at line 1 column 35
+```
 
-  # a node's output is its suffix if its suffix link is an output, 
-  # otherwise follow its suffix's output
-  if (node.suffix.pattern != null) then
-    node.output = node.suffix
-  else
-    node.output = node.suffix.output
+`Stats` on its own parses `{"scores": {"42": 23}}` just fine.  JSON keys are
+always strings, and `serde_json` only turns them into integers if the type asks
+for one.  However once `flatten` buffers the value, `"42"` is just a string.
+The error also points at the end of the document rather than at the key.
+
+```
+fn from_hex<'de, D: Deserializer<'de>>(d: D) -> Result<u32, D::Error> { ... }
+
+#[derive(Deserialize)]
+struct Theme {
+    #[serde(deserialize_with = "from_hex")]
+    primary: u32,
+    #[serde(deserialize_with = "from_hex")]
+    accent: Option<u32>,
+}
+
+//error[E0308]: `?` operator has incompatible types
+//  |
+//  |     #[serde(deserialize_with = "from_hex")]
+//  |                                ^^^^^^^^^^ expected `Option<u32>`, found `u32`
+//  |
+//help: try wrapping the expression in `Some`
+//  |
+//  |     #[serde(deserialize_with = Some("from_hex"))]
+//  |                                +++++          +
+```
+
+A function cannot be passed as a type parameter, so there is no way to apply
+`from_hex` to the inside of an `Option`, a `Vec` or a map.  You write another
+function for every wrapper, and once you have `from_opt_hex` the field is no
+longer optional unless you also remember to add `#[serde(default)]`.
+
+None of these are bugs that are easy to fix in Serde.  They fall out of its
+design, and that design is protected by Serde’s stability guarantees.
+
+Back in 2022 I started an experiment called
+[Deser](https://github.com/mitsuhiko/deser).  It’s a serialization library for
+Rust that takes the user experience of [Serde](https://serde.rs/) and puts it on
+top of a completely different architecture inspired by
+[miniserde](https://github.com/dtolnay/miniserde).  I never really finished it
+and it sat around for a few years.  I picked it back up, and it has now reached
+a point where I think it’s worth looking at.  Even just to inspire others to
+see if they want to explore the space.
+
+The name is Serde with its two halves swapped.  Deser is Serde but the other way
+around.  In Serde, a type drives the deserialization process: a `Deserialize`
+impl asks the deserializer for the kind of value it expects, the format calls
+back into a visitor.  Every nested value is handled by recursion which makes
+Serde deserialization inherently grow the stack with each level of nesting.
+
+Deser on the other hand turns this around and the format tells the type of the
+next value and pushes events into a sink.  When a sink hits the start of a
+nested value, it doesn’t call into it but hands back a new sink to a driver,
+which keeps all state on the heap (in fact, in an arena).  On the way out,
+emitters return their nested values instead of recursing into them.
+
+That also means that Deser cannot support formats like protobuf that are not
+self describing.  They are in fact quite intentionally left out of the design
+entirely.  Which is one way to say: if you want to “fix” Serde, you need to
+make some other compromises.
+
+Most of the reasons for Deser’s ideas go back to [Sentry
+Relay](https://github.com/getsentry/relay), which processes enormous amounts of
+untrusted JSON.  Over the years when I was at Sentry we ran into the same set of
+problems again and again, and many of them are not really bugs in Serde but
+consequences of its design.  Serde’s stability guarantees mean that a lot of
+them cannot be fixed without breaking every format and every hand written
+implementation.  Most of these problems come from three decisions:
+
+1. **One set of traits for all formats.** Serde serves both self describing formats (JSON, YAML, TOML, …) and formats where the reader has to know the type upfront (postcard, bincode, protobuf, …). That is incredibly useful, but it means that some features only work with some formats, and you find out at runtime. In case of Serde it also has some odd wrinkles where a derived struct quietly accepts an array in place of an object in JSON for instance.
+2. **A fixed data model that loses information when buffering.** Internally tagged enums, untagged enums and `flatten` need to buffer values before they know what to do with them. The buffer can’t hold everything the format knew, errors lose their location and extensions to the ecosystem rely on in-band signalling to express things such as arbitrary precision numbers.
+3. **Recursion on the call stack.** Every level of nesting uses stack space. Formats protect against this with a recursion limit, but the moment you go through a code path that doesn’t have one (writing, dynamic values), deeply nested data can take down your process. It also means that a deserialization cannot be paused while you wait for more input.
+
+Many of the corresponding Serde issues have been open for years, and I wrote
+about [abusing Serde](https://lucumr.pocoo.org/2021/11/14/abusing-serde/) before.  People have tried
+different angles on this over the years.  Some went minimal and dropped most
+features to get fast compiles and no recursion.  dtolnay’s own
+[miniserde](https://github.com/dtolnay/miniserde) is the best example of that,
+and deser’s trait design was originally modelled after it.  Other recent
+attempts went for runtime reflection, or for a new data model with a focus on
+binary formats.
+
+If you want to read up on all of the collected challenges with Serde’s design,
+I maintain [a lengthy list here](https://github.com/mitsuhiko/deser/blob/main/SERDE.md).
+
+First of all I don’t think it’s likely that one can replace Serde.  [The orphan
+rule](https://smallcultfollowing.com/babysteps/blog/2022/04/17/coherence-and-crate-level-where-clauses/)
+entrenches Serde incredibly well in the ecosystem.  But some things are within
+the reach of a crate author’s control.  In case of Deser it’s completeness.
+
+Deser today implements all important self describing formats from YAML, JSON,
+TOML, CBOR, JSON5 and the likes, but also XML and plist to really close the gap.
+XML in particular is something Serde has declined to support, and it shows
+(more on that below).  At the very least format support should not be the
+reason not to use Deser.
+
+The second problem usually is that actually solving Serde’s issues comes at a
+significant cost in compile time and/or runtime performance.  Deser is no
+different.  While Deser’s compile times are a bit better than Serde’s, the
+binary bloat is quite a bit worse and the runtime performance is mixed.  It’s
+roughly comparable if you look at the numbers but depending on the format
+structure you are losing significantly from some of the tradeoffs.
+
+That said, it’s now in a state where it’s at least in principle a drop-in
+replacement where the tradeoffs might work well for users.
+
+## Deser’s Design
+
+Deser does not try to be significantly different than Serde on the surface
+level.  For most uses you derive `Serialize` and `Deserialize` and then start
+using it with your format implementing crate of choice.  Most attributes are
+very similar, though they are taking Rust expressions instead of strings.
+
+```
+use deser::{Serialize, Deserialize};
+
+#[derive(Debug, Serialize, Deserialize)]
+#[deser(rename_all = "camelCase")]
+pub struct Account {
+    id: u64,
+    account_holder: String,
+    #[deser(default)]
+    is_deactivated: bool,
+}
+
+let account: Account = deser_json::from_str(json)?;
+```
+
+The difference in the design would become more apparent if you implement a
+serializer or deserializer yourself.  Instead of visitors that call into each
+other recursively, deserializing a type creates a
+*sink* which receives events that are directly emitted by the parser, and
+*serializing produces emitters* that hand out values.  Nested sinks and emitters
+are handed back to a driver, which keeps them on the heap.  This design, which is
+entirely stolen from miniserde, gives some interesting consequences:
+
+On top of that are a lot of things that I just wanted to have:
+
+Here is a small configuration type that shows a few of these together:
+
+```
+use deser::adapters::DisplayFromStr;
+use deser::de::Recording;
+use deser::{Deserialize, Serialize};
+use deser_encoding::Hex;
+use deser_validate::{Check, NonEmpty, Range};
+use ipnet::IpNet;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Config {
+    // at least one 256-bit key, each written as hex
+    #[deser(as = Check<NonEmpty, Vec<Hex>>)]
+    secret_keys: Vec<[u8; 32]>,
+    // `IpNet` knows nothing about deser, but has `FromStr` and `Display`
+    #[deser(as = Option<Vec<DisplayFromStr>>)]
+    allowed_networks: Option<Vec<IpNet>>,
+    listeners: Vec<Listener>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[deser(tag = "type", rename_all = "snake_case")]
+pub enum Listener {
+    Unix { path: PathBuf },
+    Tcp {
+        host: IpAddr,
+        #[deser(as = Check<Range<1, 65535>>)]
+        port: u16,
+    },
+    // types this version does not know are kept and written back
+    #[deser(other)]
+    Other(#[deser(tag)] String, Recording),
 }
 ```
 
-### The Automaton
+Adapters are types, so `Hex` can go inside a `Vec`, and `DisplayFromStr` inside
+a `Vec` inside an `Option`.  Validators are adapters too, so
+`Check<NonEmpty, Vec<Hex>>` decodes the keys and then checks that there is at
+least one.  The catch-all variant keeps the tag and a recording of everything
+else in case someone wants to process it later.
 
-The computation of suffix and output links is the core of Aho-Corasick, but only an intermediary step as far as computing the automaton is concerned. Of course, the trie - augmented with these internal links - can be interpreted directly. However, due to the potential to repetitively chase up suffix links to resolve the next state to transition to on a given symbol, the amount of work for each transition is not constant.
+Errors are something I care a lot about, so here is what happens when a value
+is wrong:
 
-Once the suffix and output links are in place, the transitions and outputs are all statically resolvable into a deterministic finite automaton. To compute this, a final breadth first traversal is performed.
+```
+secret_keys = ["9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"]
+allowed_networks = ["10.0.0.0/8", "fd00::/8"]
 
-First, the root node (the base case) is processed. For every symbol, $a$, if the root node has an edge reaching some state, $s$, labelled $a$, then that’s where the root transitions on $a$. If no such edge for $a$ exists, then you stay in the same place (self-looping on the root - effectively skipping over the symbol as it’s a non-starter for every pattern in the trie). All states reachable from the root are added to the traversal queue during this processing.
+[[listeners]]
+type = "unix"
+path = "/run/app.sock"
 
-For every other node processed in breadth-first fashion: for every symbol, $a$, you transition to the state reachable on an edge labelled $a$. If no such edge exists, then you transition to the state reached if you transitioned from the node’s suffix node. This encodes the idea that if no progress can be made on a certain path through the trie, then the state is transitioned into one that hopefully preserves the longest suffix of the current state that is also a prefix of a pattern in the trie. Often times, many transitions simply go to the root (preserving $\epsilon$), so a sparse matrix storage representation is recommendable for many offline Aho-Corasick automatons.
+[[listeners]]
+host = "127.0.0.1"
+port = 0
+type = "tcp"
 
-For example, the trie with suffix and output links constructed from the strings $\lbrace \text{he}, \text{she}, \text{her} \rbrace$ would be as follows:
+[[listeners]]
+type = "quic"
+host = "::1"
+alpn = ["h3"]
+```
 
-The DFA computed from the above trie (by resolving transitions and merging outputs into sets) would be:
+```
+let config: Config = deser_toml::Deserializer::from_str(input)
+    .deserialize_with(|driver| driver.push_layer(PathLayer::new()))?;
+```
 
-### Demo
+Note that here the tag of the internally tagged enum comes last which means that
+the values have to be buffered until the tag is known.  In Serde this is tricky
+and we would lose the location if we used some tricks to add it.  With Deser
+however, with the path layer enabled Deser you where in the structure the
+problem is:
 
-Below you can build an Aho-Corasick trie from a set of strings:
+Deser really wants to be extensible, and XML is a more extreme example of the
+differences between Deser and Serde.  Here is an Atom entry that mixes in Dublin
+Core for the authors:
 
-### Further Reading
+```
+use chrono::{DateTime, Utc};
+use deser::Deserialize;
+use deser_value::Value;
+use deser_xml::DeserializerConfig;
 
-- Efficient String Matching: An Aid to Bibliographic Search - original paper describing entire algorithm.
+deser_xml::namespace!(
+    atom = "http://www.w3.org/2005/Atom",
+    dc = "http://purl.org/dc/elements/1.1/",
+);
+
+#[derive(Debug, Deserialize)]
+struct Entry {
+    #[deser(rename = atom!("title"))]
+    title: String,
+    #[deser(rename = dc!("creator"))]
+    creators: Vec<String>,
+    #[deser(rename = atom!("updated"))]
+    updated: DateTime<Utc>,
+}
+
+// entries we understand, and everything else is kept as it is
+#[derive(Debug, Deserialize)]
+#[deser(untagged)]
+enum Item {
+    Entry(Entry),
+    Other(Value),
+}
+
+let item: Item = DeserializerConfig::new()
+    .resolve_namespaces(true)
+    .from_str(r#"
+        <entry xmlns="http://www.w3.org/2005/Atom"
+               xmlns:d="http://purl.org/dc/elements/1.1/">
+          <title>Deser</title>
+          <d:creator>John</d:creator>
+          <updated>2026-09-29T21:00:00Z</updated>
+          <d:creator>Jane</d:creator>
+        </entry>
+    "#)?;
+```
+
+XML uses namespaces which means that names need to be matched by their namespace,
+not by the prefix the document happens to use.  Here the document says `d:` and
+the type says `dc!`.  `atom!("title")` is just the string
+`{http://www.w3.org/2005/Atom}title`, which works because attributes are
+expressions.  The two creators are collected into one `Vec` even though there is
+another element between them, and the text of `updated` goes straight into a
+`chrono` datetime.  Because the enum is untagged, the entry has to be buffered
+before a variant is picked, and deser’s buffer keeps both creators.  So the
+result is an `Entry` with John and Jane.
+
+quick-xml, the most popular XML crate for Serde, drops the prefixes and ignores
+namespaces entirely, so a `<x:title>` from some other namespace is happily
+accepted as the title of the entry.  The split list part though is considerably
+worse.  A plain `Entry` fails with a duplicate field error for `creator`, unless
+you turn on the `overlapped-lists` feature (which, remember, is a global
+additive flag that any crate could set).  That feature makes quick-xml read
+ahead to the end of the element and buffer everything in between, without a
+limit unless you set one.
+
+But the feature only helps when quick-xml is hooked up to the struct directly
+and no buffering is taking place.  Wrap the struct in the untagged enum and
+Serde buffers the entry itself.  Read from that buffer, `Entry` sees `creator`
+twice and fails again.  The fallback is a map, which keeps only the last
+`creator`, and there is no error.  With or without the feature you get this:
+
+```
+Other({"creator": {"$text": "Jane"}, "title": {"$text": "Deser"}, ...})
+```
+
+Notice how John is gone.
+
+Format specific extension types such as TOML datetimes are another case.  TOML
+has them natively, Serde’s data model does not, so the `toml` crate passes them
+on as a map with a magic key.  In Deser a datetime is an extension value, which
+formats that know it keep and all others write as a string:
+
+```
+let value: Value = deser_toml::from_str("released = 2026-09-29T21:00:00+02:00")?;
+
+deser_json::to_string(&value)?;
+// {"released":"2026-09-29T21:00:00+02:00"}
+deser_toml::to_string(&value)?;
+// released = 2026-09-29T21:00:00+02:00
+```
+
+The same with `serde_json::Value` gives you
+`{"released":{"$__toml_private_datetime":"2026-09-29T21:00:00+02:00"}}`, and
+reading the value into a `chrono::DateTime` fails outright with `invalid type: map, expected an RFC 3339 formatted date and time string`.
+
+So now that you know Deser is at least in theory cool, at what cost?
+
+It is not free.  The design relies on dynamic dispatch and on sinks and emitters
+that live on the heap, and that has considerable runtime overhead.  In my own
+measurements for JSON, Deser reads somewhere between 33% faster and 60% slower
+than `serde_json depending` on the data.  On average it’s about 10% slower for
+reading.  Writes are between three times as fast and 70% slower and a wash on
+average.  For YAML and TOML it’s noticeably faster than the Serde based crates,
+but that is more about the format implementations than the architecture.
+
+Compile times slightly are better, but not dramatically so.  Because it doesn’t
+monomorphize everything, release builds of derived code are about 2.3 times as
+fast as with Serde and that get a tiny bit better in practice for your own code
+as less recompilation is necessary.
+
+To make Deser’s design work at all, it also uses `unsafe` internally.  Most of
+this is to keep the chain of borrowed sinks on the heap.  I feel like this is
+fine in the days of Miri and agents, but I know it makes some folks uneasy.
+
+And well, the biggest cost is that it’s just not Serde.
+
+Quite a lot actually which might be surprising.  In addition to the core
+there is support for [derive](https://github.com/mitsuhiko/deser/tree/main/deser-derive).
+
+It supports all flavorts of JSON you can think of:
+[JSON](https://github.com/mitsuhiko/deser/tree/main/deser-json),
+[JSONC](https://github.com/mitsuhiko/deser/tree/main/deser-jsonc),
+[JSON5](https://github.com/mitsuhiko/deser/tree/main/deser-json5) and
+[HJSON](https://github.com/mitsuhiko/deser/tree/main/deser-hj).  (Fun fact here:
+they are all generated out of [one shared parser template](https://github.com/mitsuhiko/deser/tree/main/deser-template-json))
+For binary handling it supports
+[CBOR](https://github.com/mitsuhiko/deser/tree/main/deser-cbor) and
+[MessagePack](https://github.com/mitsuhiko/deser/tree/main/deser-msgpack).
+Additionally it does
+[YAML](https://github.com/mitsuhiko/deser/tree/main/deser-yaml) 1.1 and 1.2,
+[TOML](https://github.com/mitsuhiko/deser/tree/main/deser-toml),
+[XML](https://github.com/mitsuhiko/deser/tree/main/deser-xml) and all three
+flavors of Apple’s [plist](https://github.com/mitsuhiko/deser/tree/main/deser-plist)
+as well as [CSV/TSV](https://github.com/mitsuhiko/deser/tree/main/deser-csv),
+[urlencoded data](https://github.com/mitsuhiko/deser/tree/main/deser-urlencoded) and
+[environment variables](https://github.com/mitsuhiko/deser/tree/main/deser-env).
+For more crazy contraptions you can
+[attach path info](https://github.com/mitsuhiko/deser/tree/main/deser-path) or
+[capture location data](https://github.com/mitsuhiko/deser/tree/main/deser-location)
+as well as support for
+[debug printing](https://github.com/mitsuhiko/deser/tree/main/deser-debug).
+You can perform [validation](https://github.com/mitsuhiko/deser/tree/main/deser-validate)
+as you parse, opt into different
+[binary encodings](https://github.com/mitsuhiko/deser/tree/main/deser-encoding)
+in addition to base64, you can
+[bridge to serde](https://github.com/mitsuhiko/deser/tree/main/deser-serde) or
+capture
+[dynamic values](https://github.com/mitsuhiko/deser/tree/main/deser-value),
+[transcode](https://github.com/mitsuhiko/deser/tree/main/deser-transcode)
+between formats or hook it up with
+[tokio](https://github.com/mitsuhiko/deser/tree/main/deser-tokio).
+
+For documentation see [docs.rs/deser](https://docs.rs/deser/latest/deser/)
+and the code itself is [on GitHub](https://github.com/mitsuhiko/deser) alongside
+[many examples](https://github.com/mitsuhiko/deser/tree/main/examples).

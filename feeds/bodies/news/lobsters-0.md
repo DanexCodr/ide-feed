@@ -1,25 +1,46 @@
-# A stacking window manager using River as the compositor.
+> Stuart Henderson wrote:
+> > On 2026/09/20 07:01, David Uhden Collado wrote:
+> >> The main goal of the packaging is to make these implementations usable
+> >> as alternatives to the existing GNU utility ports without requiring
+> >> source changes in dependent ports.
+> >>
+> >> For example, uutils-coreutils installs the same g-prefixed command names
+> >> as sysutils/coreutils, including gcat, gls, gcp, gdate, gsort, gstat,
+> >> gtail, gtimeout and the other GNU-compatible utilities. They are
+> >> symlinks to the upstream multicall binary, which is installed under
+> >> libexec/uutils.
+> > ...
+> >> Each package conflicts with its corresponding GNU implementation and
+> >> declares the GNU port as a secondary @pkgpath.
+> > I don't think this is a usable approach for ports.
+> 
+> The truth is, I find these Rust reimplementations quite
+> interesting. Ubuntu 26.10 has already adopted uutils coreutils because
+> the project has reached a level of maturity and stability where it can
+> be used reliably. The other reimplementations are still more of a work
+> in progress.
+```
 
-## Aims
+```
 
-The aims of CoW are to represent the 90s look-and-feel of FVWM and MWM, while also allowing for more modern styles as well. CoW can be configured directly through commands and the same commands can be used in its configuration file, making CoW scriptable through external applications.
+Smells like agenda.
 
-High-level features include:
+> I also think they fit quite well with OpenBSD as alternatives to GNU
+> utilities, particularly because they use a permissive MIT license.
 
-- IPC scripting.
-- Server-side decorations can be customisable.
-- Placement of windows through different commands.
-- Native menu support.
-- Rules can control scripting.
-- Internal DSL (Domain Specific Language) allows for filtering.
+Argument is vaguely like: because we already have permissive licenced
+utilities, our user base are really interested in having a second set of
+permissive licenced utilities which are very subtly different.
 
-... plus a lot more!
+That makes no sense. Noone wants subtly different behaving binaries as
+part of their workflow.  If someone runs the openbsd ls command as part
+of a pipeline that uses openbsd sed, or openbsd cut, or some other
+openbsd utility and it parses a non-standized output characteristic
+by accident, there are no people in this universe who wants to replace
+that ls with a different ls and get surprised by un-standardized tooling
+behaviour clash.
 
-CoW is developed in C, hosted on Codeberg. The community is small but friendly, and we can be found on IRC (irc.libera.chat, in #cow-wayland)
-
-Some useful things to know about the community:
-
-- IRC is the best way of saying hello or asking questions
-- Report any issues over IRC or by creating a Codeberg issue.
-- There's some chatter on Mastodon about CoW and other WMs.
-- A community Wiki exists. Feel free to contribute
+> I'm not sure yet whether it's possible to install the individual
+> utilities as separate binaries. This is new territory for me, since
+> uutils is structured as a metapackage, and because it's written in
+> Rust.
