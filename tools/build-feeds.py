@@ -352,7 +352,13 @@ def fetch_html(url):
     Returning None is a signal to the caller that this URL is
     unfixable and should be skipped."""
     req = urllib.request.Request(
-        url, headers={'User-Agent': 'Mozilla/5.0 (compatible; DroidBuild/1.0)'})
+        url, headers={
+            'User-Agent': 'Mozilla/5.0 (Linux; Android 13) '
+                          'AppleWebKit/537.36 (KHTML, like Gecko) '
+                          'Chrome/120 Mobile Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+        })
     with urllib.request.urlopen(req, timeout=15) as resp:
         ctype = resp.headers.get('Content-Type', '') or ''
         if not _is_html_content_type(ctype):
@@ -1332,10 +1338,12 @@ def fetch_devto_full():
     print("Fetching Dev.to...")
     items = []
     try:
-        list_url = "https://dev.to/api/articles?per_page=90&top=14&tag=programming"
+        list_url = "https://dev.to/api/articles?per_page=30&top=14&tag=programming"
+        print(f"  [Dev.to] List URL: {list_url}")
         req = urllib.request.Request(list_url, headers={'User-Agent': 'DroidBuild-Agent/1.0'})
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=20) as resp:
             articles = json.loads(resp.read().decode('utf-8'))
+        print(f"  [Dev.to] List returned {len(articles)} articles")
 
         skipped = 0
         kept = 0
@@ -1351,13 +1359,29 @@ def fetch_devto_full():
                 skipped += 1
                 continue
 
+            # Each article's detail fetch is isolated. A 404 or
+            # timeout on one article must not discard the batch.
+            # Without this, an exception on the Nth article
+            # unwinds the whole function and returns [] — every
+            # item already processed in this run is lost, and the
+            # segment silently falls back to whatever retention
+            # carried over from the previous feed.
             detail_url = f"https://dev.to/api/articles/{article['id']}"
-            req = urllib.request.Request(detail_url, headers={'User-Agent': 'DroidBuild-Agent/1.0'})
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                detail = json.loads(resp.read().decode('utf-8'))
+            try:
+                req = urllib.request.Request(
+                    detail_url,
+                    headers={'User-Agent': 'DroidBuild-Agent/1.0'})
+                with urllib.request.urlopen(req, timeout=20) as resp:
+                    detail = json.loads(resp.read().decode('utf-8'))
+            except Exception as detail_err:
+                print(f"  [Dev.to] Detail fetch failed for "
+                      f"{article['id']}: {type(detail_err).__name__}: {detail_err}")
+                skipped += 1
+                continue
 
             body = detail.get('body_markdown', '') or ''
             if not body.strip():
+                print(f"  [Dev.to] Empty body_markdown for {article['id']}")
                 skipped += 1
                 continue
 
@@ -1389,7 +1413,7 @@ def fetch_devto_full():
         print(f"Fetched {len(items)} Dev.to items (skipped {skipped}).")
         return items
     except Exception as e:
-        print(f"Error fetching Dev.to: {e}")
+        print(f"Error fetching Dev.to: {type(e).__name__}: {e}")
         return []
 
 
@@ -1586,6 +1610,12 @@ def build_segment_from_markdown(segment):
 # this loop writes each of them to disk exactly once. On every
 # run after that, carried-over items no longer have a body field
 # and the loop skips them without redundant disk I/O.
+#
+# Empty segments: git does not track empty directories, so a
+# segment whose every item failed would leave no trace on GitHub.
+# A .gitkeep file is written into each bodies/{segment}/ directory
+# so that the state of every segment is observable in the repo,
+# regardless of whether any body files were produced.
 # ============================================================
 
 def _body_path_for(segment, item_id):
@@ -1600,6 +1630,20 @@ def build_feed_with_retention(segment, new_items):
     feed_path = os.path.join(FEEDS_DIR, segment + '.json')
     bodies_dir = os.path.join(FEEDS_DIR, 'bodies', segment)
     os.makedirs(bodies_dir, exist_ok=True)
+
+    # Git does not track empty directories. Writing a .gitkeep
+    # here ensures that feeds/bodies/{segment}/ is committed even
+    # on runs where every item in the segment failed to produce
+    # a body. Without it, an entirely-failed segment is invisible
+    # on GitHub — you see news/ but not tutorials/, with no
+    # indication that tutorials was attempted.
+    gitkeep_path = os.path.join(bodies_dir, '.gitkeep')
+    if not os.path.isfile(gitkeep_path):
+        try:
+            with open(gitkeep_path, 'w', encoding='utf-8') as f:
+                f.write('')
+        except Exception:
+            pass
 
     # Load previous feed metadata. It has no bodies now, so this
     # is cheap regardless of pool size.
@@ -1663,12 +1707,16 @@ def build_feed_with_retention(segment, new_items):
         except Exception as e:
             print(f"  [Body] Write failed for {item['id']}: {e}")
 
-    # Remove bodies for items that fell out of the pool.
+    # Remove bodies for items that fell out of the pool. The
+    # .gitkeep file is explicitly spared so the directory stays
+    # visible even if every body file is deleted.
     live_ids = set()
     for item in merged:
         live_ids.add(re.sub(r'[^A-Za-z0-9_\-]', '_', item.get('id', '')))
     try:
         for fn in os.listdir(bodies_dir):
+            if fn == '.gitkeep':
+                continue
             if not fn.endswith('.md'):
                 continue
             stem = fn[:-3]
