@@ -1,93 +1,42 @@
-> This post is a summary of Chapter 2, "How to work well in teams", from *[Software Engineering at Google](https://abseil.io/resources/swe-book)*.
+Quick note before we begin: this is the first of two posts I’m publishing today. You’re welcome to skip ahead to: [Shin honkaku](https://dbushell.com/2026/09/28/shin-honkaku/) — it’s far more fun!
 
-Software development is a team endeavor. To succeed in a team, you must reorganize your behavior around the core principles of humility, respect, and trust. What makes or breaks your career is how well you collaborate with others.
+I’ve waited long enough! I’ve entertained one “wait six months” too many!
 
-## Solicit feedback early
+The TL;DR for my [updated AI policy](https://dbushell.com/ai/) has changed:
 
-You're not a genius who can vanish into a cave for weeks or months, slaving away at a perfect implementation of your idea, and then unleash your software to the world. Even if you are a genius, you still make mistakes, and having brilliant ideas and elite software development skills doesn't guarantee your software will be a hit.
+```
+- I do not currently use AI for professional work.
++ I do not and will not use AI.
+```
 
-Many programmers are afraid to share their work early because it means peers will see their mistakes and know the author of the code is not a genius. The natural reaction is to hide in a cave, work, work, work, and then polish, polish, polish.
+The absolute vileness of the AI industrial complex knows no bounds.
 
-Hiding code is harmful. You don't know if you're on right track without showing it to others. You easily make fundamental design mistakes early on. You risk reinventing wheels. The more feedback you solicit early on, the lower the risk of wasted work.
+Beyond morality — because let’s be honest few care — it’s very simple:
 
-*Fail early, fail fast, fail often.*
+**There is no worthwhile career in AI-*anything*.**
 
-Sharing knowledge and know-how increases the bus factor: the number of people that need to get hit by a bus before your project is doomed. People in your team might move away, leave the company, and take sick leave.
+Simple as that. The AI industry is designed to dehumanise and commoditise labour. Everyone who has dedicated their life to token servitude has become a dull fungible meat proxy.
 
-*It's better to be one part of a successful project than the critical part of a failed project.*
+The software and web development industries are leading this brain drain. I’ve observed devs go from the giddy thrills of gambling with their employer’s tokens, to the depressing realisation that they’ve been fooled by a small group of grifters and influencers.
 
-Working with other people directly increases the collective wisdom behind the effort. The fastest way to solve roadblocks is having a couple of peers look over your shoulder and have them tell you how you goofed. This is why teams sit together and do pair programming in software engineering companies.
+So many developers are giving up. Many have literally left the industry unable to find meaningful employment. Many more have figuratively quiet-quit. They clock in to babysit chatbots with no incentive to care about the output beyond quantity.
 
-*Programming is hard. Software engineering is even harder. You need that second pair of eyes.*
+I’m done pretending there is any hope for the AI industry to redeem itself.
 
-## Always take small steps
+I’m moving on to more interesting things. Barring a monumental power shift, collapse of the industrial complex, and rise in free range grass-fed “local AI” (lol) I won’t be looking back. Wake me up if anything changes!
 
-*Programmers work best in tight feedback loops*: write a new function, compile. Add a test, compile. Refactor code, compile. This is how we keep code quality high and make sure our software is evolving correctly, bit by bit.
+What does that mean, practically?
 
-Remember the DevOps philosophy:
+## In practice
 
-- Get feedback as early as possible
-- Test as early as possible
-- Think about security and production environments as early as possible
+First and foremost I will continue to [build websites for **real people**](https://valleyfold.co.uk/). I set up shop as a limited company after a decade of freelancing to bolster my commitment.
 
-The earlier we find a problem, the cheaper it is to fix it. This applies to projects as well. Tight feedback loop and many eyes make sure your project stays relevant and on track.
+I will observe the AI industrial complex cautiously from afar, but I won’t allow the bullshit I see to rage-bait me. There will be times I’m obliged to call out [egregious insults to my profession](https://dbushell.com/2026/05/20/google-just-spat-in-my-face/). Otherwise, I’ll strive to ignore the echo chamber to protect my mental health.
 
-Working alone is inherently riskier than working with others. Your primary concern should be wasting huge swaths of your time toiling away on the wrong thing. Don't become another statistic.
+I am distancing myself from peers I once respected who are all-in on chatbots<sup>†</sup>. It is not my task to help them. I have no interest in anyone wilfully funding billionaires’ fantasies. There are new people to meet who respect humanity.
 
-## Team rules
+I feel happier about my future now. There is no longer any lingering doubt. The perpetual tech circus may be a threat to my patience and sanity but it won’t take my career.
 
-Software engineering is a team endeavor. You need to work with other people.
+So to immediately move on to more interesting things: my latest obsession is shin honkaku detective fiction! I’d highly recommend [The Tokyo Zodiac Murders](https://dbushell.com/notes/2026-08-31T10:53Z/) by *Sōji Shimada*, and [The Moai Island Puzzle](https://dbushell.com/notes/2026-09-19T06:00Z/) by *Alice Arisugawa* — both satisfying reads.
 
-*Share your vision. Divide the labor. Learn from others. Create a brilliant team.*
-
-Healthy social interaction and collaboration are based on three pillars:
-
-**Humility**
-
-You're not the center of the universe. You fail like everyone else. You're open to self-improvement.
-
-**Respect**
-
-You genuinely care about the people your work with. You treat others kindly and appreciate their abilities and accomplishments.
-
-**Trust**
-
-You trust others are competent and will do the right thing. You're OK letting others drive when appropriate.
-
-Human relationships outlast projects. When you've got richer relationships with your coworkers, they are more willing to go the extra mile when you need them.
-
-## Lose the ego
-
-Do you always feel like you need to have the first and last word on every subject? Do you feel the need to comment on every detail in a proposal or discussion? Do you know somebody who does these things? Nobody wants to work with someone who consistently behaves like they're the most important person in the room.
-
-There's nothing wrong with self-confidence, but don't come off like a know-it-all. Try to go for a collective ego instead: build a team that takes pride in its accomplishments.
-
-Learn to give criticism. Understand the difference between a constructive criticism of someone's creative output and flat-out assault against their character. Learn to respect your peers and give constructive criticism politely. Choose tactful, helpful phrasing.
-
-A good way to give criticism in code reviews can be, for example, like this: "Hey, I'm confused by the control flow in this section here. I wonder if the xyzzy code pattern might make this clearer and easier to maintain?" This makes the question about you: you're having trouble understanding. The suggestion is offered as a way to clarify things for poor little you and to help the long-term sustainability goals of the project. The discussion stays on the code itself.
-
-Learn to take criticism. Trust that the other person has your best interests and those of your project at heart. Your self-worth shouldn't be connected to the code you write.
-
-*You are not your code.*
-
-Failure is an option. If you're not failing every now and then, you're not being innovative enough or taking enough risks. Failure is a golden opportunity to learn and improve for the next go-around. By the same token, if you do the same thing over and over and keep failing, it's not failure, it's incompetence.
-
-Be open to influence. The more open you are to influence, the more you are able to influence. It's OK for someone else to change your mind. To be heard, you need to listen. Do not make decisions and put your stake to the ground before listening to others.
-
-The more vulnerable you are, the stronger you are. Expression of vulnerability is an outward show of humility: it demonstrates accountability and willingness to take responsibility, and that you trust others' opinions. Sometimes the best you can say is, "I don't know". You don't need to be on the defensive: you and your collaborators have the same goal.
-
-## Be Googley
-
-Googleyness is defined as a set of attributes and behaviors that represent strong leadership and exemplify humility, respect, and trust. A Googley person is someone who:
-
-**Thrives in ambiguity**: can deal with conflicting messages, build consensus, and make progress against a dynamic problem.
-
-**Values feedback**: has humility to receive and give feedback gracefully.
-
-**Challenges status quo**: is able to set ambitious goals and pursue them even when there might be resistance from others.
-
-**Puts the user first**: has empathy and respect for the users and pursues actions that are in their best interests.
-
-**Cares about the team**: has empathy and respect for coworkers and actively works to help them.
-
-**Does the right thing**: has a strong sense of ethics, willing to make difficult and inconvenient decisions to protect the integrity of the team and product.
+<small><sup>†</sup> **Edit:** originally I wrote “lost to chatbot psychosis” here. A poor turn of phrase given the context. It wasn’t meant literally, and I should not be using it derogatorily. I very much empathise with victims of AI. Chalk it up to frustration with the industry and trying to edit multiple thoughts down to keep this brief.</small>

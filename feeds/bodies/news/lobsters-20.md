@@ -1,145 +1,93 @@
-Espressif Systems' ESP32 microcontrollers are well known for their Wi-Fi and Bluetooth capabilities.
-Over the past few months (and with the help of LLMs), we have found an undocumented feature that allows the firmware to bypass the fixed-function modems to capture raw IQ baseband samples.
-This opens up the possibility of using the ESP32 as a low-cost software-defined radio (SDR) platform, capable of receiving signals in the 2.4 GHz band (and the 5 GHz band on the ESP32-C5).
+> This post is a summary of Chapter 2, "How to work well in teams", from *[Software Engineering at Google](https://abseil.io/resources/swe-book)*.
 
-## Try it out in your browser (Web Serial)
+Software development is a team endeavor. To succeed in a team, you must reorganize your behavior around the core principles of humility, respect, and trust. What makes or breaks your career is how well you collaborate with others.
 
-To prove the concept, we made a simple web interface that displays the live power spectrum and waterfall of the captured IQ samples (at **a very low** duty cycle).
-Use a browser with [Web Serial](https://developer.mozilla.org/en-US/docs/Web/API/Web_Serial_API) support.
+## Solicit feedback early
 
-#### 1
-Flash ESP-SDR firmware to your board
+You're not a genius who can vanish into a cave for weeks or months, slaving away at a perfect implementation of your idea, and then unleash your software to the world. Even if you are a genius, you still make mistakes, and having brilliant ideas and elite software development skills doesn't guarantee your software will be a hit.
 
-Connect your board over USB and install the SDR firmware using the browser flasher.
-Supported chips are the **original ESP32**, **ESP32-C3**, **ESP32-C5**, **ESP32-C6**, **ESP32-C61**, **ESP32-S2**, **ESP32-S3** and **ESP32-S31**.
-The original ESP32 requires a USB-to-UART bridge, often built into the development board.
+Many programmers are afraid to share their work early because it means peers will see their mistakes and know the author of the code is not a genius. The natural reaction is to hide in a cave, work, work, work, and then polish, polish, polish.
 
-#### 2
-Explore the live radio spectrum
+Hiding code is harmful. You don't know if you're on right track without showing it to others. You easily make fundamental design mistakes early on. You risk reinventing wheels. The more feedback you solicit early on, the lower the risk of wasted work.
 
-After flashing, unplug the board for five seconds and reconnect. Open ESP-WebSDR and select your device to see the live spectrum.
+*Fail early, fail fast, fail often.*
 
-## How it works
+Sharing knowledge and know-how increases the bus factor: the number of people that need to get hit by a bus before your project is doomed. People in your team might move away, leave the company, and take sick leave.
 
-We assume that Espressif engineers left the IQ sampling path in place for testing and debugging the modem,
-for example for on-wafer testing in the fab.
-The exact capture mechanism, trigger modes and memory allocation differ between chips, but the general idea is the same:
-special debug registers configure the modem's sample-dump engine to write raw IQ samples directly into the chip's internal SRAM, bypassing normal Wi-Fi processing.
-The firmware reserves SRAM so that the heap cannot use it, then lets the modem write raw IQ into that memory.
+*It's better to be one part of a successful project than the critical part of a failed project.*
 
-For example, on the ESP32-C61, the capture mechanism works as follows:
-The SRAM inside the ESP32 is organized into banks.
-Our firmware uses two of these banks and organizes them as a ring buffer.
-One of the banks is temporarily owned by the modem, which writes raw IQ samples into it, while the other bank is owned by the CPU, which copies the completed samples to a buffer for transfer to the host.
-The firmware tracks the hardware write pointer to detect when the modem moves to the next bank.
+Working with other people directly increases the collective wisdom behind the effort. The fastest way to solve roadblocks is having a couple of peers look over your shoulder and have them tell you how you goofed. This is why teams sit together and do pair programming in software engineering companies.
 
-### IQ sample format
+*Programming is hard. Software engineering is even harder. You need that second pair of eyes.*
 
-The exact format of the IQ samples is configurable. In our implementation, each complex sample occupies one 32-bit word in memory.
-Bits 19–10 hold I and bits 9–0 hold Q, both signed 10-bit two's-complement values
-(−512 to +511). Bits 27–20 report the receiver gain setting (an index into the gain table), while bits 31–28
-are most likely the internal state of the automatic gain control's finite state machine.
+## Always take small steps
 
-### Capture settings
+*Programmers work best in tight feedback loops*: write a new function, compile. Add a test, compile. Refactor code, compile. This is how we keep code quality high and make sure our software is evolving correctly, bit by bit.
 
-#### Tuning
+Remember the DevOps philosophy:
 
-2.2–2.7 GHz  
-4.8–6.0 GHz
+- Get feedback as early as possible
+- Test as early as possible
+- Think about security and production environments as early as possible
 
-5 GHz is only available on ESP32-C5. Exact tuning limits differ by chip.
+The earlier we find a problem, the cheaper it is to fix it. This applies to projects as well. Tight feedback loop and many eyes make sure your project stays relevant and on track.
 
-#### Sample rate
+Working alone is inherently riskier than working with others. Your primary concern should be wasting huge swaths of your time toiling away on the wrong thing. Don't become another statistic.
 
-Up to 80 MSa/s
+## Team rules
 
-Raw complex IQ capture into memory, with transfer to the host at a low duty cycle.
+Software engineering is a team endeavor. You need to work with other people.
 
-#### Bandwidth
+*Share your vision. Divide the labor. Learn from others. Create a brilliant team.*
 
-~13–54 MHz
+Healthy social interaction and collaboration are based on three pillars:
 
-Analog RX bandwidth. Exact limits depend on the chip and filter settings.
+**Humility**
 
-#### Gain control
+You're not the center of the universe. You fail like everyone else. You're open to self-improvement.
 
-Automatic or manual
+**Respect**
 
-Internal hardware AGC or a manually selected fixed receiver gain.
+You genuinely care about the people your work with. You treat others kindly and appreciate their abilities and accomplishments.
 
-With ESP-SDR, the ESP32 can even capture IQ data *beyond* the officially supported tuning range.
-For example, the ESP32-C61 can capture signals up to 2.7 GHz, which includes some **LTE and 5G NR cellular bands**, such as LTE band 7 and 5G NR band n7 around 2.6 GHz.
+**Trust**
 
-### How we discovered this
+You trust others are competent and will do the right thing. You're OK letting others drive when appropriate.
 
-Our starting point was the `adctrig` function in Espressif's `librftest` library.
-With the help of LLMs, we reverse engineered this function to understand how it configures the hardware to capture raw IQ samples.
-These findings formed the basis of ESP-SDR's capture implementation.
+Human relationships outlast projects. When you've got richer relationships with your coworkers, they are more willing to go the extra mile when you need them.
 
-## What this means for ESPARGOS
+## Lose the ego
 
-Without any hardware modifications, [ESPARGOS One](https://espargos.net/espargos-one) can now *phase-coherently* capture raw IQ samples.
-If you already have an [ESPARGOS One](https://espargos.net/espargos-one), [update its firmware](https://espargos.net/firmware/) to the latest version from the *dev* branch to enable this capability. The hardware already supports it.
-We currently provide the "IQ Signal Analyzer" demo application, but are working on additional demo applications, including an adapted real-time augmented reality demo for arbitrary signals.
+Do you always feel like you need to have the first and last word on every subject? Do you feel the need to comment on every detail in a proposal or discussion? Do you know somebody who does these things? Nobody wants to work with someone who consistently behaves like they're the most important person in the room.
 
-The IQ sampling implementation on [ESPARGOS One](https://espargos.net/espargos-one) is even more powerful than the browser-based demo (ESP-WebSDR):
+There's nothing wrong with self-confidence, but don't come off like a know-it-all. Try to go for a collective ego instead: build a team that takes pride in its accomplishments.
 
-- Higher throughput / duty cycle: ESPARGOS One uses an internal SPI transport interface, which is much faster than the UART interface used by ESP-WebSDR.
-- Signal trigger: Instead of streaming all samples (mostly silence), ESPARGOS One can be configured to stream samples only when a signal is detected.
+Learn to give criticism. Understand the difference between a constructive criticism of someone's creative output and flat-out assault against their character. Learn to respect your peers and give constructive criticism politely. Choose tactful, helpful phrasing.
 
-In addition to the existing Wi-Fi channel state information (CSI)-based demos, [ESPARGOS One](https://espargos.net/espargos-one) can now also be used as a low-cost, eight-channel SDR platform for the 2.4 GHz ISM band, operating at a low duty cycle.
-The benefits of raw IQ capture over processed CSI include:
+A good way to give criticism in code reviews can be, for example, like this: "Hey, I'm confused by the control flow in this section here. I wonder if the xyzzy code pattern might make this clearer and easier to maintain?" This makes the question about you: you're having trouble understanding. The suggestion is offered as a way to clarify things for poor little you and to help the long-term sustainability goals of the project. The discussion stays on the code itself.
 
-- Localize arbitrary signals: ESPARGOS One can now be used to localize arbitrary signals in the 2.4 GHz ISM band, not just Wi-Fi signals. This includes Bluetooth and Bluetooth Low Energy, Zigbee, and Wi-Fi formats that were previously unsupported for CSI capture (e.g., 802.11b and Wi-Fi signals with multiple spatial streams).
-- Array gain: Signal processing and decoding can be performed centrally, improving weak-signal performance.
-- Special waveforms: ESPARGOS One can now be used with waveforms more suitable for specific applications, e.g., pulse compression radar. Even better, some preprocessing for such special applications can happen on the chip itself, so they are not throughput-constrained.
+Learn to take criticism. Trust that the other person has your best interests and those of your project at heart. Your self-worth shouldn't be connected to the code you write.
 
-## Limitations
+*You are not your code.*
 
-At 80 MSa/s and 32 bits per sample, the modem writes **2,560 Mbit/s** into SRAM.
-Getting those samples off the chip is the bottleneck: the output links are much slower.
+Failure is an option. If you're not failing every now and then, you're not being innovative enough or taking enough risks. Failure is a golden opportunity to learn and improve for the next go-around. By the same token, if you do the same thing over and over and keep failing, it's not failure, it's incompetence.
 
-Therefore, our firmware streams the IQ samples at a very low duty cycle, which is enough to display a live spectrum and waterfall in the browser.
-Packets that arrive between capture windows may be missed.
+Be open to influence. The more open you are to influence, the more you are able to influence. It's OK for someone else to change your mind. To be heard, you need to listen. Do not make decisions and put your stake to the ground before listening to others.
 
-## SoapyESPSDR: GNU Radio & gqrx
+The more vulnerable you are, the stronger you are. Expression of vulnerability is an outward show of humility: it demonstrates accountability and willingness to take responsibility, and that you trust others' opinions. Sometimes the best you can say is, "I don't know". You don't need to be on the defensive: you and your collaborators have the same goal.
 
-[SoapyESPSDR](https://github.com/ESPARGOS/SoapyESPSDR) is our receive-only
-SoapySDR driver for the **ESP32-S31**. It streams IQ samples over Gigabit Ethernet
-from a board running ESP-SDR firmware, making the receiver available to applications such as
-**GNU Radio** and **gqrx** through their SoapySDR support.
+## Be Googley
 
-The S31 supports continuous reception at 8 and 16 MSa/s; higher sample rates require a reduced
-duty cycle.
+Googleyness is defined as a set of attributes and behaviors that represent strong leadership and exemplify humility, respect, and trust. A Googley person is someone who:
 
-**Under development:** We will release firmware and SoapySDR driver repositories soon, once everything is ready.
+**Thrives in ambiguity**: can deal with conflicting messages, build consensus, and make progress against a dynamic problem.
 
-Coming soon.
+**Values feedback**: has humility to receive and give feedback gracefully.
 
-## More information and firmware
+**Challenges status quo**: is able to set ambitious goals and pursue them even when there might be resistance from others.
 
-- ESP-SDR firmware: firmware source code and build instructions.
-- ESP-WebSDR browser interface: browser-based spectrum viewer and firmware flasher.
-- The firmware of ESPARGOS One remains closed source for now, but we are considering on open-sourcing it now that this "secret" IQ functionality that we were keeping private has been revealed.
+**Puts the user first**: has empathy and respect for the users and pursues actions that are in their best interests.
 
-## FAQs
+**Cares about the team**: has empathy and respect for coworkers and actively works to help them.
 
-No, this is a feature of the ESP32's modem that was not documented in the public datasheet.
-As far as we are concerned, it is not a security vulnerability, but rather an undocumented capability that can be used for SDR applications.
-That being said, many ESP32-powered devices are connected to various cloud services which allow the manufacturer of to update the firmware remotely.
-If sensitive data is transmitted without encryption in the ISM bands, this could pose a security concern. In that case, the underlying issue is the unencrypted transmission.
-The ability of the ESP32 to transmit arbitrary signals, on the other hand, could be abused for jamming or other malicious purposes, which is why we are not providing a transmitter implementation at this time.
-
-Due to the low duty cycle achievable for most ESP32 models, it does not make much sense to use the SDR mode with these applications.
-For the ESP32-S31, our [SoapyESPSDR driver](https://espargos.net/espsdr/#soapyespsdr) provides
-integration with GNU Radio, gqrx and other SoapySDR-compatible applications over Gigabit Ethernet.
-
-ESP-SDR currently supports the original ESP32, ESP32-C3, ESP32-C5, ESP32-C6, ESP32-C61, ESP32-S2, ESP32-S3 and ESP32-S31. We are working to extend the range of supported ESP32 chips. Support for additional models will most likely be possible, but each chip needs its own implementation.
-
-Yes, this is possible. An external mixer can translate signals from other frequency bands into the ESP32's transmit / receive range. We already have multi-channel prototype hardware for this.
-
-## Acknowledgements
-
-User *h0m3us3r* first disclosed this capability for the ESP32-S3 [on Reddit](https://www.reddit.com/r/esp32/comments/1wq37xz/got_raw_iq_streaming_out_of_an_esp32s3_at_80_mss/), including firmware source code, a few days before our announcement.
-They achieve 80 MSa/s of sustained throughput using an additional FPGA to handle the transfer.
-Since we have been independently working on IQ capture for several months now, we also wanted to share our findings with the community.
+**Does the right thing**: has a strong sense of ethics, willing to make difficult and inconvenient decisions to protect the integrity of the team and product.

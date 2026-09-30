@@ -1,415 +1,232 @@
-[Serde](https://serde.rs/) is an amazing serialization library for Rust and it
-has been a huge reason why I felt productive with it for years.  However already
-while at Sentry I got quite frustrated with some of the limitations with it but
-actually replacing Serde is tricky because of the might that it has in the
-ecosystem.  Also because it’s quite hard to actually do better without also
-making some potentially painful compromises.
-
-Here are three examples of Serde corner cases that show poor interactions of
-Serde features or unexpected limitations:
-
-An internally tagged enum, with `serde_json`‘s `arbitrary_precision` feature
-turned on:
-
-```
-#[derive(Deserialize)]
-#[serde(tag = "type")]
-enum Shape {
-    Circle { radius: f64 },
-}
-
-serde_json::from_str::<Shape>(r#"{"type": "Circle", "radius": 1.5}"#)
-// error: invalid type: map, expected f64
-```
-
-Serde’s data model has no place for arbitrary precision numbers, so `serde_json`
-uses in-band signalling with a map with a magic key.  The enum has to buffer the
-fields until it has seen the tag, and the buffer does not know about the magic
-key.  Because Cargo features are unified, it’s enough for any crate in your
-dependency graph to turn the feature on.
-
-```
-#[derive(Deserialize)]
-struct Stats {
-    scores: HashMap<u32, u32>,
-}
-
-#[derive(Deserialize)]
-struct Report {
-    name: String,
-    #[serde(flatten)]
-    stats: Stats,
-}
-
-serde_json::from_str::<Report>(r#"{"name": "x", "scores": {"42": 23}}"#)
-// error: invalid type: string "42", expected u32 at line 1 column 35
-```
-
-`Stats` on its own parses `{"scores": {"42": 23}}` just fine.  JSON keys are
-always strings, and `serde_json` only turns them into integers if the type asks
-for one.  However once `flatten` buffers the value, `"42"` is just a string.
-The error also points at the end of the document rather than at the key.
-
-```
-fn from_hex<'de, D: Deserializer<'de>>(d: D) -> Result<u32, D::Error> { ... }
-
-#[derive(Deserialize)]
-struct Theme {
-    #[serde(deserialize_with = "from_hex")]
-    primary: u32,
-    #[serde(deserialize_with = "from_hex")]
-    accent: Option<u32>,
-}
-
-//error[E0308]: `?` operator has incompatible types
-//  |
-//  |     #[serde(deserialize_with = "from_hex")]
-//  |                                ^^^^^^^^^^ expected `Option<u32>`, found `u32`
-//  |
-//help: try wrapping the expression in `Some`
-//  |
-//  |     #[serde(deserialize_with = Some("from_hex"))]
-//  |                                +++++          +
-```
-
-A function cannot be passed as a type parameter, so there is no way to apply
-`from_hex` to the inside of an `Option`, a `Vec` or a map.  You write another
-function for every wrapper, and once you have `from_opt_hex` the field is no
-longer optional unless you also remember to add `#[serde(default)]`.
-
-None of these are bugs that are easy to fix in Serde.  They fall out of its
-design, and that design is protected by Serde’s stability guarantees.
-
-Back in 2022 I started an experiment called
-[Deser](https://github.com/mitsuhiko/deser).  It’s a serialization library for
-Rust that takes the user experience of [Serde](https://serde.rs/) and puts it on
-top of a completely different architecture inspired by
-[miniserde](https://github.com/dtolnay/miniserde).  I never really finished it
-and it sat around for a few years.  I picked it back up, and it has now reached
-a point where I think it’s worth looking at.  Even just to inspire others to
-see if they want to explore the space.
-
-The name is Serde with its two halves swapped.  Deser is Serde but the other way
-around.  In Serde, a type drives the deserialization process: a `Deserialize`
-impl asks the deserializer for the kind of value it expects, the format calls
-back into a visitor.  Every nested value is handled by recursion which makes
-Serde deserialization inherently grow the stack with each level of nesting.
-
-Deser on the other hand turns this around and the format tells the type of the
-next value and pushes events into a sink.  When a sink hits the start of a
-nested value, it doesn’t call into it but hands back a new sink to a driver,
-which keeps all state on the heap (in fact, in an arena).  On the way out,
-emitters return their nested values instead of recursing into them.
-
-That also means that Deser cannot support formats like protobuf that are not
-self describing.  They are in fact quite intentionally left out of the design
-entirely.  Which is one way to say: if you want to “fix” Serde, you need to
-make some other compromises.
-
-Most of the reasons for Deser’s ideas go back to [Sentry
-Relay](https://github.com/getsentry/relay), which processes enormous amounts of
-untrusted JSON.  Over the years when I was at Sentry we ran into the same set of
-problems again and again, and many of them are not really bugs in Serde but
-consequences of its design.  Serde’s stability guarantees mean that a lot of
-them cannot be fixed without breaking every format and every hand written
-implementation.  Most of these problems come from three decisions:
-
-1. **One set of traits for all formats.** Serde serves both self describing formats (JSON, YAML, TOML, …) and formats where the reader has to know the type upfront (postcard, bincode, protobuf, …). That is incredibly useful, but it means that some features only work with some formats, and you find out at runtime. In case of Serde it also has some odd wrinkles where a derived struct quietly accepts an array in place of an object in JSON for instance.
-2. **A fixed data model that loses information when buffering.** Internally tagged enums, untagged enums and `flatten` need to buffer values before they know what to do with them. The buffer can’t hold everything the format knew, errors lose their location and extensions to the ecosystem rely on in-band signalling to express things such as arbitrary precision numbers.
-3. **Recursion on the call stack.** Every level of nesting uses stack space. Formats protect against this with a recursion limit, but the moment you go through a code path that doesn’t have one (writing, dynamic values), deeply nested data can take down your process. It also means that a deserialization cannot be paused while you wait for more input.
-
-Many of the corresponding Serde issues have been open for years, and I wrote
-about [abusing Serde](https://lucumr.pocoo.org/2021/11/14/abusing-serde/) before.  People have tried
-different angles on this over the years.  Some went minimal and dropped most
-features to get fast compiles and no recursion.  dtolnay’s own
-[miniserde](https://github.com/dtolnay/miniserde) is the best example of that,
-and deser’s trait design was originally modelled after it.  Other recent
-attempts went for runtime reflection, or for a new data model with a focus on
-binary formats.
-
-If you want to read up on all of the collected challenges with Serde’s design,
-I maintain [a lengthy list here](https://github.com/mitsuhiko/deser/blob/main/SERDE.md).
-
-First of all I don’t think it’s likely that one can replace Serde.  [The orphan
-rule](https://smallcultfollowing.com/babysteps/blog/2022/04/17/coherence-and-crate-level-where-clauses/)
-entrenches Serde incredibly well in the ecosystem.  But some things are within
-the reach of a crate author’s control.  In case of Deser it’s completeness.
-
-Deser today implements all important self describing formats from YAML, JSON,
-TOML, CBOR, JSON5 and the likes, but also XML and plist to really close the gap.
-XML in particular is something Serde has declined to support, and it shows
-(more on that below).  At the very least format support should not be the
-reason not to use Deser.
-
-The second problem usually is that actually solving Serde’s issues comes at a
-significant cost in compile time and/or runtime performance.  Deser is no
-different.  While Deser’s compile times are a bit better than Serde’s, the
-binary bloat is quite a bit worse and the runtime performance is mixed.  It’s
-roughly comparable if you look at the numbers but depending on the format
-structure you are losing significantly from some of the tradeoffs.
-
-That said, it’s now in a state where it’s at least in principle a drop-in
-replacement where the tradeoffs might work well for users.
-
-## Deser’s Design
-
-Deser does not try to be significantly different than Serde on the surface
-level.  For most uses you derive `Serialize` and `Deserialize` and then start
-using it with your format implementing crate of choice.  Most attributes are
-very similar, though they are taking Rust expressions instead of strings.
-
-```
-use deser::{Serialize, Deserialize};
-
-#[derive(Debug, Serialize, Deserialize)]
-#[deser(rename_all = "camelCase")]
-pub struct Account {
-    id: u64,
-    account_holder: String,
-    #[deser(default)]
-    is_deactivated: bool,
-}
-
-let account: Account = deser_json::from_str(json)?;
-```
-
-The difference in the design would become more apparent if you implement a
-serializer or deserializer yourself.  Instead of visitors that call into each
-other recursively, deserializing a type creates a
-*sink* which receives events that are directly emitted by the parser, and
-*serializing produces emitters* that hand out values.  Nested sinks and emitters
-are handed back to a driver, which keeps them on the heap.  This design, which is
-entirely stolen from miniserde, gives some interesting consequences:
-
-On top of that are a lot of things that I just wanted to have:
-
-Here is a small configuration type that shows a few of these together:
-
-```
-use deser::adapters::DisplayFromStr;
-use deser::de::Recording;
-use deser::{Deserialize, Serialize};
-use deser_encoding::Hex;
-use deser_validate::{Check, NonEmpty, Range};
-use ipnet::IpNet;
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Config {
-    // at least one 256-bit key, each written as hex
-    #[deser(as = Check<NonEmpty, Vec<Hex>>)]
-    secret_keys: Vec<[u8; 32]>,
-    // `IpNet` knows nothing about deser, but has `FromStr` and `Display`
-    #[deser(as = Option<Vec<DisplayFromStr>>)]
-    allowed_networks: Option<Vec<IpNet>>,
-    listeners: Vec<Listener>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[deser(tag = "type", rename_all = "snake_case")]
-pub enum Listener {
-    Unix { path: PathBuf },
-    Tcp {
-        host: IpAddr,
-        #[deser(as = Check<Range<1, 65535>>)]
-        port: u16,
-    },
-    // types this version does not know are kept and written back
-    #[deser(other)]
-    Other(#[deser(tag)] String, Recording),
-}
-```
-
-Adapters are types, so `Hex` can go inside a `Vec`, and `DisplayFromStr` inside
-a `Vec` inside an `Option`.  Validators are adapters too, so
-`Check<NonEmpty, Vec<Hex>>` decodes the keys and then checks that there is at
-least one.  The catch-all variant keeps the tag and a recording of everything
-else in case someone wants to process it later.
-
-Errors are something I care a lot about, so here is what happens when a value
-is wrong:
-
-```
-secret_keys = ["9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"]
-allowed_networks = ["10.0.0.0/8", "fd00::/8"]
-
-[[listeners]]
-type = "unix"
-path = "/run/app.sock"
-
-[[listeners]]
-host = "127.0.0.1"
-port = 0
-type = "tcp"
-
-[[listeners]]
-type = "quic"
-host = "::1"
-alpn = ["h3"]
-```
-
-```
-let config: Config = deser_toml::Deserializer::from_str(input)
-    .deserialize_with(|driver| driver.push_layer(PathLayer::new()))?;
-```
-
-Note that here the tag of the internally tagged enum comes last which means that
-the values have to be buffered until the tag is known.  In Serde this is tricky
-and we would lose the location if we used some tricks to add it.  With Deser
-however, with the path layer enabled Deser you where in the structure the
-problem is:
-
-Deser really wants to be extensible, and XML is a more extreme example of the
-differences between Deser and Serde.  Here is an Atom entry that mixes in Dublin
-Core for the authors:
-
-```
-use chrono::{DateTime, Utc};
-use deser::Deserialize;
-use deser_value::Value;
-use deser_xml::DeserializerConfig;
-
-deser_xml::namespace!(
-    atom = "http://www.w3.org/2005/Atom",
-    dc = "http://purl.org/dc/elements/1.1/",
-);
-
-#[derive(Debug, Deserialize)]
-struct Entry {
-    #[deser(rename = atom!("title"))]
-    title: String,
-    #[deser(rename = dc!("creator"))]
-    creators: Vec<String>,
-    #[deser(rename = atom!("updated"))]
-    updated: DateTime<Utc>,
-}
-
-// entries we understand, and everything else is kept as it is
-#[derive(Debug, Deserialize)]
-#[deser(untagged)]
-enum Item {
-    Entry(Entry),
-    Other(Value),
-}
-
-let item: Item = DeserializerConfig::new()
-    .resolve_namespaces(true)
-    .from_str(r#"
-        <entry xmlns="http://www.w3.org/2005/Atom"
-               xmlns:d="http://purl.org/dc/elements/1.1/">
-          <title>Deser</title>
-          <d:creator>John</d:creator>
-          <updated>2026-09-29T21:00:00Z</updated>
-          <d:creator>Jane</d:creator>
-        </entry>
-    "#)?;
-```
-
-XML uses namespaces which means that names need to be matched by their namespace,
-not by the prefix the document happens to use.  Here the document says `d:` and
-the type says `dc!`.  `atom!("title")` is just the string
-`{http://www.w3.org/2005/Atom}title`, which works because attributes are
-expressions.  The two creators are collected into one `Vec` even though there is
-another element between them, and the text of `updated` goes straight into a
-`chrono` datetime.  Because the enum is untagged, the entry has to be buffered
-before a variant is picked, and deser’s buffer keeps both creators.  So the
-result is an `Entry` with John and Jane.
-
-quick-xml, the most popular XML crate for Serde, drops the prefixes and ignores
-namespaces entirely, so a `<x:title>` from some other namespace is happily
-accepted as the title of the entry.  The split list part though is considerably
-worse.  A plain `Entry` fails with a duplicate field error for `creator`, unless
-you turn on the `overlapped-lists` feature (which, remember, is a global
-additive flag that any crate could set).  That feature makes quick-xml read
-ahead to the end of the element and buffer everything in between, without a
-limit unless you set one.
-
-But the feature only helps when quick-xml is hooked up to the struct directly
-and no buffering is taking place.  Wrap the struct in the untagged enum and
-Serde buffers the entry itself.  Read from that buffer, `Entry` sees `creator`
-twice and fails again.  The fallback is a map, which keeps only the last
-`creator`, and there is no error.  With or without the feature you get this:
-
-```
-Other({"creator": {"$text": "Jane"}, "title": {"$text": "Deser"}, ...})
-```
-
-Notice how John is gone.
-
-Format specific extension types such as TOML datetimes are another case.  TOML
-has them natively, Serde’s data model does not, so the `toml` crate passes them
-on as a map with a magic key.  In Deser a datetime is an extension value, which
-formats that know it keep and all others write as a string:
-
-```
-let value: Value = deser_toml::from_str("released = 2026-09-29T21:00:00+02:00")?;
-
-deser_json::to_string(&value)?;
-// {"released":"2026-09-29T21:00:00+02:00"}
-deser_toml::to_string(&value)?;
-// released = 2026-09-29T21:00:00+02:00
-```
-
-The same with `serde_json::Value` gives you
-`{"released":{"$__toml_private_datetime":"2026-09-29T21:00:00+02:00"}}`, and
-reading the value into a `chrono::DateTime` fails outright with `invalid type: map, expected an RFC 3339 formatted date and time string`.
-
-So now that you know Deser is at least in theory cool, at what cost?
-
-It is not free.  The design relies on dynamic dispatch and on sinks and emitters
-that live on the heap, and that has considerable runtime overhead.  In my own
-measurements for JSON, Deser reads somewhere between 33% faster and 60% slower
-than `serde_json depending` on the data.  On average it’s about 10% slower for
-reading.  Writes are between three times as fast and 70% slower and a wash on
-average.  For YAML and TOML it’s noticeably faster than the Serde based crates,
-but that is more about the format implementations than the architecture.
-
-Compile times slightly are better, but not dramatically so.  Because it doesn’t
-monomorphize everything, release builds of derived code are about 2.3 times as
-fast as with Serde and that get a tiny bit better in practice for your own code
-as less recompilation is necessary.
-
-To make Deser’s design work at all, it also uses `unsafe` internally.  Most of
-this is to keep the chain of borrowed sinks on the heap.  I feel like this is
-fine in the days of Miri and agents, but I know it makes some folks uneasy.
-
-And well, the biggest cost is that it’s just not Serde.
-
-Quite a lot actually which might be surprising.  In addition to the core
-there is support for [derive](https://github.com/mitsuhiko/deser/tree/main/deser-derive).
-
-It supports all flavorts of JSON you can think of:
-[JSON](https://github.com/mitsuhiko/deser/tree/main/deser-json),
-[JSONC](https://github.com/mitsuhiko/deser/tree/main/deser-jsonc),
-[JSON5](https://github.com/mitsuhiko/deser/tree/main/deser-json5) and
-[HJSON](https://github.com/mitsuhiko/deser/tree/main/deser-hj).  (Fun fact here:
-they are all generated out of [one shared parser template](https://github.com/mitsuhiko/deser/tree/main/deser-template-json))
-For binary handling it supports
-[CBOR](https://github.com/mitsuhiko/deser/tree/main/deser-cbor) and
-[MessagePack](https://github.com/mitsuhiko/deser/tree/main/deser-msgpack).
-Additionally it does
-[YAML](https://github.com/mitsuhiko/deser/tree/main/deser-yaml) 1.1 and 1.2,
-[TOML](https://github.com/mitsuhiko/deser/tree/main/deser-toml),
-[XML](https://github.com/mitsuhiko/deser/tree/main/deser-xml) and all three
-flavors of Apple’s [plist](https://github.com/mitsuhiko/deser/tree/main/deser-plist)
-as well as [CSV/TSV](https://github.com/mitsuhiko/deser/tree/main/deser-csv),
-[urlencoded data](https://github.com/mitsuhiko/deser/tree/main/deser-urlencoded) and
-[environment variables](https://github.com/mitsuhiko/deser/tree/main/deser-env).
-For more crazy contraptions you can
-[attach path info](https://github.com/mitsuhiko/deser/tree/main/deser-path) or
-[capture location data](https://github.com/mitsuhiko/deser/tree/main/deser-location)
-as well as support for
-[debug printing](https://github.com/mitsuhiko/deser/tree/main/deser-debug).
-You can perform [validation](https://github.com/mitsuhiko/deser/tree/main/deser-validate)
-as you parse, opt into different
-[binary encodings](https://github.com/mitsuhiko/deser/tree/main/deser-encoding)
-in addition to base64, you can
-[bridge to serde](https://github.com/mitsuhiko/deser/tree/main/deser-serde) or
-capture
-[dynamic values](https://github.com/mitsuhiko/deser/tree/main/deser-value),
-[transcode](https://github.com/mitsuhiko/deser/tree/main/deser-transcode)
-between formats or hook it up with
-[tokio](https://github.com/mitsuhiko/deser/tree/main/deser-tokio).
-
-For documentation see [docs.rs/deser](https://docs.rs/deser/latest/deser/)
-and the code itself is [on GitHub](https://github.com/mitsuhiko/deser) alongside
-[many examples](https://github.com/mitsuhiko/deser/tree/main/examples).
+*Welcome to Internal Tech Emails: internal tech industry emails that surface in public records. 🔍 If you haven’t signed up, join 50,000+ others and get the newsletter:*
+
+**From:** Bill Gates  
+**Sent:** Wednesday, January 15, 2003 10:05 AM  
+**To:** Jim Allchin  
+**Cc:** Chris Jones; Bharat Shah; Joe Peterson; Will Poole; Brian Valentine; Anoop Gupta  
+**Subject:** Windows Usability Systematic degradation flame
+
+I am quite disappointed at how Windows Usability has been going backwards and the program management groups don't drive usability issues.
+
+Let me give you my experience from yesterday.
+
+I decided to download Moviemake and buy the Digital Plus pack r so I went to Microsoft.com. They have a download place so I went there.
+
+The first 5 times I used the site it timed out while trying to bring up the download page. Then after an 8 second delay I got it to come up
+
+This site is so slow it is unusable.
+
+It wasn't in the top 5 so I expanded the other 45.
+
+These 45 names are totally confusing. These names make stuff like: C:\Documents and Settings\billg\My Documents\My Pictures seem clear.
+
+They are not filtered by the system I can in on and so many of the things are strange.
+
+I tried scoping to Media stuff. Still no moviemaker. I typed in moviemaker. Nothing. I typed in movie maker. Nothing.
+
+So I gave up and sent mail to Amir saying - where is this Moviemaker download? Does it exist?
+
+So they told me that using the download page to download something was not something they anticipated
+
+They told me to go to the main page search button and type movie maker (not moviemaker!).
+
+I tried that   The site was pathetically slow but after 6 seconds of waiting up it came.
+
+I thought for sure now I would see a button to just go do the download.
+
+In fact it is more like a puzzle that you get to solve. It told me to go to Windows Update and do a bunch of incantations.
+
+This struck me as completely odd. Why should I have to go somewhere else and do a scan to download moviemaker?
+
+So I went to Windows update. Windows Update decides I need to download a bunch of controls. Now just once but multiple times where I get to see weird dialog boxes.
+
+Doesn't Windows update know some key to talk to Windows?
+
+Then I did the scan. This took quite some time and I was told it was critical for me to download 17megs of stuff.
+
+This is after I was told we were doing delta patches to things but instead just to get 6 things that are labeled in the SCARIEST possible way I had to download 17meg.
+
+So I did the download. That part was fast. Then it wanted to do an install. This took 6 minutes and the machine was so slow I couldn't use it for anything else during this time.
+
+What the heck is going on during those 6 minutes? That is crazy. This is after the download was finished.
+
+Then it told me to reboot my machine. Why should I do that? I reboot every night - why should I reboot at that time?
+
+So I did the reboot because it INSISTED on it. Of course that meant completely getting rid of all my Outlook state.
+
+So I got back up and running and went to Windows Update again. I forgot why I was in Windows Update at all since all I wanted was to get Moviemaker.
+
+So I went back to Microsoft.com and looked at the instructions. I have to click on a folder called WindowsXP. Why should I do that? Windows Update knows I am on Windows XP.
+
+What does it mean to have to click on that folder? So I get a bunch of confusing stuff but sure enough one of them is Moviemaker.
+
+So I do the download. The download is fast but the Install takes many minutes. Amazing how slow this thing is.
+
+At some point I get told I need to go get Windows Media Series 9 to download.
+
+So I decide I will go do that. This time I get dialogs saying things like "Open" or "Save". No guidance in the instructions which to do. I have no clue which to do.
+
+The download is fast and the install takes 7 minutes for this thing.
+
+So now I think I am going to have Moviemaker. I go to my add/remove programs place to make sure it is there.
+
+It is not there.
+
+What is there? The following garbage is there. Microsoft Autoupdate Exclusive test package, Microsoft Autoupdate Reboot test package, Microsoft Autoupdate testpackage1, Microsoft AUtoupdate testpackage2, Microsoft Autoupdate Test package3.
+
+Someone decided to trash the one part of Windows that was usable? The file system is no longer usable. The registry is not usable. This program listing was one sane place but now it is all crapped up.
+
+But that is just the start of the crap. Later I have listed things like Windows XP Hotfix see Q329048 for more information. What is Q329048? Why are these series of patches listed here? Some of the patches just things like Q810655 instead of saying see Q329048 for more information.
+
+What an absolute mess.
+
+Moviemaker is just not there at all.
+
+So I give up on Moviemaker and decide to download the Digital Plus Package.
+
+I get told I need to go enter a bunch of information about myself.
+
+I enter it all in and because it decides I have mistyped something I have to try again. Of course it has cleared out most of what I typed
+
+I try tryping the right stuff in 5 times and it just keeps clearing things out for me to type them in again.
+
+So after more than an hour of craziness and making my programs list garbage and being scared and seeing that Microsoft.com is a terrible website I haven't run Moviemaker and I haven't got the plus package
+
+The lack of attention to usability represented by these experiences blows my mind. I thought we had reached a low with Windows Network places or the messages I get when I try to use 802.11. (don't you just love that root certificate message?)
+
+When I really get to use the stuff I am sure I will have more feedback.  
+
+**From:** Will Poole  
+**Sent:** Wednesday, January 15, 2003 1:27 PM  
+**To:** Amir Majidimehr; Chris Jones  
+**Cc:** Dave Fester; Rick Thompson  
+**Subject:** FW: Windows Usability Systematic degradation flame
+
+Guess we should start working on a list of things that need to be fixed w/ the web sites, WU, and with windows, and identify owners. Bill's frustration is not unreasonable.  
+
+**From:** Amir Majidimehr  
+**Sent:** Wednesday, January 15, 2003 3:55 PM  
+**To:** Mike Beckerman; Tim Lebel; Dave Fester  
+**Subject:** FW: Windows Usability Systematic degradation flame
+
+Can you guys coordinate between you on how to deal with this situation on our bits? Bill's situation is worse than my personal experience but still, this aspect of the system needs to be looked at carefully and become a sign off item for each release.
+
+Please let me know which one of you going to be BOL for this moving forward.
+
+Amir  
+
+**From:** Dave Fester  
+**Sent:** Wednesday, January 15, 2003 3:58 PM  
+**To:** Amir Majidimehr; Mike Beckerman; Tim Lebel  
+**Subject:** RE: Windows Usability Systematic degradation flame
+
+I replied as well. I am owning the website issues, but Mike should own the others.  
+
+**From:** Mike Beckerman  
+**Sent:** Wednesday, January 15, 2003 4:28 PM  
+**To:** Dave Fester; Amir Majidimehr; Tim Lebel  
+**Subject:** RE: Windows Usability Systematic degradation flame
+
+I'm thinking about this and am discussing with my team.
+
+I don't know what it means to "own website issues", nor am I yet sure the best way to handle the complex mess of coordinating between product teams, WU, and MS.COM. Dave, would you please forward the other reply you mentioned?
+
+I expect to send more on this thread in a day or two.  
+
+**From:** Dave Fester  
+**Sent:** Wednesday, January 15, 2003 4:31 PM  
+**To:** Mike Beckerman; Amir Majidimehr; Tim Lebel  
+**Subject:** RE: Windows Usability Systematic degradation flame
+
+I am working with MS.com to directly address the download/discoverability of our bits (both MP9S and MM2)  
+
+**From:** Mike Beckerman  
+**Sent:** Wednesday, January 15, 2003 4:39 PM  
+**To:** John Martin; lan Mercer; Michael Halcoussis; Linda Averett  
+**Cc:** Chadd Knowlton; Ming-Chieh Lee  
+**Subject**: FW: Windows Usability Systematic degradation flame
+
+More.  
+
+**From:** Mike Beckerman  
+**Sent:** Friday, January 17, 2003 7:36 AM  
+**To:** Mike Beckerman; John Martin; lan Mercer; Michael Halcoussis; Linda Averett  
+**Cc:** Chadd Knowlton; Ming-Chieh Lee  
+**Subject:** RE: Windows Usability Systematic degradation flame
+
+haven't heard anything from any of you on this.
+
+My take is that this web-experience mess spans many groups and deliverables (like Plus), that we need one person/team to own the overall picture, driving it, tracking the experience, etc., and that WMPG isn't really the right place. I'm thinking Dave's team. What do you think?  
+
+**From:** John Martin  
+**Sent:** Friday, January 17, 2003 11:52 AM  
+**To:** Mike Beckerman; Ian Mercer; Michael Halcoussis; Linda Averett  
+**Cc:** Chadd Knowlton; Ming-Chieh Lee  
+**Subject:** RE: Windows Usability Systematic degradation flame
+
+I have always been concerned about this and feel that this has a lot of engineering implications. I also feel that the reason is it such a mess is because marketing teams own release to web in this company. Frankly, we should be up in arms about this and want to program manager and develop whatever code we need to to ensure that every customer that even thinks they want to download our bits can do so in as easy and painless a way as possible. Downloading is the first step to setup and we should think of them equally or as one experience. But, if you want nothing revolutionary and want to band-aid (which is fine and understandable) then I agree with your plan to give it to Dave.
+
+John  
+
+**From:** Ian Mercer  
+**Sent:** Friday, January 17, 2003 5:02 PM  
+**To:** John Martin; Mike Beckerman; Michael Halcoussis; Linda Averett  
+**Cc:** Chadd Knowlton; Ming-Chieh Lee; Allan Poore  
+**Subject:** RE: Windows Usability Systematic degradation flame
+
+I don't think you can abdicate this entirely to marketing. If WU is the preferred way to deliver bits to end users we all need to drive WU to deliver what we need, both individually and as a collective request from DMD.
+
+One of the biggest issues today is that WU provides no way to *promote* a download to an end-user. We want to promote MM2 and WMP9S to end-users as something new and cool that they can get for Windows. Three lines of text describing it buried under "Windows XP" in a page that the user has to purposefully go find just isn't good enough. Why can't the WU client-side piece proactively display a bubble "Look! Cool, new features for Windows XP" and the option to display a much richer "advertisement" for the feature if the user wants to read more?
+
+Other issues -  
+    MUI - I guess this is getting fixed now but it's always been an issue for us  
+    Link to download through WU - why can't we send a user right in to WU to get MM2 without them having to wade through the whole site?  
+    Critical updates that aren't really critical - if you machine is behind a firewall many just aren't critical  
+    Too many fixes bombarding users all the time - I routinely ignore them now and perhaps update once a month as otherwise I'd be rebooting all the time  
+    WU's inflexible release schedule. If there is a major tradeshow at which we want to announce we need flexibility in timing the release
+
+-Ian  
+
+**From:** Mike Beckerman  
+**Sent:** Friday, January 17, 2003 5:09 PM  
+**To:** lan Mercer; John Martin; Michael Halcoussis; Linda Averett  
+**Cc:** Chadd Knowlten; Ming-Chieh Lee; Allan Poore  
+**Subject:** RE: Windows Usability Systematic degradation flame
+
+So, I take from this that we have lots of opinions and input. However, no one appears to be saying that we, WMPG, are chartered and/or should own this. So my feedback on the thread would then be that Dave should take ownership for driving groups around today's inconsistencies, and that we should send this mail to Bharat (owns WU) as well and ask who in his team can take requirements from DMD.
+
+Any disagreement on this?  
+
+**[This document is from Comes v. Microsoft (2007).]**
+
+Previously: [Bill Gates: "The quality is giving us a bad name"](https://www.techemails.com/i/142894465/bill-gates-on-quality-experience) (October 19, 2000)
+
+Previously: [Bill Gates on iTunes Music Store](https://twitter.com/techemails/status/1413534752699830275) (April 30, 2003)
+
+Previously: [Bill Gates on the iPod](https://twitter.com/techemails/status/1423680978359312387) (November 2, 2003)
+
+If you **upgrade to a paid subscription**, you’ll receive access to the **[full archive of internal tech emails](https://files.techemails.com)**, with 250+ documents from Apple, Google, Meta, Microsoft, OpenAI, Tesla, and more. You’ll also support our work: every year, we track hundreds of court cases and review more than 10,000 filings to bring you @TechEmails.
+
+[More…](https://twitter.com/techemails)
+
+If it was Steve Jobs-
+
+He gets stuck once.
+
+“Why can’t I download Movie Maker?”
+
+Somebody explains:
+
+“Well, Steve, first you have to go to Windows Update, install the ActiveX controls, scan for updates, reboot, return to the website…”
+
+Jobs:
+
+“No.”
+
+the execs starts pointing fingers.
+
+Jobs:
+
+"I want my mother to type “Movie Maker,” click one button, and use Movie Maker.
+
+Everything between those two things is your problem.
