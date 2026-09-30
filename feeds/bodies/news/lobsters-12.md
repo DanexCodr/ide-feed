@@ -1,47 +1,151 @@
-***The Cuckoo's Egg: Tracking a Spy Through the Maze of Computer Espionage*** is a 1989 book written by [Clifford Stoll](https://en.wikipedia.org/wiki/Clifford_Stoll). It is his [first-person](https://en.wikipedia.org/wiki/First-person_narrative) account of the hunt for [Markus Hess](https://en.wikipedia.org/wiki/Markus_Hess), a [computer hacker](https://en.wikipedia.org/wiki/Hacker_(computer_security)) who broke into a computer at [Lawrence Berkeley National Laboratory](https://en.wikipedia.org/wiki/Lawrence_Berkeley_National_Laboratory) (LBNL).
+Are generative (randomized) tests significantly more effective than example-based
+unit-tests at discovering bugs? There’s
+[an interesting discussion about this on lobste.rs](https://lobste.rs/s/mkv2pl/unit_tests_mark_territory_more_than#c_5nimhl).
+One argument in favor of unit tests is, paraphrasing
 
-| [![](https://upload.wikimedia.org/wikipedia/en/2/28/The_Cuckoo%27s_Egg.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail_unscaled)](https://en.wikipedia.org/wiki/File:The_Cuckoo's_Egg.jpg) |  |
-| --- | --- |
-| Author | [Clifford Stoll](https://en.wikipedia.org/wiki/Clifford_Stoll) |
-| Language | English |
-| Publisher | [Doubleday](https://en.wikipedia.org/wiki/Doubleday_(publisher)) |
-| Publication date | 1989 |
-| Publication place | United States |
-| Media type | Print |
-| Pages | 326 |
-| [ISBN](https://en.wikipedia.org/wiki/ISBN_(identifier)) | [0-385-24946-2](https://en.wikipedia.org/wiki/Special:BookSources/0-385-24946-2) |
-| [OCLC](https://en.wikipedia.org/wiki/OCLC_(identifier)) | [43977527](https://www.worldcat.org/oclc/43977527) |
-| [Dewey Decimal](https://en.wikipedia.org/wiki/Dewey_Decimal_Classification) | 364.16/8/0973 21 |
-| [LC Class](https://en.wikipedia.org/wiki/LCC_(identifier)) | UB271.R92 H477 2000 |
+To me, it seems that generative testing should shake out that particular
+creature, so I wrote [a lil fuzzer](https://github.com/matklad/regex-fuzz)
+of my own, and it indeed discovered *another* bug in that version of `regex`,
+and then the one I was after. I didn’t find anything in the latest version. I
+like to do a write up about the process, as it is a good case study for how one
+approaches a problem like this.
 
-Stoll's use of the term extended the metaphor [*cuckoo's egg*](https://en.wikipedia.org/wiki/Cuckoo's_egg_(metaphor)) from [brood parasitism](https://en.wikipedia.org/wiki/Brood_parasitism) in birds to [malware](https://en.wikipedia.org/wiki/Malware).
+I want to be extra clear that my argument is very weak here, as I know exactly
+the bug I am after, and I even know that fuzzers can find it. My primary goal is
+to teach you the techniques, leaving it to your judgment just how effective they
+are. That being said, I think finding a *second* bug validates the approach
+somewhat.
 
-Author Clifford Stoll, an [astronomer](https://en.wikipedia.org/wiki/Astronomer) by training, managed computers at [Lawrence Berkeley National Laboratory](https://en.wikipedia.org/wiki/Lawrence_Berkeley_National_Laboratory) (LBNL) in California. One day in 1986 his supervisor asked him to resolve an accounting error of 75 cents in the computer usage accounts. Stoll traced the error to an unauthorized user who had apparently used nine seconds of computer time and not paid for it. Stoll eventually realized that the unauthorized user was a hacker who had acquired [superuser](https://en.wikipedia.org/wiki/Superuser) access to the LBNL system by exploiting a vulnerability in the [movemail](https://en.wikipedia.org/wiki/Movemail) function of the original [GNU Emacs](https://en.wikipedia.org/wiki/GNU_Emacs).
+I also want to emphasize that writing fuzzers to find known bugs is far from an
+idle amusement. While I believe that generative testing is very powerful,
+relative to its cost, it’s always a question whether a particular test is
+thorough enough. And it never is, you *will* find more bugs elsewhere (that’s
+why defense in depth and *runtime* mitigations are critical). And, whenever you
+have a pest that dodged your fuzzers, your first order of business is to treat
+this event as a bug in the *fuzzer*, and change it so that it can find this and
+related bugs. Only then you are allowed to add a fix and a unit test!
 
-Early on, and over the course of a long weekend, Stoll rounded up fifty terminals, as well as [teleprinters](https://en.wikipedia.org/wiki/Teleprinter), mostly by "borrowing" them from the desks of co-workers away for the weekend. He physically attached them to the fifty incoming phone lines at LBNL. When the hacker dialed in that weekend, Stoll located the phone line used, which was coming from the [Tymnet](https://en.wikipedia.org/wiki/Tymnet) routing service. With the help of Tymnet, he eventually tracked the intrusion to a call center at [MITRE](https://en.wikipedia.org/wiki/Mitre_Corporation), a defense contractor in [McLean, Virginia](https://en.wikipedia.org/wiki/McLean,_Virginia). Over the next ten months, Stoll spent enormous amounts of time and effort tracing the hacker's origin. He saw that the hacker was using a 1200 [baud](https://en.wikipedia.org/wiki/Baud) connection and realized that the intrusion was coming through a telephone [modem](https://en.wikipedia.org/wiki/Modem) connection. Stoll's colleagues, Paul Murray and Lloyd Bellknap, assisted with the phone lines.
+## [The Bug](https://matklad.github.io/2026/09/19/finding-bugs.html#The-Bug)
 
-After returning his  "borrowed" terminals, Stoll left a teleprinter attached to the intrusion line in order to see and record everything the hacker did. He watched as the hacker sought — and sometimes gained — unauthorized access to military bases around the United States, looking for files that contained words such as "nuclear" or "[SDI](https://en.wikipedia.org/wiki/Strategic_Defense_Initiative)" (Strategic Defense Initiative). The hacker also copied password files (in order to make [dictionary attacks](https://en.wikipedia.org/wiki/Dictionary_attack)) and set up [Trojan horses](https://en.wikipedia.org/wiki/Trojan_horse_(computing)) to find passwords. Stoll was amazed that on many of these high-security sites the hacker could easily guess passwords, since many [system administrators](https://en.wikipedia.org/wiki/System_administrator) had never bothered to change the passwords from their factory [defaults](https://en.wikipedia.org/wiki/Default_password). Even on military bases, the hacker was sometimes able to log in as "guest" with no password.
+For `".abb|b"` regex and `"zabb"` input, an older version of `regex` crate
+returned `b` as the first match, which is incorrect, because the entire `zabb`
+matches:
 
-This was one of the first⁠—⁠if not *the* first⁠—documented cases of a computer break-in, and Stoll seems to have been the first to keep a daily logbook of the hacker's activities. Over the course of his investigation, Stoll contacted various agents at the [Federal Bureau of Investigation](https://en.wikipedia.org/wiki/Federal_Bureau_of_Investigation) (FBI), the [Central Intelligence Agency](https://en.wikipedia.org/wiki/Central_Intelligence_Agency) (CIA), the [National Security Agency](https://en.wikipedia.org/wiki/National_Security_Agency) (NSA), and the [United States Air Force Office of Special Investigations](https://en.wikipedia.org/wiki/United_States_Air_Force_Office_of_Special_Investigations) (OSI). At the very beginning there was confusion as to jurisdiction and a general reluctance to share information; the FBI in particular was uninterested as no large sum of money was involved and no [classified information](https://en.wikipedia.org/wiki/Classified_information) host was accessed.
+How do we find this, or something *like* this?
 
-Studying his log book, Stoll saw that the hacker was familiar with [VAX/VMS](https://en.wikipedia.org/wiki/VAX/VMS), as well as [AT&T Unix](https://en.wikipedia.org/wiki/Unix). He also noted that the hacker tended to be active around the middle of the day, [Pacific time](https://en.wikipedia.org/wiki/Pacific_Time_Zone). Eventually Stoll hypothesized that, since modem bills are cheaper at night and most people have school or a day job and would only have a lot of free time for hacking at night, the hacker was in a time zone some distance to the east, likely beyond the US East Coast.
+Regular expression engines are one of the easiest things to apply generative
+testing to, they are pure algorithms. While few large systems are *just* an
+algorithm, algorithms are everywhere inside components of interesting systems,
+so this is a hands-on knowledge.
 
-With the help of Tymnet and agents from various agencies, Stoll found that the intrusion was coming from [West Germany](https://en.wikipedia.org/wiki/West_Germany) via satellite. The West German post office, the *[Deutsche Bundespost](https://en.wikipedia.org/wiki/Deutsche_Bundespost)*, had authority over the phone system there, and traced the calls to a university in [Bremen](https://en.wikipedia.org/wiki/Bremen). In order to entice the hacker to reveal himself, Stoll set up an elaborate hoax—known today as a [honeypot](https://en.wikipedia.org/wiki/Honeypot_(computing))—by inventing a fictitious department at LBNL that had supposedly been newly formed by an "SDI" contract, also fictitious. When he realized the hacker was particularly interested in the faux SDI entity, he filled the "SDInet" account (operated by an imaginary secretary named "Barbara Sherwin") with large files full of impressive-sounding [bureaucratese](https://en.wikipedia.org/wiki/Administratium). The ploy worked, and the *Deutsche Bundespost* finally located the hacker at his home in [Hanover](https://en.wikipedia.org/wiki/Hanover).
+And by far the most important technique for testing algorithms is to compare
+with the known right answer, with an oracle. Implement both `O(N log N)` and
+`O(N^2)` versions of the algorithm, and match the answers.
 
-The hacker's name was [Markus Hess](https://en.wikipedia.org/wiki/Markus_Hess), and he had been engaged for some years in selling the results of his hacking to the [Soviet Union](https://en.wikipedia.org/wiki/Soviet_Union)'s civilian intelligence agency, the [KGB](https://en.wikipedia.org/wiki/KGB). There was ancillary proof of this when a Hungarian [agent](https://en.wikipedia.org/wiki/Espionage) contacted the fictitious SDInet at LBNL by mail, based on information he could only have obtained through Hess. Apparently this was the KGB's method of double-checking to see if Hess was just making up the information he was selling. Stoll later flew to West Germany to testify at the trial of Hess.
+To be fair, the original comment mentioned that the their fuzzer didn’t find the
+issue because they didn’t have access to an oracle. However, if you are
+designing a reliable system, it’s part of your job to ensure it has an oracle!
+One of the first things we did for our
+[Jepsen test](https://jepsen.io/analyses/tigerbeetle-0.16.11) at TigerBeetle was to
+[expose internal timestamps](https://github.com/tigerbeetle/tigerbeetle/pull/2481)
+via API, to make it easier for Jepsen to find bugs (TigerBeetle is
+[co-designed](https://tigerbeetle.com/blog/2026-08-20-protocol-aware-dst/) with
+its internal simulator
+[VOPR](https://github.com/tigerbeetle/tigerbeetle/blob/47aeb2212a255273dda508288412e537d11e4b7c/docs/internals/vopr.md)
+which naturally has access to timestamps and anything else). And for, a regex
+engine, coming up with an oracle shouldn’t be hard, as they typically already
+come with multiple specialized implementations under a single facade, and the
+implementations can be cross-checked against each other.
 
-- The book was chronicled in an episode of WGBH's [NOVA](https://en.wikipedia.org/wiki/Nova_(American_TV_series)) entitled "The KGB, the Computer, and Me", which aired on PBS stations on October 3, 1990. Stoll and several of his co-workers participated in re-enactments of the events described.[*[citation needed](https://en.wikipedia.org/wiki/Wikipedia:Citation_needed)*][[1]](https://en.wikipedia.org/wiki/The_Cuckoo%27s_Egg_(book)#cite_note-stoll-adaptations-1)
-- Another documentary, Spycatcher, was made by Yorkshire Television.[[1]](https://en.wikipedia.org/wiki/The_Cuckoo%27s_Egg_(book)#cite_note-stoll-adaptations-1)
-- The number sequence mentioned in Chapter 48 has become a popular math puzzle, known as the Cuckoo's Egg, the Morris Number Sequence, or the look-and-say sequence.
-- In the summer of 2000 the name "Cuckoo's Egg" was used to describe a file sharing hack attempt that substituted white noise or sound effects files for legitimate song files on Napster and other networks.[[2]](https://en.wikipedia.org/wiki/The_Cuckoo%27s_Egg_(book)#cite_note-2)
-- These events are referenced in Cory Doctorow's speculative fiction short story "The Things that Make Me Weak and Strange Get Engineered Away", as "(a) sysadmin who'd tracked a $0.75 billing anomaly back to a foreign spy-ring that was using his systems to hack his military."[[3]](https://en.wikipedia.org/wiki/The_Cuckoo%27s_Egg_(book)#cite_note-3)
+But the `regex` case is even simpler (which makes it an excellent case study).
+There’s `regex_lite` crate that provides the same API.
 
-1. [1](https://en.wikipedia.org/wiki/The_Cuckoo%27s_Egg_(book)#cite_ref-stoll-adaptations_1-0) [2](https://en.wikipedia.org/wiki/The_Cuckoo%27s_Egg_(book)#cite_ref-stoll-adaptations_1-1) [Richard Stoll's Personal Webpage on TV adaptations](http://www.ocf.berkeley.edu/~stoll/nova_show.html)( [Archived](https://web.archive.org/web/20110806122326/http://www.ocf.berkeley.edu/~stoll/nova_show.html) August 6, 2011, at the [Wayback Machine](https://en.wikipedia.org/wiki/Wayback_Machine))
-2. [↑](https://en.wikipedia.org/wiki/The_Cuckoo%27s_Egg_(book)#cite_ref-2) ["Cuckoo's Egg Project Home Page"](http://www.hand-2-mouth.com/). *www.hand-2-mouth.com*.
-3. [↑](https://en.wikipedia.org/wiki/The_Cuckoo%27s_Egg_(book)#cite_ref-3) ["The Things that Make Me Weak and Strange Get Engineered Away"](http://www.tor.com/2008/08/06/weak-and-strange/). Tor.com. Edited 2015-06-24.
+So here’s a plan: generate a regular expression, an input text, and check that
+`regex` and `regex_lite` give identical answers.
 
-- Image of 1st Edition Cover—Doubleday
-- "Stalking the Wily Hacker"—The author's original article about the trap
-- *Booknotes* interview with Stoll on *The Cuckoo's Egg*, December 3, 1989
-- Reference to the book on Internet Storm Center
-- West German hackers use Columbia's Kermit software to break into dozens of US military computers and capture information for the KGB, Columbia University Computing History, 1986-1987 section.
+## [Generating a String](https://matklad.github.io/2026/09/19/finding-bugs.html#Generating-a-String)
+
+I’ll start with code that generates a random string, as it is simpler, but still
+shows some non-trivial ideas. First, we’ll need a random number generator:
+
+There are fancier techniques, which can give you
+[test-case minimization](https://matklad.github.io/2026/04/20/test-case-minimization.html),
+[exhaustive search](https://matklad.github.io/2021/11/07/generate-all-the-things.html), or
+[coverage guided exploration](https://llvm.org/docs/LibFuzzer.html), but the
+insight is that even a humble PRNG is brutally effective, if you put it to good use.
+
+When you start with randomized testing, the instinct is to generate something
+big, no, HUGE! Surely regex will choke on 5 GiBs of input? This is usually a
+wrong call. Bugs *usually* involve small, but tricky examples, weaponizing
+interactions between a few features. A string where all characters are the same
+is more likely to trigger a bug than a purely random string where every
+character is unique.
+
+So my default approach to generating strings is this. *First*, I fix the
+alphabet of possible characters. A nice way to get one is to `sort | unique` all
+the unit tests. Then, for each particular string, I pick a *subset* of that
+alphabet. I want strings that use all the characters, but I also want long
+strings with only `a` and `b`! Then I generate a string using the given subset
+of the alphabet, where the length of the string is also picked at random.
+
+To make fuzzing efficient, I want to keep each iteration as fast as possible, so
+I make sure to re-use the memory across iterations,
+[static allocation](https://github.com/tigerbeetle/tigerbeetle/blob/47aeb2212a255273dda508288412e537d11e4b7c/docs/ARCHITECTURE.md#static-memory-allocation)
+in the small:
+
+There’s a nice way to think about this two step process, generating alphabet
+first, and then generating a string. To generate a string, you need a
+distribution of characters. You *can* use the same distribution for each of the
+million iterations. But an easy way to spice things up is to make the
+distribution *itself* random. I file this “randomize distributions themselves” idea under
+[swarm testing](https://tigerbeetle.com/blog/2025-04-23-swarm-testing-data-structures/).
+
+## [Generating a Regex Distribution](https://matklad.github.io/2026/09/19/finding-bugs.html#Generating-a-Regex-Distribution)
+
+Let’s apply the same tricks when generating a regex:
+
+- pick a subset of active regex features,
+- pick size at random,
+- re-use memory.
+
+Let’s start with the first one:
+
+Regexes have alternation `r1|r2`, repetition `r*`, wildcard `.`, and literals
+`a`. Rather then binary enabling or disabling a particular feature, I assign
+each feature a weight between 0 and 100, which is a bit more general. The `sum`
+is the total of all weights. To select a feature at random, we need to generate
+a number in `0..sum` and find which segment it falls into.
+
+In anything more serious, I’d introduce explicit types for probabilities and
+distributions, but just a two-digit number is perfectly serviceable in the
+small.
+
+This is how I generate `ReOptions`, making sure that literals always have
+non-zero weight, and also selecting an alphabet for them:
+
+## [Generating a Regex](https://matklad.github.io/2026/09/19/finding-bugs.html#Generating-a-Regex)
+
+So now we can generate a regular expression. This is convenient to do
+recursively. To avoid allocations, an output buffer is passed through. To
+control regex length, a `size` parameter is also threaded, and “branching”
+recursive invocations divide the `size` between the children:
+
+## [Search Loop](https://matklad.github.io/2026/09/19/finding-bugs.html#Search-Loop)
+
+Given that compiling regular expressions is somewhat slow, it seems like a good
+idea to try multiple strings for the same pair of regular expressions, which
+gives the following code:
+
+It produces examples similar to those in the issue, with a common suffix:
+
+but also examples which somewhat different, without the shared suffix:
+
+All together:
+
+Takeaways:
+
+- Fuzzing against an oracle is effective, which is a strong motivation to build an oracle!
+- Go for small, tricky examples, rather than large uniform ones.
+- Real fuzzers are cool, but, if you know something, even xoroshiro can be dangerous.
+- Black box testing is cool, but co-designing system and its testing harness is a point of leverage (build an oracle!).
+- This stuff is not rocket science, you don’t need a Haskell PhD to apply these ideas.

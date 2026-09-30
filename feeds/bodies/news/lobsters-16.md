@@ -1,232 +1,325 @@
-*Welcome to Internal Tech Emails: internal tech industry emails that surface in public records. 🔍 If you haven’t signed up, join 50,000+ others and get the newsletter:*
-
-**From:** Bill Gates  
-**Sent:** Wednesday, January 15, 2003 10:05 AM  
-**To:** Jim Allchin  
-**Cc:** Chris Jones; Bharat Shah; Joe Peterson; Will Poole; Brian Valentine; Anoop Gupta  
-**Subject:** Windows Usability Systematic degradation flame
-
-I am quite disappointed at how Windows Usability has been going backwards and the program management groups don't drive usability issues.
-
-Let me give you my experience from yesterday.
-
-I decided to download Moviemake and buy the Digital Plus pack r so I went to Microsoft.com. They have a download place so I went there.
-
-The first 5 times I used the site it timed out while trying to bring up the download page. Then after an 8 second delay I got it to come up
-
-This site is so slow it is unusable.
-
-It wasn't in the top 5 so I expanded the other 45.
-
-These 45 names are totally confusing. These names make stuff like: C:\Documents and Settings\billg\My Documents\My Pictures seem clear.
-
-They are not filtered by the system I can in on and so many of the things are strange.
-
-I tried scoping to Media stuff. Still no moviemaker. I typed in moviemaker. Nothing. I typed in movie maker. Nothing.
-
-So I gave up and sent mail to Amir saying - where is this Moviemaker download? Does it exist?
-
-So they told me that using the download page to download something was not something they anticipated
-
-They told me to go to the main page search button and type movie maker (not moviemaker!).
-
-I tried that   The site was pathetically slow but after 6 seconds of waiting up it came.
-
-I thought for sure now I would see a button to just go do the download.
-
-In fact it is more like a puzzle that you get to solve. It told me to go to Windows Update and do a bunch of incantations.
-
-This struck me as completely odd. Why should I have to go somewhere else and do a scan to download moviemaker?
-
-So I went to Windows update. Windows Update decides I need to download a bunch of controls. Now just once but multiple times where I get to see weird dialog boxes.
-
-Doesn't Windows update know some key to talk to Windows?
-
-Then I did the scan. This took quite some time and I was told it was critical for me to download 17megs of stuff.
-
-This is after I was told we were doing delta patches to things but instead just to get 6 things that are labeled in the SCARIEST possible way I had to download 17meg.
-
-So I did the download. That part was fast. Then it wanted to do an install. This took 6 minutes and the machine was so slow I couldn't use it for anything else during this time.
-
-What the heck is going on during those 6 minutes? That is crazy. This is after the download was finished.
-
-Then it told me to reboot my machine. Why should I do that? I reboot every night - why should I reboot at that time?
-
-So I did the reboot because it INSISTED on it. Of course that meant completely getting rid of all my Outlook state.
-
-So I got back up and running and went to Windows Update again. I forgot why I was in Windows Update at all since all I wanted was to get Moviemaker.
-
-So I went back to Microsoft.com and looked at the instructions. I have to click on a folder called WindowsXP. Why should I do that? Windows Update knows I am on Windows XP.
-
-What does it mean to have to click on that folder? So I get a bunch of confusing stuff but sure enough one of them is Moviemaker.
-
-So I do the download. The download is fast but the Install takes many minutes. Amazing how slow this thing is.
-
-At some point I get told I need to go get Windows Media Series 9 to download.
-
-So I decide I will go do that. This time I get dialogs saying things like "Open" or "Save". No guidance in the instructions which to do. I have no clue which to do.
-
-The download is fast and the install takes 7 minutes for this thing.
-
-So now I think I am going to have Moviemaker. I go to my add/remove programs place to make sure it is there.
-
-It is not there.
-
-What is there? The following garbage is there. Microsoft Autoupdate Exclusive test package, Microsoft Autoupdate Reboot test package, Microsoft Autoupdate testpackage1, Microsoft AUtoupdate testpackage2, Microsoft Autoupdate Test package3.
-
-Someone decided to trash the one part of Windows that was usable? The file system is no longer usable. The registry is not usable. This program listing was one sane place but now it is all crapped up.
-
-But that is just the start of the crap. Later I have listed things like Windows XP Hotfix see Q329048 for more information. What is Q329048? Why are these series of patches listed here? Some of the patches just things like Q810655 instead of saying see Q329048 for more information.
-
-What an absolute mess.
-
-Moviemaker is just not there at all.
-
-So I give up on Moviemaker and decide to download the Digital Plus Package.
-
-I get told I need to go enter a bunch of information about myself.
-
-I enter it all in and because it decides I have mistyped something I have to try again. Of course it has cleared out most of what I typed
-
-I try tryping the right stuff in 5 times and it just keeps clearing things out for me to type them in again.
-
-So after more than an hour of craziness and making my programs list garbage and being scared and seeing that Microsoft.com is a terrible website I haven't run Moviemaker and I haven't got the plus package
-
-The lack of attention to usability represented by these experiences blows my mind. I thought we had reached a low with Windows Network places or the messages I get when I try to use 802.11. (don't you just love that root certificate message?)
-
-When I really get to use the stuff I am sure I will have more feedback.  
-
-**From:** Will Poole  
-**Sent:** Wednesday, January 15, 2003 1:27 PM  
-**To:** Amir Majidimehr; Chris Jones  
-**Cc:** Dave Fester; Rick Thompson  
-**Subject:** FW: Windows Usability Systematic degradation flame
-
-Guess we should start working on a list of things that need to be fixed w/ the web sites, WU, and with windows, and identify owners. Bill's frustration is not unreasonable.  
-
-**From:** Amir Majidimehr  
-**Sent:** Wednesday, January 15, 2003 3:55 PM  
-**To:** Mike Beckerman; Tim Lebel; Dave Fester  
-**Subject:** FW: Windows Usability Systematic degradation flame
-
-Can you guys coordinate between you on how to deal with this situation on our bits? Bill's situation is worse than my personal experience but still, this aspect of the system needs to be looked at carefully and become a sign off item for each release.
-
-Please let me know which one of you going to be BOL for this moving forward.
-
-Amir  
-
-**From:** Dave Fester  
-**Sent:** Wednesday, January 15, 2003 3:58 PM  
-**To:** Amir Majidimehr; Mike Beckerman; Tim Lebel  
-**Subject:** RE: Windows Usability Systematic degradation flame
-
-I replied as well. I am owning the website issues, but Mike should own the others.  
-
-**From:** Mike Beckerman  
-**Sent:** Wednesday, January 15, 2003 4:28 PM  
-**To:** Dave Fester; Amir Majidimehr; Tim Lebel  
-**Subject:** RE: Windows Usability Systematic degradation flame
-
-I'm thinking about this and am discussing with my team.
-
-I don't know what it means to "own website issues", nor am I yet sure the best way to handle the complex mess of coordinating between product teams, WU, and MS.COM. Dave, would you please forward the other reply you mentioned?
-
-I expect to send more on this thread in a day or two.  
-
-**From:** Dave Fester  
-**Sent:** Wednesday, January 15, 2003 4:31 PM  
-**To:** Mike Beckerman; Amir Majidimehr; Tim Lebel  
-**Subject:** RE: Windows Usability Systematic degradation flame
-
-I am working with MS.com to directly address the download/discoverability of our bits (both MP9S and MM2)  
-
-**From:** Mike Beckerman  
-**Sent:** Wednesday, January 15, 2003 4:39 PM  
-**To:** John Martin; lan Mercer; Michael Halcoussis; Linda Averett  
-**Cc:** Chadd Knowlton; Ming-Chieh Lee  
-**Subject**: FW: Windows Usability Systematic degradation flame
-
-More.  
-
-**From:** Mike Beckerman  
-**Sent:** Friday, January 17, 2003 7:36 AM  
-**To:** Mike Beckerman; John Martin; lan Mercer; Michael Halcoussis; Linda Averett  
-**Cc:** Chadd Knowlton; Ming-Chieh Lee  
-**Subject:** RE: Windows Usability Systematic degradation flame
-
-haven't heard anything from any of you on this.
-
-My take is that this web-experience mess spans many groups and deliverables (like Plus), that we need one person/team to own the overall picture, driving it, tracking the experience, etc., and that WMPG isn't really the right place. I'm thinking Dave's team. What do you think?  
-
-**From:** John Martin  
-**Sent:** Friday, January 17, 2003 11:52 AM  
-**To:** Mike Beckerman; Ian Mercer; Michael Halcoussis; Linda Averett  
-**Cc:** Chadd Knowlton; Ming-Chieh Lee  
-**Subject:** RE: Windows Usability Systematic degradation flame
-
-I have always been concerned about this and feel that this has a lot of engineering implications. I also feel that the reason is it such a mess is because marketing teams own release to web in this company. Frankly, we should be up in arms about this and want to program manager and develop whatever code we need to to ensure that every customer that even thinks they want to download our bits can do so in as easy and painless a way as possible. Downloading is the first step to setup and we should think of them equally or as one experience. But, if you want nothing revolutionary and want to band-aid (which is fine and understandable) then I agree with your plan to give it to Dave.
-
-John  
-
-**From:** Ian Mercer  
-**Sent:** Friday, January 17, 2003 5:02 PM  
-**To:** John Martin; Mike Beckerman; Michael Halcoussis; Linda Averett  
-**Cc:** Chadd Knowlton; Ming-Chieh Lee; Allan Poore  
-**Subject:** RE: Windows Usability Systematic degradation flame
-
-I don't think you can abdicate this entirely to marketing. If WU is the preferred way to deliver bits to end users we all need to drive WU to deliver what we need, both individually and as a collective request from DMD.
-
-One of the biggest issues today is that WU provides no way to *promote* a download to an end-user. We want to promote MM2 and WMP9S to end-users as something new and cool that they can get for Windows. Three lines of text describing it buried under "Windows XP" in a page that the user has to purposefully go find just isn't good enough. Why can't the WU client-side piece proactively display a bubble "Look! Cool, new features for Windows XP" and the option to display a much richer "advertisement" for the feature if the user wants to read more?
-
-Other issues -  
-    MUI - I guess this is getting fixed now but it's always been an issue for us  
-    Link to download through WU - why can't we send a user right in to WU to get MM2 without them having to wade through the whole site?  
-    Critical updates that aren't really critical - if you machine is behind a firewall many just aren't critical  
-    Too many fixes bombarding users all the time - I routinely ignore them now and perhaps update once a month as otherwise I'd be rebooting all the time  
-    WU's inflexible release schedule. If there is a major tradeshow at which we want to announce we need flexibility in timing the release
-
--Ian  
-
-**From:** Mike Beckerman  
-**Sent:** Friday, January 17, 2003 5:09 PM  
-**To:** lan Mercer; John Martin; Michael Halcoussis; Linda Averett  
-**Cc:** Chadd Knowlten; Ming-Chieh Lee; Allan Poore  
-**Subject:** RE: Windows Usability Systematic degradation flame
-
-So, I take from this that we have lots of opinions and input. However, no one appears to be saying that we, WMPG, are chartered and/or should own this. So my feedback on the thread would then be that Dave should take ownership for driving groups around today's inconsistencies, and that we should send this mail to Bharat (owns WU) as well and ask who in his team can take requirements from DMD.
-
-Any disagreement on this?  
-
-**[This document is from Comes v. Microsoft (2007).]**
-
-Previously: [Bill Gates: "The quality is giving us a bad name"](https://www.techemails.com/i/142894465/bill-gates-on-quality-experience) (October 19, 2000)
-
-Previously: [Bill Gates on iTunes Music Store](https://twitter.com/techemails/status/1413534752699830275) (April 30, 2003)
-
-Previously: [Bill Gates on the iPod](https://twitter.com/techemails/status/1423680978359312387) (November 2, 2003)
-
-If you **upgrade to a paid subscription**, you’ll receive access to the **[full archive of internal tech emails](https://files.techemails.com)**, with 250+ documents from Apple, Google, Meta, Microsoft, OpenAI, Tesla, and more. You’ll also support our work: every year, we track hundreds of court cases and review more than 10,000 filings to bring you @TechEmails.
-
-[More…](https://twitter.com/techemails)
-
-If it was Steve Jobs-
-
-He gets stuck once.
-
-“Why can’t I download Movie Maker?”
-
-Somebody explains:
-
-“Well, Steve, first you have to go to Windows Update, install the ActiveX controls, scan for updates, reboot, return to the website…”
-
-Jobs:
-
-“No.”
-
-the execs starts pointing fingers.
-
-Jobs:
-
-"I want my mother to type “Movie Maker,” click one button, and use Movie Maker.
-
-Everything between those two things is your problem.
+I suspect it to be a common character trait among us hackers: I give
+myself a hard time disposing of hardware.  So my most recent computing
+device for everyday tasks is a Pinebook Pro, leaving you to guess how
+old my other devices are.  Why buy new when stuff still works?
+
+Anyhow, my desktop machine's motherboard is particularly noisy
+(there's quite a lot of hiss you'd also get if you probed some
+computing device with a solenoid—and I do not appreciate that except
+when performing experimental live music), but which sound-card should
+I buy?  Turns out there is a Rane SL3 laying around in my studio—an
+artifact from a previous life when I was DJ-ing sub-bass heavy music
+from Tempa, Skull Disko and Kraken Recordings.  Out of curiosity I
+plug the device's USB into my machine: the blue LED turns on and I can
+confirm that at least the device's USB works:
+
+```
+$ lsusb
+[...]
+Bus 003 Device 002: ID 1cc5:0001 Rane Corporation SL 3
+[...]
+```
+
+But will audio work with my machine?  Does it—maybe—already work, just
+like that?  I check my output capable sound devices using
+`pavucontrol`—without success.
+
+The Rane SL3 is quite a potent audio interface with 6 input and 6
+output channels (3 stereo pairs each, the inputs being capable for
+amplifying and equalizing vinyl signals).  Being sold for its
+once-upon-a-time top-notch Serato Scratch software it was capable to
+emulate the feeling of playing vinyl discs (which you could scratch!)
+when in fact playing audio from a computer.  This was a crucial step
+in the transition from DJs wanting more adequate haptic feedback for
+their work than what CD players (and their controllers) had to offer.
+Of course, nowadays "CD players" are the de-facto standard with the
+"player" not having much to do with optical storage anymore, and all
+the functionality that *Serato Scratch* on your laptop used to offer
+already included in them.  What a time to be alive!
+
+Since I know of no better purpose for it (my years as a DJ have passed
+leaving little to no nostalgia), I plan to use the device.  Having
+become a GNU/hacker in the meantime, the option of switching operating
+systems just to use an audio device is completely out of the question.
+Computing freedom is essential to my life and shall not be compromised
+by the simple convenience to listen to audio.  I also don't have time
+for such shenanigans.  So I start searching.
+
+Unfortunately, there is nothing readily packaged in GNU Guix (which
+is, of course, the best of all package managers and operating
+systems).
+
+```
+$ guix search "rane.*sl3"
+$
+```
+
+So I query a web search engine and promptly find [a software repository
+that hosts a Linux kernel module](https://github.com/nvgeele/snd-rane-sl3).  Awesome!
+
+## Packaging a Linux audio driver module for GNU Guix
+
+Figuring this would just work—why would anyone craft such a thing and
+publish it if it did not—I figure all that is missing is this piece of
+readily available code running on my machine.  In the *industry* we
+call this process packaging.  Packaging software in Guix is—in my
+experience—usually relatively easy.  And in the cases where it is not,
+we are a wonderful community that strives to enable and empower fellow
+users (and contributors).
+
+I use a yasnippet template in GNU Emacs for the package outline, fill
+in the various places (TAB and type, yeah!) and build the package.  I
+have to turn off tests (because there are none) and comment that fact.
+Since there is no `configure' phase I delete it. Then I add a simple
+`cd` invokation to the build process.  That is
+all.  Guix' `linux-module-build-system` and the `linux-libre-headers`
+input are doing all the legwork.
+
+Of course I did not know about that build system—this is the first
+time I package a Linux module.  But a query on [libera.chat](https://libera.chat)'s #guix
+(Guix' official IRC channel) quickly yielded this possibility.
+
+```
+(define-public snd-rane-sl3
+  (let ((commit "01099892261b55ec5ee814292d840eeb664c1904")
+        (revision "0"))
+    (package
+      (name "snd-rane-sl3")
+      (version (git-version "0" revision commit))
+      (source (origin
+                (method git-fetch)
+                (uri (git-reference
+                       (url "https://github.com/nvgeele/snd-rane-sl3")
+                       (commit commit)))
+                (file-name (git-file-name name version))
+                (sha256
+                 (base32
+                  "1j2aan5xmbi8hgkzzwjb7rarqh4g65rg3s1qd1c8x5m6fpqdnvli"))))
+      (build-system linux-module-build-system)
+      (arguments
+       (list
+        #:tests? #f ; No tests.
+        #:phases
+        #~(modify-phases %standard-phases
+            (delete 'configure)
+            (add-before 'build 'change-directory
+              (lambda _
+                (chdir "snd-rane-sl3"))))))
+      (inputs (list linux-libre-headers))
+      (home-page "https://github.com/nvgeele/snd-rane-sl3")
+      (synopsis "Linux ALSA kernel driver for the Rane SL3 USB Audio interface")
+      (description "snd-rane-sl3 provides a native Linux kernel module that
+enables the Rane SL3 to work as a standard ALSA audio device, supporting 6
+channels (3 stereo pairs) of 24-bit PCM audio at 44.1kHz and 48kHz sample
+rates.")
+      (license license:gpl3))))
+```
+
+It may not look especially beautiful, at first, but I am convinced you
+intuitively understand the vast majority of what is going on here.
+
+This is what amazes me with people using not-that-modern build
+infrastructure.  A simple package definition (and a reference to a
+specific Guix checkout) is all it takes for me to reproduce software
+builds other people just crafted.  Reproducibility is not—how it is
+attempted in too many other build environments and processes—a costly,
+painful, exhausting add-on, it is a pillar of our computing and
+enables us to collaborate and push our computing at relative ease,
+where not-so-modern workflows either need to use giant binary packages
+to reproduce software bit-by-bit or outright refuse to do so, leaving
+bug-hunts in manually traversing differences in the dependency trees
+of their builds.
+
+## Mainlining the package
+
+Since the package is licensed with a freedom respecting
+license—version 3 of the GNU General Public License (GPL) — I open [a
+Pull Request](https://codeberg.org/guix/guix/pulls/6969) on Codeberg to add the package to the main Guix
+repository.  At GNU Guix we work relentlessly to provide as many users
+with all the free, working, up-to-date software they could possibly
+want.  So each contribution, each new package enables more users to
+get the most out of their computing: like in this case the usage of a
+completely fine and working sound-card.
+
+Pull Requests are how we invite other community members in our
+community to review our changes and give input whether they still see
+potential to improve the patch.  There is an implicit(?) agreement
+that good quality in software is when code is understandable and thus
+maintainable (by humans).
+
+## Testing
+
+But now to the real question: how should I test that package?  Since
+the package describes a Linux kernel module, I'd have to add it to my
+operating system definition, reconfigure my system, reboot it,
+eliminate bugs and continue this cycle over and over again until it
+works.  But since that machine is operational (and does other tasks in
+the background) I'd rather not reconfigure my system on top of a
+source checkout which I would have to roll-back (or pass the
+`–allow-downgrades` flag to a future `guix pull` invocation).  The
+good news is: there is no need to go down that route.  Instead I do
+the following:
+
+I adjust the `bare-bones.tmpl` minimal operating system example
+that comes with the Guix source repository to
+
+1. refer to the new package in the `loadable-kernel-modules` field and
+2. add alsa-utils to the packages field.
+
+```
+  modified   gnu/system/examples/bare-bones.tmpl
+@@ -4,7 +4,7 @@
+
+ (use-modules (gnu))
+ (use-service-modules networking ssh)
+-(use-package-modules screen ssh)
++(use-package-modules audio linux screen ssh)
+
+ (operating-system
+   (host-name "komputilo")
+@@ -20,6 +20,7 @@
+   ;; It's fitting to support the equally bare bones ‘-nographic’
+   ;; QEMU option, which also nicely sidesteps forcing QWERTY.
+   (kernel-arguments (list "console=ttyS0,115200"))
++  (kernel-loadable-modules (list snd-rane-sl3))
+   (file-systems (cons (file-system
+                         (device (file-system-label "my-root"))
+                         (mount-point "/")
+@@ -43,7 +44,7 @@
+                %base-user-accounts))
+
+   ;; Globally-installed packages.
+-  (packages (cons screen %base-packages))
++  (packages (cons* alsa-utils screen %base-packages))
+
+   ;; Add services to the baseline: a DHCP client and an SSH
+   ;; server.  You may wish to add an NTP service here.
+```
+
+I build an emulation-ready image at the ease of a simple command-line
+invocation like this:
+
+```
+$ ./pre-inst-env guix system vm gnu/system/examples/bare-bones.tmpl
+```
+
+from the source checkout where I have the package definition for the
+kernel module ready.  This returns the path to the script that starts
+that VM on the standard output.  This is very convenient, because it
+allows me to build and start the machine while passing options.
+
+But how can I conduct the test?  I have real, physical hardware
+attached to my workstation and a kernel-module in a virtual machine.
+Research on the interwebs yields that I need to give myself permission
+so that `qemu` can actually route through USB devices.  I do so by
+changing ownership of the relevant Bus/Device pair (see the output of
+`lsusb` above for the correct numbers) which is in my case:
+
+```
+$ sudo chown $(whoami) /dev/bus/usb/003/002
+```
+
+After a bunch of trial-and-error iterations I end up with these qemu
+options:
+
+```
+$(./pre-inst-env guix system vm gnu/system/examples/bare-bones.tmpl) \
+    -usb \
+    -device qemu-xhci \
+    -device usb-host,hostbus=003,hostaddr=002 \
+    -nographic
+```
+
+This launches a non-graphical virtual machine running the GNU system
+into which I can login simply stating the username `root'.  I check
+for the USB device, then for the module in the VM.
+
+```
+root@komputilo ~# lsusb
+Bus 001 Device 001: ID 1d6b:0001 Linux Foundation 1.1 root hub
+Bus 002 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+Bus 002 Device 002: ID 1cc5:0001 Rane Corporation SL 3
+Bus 003 Device 001: ID 1d6b:0003 Linux Foundation 3.0 root hub
+root@komputilo ~# lsmod | grep rane
+snd_rane_sl3           40960  0
+snd_pcm               188416  1 snd_rane_sl3
+snd                   147456  3 snd_timer,snd_rane_sl3,snd_pcm
+```
+
+This looks promising!  The device was attached, the kernel recognized
+it and correctly loaded the module to speak to it.  Now let's test
+audio!
+
+```
+root@komputilo ~# aplay -l
+**** List of PLAYBACK Hardware Devices ****
+card 0: RaneSL3 [Rane SL3], device 0: Rane SL3 [Rane SL3]
+  Subdevices: 1/1
+  Subdevice #0: subdevice #0
+```
+
+Awesome: the ALSA utilities recognize the audio device!  Now let's
+hear it.  Since I only have two speaker channels set up in my studio
+(and let's be real: hearing stereo sound to me seems like an adequate
+test for the kernel module to work) I run `speaker-test` with the two
+channel option after hooking up the first stereo output pair of the
+sound-card to my sound system:
+
+```
+root@komputilo ~# speaker-test -c 2
+
+speaker-test 1.2.11
+
+Playback device is default
+Stream parameters are 48000Hz, S16_LE, 2 channels
+Using 16 octaves of pink noise
+Rate set to 48000Hz (requested 48000Hz)
+Buffer size range from 2 to 14563
+Period size range from 1 to 7281
+Periods = 4
+was set period_size = 7281
+was set buffer_size = 14563
+ 0 - Front Left
+ 1 - Front Right
+Time per period = 5.473943
+```
+
+What a peaceful, calming sensation that floods my body hearing that
+pink noise coming out of my speakers.  Now all I have to do is to wait
+for someone (other than myself) in the audio team to approve of my
+Pull Request, push the change, pull, add the module to my operating
+system configuration(s), reconfigure, reboot and I will be able to
+enjoy non-hissy sound!
+
+## The aftermath
+
+After input from an audio-team's colleague we agreed that a Linux
+kernel module should not live in any of the audio-team's modules, but
+rather in `gnu/packages/linux.scm`, together with other Linux
+packages.  As much as this package is audio-related, this very piece
+of software *only* works with a Linux kernel.  And since works are
+ongoing in the GNU Hurd parts of the world, we wisely anticipate that
+we don't want to clean up later when we can do it now.
+
+So I fix my commit, rebase it onto current master, force-push the
+branch so the Pull Request reflects my changes and request a review
+from the kernel team.  Unfortunately noone in that team found time to
+review my request within a week's time.  As a committer to the GNU
+Guix project I am allowed to push my own changes even when they are
+not approved in a review process, but only if I am confident that they
+are good and I have waited for at least one week.  So I eventually
+did.  Then I pulled, added the module to my system definition,
+reconfigured my system, rebooted and… TADAA!  Finally am able enjoy
+non-noisy audio on my machine.
+
+If it weren't for…
+
+After a few minutes I notice some irregular short periods of silence
+while playing music.  I never had this before, so this must be cause
+in my audio device change.  Using `pw-jack qjackctl` I spawn a GUI in
+which I can increase the device's audio buffer, which I do.
+Everything is just fine after that change.
+
+And just like that, with not that much effort, I was able to save a
+piece of hardware to become trash and enable other owners of that
+hardware to use it, indefinitely, for free.  Free software

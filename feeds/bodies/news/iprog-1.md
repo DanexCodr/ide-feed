@@ -1,90 +1,9 @@
-Page 1 of 2As an applications programmer, you may have dismissed or overlooked containerization as not being relevant. Wrong. Containers are useful in every programming environment. The problem is becoming familiar with their quirks and idiosyncrasies. Help is at hand.  This is the first exclusive extract from the newly-published: **  
-**
+The Eclipse Foundation, along with 17 other organizations, has launched the Sovereign AI Foundation. The new foundation is a vendor-neutral initiative designed to help member organizations navigate AI dependencies and make more informed decisions about the technologies on which they rely. It is one of the first bodies to consider the importance of digital sovereignty to both enterprises and nation-states.  The Eclipse Foundation provides a vendor-neutral, business-friendly environment for open source collaboration and innovation. Current projects include Adoptium, the Eclipse IDE, Jakarta EE, Open VSX, Software Defined Vehicle, and more than 450 open source projects. The Sovereign AI Foundation has been created in recognition of the fact that many organizations rely on models, platforms, and services they cannot fully inspect, adapt, move, or govern. This means an organization may be limited in choosing and controlling where data is processed, and which technologies they use. The Sovereign AI Foundation will act as the member forum within the Eclipse Foundation's broader AI ecosystem.  Mike Milinkovich, executive director of the Eclipse Foundation, said that AI sovereignty is about preserving meaningful choice and control over the systems on which organizations depend: _"The Sovereign AI Foundation gives members a vendor-neutral forum to understand those dependencies, compare experience, and develop practical guidance for decisions about data, models, infrastructure, and operations."_ Milinkovich says that maintaining AI sovereignty doesn't mean isolation, complete self-sufficiency, or rejecting proprietary technology. Instead, it means an organization can simply understand, choose, adapt, and govern critical AI systems. Equally importantly, this happens while having viable alternatives and the freedom to change direction. Milinkovich points out that open source provides a strong way to achieve that goal, and can increase visibility, adaptability, scrutiny, and choice.  Participants in the Sovereign AI Foundation will assess developments, compare experience, map real-world use cases, identify shared needs, and produce practical resources that support more informed AI decisions. There are 17 founder members of the new foundation, from sectors including technology, industry, research, and the open source community. The full list is CEA LIST, EclipseSource, Engineering Ingegneria Informatica, Ericsson, Eurotech, Infosys, Kentyou, KU Leuven, Open Elements, Red Hat, Renesas Electronics, Robert Bosch, Thales, The IO Foundation, TypeFox, the University of York, and Vector Informatik. Additional organisations are in the process of joining.  The Sovereign AI Foundation will focus on assessing technologies and trends; developing practical resources; and mapping real-world ways members are working with open source AI. It will also focus on building a peer community and coming up with actions based on the member's research. The assessment of technologies will monitor developments across models, evaluation frameworks, inference infrastructure, agentic systems, and regulation. Based on this, members will develop practical resources such as whitepapers, blueprints, landscape analyses, and reference materials. Underpinning the monitoring will be the building a shared view of how members are deploying, evaluating, and piloting open source AI. Eclipse says that a key aspect will be the work of turning outcomes from Eclipse Foundation research initiatives, including EU-funded projects, into insights that members can apply.  The Eclipse Foundation has a growing AI project portfolio that includes projects for developer tools and intelligent assistance, agent frameworks and workflows, deep learning, data and numerical computing, simulation, observability, and cloud infrastructure. These projects operate independently under established Eclipse Foundation project governance while benefiting from common legal, operational, security, and community support. The goal of the new foundation is not to create a single Eclipse Foundation AI platform or centrally directed technology stack. Instead, the members want to support an ecosystem of independently governed open source technologies that meet different requirements, and that can also can evolve separately but work together where appropriate. Alongside the new foundation, the Eclipse Foundation also supports practical skills development through its AI Coding Workshop series. These are interactive workshops that help developers and engineering teams apply disciplined, cross-tool approaches to AI-assisted software development.  The new Sovereign AI Foundation is active now. 
 
-## Programmers Guide To Containers  
-with Docker and Visual Studio Code
+#### More Information
 
-#### By Mike James
+[Sovereign AI Foundation](<https://www.i-programmer.info/sovereign-ai-foundation.org>)
 
-[](<https://www.amazon.com/dp/1871962684?_encoding=UTF8&qid=&sr=&linkCode=ll1&tag=iprog-20&linkId=13e3793e24ef8654297f065cab51686a&language=en_US&ref_=as_li_ss_tl>)
+#### Related Articles
 
-#### Contents****
-
-  1. Chapter 1 Docker
-  2. Chapter 2 Why Containers?
-  3. Chapter 3 Getting Started With Docker  
-Extract 1: [Starting](<https://www.i-programmer.info/programming/241-devops/19178-programmers-guide-to-containers-starting.html>) ***NEW!!!
-  4. Chapter 4 Container As File System 
-  5. Chapter 5 Docker Compose for Build and Run
-  6. Chapter 6 Containers as Functions 
-  7. Chapter 7 Connecting To Containers
-  8. Chapter 8 A Web Server
-  9. Chapter 9 VS Code Containers
-  10. Chapter 10 Dev Containers
-  11. Appendix I Reset Docker 
-  12. Appendix II How Containers Work 
-
-<ASIN:B0HKY1GQ5K>
-
-## Getting Started With Docker
-
-The current dominant way to create and manage containers is Docker, and even if you decide to migrate to some other tool, they are all based on Docker and compatible with it to some degree. In most cases, the use of the term “container” is synonymous with “Docker”.
-
-## How To Use Docker
-
-There are three main components to the Docker system:
-
-  * Docker Engine – the program that actually looks after containers
-  * Docker CLI – the command line program that can be used to create and monitor containers
-  * Docker Desktop – a graphical user interface (GUI) that lets you create and monitor containers.
-
-The most common way to encounter Docker for the first time is to use Docker Desktop, but using the CLI and VS Code (see later) is also a good way of working. Most users opt to work with Docker Desktop, but notice that this is a paid-for option for companies with 250 employees and more than $10 million annual revenue. This seems very reasonable, but also notice that you have to open a Docker user account and provide your email address. A more technical problem is that Desktop insists on running your containers inside a VM that it automatically creates, and this can be a problem if you try mixing containers from different sources. The Docker engine and CLI are fully open source and can be freely downloaded. The CLI is the way that other tools such as VS Code use to work with Docker and as such, there is a big advantage in knowing how it works. In short, it is better to start out using the Docker CLI and use Desktop if you find it helps later.
-
-## Installing Docker
-
-If you install Docker Desktop, then you automatically have the Docker Engine and the Docker CLI installed. This is the method recommended in the documentation for installing the Docker Engine even if you don’t intend to use Desktop. However, you can install the CLI and the Docker Engine without Docker Desktop and this results in a simpler configuration. How to do this is explained on the Docker web site under the heading Install Docker Engine:
-
-    <https://docs.docker.com/engine/install>
-
-At the time of writing, you don’t need a Docker account to install Docker CLI. All you have to do is select the operating system and architecture you are using and follow the instructions. The main complication is that the instructions ask you to use the Docker package repository rather than the packages provided by the distribution you are using. The reason for this complication is said to be the need to provide packages that are more up-to-date than most distributions provide. Most distributions do provide a version of Docker that you can simply install using the standard package manager, and often this works well enough as long as you don’t need to use a recently released feature. My advice is to install Docker Engine and the CLI and see if you need or want the full Docker Desktop after using it for a while. Docker Desktop has a way of making things more complicated to configure and hence it is the source of additional errors. Even using the Docker CLI installed alongside Docker Desktop in standalone mode can cause problems. You may discover that you can’t actually run Docker after installing it. If so, add the current user to the docker user group:
-
-    sudo usermod -aG docker $USER 
-
-log out and back in again or use:
-
-    newgrp docker  
-
-Another problem that occurs is permission to connect to Docker. For example, to let VS Code connect you need to use:
-
-    sudo chmod 666 /var/run/docker.sock
-
-It is important to only do these actions on a development machine as adding a user to the docker group gives that user root access to the file system via docker. Docker runs as root and this is a security problem in some situations and there are instructions for how to run it without root permissions on the web. For a development system running as root is simpler and of course safe.
-
-## The Daemon
-
-Although the command line occupies most of our attention, it is the Docker daemon that does all the work. This is the server that manages the running of our containers. Most installations configure and start the daemon automatically, but if you need to add auto-start manually use:
-
-     sudo systemctl enable docker.service
-     sudo systemctl enable containerd.service
-
-and to stop it starting automatically:
-
-     sudo systemctl disable docker.service
-     sudo systemctl disable containerd.service
-
-You can also manage it using systemd unit files and start, stop and restart it using:
-
-     sudo systemctl _action_ docker
-
-where _a_ _ction_ is one of start, stop or restart. Although it isn’t often necessary, you can also customize the way that the daemon runs using the daemon.json file, which is usually stored in /etc/docker/ or in ~/.config/docker/. There are a very large number of configuration options, most of which you will probably never need to use. See the documentation for details. One common customization is the need to set the daemon to use a proxy for internet access:
-
-    {
-      "proxies": {
-        "http-proxy": "<http://proxy.example.com>:3128",
-        "https-proxy": "<http://proxy.example.com>:3128",
-        "no-proxy": "*.test.example.com,.example.org,12  
-                                        7.0.0.0/8"
-      }
-    }
-
-The daemon receives its commands to run or terminate a container via a standard Inter-Process Communication (IPC) socket, /var/run/docker.sock. This is also the method that allows other programs to control Docker via an API. There are Go and Python libraries that let you do everything you can do with Docker but under program control. The functions in each of the languages follow the standard Docker commands and aren’t covered in this book, but you should have no problem using them if you need to. One possibility that using a socket makes available is remote operation by converting the local IPC into a network IP socket. This allows you to use Docker commands to set up and manage containers on a remote machine. Details of this are beyond the scope of this book, so refer to the documentation if you choose to do this.
+[Eclipse Foundation Launches Open VSX Managed Registry](<https://www.i-programmer.info/news/90-tools/18815-eclipse-foundation-launches-open-vsx-managed-registry.html>) [Eclipse Foundation Launches Open Regulatory Compliance Working Group](<https://www.i-programmer.info/news/136-open-source/17499-eclipse-launches-open-regulatory-compliance-working-group-.html>) [Microsoft's New Support For Eclipse Foundation](<https://www.i-programmer.info/news/136-open-source/14779-microsofts-new-support-for-eclipse-foundation.html>) To be informed about new articles on I Programmer, sign up for our [weekly newsletter](<https://www.i-programmer.info/edit-profile.html?layout=form>),[ ](<https://s3.amazonaws.com/com.alexa.toolbar/atbp/hfdfGO/download/index.htm>)subscribe to the [RSS feed](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=3&format=raw>) and follow us on [Facebook](<http://www.facebook.com/pages/iProgrammer/127140977307932#%21/pages/iProgrammer/127140977307932?v=wall>) or [Linkedin](<http://www.linkedin.com/company/i-programmer>). [](<https://amzn.to/4iJFqTH>)

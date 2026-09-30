@@ -1,146 +1,318 @@
-Espressif Systems' ESP32 microcontrollers are well known for their Wi-Fi and Bluetooth capabilities.
-We have found an **undocumented feature** in the chip that allows the firmware to bypass these fixed-function modems to capture raw IQ baseband samples.
-While others have previously connected an [external RTL-SDR](https://github.com/hardcoreerik/esp-rtl-sdr) or [SubGHz transceiver](https://github.com/NorthernMan54/rtl_433_ESP) to an ESP32 or [used external audio ADCs to capture IQ samples](https://github.com/thaaraak/ESP32-A1S-Tayloe), we actually tap into the chips **internal** modem ADC signal chain, no extra hardware is required.
-This opens up the possibility of **using the ESP32 as a low-cost software-defined radio (SDR) platform**, capable of receiving arbitrary signals in the 2.4 GHz band (and the 5 GHz band on the ESP32-C5).
+[FoundationDB](https://www.foundationdb.org/) is the only database we use. This
+should surprise you since FoundationDB is pretty barebones, just a key-value
+store. It stores everything for us: tenants, object metadata, the replication
+log for data distributed across regions, etc. We also use it as a queue to
+handle async tasks, à la [QuiCK](https://www.foundationdb.org/files/QuiCK.pdf),
+the queuing system Apple uses for CloudKit. This has scaled very nicely. I’m not
+surprised; it’s the same tech behind iCloud, a platform with at least 900
+million users. Furthermore, keeping the queue inside FoundationDB means all
+transactions stay in the database, eliminating the
+[dual-write problem](https://www.confluent.io/blog/dual-write-problem/).
 
-## Try it out in your browser (Web Serial)
+So why start using Kafka now?
 
-The best part: You can try this out in your (desktop) web browser with almost any ESP32 development board!
-Our web interface shows the power spectrum and waterfall diagram of the captured IQ samples (at **a very low** duty cycle).
-Use a browser with [Web Serial](https://developer.mozilla.org/en-US/docs/Web/API/Web_Serial_API) support.
+We’ve seen a few issues using our database as a message queue:
 
-#### 1
-Flash ESP-SDR firmware to your board
+- Scheduling requires many writes and scans, which puts read load on FoundationDB that directly competes with user requests.
+- Each task is expensive and needs multiple writes to complete (enqueue, claim, lease, etc). We have ever more tasks as we add more features.
+- New team members have to learn all the custom code resulting from actually implementing the QuiCK paper. There’s no standard implementation, even though it’s a well known pattern in theory. Finesse is not something you can learn from a paper.
 
-Connect your board over USB (if available, the native / debug port of your board) and install the SDR firmware using the flasher.
-Supported chips are the **original ESP32**, **ESP32-C3**, **ESP32-C5**, **ESP32-C6**, **ESP32-C61**, **ESP32-S2**, **ESP32-S3** and **ESP32-S31**.
+This isn’t a story of a neat 1:1 replacement. We still have the queues in
+FoundationDB. We moved asynchronous tasks like garbage collection to Kafka, we
+can reduce the read and write load on FDB and shave off a good amount of that
+pesky custom code. Read more to see how it all turned out for us!
 
-#### 2
-Explore the live radio spectrum
+You might tell us we should have “just used Kafka” the whole time. Beyond the
+fact that you used the j-word: have you ever waited for your not-even-that-big
+broker to catch up on a cold start? Do you know what a zookeeper is and why you
+don’t pay to take care of the animals? The poor zookeeper can’t even pet them.
+Have you ever felt like a plastic bag drifting through the wind but unable to
+start again because of the sheer madness that comes with spending months
+permuting JVM flags to try to eke out a spectre’s worth of performance so that
+your servers aren’t constantly on fire?
 
-After flashing, unplug the board for five seconds and reconnect. Open ESP-WebSDR and select your device to see the live spectrum.
+No? Just me?
 
-## How it works
+Either way we kinda wanted to avoid Kafka because running it yourself is the
+administrative experience of finding yourself turned into a monstrous vermin and
+everyone around you is mildly annoyed at your experience and asking you to move
+on with life instead of understanding that you can’t work anymore because your
+arms have turned into dozens of legs. By the way, that’s actually what people
+mean when they call something “kafkaesque”, not a
+[Qu’vatlh](https://klingon.wiki/Word/Qu-vatlh) of paperwork.
 
-We assume that Espressif engineers left the IQ sampling path in place for testing and debugging the modem,
-for example for on-wafer testing in the fab.
-The exact capture mechanism, trigger modes and memory allocation differ between chips, but the general idea is the same:
-special debug registers configure the modem's sample-dump engine to write raw IQ samples directly into the chip's internal SRAM, bypassing normal Wi-Fi processing.
-The firmware reserves SRAM so that the heap cannot use it, then lets the modem write raw IQ into that memory.
+## Beyond the naïve way to build a queue on FoundationDB[​](https://www.tigrisdata.com/blog/quick-fdb-kafka/#beyond-the-naïve-way-to-build-a-queue-on-foundationdb)
 
-For example, on the ESP32-C61, the capture mechanism works as follows:
-The SRAM inside the ESP32 is organized into banks.
-Our firmware uses two of these banks and organizes them as a ring buffer.
-One of the banks is temporarily owned by the modem, which writes raw IQ samples into it, while the other bank is owned by the CPU, which copies the completed samples to a buffer for transfer to the host.
-The firmware tracks the hardware write pointer to detect when the modem moves to the next bank.
+So you need a queue. The FoundationDB docs contain
+[tutorials for making simple queues in multiple languages](https://apple.github.io/foundationdb/queues.html).
+At a high level you put messages in on one end of the keyspace (namespace for
+keys) and then read them out of the other end of the keyspace. This works fairly
+well (if you’ve ever used Sidekiq, this model should be very familiar), but the
+main problems come with naming the entries in the queue.
 
-### IQ sample format
+The naïve way to do it is to use the FoundationDB equivalent of MySQL’s
+`AUTO INCREMENT` where you assign each queue item its own atomically increasing
+integer ID, but what happens when you have more than one producer?
 
-The exact format of the IQ samples is configurable. In our implementation, each complex sample occupies one 32-bit word in memory.
-Bits 19–10 hold I and bits 9–0 hold Q, both signed 10-bit integers
-(−512 to +511). Bits 27–20 report the receiver gain setting (an index into the gain table), while bits 31–28
-are most likely the internal state of the automatic gain control's finite state machine.
+Given a sufficiently distributed system, it's easy for two jobs to have
+conflicting IDs, such as two tasks getting the ID 67 and conflicting with
+eachother on insert. Sure, with enough work you can random or UUID your way out
+of this, but the core problem is that consuming work deletes it from the
+database. If a worker dies while it's processing an item, there's no way for
+another worker to retry. Once the worker consumes a job, it's no longer in the
+queue and that job dies with it.
 
-### Capture settings
+We really don’t want to just *lose* queue items because this could mean that
+running a `PutObject` to the Tigris region in Chicago makes the object not show
+up as visible to a user that just happens to be in Europe and is hitting the
+Frankfurt region. It sure would be convenient if someone had thought of this
+problem in detail and published a detailed description of how they solved it.
 
-#### Tuning
+Foreshadowing is a literary device in which the author creates dramatic tension
+from which to signal to the reader that something is about to happen.
 
-2.2–2.7 GHz  
-4.8–6.0 GHz
+## We implemented an Apple paper that describes how to implement durable message queues on top of FoundationDB[​](https://www.tigrisdata.com/blog/quick-fdb-kafka/#we-implemented-an-apple-paper-that-describes-how-to-implement-durable-message-queues-on-top-of-foundationdb)
 
-5 GHz is only available on ESP32-C5. Exact PLL stability limits differ by chip.
+Turns out Apple has thought about this and implemented it for CloudKit with a
+system they call [QuiCK](https://www.foundationdb.org/files/QuiCK.pdf), or a
+Queueing System in CloudKit. Our industry has silly names for things. QuiCK is a
+robust queuing system that uses
+[FoundationDB’s Record Layer](https://foundationdb.github.io/fdb-record-layer/)
+to implement a message queue based on time. To understand why this is such a
+galaxy-brained genius move, let’s take a sidestep into how time works in
+distributed systems.
 
-#### Sample rate
+### Much ado about time[​](https://www.tigrisdata.com/blog/quick-fdb-kafka/#much-ado-about-time)
 
-Up to 80 MSa/s
+FoundationDB is an ordered key-value store, and the *ordering* is a huge bit of
+how it’s (ab)used in practice. One of the nice things about time is that
+generally it’s an *ordered* phenomenon. These two match.
 
-Raw complex IQ capture into memory, with transfer to the host at a low duty cycle.
+In most temporal reference frames, events happen sequentially:
 
-#### Bandwidth
+Now, that “generally” in the previous paragraph is a bit of a misnomer in
+distributed systems. It helps to think about every part of a distributed system
+having its own independent observation of time and that changes a lot about how
+event ordering can be strange in practice.
 
-~13–54 MHz
+Imagine that you have two reference frames: one is closer to the person
+interacting with that apple and the other is farther away from it and gets news
+about the apple from the initial reference frame tweeting about it over UDP for
+some reason.
 
-Analog RX bandwidth. Exact limits depend on the chip and filter settings.
+Oh no! The first tweet was slow and the clocks are slightly out of sync, so the
+second reference frame saw the tweets out of order! The obvious answer here is
+to attach the *observed time* to each tweet (and maybe get better time
+synchronization in your clusters). This makes everything in the distributed
+system have at least *some* understanding of when things happen and in what
+order they should have been observed in.
 
-#### Gain control
+### Much a-queue about time[​](https://www.tigrisdata.com/blog/quick-fdb-kafka/#much-a-queue-about-time)
 
-Automatic or manual
+As such, the message queue Apple built on top of FoundationDB uses *time* as a
+key part of job identity. Jobs are identified by their task type, item space,
+execution / vesting time, priority, and a unique ID.
 
-Internal hardware AGC or a manually selected fixed receiver gain.
+This seems a bit excessive until you realize that queue workers will fail,
+crash, and die, but it’s *unacceptable* to lose work in the process like if you
+did it naïvely. If the user doesn’t get the email for their birthday but their
+friends do, that’s an angry tweet and negative feedback on Yelp (the last
+bastion of real human contact, for now).
 
-With ESP-SDR, the ESP32 can even capture IQ data *beyond* the officially supported tuning range.
-For example, the ESP32-C61 can capture signals up to 2.7 GHz, which includes some **LTE and 5G NR cellular bands**, such as LTE band 7 and 5G NR band n7 around 2.6 GHz.
+As such, here’s what the entire lifecycle flow for the message queue looks like.
 
-### How we discovered this
+First, application code does something that needs to schedule eventual work to
+be done, such as a user uploading an object to Tigris. The queue item is
+constructed and put into the queue to be executed in the near future:
 
-Our starting point was the `adctrig` function in Espressif's `librftest` library.
-With the help of LLMs, we reverse engineered this function to understand how it configures the hardware to capture raw IQ samples.
-These findings formed the basis of ESP-SDR's capture implementation.
+Every so often a worker will poll the queue for work by asking the queue for
+available keys from the beginning of time until now. The worker will then
+randomly select jobs it’s interested in and then push them into the future to
+claim them. Once the job is claimed, it starts doing whatever the job requires
+it to do.
 
-## What this means for ESPARGOS
+Then the job finishes and the worker responds by deleting it from the database.
+But if the worker crashes while processing the job for some reason, another
+worker will pick it up when it becomes eligible for processing again. Jobs are
+either done instantly or eventually.
 
-Without any hardware modifications, [ESPARGOS One](https://espargos.net/espargos-one) can now *phase-coherently* capture raw IQ samples.
-If you already have an [ESPARGOS One](https://espargos.net/espargos-one), [update its firmware](https://espargos.net/firmware/) to the latest version from the *dev* branch to enable this capability. The hardware already supports it.
-We currently provide the "IQ Signal Analyzer" demo application, but are working on additional demo applications, including an adapted real-time augmented reality demo for arbitrary signals.
+So in the best case every job gets picked up once, gets processed, achieves
+enlightenment, and then re-enters the cosmic background radiation until its time
+is needed again. Otherwise jobs end up in an endless wheel of saṃsāra where they
+just bounce between workers until one of them doesn’t fail to process it (or if
+it’s pathologically crashing workers, then a new worker binary is pushed that
+won’t crash this time, we hope).
 
-The IQ sampling implementation on [ESPARGOS One](https://espargos.net/espargos-one) is even more powerful than the browser-based demo (ESP-WebSDR):
+### Workers will own no jobs yet will still be happy[​](https://www.tigrisdata.com/blog/quick-fdb-kafka/#workers-will-own-no-jobs-yet-will-still-be-happy)
 
-- Higher throughput / duty cycle: ESPARGOS One uses an internal SPI transport interface, which is much faster than the UART interface used by ESP-WebSDR.
-- Signal trigger: Instead of streaming all samples (mostly silence), ESPARGOS One can be configured to stream samples only when a signal is detected.
+One of the key parts of this is the idea of workers *leasing* jobs instead of
+claiming them like they would in other queue worker systems. When a worker
+leases a job, it marks itself as having its greasy paws on the job in the
+database and then pushes it forward so that it can be taken over if it crashes.
+In general, every worker has their own unique ID and every class of job has its
+own fixed lease time, so when workers crash it’ll take at most the lease time
+for the jobs to be picked up by another worker and for the spice to continue
+flowing.
 
-In addition to the existing Wi-Fi channel state information (CSI)-based demos, [ESPARGOS One](https://espargos.net/espargos-one) can now also be used as a low-cost, eight-channel SDR platform for the 2.4 GHz ISM band, operating at a low duty cycle.
-The benefits of raw IQ capture over processed CSI include:
+Also when a worker takes longer than the lease time to get something done, it
+re-leases jobs so that other workers don’t pick them up and step on the worker
+currently in progress:
 
-- Localize arbitrary signals: ESPARGOS One can now be used to localize arbitrary signals in the 2.4 GHz ISM band, not just Wi-Fi signals. This includes Bluetooth and Bluetooth Low Energy, Zigbee, and Wi-Fi formats that were previously unsupported for CSI capture (e.g., 802.11b and Wi-Fi signals with multiple spatial streams).
-- Array gain: Signal processing and decoding can be performed centrally, improving weak-signal performance.
-- Special waveforms: ESPARGOS One can now be used with waveforms more suitable for specific applications, e.g., pulse compression radar. Even better, some preprocessing for such special applications can happen on the chip itself, so they are not throughput-constrained.
+### The thorns in the roses[​](https://www.tigrisdata.com/blog/quick-fdb-kafka/#the-thorns-in-the-roses)
 
-## Limitations
+From what I’ve seen in practice and what I can crack from the technical paper,
+this really does seem to get you most of the durability and reliability
+guarantees you’d expect from Kafka or other message queues without having to
+have a second system in the mix and its associated transactions. However there’s
+some thorns in the roses that are worth mentioning:
 
-At 80 MSa/s and 32 bits per sample, the modem writes **2,560 Mbit/s** into SRAM.
-Getting those samples off the chip is the bottleneck: the output links are much slower.
+- Everything being in FoundationDB means you're inviting transaction conflicts as part of the core way your message queue works. This is a huge part of why the Apple paper has workers randomly claim jobs instead of being deterministic about it. The randomness doesn't eliminate conflicts, but it makes them less likely.
+- The randomness also can result in "chronically unlucky" jobs that just never get picked. I'll expand on this some more later.
+- You end up creating a lot of write pressure on your FoundationDB cluster once you reach a fairly large scale (eg: millions of items backlogged in the queue). This ends up being a problem when the storage server is not able to keep up with the logs. Again, I'll expand on this some more later in the post.
+- You end up needing to make sure your clocks are synced. They should be already, but worst case you need to set up a stratum 1 NTP server or do GPS time synchronization.
 
-Therefore, our firmware streams the IQ samples at a very low duty cycle, which is enough to display a live spectrum and waterfall in the browser.
-Packets that arrive between capture windows may be missed.
+## We made some changes[​](https://www.tigrisdata.com/blog/quick-fdb-kafka/#we-made-some-changes)
 
-## SoapyESPSDR: GNU Radio & gqrx
+I mentioned that Apple published a paper, not a GitHub repo or source tarball.
+As a result, this means we needed to adapt this design for our use case, and
+write all the code ourselves. In the process we changed some things:
 
-[SoapyESPSDR](https://github.com/ESPARGOS/SoapyESPSDR) is our receive-only
-SoapySDR driver for the **ESP32-S31**. It streams IQ samples over Gigabit Ethernet
-from a board running ESP-SDR firmware, making the receiver available to applications such as
-**GNU Radio** and **gqrx** through their SoapySDR support.
+- We don't use FoundationDB’s Record Layer, we use the corpse of our pre-pivot database product as the record/query layer for FoundationDB.
+- Apple's system is designed to accommodate dynamic numbers of queues, we have a fixed number of queues. Removing that stipulation removed a lot of complexity.
+- We ended up needing the concept of "long-running" jobs that checkpoint their status into the message queue so another worker picking them up doesn't have to start over from scratch.
+- We also needed cronjobs. Time being a huge part of the job identity makes this way less complicated in practice.
 
-The S31 supports continuous reception at 8 and 16 MSa/s; higher sample rates require a reduced
-duty cycle.
+### The wrath of cron[​](https://www.tigrisdata.com/blog/quick-fdb-kafka/#the-wrath-of-cron)
 
-**Under development:** We will release firmware and SoapySDR driver repositories soon, once everything is ready.
+One of the key advantages of a system like QuiCK is that there’s no central
+coordination layer, so you don’t have to maintain another service that has wide
+ranging downstream effects upon failure. One of the key disadvantages of a
+system like QuiCK is that you don’t have a central coordination layer so you end
+up needing to build things like recurring/cronjobs by yourself. The fun part
+about how this is implemented is that jobs self-identify by *when* they get
+executed, so the cheeky way to implement cronjobs is to just have a job that
+reschedules itself when it’s done executing. This is what we ended up doing.
 
-Coming soon.
+When you add up the durability, temporal smear from workers occasionally
+retrying jobs, and other third order effects of this design, you end up with all
+of the benefits of something like cron or systemd timers without having to
+actually run a cron service in your cluster. You basically farm out the
+scheduling work to the workers themselves. This is kinda beautiful in a way that
+I’m having trouble describing succinctly, it’s great.
 
-## More information and firmware
+### We sharded the message queue[​](https://www.tigrisdata.com/blog/quick-fdb-kafka/#we-sharded-the-message-queue)
 
-- ESP-SDR firmware: firmware source code and build instructions.
-- ESP-WebSDR browser interface: browser-based spectrum viewer and firmware flasher.
-- The firmware of ESPARGOS One remains closed source for now, but we are considering on open-sourcing it now that this "secret" IQ functionality that we were keeping private has been revealed.
+Apple’s paper recommends having workers randomly pick jobs to ensure that they
+don’t step on eachother when claiming them in FoundationDB. In practice we found
+that explicitly sharding jobs by the cryptographic hash of their key was a lot
+more useful. One of the downsides of randomly picking jobs is that with a
+sufficiently small number of workers, it’s hard to find a random selection
+percentage that has low conflict rates and doesn’t let jobs lag behind realtime
+too much.
 
-## FAQs
+In order to work around this, we explicitly sharded jobs into “lanes”. Every
+worker monitors a few lanes, and when jobs get claimed, their vesting time
+changes, which makes the key change, which makes the lane change. This means
+that jobs constantly bounce between lanes as different workers cycle in and out
+so that any one worker or any one “unlucky” lane is automatically mitigated
+against at the infrastructure level.
 
-No, this is a feature of the ESP32's modem that was not documented in the public datasheet.
-As far as we are concerned, it is not a security vulnerability, but rather an undocumented capability that can be used for SDR applications.
-That being said, many ESP32-powered devices are connected to various cloud services which allow the manufacturer of to update the firmware remotely.
-If sensitive data is transmitted without encryption in the ISM bands, this could pose a security concern. In that case, the underlying issue is the unencrypted transmission.
-The ability of the ESP32 to transmit arbitrary signals, on the other hand, could be abused for jamming or other malicious purposes, which is why we are not providing a transmitter implementation at this time.
+This is another case of something that would normally be solved by some kind of
+central management system with other message queue systems, but by not having
+one and being a bit clever about the design you can completely mitigate that
+entire failure mode.
 
-Due to the low duty cycle achievable for most ESP32 models, it does not make much sense to use the SDR mode with these applications.
-For the ESP32-S31, our [SoapyESPSDR driver](https://espargos.net/espsdr/#soapyespsdr) provides
-integration with GNU Radio, gqrx and other SoapySDR-compatible applications over Gigabit Ethernet.
+## We ended up with Kafka anyways[​](https://www.tigrisdata.com/blog/quick-fdb-kafka/#we-ended-up-with-kafka-anyways)
 
-ESP-SDR currently supports the original ESP32, ESP32-C3, ESP32-C5, ESP32-C6, ESP32-C61, ESP32-S2, ESP32-S3 and ESP32-S31. We are working to extend the range of supported ESP32 chips. Support for additional models will most likely be possible, but each chip needs its own implementation.
+But yeah, here's the part where we hit the limits of our setup and had to
+swallow our pride before setting up Kafka anyways.
 
-Yes, this is possible. An external mixer can translate signals from other frequency bands into the ESP32's transmit / receive range. We already have multi-channel prototype hardware for this.
+FoundationDB is really bad at coping with large sustained amounts of inserts in
+a single cluster. Sure, commits are fast, but at some point the storage servers
+have to apply and replicate out those changes. When those storage servers fall
+behind the transaction logs, the ratekeeper of the database throttles *everyone*
+so they can catch up. As our customers start storing more and more data, we
+started hitting this issue pretty regularly. Every `PutObject` call turned into
+more and more writes which resulted in more writes downstream and it was all
+inflicted on the same database clusters. Something had to give because this was
+manifesting by customers seeing the replication lag with their eyes.
 
-## Acknowledgements
+The only real paths out of this are to shard FoundationDB clusters or to just
+throw more hardware at the problem. Given that ram is at human kidney prices and
+that we have a small enough team that we're out of spare kidneys (for now, until
+we hire more), we gotta eat the complexity of setting up a second system to
+handle the message queue logic. We've had to cut our ram configurations in half.
+It's brutal out there.
 
-User *h0m3us3r* first disclosed this capability for the ESP32-S3 [on Reddit](https://www.reddit.com/r/esp32/comments/1wq37xz/got_raw_iq_streaming_out_of_an_esp32s3_at_80_mss/), including firmware source code, a few days before our announcement.
-They achieve 80 MSa/s of sustained throughput using an additional FPGA to handle the transfer.
-Since we have been independently working on IQ capture for several months now, we also wanted to share our findings with the community.
+So we ended up turning our message queue into a monstrous vermin.
+
+Well, we didn't completely end the friendship with FoundationDB, we still use it
+across our workloads, but everything splits into three categories now:
+
+1. S3API or event triggered jobs: They go to Kafka.
+2. Jobs that need a scan to find: Think TTL expiry and lifecycle transitions. We still have FoundationDB scan for them, but then that scanner produces queue items in Kafka instead of FoundationDB.
+3. Replication: This stays in FoundationDB to avoid the dual-write problem. We have saved so much write pressure everywhere else that we bought the wiggle-room we need to handle the writes for replication.
+
+Most of the savings come from that first category of changes, so let's dig into
+that.
+
+### Deletion isn't really deletion at our scale[​](https://www.tigrisdata.com/blog/quick-fdb-kafka/#deletion-isnt-really-deletion-at-our-scale)
+
+One of the fun facts about distributed systems nonsense is that at a certain
+scale "deletion" stops actually removing data from the database. We end up
+putting a tombstone in the database and deferring the actual removal until
+later, mostly so that we can have soft-deletes be soft instead of hard. We clean
+things up in a few stages:
+
+1. We have a recurring job per bucket to clean things up.
+2. Each per-bucket task scans for tombstones and for every tombstone that's past the retention period, it schedules another task to actually clean that tombstone up.
+3. Each cleanup task then checks yet again and deletes the tombstone and its associated data blocks.
+
+Let's do some napkin math. Every one of those tasks is a QuiCK job, and every
+QuiCK job costs an enqueue write, a claim write, at least one lease write, and a
+delete when it finishes. Here's what it takes to remove one tombstone, and what
+survives the move to Kafka:
+
+| Write | QuiCK | Kafka |
+| --- | --- | --- |
+| tombstone written over the key | ✓ | ✓ |
+| cleanup task enqueued | ✓ | ✗ |
+| cleanup task claimed | ✓ | ✗ |
+| cleanup task leased, at least once | ✓ | ✗ |
+| cleanup task deleted when it finishes | ✓ | ✗ |
+| tombstone and its data blocks removed | ✓ | ✓ |
+
+Four of those six writes are the queue talking to itself, and the per-bucket
+task that found the tombstone cost another four before it ever got there, plus
+range scans over the entire bucket. Then all the workers fighting for jobs are
+scanning over the work ranges, which competes with user requests against the
+storage servers. Delete a million objects and that's at least four million queue
+writes on a cluster that's probably already the bottleneck.
+
+In our brave new Kafka world, stage 1 and 2 of that vanish. Servers write
+tombstones to FoundationDB, enqueue a message to a cleanup topic, and go back to
+doing whatever it is you want them to do. The cleanup topic is naturally in
+delete order, so consumers read from the earliest offset and process tombstones
+as their time comes.
+
+Kafka's consumer offset ends up doing the job that QuiCK's vesting time did with
+no additional FoundationDB write pressure. The queue is the schedule. The only
+cost is that Kafka has its own transactions outside of FoundationDB. This is
+okay because the failure mode of the FoundationDB transaction working but the
+Kafka transaction failing is a tombstone sticking around longer than it would
+otherwise, not user data falling into the shadow realm. This tradeoff is
+acceptable.
+
+## So far nobody’s turned into a centipede[​](https://www.tigrisdata.com/blog/quick-fdb-kafka/#so-far-nobodys-turned-into-a-centipede)
+
+Overall, we’re pretty happy with how things have turned out. In an ideal world
+we’d be able to expand upon our FoundationDB-based message queue system.
+However, until we can put the time/energy into sharding our FoundationDB
+clusters, this works enough and should last us until we hit our next scaling
+threshold that requires us to rethink our design.
+
+Oh, and as an added bonus we’re pretty sure that nobody on the team has turned
+into a centipede without warning. I’ll double-check with the team to be sure
+though!
+
+Tigris is globally distributed, S3-compatible object storage. We handle the queues, the leases, and the clock skew so that you don’t have to.

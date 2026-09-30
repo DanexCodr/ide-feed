@@ -1,415 +1,187 @@
-[Serde](https://serde.rs/) is an amazing serialization library for Rust and it
-has been a huge reason why I felt productive with it for years.  However already
-while at Sentry I got quite frustrated with some of the limitations with it but
-actually replacing Serde is tricky because of the might that it has in the
-ecosystem.  Also because it’s quite hard to actually do better without also
-making some potentially painful compromises.
+*Editor's note: This article is a reproduction of a seminal explanation of the differences between foldr and foldl, both strict and lazy versions. As it has been used consistently to teach newcomers since its first appearance on [hasura/graphql-engine!2933](https://github.com/hasura/graphql-engine/pull/2933#discussion_r328821960) on the 26th September 2019, we believe that it ought to be preserved in the blog. Our many thanks to Alexis King for giving her permission to do so.*
 
-Here are three examples of Serde corner cases that show poor interactions of
-Serde features or unexpected limitations:
+To start, you have to understand that `foldl` and `foldr` are *not* folds “from the left” and “from the right.” Both `foldl` and `foldr` traverse the structure in the same order, which in the case of lists means left to right. The difference is the fold’s *associativity*.
 
-An internally tagged enum, with `serde_json`‘s `arbitrary_precision` feature
-turned on:
+### `foldl` vs `foldr` illustrated
 
-```
-#[derive(Deserialize)]
-#[serde(tag = "type")]
-enum Shape {
-    Circle { radius: f64 },
-}
+The best way to think about this is with an illustration. When you write
 
-serde_json::from_str::<Shape>(r#"{"type": "Circle", "radius": 1.5}"#)
-// error: invalid type: map, expected f64
-```
+you’re performing the following computation:
 
-Serde’s data model has no place for arbitrary precision numbers, so `serde_json`
-uses in-band signalling with a map with a magic key.  The enum has to buffer the
-fields until it has seen the tag, and the buffer does not know about the magic
-key.  Because Cargo features are unified, it’s enough for any crate in your
-dependency graph to turn the feature on.
+In contrast, when you write
+
+you’re performing this computation:
+
+See the difference? In both expressions, the elements of the list appear in the expression in the same order—from left to right—but the *grouping* changes. With `foldl`, the applications of `(⨂)` are left-associated, while with `foldr`, they’re right-associated.
+
+### `foldl` vs. `foldr`, strictly
+
+The question is: how does this difference actually impact the behavior of a program? Well, let’s start by first thinking about what the difference would be in a strict language. In a strict language, evaluation order always proceeds from the “inside out,” starting with the most deeply nested expression.
+
+Let’s think about that in the context of `foldl` first. Let’s say we wrote this expression:
 
 ```
-#[derive(Deserialize)]
-struct Stats {
-    scores: HashMap<u32, u32>,
-}
-
-#[derive(Deserialize)]
-struct Report {
-    name: String,
-    #[serde(flatten)]
-    stats: Stats,
-}
-
-serde_json::from_str::<Report>(r#"{"name": "x", "scores": {"42": 23}}"#)
-// error: invalid type: string "42", expected u32 at line 1 column 35
+foldl (+) 0 [1, 2, 3, 4]
 ```
 
-`Stats` on its own parses `{"scores": {"42": 23}}` just fine.  JSON keys are
-always strings, and `serde_json` only turns them into integers if the type asks
-for one.  However once `flatten` buffers the value, `"42"` is just a string.
-The error also points at the end of the document rather than at the key.
+By the above illustration, we know that expression is equivalent to this one:
 
 ```
-fn from_hex<'de, D: Deserializer<'de>>(d: D) -> Result<u32, D::Error> { ... }
-
-#[derive(Deserialize)]
-struct Theme {
-    #[serde(deserialize_with = "from_hex")]
-    primary: u32,
-    #[serde(deserialize_with = "from_hex")]
-    accent: Option<u32>,
-}
-
-//error[E0308]: `?` operator has incompatible types
-//  |
-//  |     #[serde(deserialize_with = "from_hex")]
-//  |                                ^^^^^^^^^^ expected `Option<u32>`, found `u32`
-//  |
-//help: try wrapping the expression in `Some`
-//  |
-//  |     #[serde(deserialize_with = Some("from_hex"))]
-//  |                                +++++          +
+(((0 + 1) + 2) + 3) + 4
 ```
 
-A function cannot be passed as a type parameter, so there is no way to apply
-`from_hex` to the inside of an `Option`, a `Vec` or a map.  You write another
-function for every wrapper, and once you have `from_opt_hex` the field is no
-longer optional unless you also remember to add `#[serde(default)]`.
-
-None of these are bugs that are easy to fix in Serde.  They fall out of its
-design, and that design is protected by Serde’s stability guarantees.
-
-Back in 2022 I started an experiment called
-[Deser](https://github.com/mitsuhiko/deser).  It’s a serialization library for
-Rust that takes the user experience of [Serde](https://serde.rs/) and puts it on
-top of a completely different architecture inspired by
-[miniserde](https://github.com/dtolnay/miniserde).  I never really finished it
-and it sat around for a few years.  I picked it back up, and it has now reached
-a point where I think it’s worth looking at.  Even just to inspire others to
-see if they want to explore the space.
-
-The name is Serde with its two halves swapped.  Deser is Serde but the other way
-around.  In Serde, a type drives the deserialization process: a `Deserialize`
-impl asks the deserializer for the kind of value it expects, the format calls
-back into a visitor.  Every nested value is handled by recursion which makes
-Serde deserialization inherently grow the stack with each level of nesting.
-
-Deser on the other hand turns this around and the format tells the type of the
-next value and pushes events into a sink.  When a sink hits the start of a
-nested value, it doesn’t call into it but hands back a new sink to a driver,
-which keeps all state on the heap (in fact, in an arena).  On the way out,
-emitters return their nested values instead of recursing into them.
-
-That also means that Deser cannot support formats like protobuf that are not
-self describing.  They are in fact quite intentionally left out of the design
-entirely.  Which is one way to say: if you want to “fix” Serde, you need to
-make some other compromises.
-
-Most of the reasons for Deser’s ideas go back to [Sentry
-Relay](https://github.com/getsentry/relay), which processes enormous amounts of
-untrusted JSON.  Over the years when I was at Sentry we ran into the same set of
-problems again and again, and many of them are not really bugs in Serde but
-consequences of its design.  Serde’s stability guarantees mean that a lot of
-them cannot be fixed without breaking every format and every hand written
-implementation.  Most of these problems come from three decisions:
-
-1. **One set of traits for all formats.** Serde serves both self describing formats (JSON, YAML, TOML, …) and formats where the reader has to know the type upfront (postcard, bincode, protobuf, …). That is incredibly useful, but it means that some features only work with some formats, and you find out at runtime. In case of Serde it also has some odd wrinkles where a derived struct quietly accepts an array in place of an object in JSON for instance.
-2. **A fixed data model that loses information when buffering.** Internally tagged enums, untagged enums and `flatten` need to buffer values before they know what to do with them. The buffer can’t hold everything the format knew, errors lose their location and extensions to the ecosystem rely on in-band signalling to express things such as arbitrary precision numbers.
-3. **Recursion on the call stack.** Every level of nesting uses stack space. Formats protect against this with a recursion limit, but the moment you go through a code path that doesn’t have one (writing, dynamic values), deeply nested data can take down your process. It also means that a deserialization cannot be paused while you wait for more input.
-
-Many of the corresponding Serde issues have been open for years, and I wrote
-about [abusing Serde](https://lucumr.pocoo.org/2021/11/14/abusing-serde/) before.  People have tried
-different angles on this over the years.  Some went minimal and dropped most
-features to get fast compiles and no recursion.  dtolnay’s own
-[miniserde](https://github.com/dtolnay/miniserde) is the best example of that,
-and deser’s trait design was originally modelled after it.  Other recent
-attempts went for runtime reflection, or for a new data model with a focus on
-binary formats.
-
-If you want to read up on all of the collected challenges with Serde’s design,
-I maintain [a lengthy list here](https://github.com/mitsuhiko/deser/blob/main/SERDE.md).
-
-First of all I don’t think it’s likely that one can replace Serde.  [The orphan
-rule](https://smallcultfollowing.com/babysteps/blog/2022/04/17/coherence-and-crate-level-where-clauses/)
-entrenches Serde incredibly well in the ecosystem.  But some things are within
-the reach of a crate author’s control.  In case of Deser it’s completeness.
-
-Deser today implements all important self describing formats from YAML, JSON,
-TOML, CBOR, JSON5 and the likes, but also XML and plist to really close the gap.
-XML in particular is something Serde has declined to support, and it shows
-(more on that below).  At the very least format support should not be the
-reason not to use Deser.
-
-The second problem usually is that actually solving Serde’s issues comes at a
-significant cost in compile time and/or runtime performance.  Deser is no
-different.  While Deser’s compile times are a bit better than Serde’s, the
-binary bloat is quite a bit worse and the runtime performance is mixed.  It’s
-roughly comparable if you look at the numbers but depending on the format
-structure you are losing significantly from some of the tradeoffs.
-
-That said, it’s now in a state where it’s at least in principle a drop-in
-replacement where the tradeoffs might work well for users.
-
-## Deser’s Design
-
-Deser does not try to be significantly different than Serde on the surface
-level.  For most uses you derive `Serialize` and `Deserialize` and then start
-using it with your format implementing crate of choice.  Most attributes are
-very similar, though they are taking Rust expressions instead of strings.
+Reducing from the inside out, we get the following reduction sequence:
 
 ```
-use deser::{Serialize, Deserialize};
-
-#[derive(Debug, Serialize, Deserialize)]
-#[deser(rename_all = "camelCase")]
-pub struct Account {
-    id: u64,
-    account_holder: String,
-    #[deser(default)]
-    is_deactivated: bool,
-}
-
-let account: Account = deser_json::from_str(json)?;
+  foldl (+) 0 [1, 2, 3, 4]
+= (((0 + 1) + 2) + 3) + 4
+= (( 1      + 2) + 3) + 4
+= (  3           + 3) + 4
+=    6                + 4
+=   10
 ```
 
-The difference in the design would become more apparent if you implement a
-serializer or deserializer yourself.  Instead of visitors that call into each
-other recursively, deserializing a type creates a
-*sink* which receives events that are directly emitted by the parser, and
-*serializing produces emitters* that hand out values.  Nested sinks and emitters
-are handed back to a driver, which keeps them on the heap.  This design, which is
-entirely stolen from miniserde, gives some interesting consequences:
-
-On top of that are a lot of things that I just wanted to have:
-
-Here is a small configuration type that shows a few of these together:
+In contrast, if we had used `foldr`, we’d get the same result (since `(+)` is an associative, commutative operation), but with a slightly different reduction sequence:
 
 ```
-use deser::adapters::DisplayFromStr;
-use deser::de::Recording;
-use deser::{Deserialize, Serialize};
-use deser_encoding::Hex;
-use deser_validate::{Check, NonEmpty, Range};
-use ipnet::IpNet;
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Config {
-    // at least one 256-bit key, each written as hex
-    #[deser(as = Check<NonEmpty, Vec<Hex>>)]
-    secret_keys: Vec<[u8; 32]>,
-    // `IpNet` knows nothing about deser, but has `FromStr` and `Display`
-    #[deser(as = Option<Vec<DisplayFromStr>>)]
-    allowed_networks: Option<Vec<IpNet>>,
-    listeners: Vec<Listener>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[deser(tag = "type", rename_all = "snake_case")]
-pub enum Listener {
-    Unix { path: PathBuf },
-    Tcp {
-        host: IpAddr,
-        #[deser(as = Check<Range<1, 65535>>)]
-        port: u16,
-    },
-    // types this version does not know are kept and written back
-    #[deser(other)]
-    Other(#[deser(tag)] String, Recording),
-}
+  foldr (+) 0 [1, 2, 3, 4]
+= 1 + (2 + (3 + (4 + 0)))
+= 1 + (2 + (3 +      4 ))
+= 1 + (2 +           7  )
+= 1 +                9
+= 10
 ```
 
-Adapters are types, so `Hex` can go inside a `Vec`, and `DisplayFromStr` inside
-a `Vec` inside an `Option`.  Validators are adapters too, so
-`Check<NonEmpty, Vec<Hex>>` decodes the keys and then checks that there is at
-least one.  The catch-all variant keeps the tag and a recording of everything
-else in case someone wants to process it later.
+What’s the practical difference between these two things? Well, note the following detail: with `foldl`, to start reducing, we only need the *first* element of the list, but with `foldr`, we have to start from the *end* of the list and reduce “backwards.”<sup>1</sup> Practically, this means `foldl` can be tail-recursive, reducing as it traverses the list in constant space, while `foldr` cannot be: to reduce a list of length *`n`* with `foldr`, you need to create *`n`* stack frames before any reduction can start.
 
-Errors are something I care a lot about, so here is what happens when a value
-is wrong:
+<sub><sup>1</sup> This is why `foldr` is sometimes described as “folding from the right”, even though it traverses the list from left to right. As we’ll see, however, this doesn’t actually hold in lazy languages!</sub>
 
-```
-secret_keys = ["9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"]
-allowed_networks = ["10.0.0.0/8", "fd00::/8"]
+### `foldl`, lazily
 
-[[listeners]]
-type = "unix"
-path = "/run/app.sock"
+But what about in *lazy* languages, like Haskell? In a lazy language, evaluation order doesn’t proceed from the “inside out” like it does in strict languages, but rather from the “outside in,” evaluating expressions only as their results are *demanded*.
 
-[[listeners]]
-host = "127.0.0.1"
-port = 0
-type = "tcp"
+In a strict language, `foldl (+) 0 [1, 2, 3, 4]` doesn’t *actually* get turned into the expression `(((0 + 1) + 2) + 3) + 4`; as I mentioned earlier, it’s implemented as a tail-recursive loop. But in Haskell, it basically *does* get expanded into that expression before any reduction starts—each application of `(+)` is lazily suspended in a thunk.
 
-[[listeners]]
-type = "quic"
-host = "::1"
-alpn = ["h3"]
-```
+If we explicitly denote thunks with ⟨⟩ brackets, the thunk we’ll end up with looks like this:
 
 ```
-let config: Config = deser_toml::Deserializer::from_str(input)
-    .deserialize_with(|driver| driver.push_layer(PathLayer::new()))?;
+⟨⟨⟨⟨0 + 1⟩ + 2⟩ + 3⟩ + 4⟩
 ```
 
-Note that here the tag of the internally tagged enum comes last which means that
-the values have to be buffered until the tag is known.  In Serde this is tricky
-and we would lose the location if we used some tricks to add it.  With Deser
-however, with the path layer enabled Deser you where in the structure the
-problem is:
+These thunks will only get forced when the outermost thunk is evaluated, which will cause `(+)` to be applied to the arguments `⟨⟨⟨0 + 1⟩ + 2⟩ + 3⟩` and `4`. Since `(+)` is strict in both its arguments, it will force the next thunk, which will in turn apply `(+)` to `⟨⟨0 + 1⟩ + 2⟩` and `3`, and so on until the whole thunk tree is reduced.
 
-Deser really wants to be extensible, and XML is a more extreme example of the
-differences between Deser and Serde.  Here is an Atom entry that mixes in Dublin
-Core for the authors:
+The result ends up being the same, but from a practical point of view, this is really bad, because instead of reducing the list in constant space, like we did in the strict language, we’re now creating a thunk linear in the size of the input list! It’s even worse that that, though, because in a strict language, the input list takes up space linear to its own size, so our overall space consumption for producing/consuming the list would simply be a constant factor increase, but in a lazy language, the list itself is more like a *stream*, which may actually use constant space if the whole stream is not fully realized in memory. By using the lazy `foldl`, we’ve possibly gone from a constant-space algorithm to a linear-space algorithm, which is bad!
 
-```
-use chrono::{DateTime, Utc};
-use deser::Deserialize;
-use deser_value::Value;
-use deser_xml::DeserializerConfig;
+What we want is to recover the behavior of the strict language’s `foldl`, efficiently updating an accumulator as we traverse the list, not building thunks. Therefore, we need a stricter version of `foldl`, which is exactly what `foldl'` is. `foldl'` places a demand on the `⟨0 + 1⟩` thunk *before* moving onto the next element of the list, so instead of building a larger `⟨⟨0 + 1⟩ + 2⟩` thunk, it simply builds a `⟨1 + 2⟩` thunk. `foldl'` continues traversing the list in constant space, never building a thunk larger than a single application of `(+)`.
 
-deser_xml::namespace!(
-    atom = "http://www.w3.org/2005/Atom",
-    dc = "http://purl.org/dc/elements/1.1/",
-);
+### `foldr`, lazily
 
-#[derive(Debug, Deserialize)]
-struct Entry {
-    #[deser(rename = atom!("title"))]
-    title: String,
-    #[deser(rename = dc!("creator"))]
-    creators: Vec<String>,
-    #[deser(rename = atom!("updated"))]
-    updated: DateTime<Utc>,
-}
+But what about `foldr`? Remember that in a strict language, `foldr` already needed to consume space linear in the size of the input list, since it fundamentally needed the last element in the list before it could start reducing. Indeed, if we consider a lazy `foldr` with a strict operation like `(+)`, this is still true—but in an interestingly *different* way from `foldl`.
 
-// entries we understand, and everything else is kept as it is
-#[derive(Debug, Deserialize)]
-#[deser(untagged)]
-enum Item {
-    Entry(Entry),
-    Other(Value),
-}
-
-let item: Item = DeserializerConfig::new()
-    .resolve_namespaces(true)
-    .from_str(r#"
-        <entry xmlns="http://www.w3.org/2005/Atom"
-               xmlns:d="http://purl.org/dc/elements/1.1/">
-          <title>Deser</title>
-          <d:creator>John</d:creator>
-          <updated>2026-09-29T21:00:00Z</updated>
-          <d:creator>Jane</d:creator>
-        </entry>
-    "#)?;
-```
-
-XML uses namespaces which means that names need to be matched by their namespace,
-not by the prefix the document happens to use.  Here the document says `d:` and
-the type says `dc!`.  `atom!("title")` is just the string
-`{http://www.w3.org/2005/Atom}title`, which works because attributes are
-expressions.  The two creators are collected into one `Vec` even though there is
-another element between them, and the text of `updated` goes straight into a
-`chrono` datetime.  Because the enum is untagged, the entry has to be buffered
-before a variant is picked, and deser’s buffer keeps both creators.  So the
-result is an `Entry` with John and Jane.
-
-quick-xml, the most popular XML crate for Serde, drops the prefixes and ignores
-namespaces entirely, so a `<x:title>` from some other namespace is happily
-accepted as the title of the entry.  The split list part though is considerably
-worse.  A plain `Entry` fails with a duplicate field error for `creator`, unless
-you turn on the `overlapped-lists` feature (which, remember, is a global
-additive flag that any crate could set).  That feature makes quick-xml read
-ahead to the end of the element and buffer everything in between, without a
-limit unless you set one.
-
-But the feature only helps when quick-xml is hooked up to the struct directly
-and no buffering is taking place.  Wrap the struct in the untagged enum and
-Serde buffers the entry itself.  Read from that buffer, `Entry` sees `creator`
-twice and fails again.  The fallback is a map, which keeps only the last
-`creator`, and there is no error.  With or without the feature you get this:
+With `foldl`, we ended up building thunks incrementally as we traversed the list, leading to a very large, nested thunk. But with `foldr`, that doesn’t actually happen. Why? Well, consider the expansion again for just a moment:
 
 ```
-Other({"creator": {"$text": "Jane"}, "title": {"$text": "Deser"}, ...})
+  foldr (+) 0 [1, 2, 3, 4]
+= 1 + (2 + (3 + (4 + 0)))
 ```
 
-Notice how John is gone.
-
-Format specific extension types such as TOML datetimes are another case.  TOML
-has them natively, Serde’s data model does not, so the `toml` crate passes them
-on as a map with a magic key.  In Deser a datetime is an extension value, which
-formats that know it keep and all others write as a string:
+To consider how we end up with this expansion, let’s write the expansion out in an explicitly inductive way:
 
 ```
-let value: Value = deser_toml::from_str("released = 2026-09-29T21:00:00+02:00")?;
-
-deser_json::to_string(&value)?;
-// {"released":"2026-09-29T21:00:00+02:00"}
-deser_toml::to_string(&value)?;
-// released = 2026-09-29T21:00:00+02:00
+  foldr (+) 0 [1, 2, 3, 4]
+= 1 + foldr (+) 0 [2, 3, 4]
+= 1 + (2 + foldr (+) 0 [3, 4])
+= 1 + (2 + (3 + foldr (+) 0 [4]))
+= 1 + (2 + (3 + (4 + foldr (+) 0 [])))
+= 1 + (2 + (3 + (4 + 0)))
 ```
 
-The same with `serde_json::Value` gives you
-`{"released":{"$__toml_private_datetime":"2026-09-29T21:00:00+02:00"}}`, and
-reading the value into a `chrono::DateTime` fails outright with `invalid type: map, expected an RFC 3339 formatted date and time string`.
+This makes the recursive calls to `foldr` more explicit. In a strict language, as soon as we call `foldr`, we need to demand the result, so we *have* to traverse the whole list. But here’s where things get interesting—in a lazy language, we can actually just return the following result, with a suspended thunk:
 
-So now that you know Deser is at least in theory cool, at what cost?
+```
+  foldr (+) 0 [1, 2, 3, 4]
+= 1 + ⟨foldr (+) 0 [2, 3, 4]⟩
+```
 
-It is not free.  The design relies on dynamic dispatch and on sinks and emitters
-that live on the heap, and that has considerable runtime overhead.  In my own
-measurements for JSON, Deser reads somewhere between 33% faster and 60% slower
-than `serde_json depending` on the data.  On average it’s about 10% slower for
-reading.  Writes are between three times as fast and 70% slower and a wash on
-average.  For YAML and TOML it’s noticeably faster than the Serde based crates,
-but that is more about the format implementations than the architecture.
+This might seem totally irrelevant, since once that result is forced, the `⟨foldr (+) 0 [2, 3, 4]⟩` will be forced by `(+)`, and we’ll get the same reduction sequence we had before. But note that this is only true because `(+)` is a strict operation. What if we instead used a *lazy* operation, like `(:)`? In that case, we’d get the following expansion:
 
-Compile times slightly are better, but not dramatically so.  Because it doesn’t
-monomorphize everything, release builds of derived code are about 2.3 times as
-fast as with Serde and that get a tiny bit better in practice for your own code
-as less recompilation is necessary.
+```
+  foldr (:) [] [1, 2, 3, 4]
+= 1 : ⟨foldr (:) [] [2, 3, 4]⟩
+```
 
-To make Deser’s design work at all, it also uses `unsafe` internally.  Most of
-this is to keep the chain of borrowed sinks on the heap.  I feel like this is
-fine in the days of Miri and agents, but I know it makes some folks uneasy.
+Guess what? That result is already in [weak-head normal form (WHNF)](https://stackoverflow.com/a/6889335/465378)! So evaluation just stops there until the rest of the result is explicitly demanded by something else. Now, in this case, this is a silly operation, since `foldr (:) []` is just a complicated identity function on lists, but we could imagine a slightly more complicated function, such as one that doubles each element in a list:
 
-And well, the biggest cost is that it’s just not Serde.
+```
+let f x xs = (x * 2) : xs
+in foldr f [] [1, 2, 3, 4]
+```
 
-Quite a lot actually which might be surprising.  In addition to the core
-there is support for [derive](https://github.com/mitsuhiko/deser/tree/main/deser-derive).
+This will expand into the following:
 
-It supports all flavorts of JSON you can think of:
-[JSON](https://github.com/mitsuhiko/deser/tree/main/deser-json),
-[JSONC](https://github.com/mitsuhiko/deser/tree/main/deser-jsonc),
-[JSON5](https://github.com/mitsuhiko/deser/tree/main/deser-json5) and
-[HJSON](https://github.com/mitsuhiko/deser/tree/main/deser-hj).  (Fun fact here:
-they are all generated out of [one shared parser template](https://github.com/mitsuhiko/deser/tree/main/deser-template-json))
-For binary handling it supports
-[CBOR](https://github.com/mitsuhiko/deser/tree/main/deser-cbor) and
-[MessagePack](https://github.com/mitsuhiko/deser/tree/main/deser-msgpack).
-Additionally it does
-[YAML](https://github.com/mitsuhiko/deser/tree/main/deser-yaml) 1.1 and 1.2,
-[TOML](https://github.com/mitsuhiko/deser/tree/main/deser-toml),
-[XML](https://github.com/mitsuhiko/deser/tree/main/deser-xml) and all three
-flavors of Apple’s [plist](https://github.com/mitsuhiko/deser/tree/main/deser-plist)
-as well as [CSV/TSV](https://github.com/mitsuhiko/deser/tree/main/deser-csv),
-[urlencoded data](https://github.com/mitsuhiko/deser/tree/main/deser-urlencoded) and
-[environment variables](https://github.com/mitsuhiko/deser/tree/main/deser-env).
-For more crazy contraptions you can
-[attach path info](https://github.com/mitsuhiko/deser/tree/main/deser-path) or
-[capture location data](https://github.com/mitsuhiko/deser/tree/main/deser-location)
-as well as support for
-[debug printing](https://github.com/mitsuhiko/deser/tree/main/deser-debug).
-You can perform [validation](https://github.com/mitsuhiko/deser/tree/main/deser-validate)
-as you parse, opt into different
-[binary encodings](https://github.com/mitsuhiko/deser/tree/main/deser-encoding)
-in addition to base64, you can
-[bridge to serde](https://github.com/mitsuhiko/deser/tree/main/deser-serde) or
-capture
-[dynamic values](https://github.com/mitsuhiko/deser/tree/main/deser-value),
-[transcode](https://github.com/mitsuhiko/deser/tree/main/deser-transcode)
-between formats or hook it up with
-[tokio](https://github.com/mitsuhiko/deser/tree/main/deser-tokio).
+```
+  foldr f [] [1, 2, 3, 4]
+= ⟨1 * 2⟩ : ⟨foldr f [] [2, 3, 4]⟩
+```
 
-For documentation see [docs.rs/deser](https://docs.rs/deser/latest/deser/)
-and the code itself is [on GitHub](https://github.com/mitsuhiko/deser) alongside
-[many examples](https://github.com/mitsuhiko/deser/tree/main/examples).
+…and again, it will just stop there, since it’s already in WHNF. How is this useful? Well, what if we didn’t actually consume the entire result list, like this?
+
+```
+sum (take 2 (foldr f [] [1, 2, 3, 4]))
+```
+
+Because `take 2` will only return the first two elements of the list, then when `sum` forces  the list and its values to add them together, it will never even evaluate the thunk `⟨foldr f [] [3, 4]⟩`, and the list will only be partially-traversed.
+
+What are the implications of this? Well, it means that `foldr` can possibly save on work if the reducing function is lazy in its second argument, and the result list is not entirely consumed. In fact, **`foldr` can operate on infinite lists** this way, while `foldl` cannot. It also means that `foldr` may be subject to more [list fusion](https://teh.id.au/posts/2017/06/30/notes-on-fusion/index.html) than `foldl`, though that’s another discussion entirely.
+
+### `foldl` vs. `foldr`, lazily
+
+Okay, so, to briefly recap, here’s what I’ve said so far:
+
+1. In a lazy language, `foldl` on lists is bad because it’s too lazy, and it builds up big thunks. Use `foldl'` instead to force the thunks incrementally and consume the list in constant space.
+2. In a lazy language, `foldr` on lists is good because it’s lazy, so if the reducing function is lazy in its second argument, it can save on work.
+
+These two things might seem a little contradictory. Why is `foldl` bad because it’s too lazy while `foldr` is good because it’s lazy?
+
+To understand the difference, let’s expand `foldl` inductively like we did with `foldr`:
+
+```
+  foldl (+) 0 [1, 2, 3, 4]
+= foldl (+) (0 + 1) [2, 3, 4]
+= foldl (+) ((0 + 1) + 2) [3, 4]
+= foldl (+) (((0 + 1) + 2) + 3) [4]
+= foldl (+) ((((0 + 1) + 2) + 3) + 4) []
+= ((((0 + 1) + 2) + 3) + 4)
+```
+
+See the difference? With `foldr`, the recursive call was pushed into a “leaf” of the resulting expression tree, but with `foldl`, the recursive call is always the root. This is, by the way, why `foldl` is tail recursive—this is exactly what tail recursion *is!*—but it means it can’t possibly be lazy, since it will never be in WHNF until the entire list has been traversed.
+
+This gives us a general rule of thumb for using `foldl` and `foldr` on lists:
+
+1. When the accumulation function is strict, use `foldl'` to consume the list in constant space, since the whole list is going to have to be traversed, anyway.
+2. When the accumulation function is lazy in its second argument, use `foldr` to do work incrementally to improve streaming and work-saving.
+3. Never use `foldl` or `foldr'`; they’re always worse on lists.
+
+In your case, the accumulation function you’re applying is `Map.delete`, which *is* strict, so you should use `foldl'`.
+
+That said, this is often a micro-optimization, so if the list is not large, it usually doesn’t really matter. It’s just a good habit to get into, and it’s worth understanding, since it’s a great example of laziness in practice.
+
+### Addendum: `foldl` and `foldr` on other data structures
+
+As a final note, you might wonder: if `foldl` and `foldr'` are so useless, why do they even exist? Why not just have `foldl'` and `foldr`?
+
+The answer is that everything I just said only applies to lists. This behavior happens because, fundamentally, `(:)` is a right-associative operation, so the “remainder” of the list is on the right. But if we had snoc lists, like this:
+
+```
+data SnocList a = Nil | Snoc (SnocList a) a
+```
+
+…then our lists would be *left-associative*, and we’d want to use `foldr'` in situations where we use `foldl'` on ordinary lists and `foldl` where we use `foldr` on ordinary lists. A little confusing, isn’t it?
+
+Ordinary cons lists and snoc lists are basically the two extremes of `foldl` vs `foldr`, but in practice, other data structures are a lot fuzzier. For example, if you have a tree, like
+
+```
+data Tree a = Leaf | Branch (Tree a) a (Tree a)
+```
+
+…then some elements are on the left and others are on the right, and neither `foldl` nor `foldr` are clearly better. In that case, if you really, really care about performance, `foldMap` and `foldMap'` are usually your best bet, since they don’t specify any particular associativity of calls to `(<>)`. However, we don’t have `foldMap'` until `base-4.13.0.0`, which won’t be available until we switch to GHC 8.8.1. (But in truth, it probably doesn’t matter, anyway.)

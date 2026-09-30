@@ -1,186 +1,136 @@
-My [last
-post](https://nnethercote.github.io/2026/07/31/how-to-speed-up-the-rust-compiler-in-july-2026.html)
-on the Rust compiler’s performance was two months ago and a lot has happened
-since then.
+I mentioned in my [Hello, world!](https://aaronmallen.me/writing/hello-world) post that I built this site using [Hanami](https://hanakai.org/hanami). This site may seem simple on the surface; it is, after all, just a blog. However, the backend is packed with features that help me day to day. I have built a tool that lets me cross-post to both Bluesky and Mastodon. I have a private journal where I can keep notes throughout the day. There is a custom analytics engine to provide me with insights on how well my blog posts are doing. There is a messaging backend that lets readers reach me through my contact form without cluttering my inbox. I have also built a task manager that syncs with both Linear and GitHub Issues and helps me track what I need to do. Most importantly, I have built an activity feed that captures my GitHub commits, journal entries, blog posts, and tasks. It helps me answer the question "What did I do between ___ and ___ dates?", which, believe it or not, is hard for me to answer on my own, even for last week. The application is open source, and you can find it on [GitHub](https://github.com/aaronmallen/aaronmallen.me).
 
-## Overall progress
+I chose Hanami for a few reasons. I had always felt trapped by Rails, which to me has a rigid way of doing things and makes you fight for anything you want to do differently. At one point I even started writing web applications in [Sinatra](https://sinatrarb.com/) for more freedom in how I built them. I had heard of Hanami, and had even experimented with some of the early 1.x versions, but it was not until RubyConf 2024 in Chicago that I was truly introduced to it. Today I am a maintainer on the [Hanakai team](https://hanakai.org/community) (the folks behind Hanami, dry-rb and ROM), and what better way to get to know the things you build than to use them? Hanami is **very** different from other web frameworks in the Ruby ecosystem. I thought it might be a good idea to go over some of these differences and why I think they are beneficial. So with that, I would like to introduce you to a new series I plan on doing over the coming weeks called "Hanami, Why?".
 
-The measurements for the period 2026-07-29 to 2026-09-28 can be seen
-[here](https://perf.rust-lang.org/compare.html?start=1a833e16546c2eb012758ddd499964fd8afee29e&stat=wall-time&tab=compile&end=c1070d69382b8d2f2eb65119c738a77d9e324c9e&nonRelevant=true).
+## The Basics
 
-The mean wall-time reduction was 4.57%, which is a remarkable improvement in
-just two months. Of the 629 benchmark measurements, 555 of them improved and
-only 74 regressed. A number of benchmarks saw double-digit percentage
-reductions. The technical term for this result is “a sea of green”.
+I think in order for us to have a fruitful conversation about Hanami, how it differs from other web frameworks, and what those differences mean, we need two things. First, we need to approach this with an open mind. As I mentioned, Hanami is **very** different, and I mean this in a good way. At best, you may come out of this series understanding that Hanami might actually scale better than alternatives in various circumstances. At worst, you will come out of this series with a new perspective on how things could be done differently within your own web applications. For either outcome, we must be open to difference. The other thing we will need is a basic understanding of how Hanami works. I will keep this segment high level, since the [Hanami documentation](https://hanakai.org/learn/hanami/v3.0/getting-started) covers the finer points well and we will dig deeper later in this series.
 
-## rustdoc
+Hanami does its best to push you toward tiny, single-purpose abstractions. There are several important abstractions in the Hanami ecosystem, but I think the four most important abstractions are [Actions](https://hanakai.org/learn/hanami/v3.0/actions), [Relations](https://hanakai.org/learn/hanami/v3.0/database/relations), Repos, and [Operations](https://hanakai.org/learn/hanami/v3.0/operations). Actions represent individual HTTP endpoints within your application. This can be daunting for some, as it means a simple set of CRUD operations is spread out amongst four separate classes. I will go into more detail in a future issue about how and why that is a good thing. Relations, repos and structs (plain data objects) are the "model" layer of a Hanami web application. Relations are the lowest level of the model layer and own the responsibility of querying your database. Repos are an optional, higher-level layer that sits on top of your relations. Repos can manage one or several relations and ensure you are not passing around a persistence layer by always returning structs. Lastly, you have operations. Operations are an implementation of the command pattern, powered by [dry-operation](https://hanakai.org/learn/dry/dry-operation/v1.1). Operations are the perfect place to perform complex mutations and receive a `Success` or `Failure` object in return.
 
-In my last post I mentioned how [Noah Lev](https://github.com/camelid) got some
-enormous speed wins on rustdoc. He recently wrote [a
-post](https://noahlev.org/blog/2026/08/27/making-rustdoc-faster) explaining in
-some detail exactly how he did this. It’s an interesting and satisfying read.
+Beneath these sit lower-level system pieces that help with things like dependency injection. Thanks to [dry-system](https://hanakai.org/learn/dry/dry-system/v1.2) we can automagically inject instances of classes directly into our actions, relations, repos, and operations. This is typically done via the `Deps` module which gets included in your classes with a list of the dependencies you want to inject. This offers an additional layer of clarity on what dependencies a particular class relies on, as well as where those dependencies come from. We also have a robust typing system thanks to [dry-types](https://hanakai.org/learn/dry/dry-types/v1.8). We will go into more detail later in this series on how I use types to validate and normalize user inputs. Lastly, as I mentioned, our operations and our actions can both use `Success` and `Failure` results thanks to [dry-monads](https://hanakai.org/learn/dry/dry-monads/v1.8). In a moment I will show how these result objects, with pattern matching, simplify your mutations.
 
-## Clippy
+A typical Hanami application might look a little something like this:
 
-[#159642](https://github.com/rust-lang/rust/pull/159642): In this PR
-[Jakub Beránek](https://github.com/Kobzol) enabled PGO for Clippy, giving
-wall-time improvements across most Clippy benchmarks, in the best case by 18%!
+```
+module MyApp
+  module Actions
+    module Users
+      class Create < Action
+        include Deps["operations.create_user"]
 
-## LLVM update
+        before :validate_params
 
-[#158734](https://github.com/rust-lang/rust/pull/158734): In this PR [Nikita
-Popov](https://github.com/nikic) upgraded the LLVM version used by the compiler
-to LLVM 23. As often happens when we upgrade LLVM, we saw some nice speedups.
-The mean wall-time reduction across all benchmarks was 1.2%, which might not
-sound like much but is really impressive for a single PR. Great work from the
-LLVM folks!
+        params do
+          required(:user).filled(:hash) do
+            required(:email).filled(Types::EmailAddress)
+            required(:password).filled(:string, min_size?: 8)
+          end
+        end
 
-## The new borrow checker
+        def handle(request, response)
+          case create_user.call(request.params.to_h)
+            in Success[user] then success_response(response, user)
+            in Failure[errors] then error_response(response, errors)
+          end
+        end
 
-The new borrow checker, [Polonius](https://en.wikipedia.org/wiki/Polonius)
-[Alpha](https://en.wikipedia.org/wiki/Alpha) (no relation to
-[Napoleon](https://en.wikipedia.org/wiki/Napoleon_(disambiguation))
-[Dynamite](https://www.youtube.com/watch?v=gdZLi9oWNZg)), was
-[enabled on
-Nightly](https://blog.rust-lang.org/2026/08/04/enabling-polonius-alpha-on-nightly/).
-It is more precise than the existing borrow checker and accepts some valid
-programs that the old borrow checker would reject. It does do more work than the
-old borrow checker, enough to make a measurable difference to compile time in a
-minority of cases, including the popular `serde` crate. Fortunately, [Jack
-Huey](https://github.com/jackh726) has been on the case.
+        private
 
-[#161938](https://github.com/rust-lang/rust/pull/161938): In this PR Jack made
-some liveness computations lazy, which reduced instruction counts for `serde`
-by 3-5%, and for some other benchmarks by less than 1%.
+        def error_response(response, errors)
+          response.status = :unprocessable_entity
+          response.format = :json
+          response.body = errors.to_json
+        end
 
-[#163027](https://github.com/rust-lang/rust/pull/163027): In this PR Jack
-adjusted a data structure and tweaked some inlining, for mostly sub-1%
-instruction count reductions across numerous benchmarks.
+        def success_response(response, user)
+          response.status = :created
+          response.format = :json
+          response.body = user.to_json
+        end
 
-There is more work to be done to reduce the remaining Polonius Alpha
-regressions, but it’s worth noting that the “sea of green” shows these
-regressions were swamped by the many other recent improvements.
+        def validate_params(request, response)
+          return if request.params.valid?
 
-## The new trait solver
+          halt 422, error_response(response, request.params.errors.to_h)
+        end
+      end
+    end
+  end
+end
+```
 
-The new trait solver,
-[Penelope](https://en.wikipedia.org/wiki/Anne_Hathaway)
-[Hammertime](https://www.youtube.com/watch?v=q8WSdypJ4WA),
-*[Ed. note: is that right?]* was also [enabled on
-Nightly](https://blog.rust-lang.org/2026/08/21/enabling-next-solver-on-nightly/).
+Here we have an action which defines the shape of its parameters, validates them, then calls into the `CreateUser` operation to handle user creation. This ensures the action's sole responsibility is HTTP logic. If `CreateUser` returns success then we render the user object as JSON. If parameter validation fails or `CreateUser` returns failure then we render the errors as JSON and return an `unprocessable_entity` status.
 
-As I said, a lot has been happening.
+```
+module MyApp
+  module Operations
+    class CreateUser < Operation
+      include Deps[
+          "argon2.hasher",
+          "repos.user_repo"
+        ]
 
-Like the new borrow checker, the new trait solver is slower in a minority of
-cases. [Jana Dönszelmann](https://github.com/jdonszelmann) wrote a [detailed
-post](https://donsz.nl/blog/new-solver-performance) about the efforts to
-improve the performance of this new solver.
+      def call(params)
+        step validate_user_email_unique(params.dig(:user, :email))
+        user_params = step build_user_params(params)
+        user_repo.create(user_params)
+      end
 
-Jana’s post is detailed enough that I won’t say much more about the large
-amount of ongoing work on the new solver, but I will mention in passing the PRs
-I made:
-[#160479](https://github.com/rust-lang/rust/pull/160479),
-[#160605](https://github.com/rust-lang/rust/pull/160605),
-[#160801](https://github.com/rust-lang/rust/pull/160801),
-[#160892](https://github.com/rust-lang/rust/pull/160892),
-[#161077](https://github.com/rust-lang/rust/pull/161077),
-and [#161211](https://github.com/rust-lang/rust/pull/161211).
-Some of these reduced compile times greatly for certain outlier crates: 50%
-here, 25% there, 15% there, and [even
-more](https://github.com/rust-lang/rust/issues/159933#issuecomment-5333109889)
-on one stress test. And I am not the only one who has made progress here… go
-read Jana’s post.
+      private
 
-## xmakro
+      def build_user_params(params)
+        built_params = params[:user].slice(:email)
+        built_params[:password_digest] = hasher.call(params.dig(:user, :password))
+        Success(built_params)
+      end
 
-New contributor [xmakro](https://github.com/xmakro) continued their run of good
-improvements.
+      def validate_user_email_unique(email)
+        return Success() unless user_repo.email_exist?(email)
 
-[#157281](https://github.com/rust-lang/rust/pull/157281): In this PR xmakro
-optimized impl handling when building the specialization graph. This gave a
-mean cycle count reduction of 1.58% across all benchmarks, which is huge for a
-single PR.
+        Failure({ generic: "Something went wrong" })
+      end
+    end
+  end
+end
+```
 
-[#158059](https://github.com/rust-lang/rust/pull/158059): In this PR xmakro
-optimized one aspect of the loading of incremental compilation data, reducing
-instruction counts across multiple benchmarks, in the best case by 6%.
+Here we have an operation that validates the user's email is unique, hashes the password, then creates the user. Note that we did not need to wrap the last call in `Success`, because [dry-operation](https://hanakai.org/learn/dry/dry-operation/v1.1) does this for us. We also inject an Argon2 hasher. It comes from a [provider](https://hanakai.org/learn/hanami/v3.0/app/providers), which we will cover in depth later in this series.
 
-[#160473](https://github.com/rust-lang/rust/pull/160473): In this PR xmakro
-avoided some allocations in a hot obligations processing path, reducing
-instruction counts across numerous benchmarks, in the best case by 2%.
+Here we have a very simple repo class offering a method to create a user, and check if an email already exists.
 
-[#160268](https://github.com/rust-lang/rust/pull/160268): In this PR xmakro
-avoided a lot of allocations by changing the old/new trait solver selection
-code to use static dispatch instead of dynamic dispatch. This gave mostly
-sub-1% instruction count reductions across a number of benchmarks. This hot
-allocation path had been showing up in profiles for a while and I had earlier
-tried exactly the same idea in
-[#155714](https://github.com/rust-lang/rust/pull/155714). But I got regressions
-on a couple of benchmarks, possibly due to slightly different choices of where
-to place some `#[inline]` attributes. It was good to see this obvious
-inefficiency fixed.
+```
+module MyApp
+  module Relations
+    class Users < Relation
+      schema :users, infer: true do
+        attribute :email, Types::Normalized::EmailAddress
+      end
+    end
+  end
+end
+```
 
-## Dataflow analysis
+Here we have our relation which currently does little besides infer its own schema from the `users` table and normalize our email address with a dry type. We will go into more detail on relations and types later in this series.
 
-[#160193](https://github.com/rust-lang/rust/pull/160193): In this PR I changed
-the CFG traversal algorithm used by the dataflow analyses in the compiler.
-These analyses iterate to a fixpoint and the traversal algorithm can affect how
-quickly the fixpoint is reached. For most code the new algorithm makes no
-difference, but the `cranelift-codegen` crate has one enormous function with
-over 18,000 basic blocks. The old algorithm required 1.5 million calls to
-`apply_effects_in_block` to reach a fixpoint for the `EverInitializedPlaces`
-analysis used by the borrow checker; the new algorithm requires 90,000. This
-gave an enormous ~30% wall-time reduction for a `check` build of this crate.
+Finally, we have our router tying everything together and pointing the `/users` endpoint at our action. Now, this is a **very** simple example, and yes, it is riddled with security holes. We will cover more advanced use cases throughout this series. Still, I hope it is enough to give you the gist of how I structure a Hanami application. Keep in mind that a lot of these abstractions are optional. For example, I could have skipped the operation and just created my user directly in the action, or I could skip the repo and call my relations directly. Hanami gives you the freedom to choose how you write your application.
 
-[#160033](https://github.com/rust-lang/rust/pull/160033): In this PR I made
-`EverInitializedPlaces` more efficient again, this time by not tracking
-unnecessary data for projections. This reduced instruction counts on the
-`match-stress` benchmark by 17%, and on a few other benchmarks by less than 1%.
+## Rough Edges
 
-## LLMs
+Throughout this series, I will do my best to give an honest assessment of some of the rough edges you may or may not encounter in your adventures with Hanami. We will start with some of the more general rough edges, or what I would consider barriers to entry. Most of these do not bother me, and I think most of them are easy to overcome, but I know they will bother some of you.
 
-They’ve gotten very good at certain kinds of analysis. I’m still writing all my
-own code and text, because (a) that’s paramount, and (b) the [project
-policy](https://forge.rust-lang.org/policies/llm-usage.html) requires it, but I
-had useful LLM analysis assistance on several of the PRs mentioned in this post.
+One of the first rough edges you will hit with Hanami is that there will be a lot of "roll your own" solutions. If you are on a team with a deadline and you need an admin panel or authentication next week, this will sting. I personally view this as a net positive. The shorter your dependency tree, the lower your risk. Everything on this site, from GitHub sign-in to cross-posting, is something I built myself, and I understand every piece of it because of that. One of the main selling points of Hanami is its community, and there is ample opportunity for you to get involved in that community. If you find yourself rolling your own solution and you feel it would be useful to the community at large, extract it and publish it as a gem! I myself have taken some of the things I often build and published them as gems for the community, like [phlex-hanami](https://github.com/aaronmallen/phlex-hanami) and [hanami-settings-stores](https://github.com/aaronmallen/hanami-settings-stores).
 
-Anyway, enough about that.
+Another rough edge you may hit is finding resources for some of the more complex edge cases. Hanami does not have fifteen years of blog posts and Stack Overflow answers behind it, and your AI coding assistant has seen a lot less Hanami code than Rails code. If you are used to searching your way out of every problem, this will slow you down at first. I would encourage you to reach out via Discord, the discussion forum, a GitHub issue, whatever. Someone on the Hanami team or in the Hanami community will help you answer any question you may have. Pay it forward and submit a pull request to update documentation on whatever you got stuck on.
 
-## Miscellaneous
+If you want to dive in and start experimenting on your own, there are some good resources you should check out.
 
-[#160535](https://github.com/rust-lang/rust/pull/160535): In this PR [Chris
-Denton](https://github.com/ChrisDenton) increased the default stack size used
-by the compiler, which allowed the removal of `ensure_sufficient_stack`, a
-manual stack extension mechanism sprinkled about in places prone to high levels
-of recursion. There was a lot of discussion about this one because it can be
-difficult to decide how to best deal with stack exhaustion. But the performance
-effects are clear, with reduced instruction counts across many benchmarks, in
-the best case by almost 3%.
+## Acknowledgements
 
-[#160506](https://github.com/rust-lang/rust/pull/160506): The project uses a
-lot of “rollup” PRs, where multiple PRs are merged together. This is because we
-don’t have sufficient CI capacity to merge every PR individually. Normally PRs
-that affect performance are merged by themselves so we can measure their
-effects clearly. For the first time ever, at one point we had so many
-performance improvement PRs waiting in the merge queue that [Jonathan
-Brouwer](https://github.com/JonathanBrouwer) created a rollup containing 10
-performance-improving PRs to keep things moving! This is a good problem to
-have. And later on we had
-[#162859](https://github.com/rust-lang/rust/pull/162859) which contained four
-performance-improving PRs. (You needn’t worry about unexpected effects slipping
-in because we have the ability to run the perf benchmark suite on the
-individual PRs after merging, to make sure each PR had the expected performance
-effect.)
+I know, I know, typically you would save acknowledgements until the very end of a series. I would like to do things a bit backwards in this case. As I mentioned, one of the primary selling points of Hanami **is** the community being built around it. As a member of the Hanakai team, I have been blessed with the privilege of meeting some of the most compassionate and talented people I have ever worked with. A super nice, super quiet dude named [Sean Collins](https://github.com/cllns) was giving a workshop on how to Hanami at RubyConf. It was not until Sean's workshop that things started to click for me. I also briefly met [Tim Riley](https://timriley.info/). Both of them were super nice and, more importantly, helpful. I cannot think of a question they would not have answered.
 
-[#162747](https://github.com/rust-lang/rust/pull/162747): In this PR I made
-some minor improvements to the code that lowers AST to HIR. It was a cleanup
-that wasn’t expected to affect performance but it reduced instruction counts
-across numerous benchmarks, in the best case by 1.5%. Sometimes you get lucky.
+Now, I do not make it a habit to idolize people. I think idolizing people is actually a very dangerous practice to fall into. I do not idolize Tim, but I do **adore** Tim. Since RubyConf, Tim and I have grown close. Tim is a man I can be vulnerable with, and that is rarer than it should be. Tim is a man with community at the forefront of his mind in **all** things. Tim fosters relationships between the people on his team, as well as between his team and the community we serve. Tim genuinely wants to help folks and reaches out to open hearts and minds. I could not ask for a better lead on a project I am passionate about.
 
-## Job status
+The community itself has been overwhelmingly pleasant. We have a fairly active [Discord](https://discord.com/invite/KFCxDmk3JQ) community, and an even more active [discussion forum](https://discourse.hanakai.org/). Folks seem genuinely curious: they ask questions and share what they are working on. [Adam Lassek](https://github.com/alassek) is a Hanami veteran and is usually around when you need a question answered in a pinch. All in all, I think the people building and building with Hanami are a joy to work with. I have been having so much fun since I joined the Hanakai team.
 
-Tomorrow I will start working at [Hexcat](https://hexcat.nl/) on the [compiler
-performance
-optimizations](https://goals.rust-lang.org/2026/compiler-performance-optimization.html)
-project goal. It’s exciting! Many thanks to Mara Bos, Predrag Gruevski, and all
-the other people who helped make this happen.
+In closing, I hope you will stay with me on this journey. In the next issue, we will dig into the system pieces that hold a Hanami app together, like dependency injection. From there, I plan to cover actions, the model layer, operations and providers, though I expect that list to grow as we go. If there is something you would like me to cover, reach out and let me know. I look forward to seeing you in the next issue.

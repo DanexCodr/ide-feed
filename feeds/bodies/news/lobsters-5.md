@@ -1,163 +1,186 @@
-The SQL language has a paradoxical fate.  Although it was deliberately designed to appeal to a human user, nowadays most of SQL code is written—or rather generated—by the computer.  Many computer programs need to query some database, and, for the vast majority of database servers, the only supported query language is SQL.  But generating SQL is difficult because of the complicated and obscure rules of its quasi-English grammar (its original name SEQUEL stands for Structured *English* Query Language).  For this reason, programs that interact with a database often use specialized libraries for generating SQL queries.
+My [last
+post](https://nnethercote.github.io/2026/07/31/how-to-speed-up-the-rust-compiler-in-july-2026.html)
+on the Rust compiler’s performance was two months ago and a lot has happened
+since then.
 
-One of such libraries is FunSQL.  FunSQL is designed with two goals in mind: supporting the full range of SQL's querying capabilities and exposing these capabilities in a compositional, data-oriented interface.  This combination of goals makes FunSQL a perfect tool for data analysis in SQL and differentiates it from all the other query building libraries.  Many query builders offer good coverage of SQL features, fewer provide data-oriented interface, but only FunSQL combines them in a single package.
+## Overall progress
 
-And yet the difference between FunSQL and other query builders is not immediately apparent.  In fact, the interfaces of various query building libraries seem almost identical.  A query that finds *100 oldest male patients* (in the [OMOP CDM](https://ohdsi.github.io/CommonDataModel/cdm53.html) database) is assembled with FunSQL as follows:
+The measurements for the period 2026-07-29 to 2026-09-28 can be seen
+[here](https://perf.rust-lang.org/compare.html?start=1a833e16546c2eb012758ddd499964fd8afee29e&stat=wall-time&tab=compile&end=c1070d69382b8d2f2eb65119c738a77d9e324c9e&nonRelevant=true).
 
-```julia
-From(:person) |>
-Where(Get.gender_concept_id .== 8507) |>
-Order(Get.year_of_birth) |>
-Limit(100) |>
-Select(Get.person_id)
-```
+The mean wall-time reduction was 4.57%, which is a remarkable improvement in
+just two months. Of the 629 benchmark measurements, 555 of them improved and
+only 74 regressed. A number of benchmarks saw double-digit percentage
+reductions. The technical term for this result is “a sea of green”.
 
-The same query can be written in Ruby using [Active Record Query Interface](https://guides.rubyonrails.org/active_record_querying.html):
+## rustdoc
 
-```ruby
-Person
-.where("gender_concept_id = ?", 8507)
-.order(:year_of_birth)
-.limit(100)
-.select(:person_id)
-```
+In my last post I mentioned how [Noah Lev](https://github.com/camelid) got some
+enormous speed wins on rustdoc. He recently wrote [a
+post](https://noahlev.org/blog/2026/08/27/making-rustdoc-faster) explaining in
+some detail exactly how he did this. It’s an interesting and satisfying read.
 
-Or in PHP with [Laravel's Query Builder](https://laravel.com/docs/9.x/queries):
+## Clippy
 
-```php
-DB::table('person')
-->where('gender_concept_id', '=', 8507)
-->orderBy('year_of_birth')
-->limit(100)
-->select('person_id')
-```
+[#159642](https://github.com/rust-lang/rust/pull/159642): In this PR
+[Jakub Beránek](https://github.com/Kobzol) enabled PGO for Clippy, giving
+wall-time improvements across most Clippy benchmarks, in the best case by 18%!
 
-In C#'s [EF/LINQ](https://docs.microsoft.com/en-us/ef/core/querying/):
+## LLVM update
 
-```csharp
-Person
-.Where(p => p.gender_concept_id == 8507)
-.OrderBy(p => p.year_of_birth)
-.Take(100)
-.Select(p => new { person_id = p.person_id });
-```
+[#158734](https://github.com/rust-lang/rust/pull/158734): In this PR [Nikita
+Popov](https://github.com/nikic) upgraded the LLVM version used by the compiler
+to LLVM 23. As often happens when we upgrade LLVM, we saw some nice speedups.
+The mean wall-time reduction across all benchmarks was 1.2%, which might not
+sound like much but is really impressive for a single PR. Great work from the
+LLVM folks!
 
-Or in R with [dbplyr](https://dbplyr.tidyverse.org/):
+## The new borrow checker
 
-```r
-tbl(conn, "person") %>%
-filter(gender_concept_id == 8507) %>%
-arrange(year_of_birth) %>%
-head(100) %>%
-select(person_id)
-```
+The new borrow checker, [Polonius](https://en.wikipedia.org/wiki/Polonius)
+[Alpha](https://en.wikipedia.org/wiki/Alpha) (no relation to
+[Napoleon](https://en.wikipedia.org/wiki/Napoleon_(disambiguation))
+[Dynamite](https://www.youtube.com/watch?v=gdZLi9oWNZg)), was
+[enabled on
+Nightly](https://blog.rust-lang.org/2026/08/04/enabling-polonius-alpha-on-nightly/).
+It is more precise than the existing borrow checker and accepts some valid
+programs that the old borrow checker would reject. It does do more work than the
+old borrow checker, enough to make a measurable difference to compile time in a
+minority of cases, including the popular `serde` crate. Fortunately, [Jack
+Huey](https://github.com/jackh726) has been on the case.
 
-In each of these code samples, the query is assembled using essentially the same interface.  Stripped of its syntactic shell, the process of assembling the query can be visualized as a diagram of five processing nodes connected in a pipeline:
+[#161938](https://github.com/rust-lang/rust/pull/161938): In this PR Jack made
+some liveness computations lazy, which reduced instruction counts for `serde`
+by 3-5%, and for some other benchmarks by less than 1%.
 
-![100 oldest male patients](https://mechanicalrabbit.github.io/FunSQL.jl/stable/two-kinds-of-sql-query-builders/100-oldest-male-patients.drawio.svg)
+[#163027](https://github.com/rust-lang/rust/pull/163027): In this PR Jack
+adjusted a data structure and tweaked some inlining, for mostly sub-1%
+instruction count reductions across numerous benchmarks.
 
-It is precisely the fact that the query is progressively assembled using atomic, independent components that lets us call this interface *compositional*.
+There is more work to be done to reduce the remaining Polonius Alpha
+regressions, but it’s worth noting that the “sea of green” shows these
+regressions were swamped by the many other recent improvements.
 
-However we did claim that FunSQL differs from all the other query building libraries, and now apparently proved the opposite?  As a matter of fact, there is a difference, even if it is not reflected in notation.  To demonstrate this, let us rearrange this pipeline, moving the `Order` and the `Limit` nodes in front of `Where`.
+## The new trait solver
 
-![100 oldest male patients ⟹ Males among 100 oldest patients](https://mechanicalrabbit.github.io/FunSQL.jl/stable/two-kinds-of-sql-query-builders/males-among-100-oldest-patients.drawio.svg)
+The new trait solver,
+[Penelope](https://en.wikipedia.org/wiki/Anne_Hathaway)
+[Hammertime](https://www.youtube.com/watch?v=q8WSdypJ4WA),
+*[Ed. note: is that right?]* was also [enabled on
+Nightly](https://blog.rust-lang.org/2026/08/21/enabling-next-solver-on-nightly/).
 
-How does this rearrangement affect the output of the query?  Perhaps unexpectedly, the answer depends on the library.  With FunSQL, as well as EF/LINQ and dbplyr, it changes the output from *100 oldest male patients* to *the males among 100 oldest patients*.  But not so with the other two libraries, Active Record and Laravel, where rearranging the pipeline has *no* effect on the output.
+As I said, a lot has been happening.
 
-To summarize, the following query builders are sensitive to the order of the pipeline nodes:
+Like the new borrow checker, the new trait solver is slower in a minority of
+cases. [Jana Dönszelmann](https://github.com/jdonszelmann) wrote a [detailed
+post](https://donsz.nl/blog/new-solver-performance) about the efforts to
+improve the performance of this new solver.
 
-- FunSQL
-- EF/LINQ
-- dbplyr
+Jana’s post is detailed enough that I won’t say much more about the large
+amount of ongoing work on the new solver, but I will mention in passing the PRs
+I made:
+[#160479](https://github.com/rust-lang/rust/pull/160479),
+[#160605](https://github.com/rust-lang/rust/pull/160605),
+[#160801](https://github.com/rust-lang/rust/pull/160801),
+[#160892](https://github.com/rust-lang/rust/pull/160892),
+[#161077](https://github.com/rust-lang/rust/pull/161077),
+and [#161211](https://github.com/rust-lang/rust/pull/161211).
+Some of these reduced compile times greatly for certain outlier crates: 50%
+here, 25% there, 15% there, and [even
+more](https://github.com/rust-lang/rust/issues/159933#issuecomment-5333109889)
+on one stress test. And I am not the only one who has made progress here… go
+read Jana’s post.
 
-And the following are not:
+## xmakro
 
-- Active Record
-- Laravel
+New contributor [xmakro](https://github.com/xmakro) continued their run of good
+improvements.
 
-These are the two kinds of query builders from this article's title.  But how can these libraries act so differently while sharing the same interface?  To answer this question, we need to focus on what is only implicitly present on the pipeline diagram: the information that is processed by the pipeline nodes.
+[#157281](https://github.com/rust-lang/rust/pull/157281): In this PR xmakro
+optimized impl handling when building the specialization graph. This gave a
+mean cycle count reduction of 1.58% across all benchmarks, which is huge for a
+single PR.
 
-!["Where" node](https://mechanicalrabbit.github.io/FunSQL.jl/stable/two-kinds-of-sql-query-builders/where-node.drawio.svg)
+[#158059](https://github.com/rust-lang/rust/pull/158059): In this PR xmakro
+optimized one aspect of the loading of incremental compilation data, reducing
+instruction counts across multiple benchmarks, in the best case by 6%.
 
-A node with one incoming and one outgoing arrow symbolizes a processing unit that takes the input data, transforms it, and emits the output data.  While the character of the data is not revealed, it is tempting to assume it to be the tabular data extracted from the database.
+[#160473](https://github.com/rust-lang/rust/pull/160473): In this PR xmakro
+avoided some allocations in a hot obligations processing path, reducing
+instruction counts across numerous benchmarks, in the best case by 2%.
 
-!["Where" node acting on data](https://mechanicalrabbit.github.io/FunSQL.jl/stable/two-kinds-of-sql-query-builders/where-node-acting-on-data.drawio.svg)
+[#160268](https://github.com/rust-lang/rust/pull/160268): In this PR xmakro
+avoided a lot of allocations by changing the old/new trait solver selection
+code to use static dispatch instead of dynamic dispatch. This gave mostly
+sub-1% instruction count reductions across a number of benchmarks. This hot
+allocation path had been showing up in profiles for a while and I had earlier
+tried exactly the same idea in
+[#155714](https://github.com/rust-lang/rust/pull/155714). But I got regressions
+on a couple of benchmarks, possibly due to slightly different choices of where
+to place some `#[inline]` attributes. It was good to see this obvious
+inefficiency fixed.
 
-But this can't be right, at least not literally, because a SQL query builder cannot read the data in the database.  Instead, the query builder generates a SQL query:
+## Dataflow analysis
 
-```sql
-SELECT "person_1"."person_id"
-FROM "person" AS "person_1"
-WHERE ("person_1"."gender_concept_id" = 8507)
-ORDER BY "person_1"."year_of_birth"
-LIMIT 100
-```
+[#160193](https://github.com/rust-lang/rust/pull/160193): In this PR I changed
+the CFG traversal algorithm used by the dataflow analyses in the compiler.
+These analyses iterate to a fixpoint and the traversal algorithm can affect how
+quickly the fixpoint is reached. For most code the new algorithm makes no
+difference, but the `cranelift-codegen` crate has one enormous function with
+over 18,000 basic blocks. The old algorithm required 1.5 million calls to
+`apply_effects_in_block` to reach a fixpoint for the `EverInitializedPlaces`
+analysis used by the borrow checker; the new algorithm requires 90,000. This
+gave an enormous ~30% wall-time reduction for a `check` build of this crate.
 
-But if we assume for a moment that pipeline nodes could process the data directly, we would expect that both the pipeline and the corresponding SQL query produce the same output.  In other words, the role of the pipeline is to specify the expected output of the SQL query.  This is how pipeline nodes are interpreted by FunSQL and the other two libraries, EF/LINQ and dbplyr.  We can call such query builders *data-oriented*.
+[#160033](https://github.com/rust-lang/rust/pull/160033): In this PR I made
+`EverInitializedPlaces` more efficient again, this time by not tracking
+unnecessary data for projections. This reduced instruction counts on the
+`match-stress` benchmark by 17%, and on a few other benchmarks by less than 1%.
 
-The conversion of the pipeline to SQL is not always that straightforward.  Even though we could freely reorder the nodes in a pipeline, we cannot do the same to the clauses in a SQL query.  This is because the SQL grammar arranges the clauses in a rigid order:
+## LLMs
 
-1. FROM, followed by zero, one or more
-2. JOIN, followed by
-3. WHERE, followed by
-4. GROUP BY, followed by
-5. HAVING, followed by
-6. ORDER BY, followed by
-7. LIMIT, followed by
-8. SELECT, written at the top of the query, but the last one to perform.
+They’ve gotten very good at certain kinds of analysis. I’m still writing all my
+own code and text, because (a) that’s paramount, and (b) the [project
+policy](https://forge.rust-lang.org/policies/llm-usage.html) requires it, but I
+had useful LLM analysis assistance on several of the PRs mentioned in this post.
 
-This order is compatible with the first pipeline, in which the `Where` node is followed by `Order` and `Limit`, but not the second pipeline, where these nodes change their relative positions.  So how could the second pipeline be converted to SQL?  We would be out of options if we were still using the original SQL standard, SQL-86, but the next revision of the language, SQL-92, recognized this limitation.  Regrettably, it did not relax this rigid clause order. Instead, SQL-92 introduced a workaround: a query can be extended by nesting it into the next query's `FROM` clause.  This gives us a method for converting an arbitrary pipeline into SQL: break the pipeline into smaller chunks that comply with the SQL clause order, convert each chunk into a SQL query, and then nest all these queries together:
+Anyway, enough about that.
 
-```sql
-SELECT "person_2"."person_id"
-FROM (
-  SELECT
-    "person_1"."person_id",
-    "person_1"."gender_concept_id"
-  FROM "person" AS "person_1"
-  ORDER BY "person_1"."year_of_birth"
-  LIMIT 100
-) AS "person_2"
-WHERE ("person_2"."gender_concept_id" = 8507)
-```
+## Miscellaneous
 
-The SQL grammar has a number of deficiencies, including rigid clause order, query nesting, and nonsensical position of the `SELECT` clause.  The position of `SELECT` violates the execution flow of the query, and this violation is aggravated by query nesting.  Complex SQL queries often require multiple levels of nesting, which makes such queries bloated and difficult to interpret.  This is where data-oriented query builders, which do not constrain the order of pipeline nodes, offer an improvement over plain SQL.
+[#160535](https://github.com/rust-lang/rust/pull/160535): In this PR [Chris
+Denton](https://github.com/ChrisDenton) increased the default stack size used
+by the compiler, which allowed the removal of `ensure_sufficient_stack`, a
+manual stack extension mechanism sprinkled about in places prone to high levels
+of recursion. There was a lot of discussion about this one because it can be
+difficult to decide how to best deal with stack exhaustion. But the performance
+effects are clear, with reduced instruction counts across many benchmarks, in
+the best case by almost 3%.
 
-What about the other kind of query builders?  Active Record and Laravel employ a pipeline of exactly the same form, but because it is not sensitive to the order of the nodes, it must work on a different principle.  Indeed, this pipeline generates a SQL query by incrementally assembling the SQL syntax tree.  Because of the rigid clause order, a SQL syntax tree can be faithfully represented as a composite data structure with slots specifying the content of the `SELECT`, `FROM`, `WHERE`, and the other clauses:
+[#160506](https://github.com/rust-lang/rust/pull/160506): The project uses a
+lot of “rollup” PRs, where multiple PRs are merged together. This is because we
+don’t have sufficient CI capacity to merge every PR individually. Normally PRs
+that affect performance are merged by themselves so we can measure their
+effects clearly. For the first time ever, at one point we had so many
+performance improvement PRs waiting in the merge queue that [Jonathan
+Brouwer](https://github.com/JonathanBrouwer) created a rollup containing 10
+performance-improving PRs to keep things moving! This is a good problem to
+have. And later on we had
+[#162859](https://github.com/rust-lang/rust/pull/162859) which contained four
+performance-improving PRs. (You needn’t worry about unexpected effects slipping
+in because we have the ability to run the perf benchmark suite on the
+individual PRs after merging, to make sure each PR had the expected performance
+effect.)
 
-```julia
-struct SQLQuery
-    select
-    from
-    joins
-    where
-    groupby
-    having
-    orderby
-    limit
-end
-```
+[#162747](https://github.com/rust-lang/rust/pull/162747): In this PR I made
+some minor improvements to the code that lowers AST to HIR. It was a cleanup
+that wasn’t expected to affect performance but it reduced instruction counts
+across numerous benchmarks, in the best case by 1.5%. Sometimes you get lucky.
 
-Individual slots of this structure are populated by the corresponding pipeline nodes.
+## Job status
 
-!["Where" node acting on the syntax tree](https://mechanicalrabbit.github.io/FunSQL.jl/stable/two-kinds-of-sql-query-builders/where-node-acting-on-syntax-tree.drawio.svg)
-
-This explains why the pipeline is insensitive to the order of the nodes. Indeed, as long as the content of the slots stays the same, it makes no difference in what order the slots are populated.
-
-![Pipeline is insensitive to the order of the nodes](https://mechanicalrabbit.github.io/FunSQL.jl/stable/two-kinds-of-sql-query-builders/pipeline-insensitive-to-node-order.drawio.svg)
-
-This method of incrementally constructing a composite structure is known as the [*builder pattern*](https://en.wikipedia.org/wiki/Builder_pattern).  We can call the query builders that employ this pattern *syntax-oriented*.
-
-Both data-oriented and syntax-oriented query builders are compositional: the difference is in the nature of the information processed by the units of composition.  Data-oriented query builders incrementally refine the query output; syntax-oriented query builders incrementally assemble the SQL syntax tree.  Their interfaces look almost identical, but their methods of operation are fundamentally different.
-
-But which one is better?  Syntax-oriented query builders have two definite advantages: they are easy to implement and they could support the full range of SQL features.  Indeed, the interface of a syntax-oriented query builder is just a collection of builders for the SQL syntax tree.  How complete the representation of the syntax tree determines how well various SQL features are supported.
-
-On the other hand, syntax-oriented query builders are harder to *use*.  As they directly represent the SQL grammar, they inherit all of its deficiencies.  In particular, the rigid clause order makes it difficult to assemble complex data processing pipelines, especially when the arrangement of pipeline nodes is not predetermined.
-
-A data-oriented query builder directly represents data processing nodes, which makes assembling data processing pipelines much more straightforward—as long as we can find the necessary nodes among those offered by the builder.  But where does the builder get its collection of data processing nodes?  And how can we tell if this collection is complete?
-
-One way to implement a data-oriented query builder is to adapt a general-purpose query framework.  Indeed, this is the origin of EF/LINQ, which is adapted from [LINQ](https://docs.microsoft.com/en-us/dotnet/standard/using-linq), and dbplyr, which is adapted from [dplyr](https://dplyr.tidyverse.org/).  The query framework determines what processing nodes are available and how they operate. In principle, any query framework could be adapted to SQL databases by introducing just one new node, a node that loads the content of a database table.  If we place this node at the beginning of a pipeline and make the rest of it out of regular nodes, we obtain a pipeline that processes data from a SQL database.  However, this pipeline will be very inefficient compared to a SQL engine, which can use indexes to avoid loading the entire table into memory and thus can process the same data much faster.  This is why EF/LINQ and dbplyr generate a SQL query that replaces the pipeline as a whole.  The pipeline itself no longer runs directly, but now serves as a specification, with the assumption that if it *were* to run, it would produce the same output as the SQL query. This method of transforming a general-purpose query framework to a SQL query builder is called *SQL pushdown*.
-
-However, SQL pushdown has a serious limitation.  A general-purpose query framework is not designed with SQL compatibility in mind.  For this reason, some of the pipelines assembled within this framework cannot be converted to SQL. Even worse, many useful SQL queries have no equivalent pipelines and thus cannot be generated using SQL pushdown.  Indeed, SQL accumulated a wide range of features and capabilities since it first appeared in 1974.  The first revision of the SQL standard, SQL-86, already supported Cartesian products, filtering, grouping, aggregation, and correlated subqueries.  The next revision, SQL-92, added many join types and introduced query nesting.  SQL:1999 greatly expanded its analytical capabilities by adding two types of queries: recursive queries, for processing hierarchical data, and data cube queries, which generalize histograms, cross-tabulations, roll-ups, drill-downs, and sub-totals.  The follow-up revision, SQL:2003, added support for aggregate functions over a running window.  Admittedly, SQL is a quintessential *enterprise abomination*, a hodgepodge of features added to support every imaginable use case, but with inadequate syntax, weird gaps in functionality, and no regards to internal consistency.  Nevertheless, the breadth of SQL's capabilities has not been matched by any other query framework, including LINQ or dplyr.  So when we generate SQL queries using EF/LINQ or dbplyr, a large subset of these capabilities remains inaccessible.
-
-FunSQL is a data-oriented query builder created specifically to expose full expressive power of SQL.  Unlike EF/LINQ and dbplyr, FunSQL was not adapted from an existing query framework, but was carefully designed from scratch to match SQL's capabilities.  These capabilities include, for example, support for correlated subqueries and lateral joins (with [`Bind`](https://mechanicalrabbit.github.io/FunSQL.jl/stable/reference/#Bind) node), aggregate and window functions (using [`Group`](https://mechanicalrabbit.github.io/FunSQL.jl/stable/reference/#Group) and [`Partition`](https://mechanicalrabbit.github.io/FunSQL.jl/stable/reference/#Partition) nodes), as well as recursive queries (with [`Iterate`](https://mechanicalrabbit.github.io/FunSQL.jl/stable/reference/#Iterate) node).  This comprehensive support for SQL capabilities makes FunSQL the only SQL query builder suitable for assembling complex data processing pipelines.  Moreover, even though FunSQL pipelines cannot be run directly, every FunSQL node has a well-defined data processing semantics, which means that, in principle, FunSQL could be developed into a full-blown query framework.  This potentially opens a path for replacing SQL with an equally powerful, but a more coherent and expressive query language.
+Tomorrow I will start working at [Hexcat](https://hexcat.nl/) on the [compiler
+performance
+optimizations](https://goals.rust-lang.org/2026/compiler-performance-optimization.html)
+project goal. It’s exciting! Many thanks to Mara Bos, Predrag Gruevski, and all
+the other people who helped make this happen.

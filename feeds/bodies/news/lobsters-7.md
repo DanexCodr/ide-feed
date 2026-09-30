@@ -1,57 +1,63 @@
-The only "intuitive" interface is the nipple.  After that it's
-  all learned.
+Exactly a week ago (as a joke), I started writing THC, my “Turbo Haskell compiler,” while on vacation visiting [Bartosz Milewski](https://bartoszmilewski.com/).
 
-This is usually attributed to one [Bruce Ediger](http://www.users.qwest.net/~eballen1/)
-  (though at least one person thought it was originally said by [Steve Jobs](http://www.apple.com/pr/bios/jobs.html), a
-  manufacturer of fine computers), and refers to the frequent (and
-  invariably inaccurate) description of computer user interfaces as
-  "intuitive".  But in 2001, Bruce [denied
-  that it was original to him](http://groups.google.com/groups?selm=4mKd7.1048%248f5.454947%40news.uswest.net).  This made me wonder what the
-  history of the quote was.
+It has grown a tiny bit since then.
 
-My first stop was a [dictionary of quotations](http://isbn.nu/0198601735), but
-  that doesn't have it at all.  Perhaps it is indeed relatively
-  recent, then.
+THC now implements every one of GHC 9.14.1’s prim-ops and provides a JIT for GHC Core that runs Haskell on the JVM. It uses the approach for running typed functional languages I developed several years ago in [Cadenza](https://github.com/ekmett/cadenza) ([talk](https://www.youtube.com/watch?v=gbmURWs_SaU)), using [Truffle](https://www.graalvm.org/latest/graalvm-as-a-platform/language-implementation-framework/) and [GraalVM](https://www.graalvm.org/).
 
-I can get back as far as August 1994, where Scott Francis [suggests
-  the nipple](http://groups.google.com/groups?selm=Scott.Francis-230894132436%40198.99.205.138) as the only intuitive interface, in response to
-  "There really is no user interface metaphor that is truly
-  intuitive."  The idea is there, but the exact form is not.  (And of
-  course, nipples aren't metaphors, at least in this context.)  To get
-  close to the usually-quoted form of words, the earliest I can find
-  is [this
-  one from January 1995](http://groups.google.com/groups?selm=1994Dec31.185452.1036%40walter.cray.com), by one Jay Vollmer.  He said:
+GHC still handles parsing, typechecking, desugaring, and Core optimization. THC takes over from there, compiling and executing that Core through its own runtime on Truffle/GraalVM. Advanced language features such as Template Haskell and Linear Haskell are fully supported.
 
-Actually, the only truly intuitive interface is the
-  nipple.
+While it can be used as a JIT for GHC-grade Haskell, it also supports ahead-of-time (AOT) compilation with Native Image, allowing it to produce executables.
 
-Did Bruce see this post and like it, or did he see the idea
-   somewhere else?  It's not really possible to tell from [Google's
-  archive](http://groups.google.com/).  At any rate, he started using variants of it shortly
-  afterwards.  [For
-  instance, in February 1995](http://groups.google.com/groups?selm=3j0e2s%247if%40news-2.csn.net):
+THC is capable of JIT- or AOT-compiling a number of Haskell programs, including `pandoc`, `happy`, `alex`, and, as of today, even GHC itself!
 
-It's an old saw, I know, but the only really, truly "intuitive"
-interface is the human nipple.
+THC resolves packages using Cabal and fully supports packages with multiple libraries, including Backpack.
 
-[Slightly
-  later the same month](http://groups.google.com/groups?selm=3ihuip%243l3%40explorer.clark.net), we see a variant on the "it's all learned"
-  theme from one Taylor Hutt:
+## Borrowing libraries
 
-I argue that no computer interface is intuitive -- none; they
-  are all learned.
+THC provides polyglot FFI to [Python](https://github.com/oracle/graalpython), [Ruby](https://github.com/truffleruby/truffleruby), [R](https://github.com/oracle/fastr), and [JavaScript](https://github.com/oracle/graaljs), letting Haskell raid libraries from other languages and bring their output straight into a JIT-compiled Haskell program. Conversion between `Data.Text` and Truffle strings over FFI is zero-copy for UTF-8-encoded strings inside other polyglot languages.
 
-In [April
-  1995](http://groups.google.com/groups?selm=3m7duk%24hh9%40news-2.csn.net) Bruce is back:
+The idea is that if you need a data frame, want to run an LLM, or want a D3.js visualization, you should just pass `Text` out through foreign imports. Quasi-quotation-based `inline-<language name>` style bindings should be pretty easy to implement as well.
 
-By this definition, the nipple is the only "intuitive" user
-  interface.
+C/C++ bits in your Haskell libraries are run via FFI to native-mode [Sulong](https://www.graalvm.org/latest/reference-manual/llvm/) (LLVM on the JVM). Managed-mode Sulong, where LLVM is interpreted inside the JVM and pointers are managed and garbage-collected, is also available, but is not used by the normal `foreign import` path.
 
-Basically, the only "intuitive" interface is the nipple.
-  After that, it's all learned.
+## Evaluation and concurrency
 
-So perhaps Bruce does have the best claim to this form after all?
-  Maybe.  At any rate, I think I prefer his 2001 version:
+Internally, THC supports two different backends for Truffle evaluation: a bytecode-based JIT target and a traditional AST-based JIT target. Both can run in a single-threaded or multi-threaded style, with additional locking for the latter. It also supports GHC bytecode itself, so it can run BCO code as produced by GHCi.
 
-There is no intuitive interface, not even the
-  nipple.  It's all learned.
+THC fully supports `throwTo`, asynchronous exceptions that leave behind resumable code, and masking.
+
+THC supports both “normal” Java threading and [Project Loom](https://openjdk.org/projects/loom/), upon which it offers lightweight GHC-style green threading with a HEC-style runtime executor permitting cheap `MVar`s and the like.
+
+## SIMD
+
+THC supports SIMD using the relatively limited supply of available GHC prim-ops, but it can also go further, allowing runtime selection of the SIMD “species” width and JIT-compiling loops using that information through the incubating [Vector API](https://openjdk.org/jeps/508) (`jdk.incubator.vector`). This lets the JIT start to earn its keep!
+
+In fact, nothing prevents the runtime from providing complete `RuntimeRep`-polymorphic code at runtime other than the fact that we have no Core that takes advantage of that freedom!
+
+## Tail calls
+
+Hot tail calls become loops. When execution has to fall back to ordinary calls, THC periodically unwinds the accumulated stack frames.
+
+Previous efforts to run functional code on the JVM, such as the [Eta programming language](https://eta-lang.org/) and the design I used with Runar Bjarnason for trampolining Scalaz’s monads, used a trampoline mechanism. THC instead uses a code transformation trick to keep hot tail calls inside tight basic-block-style loops with side exits.
+
+During recursion in tracing mode, THC fills a 64-bit [Bloom filter](https://en.wikipedia.org/wiki/Bloom_filter) to detect likely recursive tail calls. When it finds a likely hit, it throws a slow-path exception to connect the continuation with the launch site, and then custom Truffle nodes get Graal to transform the current tail-call loop across function bodies into a tight loop. False positives mean extra slow-path work; they don’t change the program’s result.
+
+When later code paths diverge, THC tries to grow additional side loops, like a tracing JIT, until it hits the JVM’s limits on function body size. At that point, it’ll finally spill a tail call in a way that “leaks” a stack frame.
+
+That leak is temporary. We can compact the accumulated stack frames using a trick somewhat similar to [CHICKEN Scheme’s garbage collection strategy](https://www.more-magic.net/posts/internals-gc.html), reusing the machinery we needed to support resumable code in the presence of asynchronous exceptions. The result is that hot loops can run *very* hot indeed.
+
+When benchmarking `Data.Map` in particular, I found it needed something like 66 fallback trampoline calls compared to several million fast-path calls.
+
+## Performance
+
+The runtime can also use [compressed ordinary object pointers (compressed oops)](https://docs.oracle.com/en/java/javase/25/vm/java-hotspot-virtual-machine-performance-enhancements.html). These represent heap references as 32-bit offsets rather than full 64-bit pointers, reducing the memory occupied by references and helping more data fit in cache. With the JVM’s usual 8-byte object alignment, this limits the heap to roughly 32 GB when running in this mode.
+
+Performance was a key consideration for the first couple of days of development. For tests on `Data.Map` and the like, I was able to get things to run within a general range of 3× faster to 3× slower after warmup, mostly hovering around 10–20% slower than GHC. That said, we haven’t been benchmarking for the last few days while we raced for broader coverage and suffered a 10× or so performance regression on some easy benchmarks in the meantime. Development effort continues to plug away at these to keep it under control.
+
+We haven’t yet tested whether stack growth on non-tail-call paths remains bounded relative to GHC’s stack usage. Ensuring that bound remains possible future work.
+
+## Development
+
+The code is available at [github.com/ekmett/thc](https://github.com/ekmett/thc), with [documentation](https://ekmett.github.io/thc/) covering how to build, run, and use THC.
+
+Development is proceeding on `irc.libera.chat` in the [##thc channel](https://web.libera.chat/##thc).

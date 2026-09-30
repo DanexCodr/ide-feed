@@ -1,57 +1,359 @@
-Last week I published [What About Rails](https://jardo.dev/what-about-rails), a dive into DHH’s Rails World keynote. Smarter people than me had [interesting things to say](https://x.com/josevalim/status/2103751481757216781) about it:
+In the course of writing my [build driver](https://git.sr.ht/~polywolf/driver), I came across a bit of an unusual problem, for which I made a bit of an usual solution. I think the solution is interesting and would like to talk about it, but to understand anything we must first understand the problem at hand.
 
-> You have the most powerful tool you ever had, you have become a 1000x maker, and you can’t think of how to make your stack 10x better?
+## Consider The Case Of The Humble Concurrent Cache
 
-José Valim poses an excellent question. I tried to find an answer.
+Suppose we have some expensive function we'd like to put a cache in front of. Furthermore, suppose we'd like to access this cache from multiple threads. A simple example follows ([playground link](https://play.rust-lang.org/?version=stable&mode=debug&edition=2024&gist=cf4e4af4e40d6895d16d12779f395fa0)):
 
-## The Bottleneck Isn’t Gone
+```rust
+enum JSON {
+    F64(f64),
+    String(String),
+    Vec(Vec<JSON>),
+    Object(HashMap<String, JSON>),
+}
 
-> They’re not gonna be web apps much longer. They’re gonna be native applications, because the price of developing those things has gone to damn near zero.
+struct Proxy {
+    client: HTTPClient,
+    cache: RWLock<HashMap<String, JSON>>,
+}
 
-The move to native apps for the frontend and Rust on the backend isn’t about any particular technology. It’s about cost. DHH isn’t the first to make this case.
+impl Proxy {
+    fn get(&self, key: &str) -> JSON {
+        // 1.
+        {
+            let cache = self.cache.read().unwrap();
+            if let Some(value) = cache.get(key) {
+                return value.clone();
+            }
+        }
 
-Back in August, Dan Luu posted [There’s no reason for software to be slow anymore](https://danluu.com/perf-opt/). In it, he argued that the cost of specialized performance work has dropped so significantly (because LLMs) that it’s now cheap enough for almost anyone to do.
+        // 2.
+        let value = self.client.get(key);
+        {
+            let mut cache = self.cache.write().unwrap();
+            cache.insert(key.to_string(), value.clone());
+        }
+        value
+    }
+}
+```
 
-Luu is *much* more careful than DHH. He points out that agents overfit benchmarks, that they are poor at experimental design (without human assistance), and that the time to get a *rigorous* result hasn’t dropped, just the time to get an *interesting* one.
+This code has an "early exit" path (1) where it returns a value from the cache if it's present, and a "late exit" path (2) where it calls the expensive function, then inserts the resulting value into the cache.
 
-Shortly after, Varun Gandhi posted a response of his own, titled [There continue to be reasons for software to be slow](https://typesanitizer.com/blog/performance-issues.html). He points out the shape of the argument: X cost too much, LLMs divide the cost by a large number, so people will now do X. Gandhi argues that while this holds true for people like Luu (experts working on their own projects), those cases are rare.
+Please ignore the many, many obvious problems with this implementation<sup>[1](https://wolfgirl.dev/blog/2026-09-29-pining-for-arc-downcasting-in-rust/#fn-problems)</sup>. Instead, let's focus on the one problem that bothers me the most: there's fair bit of `.clone()` action going on here!
 
-Substitute the Rust backend, six native apps, or a CLI by last Friday for X and you get DHH’s keynote pitch. DHH *is* an expert working on his own product, at a company he controls. This is the kind of scenario that Gandhi argues is most likely to work. There’s not even a manager to squeeze the budget here. If it works anywhere, it works here. He took a best-case result and generalized it to “virtually all programmers, virtually all companies, by December.”
+Technically, it's just one `.clone()` per call: one on early exit to take value out of the cache, and one on late exit to put value into the cache. But if those values are big/tree-shaped/otherwise expensive to clone, this cost can dominate, minimizing the savings conferred by a cache. In my code, I found this to be the case, so we gotta do something about it.
 
-Gandhi’s most useful point is that writing<sup>[1](https://jardo.dev/hardly-promethean#block-222-fn1)</sup> the code was never the dominant cost. We also have to consider shipping the changes, maintaining them, and avoiding regressions. DHH’s experience with Hey Next is a week old. It’s not even a production system yet.
+## Let's Get Rid Of The Clones?
 
-He showed us this himself. Basecamp 5’s “Swiss cheese” architecture was born out of the reality that code was cheap, but coordination wasn’t. Gandhi tells a version of the same story: Bun’s LLM-assisted fork of Zig that compiles 4x faster but [can’t be upstreamed](https://ziggit.dev/t/bun-s-zig-fork-got-4x-faster-compilation-times/15183/18), because no one<sup>[2](https://jardo.dev/hardly-promethean#block-222-fn2)</sup> wants a non-deterministic compiler.
+Assume that, with the way we use this data, read-only access is more than enough. Shared references are read-only & cheap to `Copy`, so using those instead of `.clone()`-ing the entire value seems good. If some later part of the code really needs to take ownership, we can just `.clone()` there, saving time in the average case. So, we'd like to change the signature for `get()` to be:
 
-Removing a bottleneck doesn’t remove the queue; it just shows you where the next constraint is. With LLMs, we’re moving the bottleneck one step to the right, from writing code to everything that happens after. DHH’s solution is to skip it.
+```rust
+impl Proxy {
+    fn get<'a, 'b>(&'a self, url: &'b str) -> &'a JSON { ... }
+}
+```
 
-## Intolerance
+But we can't do this!! Because our cache is behind a mutex, the only way we can get references to its contents is thru temporary handles. Those handles, while live, hold a lock on the cache, plus they only live for the body of the function, a not for all of `'a`. Even if we *could* return one of those handles, that'd be equivalent to holding the lock outside the function, which is very bad. Locks should only be held for VERY SHORT amounts of time <del>unless ur into that sorta thing next month ;)</del>
 
-> Now, part of that is that these programming languages like Rust are tremendously verbose and unappealing for humans to look at. So I don’t, and I allow the agent to just spit out more than was necessary, in a way I would never tolerate from my Ruby code.
+## Let's Make The Clones Cheaper
 
-One of Gandhi’s reasons the cost argument fails is that people’s tolerance goes up. When work is asynchronous and agent-driven, we’re no longer face-to-face with slower git, laggier autocomplete, and longer builds. There’s no human sitting there waiting. If you still care about these things, you probably hate this.
+So, no references. What other types can we use? What we want is something with all the following properties:
 
-DHH skips it all. You hand the task off “like you would a coworker” and “go back and review when there’s something ready.” “Review” doesn’t mean code review here; it means checking whether the button does the thing.
+1. It allows for read access to our data. That is, it allows us to get an &JSON somehow.
+2. It has no lifetime parameters ('a, the only lifetime we have access to, is too long).
+3. It is cheap to .clone(), even if the underlying value is not cheap to .clone().
 
-Maybe that’s okay for his personal one-shot projects. It sounds like it’s working, a week into Hey Next. But his tolerance going up doesn’t raise anyone else’s. He’s free to not care what’s in the Hey Next box, but lots of people care what’s in the Rails box. So much for “virtually all programmers.”
+These requirements hint we should probably still be looking for some sort of pointer... Among standard library types, we have the following options<sup>[2](https://wolfgirl.dev/blog/2026-09-29-pining-for-arc-downcasting-in-rust/#fn-built-in)</sup>:
 
-## The Scarcity Is Still Here
+- Raw pointers: *const JSON
+- Reference-counted pointers: Rc<JSON>
+- Atomically-reference-counted pointers: Arc<JSON>
 
-So, back to Valim’s question. You have infinite tokens. You’re a 1000x maker. You can create anything. Could you not find something, *anything* to create for Rails?
+Like any good Rustacean, we care a lot about safety & concurrency, so `Arc` is the obvious pick here :3 Modifying the example to use it is straightforward ([playground link](https://play.rust-lang.org/?version=stable&mode=debug&edition=2024&gist=f3e3821009472761d2297690f6262e17)):
 
-This was never really about the budget. An increase in velocity doesn’t change priorities. Everything DHH built this year, he wanted for himself. Nothing he’s building needs Rails to be better, so he hasn’t made it better.
+```rust
+struct Proxy {
+    client: HTTPClient,
+    cache: RWLock<HashMap<String, Arc<JSON>>>, // new!
+}
 
-> We can now want everything. We can now get everything.
+impl Proxy {
+    fn get(&self, url: &str) -> Arc<JSON> { // new!
+        {
+            let cache = self.cache.read().unwrap();
+            if let Some(value) = cache.get(url) {
+                return value.clone();
+            }
+        }
 
-So, what is this everything? Turns out it’s a calculator. And a video editor. And some presentation software. Yet another Linux distro. And a rewrite of his own product. He’s been handed *unlimited* tokens, and this is all he could dream up. There’s some scarcity here. Scarcity of ideas.
+        let value = Arc::new(self.client.get(url)); // new!
+        {
+            let mut cache = self.cache.write().unwrap();
+            cache.insert(url.to_string(), value.clone());
+        }
+        value
+    }
+}
+```
 
-Look at that list. Not one single new idea. A microcosm of the industry right now. DHH’s wants are on display, and he wants nothing that isn’t his and nothing that didn’t already exist.
+Other than the three lines with `Arc` added to them, this implementation looks the exact same as before. But now our clones are cheaper, so we're happy, yay!!
 
-LLMs are exceptional at making things that already exist. Luu admits this; earlier models overfit to the point of [comedy](https://chat.mistral.ai/chat/50900a4b-014a-4214-857b-36c18d5e0727)<sup>[3](https://jardo.dev/hardly-promethean#block-222-fn3)</sup>. A calculator is a safe ask. In 2004, Rails wasn’t. It was novel, and celebrated for it.
+## So What's This About Downcasting?
 
-DHH’s keynote has this backwards. The era of hand-written code isn’t some charming thing we’ve outgrown. Before LLMs, executing on an idea took a hell of a lot more legwork. But you needed a spark first, and you still need it now.
+I hope the above section convinced you having an `Arc` "owned value that acts like a reference" is both normal to want & possible to achieve. Switching gears a bit, I'd like to discuss an interesting shortcoming with them: they don't fit into Rust's type system very well.
 
-In 2005, “Look at all the things I’m not doing” was a boast. He replayed it this year for the parallel. From where I’m sitting, the thing he’s no longer doing is coming up with new ideas.
+Supposed we know for a fact that certain `JSON` values are strings, and we're only interested in the `JSON::String` variant of them. With an owned value or a shared reference, we can just pattern-match to "downcast" from a `JSON` to a `String`, or a `&JSON` to a `&String`.
 
-1. “Writing” includes design and debugging, not just typing. [↩](https://jardo.dev/hardly-promethean#block-222-fnref1)
-2. Well, except for Bun, whose fork only has to work for them. [↩](https://jardo.dev/hardly-promethean#block-222-fnref2)
-3. Further reading: [Like Humans, AI Can Jump to Conclusions, Mount Sinai Study Finds](https://www.mountsinai.org/about/newsroom/2025/like-humans-ai-can-jump-to-conclusions-mount-sinai-study-finds) [↩](https://jardo.dev/hardly-promethean#block-222-fnref3)
+```rust
+impl JSON {
+    fn to_str(self) -> Option<String> {
+        match self {
+            Self::String(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    fn as_str(&self) -> Option<&String> {
+        match self {
+            Self::String(s) => Some(s),
+            _ => None,
+        }
+    }
+}
+```
+
+But if we have an `Arc<JSON>`, we can't get another `Arc<String>` the same way!
+
+```rust
+impl JSON {
+    fn doesnt_exist(value: Arc<JSON>) -> Option<Arc<String>> {
+        match value.deref() {
+            Self::String(s) => Some(s), // compile error!
+            _ => None,
+        }
+    }
+}
+```
+
+This is because `value.deref()` creates a reference to `value`, whose lifetime will end as soon as the function is over, because we don't return it, only a pointer somewhere inside it. The machinery for `Arc` only works if it has access to the original pointer, not any derived pointers. So if we wanted to return an `Arc<String>`, we'd need to `.clone()` out of the `Arc<JSON>`, which is what we've been trying to avoid this whole time.
+
+However! We don't necessarily *need* a full `Arc<String>`! We'd be perfectly happy returning some other type, perhaps implementing `Deref<Target = String>`, so long as it still gives us those "owned value that acts like a reference" properties. If only we could extend the lifetime of `value`, perhaps by returning it alongside a reference to its contents, packaged together to implement `Deref` like we want...
+
+## Tying The Two Together With Evil Lesbian Shibari
+
+Our goal is some return type that looks like:
+
+```
+               ,-----------------------+---------------------.
+val: owned --> | contents: *const JSON | refcnt: AtomicUsize |
+               `-----------------------+---------------------'
+                                     |
+          /--------------------------/
+          V
+        ,------------------+--------------+------------+------------.
+        | JSON::String tag | buf: *mut u8 | len: usize | cap: usize |
+        `------------------+--------------+------------+------------'
+                             ^          |
+                             |          |
+ptr: ref --------------------/          |
+                                        V
+                                      ,---+---+---+---.
+                                      |'A'|'C'|'A'|'B'|
+                                      `---+---+---+---'
+```
+
+That is, we want some `val` showing us how to get to the main value we care about, and then some pointer `ptr` into the memory `val` references. Then, as long as we keep those tied together, we know `ptr` will still be valid, because `val` is still alive, because we own `val`.
+
+A first attempt at writing this reveals an immediate issue<sup>[3](https://wolfgirl.dev/blog/2026-09-29-pining-for-arc-downcasting-in-rust/#fn-why-not-arc)</sup>
+
+```rust
+struct Ref<V, T> {
+    val: V,
+    ptr: &T, // What's the lifetime here?
+}
+```
+
+We can't express `ptr` as a reference, because there's no obvious lifetime to attach it to. Without a way to spell "lifetime of the containing struct" in Rust, it looks like we're going to need a raw pointer instead. But what if.....
+
+```rust
+struct Ref<V, T: 'static> {
+    val: V,
+    ptr: &'static T,
+}
+
+impl<T, V: Deref<Target = T>> {
+    fn new(val: V) -> Self {
+        let ptr: &T = val.deref();
+        Self {
+            // This is the easiest way to do lifetime extension
+            // SAFETY: hm?
+            ptr: unsafe { std::mem::transmute(ptr) },
+            val,
+        }
+    }
+}
+```
+
+Whoa!! That's scary!!! Are they even allowed to hold hands like that...?
+
+It's true this is exceedingly unsafe if users could extract that `ptr: &'static T` separately from the `val: V` it points into (`val`'s lifetime isn't `'static`!). But we could also just... not allow that, keeping them tied together always, providing access only via `Deref` implementation:
+
+```rust
+impl<V, T> Deref for Ref<V, T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        self.ptr
+    }
+}
+```
+
+Because the *effective* lifetime for which `ptr` can be accessed is a subset of the *actual* lifetime for which `val` lives, I believe we've properly rules-lawyered Rust's reference aliasing rules into submission. Or have we...
+
+Oh noes... ([playground link](https://play.rust-lang.org/?version=stable&mode=debug&edition=2024&gist=52455c2042bd9bc26f1bbbb8a239f9a4))
+
+```rust
+struct SimpleWrapper<T>(T);
+
+impl<T> Deref for SimpleWrapper<T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+fn main() {
+    let r = Ref::new(SimpleWrapper(x));
+    // Check what's stored vs what should be returned
+    let ptr = r.ptr as *const i32 as usize;
+    let actual_ptr = r.val.deref() as *const i32 as usize;
+    println!("ptr: {ptr:x} actual_ptr {actual_ptr:x}");
+}
+```
+
+Running this, I got `ptr: 7fff85189b5c actual_ptr 7fff85189b88`. These are in fact different pointers!!! Turns out I messed up my earlier rules-lawyering: The act of moving `val` into `Ref::new()`, taking the `.deref()` on that stack frame, and then moving it back out to the parent stack frame invalidates `ptr`<sup>[3](https://wolfgirl.dev/blog/2026-09-29-pining-for-arc-downcasting-in-rust/#fn-why-not-arc)</sup>. Lifetimes exist precisely to prevent bugs like this, and our extension trick was foiled. Lesson learned! Guess we'll do this the hard way...
+
+## Ensure Address Stability With This One Simple Trick!
+
+To fix our datastructure, we'll want a guarantee that each `.deref()` will give us the same pointer, even if move the container around. For this, we MUST NOT be able to move the `val: V` out of its location once we wrap it. Fortunately, Rust has a type exactly for this usecase!
+
+ahem. anyways. Unfortunately, `Pin` is very hard to use, to the point I found a flaw in my initial implementation<sup>[4](https://wolfgirl.dev/blog/2026-09-29-pining-for-arc-downcasting-in-rust/#fn-other-idea)</sup> while writing this :( Still, the docs are *really* good, and we can pretty easily follow their example to make [a self-referential struct](https://doc.rust-lang.org/std/pin/index.html#a-self-referential-struct):
+
+```rust
+struct MustPin<V> {
+    val: V,
+    _pin: PhantomPinned,
+}
+struct PinRef<V, T> {
+    val: Pin<Arc<MustPin<V>>>,
+    // MUST point into [`val`].
+    ptr: *const T,
+}
+
+impl<V> MustPin<V> {
+    fn new(val: V) -> Pin<Arc<Self>> {
+        Arc::pin(Self {
+            val,
+            _pin: PhantomPinned,
+        })
+    }
+}
+
+impl<V> PinRef<V, V> {
+    fn new(val: Pin<Arc<MustPin<V>>>) -> Self {
+        let ptr = &raw const val.val;
+        Self { val, ptr }
+    }
+}
+```
+
+Comparing this to the example in the docs:
+
+1. We use *const T instead of NonNull<T> because the latter is more like a *mut T, and we don't need all that power.
+2. We don't need MaybeUninit because we solve the "knot-tying" trick in a different way: we create the pinned data first, and then store a pointer into it out-of-line. This is still fine because of pin guarantees.
+3. We still need PhantomPinned because if we have Pin<Arc<V>> where V: Unpin, all bets are off, literally every pin guarantee goes out the window.
+
+`Deref` is simple like before, just with a pointer instead of a reference:
+
+```rust
+impl<V, T> Deref for PinRef<V, T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        // SAFETY: by construction and pin guarantees, the pointer is still valid.
+        unsafe { &*self.ptr }
+    }
+}
+```
+
+Now, finally, we're all set up for the big reveal: how are we going to downcast these things?
+
+## She Downcast On My `Pin` 'Til I `Arc`
+
+Our rule for `ptr` is that it MUST point somewhere valid inside `val`. That's all we can assume, and that's what we have to uphold while doing our downcasts. Fortunately, we can use Rust's type-checking for "standard" downcasts to our advantage!
+
+```rust
+impl<V, T> PinRef<V, T> {
+    fn project<U>(self, f: impl for<'a> FnOnce(&'a T) -> &'a U) -> PinRef<V, U> {
+        let Self { val, ptr } = self;
+        // SAFETY: by validity of `ptr` and `f`
+        let ptr = unsafe { f(&*ptr) as *const U };
+        PinRef { val, ptr }
+    }
+}
+```
+
+Stating this signature more in more math-y terms, for those unfamiliar with Rust's syntax:
+
+How we should interpret this is: If we can go from a `&T` to a `&U` for an *arbitrary* lifetime `'a`, that means `*U` is a fixed offset from `*T`<sup>[5](https://wolfgirl.dev/blog/2026-09-29-pining-for-arc-downcasting-in-rust/#fn-arbitrary)</sup>. So, because `ptr` has a fixed address (it was derived from the pinned `val`), so will the output of `f`. Other pin guarantees like "`val` will always remain valid at that address while it's pinned" help too.
+
+If I were a real type theorist, I would have pulled out some sort of commutative diagram and drawn a bunch of arrows, or perhaps even written down some inference rules, but alas, I cannot even abstract over monads... Anyways this argument works for what we originally wanted too:
+
+```rust
+impl<V, T> PinRef<V, T> {
+    fn filter_project<U>(
+        self,
+        f: impl for<'a> FnOnce(&'a T) -> Option<&'a U>,
+    ) -> Option<PinRef<V, U>> {
+        let Self { val, ptr } = self;
+        // SAFETY: by validity of `ptr`, `f`
+        let ptr = unsafe { f(&*ptr)? as *const U };
+        Some(PinRef { val, ptr })
+    }
+
+    fn try_project<U, E>(
+        self,
+        f: impl for<'a> FnOnce(&'a T) -> Result<&'a U, E>,
+    ) -> Result<PinRef<V, U>, E> {
+        let Self { val, ptr } = self;
+        // SAFETY: by validity of `ptr`, `f`
+        let ptr = unsafe { f(&*ptr)? as *const U };
+        Ok(PinRef { val, ptr })
+    }
+}
+```
+
+You see that??? We did the thing!! To celebrate, here's a full example using the original JSON projections ([playground link](https://play.rust-lang.org/?version=stable&mode=debug&edition=2024&gist=9ba8b6f27dc48afb065a2923023fb1da)):
+
+```rust
+fn print(s: impl Deref<Target = str>) {
+    println!("{}", s.deref())
+}
+
+fn main() {
+    let v = std::sync::Arc::pin(JSON::String(String::from("hello, world!")));
+    let v = PinRef::new(v);
+    let s = v.filter_project(JSON::as_str).unwrap();
+    print(s.clone());
+    print(s);
+}
+```
+
+All that remains in our original example is to replace all the plain `Arc<JSON>` with `Pin<Arc<MustPin<JSON>>>` (wow what a mouthful), make a `Clone` implementation, account for `?Sized` types, etc. etc. This post is long enough as it is so I've omitted that, but if you want, you can find the full details in my [repository](https://git.sr.ht/~polywolf/driver/tree/cb9ee31e272f24311981a41f979d82f31f39f61f/item/packages/pin-downcast/src/pin_ref.rs). I might release this as a standalone crate if I feel like it, but this might still be riddled with UB I missed so maybe not (:
+
+Anyways!! Hope you learned something, until next time~
+
+1. In increasing order of badness: too much string typing, no error handling, concurrent requests can race and end up doing extra work. Probably others I'm missing too. The solution to that last one is simultaneously very interesting & very boring, [read the code yourself if you want](https://git.sr.ht/~polywolf/driver/tree/3e0e9250a6657f9e5ed977ecdd08f3550e06f68b/item/packages/driver-db/src/database.rs#L150-270). [↩](https://wolfgirl.dev/blog/2026-09-29-pining-for-arc-downcasting-in-rust/#fnref-problems)
+2. I'm only covering options from the Rust standard library for simplicity, but garbage-collected pointers from [`dumpster`](https://crates.io/crates/dumpster) or arena pointers from [`slotmap`](https://crates.io/crates/slotmap) can also be good ideas. [↩](https://wolfgirl.dev/blog/2026-09-29-pining-for-arc-downcasting-in-rust/#fnref-built-in)
+3. You might be thinking, "why not `struct Ref<V, T> { val: Arc<V>, ptr: &'static T}`?" and unfortunately a refutation is much more complex, and this example is more illustrative of why we need `Pin` later. Suffice to say, even though `Arc` on its own gives address stability in practice, Rust's type system doesn't enforce that it will<sup>[4](https://wolfgirl.dev/blog/2026-09-29-pining-for-arc-downcasting-in-rust/#fn-other-idea)</sup>. [↩](https://wolfgirl.dev/blog/2026-09-29-pining-for-arc-downcasting-in-rust/#fnref-why-not-arc) [↩<sup>2</sup>](https://wolfgirl.dev/blog/2026-09-29-pining-for-arc-downcasting-in-rust/#fnref-why-not-arc-2)
+4. I previously thought `struct PinRef<V, T> { val: Pin<Arc<V>>, ptr: &'static T }` was enough, but turns out that's entirely insufficient due to the presence of `Unpin`. [↩](https://wolfgirl.dev/blog/2026-09-29-pining-for-arc-downcasting-in-rust/#fnref-other-idea) [↩<sup>2</sup>](https://wolfgirl.dev/blog/2026-09-29-pining-for-arc-downcasting-in-rust/#fnref-other-idea-2)
+5. "Arbitrary" is key here. Means we can't do `fn project<'a, U>(self, f: impl FnOnce(&'a T) -> &'a U) -> PinRef<V, U>`, because `'a` is bound too early, which would allow us to choose a smaller lifetime, letting us project things w/ interior mutability, which is bad. Wish I could formalize this better but I've thought about it really really hard and haven't been able to come up with a counterexample to my main function so I hope no one else will either. [↩](https://wolfgirl.dev/blog/2026-09-29-pining-for-arc-downcasting-in-rust/#fnref-arbitrary)

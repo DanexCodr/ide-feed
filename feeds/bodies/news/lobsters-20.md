@@ -1,112 +1,57 @@
-I have always liked the idea of having one program to do everything on my computer.
-Also, I have always been a fan of text-based interfaces.
-These two preferences of mine scream Emacs user, but I have never really used it seriously.
+Last week I published [What About Rails](https://jardo.dev/what-about-rails), a dive into DHH’s Rails World keynote. Smarter people than me had [interesting things to say](https://x.com/josevalim/status/2103751481757216781) about it:
 
-My experience with Emacs has only been installing it every once in a while, opening it up,
-failing to understand how it works, and then uninstalling it again.
+> You have the most powerful tool you ever had, you have become a 1000x maker, and you can’t think of how to make your stack 10x better?
 
-So why switch to Emacs now?
+José Valim poses an excellent question. I tried to find an answer.
 
-## What I Was Missing in Neovim
+## The Bottleneck Isn’t Gone
 
-I have successfully been using Neovim for quite some time and was very happy with it.
-The thing is, Neovim is meant to be used as a text editor, and to be frank: it excels at that.
-I love everything about Neovim: the ergonomic keybinds, the package system, the customizability, everything.
-I have been using it for software development and have had zero issues.
+> They’re not gonna be web apps much longer. They’re gonna be native applications, because the price of developing those things has gone to damn near zero.
 
-One concept I was always fascinated by was text-based browsers like [lynx](https://lynx.invisible-island.net/).
-Just being able to access all the information the web has to offer from my terminal felt like a great idea.
-In practice, of course, many modern web pages do not accomodate for browsers without javascript support,
-but that is besides my point.
+The move to native apps for the frontend and Rust on the backend isn’t about any particular technology. It’s about cost. DHH isn’t the first to make this case.
 
-Another idea that sparked interest in me was reading emails from the terminal.
-Or having a calendar in the terminal.
-Or chatting on IRC channels from the terminal.
+Back in August, Dan Luu posted [There’s no reason for software to be slow anymore](https://danluu.com/perf-opt/). In it, he argued that the cost of specialized performance work has dropped so significantly (because LLMs) that it’s now cheap enough for almost anyone to do.
 
-Basically, I love the terminal.
+Luu is *much* more careful than DHH. He points out that agents overfit benchmarks, that they are poor at experimental design (without human assistance), and that the time to get a *rigorous* result hasn’t dropped, just the time to get an *interesting* one.
 
-So what ended up happening was that I had all of these different programs to do different things.
-That was fine and it worked well, but each program had their own keybinds and conventions and things to be aware of.
+Shortly after, Varun Gandhi posted a response of his own, titled [There continue to be reasons for software to be slow](https://typesanitizer.com/blog/performance-issues.html). He points out the shape of the argument: X cost too much, LLMs divide the cost by a large number, so people will now do X. Gandhi argues that while this holds true for people like Luu (experts working on their own projects), those cases are rare.
 
-Neovim was just that: one of the many programs I used. I just used it to edit text files.
+Substitute the Rust backend, six native apps, or a CLI by last Friday for X and you get DHH’s keynote pitch. DHH *is* an expert working on his own product, at a company he controls. This is the kind of scenario that Gandhi argues is most likely to work. There’s not even a manager to squeeze the budget here. If it works anywhere, it works here. He took a best-case result and generalized it to “virtually all programmers, virtually all companies, by December.”
 
-I would have **loved** to have a program like Emacs that would compile all of these utilities into one large piece of software
-(I am aware that much of the functionality I mentioned is achieved through packages in Emacs, but I am mainly referring to having one
-large ecosystem to do all of those things rather than one literal codebase that does it).
+Gandhi’s most useful point is that writing<sup>[1](https://jardo.dev/hardly-promethean#block-222-fn1)</sup> the code was never the dominant cost. We also have to consider shipping the changes, maintaining them, and avoiding regressions. DHH’s experience with Hey Next is a week old. It’s not even a production system yet.
 
-## Why I Went With Doom Emacs
+He showed us this himself. Basecamp 5’s “Swiss cheese” architecture was born out of the reality that code was cheap, but coordination wasn’t. Gandhi tells a version of the same story: Bun’s LLM-assisted fork of Zig that compiles 4x faster but [can’t be upstreamed](https://ziggit.dev/t/bun-s-zig-fork-got-4x-faster-compilation-times/15183/18), because no one<sup>[2](https://jardo.dev/hardly-promethean#block-222-fn2)</sup> wants a non-deterministic compiler.
 
-When it comes to Emacs, I am very much a beginner.
-I am not a fan of using premade configurations for whatever software you use - whether we are talking about a window manager like i3 or Hyprland,
-or a text editor like Neovim.
+Removing a bottleneck doesn’t remove the queue; it just shows you where the next constraint is. With LLMs, we’re moving the bottleneck one step to the right, from writing code to everything that happens after. DHH’s solution is to skip it.
 
-In fact, my Neovim config is written by me and has exactly what I need. Another nice bonus of doing this is that I know how everything works.
-This means that, should something break, I would be able to fix it.
-Or, if I need to add something to my config, I would know where to look.
+## Intolerance
 
-Now, if I look back at my Neovim journey, I have also experimented with prebuilt configurations for Neovim.
-If anybody knows about them, I have tried LunarVim (which I used for quite a while) and NvChad.
+> Now, part of that is that these programming languages like Rust are tremendously verbose and unappealing for humans to look at. So I don’t, and I allow the agent to just spit out more than was necessary, in a way I would never tolerate from my Ruby code.
 
-Eventually, once I got comfortable with Neovim and figured out what I used frequently, what was left unused, and what I needed,
-I proceeded to write my own config.
+One of Gandhi’s reasons the cost argument fails is that people’s tolerance goes up. When work is asynchronous and agent-driven, we’re no longer face-to-face with slower git, laggier autocomplete, and longer builds. There’s no human sitting there waiting. If you still care about these things, you probably hate this.
 
-It’s not like I did not try to use vanilla Emacs, but I just could not do it. I got some basic things working but it
-was taking such a long time that, at this pace, it would have taken me literal **months** of work to get to a point that would allow
-me to completely switch over from Neovim to Emacs even for my job.
+DHH skips it all. You hand the task off “like you would a coworker” and “go back and review when there’s something ready.” “Review” doesn’t mean code review here; it means checking whether the button does the thing.
 
-This is the reason why I decided to go with Doom Emacs. On top of all the reasons mentioned above, in my research it seemed to be the case
-that Doom Emacs is ideal for people coming from Neovim, like me, since it uses Vim keybinds for everything.
-I can definitely confirm that Doom Emacs has eased the transition significantly and I could get up and running fairly quickly.
+Maybe that’s okay for his personal one-shot projects. It sounds like it’s working, a week into Hey Next. But his tolerance going up doesn’t raise anyone else’s. He’s free to not care what’s in the Hey Next box, but lots of people care what’s in the Rails box. So much for “virtually all programmers.”
 
-## Some Things I Like About Emacs
+## The Scarcity Is Still Here
 
-Since the built-in package manager has been introduced in Neovim, this is not as true anymore, but when I first started using Neovim,
-this very much did apply: with Emacs, installing new packages is incredibly easy.
+So, back to Valim’s question. You have infinite tokens. You’re a 1000x maker. You can create anything. Could you not find something, *anything* to create for Rails?
 
-As long as you stick to the built-in repositories for Emacs packages (which are rather extensive), you can just do `M-x package-install` and
-install a new package. Everything is done automatically. This felt so great to me. It was a breath of fresh air compared to what I was used to.
+This was never really about the budget. An increase in velocity doesn’t change priorities. Everything DHH built this year, he wanted for himself. Nothing he’s building needs Rails to be better, so he hasn’t made it better.
 
-Also, the setup required to get language servers working (especially before the introduction of the built-in lsp integration that modern Neovim ships with)
-is minimal compared to Neovim. Language servers and syntax highlighting have become a central part of my workflow when programming,
-and I believe that every serious editor that strives to gain traction should support TreeSitter and LSPs easily and (ideally) natively.
+> We can now want everything. We can now get everything.
 
-Also, another thing I thoroughly enjoyed in emacs is the extensive documentation. The documentation emacs has is not even comparable to the
-Neovim help pages. With emacs, you can easily figure out what a certain key combination does, or what key combination you need to press to
-trigger a certain command. You can easily search what commands there are via keywords. It is just so great.
+So, what is this everything? Turns out it’s a calculator. And a video editor. And some presentation software. Yet another Linux distro. And a rewrite of his own product. He’s been handed *unlimited* tokens, and this is all he could dream up. There’s some scarcity here. Scarcity of ideas.
 
-With vanilla emacs you could even press `C-h m` and it would open a list of all the possible actions one can take in that particular scenario
-(for those familiar with emacs, with “scenario” I mean major mode).
+Look at that list. Not one single new idea. A microcosm of the industry right now. DHH’s wants are on display, and he wants nothing that isn’t his and nothing that didn’t already exist.
 
-With Doom Emacs, `C-h m` becomes less useful since all actions are shadowed by the Doom keybinds, but that is completely fine since most
-commands start with space anyway, and when you press space and wait a second it opens this convenient little popup that shows you all possible
-ways of continuing this keyboard combination. It feels like searching through a menu rather than memorizing keybinds.
-With time you naturally get faster at executing the different keybinds you use often and this becomes second nature,
-but for newcomers like me this is a very convenient feature.
+LLMs are exceptional at making things that already exist. Luu admits this; earlier models overfit to the point of [comedy](https://chat.mistral.ai/chat/50900a4b-014a-4214-857b-36c18d5e0727)<sup>[3](https://jardo.dev/hardly-promethean#block-222-fn3)</sup>. A calculator is a safe ask. In 2004, Rails wasn’t. It was novel, and celebrated for it.
 
-To be frank, there were plugins in Neovim that did this as well. But that is kind of the point: you had to know how to install plugins before you
-could get access to these kinds of features.
+DHH’s keynote has this backwards. The era of hand-written code isn’t some charming thing we’ve outgrown. Before LLMs, executing on an idea took a hell of a lot more legwork. But you needed a spark first, and you still need it now.
 
-And even then - as I said above - I did not find the Neovim help pages to be nearly as useful as the Emacs documentation pages (on top of Emacs having
-much better documentation navigation features).
+In 2005, “Look at all the things I’m not doing” was a boast. He replayed it this year for the parallel. From where I’m sitting, the thing he’s no longer doing is coming up with new ideas.
 
-## What I Plan To Do With Emacs
-
-Ideally, as much as possible.
-
-At the moment I am still setting everything up and getting used to it. This blog article, for example, is written entirely in Emacs.
-
-*(By the way, the out-of-the-box Markdown support of Doom Emacs is extraordinary.)*
-
-In the coming days I would like to setup my emails properly (I have tried using Gnus, but will probably switch to Mu4e since it seems simpler),
-get to know org-mode much better and figure out how to use Git with Emacs (via Magit).
-
-I might write some guides about these things, here on my blog.
-
-## Conclusion
-
-I just wanted to report on my first-impression when it comes to Emacs as a Neovim user.
-If you are thinking about switching, I cannot recommend Doom Emacs enough.
-It makes the transition much more seamless and I quite frankly hate the default Emacs keybindigs, so Doom Emacs makes everything
-much more usable and ergonomic. I use the Dvorak keyboard layout, so maybe Qwerty keybindings feel better, I am not sure.
-
-Thank you for reading. As always, for questions or suggestions you can reach me at my email [info@eliasebner.com](mailto:info@eliasebner.com).
+1. “Writing” includes design and debugging, not just typing. [↩](https://jardo.dev/hardly-promethean#block-222-fnref1)
+2. Well, except for Bun, whose fork only has to work for them. [↩](https://jardo.dev/hardly-promethean#block-222-fnref2)
+3. Further reading: [Like Humans, AI Can Jump to Conclusions, Mount Sinai Study Finds](https://www.mountsinai.org/about/newsroom/2025/like-humans-ai-can-jump-to-conclusions-mount-sinai-study-finds) [↩](https://jardo.dev/hardly-promethean#block-222-fnref3)

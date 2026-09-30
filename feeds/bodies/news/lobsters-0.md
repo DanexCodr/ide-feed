@@ -1,46 +1,47 @@
-> Stuart Henderson wrote:
-> > On 2026/09/20 07:01, David Uhden Collado wrote:
-> >> The main goal of the packaging is to make these implementations usable
-> >> as alternatives to the existing GNU utility ports without requiring
-> >> source changes in dependent ports.
-> >>
-> >> For example, uutils-coreutils installs the same g-prefixed command names
-> >> as sysutils/coreutils, including gcat, gls, gcp, gdate, gsort, gstat,
-> >> gtail, gtimeout and the other GNU-compatible utilities. They are
-> >> symlinks to the upstream multicall binary, which is installed under
-> >> libexec/uutils.
-> > ...
-> >> Each package conflicts with its corresponding GNU implementation and
-> >> declares the GNU port as a secondary @pkgpath.
-> > I don't think this is a usable approach for ports.
-> 
-> The truth is, I find these Rust reimplementations quite
-> interesting. Ubuntu 26.10 has already adopted uutils coreutils because
-> the project has reached a level of maturity and stability where it can
-> be used reliably. The other reimplementations are still more of a work
-> in progress.
-```
+***The Cuckoo's Egg: Tracking a Spy Through the Maze of Computer Espionage*** is a 1989 book written by [Clifford Stoll](https://en.wikipedia.org/wiki/Clifford_Stoll). It is his [first-person](https://en.wikipedia.org/wiki/First-person_narrative) account of the hunt for [Markus Hess](https://en.wikipedia.org/wiki/Markus_Hess), a [computer hacker](https://en.wikipedia.org/wiki/Hacker_(computer_security)) who broke into a computer at [Lawrence Berkeley National Laboratory](https://en.wikipedia.org/wiki/Lawrence_Berkeley_National_Laboratory) (LBNL).
 
-```
+| [![](https://upload.wikimedia.org/wikipedia/en/2/28/The_Cuckoo%27s_Egg.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail_unscaled)](https://en.wikipedia.org/wiki/File:The_Cuckoo's_Egg.jpg) |  |
+| --- | --- |
+| Author | [Clifford Stoll](https://en.wikipedia.org/wiki/Clifford_Stoll) |
+| Language | English |
+| Publisher | [Doubleday](https://en.wikipedia.org/wiki/Doubleday_(publisher)) |
+| Publication date | 1989 |
+| Publication place | United States |
+| Media type | Print |
+| Pages | 326 |
+| [ISBN](https://en.wikipedia.org/wiki/ISBN_(identifier)) | [0-385-24946-2](https://en.wikipedia.org/wiki/Special:BookSources/0-385-24946-2) |
+| [OCLC](https://en.wikipedia.org/wiki/OCLC_(identifier)) | [43977527](https://www.worldcat.org/oclc/43977527) |
+| [Dewey Decimal](https://en.wikipedia.org/wiki/Dewey_Decimal_Classification) | 364.16/8/0973 21 |
+| [LC Class](https://en.wikipedia.org/wiki/LCC_(identifier)) | UB271.R92 H477 2000 |
 
-Smells like agenda.
+Stoll's use of the term extended the metaphor [*cuckoo's egg*](https://en.wikipedia.org/wiki/Cuckoo's_egg_(metaphor)) from [brood parasitism](https://en.wikipedia.org/wiki/Brood_parasitism) in birds to [malware](https://en.wikipedia.org/wiki/Malware).
 
-> I also think they fit quite well with OpenBSD as alternatives to GNU
-> utilities, particularly because they use a permissive MIT license.
+Author Clifford Stoll, an [astronomer](https://en.wikipedia.org/wiki/Astronomer) by training, managed computers at [Lawrence Berkeley National Laboratory](https://en.wikipedia.org/wiki/Lawrence_Berkeley_National_Laboratory) (LBNL) in California. One day in 1986 his supervisor asked him to resolve an accounting error of 75 cents in the computer usage accounts. Stoll traced the error to an unauthorized user who had apparently used nine seconds of computer time and not paid for it. Stoll eventually realized that the unauthorized user was a hacker who had acquired [superuser](https://en.wikipedia.org/wiki/Superuser) access to the LBNL system by exploiting a vulnerability in the [movemail](https://en.wikipedia.org/wiki/Movemail) function of the original [GNU Emacs](https://en.wikipedia.org/wiki/GNU_Emacs).
 
-Argument is vaguely like: because we already have permissive licenced
-utilities, our user base are really interested in having a second set of
-permissive licenced utilities which are very subtly different.
+Early on, and over the course of a long weekend, Stoll rounded up fifty terminals, as well as [teleprinters](https://en.wikipedia.org/wiki/Teleprinter), mostly by "borrowing" them from the desks of co-workers away for the weekend. He physically attached them to the fifty incoming phone lines at LBNL. When the hacker dialed in that weekend, Stoll located the phone line used, which was coming from the [Tymnet](https://en.wikipedia.org/wiki/Tymnet) routing service. With the help of Tymnet, he eventually tracked the intrusion to a call center at [MITRE](https://en.wikipedia.org/wiki/Mitre_Corporation), a defense contractor in [McLean, Virginia](https://en.wikipedia.org/wiki/McLean,_Virginia). Over the next ten months, Stoll spent enormous amounts of time and effort tracing the hacker's origin. He saw that the hacker was using a 1200 [baud](https://en.wikipedia.org/wiki/Baud) connection and realized that the intrusion was coming through a telephone [modem](https://en.wikipedia.org/wiki/Modem) connection. Stoll's colleagues, Paul Murray and Lloyd Bellknap, assisted with the phone lines.
 
-That makes no sense. Noone wants subtly different behaving binaries as
-part of their workflow.  If someone runs the openbsd ls command as part
-of a pipeline that uses openbsd sed, or openbsd cut, or some other
-openbsd utility and it parses a non-standized output characteristic
-by accident, there are no people in this universe who wants to replace
-that ls with a different ls and get surprised by un-standardized tooling
-behaviour clash.
+After returning his  "borrowed" terminals, Stoll left a teleprinter attached to the intrusion line in order to see and record everything the hacker did. He watched as the hacker sought — and sometimes gained — unauthorized access to military bases around the United States, looking for files that contained words such as "nuclear" or "[SDI](https://en.wikipedia.org/wiki/Strategic_Defense_Initiative)" (Strategic Defense Initiative). The hacker also copied password files (in order to make [dictionary attacks](https://en.wikipedia.org/wiki/Dictionary_attack)) and set up [Trojan horses](https://en.wikipedia.org/wiki/Trojan_horse_(computing)) to find passwords. Stoll was amazed that on many of these high-security sites the hacker could easily guess passwords, since many [system administrators](https://en.wikipedia.org/wiki/System_administrator) had never bothered to change the passwords from their factory [defaults](https://en.wikipedia.org/wiki/Default_password). Even on military bases, the hacker was sometimes able to log in as "guest" with no password.
 
-> I'm not sure yet whether it's possible to install the individual
-> utilities as separate binaries. This is new territory for me, since
-> uutils is structured as a metapackage, and because it's written in
-> Rust.
+This was one of the first⁠—⁠if not *the* first⁠—documented cases of a computer break-in, and Stoll seems to have been the first to keep a daily logbook of the hacker's activities. Over the course of his investigation, Stoll contacted various agents at the [Federal Bureau of Investigation](https://en.wikipedia.org/wiki/Federal_Bureau_of_Investigation) (FBI), the [Central Intelligence Agency](https://en.wikipedia.org/wiki/Central_Intelligence_Agency) (CIA), the [National Security Agency](https://en.wikipedia.org/wiki/National_Security_Agency) (NSA), and the [United States Air Force Office of Special Investigations](https://en.wikipedia.org/wiki/United_States_Air_Force_Office_of_Special_Investigations) (OSI). At the very beginning there was confusion as to jurisdiction and a general reluctance to share information; the FBI in particular was uninterested as no large sum of money was involved and no [classified information](https://en.wikipedia.org/wiki/Classified_information) host was accessed.
+
+Studying his log book, Stoll saw that the hacker was familiar with [VAX/VMS](https://en.wikipedia.org/wiki/VAX/VMS), as well as [AT&T Unix](https://en.wikipedia.org/wiki/Unix). He also noted that the hacker tended to be active around the middle of the day, [Pacific time](https://en.wikipedia.org/wiki/Pacific_Time_Zone). Eventually Stoll hypothesized that, since modem bills are cheaper at night and most people have school or a day job and would only have a lot of free time for hacking at night, the hacker was in a time zone some distance to the east, likely beyond the US East Coast.
+
+With the help of Tymnet and agents from various agencies, Stoll found that the intrusion was coming from [West Germany](https://en.wikipedia.org/wiki/West_Germany) via satellite. The West German post office, the *[Deutsche Bundespost](https://en.wikipedia.org/wiki/Deutsche_Bundespost)*, had authority over the phone system there, and traced the calls to a university in [Bremen](https://en.wikipedia.org/wiki/Bremen). In order to entice the hacker to reveal himself, Stoll set up an elaborate hoax—known today as a [honeypot](https://en.wikipedia.org/wiki/Honeypot_(computing))—by inventing a fictitious department at LBNL that had supposedly been newly formed by an "SDI" contract, also fictitious. When he realized the hacker was particularly interested in the faux SDI entity, he filled the "SDInet" account (operated by an imaginary secretary named "Barbara Sherwin") with large files full of impressive-sounding [bureaucratese](https://en.wikipedia.org/wiki/Administratium). The ploy worked, and the *Deutsche Bundespost* finally located the hacker at his home in [Hanover](https://en.wikipedia.org/wiki/Hanover).
+
+The hacker's name was [Markus Hess](https://en.wikipedia.org/wiki/Markus_Hess), and he had been engaged for some years in selling the results of his hacking to the [Soviet Union](https://en.wikipedia.org/wiki/Soviet_Union)'s civilian intelligence agency, the [KGB](https://en.wikipedia.org/wiki/KGB). There was ancillary proof of this when a Hungarian [agent](https://en.wikipedia.org/wiki/Espionage) contacted the fictitious SDInet at LBNL by mail, based on information he could only have obtained through Hess. Apparently this was the KGB's method of double-checking to see if Hess was just making up the information he was selling. Stoll later flew to West Germany to testify at the trial of Hess.
+
+- The book was chronicled in an episode of WGBH's [NOVA](https://en.wikipedia.org/wiki/Nova_(American_TV_series)) entitled "The KGB, the Computer, and Me", which aired on PBS stations on October 3, 1990. Stoll and several of his co-workers participated in re-enactments of the events described.[*[citation needed](https://en.wikipedia.org/wiki/Wikipedia:Citation_needed)*][[1]](https://en.wikipedia.org/wiki/The_Cuckoo%27s_Egg_(book)#cite_note-stoll-adaptations-1)
+- Another documentary, Spycatcher, was made by Yorkshire Television.[[1]](https://en.wikipedia.org/wiki/The_Cuckoo%27s_Egg_(book)#cite_note-stoll-adaptations-1)
+- The number sequence mentioned in Chapter 48 has become a popular math puzzle, known as the Cuckoo's Egg, the Morris Number Sequence, or the look-and-say sequence.
+- In the summer of 2000 the name "Cuckoo's Egg" was used to describe a file sharing hack attempt that substituted white noise or sound effects files for legitimate song files on Napster and other networks.[[2]](https://en.wikipedia.org/wiki/The_Cuckoo%27s_Egg_(book)#cite_note-2)
+- These events are referenced in Cory Doctorow's speculative fiction short story "The Things that Make Me Weak and Strange Get Engineered Away", as "(a) sysadmin who'd tracked a $0.75 billing anomaly back to a foreign spy-ring that was using his systems to hack his military."[[3]](https://en.wikipedia.org/wiki/The_Cuckoo%27s_Egg_(book)#cite_note-3)
+
+1. [1](https://en.wikipedia.org/wiki/The_Cuckoo%27s_Egg_(book)#cite_ref-stoll-adaptations_1-0) [2](https://en.wikipedia.org/wiki/The_Cuckoo%27s_Egg_(book)#cite_ref-stoll-adaptations_1-1) [Richard Stoll's Personal Webpage on TV adaptations](http://www.ocf.berkeley.edu/~stoll/nova_show.html)( [Archived](https://web.archive.org/web/20110806122326/http://www.ocf.berkeley.edu/~stoll/nova_show.html) August 6, 2011, at the [Wayback Machine](https://en.wikipedia.org/wiki/Wayback_Machine))
+2. [↑](https://en.wikipedia.org/wiki/The_Cuckoo%27s_Egg_(book)#cite_ref-2) ["Cuckoo's Egg Project Home Page"](http://www.hand-2-mouth.com/). *www.hand-2-mouth.com*.
+3. [↑](https://en.wikipedia.org/wiki/The_Cuckoo%27s_Egg_(book)#cite_ref-3) ["The Things that Make Me Weak and Strange Get Engineered Away"](http://www.tor.com/2008/08/06/weak-and-strange/). Tor.com. Edited 2015-06-24.
+
+- Image of 1st Edition Cover—Doubleday
+- "Stalking the Wily Hacker"—The author's original article about the trap
+- *Booknotes* interview with Stoll on *The Cuckoo's Egg*, December 3, 1989
+- Reference to the book on Internet Storm Center
+- West German hackers use Columbia's Kermit software to break into dozens of US military computers and capture information for the KGB, Columbia University Computing History, 1986-1987 section.

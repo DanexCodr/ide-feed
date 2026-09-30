@@ -1,182 +1,75 @@
-I think I managed to build quite a nice and interesting test suite recently; I’ll do my best to describe it in this post.
+We present **Branch Target Reuse (BTR)**, a new Spectre-v2 attack targeting just-in-time (JIT) compilers. BTR affects the JIT engines found in web browsers, language runtimes, and the operating system kernel, across multiple CPU vendors. We analyzed the attack surface of Linux cBPF, Oracle GraalVM and SpiderMonkey (the JIT engine of the Firefox browser), and built two end-to-end exploits against the Linux kernel.
 
-It’s basically just a bunch of notes, and the code is not open-source, but I think these explanations can have more value than raw source code, especially if you want to adapt some of these ideas for one of your own projects.
+The key insight behind the attack is that, while modern CPUs restore architectural code coherence after self-modification, they do not necessarily invalidate stale indirect branch prediction entries (i.e., branch targets). In JIT engines, these stale targets can outlive the original code and later be reused when the code cache is repopulated, yielding a **speculative execute-after-free** primitive. This allows attackers to hijack speculative control flow to newly generated code at obsolete offsets, bypassing software hardening or reaching misaligned gadgets.
 
-## The application
+Figure 1 gives an overview of the attack.
 
-Let’s start with a quick description of *what* we want to actually test, because as you can imagine, this is crucial for everything else.
+[![](https://www.vusec.net/wp-content/uploads/2026/09/btr_overview.png)](https://www.vusec.net/wp-content/uploads/2026/09/btr_overview.png)*Figure 1: The attacker lures the JIT engine into allocating a new code section, the training chunk ①, and trains the indirect branch by jumping to it ②. Next, the attacker forces a deallocation of the training chunk ③ and an allocation of the target chunk that partially reuses the same address ④. When the attacker triggers the indirect branch again, the CPU uses the now-stale branch target buffer (BTB) entry and speculatively jumps to the old training-chunk entry point ⑤, resulting in control-flow hijacking and secret data disclosure.*
 
-[Réécoute](https://reecoute.fr/) is a single-page web application (SPA), i.e., a website rendered with client-side JavaScript<sup>[1](https://reecoute.fr/tech_blog/2026-09-28_my-experience-writing-automated-tests-for-a-spa#note1)</sup>. It’s mainly an audio player, optimized for long recordings (typically 2 or 3 hours), with quite a few interactive features that couldn’t work with server-side rendering alone. It uses React, and the client-side JavaScript communicates with a single server by sending JSON over HTTP. Nothing special.
+## End-to-end exploit on Linux cBPF
 
-Now, how can we test that? Unlike a classic server-side rendered website, the complexity is split into two roughly equal parts between the backend and the client-side JavaScript. Ideally, we should test both together in a realistic fashion to exercise all the chatter between the client and the server. I’ve made the extreme choice of testing the app as a whole, using a real web browser.
+We built an end-to-end BTR exploit that leaks arbitrary memory on modern Intel CPUs, bypassing all enabled mitigations. Check out the demo below!
 
-The project also has a few backend-only tests that I won’t discuss here because there is really nothing special about them.
+*Figure 2: BTR exploit with Linux kernel cBPF.*
 
-## The main test suite
+Our exploit leaks 8 bytes per second. That may sound slow, but with careful pointer chasing we only need to leak a small amount of data to reach the secret. In the demo above, we leak the root password hash from the “su” process. We first run “su root”, which loads the root password hash into memory.
 
-The main test suite is written with [Playwright](https://playwright.dev/), running against a real web browser. It consists of about 20 files, each containing between 1 and 4 test cases.
+Once the attack is set up ([[0:42]](https://youtu.be/6en6nmF6Uyc?si=_Vw5rBz9GpDuoCju&t=42))), we walk the Linux kernel task list. Since it is a linked list, we walk it backwards by leaking each “prev” pointer. For every task struct, we check whether the PID matches our victim. Once we find the correct task struct ([[0:52]](https://youtu.be/6en6nmF6Uyc?si=_Vw5rBz9GpDuoCju&t=52)), we leak the “mm” struct and start walking the page tables. For every mapped page, we check whether it contains the root password hash. Once we find the correct page, we leak the hash! 😎
 
-Regarding my personal preferences: I tend to write rather lengthy test cases that describe full user journeys, rather than small tests for individual steps. For an e-commerce website, for example, I would likely write a test that adds an item to the cart, signs up, goes to the checkout page, and actually purchases the item: it’s the most critical user journey for the business, and you do not want it to break. Of course, I also write smaller, specialized tests for things like sign-up, but IMO these tend to be somewhat less critical than the end-to-end flows.
+### Bypassing cBPF constant-blinding
 
-## Data isolation between tests
+The Linux kernel can harden cBPF at runtime with the `bpf_jit_harden` option (see [Linux documentation](https://www.kernel.org/doc/html/latest/admin-guide/sysctl/net.html#bpf-jit-harden)). When enabled, it applies constant blinding to immediate values to prevent direct JIT spraying. The option is off by default, but we took on the challenge of bypassing it anyway, and succeeded! We adapted an existing JIT-spraying technique that encodes instructions in jump offsets and applied it to cBPF for the first time. See the details below.
 
-Tests are not jailed in isolated environments, because:
+## SpiderMonkey
 
-- When using something like Playwright, this is very complicated to achieve with database transactions;
-- I could spawn an instance of the backend for each test, but it would be much slower, so I’m not going to do that;
-- Running each test on a tiny subset of the dataset does not help catch database queries that only slow down when there’s a lot of data;
-- It’s simply more complicated and less realistic than writing tests that run against the same database without disturbing other tests.
+SpiderMonkey is the JavaScript and WebAssembly engine of Firefox. Like every modern JavaScript engine, it JIT-compiles frequently executed (“hot”) code for performance, and that JIT compiler is exactly what we attack. The threat model is simple: a malicious web page controls the JavaScript that runs in your browser. Since Firefox has not yet fully deployed site isolation, other tabs can end up in the same address space, making their data a perfect target.
 
-Basically, I write tests just like anyone would use the app in production: each test creates its own objects without relying on any existing data, never touches data it did not create, and never cleans up anything. Data just accumulates. This strategy works really well for apps like Réécoute, where nothing is actually public.
+We investigated whether BTR works in SpiderMonkey and found attacks to be feasible. WebAssembly instructions such as `f64.const` store their constants in a literal pool inside the executable code buffer. With BTR, we can speculatively jump straight into that pool, which gives us speculative arbitrary code execution. We built a proof of concept (PoC) and observed that, on Intel CPUs, BTB entries survive the full deallocation and reallocation cycle, for an estimated leakage rate on the order of tens of bytes per second. Turning this into an end-to-end browser exploit requires further work.
 
-I use a few helper functions to create data (`createUser`, `createBand`,  `createSession`, etc.). Note that I do not use before/after hooks at all.
+## GraalVM
 
-## Mocks
+GraalVM is Oracle’s multi-language runtime, which JIT-compiles the code it runs. It offers a sandbox for untrusted guest code, and in its strictest mode that sandbox is explicitly hardened against Spectre attacks: every memory access the guest makes is masked so that it cannot reach outside the sandbox arena. The threat model here is untrusted code that you deliberately run in that sandbox, such as a plugin or a user-supplied script.
 
-The test suite uses two kinds of mocks:
+That masking only helps if execution enters the code from its natural entry point. We used GraalPy, GraalVM’s Python implementation, to generate functions whose compiled form contains an array access preceded by such a masking operating. With BTR, we speculatively jump past the masking operation, straight into the load (as in Figure 1). The access is now unbounded and happily reads outside the arena. This gives us stable address reuse, but, in our experiments, the engine’s own compilation and garbage collection (GC) activity wipes the BTB entries before we can use them. This limitation does not appear fundamental, and better scheduling or smarter memory massaging may well close the gap.
 
-- Each external service has its own global mock: things like S3, Stripe, Twilio, etc. I tend to write one large, realistic mock for each of them. It’s much faster and more reliable than using actual third-party services, and it allows running the tests without an internet connection. These mocks are enabled by default and used across all tests.
-- For some complicated cases (emails and passkeys, especially), I have a few (2 or 3?) custom code paths enabled by test-only parameters/HTTP headers in API queries. These parameters are ignored by the backend in production builds.
+## Deployed mitigations
 
-(I really hate when a test suite forces you to write custom mocks for every single test…)
+We disclosed our findings to affected hardware and software vendors, which acknowledged our findings. The hardware vendors stated that mitigating mechanisms (e.g., IBPB) already exist, and that BTR mitigations should be deployed in software. The Linux kernel developers and Oracle have deployed mitigations.
 
-The most complex mock I wrote for this project is probably the one for passkeys: I couldn’t get actual passkeys to work in headless Chromium, so I hacked together a fake client around the  [`passkey` crate](https://docs.rs/passkey/latest/passkey/). But it is very specific and I am not very proud of it, so I won’t go into details here!
+**Linux kernel. **The kernel developers upstreamed a new mitigation for x86 that issues an IBPB on all cores when a cBPF program reuses a previously executed cBPF/eBPF region, and discourages such reuse as an optimization. The mitigation applies whether or not IBT is enabled. Two CVEs were assigned:
 
-## Speed
+- CVE-2026-64507 – x86/bugs: Enable IBPB flush on BPF JIT allocation
+- CVE-2026-64508 – bpf: Support for hardening against JIT spraying
 
-As you can imagine, browser automation is much slower than simply parsing HTTP response bodies, so without parallelism it can quickly become unmanageable. This is why Playwright runs test files in parallel by default. With Réécoute, I went a step further by enabling  `fullyParallel` in the Playwright config, so tests within the same file also run concurrently. However, the most important factor here is the app itself, since a test suite can’t be more efficient than the app being tested! To give you an idea, the Playwright suite currently completes in just over 20 seconds on my fanless M3 MacBook Air.
+**Oracle.** GraalVM instead hinders region reuse by [randomizing JIT code-cache locations](https://github.com/oracle/graal/pull/14261).
 
-Also, Playwright supports all major web browsers and runs your tests across 3 or 4 of them by default. I changed the settings to only use Chromium: modern browsers behave very similarly, this makes the suite 3 to 4 times faster to run, and it is nearly as effective.
+**Mozilla**. Mozilla considered IBPB-based mitigations, but is currently prioritizing the completion and deployment of site isolation.
 
-## Reliability
+## More details: cBPF constant-blinding bypass
 
-Here’s the main downside to browser testing, especially for SPAs: because we are testing an entire app *and* an entire browser, it’s difficult to make tests perfectly reliable. Yet with a large test suite, you **must** have high reliability, because  [the more tests you have, the less reliable the overall suite becomes](https://en.wikipedia.org/wiki/Probability#Independent_events), and re-running failed suites is expensive.
+Following the jump-offset technique introduced by Maisuradze et al. (2016), we bypass cBPF constant blinding by encoding attacker-controlled bytes in the offset bytes of forward jumps instead of in immediates. The same byte sequence can be decoded as a valid chain of cBPF jumps in one alignment and as a “dispatch” gadget when execution re-enters two bytes later, yielding an end-to-end exploit against cBPF even with blinding enabled.
 
-There is a trick here—it’s not pretty, but it works well: Playwright has a  [`retries`](https://playwright.dev/docs/api/class-testconfig#test-config-retries)  option, which I set to 2 in CI. When a test fails, it is retried individually up to 2 times. In practice, tests in Réécoute’s suite rarely fail and retry. I could probably eliminate flakes entirely if I spent a few hours on it, but I’m not sure it's worth the effort right now.
+Since the maximum forward jump offset is 0x014fc5, we control only the lower two bytes of the offset, and the upper bytes remain zero. To stay in the misaligned execution stream, we carefully select instructions so that the next instruction consumes at least one of the remaining bytes.
 
-In fact, the main issue I faced with reliability was related to dual server-side/client-side rendering, in other words, *hydration*. When a user navigates to a page with a text input field, the browser first fetches the server-side rendered HTML, and then downloads and runs the JavaScript that replaces the page. But if the user starts typing into the input  *before* React has initialized, the client-side code will ignore those edits. To prevent this issue, all inputs are disabled by default and are only enabled once their React component is actually ready. Here’s how I did it:
+[![](https://www.vusec.net/wp-content/uploads/2026/09/btr_constant_blind_bypass-scaled.png)](https://www.vusec.net/wp-content/uploads/2026/09/btr_constant_blind_bypass.png)
 
-```
-export const useReady = (): boolean => {
-  const [ready, setReady] = useState(false);
-  useEffect(() => {
-    setTimeout(() => setReady(true), 1);
-  }, []);
-  return ready;
-};
+*Figure 3: cBPF constant-blinding bypass via jump offsets. In the aligned view, the JIT emits a chain of valid forward jumps. In the misaligned view, the same bytes decode as a gadget that loads attacker-controlled data, propagates it to `rdi` and `rdx`, and then jumps to the disclosure gadget via an attacker-controlled indirect jump.*
 
-const MyPageWithAForm = () => {
-  const ready = useReady();
-  …
+## **FAQ**
 
-  return (
-    <form>
-      <input type="text" disabled={!ready} value={…} onChange={…} />
-    </form>
-  );
-}
-```
+**Is my system affected?  
+**Most likely. Indirect branch prediction is inherent to modern CPUs, and BTR exploits the desynchronization between the branch predictor and the actual state of the code. No current CPU has a mechanism to keep the two in sync, so until vendors add one, your CPU is vulnerable. We confirmed this behavior on every CPU we tested, covering Intel, AMD and Arm. Mitigation is left to software (see “Deployed mitigations”).
 
-I rely on the fact that Playwright waits until the input is enabled before filling it (just like a real user!). Another option would have been to make all forms submittable without JavaScript, but that would have been more work, and the app is kind of pointless without JavaScript anyway.
+**How do I protect my system?  
+**Update your OS and software as soon as vendor patches are available. Both the Linux kernel and Oracle have released patches.
 
-## Developer experience
+**Does IBT/BTI protect me?  
+**These mitigations raise the bar, but do not eliminate the risk. Indirect Branch Tracking (x86) and Branch Target Identification (Arm) require indirect branch targets to start with an `endbr64` or `BTI` instruction. On older Intel CPUs, one or more instructions can still execute speculatively before that check (Lion Cove is the first race-free Intel generation we found).  
+Even on race-free implementations, an attacker can inject bytes into JIT-compiled code that encode `endbr64` and reach them through misaligned execution, turning them into a valid landing pad. We were only able to do so with constant blinding disabled, which makes race-free IBT combined with constant blinding a much stronger defense. Exploitable gadgets may still exist on the speculative return path. See the paper for more details.
 
-The interactive Playwright UI is great; I use it a lot:
+**Wasn’t cBPF already disabled for unprivileged users?  
+**Not quite. The more powerful eBPF JIT is restricted to privileged users, but the older classic BPF (cBPF) variant remains available to unprivileged programs. cBPF is intentionally tiny: it has only two 32-bit registers, supports only forward jumps, and forbids register dereferences. Those limits are exactly why it was historically considered safe enough for user-space filters, and why it is still widely used in Linux Socket Filtering (LSF), seccomp filters, and packet-filtering paths used by software such as Docker and Chrome, and in high-throughput network filtering.
 
-## Continuous integration
+### **More details**
 
-This is where Playwright really shines: when a test fails, it creates a  `playwright-report` directory containing HTML files that embed the **same** UI as the interactive Playwright runner, completely standalone! When tests fail in CI, you can simply upload this directory to your favorite S3-compatible cloud storage. It makes troubleshooting easy because the trace files include console logs, network request/response bodies, screenshots, and more.
-
-Running a headless browser in a CI environment is not always straightforward. I use the following Dockerfile:
-
-```
-FROM --platform=linux/amd64 node:22.15.0-bookworm
-
-RUN apt-get update && \
-  apt-get install -y --no-install-recommends socat && \
-  rm -rf /var/lib/apt/lists/*
-COPY package.json package-lock.json playwright.config.js ./
-RUN npm ci
-RUN npx playwright install-deps
-RUN npx playwright install chromium
-COPY . .
-
-ENTRYPOINT ["socat", "TCP4-LISTEN:4000,fork,reuseaddr", "TCP4:reecoute_test:4000"]
-```
-
-This image only runs Playwright; the app being tested runs in a separate container. Honestly, I don’t remember why I decided to use `socat` here—there’s probably a way to make it work without it<sup>[2](https://reecoute.fr/tech_blog/2026-09-28_my-experience-writing-automated-tests-for-a-spa#note2)</sup>.
-
-## Miscellaneous tricks I occasionally use
-
-### API tests using Playwright
-
-It’s not what Playwright was primarily designed for, but you can write API-only tests with it, using `request()`, and it works just fine.
-
-### Testing emails
-
-I implemented a test-only API route that returns the latest emails for a recipient. It is used like this:
-
-```
-/** Returns emails, newest first */
-export const listEmails = async ({ request, recipient_address }) => {
-  const res = await request.post(
-    "/_api/test_helpers/list_emails",
-    { data: { recipient_address } },
-  );
-  expect(res.ok()).toBeTruthy();
-  const { emails } = await res.json();
-  return emails;
-};
-
-const readOtpEmail = async ({ page, recipient_address }) => {
-  const emails = await listEmails({ request: page.request, recipient_address });
-  const email = emails[0];
-  expect(email.subject).toMatch(/^Your code is [0-9]{6} - Réécoute$/);
-  const code_match = /<h2>([0-9]{6})<\/h2>/.exec(email.html_part);
-  expect(code_match).toBeTruthy();
-  return code_match[1];
-};
-```
-
-The API route is disabled in production builds.
-
-### Simulating mouse movements and clicks
-
-I managed to write this one:
-
-```
-…
-// wait until the player is loaded
-await expect(page.getByRole("button", { name: "Play" })).toBeEnabled();
-await page.mouse.move(800, 300);
-await page.mouse.down();
-await page.mouse.move(700, 300);
-await new Promise((r) => setTimeout(r, 100));
-await page.mouse.move(700, 300);
-await page.mouse.up();
-await page.getByRole("button", { name: "Select" }).click();
-// scroll
-await page.mouse.move(800, 300);
-await page.mouse.down();
-await page.mouse.move(600, 300);
-await new Promise((r) => setTimeout(r, 100));
-await page.mouse.move(600, 300);
-await page.mouse.up();
-await page.getByRole("button", { name: "Create a clip" }).click();
-…
-```
-
-You may find it ugly, but it tests an important feature I really don't want to break. And believe it or not, despite the `setTimeout()`s, it is surprisingly reliable!
-
-## Things that could be improved
-
-Test coverage isn't measured at the moment 🙃. However, the most critical user journeys and all the “happy paths” of the important features are tested. I don’t mind if obscure code paths aren't covered—I just don’t want any critical bugs.
-
-I’d really like to set `retries` to zero in CI, and I don't think I'm far from that goal. I'm just too lazy to tackle it right now!
-
-### Updates
-
-2026-09-29: added a note about hydration in the “Reliability” section.
-
-1. In fact, Réécoute is also server-side rendered for speed, SEO, and the rare nerds who browse with JavaScript disabled. However, the primary features are unavailable without client-side rendering.
-2. I can tell that it was my own decision to use socat—no LLM was involved here! It’s a great example of a situation where a comment would have helped…
+The “Branch Target Reuse” paper has been accepted for publication at the ACM Conference on Computer and Communications Security (CCS) 2026. The paper and code are linked below.
