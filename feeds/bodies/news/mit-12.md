@@ -1,0 +1,19 @@
+Daniela Rus, director of MIT's Computer Science and Artificial Intelligence Laboratory (CSAIL) and the Panasonic Professor of Computer Science, has received the 2026 High-Tech Prize of the Bavarian Minister-President for her contributions to robotics, artificial intelligence, and autonomous systems.
+
+Awarded jointly by the Bavarian State Government and the Bavarian Academy of Sciences and Humanities, it is the most highly endowed award for technology and engineering in Germany. Rus accepted the prize on July 23 at the Herkulessaal of the Munich Residence.
+
+The selection committee cited four strands of her work: self-organizing robot collectives, soft robotics, autonomous mobility, and brain-inspired artificial intelligence. Together they describe a 30-year effort to build machines that hold up outside the lab, in conditions no one scripted in advance.
+
+That effort has arrived at a moment when physical AI has become a preoccupation for industry leaders and policymakers alike. When human-robot collaboration comes up, the examples tend to be household chores or the factory floor. Rus is working several orders of magnitude wider than that, developing algorithms and systems that put autonomous robots into transportation, agriculture, medicine, the home, and environmental monitoring. She is also a pioneer of soft robotics, where compliant machines manipulate the world more safely and adapt to it more readily than rigid ones can.
+
+Her emphasis throughout has been on giving robots the intelligence to reason and adapt in the real world, through algorithms whose behavior can be explained.
+
+"AI gives machines the ability to do work that humans don't want to do," she says. "It's not a battle between humans and machines. Both form a system that solves problems that neither humans nor machines can solve alone."
+
+At CSAIL she leads the Distributed Robotics Laboratory, where that principle has produced some unusual solutions to durable problems. Her group helped build an ingestible origami robot capable of retrieving swallowed button batteries from a child's digestive tract, and a fleet of small autonomous boats that assemble themselves into bridges and platforms, turning a city's waterways into infrastructure that can be reconfigured on demand.
+
+She also helped invent liquid neural networks, an architecture inspired by the compact nervous system of a millimeter-long worm. The networks can steer a vehicle through an unfamiliar environment using as few as 19 control neurons, a level of efficiency that conventional architectures cannot approach. The research led Rus and former CSAIL affiliates Ramin Hasani, Alexander Amini, and Mathias Lechner to found Liquid AI out of MIT CSAIL, building models designed from the start for the hardware constraints of the devices they run on.
+
+"Daniela Rus is a pioneer in soft robotics and physical AI," noted Lorenzo Masia, professor of intelligent bio-robotic systems at the Technical University of Munich, in a [press release](https://www.br.de/nachrichten/wissen/hightech-preis-bayern-2026-robotik-pionierin-daniela-rus-geehrt,VQ6KYDY). "The prize will help to bring this science to the forefront."
+
+Rus' previous honors include the 2025 IEEE Edison Medal and the 2024 John Scott Award. She is a member of the 2002 class of MacArthur Fellows and has been elected to the French National Academy of Medicine, the National Academy of Engineering, and the American Academy of Arts and Sciences. She is a fellow of the Association for Computing Machinery, the Institute of Electrical and Electronics Engineers, and the Association for the Advancement of Artificial Intelligence.
