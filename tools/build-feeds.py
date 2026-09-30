@@ -1579,9 +1579,13 @@ def build_segment_from_markdown(segment):
 # fall out of the window are deleted from disk, so the bodies
 # directory stays in sync with the feed.
 #
-# Upgrade note: the first run after this change will read a
-# previous feed whose items still carry an inline "body" field.
-# Those fields are dropped from the metadata copy on the way in.
+# Transition handling: the write-bodies loop iterates the merged
+# pool, not just the freshly fetched items, and strips the body
+# field only at write time. On the first run after the split the
+# previous feed still carries inline bodies for every item, and
+# this loop writes each of them to disk exactly once. On every
+# run after that, carried-over items no longer have a body field
+# and the loop skips them without redundant disk I/O.
 # ============================================================
 
 def _body_path_for(segment, item_id):
@@ -1621,6 +1625,14 @@ def build_feed_with_retention(segment, new_items):
         merged.append(item)
 
     # Carry over previous items that are still inside the window.
+    #
+    # We do NOT strip the 'body' field here. The body-writing
+    # loop below handles both new and carried-over items
+    # uniformly. On the transition run, carried-over items still
+    # carry an inline body from the pre-split format, and the
+    # loop is what turns those into on-disk body files. On every
+    # subsequent run, carried-over items have no body field, so
+    # the loop skips them.
     for item in prev_items:
         iid = item.get('id')
         if not iid or iid in seen:
@@ -1634,22 +1646,22 @@ def build_feed_with_retention(segment, new_items):
             except Exception:
                 pass
         seen.add(iid)
-        # Old feeds may still carry an inline body. Strip it so
-        # the metadata copy stays small.
-        item.pop('body', None)
         merged.append(item)
 
-    # Write bodies for the new items. Previous items' body files
-    # were written by an earlier build and are still on disk.
-    for item in new_items:
+    # Write bodies for every item that still has a 'body' field.
+    # The pop() here is the only place body text is removed from
+    # an item, so the metadata JSON written below never carries
+    # an inline body.
+    for item in merged:
         body = item.pop('body', '') or ''
-        if body:
-            path = _body_path_for(segment, item['id'])
-            try:
-                with open(path, 'w', encoding='utf-8') as f:
-                    f.write(body)
-            except Exception as e:
-                print(f"  [Body] Write failed for {item['id']}: {e}")
+        if not body:
+            continue
+        path = _body_path_for(segment, item['id'])
+        try:
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write(body)
+        except Exception as e:
+            print(f"  [Body] Write failed for {item['id']}: {e}")
 
     # Remove bodies for items that fell out of the pool.
     live_ids = set()
