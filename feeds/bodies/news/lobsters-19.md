@@ -1,35 +1,46 @@
-LibreOffice does not reject artificial intelligence out of hand, but an office suite used by tens of millions of people – in schools, hospitals, public bodies, law firms and thousands of other organisations – will not add a feature to its default configuration until that feature can be delivered under the conditions defined by the project in accordance with its principles.
+> Stuart Henderson wrote:
+> > On 2026/09/20 07:01, David Uhden Collado wrote:
+> >> The main goal of the packaging is to make these implementations usable
+> >> as alternatives to the existing GNU utility ports without requiring
+> >> source changes in dependent ports.
+> >>
+> >> For example, uutils-coreutils installs the same g-prefixed command names
+> >> as sysutils/coreutils, including gcat, gls, gcp, gdate, gsort, gstat,
+> >> gtail, gtimeout and the other GNU-compatible utilities. They are
+> >> symlinks to the upstream multicall binary, which is installed under
+> >> libexec/uutils.
+> > ...
+> >> Each package conflicts with its corresponding GNU implementation and
+> >> declares the GNU port as a secondary @pkgpath.
+> > I don't think this is a usable approach for ports.
+> 
+> The truth is, I find these Rust reimplementations quite
+> interesting. Ubuntu 26.10 has already adopted uutils coreutils because
+> the project has reached a level of maturity and stability where it can
+> be used reliably. The other reimplementations are still more of a work
+> in progress.
+```
 
-**User-controlled execution**. The user must be able to choose where inference takes place: on the local computer, on an infrastructure directly controlled by the user, or on a service chosen independently by the user. A default setting that silently redirects to a single provider is not a choice.
+```
 
-**No content may leave the computer without authorisation**. The content of documents is a user’s asset and, in many implementations, is also legally protected material: medical records, case files, tender documents and student data. Transmission must be the result of a user’s decision and not behaviour carried out in the background by the application.
+Smells like agenda.
 
-**No telemetry of any kind**. LibreOffice does not collect usage data, and this must also apply to AI features.
+> I also think they fit quite well with OpenBSD as alternatives to GNU
+> utilities, particularly because they use a permissive MIT license.
 
-**No dependence on a single provider**. An integration that only works with a single company’s API is a lock-in mechanism, regardless of how it is described in the release notes. Interfaces should be open and implementable by multiple backends.
+Argument is vaguely like: because we already have permissive licenced
+utilities, our user base are really interested in having a second set of
+permissive licenced utilities which are very subtly different.
 
-**No compromises on format**. Generated content must be in ODF format, just like any other content, and must retain its structure, styles and semantics. An assistant that generates documents in a proprietary format perpetuates content lock-in.
+That makes no sense. Noone wants subtly different behaving binaries as
+part of their workflow.  If someone runs the openbsd ls command as part
+of a pipeline that uses openbsd sed, or openbsd cut, or some other
+openbsd utility and it parses a non-standized output characteristic
+by accident, there are no people in this universe who wants to replace
+that ls with a different ls and get surprised by un-standardized tooling
+behaviour clash.
 
-**Entirely optional**. It must be installable, removable, and absent from the user interface for those who do not wish to use it, including administrators deploying the software across thousands of workstations who, due to company policy, do not authorise its use.
-
-**Where we stand today**
-
-In light of this list, there is no integration that meets all the requirements and that could be deployed, enabled by default, and supported throughout the entire lifecycle of a release. This is an assessment of the current state of the technology and the solutions based on it, and not a judgement on the value of the sector.
-
-In the meantime, users who wish to use AI features can install one of the available extensions, which can be found either on the LibreOffice extensions website or distributed independently. Most connect to a locally running model via Ollama, LM Studio or another OpenAI-compatible endpoint, which means the document never leaves the computer.
-
-These are third-party extensions at various stages of maturity, developed and maintained by their respective authors rather than by The Document Foundation. Users and administrators should assess them as they would any third-party component, checking whether a cloud endpoint is configured and what the provider does with the data it receives. The extension mechanism offers AI functionality to those who want it, without any consequences for all other users.
-
-**Why our motivations are different**
-
-The reason our position differs from that of the dominant suites has almost nothing to do with the technology.
-
-For a company that sells subscriptions, an AI assistant justifies a price increase and strengthens the case for keeping all documents within its own infrastructure. The functionality and the business model reinforce each other, so integration is not only attractive but almost mandatory.
-
-The Document Foundation is a not-for-profit organisation. There are no subscription tiers to protect, no upsells, no data to monetise. This does not make us wiser than others, but it means we can take the time needed to decide whether something is genuinely useful for our users, as we are not driven by quarterly results.
-
-**What lies ahead**
-
-The criteria we have listed do not amount to a definitive rejection. The AI sector is evolving rapidly; on-premises inference is becoming manageable on standard hardware; and open models are improving much faster than most of us had anticipated. Should an approach emerge that meets all the conditions, we will evaluate it very carefully.
-
-Until then, there will be no AI of any kind in the default installation; extensions will be available for those who wish to integrate AI features, and we will closely monitor where the technology is actually heading.
+> I'm not sure yet whether it's possible to install the individual
+> utilities as separate binaries. This is new territory for me, since
+> uutils is structured as a metapackage, and because it's written in
+> Rust.

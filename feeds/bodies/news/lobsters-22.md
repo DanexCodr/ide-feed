@@ -1,153 +1,243 @@
-Sony has progressively locked down what you can do with the PS5’s hardware. Streaming is a good example: the console gives you a nice, convenient **“Broadcast”** button, but the moment you want to do anything outside the handful of services Sony supports, it gets annoying very fast.
+Text-to-audio models take a text prompt as input, and generate audio as output.
+In principle they take any kind of prompt and generate any type of audio.
+If you re-prompt them with the same prompt but a different random seed, you
+should get a new example of audio for that prompt. But as you might imagine,
+any given text-to-audio model is not equally good at all kinds of audio: nature
+sounds, animal vocalizations, human vocalizations, music, etc. Furthermore,
+the *range* of output is wider in some cases than others: a given model
+may be able to produce a wide range of thunderclaps but have a relatively
+narrow range of bird chirps, or vice versa.
 
-Third-party Bluetooth devices are the same story! Sony locks the wireless stack to their own peripherals, so your headphones or controllers from other brands simply won’t pair :/
+Generative range analysis
 
-## [#](https://yashgarg.dev/posts/hijacking-ps5-rtmp-stream/#the-problem)The Problem
+Some collaborators and I proposed a methodology for exploratory data analysis
+of the generative range of text-to-audio models, which is an aspect we don't
+think has been studied in much detail:
 
-I often stream games with friends on [Discord](https://discord.com) who watch me play, but the PS5 doesn’t support screen sharing to Discord. The obvious fix is a capture card — plug the HDMI output into a [capture card](https://www.elgato.com/us/en/explorer/products/capture/what-is-a-capture-card/), feed it into [OBS](https://obsproject.com/) on your Mac, stream from there. But decent ones aren’t cheap, and I didn’t want to spend upwards of $100 just for this.
+Jonathan Morse, Azadeh Naderi, Swen Gaudl, Mark Cartwright, Amy K. Hoover, Mark J. Nelson (2025). [**Expressive range characterization of open text-to-audio models**](https://www.kmjn.org/publications/ExpressiveRangeAudio_AIIDE25-abstract.html). In *Proceedings of the AAAI Conference on Artificial Intelligence and Interactive Digital Entertainment*, pp. 91-98.
 
-## [#](https://yashgarg.dev/posts/hijacking-ps5-rtmp-stream/#remote-play)Remote Play
+The main visualization tool we use, an *expressive-range plot*, comes from
+the procedural content generation (PCG) community, which uses it to analyze the
+range of level generators and similar kinds of PCG systems that may be either
+AI-driven or handcrafted generators (examples [here](https://dl.acm.org/doi/abs/10.1145/1814256.1814260) and [here](https://dl.acm.org/doi/full/10.1145/3723498.3723845)).
+This post applies the methodology to the rather expressive special case of cat
+vocalizations. Unlike in the PDF paper, you can also click on the dots in the
+plots and listen to the generated audio. *Advice:* Use headphones if you
+live with a cat!
 
-[Remote Play](https://www.playstation.com/en-in/remote-play/) somewhat worked for me. I could connect the PS5 to my MacBook, share the Mac’s screen to Discord and play from there.
+For this post, I generated 2,100 clips of cats vocalizing, with seven different
+prompts, three text-to-audio models, and 100 samples per prompt+model
+combination. The models are intended to illustrate some of the range of current
+model architectures and training sets:
 
-The problem is that you need to connect everything to the Remote Play device: controller, earphones, etc. I also occasionally ran into input lag, and the stream quality is entirely controlled by the PS5. You can’t really configure anything.
+[Stable
+Audio Open 1.0](https://huggingface.co/stabilityai/stable-audio-open-1.0): Continuous latent diffusion trained on ~486k open-license
+clips from Freesound and the Free Music Archive (FMA), conditioned via
+T5-base.
+[EzAudio](https://github.com/haidog-yaqub/EzAudio): 1D
+waveform VAE + DiT trained on AudioSet and VGGSound with synthetic captions,
+followed by supervised fine-tuning on AudioCaps.
+[TangoFlux](https://github.com/declare-lab/TangoFlux):
+Flow-matching transformer pre-trained on WavCaps (~400k clips), fine-tuned on
+AudioCaps, and aligned using direct preference optimization (DPO) on synthetic
+CLAP-ranked preference pairs.
 
-I didn’t want to change my physical setup every time I wanted to stream.
+In typical expressive range analysis, you choose domain-specific metrics for
+the axes. To compare outputs more generally without hand-crafted metrics for
+each prompt, in the paper we used three standard audio attributes: timbre,
+pitch, and loudness. For each clip, we computed a feature vector of
+timbre/pitch/loudness through the clip, as well as the 1st- and 2nd-order
+differences (to capture variation over time). Then we reduced each to two
+dimensions with principal components analysis (PCA) to plot it. This means the
+axes are not directly interpretable as acoustic properties, but distance and
+point clustering is meaningful (nearby points share similar acoustic profiles).
+For this post, I ran one PCA reduction for all 2,100 clips, so points are
+comparable between plots.
 
-## [#](https://yashgarg.dev/posts/hijacking-ps5-rtmp-stream/#how-ps5-streaming-works)How PS5 Streaming Works
+Prompt: "sound of cat"
 
-The PS5 supports streaming to [YouTube](https://youtube.com) and [Twitch](https://twitch.tv) by default if you’re signed into those accounts. The protocol used for this is [RTMP](https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol), or Real-Time Messaging Protocol, which is commonly used for live audio/video streaming.
+In the paper, we started with the prompt `"sound of [x]"` for
+various objects `[x]`, to see what each model would produce without
+being given an explicit verb. So in this post I'll also start with `"sound
+of cat"`.
 
-So when you start a broadcast, the PS5 roughly does this:
+Toggle between Timbre, Pitch, and Loudness to see the point-cloud spreads on
+each acoustic property. Click a point to listen.
 
-![](https://yashgarg.dev/_astro/diagram-1-light.DQtKQAgY.svg)
+Baseline Comparison
+Generative range for `"sound of cat"`
 
-What if we could make our own device act as Twitch and receive that RTMP stream instead?
+Timbre
+Pitch
+Loudness
 
-![](https://yashgarg.dev/_astro/diagram-2-light.DTxc9dxk.svg)
+ Stable Audio Open
+ EzAudio
+ TangoFlux
 
-That’s the idea. The PS5 doesn’t hardcode Twitch’s IP, it looks it up via DNS every time. If we control what DNS returns, we control where the stream goes.
+300 samples
 
-## [#](https://yashgarg.dev/posts/hijacking-ps5-rtmp-stream/#finding-the-right-hostname)Finding the Right Hostname
+DRAG TO PAN · SCROLL TO ZOOM · DBLCLICK RESET
 
-The obvious first attempt was to spoof `ingest.twitch.tv` directly. That’s the hostname the PS5 resolves when you hit broadcast, so pointing it at the Mac should work, right?
+*Observations:* Stable Audio Open and TangoFlux both generally produce
+meowing, as one might expect. TangoFlux's meows are a bit more tightly
+clustered in the expressive-range diagrams (and to my ears also sound like they
+vary less). EzAudio surprisingly often just has silence or living-room
+background noise, or a single faint meow in the whole 10 seconds; I believe
+this is probably due to being trained on uncurated video captions, where cats
+often appear silently. The fact that EzAudio is an outlier is particularly
+visible on the Loudness plot.
 
-Not quite. `ingest.twitch.tv:443` is actually a **discovery endpoint**, not the RTMP server itself. PS5 makes an HTTPS call to it asking “which regional ingest server should I use?” and Twitch responds with something like `ap-southeast-1.prod.fi.contribute.live-video.net`. Then the PS5 pushes the actual stream there.
+Object and action in the prompt
 
-Spoofing that hostname, I ran into a different problem: the actual Twitch ingest uses **RTMPS** (RTMP over TLS on port 443), and PS5 validates the certificate against trusted [CAs](https://en.wikipedia.org/wiki/Certificate_authority). A self-signed cert doesn’t work, and there’s no way to install custom CAs on a PS5.
+We can try a few prompts to see how models respond to being more or less
+specific about the desired object and action.
 
-I then tried YouTube as a workaround. Its RTMP ingest uses plain RTMP on port 1935, so there was no TLS certificate to deal with. The PS5 happily sent the stream to my Mac, so I knew the basic approach worked.
+Bare noun: `"cat"`
+Paper baseline: `"sound of cat"`
+Explicit action: `"sound of a cat meowing"`
 
-The problem was that PS5 periodically checks YouTube’s API to make sure the stream is actually live. Since YouTube never received the stream, that check failed and it stopped broadcasting after about 60 seconds.
+That produces 900 total samples (3 prompts x 3 models x 100 samples each). In
+the visualization below you can check or uncheck each of the three prompts and
+three models to see subsets.
 
-That meant I needed to find a Twitch endpoint that used plain RTMP. The answer came from watching DNS logs while broadcasting:
+Prompt Specificity: Object vs. Action
+Comparing bare noun (`"cat"`), baseline template, and explicit action (`"sound of a cat meowing"`)
 
-```
-sudo tail -f /tmp/dnsmasq.log
-# Sep 22 23:20:28 dnsmasq: query[A] ingest.global-contribute.live-video.net from 192.168.8.171
-# Sep 22 23:20:28 dnsmasq: reply aps30.contribute.live-video.net is 35.55.13.0
-```
+Timbre
+Pitch
+Loudness
 
-The PS5 was resolving `ingest.global-contribute.live-video.net`, which chains down to `aps30.contribute.live-video.net`. That’s the real RTMP server. Spoofing `contribute.live-video.net` covers all subdomains and redirects the actual stream to the Mac without any certificate issues.
+ Populated by JS 
 
-## [#](https://yashgarg.dev/posts/hijacking-ps5-rtmp-stream/#dns-trick)DNS Trick
+ Populated by JS 
 
-The setup has two main parts: [`dnsmasq`](https://dnsmasq.org) and [`nginx-rtmp`](https://github.com/arut/nginx-rtmp-module). I built a small macOS menu bar app that bundles both and manages them.
+DRAG TO PAN · SCROLL TO ZOOM · DBLCLICK RESET
 
-![Menu bar app running nginx and dnsmasq](https://yashgarg.dev/_astro/macos-app_agYga.webp)
+*Observations:* As in the previous plot, EzAudio often doesn't produce a
+meow with the `"cat"` or `"sound of cat"` prompts, but
+*does* start doing so (most of the time) when we explicitly say we want
+the cat to be meowing. TangoFlux and Stable Audio Open tend to produce meows
+for all three prompts, but it's interesting that the timbre range significantly
+narrows when we specify meowing. (To see that, try selecting just one model and
+the 1st and 3rd prompts.)
 
-I run `dnsmasq` on my Mac and configure it to resolve Twitch’s ingest domains to my Mac’s LAN address:
+Descriptive modifiers
 
-```
-server=1.1.1.1
-server=8.8.8.8
+Something the paper left for future work was investigating how descriptive
+modifiers impact expressive ranges. For this post I'll try four different
+prompts that try to elicit qualitatively different types of cat vocalizations
+(some of them not meows):
 
-# Redirect Twitch ingest traffic to the Mac
-address=/contribute.live-video.net/192.168.8.175
-address=/ingest.global-contribute.live-video.net/192.168.8.175
-address=/live.twitch.tv/192.168.8.175
-address=/live-sin.twitch.tv/192.168.8.175
-address=/live-nrt.twitch.tv/192.168.8.175
-address=/live-syd.twitch.tv/192.168.8.175
-address=/live-fra.twitch.tv/192.168.8.175
-address=/live-ams.twitch.tv/192.168.8.175
-address=/live-lhr.twitch.tv/192.168.8.175
-address=/live-jfk.twitch.tv/192.168.8.175
-address=/live-lax.twitch.tv/192.168.8.175
-address=/live-sea.twitch.tv/192.168.8.175
+`"tiny kitten meowing"`
+`"angry cat hissing and growling"`
+`"cat meowing plaintively"`
+`"happy cat purring"`
 
-log-queries
-log-facility=/tmp/dnsmasq.log
+In addition to the dots for individual clips (as above), the plot below draws
+an arrow from the centroid for the baseline `"sound of cat"` clips
+to each of the other four prompts' centroids, showing how each prompt shifts
+the model's output distribution. Select a model to compare how it responds
+here, and click any centroid badge to listen to the clip nearest to the centroid.
 
-no-hosts
-listen-address=0.0.0.0
-```
+Descriptive Modifiers: Distribution Shifts
+Centroids and directional shifts from `"sound of cat"`
 
-`192.168.8.175` is my Mac’s IP. When the PS5 asks DNS for one of these Twitch endpoints, `dnsmasq` returns my Mac’s IP instead. The PS5 connects to my Mac thinking it’s Twitch.
+Timbre
+Pitch
+Loudness
 
-The last piece is pointing the PS5 at this DNS server. I have a [GL.iNet router](https://www.gl-inet.com/) running [OpenWRT](https://openwrt.org/), so I configured it to hand my Mac’s IP as the DNS server specifically for the PS5’s [DHCP](https://en.wikipedia.org/wiki/Dynamic_Host_Configuration_Protocol) lease.
+ Base: sound of cat
+ Tiny kitten
+ Angry cat
+ Plaintive
+ Purring
 
-```
-# SSH into the router and run:
-uci add_list dhcp.lan.dhcp_option="tag:PS5,6,192.168.8.175"
-uci commit dhcp
-/etc/init.d/dnsmasq restart
-```
+TangoFlux
+Stable Audio
+EzAudio
 
-The `tag:PS5` part works because the PS5’s static lease already has that tag set in `/etc/config/dhcp`. Option `6` is the DHCP option for DNS server. The PS5 picks this up on its next DHCP renewal, no manual DNS configuration is required on the console!
+DRAG TO PAN · SCROLL TO ZOOM · DBLCLICK RESET
 
-## [#](https://yashgarg.dev/posts/hijacking-ps5-rtmp-stream/#receiving-the-stream)Receiving the Stream
+*Observations:* Well, there is a lot going on here. Toggling between
+models shows they respond differently to the modifiers. On timbre, TangoFlux
+has particularly large centroid shifts (especially for `"tiny kitten
+meowing"`). On loudness, we can see again that EzAudio needs actions
+specified to produce noticeable audio, so essentially *any* modifier
+pushes in a similar direction. The Pitch view shows fairly strong directional
+agreement in the effect of each modifier between TangoFlux and Stable Audio.
 
-For that, I’m using `nginx-rtmp`:
+Listening to a few examples is also a good reminder that looking at the
+distribution of purely acoustic features like these doesn't measure *quality*,
+which would need different metrics. Some of the hisses in particular seem to
+blow out into something more like *tape* hiss, either due to semantic
+mix-up or some kind of audio artifact. A lot of the purrs are also pretty
+weird sounding.
 
-```
-worker_processes 1;
+Cross-model agreement: What does "plaintive" mean?
 
-error_log /tmp/nginx-error.log warn;
-pid /tmp/nginx.pid;
+To plot that differently, let's look at just one of the modified prompts,
+but with all the models. The plot below shows `"sound of cat"` and
+`"cat meowing plaintively"` along with the shift in centroids from
+the former to the latter prompt for all three models. I picked `"cat meowing
+plaintively"` to look at in more detail because, subjectively, all three
+models actually do fairly good interpretations of it, unlike some of the
+artifacts in the hissing and purring prompts, so we can look for more subtle
+distinctions.
 
-events {
-    worker_connections 512;
-}
+Cross-Model Agreement: "Plaintive"
+Centroid shifts from baseline to `"cat meowing plaintively"`
 
-rtmp {
-    server {
-        listen 1935;
-        chunk_size 4096;
-        application ps5 {
-            live on;
-            record off;
-            sync 10ms;
-            # Notify our app when a stream starts
-            on_publish http://127.0.0.1:9988/on_publish;
-        }
-    }
-}
+Timbre
+Pitch
+Loudness
 
-http {
-    server {
-        listen 8080;
-        location /stat {
-            rtmp_stat all;
-        }
-    }
-}
-```
+ Stable Audio Open
+ EzAudio
+ TangoFlux
 
-The `on_publish` callback is how the menu bar app detects when the PS5 starts broadcasting. nginx fires a POST to `localhost:9988` with the stream name, and the app surfaces the full RTMP URL ready to copy.
+600 samples
 
-At this point, the PS5 is pushing its stream (1080p60, H.264, AAC stereo) directly to my Mac instead of Twitch.
+DRAG TO PAN · SCROLL TO ZOOM · DBLCLICK RESET
 
-![](https://yashgarg.dev/_astro/diagram-3-light.Dd-yXgWU.svg)
+*Observations:* There are a few things we might look for here. If there
+were some kind of consistent, direct acoustic meaning of "plaintive" as a
+modifier, we might expect to see the arrows be parallel to each other, as in
+some of the classic [word2vec examples](https://proceedings.mlr.press/v97/allen19a)
+(although admittedly those examples are in embedding space, while we're in
+a projected acoustic space). That clearly does not seem to be the case. We can
+also look at the actual centroid locations and spreads of points, where there
+does seem to be something interesting going on. In timbre space, asking for a
+plaintive meow vs. a generic sound of cat seems to actually push the models
+further apart; but in pitch space they converge to more similar generative
+output.
 
-From here I can pull the stream into anything: OBS to re-stream it, record it locally, or just play it directly.
+Full Meowdio Explorer
 
-## [#](https://yashgarg.dev/posts/hijacking-ps5-rtmp-stream/#watching-it)Watching It
+Below are all 2,100 clips generated for this post. Select any combination of
+models and prompts, switch between Timbre, Pitch, and Loudness plots, and
+toggle whether points are colored by model or by prompt.
 
-Instead of going through OBS, I used [`mpv`](https://mpv.io/) to pull the stream and shared the window to Discord. The low-latency profile keeps the delay less than a second:
+Meowdio Explorer
 
-```
-mpv --profile=low-latency --audio-buffer=0.3 rtmp://127.0.0.1/ps5/stream-key
-```
+Timbre
+Pitch
+Loudness
 
-This has been quite reliable surprisingly. I’ve been using it for a few weeks now and haven’t had any issues. You can find the complete source code [here](https://github.com/yash-garg/PS5Streamer).
+Color by:
+
+Model
+Prompt
+
+2,100 samples
+
+ Populated by JS 
+
+ Populated by JS 
+
+DRAG TO PAN · SCROLL TO ZOOM · DBLCLICK RESET
+
+There are all kinds of metrics for text-to-audio generators: Fréchet audio
+distance (FAD), CLAP score, etc. But there's no substitute for just listening to
+the output. We think slicing and dicing the generative space with these kinds
+of expressive-range plots is one way to get an ear on what's going on.

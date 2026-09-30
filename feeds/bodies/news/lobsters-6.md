@@ -1,186 +1,75 @@
-My [last
-post](https://nnethercote.github.io/2026/07/31/how-to-speed-up-the-rust-compiler-in-july-2026.html)
-on the Rust compiler’s performance was two months ago and a lot has happened
-since then.
+We have shown that running mainline Linux on your phone is a real possibility for highly invested Linux enthusiasts. Now how do we get from there to making it usable for everybody else who just wants a working phone?
 
-## Overall progress
+Two important segments of the road towards this destination are [Duranium](https://postmarketos.org/blog/2026/03/17/introducing-duranium/) and [Hardware CI](https://postmarketos.org/blog/2026/01/21/hw-ci-mvp/). This blog post is about the third one: **reference devices!**
 
-The measurements for the period 2026-07-29 to 2026-09-28 can be seen
-[here](https://perf.rust-lang.org/compare.html?start=1a833e16546c2eb012758ddd499964fd8afee29e&stat=wall-time&tab=compile&end=c1070d69382b8d2f2eb65119c738a77d9e324c9e&nonRelevant=true).
+Members of the Nura team have joined forces to build maintainer teams for three of the many devices Nura runs on to push them across the finishing line and make them suitable for everyday use with Nura. More on the actual workflow comes further below, let's start with defining the goal in detail.
 
-The mean wall-time reduction was 4.57%, which is a remarkable improvement in
-just two months. Of the 629 benchmark measurements, 555 of them improved and
-only 74 regressed. A number of benchmarks saw double-digit percentage
-reductions. The technical term for this result is “a sea of green”.
+## [New "main" category](https://postmarketos.org/blog/2026/09/29/road-to-main-category/#new-main-category)
 
-## rustdoc
+We [categorize devices](https://docs.nura.eco/pmaports/main/packaging/device-categorization.html) into "main", "community", "testing", "downstream" and "archived". The "main" category was [emptied](https://postmarketos.org/blog/2024/12/23/v24.12-release/#pinephone-and-librem-5) with the v24.12 release. With [PMCR-0009](https://docs.nura.eco/pmcr/main/0009-new-main-device-category.html) we have re-evaluated what we want to have in the "main" device category. Here is the summary:
 
-In my last post I mentioned how [Noah Lev](https://github.com/camelid) got some
-enormous speed wins on rustdoc. He recently wrote [a
-post](https://noahlev.org/blog/2026/08/27/making-rustdoc-faster) explaining in
-some detail exactly how he did this. It’s an interesting and satisfying read.
+> Set new requirements for the “main” device category to highlight selected device ports which are well-tested in hardware CI and set up to stay in “main” for a long time through strong maintainership.
+>
+> Change the meaning of the “main” category to not only indicate that more features are working than in the “community” category, but also that the Nura team is highly invested in keeping the device in the “main” category and takes on responsibilities to make this likely.
+>
+> Maintainers of devices in other categories are welcome to use some of these new requirements for “main” as blueprint for their devices as well, in order to get similar reliability and maintainership improvements for their devices.
 
-## Clippy
+### [Fully mainline](https://postmarketos.org/blog/2026/09/29/road-to-main-category/#fully-mainline)
 
-[#159642](https://github.com/rust-lang/rust/pull/159642): In this PR
-[Jakub Beránek](https://github.com/Kobzol) enabled PGO for Clippy, giving
-wall-time improvements across most Clippy benchmarks, in the best case by 18%!
+After many discussions (the PMCR merge request had 151 comments), we have arrived at [high quality requirements](https://docs.nura.eco/pmaports/main/packaging/device-categorization.html#main) for ports in this category. Among others:
 
-## LLVM update
+- Boot via UEFI (e.g. through a second-stage bootloader on phones).
+- Must use upstream kernels with a strict and minimal policy for patches.
+- Must not depend on forked device-specific packages, such as alsa-ucm-conf.
+- Must use a generic device package for the target architecture.
 
-[#158734](https://github.com/rust-lang/rust/pull/158734): In this PR [Nikita
-Popov](https://github.com/nikic) upgraded the LLVM version used by the compiler
-to LLVM 23. As often happens when we upgrade LLVM, we saw some nice speedups.
-The mean wall-time reduction across all benchmarks was 1.2%, which might not
-sound like much but is really impressive for a single PR. Great work from the
-LLVM folks!
+This means that the resulting ports are essentially fully mainlined and can not only be used with Nura, but also relatively easily with any other Linux distribution. There will be one UI-specific aarch64 image that can be flashed on all "main" aarch64 devices. Getting Linux kernel security patches will be trivial, as we only need to update our generic kernel packages and then get them for all devices in the "main" category at once.
 
-## The new borrow checker
+### [Device features](https://postmarketos.org/blog/2026/09/29/road-to-main-category/#device-features)
 
-The new borrow checker, [Polonius](https://en.wikipedia.org/wiki/Polonius)
-[Alpha](https://en.wikipedia.org/wiki/Alpha) (no relation to
-[Napoleon](https://en.wikipedia.org/wiki/Napoleon_(disambiguation))
-[Dynamite](https://www.youtube.com/watch?v=gdZLi9oWNZg)), was
-[enabled on
-Nightly](https://blog.rust-lang.org/2026/08/04/enabling-polonius-alpha-on-nightly/).
-It is more precise than the existing borrow checker and accepts some valid
-programs that the old borrow checker would reject. It does do more work than the
-old borrow checker, enough to make a measurable difference to compile time in a
-minority of cases, including the popular `serde` crate. Fortunately, [Jack
-Huey](https://github.com/jackh726) has been on the case.
+Regarding device features, "main" category requirements now have:
 
-[#161938](https://github.com/rust-lang/rust/pull/161938): In this PR Jack made
-some liveness computations lazy, which reduced instruction counts for `serde`
-by 3-5%, and for some other benchmarks by less than 1%.
+> **The working features should allow to use the device in most common use cases.** A phone for example would typically have calls, SMS, mobile data, Wi-Fi, audio, battery charging, Bluetooth and camera. Exceptions can be made by the device maintainer team, together with reasoning why they are necessary (e.g. fingerprint reader is not working because the driver is missing). The Nura team decides if the port is complete enough for the main category based on that list.
 
-[#163027](https://github.com/rust-lang/rust/pull/163027): In this PR Jack
-adjusted a data structure and tweaked some inlining, for mostly sub-1%
-instruction count reductions across numerous benchmarks.
+### [Device maintainer team](https://postmarketos.org/blog/2026/09/29/road-to-main-category/#device-maintainer-team)
 
-There is more work to be done to reduce the remaining Polonius Alpha
-regressions, but it’s worth noting that the “sea of green” shows these
-regressions were swamped by the many other recent improvements.
+In order to pull this off, each device must have a team of maintainers that consists of at least 5 people, of which the majority are part of the [Nura team](https://nura.eco/team/). Between these people, a list of responsibilities must be covered. As with the other requirements listed above, this is an ideal the team would be working towards for eventually getting the device into *main*. The team can consist of fewer people and have a smaller scope initially.
 
-## The new trait solver
+From the [list of responsibilities](https://docs.nura.eco/pmaports/main/packaging/device-categorization.html#main), most importantly:
 
-The new trait solver,
-[Penelope](https://en.wikipedia.org/wiki/Anne_Hathaway)
-[Hammertime](https://www.youtube.com/watch?v=q8WSdypJ4WA),
-*[Ed. note: is that right?]* was also [enabled on
-Nightly](https://blog.rust-lang.org/2026/08/21/enabling-next-solver-on-nightly/).
+- Organize regular meetings.
+- Long-term commitment for the device.
+- Kernel maintenance (fixing regressions on the kernel side, new kernel developments).
+- Triage issues found by the community and HW CI regressions.
+- Documentation for this device.
+- Making sure Hardware CI works (wires are connected, preparing CI).
+- Manual testing where necessary.
 
-As I said, a lot has been happening.
+## [Workflow](https://postmarketos.org/blog/2026/09/29/road-to-main-category/#workflow)
 
-Like the new borrow checker, the new trait solver is slower in a minority of
-cases. [Jana Dönszelmann](https://github.com/jdonszelmann) wrote a [detailed
-post](https://donsz.nl/blog/new-solver-performance) about the efforts to
-improve the performance of this new solver.
+So how can your favorite device get into the main category? We have thought hard about this and came up with the following workflow:
 
-Jana’s post is detailed enough that I won’t say much more about the large
-amount of ongoing work on the new solver, but I will mention in passing the PRs
-I made:
-[#160479](https://github.com/rust-lang/rust/pull/160479),
-[#160605](https://github.com/rust-lang/rust/pull/160605),
-[#160801](https://github.com/rust-lang/rust/pull/160801),
-[#160892](https://github.com/rust-lang/rust/pull/160892),
-[#161077](https://github.com/rust-lang/rust/pull/161077),
-and [#161211](https://github.com/rust-lang/rust/pull/161211).
-Some of these reduced compile times greatly for certain outlier crates: 50%
-here, 25% there, 15% there, and [even
-more](https://github.com/rust-lang/rust/issues/159933#issuecomment-5333109889)
-on one stress test. And I am not the only one who has made progress here… go
-read Jana’s post.
+- Become part of a team of device maintainers through issues in the [new-device-teams](https://gitlab.postmarketos.org/postmarketOS/new-device-teams/-/work_items) project. You can either apply to join an existing team by commenting in an existing issue or create a new one.
+- When creating a new issue, the [Nura infrastructure team](https://docs.nura.eco/policies-and-processes/governance/groups-and-teams.html#infrastructure-team) will create bridged Matrix and IRC channels for you, and a pmaports label for this new device will be created. (This is a manual process, if we don't do this within a week then please kindly ask in the devel chat.)
+- Wait until you have at least two people in the potential new team, then find a meeting time that works for everyone and start doing regular meetings. Use the meetings to figure out how to implement the requirements for the main category.
+- Once all requirements for *main* are fulfilled (this will take quite some time, but the device port will already improve significantly in this process!), make a merge request to move the device to the "main" category.
 
-## xmakro
+## [Financing](https://postmarketos.org/blog/2026/09/29/road-to-main-category/#financing)
 
-New contributor [xmakro](https://github.com/xmakro) continued their run of good
-improvements.
+Most of the work done in Nura is volunteer-based. Therefore, we cannot really promise ETAs for this project. Still, donations make it possible to finance development and HW-CI hardware. In some specific cases we might even be able to directly fund development work (e.g. [q6voice(d)](https://postmarketos.org/blog/2026/05/08/q6voice-project/)) too. We are also working on applying for grants to potentially support part of this project.
 
-[#157281](https://github.com/rust-lang/rust/pull/157281): In this PR xmakro
-optimized impl handling when building the specialization graph. This gave a
-mean cycle count reduction of 1.58% across all benchmarks, which is huge for a
-single PR.
+If you are interested in supporting this project, you can make sure that some of your [donations](https://postmarketos.org/donate) will go specifically to this project! If you want to get in touch for some bigger-targeted donations to directly support development, we would also be happy to hear from you at `board at postmarketos dot org` (emails are not migrated to nura.eco yet).
 
-[#158059](https://github.com/rust-lang/rust/pull/158059): In this PR xmakro
-optimized one aspect of the loading of incremental compilation data, reducing
-instruction counts across multiple benchmarks, in the best case by 6%.
+## [Initial candidates](https://postmarketos.org/blog/2026/09/29/road-to-main-category/#initial-candidates)
 
-[#160473](https://github.com/rust-lang/rust/pull/160473): In this PR xmakro
-avoided some allocations in a hot obligations processing path, reducing
-instruction counts across numerous benchmarks, in the best case by 2%.
+Together with this blog post, we have created three initial issues in the new-device-teams project:
 
-[#160268](https://github.com/rust-lang/rust/pull/160268): In this PR xmakro
-avoided a lot of allocations by changing the old/new trait solver selection
-code to use static dispatch instead of dynamic dispatch. This gave mostly
-sub-1% instruction count reductions across a number of benchmarks. This hot
-allocation path had been showing up in profiles for a while and I had earlier
-tried exactly the same idea in
-[#155714](https://github.com/rust-lang/rust/pull/155714). But I got regressions
-on a couple of benchmarks, possibly due to slightly different choices of where
-to place some `#[inline]` attributes. It was good to see this obvious
-inefficiency fixed.
+All of these are based on the [SM7325](https://wiki.nura.eco/wiki/Qualcomm_Snapdragon_778G/778G%2B/782G_(SM7325)) SoC for which significant mainline support exists already, to the point that we believe there is a good chance to eventually fulfill all requirements needed for the new main category. For all of these we are already able to use UART.
 
-## Dataflow analysis
+The Radxa Dragon Q6A is a single-board computer, which means it will be much easier to get this moved to main first compared to actual phones. Fairphone as OEM is ideologically very aligned with our project, while the Edge 30 is a cheaper phone that is easier to obtain in some regions.
 
-[#160193](https://github.com/rust-lang/rust/pull/160193): In this PR I changed
-the CFG traversal algorithm used by the dataflow analyses in the compiler.
-These analyses iterate to a fixpoint and the traversal algorithm can affect how
-quickly the fixpoint is reached. For most code the new algorithm makes no
-difference, but the `cranelift-codegen` crate has one enormous function with
-over 18,000 basic blocks. The old algorithm required 1.5 million calls to
-`apply_effects_in_block` to reach a fixpoint for the `EverInitializedPlaces`
-analysis used by the borrow checker; the new algorithm requires 90,000. This
-gave an enormous ~30% wall-time reduction for a `check` build of this crate.
+## [Get involved](https://postmarketos.org/blog/2026/09/29/road-to-main-category/#get-involved)
 
-[#160033](https://github.com/rust-lang/rust/pull/160033): In this PR I made
-`EverInitializedPlaces` more efficient again, this time by not tracking
-unnecessary data for projections. This reduced instruction counts on the
-`match-stress` benchmark by 17%, and on a few other benchmarks by less than 1%.
+Now it's your turn. If you would like to see one of these devices become well maintained in Nura to the point that you can daily drive them without making compromises, consider joining their device maintainer teams. You don't even need to be a programmer to help out, there are many non-coding tasks such as testing, organization, triaging issues etc. that are super important as well and ensure that the programmers don't burn out.
 
-## LLMs
-
-They’ve gotten very good at certain kinds of analysis. I’m still writing all my
-own code and text, because (a) that’s paramount, and (b) the [project
-policy](https://forge.rust-lang.org/policies/llm-usage.html) requires it, but I
-had useful LLM analysis assistance on several of the PRs mentioned in this post.
-
-Anyway, enough about that.
-
-## Miscellaneous
-
-[#160535](https://github.com/rust-lang/rust/pull/160535): In this PR [Chris
-Denton](https://github.com/ChrisDenton) increased the default stack size used
-by the compiler, which allowed the removal of `ensure_sufficient_stack`, a
-manual stack extension mechanism sprinkled about in places prone to high levels
-of recursion. There was a lot of discussion about this one because it can be
-difficult to decide how to best deal with stack exhaustion. But the performance
-effects are clear, with reduced instruction counts across many benchmarks, in
-the best case by almost 3%.
-
-[#160506](https://github.com/rust-lang/rust/pull/160506): The project uses a
-lot of “rollup” PRs, where multiple PRs are merged together. This is because we
-don’t have sufficient CI capacity to merge every PR individually. Normally PRs
-that affect performance are merged by themselves so we can measure their
-effects clearly. For the first time ever, at one point we had so many
-performance improvement PRs waiting in the merge queue that [Jonathan
-Brouwer](https://github.com/JonathanBrouwer) created a rollup containing 10
-performance-improving PRs to keep things moving! This is a good problem to
-have. And later on we had
-[#162859](https://github.com/rust-lang/rust/pull/162859) which contained four
-performance-improving PRs. (You needn’t worry about unexpected effects slipping
-in because we have the ability to run the perf benchmark suite on the
-individual PRs after merging, to make sure each PR had the expected performance
-effect.)
-
-[#162747](https://github.com/rust-lang/rust/pull/162747): In this PR I made
-some minor improvements to the code that lowers AST to HIR. It was a cleanup
-that wasn’t expected to affect performance but it reduced instruction counts
-across numerous benchmarks, in the best case by 1.5%. Sometimes you get lucky.
-
-## Job status
-
-Tomorrow I will start working at [Hexcat](https://hexcat.nl/) on the [compiler
-performance
-optimizations](https://goals.rust-lang.org/2026/compiler-performance-optimization.html)
-project goal. It’s exciting! Many thanks to Mara Bos, Predrag Gruevski, and all
-the other people who helped make this happen.
+If you are significantly interested in improving another device port (even if the end-goal is not main), look through the [existing issues](https://gitlab.postmarketos.org/postmarketOS/new-device-teams/-/work_items). If it is not there, consider creating a [new issue](https://gitlab.postmarketos.org/postmarketOS/new-device-teams/-/work_items/new) and get the ball rolling.
