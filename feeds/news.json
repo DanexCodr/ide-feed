@@ -1,10 +1,10 @@
 {
-  "updated": "2026-09-30T01:01:39Z",
+  "updated": "2026-09-30T01:22:32Z",
   "items": [
     {
       "id": "hn-49891295",
       "title": "Everybody’s home. No one’s coming over",
-      "desc": "By barry-cotter | 716 points | 660 comments",
+      "desc": "By barry-cotter | 720 points | 662 comments",
       "tag": "news",
       "published": "2026-09-29T11:14:45Z",
       "url": "https://www.derekthompson.org/p/the-death-of-the-american-host",
@@ -16,7 +16,7 @@
     {
       "id": "hn-49892245",
       "title": "How Delhi cut electricity loss from 50 to 5 percent",
-      "desc": "By rbanffy | 434 points | 251 comments",
+      "desc": "By rbanffy | 436 points | 253 comments",
       "tag": "news",
       "published": "2026-09-29T12:43:29Z",
       "url": "https://spectrum.ieee.org/delhi-electricity-loss",
@@ -40,55 +40,55 @@
     {
       "id": "hn-49895304",
       "title": "PS5 Relapse Exploit",
-      "desc": "By therepanic | 227 points | 123 comments",
+      "desc": "By therepanic | 232 points | 125 comments",
       "tag": "news",
       "published": "2026-09-29T15:44:41Z",
       "url": "https://github.com/ntfargo/Relapse-Exploit",
       "color": "#FF6600",
-      "image": "https://opengraph.githubassets.com/87a57d1ac0d38df07ebc8cbf0e15e1a9093b73d9817c52f39697cb906cc9372c/ntfargo/Relapse-Exploit",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAAQACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAAMBAgT/xAAVAQEBAAAAAAAAAAAAAAAAAAAAAf/aAAwDAQACEAMQAAAB3liJS4P/xAAaEAEAAQUAAAAAAAAAAAAAAAABAAIQEiAi/9oACAEBAAEFAlnVipy0/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFhAAAwAAAAAAAAAAAAAAAAAAEBEg/9oACAEBAAY/Aip//8QAGxAAAwEBAAMAAAAAAAAAAAAAAAERIYEQobH/2gAIAQEAAT8hYni9GtTXUKzZwct8M8Up/9oADAMBAAIAAwAAABD5L//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QP//EABcRAAMBAAAAAAAAAAAAAAAAAAABEVH/2gAIAQIBAT8QqHNP/8QAHBABAAICAwEAAAAAAAAAAAAAAQARMZEhQaFh/9oACAEBAAE/EHom76QoAR6Sz2d6n4qOrqFvCLbrcsrBuAt5Nyl5Nz//2Q==",
+      "image": "https://opengraph.githubassets.com/3297faf6b459e7fcbed1226cf342f5cb61fec5a57ec2e79bd9097e424720a013/ntfargo/Relapse-Exploit",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAAQACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAAMBAgT/xAAVAQEBAAAAAAAAAAAAAAAAAAAAAf/aAAwDAQACEAMQAAAB3liJS4P/xAAaEAEAAQUAAAAAAAAAAAAAAAABAAIQEiAi/9oACAEBAAEFAlnVipy0/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFhAAAwAAAAAAAAAAAAAAAAAAEBEg/9oACAEBAAY/Aip//8QAGxAAAwEBAAMAAAAAAAAAAAAAAAERIYEQobH/2gAIAQEAAT8hYni9GtTXUKzZwct8M8Up/9oADAMBAAIAAwAAABD5L//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QP//EABcRAAMBAAAAAAAAAAAAAAAAAAABEVH/2gAIAQIBAT8QqHNP/8QAGxABAAIDAQEAAAAAAAAAAAAAAQARMUGRoWH/2gAIAQEAAT8QeidvpCgBHSWezep+Kjq6hbwi212WVg7KXk7KXk7P/9k=",
       "order": 4
     },
     {
       "id": "hn-49891290",
       "title": "Jeeves. Reasoning improves Jev-like decision models",
-      "desc": "By nicowaltz | 224 points | 85 comments",
+      "desc": "By nicowaltz | 225 points | 85 comments",
       "tag": "news",
       "published": "2026-09-29T11:13:54Z",
       "url": "https://github.com/PostHog/jeeves",
       "color": "#FF6600",
-      "image": "https://opengraph.githubassets.com/eab27adf2c983aa9757dc3e62507a6075d4b3d0975d24912e20c3be30723221a/PostHog/jeeves",
+      "image": "https://opengraph.githubassets.com/0370178d31cc7865fa5b0461b5a44bb8bea13223436ff5bd2f73c44b9ae3db3b/PostHog/jeeves",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAAQACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAQIABf/EABQBAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhADEAAAAeiIVLj/xAAYEAADAQEAAAAAAAAAAAAAAAAAAREQIf/aAAgBAQABBQI7ibtRUVFR/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAGBABAQADAAAAAAAAAAAAAAAAADEBECH/2gAIAQEABj8C33Cqqv/EABsQAAIDAQEBAAAAAAAAAAAAAAARAWGRITGB/9oACAEBAAE/IZb5MYfOENd9JKJtlTSppU0qaf/aAAwDAQACAAMAAAAQEA//xAAVEQEBAAAAAAAAAAAAAAAAAAAAEf/aAAgBAwEBPxBX/8QAFREBAQAAAAAAAAAAAAAAAAAAABH/2gAIAQIBAT8QR//EABwQAAICAwEBAAAAAAAAAAAAAAABESFhwfFBgf/aAAgBAQABPxBpqGQ70/th/C8FCHhlZcQNMv0jkjmi/SP/2Q==",
       "order": 5
     },
     {
+      "id": "hn-49901736",
+      "title": "Livenerf: Has Opus 5.5 been nerfed yet?",
+      "desc": "By bryan0 | 195 points | 96 comments",
+      "tag": "news",
+      "published": "2026-09-29T22:36:14Z",
+      "url": "https://github.com/ninjahawk/livenerf",
+      "color": "#FF6600",
+      "image": "https://opengraph.githubassets.com/9330757b64f652e9e60798fdb91f1adbef3d7d11e59b3a694a45637510a8db1a/ninjahawk/livenerf",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAAQACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAQQABf/EABQBAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhADEAAAAeiIMtOP/8QAGRAAAwEBAQAAAAAAAAAAAAAAAAERAgMh/9oACAEBAAEFAj0VM70+lRUVFR//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAYEAEBAAMAAAAAAAAAAAAAAAAAMQEQEf/aAAgBAQAGPwLfMxVVX//EABsQAAEFAQEAAAAAAAAAAAAAAAABESFhkTFx/9oACAEBAAE/IVd4Y9phJKpglXOngqaVNKmlTT//2gAMAwEAAgADAAAAEFHP/8QAFREBAQAAAAAAAAAAAAAAAAAAABH/2gAIAQMBAT8QV//EABURAQEAAAAAAAAAAAAAAAAAAAAR/9oACAECAQE/EEf/xAAeEAACAgICAwAAAAAAAAAAAAAAAREhUXExwYGx8f/aAAgBAQABPxBqm8kx0pL2MKYTIsmGqOMRMXqC/pHyRd0jj9I//9k=",
+      "order": 6
+    },
+    {
       "id": "hn-49878857",
       "title": "A Staff Engineer's Guide to Inventing Work",
-      "desc": "By amortize | 178 points | 37 comments",
+      "desc": "By amortize | 184 points | 38 comments",
       "tag": "news",
       "published": "2026-09-28T14:46:07Z",
       "url": "https://sujithjay.com/inventing-work",
       "color": "#FF6600",
       "image": "",
       "preview": "",
-      "order": 6
-    },
-    {
-      "id": "hn-49901736",
-      "title": "Livenerf: Has Opus 5.5 been nerfed yet?",
-      "desc": "By bryan0 | 171 points | 92 comments",
-      "tag": "news",
-      "published": "2026-09-29T22:36:14Z",
-      "url": "https://github.com/ninjahawk/livenerf",
-      "color": "#FF6600",
-      "image": "https://opengraph.githubassets.com/683344a071936936135ae1bfb0ade13463035aa730f540d9355d6e9442ce5ef1/ninjahawk/livenerf",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAAQACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAQQABf/EABQBAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhADEAAAAeiIMtOP/8QAGRAAAwEBAQAAAAAAAAAAAAAAAAERAgMh/9oACAEBAAEFAj0VM70+lRUVFR//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAYEAEBAAMAAAAAAAAAAAAAAAAAMQEQEf/aAAgBAQAGPwLfMxVVX//EABsQAAEFAQEAAAAAAAAAAAAAAAABESFhkTFx/9oACAEBAAE/IVd4Y9phJKpglXOngqaVNKmlTT//2gAMAwEAAgADAAAAEFHP/8QAFREBAQAAAAAAAAAAAAAAAAAAABH/2gAIAQMBAT8QV//EABURAQEAAAAAAAAAAAAAAAAAAAAR/9oACAECAQE/EEf/xAAeEAACAgICAwAAAAAAAAAAAAAAAREhUXEx8YGxwf/aAAgBAQABPxBqm8kx0pL2MKYTIsmGqOMRMXqC/wCI6kdSOP0j/9k=",
       "order": 7
     },
     {
       "id": "hn-49899090",
       "title": "U.S. postal inspectors shut down website selling counterfeit postage labels",
-      "desc": "By ilamont | 165 points | 88 comments",
+      "desc": "By ilamont | 166 points | 92 comments",
       "tag": "news",
       "published": "2026-09-29T19:30:17Z",
       "url": "https://postalemployeenetwork.com/news/2026/09/26/u-s-postal-inspectors-shut-down-website-selling-millions-of-counterfeit-postage-labels/",
@@ -100,7 +100,7 @@
     {
       "id": "hn-49893157",
       "title": "Ask HN: What are you reading?",
-      "desc": "By dan-bailey | 126 points | 337 comments",
+      "desc": "By dan-bailey | 128 points | 343 comments",
       "tag": "news",
       "published": "2026-09-29T13:44:43Z",
       "url": "https://news.ycombinator.com/item?id=49893157",
@@ -112,7 +112,7 @@
     {
       "id": "hn-49894351",
       "title": "Show HN: NSL – WSL for Linux",
-      "desc": "By bketelsen | 78 points | 60 comments",
+      "desc": "By bketelsen | 81 points | 62 comments",
       "tag": "news",
       "published": "2026-09-29T14:51:36Z",
       "url": "https://frostyard.github.io/nsl/",
@@ -124,7 +124,7 @@
     {
       "id": "hn-49897993",
       "title": "Vermont replacing power plants with home batteries",
-      "desc": "By devonnull | 67 points | 37 comments",
+      "desc": "By devonnull | 75 points | 47 comments",
       "tag": "news",
       "published": "2026-09-29T18:19:02Z",
       "url": "https://www.bbc.com/future/article/20260928-a-virtual-power-plant-hidden-in-vermont-homes-is-keeping-the-lights-on-during-storms",
@@ -136,7 +136,7 @@
     {
       "id": "hn-49893002",
       "title": "Backblaze drive stats for Q2 2026",
-      "desc": "By HieronymusBosch | 67 points | 8 comments",
+      "desc": "By HieronymusBosch | 71 points | 8 comments",
       "tag": "news",
       "published": "2026-09-29T13:34:20Z",
       "url": "https://www.backblaze.com/blog/backblaze-drive-stats-for-q2-2026/",
@@ -148,7 +148,7 @@
     {
       "id": "hn-49890733",
       "title": "NASA asked several former SR-71A staffers to help secret restart",
-      "desc": "By ilamont | 54 points | 41 comments",
+      "desc": "By ilamont | 60 points | 56 comments",
       "tag": "news",
       "published": "2026-09-29T10:10:20Z",
       "url": "https://aviationweek.com/defense/aircraft-propulsion/nasa-asked-several-former-sr-71a-staffers-help-secret-restart",
@@ -160,7 +160,7 @@
     {
       "id": "hn-49898050",
       "title": "We’re forgetting what darkness feels like",
-      "desc": "By pseudolus | 37 points | 33 comments",
+      "desc": "By pseudolus | 44 points | 36 comments",
       "tag": "news",
       "published": "2026-09-29T18:22:40Z",
       "url": "https://www.theguardian.com/environment/2026/sep/29/night-sky-darkness-city-regulation",
@@ -170,45 +170,45 @@
       "order": 14
     },
     {
+      "id": "hn-49866031",
+      "title": "Stuck in the Suez Canal – the short version (2021)",
+      "desc": "By joebig | 39 points | 3 comments",
+      "tag": "news",
+      "published": "2026-09-27T12:17:39Z",
+      "url": "https://cathsenker.co.uk/stuck-in-the-suez-canal-the-short-version/",
+      "color": "#FF6600",
+      "image": "https://cathsenker.co.uk/wp-content/uploads/pic6_GWharton_sailingboat.jpg",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAAPACADASIAAhEBAxEB/8QAGAABAAMBAAAAAAAAAAAAAAAABAABAgP/xAAUAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAFcHQL5GyP/xAAXEAEBAQEAAAAAAAAAAAAAAAABABAR/9oACAEBAAEFAsYe6rdv/8QAFREBAQAAAAAAAAAAAAAAAAAAAEH/2gAIAQMBAT8BR//EABURAQEAAAAAAAAAAAAAAAAAAABB/9oACAECAQE/AVf/xAAUEAEAAAAAAAAAAAAAAAAAAAAw/9oACAEBAAY/Ag//xAAZEAEAAwEBAAAAAAAAAAAAAAABABARITH/2gAIAQEAAT8hpYTsGDiUDxyKn//aAAwDAQACAAMAAAAQHf8A/8QAFhEBAQEAAAAAAAAAAAAAAAAAABEB/9oACAEDAQE/EGSn/8QAFhEBAQEAAAAAAAAAAAAAAAAAAQAR/9oACAECAQE/EMkcX//EABwQAAICAgMAAAAAAAAAAAAAAAABETEhUUFxwf/aAAgBAQABPxDGzGxT2La0srobIQ279IyxfMkCGz//2Q==",
+      "order": 15
+    },
+    {
       "id": "hn-49896757",
       "title": "Show HN: A working 3D model of an Enigma machine",
-      "desc": "By primitivesuave | 31 points | 3 comments",
+      "desc": "By primitivesuave | 32 points | 3 comments",
       "tag": "news",
       "published": "2026-09-29T17:15:56Z",
       "url": "https://enigma.design",
       "color": "#FF6600",
       "image": "",
       "preview": "",
-      "order": 15
+      "order": 16
     },
     {
       "id": "hn-49859482",
       "title": "Commodore 64: Mercenary",
-      "desc": "By a1r | 25 points | 5 comments",
+      "desc": "By a1r | 26 points | 5 comments",
       "tag": "news",
       "published": "2026-09-26T19:00:46Z",
       "url": "https://gamesexplained.com/c64/mercenary/",
       "color": "#FF6600",
       "image": "https://gamesexplained.com/c64/mercenary/reference/lift-0808-room8-hangar.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAAXACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAAMCBP/EABYBAQEBAAAAAAAAAAAAAAAAAAACA//aAAwDAQACEAMQAAAB4dKbzPNpihhSIf/EABwQAAIBBQEAAAAAAAAAAAAAAAECAAMREhMxEP/aAAgBAQABBQJVuMBMBGWwTnj8WoVXeZvaNUyH/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAwEBPwEf/8QAGBEBAAMBAAAAAAAAAAAAAAAAAgABERD/2gAIAQIBAT8BNHIqOd//xAAXEAEBAQEAAAAAAAAAAAAAAAAAETEw/9oACAEBAAY/AuEYxI//xAAaEAADAQADAAAAAAAAAAAAAAAAARFhEIGR/9oACAEBAAE/IUUdNGaMRRXh6fh0/OGapS0zGQdQiP/aAAwDAQACAAMAAAAQOOAc/8QAFxEBAQEBAAAAAAAAAAAAAAAAAREAEP/aAAgBAwEBPxBW4W9//8QAFxEBAQEBAAAAAAAAAAAAAAAAAREAEP/aAAgBAgEBPxBIswVJ3//EAB0QAQADAAIDAQAAAAAAAAAAAAEAESExQVHh8fD/2gAIAQEAAT8Qt4G6yfZn2Zby11sb1XehZvsTfYj8Xk6Y+XWjd/smt7+bYFdDfOuxOCUVL2p//9k=",
-      "order": 16
-    },
-    {
-      "id": "hn-49888182",
-      "title": "When oil prices spike, where does the money go?",
-      "desc": "By thelastgallon | 23 points | 12 comments",
-      "tag": "news",
-      "published": "2026-09-29T04:14:11Z",
-      "url": "https://theconversation.com/when-oil-prices-spike-where-does-the-money-go-280763",
-      "color": "#FF6600",
-      "image": "https://images.theconversation.com/files/730536/original/file-20260416-63-94sb16.jpg?ixlib=rb-4.1.1&rect=0%2C484%2C5799%2C2899&q=45&auto=format&w=1356&h=668&fit=crop",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAAQACADASIAAhEBAxEB/8QAFwABAAMAAAAAAAAAAAAAAAAAAwIEBf/EABQBAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhADEAAAAbAqRJc9D//EABoQAAIDAQEAAAAAAAAAAAAAAAECABExIkH/2gAIAQEAAQUCMI6xp6Lj6ppf/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAGhAAAgIDAAAAAAAAAAAAAAAAADEQEQEhQf/aAAgBAQAGPwJCHOYu9dP/xAAcEAACAwADAQAAAAAAAAAAAAABEQAhMUFRYZH/2gAIAQEAAT8hBhcomiLbhw+SYLFAGAMryATIm/I6PcMOIdEHU//aAAwDAQACAAMAAAAQEM//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/ED//xAAeEAEAAgICAwEAAAAAAAAAAAABABEhMUFRYXGxkf/aAAgBAQABPxBFoNLGBYgI0Wb7fUFjoAIB+zdEdIxKONP3mOmNqI6a5hCNwoezHyozJ8gXZP/Z",
       "order": 17
     },
     {
       "id": "hn-49891203",
       "title": "Language models for text classification: From bag-of-words to Jev",
-      "desc": "By Anon84 | 22 points | 0 comments",
+      "desc": "By Anon84 | 25 points | 0 comments",
       "tag": "news",
       "published": "2026-09-29T11:06:25Z",
       "url": "https://magazine.sebastianraschka.com/p/classifier-history-and-jev",
@@ -218,40 +218,52 @@
       "order": 18
     },
     {
+      "id": "hn-49888182",
+      "title": "When oil prices spike, where does the money go?",
+      "desc": "By thelastgallon | 25 points | 13 comments",
+      "tag": "news",
+      "published": "2026-09-29T04:14:11Z",
+      "url": "https://theconversation.com/when-oil-prices-spike-where-does-the-money-go-280763",
+      "color": "#FF6600",
+      "image": "https://images.theconversation.com/files/730536/original/file-20260416-63-94sb16.jpg?ixlib=rb-4.1.1&rect=0%2C484%2C5799%2C2899&q=45&auto=format&w=1356&h=668&fit=crop",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAAQACADASIAAhEBAxEB/8QAFwABAAMAAAAAAAAAAAAAAAAAAwIEBf/EABQBAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhADEAAAAbAqRJc9D//EABoQAAIDAQEAAAAAAAAAAAAAAAECABExIkH/2gAIAQEAAQUCMI6xp6Lj6ppf/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAGhAAAgIDAAAAAAAAAAAAAAAAADEQEQEhQf/aAAgBAQAGPwJCHOYu9dP/xAAcEAACAwADAQAAAAAAAAAAAAABEQAhMUFRYZH/2gAIAQEAAT8hBhcomiLbhw+SYLFAGAMryATIm/I6PcMOIdEHU//aAAwDAQACAAMAAAAQEM//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/ED//xAAeEAEAAgICAwEAAAAAAAAAAAABABEhMUFRYXGxkf/aAAgBAQABPxBFoNLGBYgI0Wb7fUFjoAIB+zdEdIxKONP3mOmNqI6a5hCNwoezHyozJ8gXZP/Z",
+      "order": 19
+    },
+    {
       "id": "hn-49901149",
       "title": "Deser: Rethinking Rust Serialization",
-      "desc": "By tosh | 20 points | 6 comments",
+      "desc": "By tosh | 21 points | 6 comments",
       "tag": "news",
       "published": "2026-09-29T21:48:27Z",
       "url": "https://lucumr.pocoo.org/2026/9/29/deser/",
       "color": "#FF6600",
       "image": "https://lucumr.pocoo.org/social/2026-09-29-deser-social.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAARACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAAEE/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAL/2gAMAwEAAhADEAAAAciLmwAAP//EABYQAAMAAAAAAAAAAAAAAAAAAAAhMP/aAAgBAQABBQIU/wD/xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAEDAQE/AR//xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAECAQE/AR//xAAUEAEAAAAAAAAAAAAAAAAAAAAw/9oACAEBAAY/Ak//xAAXEAEAAwAAAAAAAAAAAAAAAAAhEDBR/9oACAEBAAE/ISBlX//aAAwDAQACAAMAAAAQQUAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAwEBPxAf/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAgEBPxAf/8QAIhAAAQMACwAAAAAAAAAAAAAAAQARIRAgMUFRYXGBkdHw/9oACAEBAAE/EBCbdU3hPSfE5Ra4NvSJTZir/9k=",
-      "order": 19
+      "order": 20
     },
     {
       "id": "hn-49895864",
       "title": "Needed 1+1, built a functional programming language",
-      "desc": "By birdculture | 18 points | 3 comments",
+      "desc": "By birdculture | 20 points | 4 comments",
       "tag": "news",
       "published": "2026-09-29T16:18:26Z",
       "url": "https://hereticpleb.vercel.app/blog/needed-one-plus-one/",
       "color": "#FF6600",
       "image": "https://hereticpleb.vercel.app/og-image.jpg",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAASACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAAEF/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEAMQAAABzrBYgAB//8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQABBQJP/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAwEBPwEf/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAgEBPwEf/8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwJP/8QAFhAAAwAAAAAAAAAAAAAAAAAAADBB/9oACAEBAAE/ISL/AP/aAAwDAQACAAMAAAAQUM88/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAwEBPxAf/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAgEBPxAf/8QAGRAAAwEBAQAAAAAAAAAAAAAAAAEREDFB/9oACAEBAAE/EFyClY+idKN3Ee4z/9k=",
-      "order": 20
+      "order": 21
     },
     {
       "id": "hn-49901437",
       "title": "UnoDOS",
-      "desc": "By nicoloren | 14 points | 7 comments",
+      "desc": "By nicoloren | 15 points | 8 comments",
       "tag": "news",
       "published": "2026-09-29T22:10:23Z",
       "url": "https://github.com/hmofet/unodos",
       "color": "#FF6600",
-      "image": "https://opengraph.githubassets.com/3b45d66af01b999099cd302f7c784c35d50fd2db0fc47b6d24f1b4bcd1ef739a/hmofet/unodos",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAAQACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAQACBf/EABQBAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhADEAAAAeiQaJP/xAAYEAADAQEAAAAAAAAAAAAAAAAAAREhEP/aAAgBAQABBQI3m2oqKio//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAGBABAQADAAAAAAAAAAAAAAAAADEBEEH/2gAIAQEABj8Cc3VXCv/EABwQAAIBBQEAAAAAAAAAAAAAAAABkREhMUFh8f/aAAgBAQABPyF100V1cBYvkV2uDik4pPcOST//2gAMAwEAAgADAAAAEBKP/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPxA//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPxA//8QAHhABAAIBBAMAAAAAAAAAAAAAAQARYSFBgcFRcfH/2gAIAQEAAT8Qd2h7I9iUa0Q4FRsKeOIs9afJwLY4S90XhP/Z",
-      "order": 21
+      "image": "https://opengraph.githubassets.com/5920c8999afdcae1182216369b599e33ec31861e1b80bd75c4bef5906d4fbe6e/hmofet/unodos",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAAQACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAQACBf/EABQBAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhADEAAAAeiQaJP/xAAYEAADAQEAAAAAAAAAAAAAAAAAAREhEP/aAAgBAQABBQI3m2oqKio//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAGBABAQADAAAAAAAAAAAAAAAAADEBEEH/2gAIAQEABj8Cc3VXCv/EABwQAAIBBQEAAAAAAAAAAAAAAAABkREhMUFh8f/aAAgBAQABPyF100V1cBYvkV2uDik4pPcOST//2gAMAwEAAgADAAAAEBKP/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPxA//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPxA//8QAHRABAAICAgMAAAAAAAAAAAAAAQARYYEhwUFRcf/aAAgBAQABPxB3aH0j2JRrRDgVGwp64iz1pmdYF4NJe8LpP//Z",
+      "order": 22
     },
     {
       "id": "lobsters-0",
@@ -303,18 +315,6 @@
     },
     {
       "id": "lobsters-4",
-      "title": "Nura (postmarketOS): The road to daily-drivable mainline phones",
-      "desc": "Source: Lobsters",
-      "tag": "news",
-      "published": "Tue, 29 Sep 2026 14:20:05 -0500",
-      "url": "https://postmarketos.org/blog/2026/09/29/road-to-main-category/",
-      "color": "#AC130D",
-      "image": "https://postmarketos.org/static/img/2026-09/main-device-roadmap.jpg",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAAPACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAgMAAQT/xAAWAQEBAQAAAAAAAAAAAAAAAAABAAL/2gAMAwEAAhADEAAAASXFZCdnqf/EABsQAAMAAwEBAAAAAAAAAAAAAAABAhESIgMh/9oACAEBAAEFAl8KpsdPEvn0fSrU2wTR/8QAFxEAAwEAAAAAAAAAAAAAAAAAAAECMf/aAAgBAwEBPwFsnT//xAAWEQEBAQAAAAAAAAAAAAAAAAABADH/2gAIAQIBAT8BCcv/xAAaEAACAgMAAAAAAAAAAAAAAAABEAAhETFB/9oACAEBAAY/AuIXBa1l/wD/xAAbEAADAAMBAQAAAAAAAAAAAAAAAREhMVGBcf/aAAgBAQABPyGnd+B5K01wkE9gzNsMXkuqydE9OS+mRKvZ/9oADAMBAAIAAwAAABCuL//EABURAQEAAAAAAAAAAAAAAAAAAAAB/9oACAEDAQE/EFVP/8QAFhEBAQEAAAAAAAAAAAAAAAAAAQAR/9oACAECAQE/EACI4v/EABoQAQEAAwEBAAAAAAAAAAAAAAERACExQcH/2gAIAQEAAT8QRoWhprgEkNmkz2YjHmXlkcmXHNZ7e5QChFR9MrSHfMO0gUb1n//Z",
-      "order": 5
-    },
-    {
-      "id": "lobsters-5",
       "title": "Deser: Rethinking Rust Serialization",
       "desc": "Source: Lobsters",
       "tag": "news",
@@ -323,6 +323,18 @@
       "color": "#AC130D",
       "image": "https://lucumr.pocoo.org/social/2026-09-29-deser-social.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAARACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAAEE/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAL/2gAMAwEAAhADEAAAAciLmwAAP//EABYQAAMAAAAAAAAAAAAAAAAAAAAhMP/aAAgBAQABBQIU/wD/xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAEDAQE/AR//xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAECAQE/AR//xAAUEAEAAAAAAAAAAAAAAAAAAAAw/9oACAEBAAY/Ak//xAAXEAEAAwAAAAAAAAAAAAAAAAAhEDBR/9oACAEBAAE/ISBlX//aAAwDAQACAAMAAAAQQUAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAwEBPxAf/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAgEBPxAf/8QAIhAAAQMACwAAAAAAAAAAAAAAAQARIRAgMUFRYXGBkdHw/9oACAEBAAE/EBCbdU3hPSfE5Ra4NvSJTZir/9k=",
+      "order": 5
+    },
+    {
+      "id": "lobsters-5",
+      "title": "Nura (postmarketOS): The road to daily-drivable mainline phones",
+      "desc": "Source: Lobsters",
+      "tag": "news",
+      "published": "Tue, 29 Sep 2026 14:20:05 -0500",
+      "url": "https://postmarketos.org/blog/2026/09/29/road-to-main-category/",
+      "color": "#AC130D",
+      "image": "https://postmarketos.org/static/img/2026-09/main-device-roadmap.jpg",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAAPACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAgMAAQT/xAAWAQEBAQAAAAAAAAAAAAAAAAABAAL/2gAMAwEAAhADEAAAASXFZCdnqf/EABsQAAMAAwEBAAAAAAAAAAAAAAABAhESIgMh/9oACAEBAAEFAl8KpsdPEvn0fSrU2wTR/8QAFxEAAwEAAAAAAAAAAAAAAAAAAAECMf/aAAgBAwEBPwFsnT//xAAWEQEBAQAAAAAAAAAAAAAAAAABADH/2gAIAQIBAT8BCcv/xAAaEAACAgMAAAAAAAAAAAAAAAABEAAhETFB/9oACAEBAAY/AuIXBa1l/wD/xAAbEAADAAMBAQAAAAAAAAAAAAAAAREhMVGBcf/aAAgBAQABPyGnd+B5K01wkE9gzNsMXkuqydE9OS+mRKvZ/9oADAMBAAIAAwAAABCuL//EABURAQEAAAAAAAAAAAAAAAAAAAAB/9oACAEDAQE/EFVP/8QAFhEBAQEAAAAAAAAAAAAAAAAAAQAR/9oACAECAQE/EACI4v/EABoQAQEAAwEBAAAAAAAAAAAAAAERACExQcH/2gAIAQEAAT8QRoWhprgEkNmkz2YjHmXlkcmXHNZ7e5QChFR9MrSHfMO0gUb1n//Z",
       "order": 6
     },
     {
@@ -339,18 +351,6 @@
     },
     {
       "id": "lobsters-7",
-      "title": "Bill Gates tries to install Movie Maker",
-      "desc": "Source: Lobsters",
-      "tag": "news",
-      "published": "Mon, 28 Sep 2026 11:18:16 -0500",
-      "url": "https://www.techemails.com/p/bill-gates-tries-to-install-movie-maker",
-      "color": "#AC130D",
-      "image": "https://substackcdn.com/image/fetch/$s_!Kgd5!,w_1200,h_675,c_fill,f_jpg,q_auto:good,fl_progressive:steep,g_auto/https%3A%2F%2Fbucketeer-e05bbc84-baa3-437e-9518-adb32be77984.s3.amazonaws.com%2Fpublic%2Fimages%2F79fc15fc-6ea8-4426-acad-117e6c349ba0_922x876.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAAXACADASIAAhEBAxEB/8QAGAABAQEBAQAAAAAAAAAAAAAAAAQBAgX/xAAXAQADAQAAAAAAAAAAAAAAAAAAAQID/9oADAMBAAIQAxAAAAH0k/LVWy0okGk7UTX/xAAbEAACAQUAAAAAAAAAAAAAAAAAATECEBESIP/aAAgBAQABBQLjdmWUTdSf/8QAFxEAAwEAAAAAAAAAAAAAAAAAAAEQEf/aAAgBAwEBPwHaj//EABcRAAMBAAAAAAAAAAAAAAAAAAACEBH/2gAIAQIBAT8Bysf/xAAVEAEBAAAAAAAAAAAAAAAAAAAgMf/aAAgBAQAGPwI1/wD/xAAcEAEAAgIDAQAAAAAAAAAAAAABABARQSExUWH/2gAIAQEAAT8hrNOgCL7Tiz0h1awX7Cf/2gAMAwEAAgADAAAAEOjwwP/EABcRAAMBAAAAAAAAAAAAAAAAAAABERD/2gAIAQMBAT8QgTuv/8QAGBEBAAMBAAAAAAAAAAAAAAAAAQAQETH/2gAIAQIBAT8QHExyup//xAAgEAACAQMEAwAAAAAAAAAAAAAAAREQITFBYXGxgaHR/9oACAEBAAE/ECVyOCb0VGveXMz4LdDykvsQ0pNdqk+GTnJ//9k=",
-      "order": 8
-    },
-    {
-      "id": "lobsters-8",
       "title": "Two Kinds of SQL Query Builders",
       "desc": "Source: Lobsters",
       "tag": "news",
@@ -359,6 +359,18 @@
       "color": "#AC130D",
       "image": "",
       "preview": "",
+      "order": 8
+    },
+    {
+      "id": "lobsters-8",
+      "title": "Bill Gates tries to install Movie Maker",
+      "desc": "Source: Lobsters",
+      "tag": "news",
+      "published": "Mon, 28 Sep 2026 11:18:16 -0500",
+      "url": "https://www.techemails.com/p/bill-gates-tries-to-install-movie-maker",
+      "color": "#AC130D",
+      "image": "https://substackcdn.com/image/fetch/$s_!Kgd5!,w_1200,h_675,c_fill,f_jpg,q_auto:good,fl_progressive:steep,g_auto/https%3A%2F%2Fbucketeer-e05bbc84-baa3-437e-9518-adb32be77984.s3.amazonaws.com%2Fpublic%2Fimages%2F79fc15fc-6ea8-4426-acad-117e6c349ba0_922x876.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAAXACADASIAAhEBAxEB/8QAGAABAQEBAQAAAAAAAAAAAAAAAAQBAgX/xAAXAQADAQAAAAAAAAAAAAAAAAAAAQID/9oADAMBAAIQAxAAAAH0k/LVWy0okGk7UTX/xAAbEAACAQUAAAAAAAAAAAAAAAAAATECEBESIP/aAAgBAQABBQLjdmWUTdSf/8QAFxEAAwEAAAAAAAAAAAAAAAAAAAEQEf/aAAgBAwEBPwHaj//EABcRAAMBAAAAAAAAAAAAAAAAAAACEBH/2gAIAQIBAT8Bysf/xAAVEAEBAAAAAAAAAAAAAAAAAAAgMf/aAAgBAQAGPwI1/wD/xAAcEAEAAgIDAQAAAAAAAAAAAAABABARQSExUWH/2gAIAQEAAT8hrNOgCL7Tiz0h1awX7Cf/2gAMAwEAAgADAAAAEOjwwP/EABcRAAMBAAAAAAAAAAAAAAAAAAABERD/2gAIAQMBAT8QgTuv/8QAGBEBAAMBAAAAAAAAAAAAAAAAAQAQETH/2gAIAQIBAT8QHExyup//xAAgEAACAQMEAwAAAAAAAAAAAAAAAREQITFBYXGxgaHR/9oACAEBAAE/ECVyOCb0VGveXMz4LdDykvsQ0pNdqk+GTnJ//9k=",
       "order": 9
     },
     {
@@ -470,7 +482,7 @@
       "order": 18
     },
     {
-      "id": "lobsters-20",
+      "id": "lobsters-21",
       "title": "How to work in a software engineering team (2022)",
       "desc": "Source: Lobsters",
       "tag": "news",
@@ -494,7 +506,7 @@
       "order": 20
     },
     {
-      "id": "lobsters-24",
+      "id": "lobsters-23",
       "title": "What makes Lisp difficult to read?",
       "desc": "Source: Lobsters",
       "tag": "news",
@@ -506,11 +518,23 @@
       "order": 21
     },
     {
+      "id": "lobsters-24",
+      "title": "Text-to-meowdio models",
+      "desc": "Source: Lobsters",
+      "tag": "news",
+      "published": "Tue, 29 Sep 2026 11:51:35 -0500",
+      "url": "https://www.kmjn.org/notes/text_to_meowdio_models.html",
+      "color": "#AC130D",
+      "image": "",
+      "preview": "",
+      "order": 22
+    },
+    {
       "id": "iprog-0",
       "title": "AI-901: Introduction to AI in Azure",
       "desc": "Source: I Programmer",
       "tag": "news",
-      "published": "Wed, 30 Sep 2026 00:19:32 GMT",
+      "published": "Wed, 30 Sep 2026 01:19:34 GMT",
       "url": "http://www.i-programmer.info/news/150-training-a-education/19179-ai-901-introduction-to-ai-in-azure.html",
       "color": "#2196F3",
       "image": "http://www.i-programmer.info/images/stories/News/2026/Sep/B/azure_logo_chat.jpg",
@@ -522,7 +546,7 @@
       "title": "Programmers Guide To Containers  - Starting With Docker",
       "desc": "Source: I Programmer",
       "tag": "news",
-      "published": "Wed, 30 Sep 2026 00:19:32 GMT",
+      "published": "Wed, 30 Sep 2026 01:19:34 GMT",
       "url": "http://www.i-programmer.info/programming/241-devops/19178-programmers-guide-to-containers-starting.html",
       "color": "#2196F3",
       "image": "http://www.i-programmer.info/images/stories/Core/Containers/container360.jpg",
@@ -534,7 +558,7 @@
       "title": "Introducing The Enterprise Reasoning Initiative",
       "desc": "Source: I Programmer",
       "tag": "news",
-      "published": "Wed, 30 Sep 2026 00:19:32 GMT",
+      "published": "Wed, 30 Sep 2026 01:19:34 GMT",
       "url": "http://www.i-programmer.info/news/105-artificial-intelligence/19177-introducing-the-enterprise-reasoning-initiative.html",
       "color": "#2196F3",
       "image": "http://www.i-programmer.info/images/stories/News/2026/Sep/B/Enterprise_Reasoning_logo2.JPG",
@@ -546,7 +570,7 @@
       "title": "Amazon Aurora DSQL Adds Support For Foreign Key Constraints",
       "desc": "Source: I Programmer",
       "tag": "news",
-      "published": "Wed, 30 Sep 2026 00:19:32 GMT",
+      "published": "Wed, 30 Sep 2026 01:19:34 GMT",
       "url": "http://www.i-programmer.info/news/197-data-mining/19175-amazon-aurora-dsql-adds-support-for-foreign-key-constraints.html",
       "color": "#2196F3",
       "image": "http://www.i-programmer.info/images/stories/News/2025/June/A/Aurora_logo.JPG",
@@ -558,7 +582,7 @@
       "title": "VS Code Expands Codex Harness",
       "desc": "Source: I Programmer",
       "tag": "news",
-      "published": "Wed, 30 Sep 2026 00:19:32 GMT",
+      "published": "Wed, 30 Sep 2026 01:19:34 GMT",
       "url": "http://www.i-programmer.info/news/90-tools/19174-vs-code-expands-codex-harness.html",
       "color": "#2196F3",
       "image": "http://www.i-programmer.info/images/stories/News/2020/Aug/A/vscodeicon.jpg",
@@ -570,7 +594,7 @@
       "title": "Why Do We Try To Make Programming Like Something Else?",
       "desc": "Source: I Programmer",
       "tag": "news",
-      "published": "Wed, 30 Sep 2026 00:19:32 GMT",
+      "published": "Wed, 30 Sep 2026 01:19:34 GMT",
       "url": "http://www.i-programmer.info/professional-programmer/103-i-programmer/5850-why-do-we-try-to-make-programming-like-something-else.html",
       "color": "#2196F3",
       "image": "http://www.i-programmer.info/images/stories/Puzzles/elevator/waitingelevator.jpg",
@@ -582,7 +606,7 @@
       "title": "Robots Build Robots",
       "desc": "Source: I Programmer",
       "tag": "news",
-      "published": "Wed, 30 Sep 2026 00:19:32 GMT",
+      "published": "Wed, 30 Sep 2026 01:19:34 GMT",
       "url": "http://www.i-programmer.info/news/169-robotics/19173-robots-build-robots.html",
       "color": "#2196F3",
       "image": "http://www.i-programmer.info/images/stories/News/2026/Sep/B/ubtech.JPG",
@@ -594,7 +618,7 @@
       "title": "September Week 3",
       "desc": "Source: I Programmer",
       "tag": "news",
-      "published": "Wed, 30 Sep 2026 00:19:32 GMT",
+      "published": "Wed, 30 Sep 2026 01:19:34 GMT",
       "url": "http://www.i-programmer.info/i-programmer-weekly/246-i-programmer-weekly-2026/19167-september-week-3.html",
       "color": "#2196F3",
       "image": "http://www.i-programmer.info/images/stories/News/2012/NOV/A/IP2.jpg",
@@ -606,7 +630,7 @@
       "title": "Robot Rabbits Used To Catch Florida Pythons",
       "desc": "Source: I Programmer",
       "tag": "news",
-      "published": "Wed, 30 Sep 2026 00:19:32 GMT",
+      "published": "Wed, 30 Sep 2026 01:19:34 GMT",
       "url": "http://www.i-programmer.info/news/169-robotics/19172-robot-rabbits-used-to-catch-florida-pythons.html",
       "color": "#2196F3",
       "image": "http://www.i-programmer.info/images/stories/News/2026/Sep/B/rabbit1.jpg",
@@ -972,6 +996,18 @@
       "image": "https://news.mit.edu/sites/default/files/images/202604/MIT-csail-YZipper.jpg",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAAVACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAAIDBP/EABcBAAMBAAAAAAAAAAAAAAAAAAABAgP/2gAMAwEAAhADEAAAAUvm2DVLxFlsE6UQHP8A/8QAGhABAAMAAwAAAAAAAAAAAAAAAQACERAhIv/aAAgBAQABBQIcqWrY6hb0cqbNmxn/xAAVEQEBAAAAAAAAAAAAAAAAAAABEP/aAAgBAwEBPwFjP//EABQRAQAAAAAAAAAAAAAAAAAAACD/2gAIAQIBAT8BH//EABsQAAICAwEAAAAAAAAAAAAAAAABETEQICEy/9oACAEBAAY/ApLPRGEUPi1//8QAHBAAAgIDAQEAAAAAAAAAAAAAAAERMSFBYXGR/9oACAEBAAE/ITEkieVWKeRcK6J+mOG1hRBKuGyeCY+z/9oADAMBAAIAAwAAABCDUCH/xAAYEQACAwAAAAAAAAAAAAAAAAAAARAxYf/aAAgBAwEBPxCwtl//xAAZEQEAAgMAAAAAAAAAAAAAAAABABARIVH/2gAIAQIBAT8QDRMchX//xAAdEAEBAQEAAgMBAAAAAAAAAAABEQAhMWFBUXGB/9oACAEBAAE/EK7VjwPv3uRSyjSOeWfqWaNrZSec4BgH+5K+Bw8esLcapD1k9IaMXSHuPCZO4ga1gr87/9k=",
       "order": 30
+    },
+    {
+      "id": "lobsters-20",
+      "title": "How to work in a software engineering team (2022)",
+      "desc": "Source: Lobsters",
+      "tag": "news",
+      "published": "Tue, 29 Sep 2026 17:34:26 -0500",
+      "url": "https://kimmosaaskilahti.fi/blog/2022/02/25/how-to-work-in-a-software-engineering-team/",
+      "color": "#AC130D",
+      "image": "https://github.com/ksaaskil.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAAgACADASIAAhEBAxEB/8QAGAABAAMBAAAAAAAAAAAAAAAAAwABAgT/xAAWAQEBAQAAAAAAAAAAAAAAAAABAAL/2gAMAwEAAhADEAAAAS0b4YbhRbxSdw1B/8QAHBAAAgICAwAAAAAAAAAAAAAAAAECEQMxEiFB/9oACAEBAAEFAkMmS6EyFXkVNni29raLp82Wf//EABQRAQAAAAAAAAAAAAAAAAAAACD/2gAIAQMBAT8BH//EABYRAAMAAAAAAAAAAAAAAAAAAAABEP/aAAgBAgEBPwGs/8QAGRAAAwEBAQAAAAAAAAAAAAAAAAEQESCR/9oACAEBAAY/Auc8FUJaO7P/xAAdEAEAAgICAwAAAAAAAAAAAAABABEhQRBxMVHh/9oACAEBAAE/IfuJsqa9ReGpimR7cEIXJc0Imgww2xOL41liuiWdsRoz/9oADAMBAAIAAwAAABB4bED/xAAVEQEBAAAAAAAAAAAAAAAAAAAAAf/aAAgBAwEBPxCKiv/EABcRAAMBAAAAAAAAAAAAAAAAAAABECH/2gAIAQIBAT8QHgo//8QAHhABAQACAgIDAAAAAAAAAAAAAREAMSFBUXGRobH/2gAIAQEAAT8QByzRiiCya5xqoeT94sRQh6yAur52eMQsVQqWmKx7h95JQSvvG8nhZwaxCiLsenrHnyqXmTNRqkmFA9CmJZ2+XBNjRu4XpHWf/9k=",
+      "order": 19
     },
     {
       "id": "hn-49886422",

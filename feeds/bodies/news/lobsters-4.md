@@ -1,75 +1,415 @@
-We have shown that running mainline Linux on your phone is a real possibility for highly invested Linux enthusiasts. Now how do we get from there to making it usable for everybody else who just wants a working phone?
+[Serde](https://serde.rs/) is an amazing serialization library for Rust and it
+has been a huge reason why I felt productive with it for years.  However already
+while at Sentry I got quite frustrated with some of the limitations with it but
+actually replacing Serde is tricky because of the might that it has in the
+ecosystem.  Also because it’s quite hard to actually do better without also
+making some potentially painful compromises.
 
-Two important segments of the road towards this destination are [Duranium](https://postmarketos.org/blog/2026/03/17/introducing-duranium/) and [Hardware CI](https://postmarketos.org/blog/2026/01/21/hw-ci-mvp/). This blog post is about the third one: **reference devices!**
+Here are three examples of Serde corner cases that show poor interactions of
+Serde features or unexpected limitations:
 
-Members of the Nura team have joined forces to build maintainer teams for three of the many devices Nura runs on to push them across the finishing line and make them suitable for everyday use with Nura. More on the actual workflow comes further below, let's start with defining the goal in detail.
+An internally tagged enum, with `serde_json`‘s `arbitrary_precision` feature
+turned on:
 
-## [New "main" category](https://postmarketos.org/blog/2026/09/29/road-to-main-category/#new-main-category)
+```
+#[derive(Deserialize)]
+#[serde(tag = "type")]
+enum Shape {
+    Circle { radius: f64 },
+}
 
-We [categorize devices](https://docs.nura.eco/pmaports/main/packaging/device-categorization.html) into "main", "community", "testing", "downstream" and "archived". The "main" category was [emptied](https://postmarketos.org/blog/2024/12/23/v24.12-release/#pinephone-and-librem-5) with the v24.12 release. With [PMCR-0009](https://docs.nura.eco/pmcr/main/0009-new-main-device-category.html) we have re-evaluated what we want to have in the "main" device category. Here is the summary:
+serde_json::from_str::<Shape>(r#"{"type": "Circle", "radius": 1.5}"#)
+// error: invalid type: map, expected f64
+```
 
-> Set new requirements for the “main” device category to highlight selected device ports which are well-tested in hardware CI and set up to stay in “main” for a long time through strong maintainership.
->
-> Change the meaning of the “main” category to not only indicate that more features are working than in the “community” category, but also that the Nura team is highly invested in keeping the device in the “main” category and takes on responsibilities to make this likely.
->
-> Maintainers of devices in other categories are welcome to use some of these new requirements for “main” as blueprint for their devices as well, in order to get similar reliability and maintainership improvements for their devices.
+Serde’s data model has no place for arbitrary precision numbers, so `serde_json`
+uses in-band signalling with a map with a magic key.  The enum has to buffer the
+fields until it has seen the tag, and the buffer does not know about the magic
+key.  Because Cargo features are unified, it’s enough for any crate in your
+dependency graph to turn the feature on.
 
-### [Fully mainline](https://postmarketos.org/blog/2026/09/29/road-to-main-category/#fully-mainline)
+```
+#[derive(Deserialize)]
+struct Stats {
+    scores: HashMap<u32, u32>,
+}
 
-After many discussions (the PMCR merge request had 151 comments), we have arrived at [high quality requirements](https://docs.nura.eco/pmaports/main/packaging/device-categorization.html#main) for ports in this category. Among others:
+#[derive(Deserialize)]
+struct Report {
+    name: String,
+    #[serde(flatten)]
+    stats: Stats,
+}
 
-- Boot via UEFI (e.g. through a second-stage bootloader on phones).
-- Must use upstream kernels with a strict and minimal policy for patches.
-- Must not depend on forked device-specific packages, such as alsa-ucm-conf.
-- Must use a generic device package for the target architecture.
+serde_json::from_str::<Report>(r#"{"name": "x", "scores": {"42": 23}}"#)
+// error: invalid type: string "42", expected u32 at line 1 column 35
+```
 
-This means that the resulting ports are essentially fully mainlined and can not only be used with Nura, but also relatively easily with any other Linux distribution. There will be one UI-specific aarch64 image that can be flashed on all "main" aarch64 devices. Getting Linux kernel security patches will be trivial, as we only need to update our generic kernel packages and then get them for all devices in the "main" category at once.
+`Stats` on its own parses `{"scores": {"42": 23}}` just fine.  JSON keys are
+always strings, and `serde_json` only turns them into integers if the type asks
+for one.  However once `flatten` buffers the value, `"42"` is just a string.
+The error also points at the end of the document rather than at the key.
 
-### [Device features](https://postmarketos.org/blog/2026/09/29/road-to-main-category/#device-features)
+```
+fn from_hex<'de, D: Deserializer<'de>>(d: D) -> Result<u32, D::Error> { ... }
 
-Regarding device features, "main" category requirements now have:
+#[derive(Deserialize)]
+struct Theme {
+    #[serde(deserialize_with = "from_hex")]
+    primary: u32,
+    #[serde(deserialize_with = "from_hex")]
+    accent: Option<u32>,
+}
 
-> **The working features should allow to use the device in most common use cases.** A phone for example would typically have calls, SMS, mobile data, Wi-Fi, audio, battery charging, Bluetooth and camera. Exceptions can be made by the device maintainer team, together with reasoning why they are necessary (e.g. fingerprint reader is not working because the driver is missing). The Nura team decides if the port is complete enough for the main category based on that list.
+//error[E0308]: `?` operator has incompatible types
+//  |
+//  |     #[serde(deserialize_with = "from_hex")]
+//  |                                ^^^^^^^^^^ expected `Option<u32>`, found `u32`
+//  |
+//help: try wrapping the expression in `Some`
+//  |
+//  |     #[serde(deserialize_with = Some("from_hex"))]
+//  |                                +++++          +
+```
 
-### [Device maintainer team](https://postmarketos.org/blog/2026/09/29/road-to-main-category/#device-maintainer-team)
+A function cannot be passed as a type parameter, so there is no way to apply
+`from_hex` to the inside of an `Option`, a `Vec` or a map.  You write another
+function for every wrapper, and once you have `from_opt_hex` the field is no
+longer optional unless you also remember to add `#[serde(default)]`.
 
-In order to pull this off, each device must have a team of maintainers that consists of at least 5 people, of which the majority are part of the [Nura team](https://nura.eco/team/). Between these people, a list of responsibilities must be covered. As with the other requirements listed above, this is an ideal the team would be working towards for eventually getting the device into *main*. The team can consist of fewer people and have a smaller scope initially.
+None of these are bugs that are easy to fix in Serde.  They fall out of its
+design, and that design is protected by Serde’s stability guarantees.
 
-From the [list of responsibilities](https://docs.nura.eco/pmaports/main/packaging/device-categorization.html#main), most importantly:
+Back in 2022 I started an experiment called
+[Deser](https://github.com/mitsuhiko/deser).  It’s a serialization library for
+Rust that takes the user experience of [Serde](https://serde.rs/) and puts it on
+top of a completely different architecture inspired by
+[miniserde](https://github.com/dtolnay/miniserde).  I never really finished it
+and it sat around for a few years.  I picked it back up, and it has now reached
+a point where I think it’s worth looking at.  Even just to inspire others to
+see if they want to explore the space.
 
-- Organize regular meetings.
-- Long-term commitment for the device.
-- Kernel maintenance (fixing regressions on the kernel side, new kernel developments).
-- Triage issues found by the community and HW CI regressions.
-- Documentation for this device.
-- Making sure Hardware CI works (wires are connected, preparing CI).
-- Manual testing where necessary.
+The name is Serde with its two halves swapped.  Deser is Serde but the other way
+around.  In Serde, a type drives the deserialization process: a `Deserialize`
+impl asks the deserializer for the kind of value it expects, the format calls
+back into a visitor.  Every nested value is handled by recursion which makes
+Serde deserialization inherently grow the stack with each level of nesting.
 
-## [Workflow](https://postmarketos.org/blog/2026/09/29/road-to-main-category/#workflow)
+Deser on the other hand turns this around and the format tells the type of the
+next value and pushes events into a sink.  When a sink hits the start of a
+nested value, it doesn’t call into it but hands back a new sink to a driver,
+which keeps all state on the heap (in fact, in an arena).  On the way out,
+emitters return their nested values instead of recursing into them.
 
-So how can your favorite device get into the main category? We have thought hard about this and came up with the following workflow:
+That also means that Deser cannot support formats like protobuf that are not
+self describing.  They are in fact quite intentionally left out of the design
+entirely.  Which is one way to say: if you want to “fix” Serde, you need to
+make some other compromises.
 
-- Become part of a team of device maintainers through issues in the [new-device-teams](https://gitlab.postmarketos.org/postmarketOS/new-device-teams/-/work_items) project. You can either apply to join an existing team by commenting in an existing issue or create a new one.
-- When creating a new issue, the [Nura infrastructure team](https://docs.nura.eco/policies-and-processes/governance/groups-and-teams.html#infrastructure-team) will create bridged Matrix and IRC channels for you, and a pmaports label for this new device will be created. (This is a manual process, if we don't do this within a week then please kindly ask in the devel chat.)
-- Wait until you have at least two people in the potential new team, then find a meeting time that works for everyone and start doing regular meetings. Use the meetings to figure out how to implement the requirements for the main category.
-- Once all requirements for *main* are fulfilled (this will take quite some time, but the device port will already improve significantly in this process!), make a merge request to move the device to the "main" category.
+Most of the reasons for Deser’s ideas go back to [Sentry
+Relay](https://github.com/getsentry/relay), which processes enormous amounts of
+untrusted JSON.  Over the years when I was at Sentry we ran into the same set of
+problems again and again, and many of them are not really bugs in Serde but
+consequences of its design.  Serde’s stability guarantees mean that a lot of
+them cannot be fixed without breaking every format and every hand written
+implementation.  Most of these problems come from three decisions:
 
-## [Financing](https://postmarketos.org/blog/2026/09/29/road-to-main-category/#financing)
+1. **One set of traits for all formats.** Serde serves both self describing formats (JSON, YAML, TOML, …) and formats where the reader has to know the type upfront (postcard, bincode, protobuf, …). That is incredibly useful, but it means that some features only work with some formats, and you find out at runtime. In case of Serde it also has some odd wrinkles where a derived struct quietly accepts an array in place of an object in JSON for instance.
+2. **A fixed data model that loses information when buffering.** Internally tagged enums, untagged enums and `flatten` need to buffer values before they know what to do with them. The buffer can’t hold everything the format knew, errors lose their location and extensions to the ecosystem rely on in-band signalling to express things such as arbitrary precision numbers.
+3. **Recursion on the call stack.** Every level of nesting uses stack space. Formats protect against this with a recursion limit, but the moment you go through a code path that doesn’t have one (writing, dynamic values), deeply nested data can take down your process. It also means that a deserialization cannot be paused while you wait for more input.
 
-Most of the work done in Nura is volunteer-based. Therefore, we cannot really promise ETAs for this project. Still, donations make it possible to finance development and HW-CI hardware. In some specific cases we might even be able to directly fund development work (e.g. [q6voice(d)](https://postmarketos.org/blog/2026/05/08/q6voice-project/)) too. We are also working on applying for grants to potentially support part of this project.
+Many of the corresponding Serde issues have been open for years, and I wrote
+about [abusing Serde](https://lucumr.pocoo.org/2021/11/14/abusing-serde/) before.  People have tried
+different angles on this over the years.  Some went minimal and dropped most
+features to get fast compiles and no recursion.  dtolnay’s own
+[miniserde](https://github.com/dtolnay/miniserde) is the best example of that,
+and deser’s trait design was originally modelled after it.  Other recent
+attempts went for runtime reflection, or for a new data model with a focus on
+binary formats.
 
-If you are interested in supporting this project, you can make sure that some of your [donations](https://postmarketos.org/donate) will go specifically to this project! If you want to get in touch for some bigger-targeted donations to directly support development, we would also be happy to hear from you at `board at postmarketos dot org` (emails are not migrated to nura.eco yet).
+If you want to read up on all of the collected challenges with Serde’s design,
+I maintain [a lengthy list here](https://github.com/mitsuhiko/deser/blob/main/SERDE.md).
 
-## [Initial candidates](https://postmarketos.org/blog/2026/09/29/road-to-main-category/#initial-candidates)
+First of all I don’t think it’s likely that one can replace Serde.  [The orphan
+rule](https://smallcultfollowing.com/babysteps/blog/2022/04/17/coherence-and-crate-level-where-clauses/)
+entrenches Serde incredibly well in the ecosystem.  But some things are within
+the reach of a crate author’s control.  In case of Deser it’s completeness.
 
-Together with this blog post, we have created three initial issues in the new-device-teams project:
+Deser today implements all important self describing formats from YAML, JSON,
+TOML, CBOR, JSON5 and the likes, but also XML and plist to really close the gap.
+XML in particular is something Serde has declined to support, and it shows
+(more on that below).  At the very least format support should not be the
+reason not to use Deser.
 
-All of these are based on the [SM7325](https://wiki.nura.eco/wiki/Qualcomm_Snapdragon_778G/778G%2B/782G_(SM7325)) SoC for which significant mainline support exists already, to the point that we believe there is a good chance to eventually fulfill all requirements needed for the new main category. For all of these we are already able to use UART.
+The second problem usually is that actually solving Serde’s issues comes at a
+significant cost in compile time and/or runtime performance.  Deser is no
+different.  While Deser’s compile times are a bit better than Serde’s, the
+binary bloat is quite a bit worse and the runtime performance is mixed.  It’s
+roughly comparable if you look at the numbers but depending on the format
+structure you are losing significantly from some of the tradeoffs.
 
-The Radxa Dragon Q6A is a single-board computer, which means it will be much easier to get this moved to main first compared to actual phones. Fairphone as OEM is ideologically very aligned with our project, while the Edge 30 is a cheaper phone that is easier to obtain in some regions.
+That said, it’s now in a state where it’s at least in principle a drop-in
+replacement where the tradeoffs might work well for users.
 
-## [Get involved](https://postmarketos.org/blog/2026/09/29/road-to-main-category/#get-involved)
+## Deser’s Design
 
-Now it's your turn. If you would like to see one of these devices become well maintained in Nura to the point that you can daily drive them without making compromises, consider joining their device maintainer teams. You don't even need to be a programmer to help out, there are many non-coding tasks such as testing, organization, triaging issues etc. that are super important as well and ensure that the programmers don't burn out.
+Deser does not try to be significantly different than Serde on the surface
+level.  For most uses you derive `Serialize` and `Deserialize` and then start
+using it with your format implementing crate of choice.  Most attributes are
+very similar, though they are taking Rust expressions instead of strings.
 
-If you are significantly interested in improving another device port (even if the end-goal is not main), look through the [existing issues](https://gitlab.postmarketos.org/postmarketOS/new-device-teams/-/work_items). If it is not there, consider creating a [new issue](https://gitlab.postmarketos.org/postmarketOS/new-device-teams/-/work_items/new) and get the ball rolling.
+```
+use deser::{Serialize, Deserialize};
+
+#[derive(Debug, Serialize, Deserialize)]
+#[deser(rename_all = "camelCase")]
+pub struct Account {
+    id: u64,
+    account_holder: String,
+    #[deser(default)]
+    is_deactivated: bool,
+}
+
+let account: Account = deser_json::from_str(json)?;
+```
+
+The difference in the design would become more apparent if you implement a
+serializer or deserializer yourself.  Instead of visitors that call into each
+other recursively, deserializing a type creates a
+*sink* which receives events that are directly emitted by the parser, and
+*serializing produces emitters* that hand out values.  Nested sinks and emitters
+are handed back to a driver, which keeps them on the heap.  This design, which is
+entirely stolen from miniserde, gives some interesting consequences:
+
+On top of that are a lot of things that I just wanted to have:
+
+Here is a small configuration type that shows a few of these together:
+
+```
+use deser::adapters::DisplayFromStr;
+use deser::de::Recording;
+use deser::{Deserialize, Serialize};
+use deser_encoding::Hex;
+use deser_validate::{Check, NonEmpty, Range};
+use ipnet::IpNet;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Config {
+    // at least one 256-bit key, each written as hex
+    #[deser(as = Check<NonEmpty, Vec<Hex>>)]
+    secret_keys: Vec<[u8; 32]>,
+    // `IpNet` knows nothing about deser, but has `FromStr` and `Display`
+    #[deser(as = Option<Vec<DisplayFromStr>>)]
+    allowed_networks: Option<Vec<IpNet>>,
+    listeners: Vec<Listener>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[deser(tag = "type", rename_all = "snake_case")]
+pub enum Listener {
+    Unix { path: PathBuf },
+    Tcp {
+        host: IpAddr,
+        #[deser(as = Check<Range<1, 65535>>)]
+        port: u16,
+    },
+    // types this version does not know are kept and written back
+    #[deser(other)]
+    Other(#[deser(tag)] String, Recording),
+}
+```
+
+Adapters are types, so `Hex` can go inside a `Vec`, and `DisplayFromStr` inside
+a `Vec` inside an `Option`.  Validators are adapters too, so
+`Check<NonEmpty, Vec<Hex>>` decodes the keys and then checks that there is at
+least one.  The catch-all variant keeps the tag and a recording of everything
+else in case someone wants to process it later.
+
+Errors are something I care a lot about, so here is what happens when a value
+is wrong:
+
+```
+secret_keys = ["9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"]
+allowed_networks = ["10.0.0.0/8", "fd00::/8"]
+
+[[listeners]]
+type = "unix"
+path = "/run/app.sock"
+
+[[listeners]]
+host = "127.0.0.1"
+port = 0
+type = "tcp"
+
+[[listeners]]
+type = "quic"
+host = "::1"
+alpn = ["h3"]
+```
+
+```
+let config: Config = deser_toml::Deserializer::from_str(input)
+    .deserialize_with(|driver| driver.push_layer(PathLayer::new()))?;
+```
+
+Note that here the tag of the internally tagged enum comes last which means that
+the values have to be buffered until the tag is known.  In Serde this is tricky
+and we would lose the location if we used some tricks to add it.  With Deser
+however, with the path layer enabled Deser you where in the structure the
+problem is:
+
+Deser really wants to be extensible, and XML is a more extreme example of the
+differences between Deser and Serde.  Here is an Atom entry that mixes in Dublin
+Core for the authors:
+
+```
+use chrono::{DateTime, Utc};
+use deser::Deserialize;
+use deser_value::Value;
+use deser_xml::DeserializerConfig;
+
+deser_xml::namespace!(
+    atom = "http://www.w3.org/2005/Atom",
+    dc = "http://purl.org/dc/elements/1.1/",
+);
+
+#[derive(Debug, Deserialize)]
+struct Entry {
+    #[deser(rename = atom!("title"))]
+    title: String,
+    #[deser(rename = dc!("creator"))]
+    creators: Vec<String>,
+    #[deser(rename = atom!("updated"))]
+    updated: DateTime<Utc>,
+}
+
+// entries we understand, and everything else is kept as it is
+#[derive(Debug, Deserialize)]
+#[deser(untagged)]
+enum Item {
+    Entry(Entry),
+    Other(Value),
+}
+
+let item: Item = DeserializerConfig::new()
+    .resolve_namespaces(true)
+    .from_str(r#"
+        <entry xmlns="http://www.w3.org/2005/Atom"
+               xmlns:d="http://purl.org/dc/elements/1.1/">
+          <title>Deser</title>
+          <d:creator>John</d:creator>
+          <updated>2026-09-29T21:00:00Z</updated>
+          <d:creator>Jane</d:creator>
+        </entry>
+    "#)?;
+```
+
+XML uses namespaces which means that names need to be matched by their namespace,
+not by the prefix the document happens to use.  Here the document says `d:` and
+the type says `dc!`.  `atom!("title")` is just the string
+`{http://www.w3.org/2005/Atom}title`, which works because attributes are
+expressions.  The two creators are collected into one `Vec` even though there is
+another element between them, and the text of `updated` goes straight into a
+`chrono` datetime.  Because the enum is untagged, the entry has to be buffered
+before a variant is picked, and deser’s buffer keeps both creators.  So the
+result is an `Entry` with John and Jane.
+
+quick-xml, the most popular XML crate for Serde, drops the prefixes and ignores
+namespaces entirely, so a `<x:title>` from some other namespace is happily
+accepted as the title of the entry.  The split list part though is considerably
+worse.  A plain `Entry` fails with a duplicate field error for `creator`, unless
+you turn on the `overlapped-lists` feature (which, remember, is a global
+additive flag that any crate could set).  That feature makes quick-xml read
+ahead to the end of the element and buffer everything in between, without a
+limit unless you set one.
+
+But the feature only helps when quick-xml is hooked up to the struct directly
+and no buffering is taking place.  Wrap the struct in the untagged enum and
+Serde buffers the entry itself.  Read from that buffer, `Entry` sees `creator`
+twice and fails again.  The fallback is a map, which keeps only the last
+`creator`, and there is no error.  With or without the feature you get this:
+
+```
+Other({"creator": {"$text": "Jane"}, "title": {"$text": "Deser"}, ...})
+```
+
+Notice how John is gone.
+
+Format specific extension types such as TOML datetimes are another case.  TOML
+has them natively, Serde’s data model does not, so the `toml` crate passes them
+on as a map with a magic key.  In Deser a datetime is an extension value, which
+formats that know it keep and all others write as a string:
+
+```
+let value: Value = deser_toml::from_str("released = 2026-09-29T21:00:00+02:00")?;
+
+deser_json::to_string(&value)?;
+// {"released":"2026-09-29T21:00:00+02:00"}
+deser_toml::to_string(&value)?;
+// released = 2026-09-29T21:00:00+02:00
+```
+
+The same with `serde_json::Value` gives you
+`{"released":{"$__toml_private_datetime":"2026-09-29T21:00:00+02:00"}}`, and
+reading the value into a `chrono::DateTime` fails outright with `invalid type: map, expected an RFC 3339 formatted date and time string`.
+
+So now that you know Deser is at least in theory cool, at what cost?
+
+It is not free.  The design relies on dynamic dispatch and on sinks and emitters
+that live on the heap, and that has considerable runtime overhead.  In my own
+measurements for JSON, Deser reads somewhere between 33% faster and 60% slower
+than `serde_json depending` on the data.  On average it’s about 10% slower for
+reading.  Writes are between three times as fast and 70% slower and a wash on
+average.  For YAML and TOML it’s noticeably faster than the Serde based crates,
+but that is more about the format implementations than the architecture.
+
+Compile times slightly are better, but not dramatically so.  Because it doesn’t
+monomorphize everything, release builds of derived code are about 2.3 times as
+fast as with Serde and that get a tiny bit better in practice for your own code
+as less recompilation is necessary.
+
+To make Deser’s design work at all, it also uses `unsafe` internally.  Most of
+this is to keep the chain of borrowed sinks on the heap.  I feel like this is
+fine in the days of Miri and agents, but I know it makes some folks uneasy.
+
+And well, the biggest cost is that it’s just not Serde.
+
+Quite a lot actually which might be surprising.  In addition to the core
+there is support for [derive](https://github.com/mitsuhiko/deser/tree/main/deser-derive).
+
+It supports all flavorts of JSON you can think of:
+[JSON](https://github.com/mitsuhiko/deser/tree/main/deser-json),
+[JSONC](https://github.com/mitsuhiko/deser/tree/main/deser-jsonc),
+[JSON5](https://github.com/mitsuhiko/deser/tree/main/deser-json5) and
+[HJSON](https://github.com/mitsuhiko/deser/tree/main/deser-hj).  (Fun fact here:
+they are all generated out of [one shared parser template](https://github.com/mitsuhiko/deser/tree/main/deser-template-json))
+For binary handling it supports
+[CBOR](https://github.com/mitsuhiko/deser/tree/main/deser-cbor) and
+[MessagePack](https://github.com/mitsuhiko/deser/tree/main/deser-msgpack).
+Additionally it does
+[YAML](https://github.com/mitsuhiko/deser/tree/main/deser-yaml) 1.1 and 1.2,
+[TOML](https://github.com/mitsuhiko/deser/tree/main/deser-toml),
+[XML](https://github.com/mitsuhiko/deser/tree/main/deser-xml) and all three
+flavors of Apple’s [plist](https://github.com/mitsuhiko/deser/tree/main/deser-plist)
+as well as [CSV/TSV](https://github.com/mitsuhiko/deser/tree/main/deser-csv),
+[urlencoded data](https://github.com/mitsuhiko/deser/tree/main/deser-urlencoded) and
+[environment variables](https://github.com/mitsuhiko/deser/tree/main/deser-env).
+For more crazy contraptions you can
+[attach path info](https://github.com/mitsuhiko/deser/tree/main/deser-path) or
+[capture location data](https://github.com/mitsuhiko/deser/tree/main/deser-location)
+as well as support for
+[debug printing](https://github.com/mitsuhiko/deser/tree/main/deser-debug).
+You can perform [validation](https://github.com/mitsuhiko/deser/tree/main/deser-validate)
+as you parse, opt into different
+[binary encodings](https://github.com/mitsuhiko/deser/tree/main/deser-encoding)
+in addition to base64, you can
+[bridge to serde](https://github.com/mitsuhiko/deser/tree/main/deser-serde) or
+capture
+[dynamic values](https://github.com/mitsuhiko/deser/tree/main/deser-value),
+[transcode](https://github.com/mitsuhiko/deser/tree/main/deser-transcode)
+between formats or hook it up with
+[tokio](https://github.com/mitsuhiko/deser/tree/main/deser-tokio).
+
+For documentation see [docs.rs/deser](https://docs.rs/deser/latest/deser/)
+and the code itself is [on GitHub](https://github.com/mitsuhiko/deser) alongside
+[many examples](https://github.com/mitsuhiko/deser/tree/main/examples).

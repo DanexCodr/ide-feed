@@ -1,163 +1,232 @@
-The SQL language has a paradoxical fate.  Although it was deliberately designed to appeal to a human user, nowadays most of SQL code is written—or rather generated—by the computer.  Many computer programs need to query some database, and, for the vast majority of database servers, the only supported query language is SQL.  But generating SQL is difficult because of the complicated and obscure rules of its quasi-English grammar (its original name SEQUEL stands for Structured *English* Query Language).  For this reason, programs that interact with a database often use specialized libraries for generating SQL queries.
+*Welcome to Internal Tech Emails: internal tech industry emails that surface in public records. 🔍 If you haven’t signed up, join 50,000+ others and get the newsletter:*
 
-One of such libraries is FunSQL.  FunSQL is designed with two goals in mind: supporting the full range of SQL's querying capabilities and exposing these capabilities in a compositional, data-oriented interface.  This combination of goals makes FunSQL a perfect tool for data analysis in SQL and differentiates it from all the other query building libraries.  Many query builders offer good coverage of SQL features, fewer provide data-oriented interface, but only FunSQL combines them in a single package.
+**From:** Bill Gates  
+**Sent:** Wednesday, January 15, 2003 10:05 AM  
+**To:** Jim Allchin  
+**Cc:** Chris Jones; Bharat Shah; Joe Peterson; Will Poole; Brian Valentine; Anoop Gupta  
+**Subject:** Windows Usability Systematic degradation flame
 
-And yet the difference between FunSQL and other query builders is not immediately apparent.  In fact, the interfaces of various query building libraries seem almost identical.  A query that finds *100 oldest male patients* (in the [OMOP CDM](https://ohdsi.github.io/CommonDataModel/cdm53.html) database) is assembled with FunSQL as follows:
+I am quite disappointed at how Windows Usability has been going backwards and the program management groups don't drive usability issues.
 
-```julia
-From(:person) |>
-Where(Get.gender_concept_id .== 8507) |>
-Order(Get.year_of_birth) |>
-Limit(100) |>
-Select(Get.person_id)
-```
+Let me give you my experience from yesterday.
 
-The same query can be written in Ruby using [Active Record Query Interface](https://guides.rubyonrails.org/active_record_querying.html):
+I decided to download Moviemake and buy the Digital Plus pack r so I went to Microsoft.com. They have a download place so I went there.
 
-```ruby
-Person
-.where("gender_concept_id = ?", 8507)
-.order(:year_of_birth)
-.limit(100)
-.select(:person_id)
-```
+The first 5 times I used the site it timed out while trying to bring up the download page. Then after an 8 second delay I got it to come up
 
-Or in PHP with [Laravel's Query Builder](https://laravel.com/docs/9.x/queries):
+This site is so slow it is unusable.
 
-```php
-DB::table('person')
-->where('gender_concept_id', '=', 8507)
-->orderBy('year_of_birth')
-->limit(100)
-->select('person_id')
-```
+It wasn't in the top 5 so I expanded the other 45.
 
-In C#'s [EF/LINQ](https://docs.microsoft.com/en-us/ef/core/querying/):
+These 45 names are totally confusing. These names make stuff like: C:\Documents and Settings\billg\My Documents\My Pictures seem clear.
 
-```csharp
-Person
-.Where(p => p.gender_concept_id == 8507)
-.OrderBy(p => p.year_of_birth)
-.Take(100)
-.Select(p => new { person_id = p.person_id });
-```
+They are not filtered by the system I can in on and so many of the things are strange.
 
-Or in R with [dbplyr](https://dbplyr.tidyverse.org/):
+I tried scoping to Media stuff. Still no moviemaker. I typed in moviemaker. Nothing. I typed in movie maker. Nothing.
 
-```r
-tbl(conn, "person") %>%
-filter(gender_concept_id == 8507) %>%
-arrange(year_of_birth) %>%
-head(100) %>%
-select(person_id)
-```
+So I gave up and sent mail to Amir saying - where is this Moviemaker download? Does it exist?
 
-In each of these code samples, the query is assembled using essentially the same interface.  Stripped of its syntactic shell, the process of assembling the query can be visualized as a diagram of five processing nodes connected in a pipeline:
+So they told me that using the download page to download something was not something they anticipated
 
-![100 oldest male patients](https://mechanicalrabbit.github.io/FunSQL.jl/stable/two-kinds-of-sql-query-builders/100-oldest-male-patients.drawio.svg)
+They told me to go to the main page search button and type movie maker (not moviemaker!).
 
-It is precisely the fact that the query is progressively assembled using atomic, independent components that lets us call this interface *compositional*.
+I tried that   The site was pathetically slow but after 6 seconds of waiting up it came.
 
-However we did claim that FunSQL differs from all the other query building libraries, and now apparently proved the opposite?  As a matter of fact, there is a difference, even if it is not reflected in notation.  To demonstrate this, let us rearrange this pipeline, moving the `Order` and the `Limit` nodes in front of `Where`.
+I thought for sure now I would see a button to just go do the download.
 
-![100 oldest male patients ⟹ Males among 100 oldest patients](https://mechanicalrabbit.github.io/FunSQL.jl/stable/two-kinds-of-sql-query-builders/males-among-100-oldest-patients.drawio.svg)
+In fact it is more like a puzzle that you get to solve. It told me to go to Windows Update and do a bunch of incantations.
 
-How does this rearrangement affect the output of the query?  Perhaps unexpectedly, the answer depends on the library.  With FunSQL, as well as EF/LINQ and dbplyr, it changes the output from *100 oldest male patients* to *the males among 100 oldest patients*.  But not so with the other two libraries, Active Record and Laravel, where rearranging the pipeline has *no* effect on the output.
+This struck me as completely odd. Why should I have to go somewhere else and do a scan to download moviemaker?
 
-To summarize, the following query builders are sensitive to the order of the pipeline nodes:
+So I went to Windows update. Windows Update decides I need to download a bunch of controls. Now just once but multiple times where I get to see weird dialog boxes.
 
-- FunSQL
-- EF/LINQ
-- dbplyr
+Doesn't Windows update know some key to talk to Windows?
 
-And the following are not:
+Then I did the scan. This took quite some time and I was told it was critical for me to download 17megs of stuff.
 
-- Active Record
-- Laravel
+This is after I was told we were doing delta patches to things but instead just to get 6 things that are labeled in the SCARIEST possible way I had to download 17meg.
 
-These are the two kinds of query builders from this article's title.  But how can these libraries act so differently while sharing the same interface?  To answer this question, we need to focus on what is only implicitly present on the pipeline diagram: the information that is processed by the pipeline nodes.
+So I did the download. That part was fast. Then it wanted to do an install. This took 6 minutes and the machine was so slow I couldn't use it for anything else during this time.
 
-!["Where" node](https://mechanicalrabbit.github.io/FunSQL.jl/stable/two-kinds-of-sql-query-builders/where-node.drawio.svg)
+What the heck is going on during those 6 minutes? That is crazy. This is after the download was finished.
 
-A node with one incoming and one outgoing arrow symbolizes a processing unit that takes the input data, transforms it, and emits the output data.  While the character of the data is not revealed, it is tempting to assume it to be the tabular data extracted from the database.
+Then it told me to reboot my machine. Why should I do that? I reboot every night - why should I reboot at that time?
 
-!["Where" node acting on data](https://mechanicalrabbit.github.io/FunSQL.jl/stable/two-kinds-of-sql-query-builders/where-node-acting-on-data.drawio.svg)
+So I did the reboot because it INSISTED on it. Of course that meant completely getting rid of all my Outlook state.
 
-But this can't be right, at least not literally, because a SQL query builder cannot read the data in the database.  Instead, the query builder generates a SQL query:
+So I got back up and running and went to Windows Update again. I forgot why I was in Windows Update at all since all I wanted was to get Moviemaker.
 
-```sql
-SELECT "person_1"."person_id"
-FROM "person" AS "person_1"
-WHERE ("person_1"."gender_concept_id" = 8507)
-ORDER BY "person_1"."year_of_birth"
-LIMIT 100
-```
+So I went back to Microsoft.com and looked at the instructions. I have to click on a folder called WindowsXP. Why should I do that? Windows Update knows I am on Windows XP.
 
-But if we assume for a moment that pipeline nodes could process the data directly, we would expect that both the pipeline and the corresponding SQL query produce the same output.  In other words, the role of the pipeline is to specify the expected output of the SQL query.  This is how pipeline nodes are interpreted by FunSQL and the other two libraries, EF/LINQ and dbplyr.  We can call such query builders *data-oriented*.
+What does it mean to have to click on that folder? So I get a bunch of confusing stuff but sure enough one of them is Moviemaker.
 
-The conversion of the pipeline to SQL is not always that straightforward.  Even though we could freely reorder the nodes in a pipeline, we cannot do the same to the clauses in a SQL query.  This is because the SQL grammar arranges the clauses in a rigid order:
+So I do the download. The download is fast but the Install takes many minutes. Amazing how slow this thing is.
 
-1. FROM, followed by zero, one or more
-2. JOIN, followed by
-3. WHERE, followed by
-4. GROUP BY, followed by
-5. HAVING, followed by
-6. ORDER BY, followed by
-7. LIMIT, followed by
-8. SELECT, written at the top of the query, but the last one to perform.
+At some point I get told I need to go get Windows Media Series 9 to download.
 
-This order is compatible with the first pipeline, in which the `Where` node is followed by `Order` and `Limit`, but not the second pipeline, where these nodes change their relative positions.  So how could the second pipeline be converted to SQL?  We would be out of options if we were still using the original SQL standard, SQL-86, but the next revision of the language, SQL-92, recognized this limitation.  Regrettably, it did not relax this rigid clause order. Instead, SQL-92 introduced a workaround: a query can be extended by nesting it into the next query's `FROM` clause.  This gives us a method for converting an arbitrary pipeline into SQL: break the pipeline into smaller chunks that comply with the SQL clause order, convert each chunk into a SQL query, and then nest all these queries together:
+So I decide I will go do that. This time I get dialogs saying things like "Open" or "Save". No guidance in the instructions which to do. I have no clue which to do.
 
-```sql
-SELECT "person_2"."person_id"
-FROM (
-  SELECT
-    "person_1"."person_id",
-    "person_1"."gender_concept_id"
-  FROM "person" AS "person_1"
-  ORDER BY "person_1"."year_of_birth"
-  LIMIT 100
-) AS "person_2"
-WHERE ("person_2"."gender_concept_id" = 8507)
-```
+The download is fast and the install takes 7 minutes for this thing.
 
-The SQL grammar has a number of deficiencies, including rigid clause order, query nesting, and nonsensical position of the `SELECT` clause.  The position of `SELECT` violates the execution flow of the query, and this violation is aggravated by query nesting.  Complex SQL queries often require multiple levels of nesting, which makes such queries bloated and difficult to interpret.  This is where data-oriented query builders, which do not constrain the order of pipeline nodes, offer an improvement over plain SQL.
+So now I think I am going to have Moviemaker. I go to my add/remove programs place to make sure it is there.
 
-What about the other kind of query builders?  Active Record and Laravel employ a pipeline of exactly the same form, but because it is not sensitive to the order of the nodes, it must work on a different principle.  Indeed, this pipeline generates a SQL query by incrementally assembling the SQL syntax tree.  Because of the rigid clause order, a SQL syntax tree can be faithfully represented as a composite data structure with slots specifying the content of the `SELECT`, `FROM`, `WHERE`, and the other clauses:
+It is not there.
 
-```julia
-struct SQLQuery
-    select
-    from
-    joins
-    where
-    groupby
-    having
-    orderby
-    limit
-end
-```
+What is there? The following garbage is there. Microsoft Autoupdate Exclusive test package, Microsoft Autoupdate Reboot test package, Microsoft Autoupdate testpackage1, Microsoft AUtoupdate testpackage2, Microsoft Autoupdate Test package3.
 
-Individual slots of this structure are populated by the corresponding pipeline nodes.
+Someone decided to trash the one part of Windows that was usable? The file system is no longer usable. The registry is not usable. This program listing was one sane place but now it is all crapped up.
 
-!["Where" node acting on the syntax tree](https://mechanicalrabbit.github.io/FunSQL.jl/stable/two-kinds-of-sql-query-builders/where-node-acting-on-syntax-tree.drawio.svg)
+But that is just the start of the crap. Later I have listed things like Windows XP Hotfix see Q329048 for more information. What is Q329048? Why are these series of patches listed here? Some of the patches just things like Q810655 instead of saying see Q329048 for more information.
 
-This explains why the pipeline is insensitive to the order of the nodes. Indeed, as long as the content of the slots stays the same, it makes no difference in what order the slots are populated.
+What an absolute mess.
 
-![Pipeline is insensitive to the order of the nodes](https://mechanicalrabbit.github.io/FunSQL.jl/stable/two-kinds-of-sql-query-builders/pipeline-insensitive-to-node-order.drawio.svg)
+Moviemaker is just not there at all.
 
-This method of incrementally constructing a composite structure is known as the [*builder pattern*](https://en.wikipedia.org/wiki/Builder_pattern).  We can call the query builders that employ this pattern *syntax-oriented*.
+So I give up on Moviemaker and decide to download the Digital Plus Package.
 
-Both data-oriented and syntax-oriented query builders are compositional: the difference is in the nature of the information processed by the units of composition.  Data-oriented query builders incrementally refine the query output; syntax-oriented query builders incrementally assemble the SQL syntax tree.  Their interfaces look almost identical, but their methods of operation are fundamentally different.
+I get told I need to go enter a bunch of information about myself.
 
-But which one is better?  Syntax-oriented query builders have two definite advantages: they are easy to implement and they could support the full range of SQL features.  Indeed, the interface of a syntax-oriented query builder is just a collection of builders for the SQL syntax tree.  How complete the representation of the syntax tree determines how well various SQL features are supported.
+I enter it all in and because it decides I have mistyped something I have to try again. Of course it has cleared out most of what I typed
 
-On the other hand, syntax-oriented query builders are harder to *use*.  As they directly represent the SQL grammar, they inherit all of its deficiencies.  In particular, the rigid clause order makes it difficult to assemble complex data processing pipelines, especially when the arrangement of pipeline nodes is not predetermined.
+I try tryping the right stuff in 5 times and it just keeps clearing things out for me to type them in again.
 
-A data-oriented query builder directly represents data processing nodes, which makes assembling data processing pipelines much more straightforward—as long as we can find the necessary nodes among those offered by the builder.  But where does the builder get its collection of data processing nodes?  And how can we tell if this collection is complete?
+So after more than an hour of craziness and making my programs list garbage and being scared and seeing that Microsoft.com is a terrible website I haven't run Moviemaker and I haven't got the plus package
 
-One way to implement a data-oriented query builder is to adapt a general-purpose query framework.  Indeed, this is the origin of EF/LINQ, which is adapted from [LINQ](https://docs.microsoft.com/en-us/dotnet/standard/using-linq), and dbplyr, which is adapted from [dplyr](https://dplyr.tidyverse.org/).  The query framework determines what processing nodes are available and how they operate. In principle, any query framework could be adapted to SQL databases by introducing just one new node, a node that loads the content of a database table.  If we place this node at the beginning of a pipeline and make the rest of it out of regular nodes, we obtain a pipeline that processes data from a SQL database.  However, this pipeline will be very inefficient compared to a SQL engine, which can use indexes to avoid loading the entire table into memory and thus can process the same data much faster.  This is why EF/LINQ and dbplyr generate a SQL query that replaces the pipeline as a whole.  The pipeline itself no longer runs directly, but now serves as a specification, with the assumption that if it *were* to run, it would produce the same output as the SQL query. This method of transforming a general-purpose query framework to a SQL query builder is called *SQL pushdown*.
+The lack of attention to usability represented by these experiences blows my mind. I thought we had reached a low with Windows Network places or the messages I get when I try to use 802.11. (don't you just love that root certificate message?)
 
-However, SQL pushdown has a serious limitation.  A general-purpose query framework is not designed with SQL compatibility in mind.  For this reason, some of the pipelines assembled within this framework cannot be converted to SQL. Even worse, many useful SQL queries have no equivalent pipelines and thus cannot be generated using SQL pushdown.  Indeed, SQL accumulated a wide range of features and capabilities since it first appeared in 1974.  The first revision of the SQL standard, SQL-86, already supported Cartesian products, filtering, grouping, aggregation, and correlated subqueries.  The next revision, SQL-92, added many join types and introduced query nesting.  SQL:1999 greatly expanded its analytical capabilities by adding two types of queries: recursive queries, for processing hierarchical data, and data cube queries, which generalize histograms, cross-tabulations, roll-ups, drill-downs, and sub-totals.  The follow-up revision, SQL:2003, added support for aggregate functions over a running window.  Admittedly, SQL is a quintessential *enterprise abomination*, a hodgepodge of features added to support every imaginable use case, but with inadequate syntax, weird gaps in functionality, and no regards to internal consistency.  Nevertheless, the breadth of SQL's capabilities has not been matched by any other query framework, including LINQ or dplyr.  So when we generate SQL queries using EF/LINQ or dbplyr, a large subset of these capabilities remains inaccessible.
+When I really get to use the stuff I am sure I will have more feedback.  
 
-FunSQL is a data-oriented query builder created specifically to expose full expressive power of SQL.  Unlike EF/LINQ and dbplyr, FunSQL was not adapted from an existing query framework, but was carefully designed from scratch to match SQL's capabilities.  These capabilities include, for example, support for correlated subqueries and lateral joins (with [`Bind`](https://mechanicalrabbit.github.io/FunSQL.jl/stable/reference/#Bind) node), aggregate and window functions (using [`Group`](https://mechanicalrabbit.github.io/FunSQL.jl/stable/reference/#Group) and [`Partition`](https://mechanicalrabbit.github.io/FunSQL.jl/stable/reference/#Partition) nodes), as well as recursive queries (with [`Iterate`](https://mechanicalrabbit.github.io/FunSQL.jl/stable/reference/#Iterate) node).  This comprehensive support for SQL capabilities makes FunSQL the only SQL query builder suitable for assembling complex data processing pipelines.  Moreover, even though FunSQL pipelines cannot be run directly, every FunSQL node has a well-defined data processing semantics, which means that, in principle, FunSQL could be developed into a full-blown query framework.  This potentially opens a path for replacing SQL with an equally powerful, but a more coherent and expressive query language.
+**From:** Will Poole  
+**Sent:** Wednesday, January 15, 2003 1:27 PM  
+**To:** Amir Majidimehr; Chris Jones  
+**Cc:** Dave Fester; Rick Thompson  
+**Subject:** FW: Windows Usability Systematic degradation flame
+
+Guess we should start working on a list of things that need to be fixed w/ the web sites, WU, and with windows, and identify owners. Bill's frustration is not unreasonable.  
+
+**From:** Amir Majidimehr  
+**Sent:** Wednesday, January 15, 2003 3:55 PM  
+**To:** Mike Beckerman; Tim Lebel; Dave Fester  
+**Subject:** FW: Windows Usability Systematic degradation flame
+
+Can you guys coordinate between you on how to deal with this situation on our bits? Bill's situation is worse than my personal experience but still, this aspect of the system needs to be looked at carefully and become a sign off item for each release.
+
+Please let me know which one of you going to be BOL for this moving forward.
+
+Amir  
+
+**From:** Dave Fester  
+**Sent:** Wednesday, January 15, 2003 3:58 PM  
+**To:** Amir Majidimehr; Mike Beckerman; Tim Lebel  
+**Subject:** RE: Windows Usability Systematic degradation flame
+
+I replied as well. I am owning the website issues, but Mike should own the others.  
+
+**From:** Mike Beckerman  
+**Sent:** Wednesday, January 15, 2003 4:28 PM  
+**To:** Dave Fester; Amir Majidimehr; Tim Lebel  
+**Subject:** RE: Windows Usability Systematic degradation flame
+
+I'm thinking about this and am discussing with my team.
+
+I don't know what it means to "own website issues", nor am I yet sure the best way to handle the complex mess of coordinating between product teams, WU, and MS.COM. Dave, would you please forward the other reply you mentioned?
+
+I expect to send more on this thread in a day or two.  
+
+**From:** Dave Fester  
+**Sent:** Wednesday, January 15, 2003 4:31 PM  
+**To:** Mike Beckerman; Amir Majidimehr; Tim Lebel  
+**Subject:** RE: Windows Usability Systematic degradation flame
+
+I am working with MS.com to directly address the download/discoverability of our bits (both MP9S and MM2)  
+
+**From:** Mike Beckerman  
+**Sent:** Wednesday, January 15, 2003 4:39 PM  
+**To:** John Martin; lan Mercer; Michael Halcoussis; Linda Averett  
+**Cc:** Chadd Knowlton; Ming-Chieh Lee  
+**Subject**: FW: Windows Usability Systematic degradation flame
+
+More.  
+
+**From:** Mike Beckerman  
+**Sent:** Friday, January 17, 2003 7:36 AM  
+**To:** Mike Beckerman; John Martin; lan Mercer; Michael Halcoussis; Linda Averett  
+**Cc:** Chadd Knowlton; Ming-Chieh Lee  
+**Subject:** RE: Windows Usability Systematic degradation flame
+
+haven't heard anything from any of you on this.
+
+My take is that this web-experience mess spans many groups and deliverables (like Plus), that we need one person/team to own the overall picture, driving it, tracking the experience, etc., and that WMPG isn't really the right place. I'm thinking Dave's team. What do you think?  
+
+**From:** John Martin  
+**Sent:** Friday, January 17, 2003 11:52 AM  
+**To:** Mike Beckerman; Ian Mercer; Michael Halcoussis; Linda Averett  
+**Cc:** Chadd Knowlton; Ming-Chieh Lee  
+**Subject:** RE: Windows Usability Systematic degradation flame
+
+I have always been concerned about this and feel that this has a lot of engineering implications. I also feel that the reason is it such a mess is because marketing teams own release to web in this company. Frankly, we should be up in arms about this and want to program manager and develop whatever code we need to to ensure that every customer that even thinks they want to download our bits can do so in as easy and painless a way as possible. Downloading is the first step to setup and we should think of them equally or as one experience. But, if you want nothing revolutionary and want to band-aid (which is fine and understandable) then I agree with your plan to give it to Dave.
+
+John  
+
+**From:** Ian Mercer  
+**Sent:** Friday, January 17, 2003 5:02 PM  
+**To:** John Martin; Mike Beckerman; Michael Halcoussis; Linda Averett  
+**Cc:** Chadd Knowlton; Ming-Chieh Lee; Allan Poore  
+**Subject:** RE: Windows Usability Systematic degradation flame
+
+I don't think you can abdicate this entirely to marketing. If WU is the preferred way to deliver bits to end users we all need to drive WU to deliver what we need, both individually and as a collective request from DMD.
+
+One of the biggest issues today is that WU provides no way to *promote* a download to an end-user. We want to promote MM2 and WMP9S to end-users as something new and cool that they can get for Windows. Three lines of text describing it buried under "Windows XP" in a page that the user has to purposefully go find just isn't good enough. Why can't the WU client-side piece proactively display a bubble "Look! Cool, new features for Windows XP" and the option to display a much richer "advertisement" for the feature if the user wants to read more?
+
+Other issues -  
+    MUI - I guess this is getting fixed now but it's always been an issue for us  
+    Link to download through WU - why can't we send a user right in to WU to get MM2 without them having to wade through the whole site?  
+    Critical updates that aren't really critical - if you machine is behind a firewall many just aren't critical  
+    Too many fixes bombarding users all the time - I routinely ignore them now and perhaps update once a month as otherwise I'd be rebooting all the time  
+    WU's inflexible release schedule. If there is a major tradeshow at which we want to announce we need flexibility in timing the release
+
+-Ian  
+
+**From:** Mike Beckerman  
+**Sent:** Friday, January 17, 2003 5:09 PM  
+**To:** lan Mercer; John Martin; Michael Halcoussis; Linda Averett  
+**Cc:** Chadd Knowlten; Ming-Chieh Lee; Allan Poore  
+**Subject:** RE: Windows Usability Systematic degradation flame
+
+So, I take from this that we have lots of opinions and input. However, no one appears to be saying that we, WMPG, are chartered and/or should own this. So my feedback on the thread would then be that Dave should take ownership for driving groups around today's inconsistencies, and that we should send this mail to Bharat (owns WU) as well and ask who in his team can take requirements from DMD.
+
+Any disagreement on this?  
+
+**[This document is from Comes v. Microsoft (2007).]**
+
+Previously: [Bill Gates: "The quality is giving us a bad name"](https://www.techemails.com/i/142894465/bill-gates-on-quality-experience) (October 19, 2000)
+
+Previously: [Bill Gates on iTunes Music Store](https://twitter.com/techemails/status/1413534752699830275) (April 30, 2003)
+
+Previously: [Bill Gates on the iPod](https://twitter.com/techemails/status/1423680978359312387) (November 2, 2003)
+
+If you **upgrade to a paid subscription**, you’ll receive access to the **[full archive of internal tech emails](https://files.techemails.com)**, with 250+ documents from Apple, Google, Meta, Microsoft, OpenAI, Tesla, and more. You’ll also support our work: every year, we track hundreds of court cases and review more than 10,000 filings to bring you @TechEmails.
+
+[More…](https://twitter.com/techemails)
+
+If it was Steve Jobs-
+
+He gets stuck once.
+
+“Why can’t I download Movie Maker?”
+
+Somebody explains:
+
+“Well, Steve, first you have to go to Windows Update, install the ActiveX controls, scan for updates, reboot, return to the website…”
+
+Jobs:
+
+“No.”
+
+the execs starts pointing fingers.
+
+Jobs:
+
+"I want my mother to type “Movie Maker,” click one button, and use Movie Maker.
+
+Everything between those two things is your problem.
