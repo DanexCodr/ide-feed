@@ -29,8 +29,9 @@ Pipeline for each article:
   3. BeautifulSoup walks the raw HTML into semantic blocks.
   4. Blocks whose text appears in the mask are kept, in order.
   5. The title is stripped, the body trimmed, prose enforced.
-  6. og:image is extracted. The image is fetched, downscaled to
-     a preview, and both URLs are written into the item.
+  6. og:image is extracted. The image is fetched, analyzed for
+     solidity, downscaled to a preview, and both URLs are written
+     into the item.
 
 No AI. No API keys. No model retirements. Deterministic output.
 """
@@ -87,23 +88,6 @@ RETENTION_DAYS = 7
 
 # ============================================================
 # HTML SANITIZATION
-#
-# XML (and therefore lxml, which readability-lxml uses) refuses
-# to build text nodes that contain control characters below 0x20
-# except for tab, newline, and carriage return. Real-world HTML
-# occasionally carries these — usually a stray \x00 or \x0B that
-# came out of a content management system. When readability
-# encounters one, it raises ValueError and the whole article is
-# lost.
-#
-# We strip them at the source, in fetch_html, so every consumer
-# downstream (trafilatura, readability, BeautifulSoup) sees clean
-# text.
-#
-# The legal whitespace characters (tab 0x09, newline 0x0A, CR 0x0D)
-# are kept. C1 control characters (0x80-0x9F) are also removed;
-# they are almost always mojibake from a bad charset, and XML
-# does not allow them.
 # ============================================================
 
 _CONTROL_CHARS_RE = re.compile(
@@ -240,18 +224,9 @@ def is_prose_block(block):
 
 # ============================================================
 # FETCHING
-#
-# fetch_html is the boundary between raw bytes and text. It is
-# also the place where non-HTML responses are rejected.
 # ============================================================
 
 def _is_html_content_type(ctype):
-    """True if the Content-Type header describes a document we
-    can parse as HTML. Everything else is rejected.
-
-    A missing Content-Type is treated as acceptable; the
-    magic-byte check in fetch_html will still reject obvious
-    binaries, and some perfectly fine sites omit the header."""
     if not ctype:
         return True
     c = ctype.lower()
@@ -265,7 +240,6 @@ def _is_html_content_type(ctype):
 
 
 def _looks_like_pdf_url(url):
-    """Cheap pre-check: does the URL's path component end in .pdf?"""
     if not url:
         return False
     path = url.split('?', 1)[0].split('#', 1)[0].lower()
@@ -274,23 +248,12 @@ def _looks_like_pdf_url(url):
 
 # ============================================================
 # ROBOTS.TXT
-#
-# A good-faith check. Almost every source we pull from allows
-# article fetching, and the ones that disallow are usually
-# disallowing admin paths, not articles. But running the check
-# costs little and demonstrates intent if a publisher ever asks.
-#
-# robots.txt is opt-out: a missing, empty, or unreachable file
-# means everything is allowed. We match only the "User-agent: *"
-# block, which is what all well-behaved crawlers do.
 # ============================================================
 
 _robots_cache = {}
 
 
 def _robots_allows(url):
-    """Return True unless the host's robots.txt explicitly
-    disallows this path for User-agent: *."""
     try:
         parsed = urllib.parse.urlparse(url)
         origin = parsed.scheme + '://' + parsed.netloc
@@ -331,8 +294,6 @@ def _robots_allows(url):
                 disallowed.append(rule)
 
     for rule in disallowed:
-        # robots.txt supports '*' as a wildcard and '$' as an
-        # end-of-path anchor. Convert to a regex.
         pattern = re.escape(rule).replace(r'\*', '.*')
         if pattern.endswith(r'\$'):
             pattern = pattern[:-2] + '$'
@@ -346,11 +307,6 @@ def _robots_allows(url):
 
 
 def fetch_html(url):
-    """Fetch URL and return decoded, control-character-stripped
-    HTML, or None when the response is not HTML.
-
-    Returning None is a signal to the caller that this URL is
-    unfixable and should be skipped."""
     req = urllib.request.Request(
         url, headers={
             'User-Agent': 'Mozilla/5.0 (Linux; Android 13) '
@@ -365,9 +321,6 @@ def fetch_html(url):
             return None
         raw = resp.read()
 
-    # Servers sometimes mis-label binaries as text/html. The
-    # magic numbers below catch the two most common cases: PDF
-    # (starts with "%PDF-") and gzip (starts with 0x1F 0x8B).
     if raw[:5] == b'%PDF-':
         return None
     if raw[:2] == b'\x1f\x8b':
@@ -386,7 +339,6 @@ def fetch_html(url):
 
 
 def fetch_bytes(url, timeout=10, referer=None):
-    """Fetch raw bytes from url. Returns b'' on failure."""
     if not url:
         return b''
     try:
@@ -406,16 +358,9 @@ def fetch_bytes(url, timeout=10, referer=None):
 
 # ============================================================
 # IMAGE URL EXTRACTION HELPERS
-#
-# Modern article pages almost never put the real image URL in
-# <img src>. The URL lives in srcset (responsive), data-src
-# (lazy-load), data-lazy-src (Jetpack), data-original (various
-# jQuery lazy loaders), or in a <picture><source srcset>.
 # ============================================================
 
 def _is_placeholder(url):
-    """True if url is clearly not a real article image: a data:
-    URL, a known spacer/blank image, or empty."""
     if not url:
         return True
     lower = url.lower().strip()
@@ -429,26 +374,14 @@ def _is_placeholder(url):
 
 
 def _is_usable_article_image(url):
-    """True if url plausibly points to an actual article image
-    (a hero photo, an inline figure), not a UI chrome asset.
-
-    Rejects:
-      - placeholders (data:, blank.gif)
-      - SVG files (logos, icons, share buttons)
-      - common icon paths (favicon, apple-touch, /icons/, /social/)
-      - short filenames dominated by icon / logo / avatar / etc.
-    """
     if _is_placeholder(url):
         return False
 
     lower = url.lower().split('?', 1)[0].split('#', 1)[0]
 
-    # SVG is almost never article content. It's logos, icons,
-    # share buttons, or site chrome.
     if lower.endswith('.svg'):
         return False
 
-    # Directories and filename patterns that are UI, not article.
     ui_markers = (
         '/icons/', '/icon/', '/social/', '/share/',
         '/assets/img/social/', '/assets/icons/',
@@ -459,20 +392,12 @@ def _is_usable_article_image(url):
         if m in lower:
             return False
 
-    # Filename-level markers. Only match when the filename is
-    # dominated by the marker, not when the marker appears as a
-    # substring inside a longer slug. "logo.png" is UI chrome;
-    # "how-we-built-our-logo-generator.png" is an article.
     name = lower.rsplit('/', 1)[-1]
-    stem = name.rsplit('.', 1)[0]  # strip extension for matching
+    stem = name.rsplit('.', 1)[0]
 
     for marker in ('icon', 'logo', 'avatar', 'badge', 'share'):
-        # Exact match: "logo.png"
         if stem == marker:
             return False
-        # Short prefixed/suffixed forms: "logo-dark", "site-logo",
-        # "share-button", "avatar-32". Reject only when the marker
-        # is at one end AND the total stem is short (<= 20 chars).
         if len(stem) <= 20:
             if stem.startswith(marker + '-') or stem.endswith('-' + marker):
                 return False
@@ -481,8 +406,6 @@ def _is_usable_article_image(url):
 
 
 def _pick_from_srcset(srcset):
-    """srcset is comma-separated: url1 w1, url2 w2, ...
-    Pick the largest candidate by width descriptor."""
     candidates = []
     for part in srcset.split(","):
         part = part.strip()
@@ -511,8 +434,6 @@ def _pick_from_srcset(srcset):
 
 
 def extract_image_src(img_el, base_url):
-    """Return the best real image URL from an <img>, preferring
-    srcset over lazy-src over src, and rejecting placeholders."""
     for attr in ("srcset", "data-srcset"):
         srcset = img_el.get(attr)
         if srcset:
@@ -533,8 +454,6 @@ def extract_image_src(img_el, base_url):
 
 
 def extract_picture_src(picture_el, base_url):
-    """Pick the largest <source> inside a <picture>, falling back
-    to the inner <img>."""
     for source in picture_el.find_all("source"):
         srcset = source.get("srcset") or source.get("data-srcset")
         if srcset:
@@ -560,7 +479,6 @@ def extract_og_image(html_text, base_url):
     except Exception:
         return ""
 
-    # 1. Standard og:image / twitter:image meta tags.
     for prop in ('og:image', 'og:image:url', 'og:image:secure_url',
                  'twitter:image', 'twitter:image:src'):
         tag = (soup.find('meta', attrs={'property': prop})
@@ -570,17 +488,12 @@ def extract_og_image(html_text, base_url):
             if not _is_placeholder(url):
                 return _resolve_image_url(url, base_url)
 
-    # 2. <link rel="image_src">.
     tag = soup.find('link', attrs={'rel': 'image_src'})
     if tag and tag.get('href'):
         url = tag['href'].strip()
         if not _is_placeholder(url):
             return _resolve_image_url(url, base_url)
 
-    # 3. Fallback: scan the article / main container for the
-    # first real <img> or <picture>. Reject SVGs, icons, avatars,
-    # share buttons, and other UI chrome via
-    # _is_usable_article_image().
     for container_sel in ('article', 'main', '[role=main]',
                           '.post-content', '.entry-content',
                           '.article-body', '.story-body'):
@@ -603,8 +516,6 @@ def extract_og_image(html_text, base_url):
 
 
 def _resolve_image_url(url, base_url):
-    """Resolve protocol-relative and relative URLs to absolute
-    HTTP(S) URLs."""
     if not url:
         return ""
     url = url.strip()
@@ -616,32 +527,117 @@ def _resolve_image_url(url, base_url):
 
 
 # ============================================================
-# PREVIEW GENERATION
+# IMAGE ANALYSIS
+#
+# Two things happen here:
+#
+#   1. Every decoded image is composited over white if it has
+#      an alpha channel. Without this, transparent PNGs would
+#      become black rectangles after a naive RGB conversion,
+#      both in the preview and in the solid-color check.
+#
+#   2. The image is classified as "solid" or "not solid". A
+#      solid image is one whose pixel variance is below a
+#      small threshold after downsampling. Such images are
+#      useless as card visuals — they look identical to the
+#      placeholder — so the pipeline clears both the image
+#      and preview fields on the item and lets the app fall
+#      back to its CSS placeholder.
+#
+# Threshold rationale: after LANCZOS downsampling to 16x16,
+# a true solid color (even through JPEG compression) has a
+# standard deviation under 4. A near-solid image with a small
+# logo or a single dot has stddev in the 15-30 range. Real
+# photographs are 30+. The cutoff is set at 8 to catch the
+# first category without touching the second.
 # ============================================================
 
-def generate_preview_data_url(image_url, referer=None):
-    if not image_url:
-        return ""
-    if not HAS_PIL:
-        return ""
+def _pil_image_is_solid(img):
+    """Return True if the image is effectively a single color.
 
-    raw = fetch_bytes(image_url, timeout=10, referer=referer)
-    if not raw:
-        return ""
-
-    try:
-        img = Image.open(io.BytesIO(raw))
-        img.load()
-    except Exception:
-        return ""
-
+    The image is reduced to a 16x16 thumbnail first, which
+    averages out JPEG compression noise while preserving any
+    real visual structure. If the standard deviation of the
+    resulting pixels is below 8, the image is treated as solid.
+    """
     try:
         if img.mode not in ('RGB', 'L'):
             img = img.convert('RGB')
 
+        try:
+            resample = Image.Resampling.LANCZOS
+        except AttributeError:
+            resample = Image.LANCZOS
+
+        small = img.resize((16, 16), resample)
+        pixels = list(small.getdata())
+
+        if not pixels:
+            return False
+
+        n = len(pixels)
+        r_sum = 0
+        g_sum = 0
+        b_sum = 0
+        for px in pixels:
+            if isinstance(px, tuple):
+                r_sum += px[0]
+                g_sum += px[1]
+                b_sum += px[2]
+            else:
+                r_sum += px
+                g_sum += px
+                b_sum += px
+        r_mean = r_sum / float(n)
+        g_mean = g_sum / float(n)
+        b_mean = b_sum / float(n)
+
+        variance_sum = 0.0
+        for px in pixels:
+            if isinstance(px, tuple):
+                r, g, b = px[0], px[1], px[2]
+            else:
+                r = g = b = px
+            variance_sum += (r - r_mean) ** 2
+            variance_sum += (g - g_mean) ** 2
+            variance_sum += (b - b_mean) ** 2
+
+        stddev = (variance_sum / (3.0 * n)) ** 0.5
+        return stddev < 8.0
+    except Exception:
+        return False
+
+
+def _composite_over_white(img):
+    """If the image has an alpha channel, composite it over a
+    white background. Returns an RGB image. Without this step a
+    transparent PNG would become a black rectangle after a
+    naive RGB conversion."""
+    try:
+        if img.mode == 'RGBA':
+            background = Image.new('RGB', img.size, (255, 255, 255))
+            background.paste(img, mask=img.split()[3])
+            return background
+        if img.mode == 'LA':
+            background = Image.new('L', img.size, 255)
+            background.paste(img, mask=img.split()[1])
+            return background.convert('RGB')
+        if img.mode not in ('RGB', 'L'):
+            return img.convert('RGB')
+        return img
+    except Exception:
+        return img
+
+
+def _encode_preview_data_url(img):
+    """Encode a PIL image as a 32px JPEG data URL. Retries at
+    progressively smaller sizes and lower qualities until the
+    base64 representation fits under PREVIEW_MAX_BASE64_BYTES.
+    Returns '' on any failure."""
+    try:
         w, h = img.size
         if w <= 0 or h <= 0:
-            return ""
+            return ''
 
         try:
             resample = Image.Resampling.LANCZOS
@@ -666,9 +662,57 @@ def generate_preview_data_url(image_url, referer=None):
                 if len(data_url) <= PREVIEW_MAX_BASE64_BYTES:
                     return data_url
     except Exception:
-        return ""
+        pass
 
-    return ""
+    return ''
+
+
+def analyze_image(image_url, referer=None):
+    """Fetch, decode, and classify an image.
+
+    Returns a dict with two keys:
+
+      solid   : True if the image is effectively one color.
+      preview : a base64 JPEG data URL, or '' on any failure
+                or when the image is solid.
+
+    A caller that has both an image URL and a preview field to
+    populate should use this function directly. A caller that
+    only wants the preview string can read result['preview'].
+    """
+    result = {'solid': False, 'preview': ''}
+
+    if not image_url or not HAS_PIL:
+        return result
+
+    raw = fetch_bytes(image_url, timeout=10, referer=referer)
+    if not raw:
+        return result
+
+    try:
+        img = Image.open(io.BytesIO(raw))
+        img.load()
+    except Exception:
+        return result
+
+    try:
+        img = _composite_over_white(img)
+    except Exception:
+        return result
+
+    try:
+        if _pil_image_is_solid(img):
+            result['solid'] = True
+            return result
+    except Exception:
+        pass
+
+    try:
+        result['preview'] = _encode_preview_data_url(img)
+    except Exception:
+        pass
+
+    return result
 
 
 # ============================================================
@@ -1146,11 +1190,16 @@ def prepare_body(url, title):
 
     preview = ""
     if image:
-        preview = generate_preview_data_url(image, referer=url)
-        if preview:
-            print(f"  [Preview] {len(preview)} bytes from {image}")
+        result = analyze_image(image, referer=url)
+        if result['solid']:
+            print(f"  [Solid] Solid-color image, treated as no image: {image}")
+            image = ""
         else:
-            print(f"  [Preview] Failed for {image}")
+            preview = result['preview']
+            if preview:
+                print(f"  [Preview] {len(preview)} bytes from {image}")
+            else:
+                print(f"  [Preview] Failed for {image}")
 
     return body, image, preview
 
@@ -1359,13 +1408,6 @@ def fetch_devto_full():
                 skipped += 1
                 continue
 
-            # Each article's detail fetch is isolated. A 404 or
-            # timeout on one article must not discard the batch.
-            # Without this, an exception on the Nth article
-            # unwinds the whole function and returns [] — every
-            # item already processed in this run is lost, and the
-            # segment silently falls back to whatever retention
-            # carried over from the previous feed.
             detail_url = f"https://dev.to/api/articles/{article['id']}"
             try:
                 req = urllib.request.Request(
@@ -1391,9 +1433,14 @@ def fetch_devto_full():
 
             preview = ""
             if image:
-                preview = generate_preview_data_url(image, referer=article['url'])
-                if preview:
-                    print(f"  [Preview] {len(preview)} bytes from {image}")
+                result = analyze_image(image, referer=article['url'])
+                if result['solid']:
+                    print(f"  [Solid] Skipping solid cover: {image}")
+                    image = ""
+                else:
+                    preview = result['preview']
+                    if preview:
+                        print(f"  [Preview] {len(preview)} bytes from {image}")
 
             items.append({
                 'id': f"devto-{article['id']}",
@@ -1463,11 +1510,20 @@ def fetch_daily_dev():
                 if not looks_like_article(body):
                     print(f"  [Drop] daily.dev summary too short: {item['url']}")
                     continue
+
                 preview = ""
                 if item.get('image'):
-                    preview = generate_preview_data_url(
+                    result = analyze_image(
                         item['image'], referer=item.get('url'))
+                    if result['solid']:
+                        print(f"  [Solid] Skipping solid cover: {item['image']}")
+                        item['image'] = ""
+                    else:
+                        preview = result['preview']
+                        if preview:
+                            print(f"  [Preview] {len(preview)} bytes from {item['image']}")
                 item['preview'] = preview
+
             item.pop('summary', None)
             item['body'] = body
             final.append(item)
@@ -1570,7 +1626,12 @@ def build_segment_from_markdown(segment):
         image = meta.get('image', '')
         preview = ""
         if image:
-            preview = generate_preview_data_url(image)
+            result = analyze_image(image)
+            if result['solid']:
+                print(f"  [Solid] Solid local image, treated as no image: {image}")
+                image = ""
+            else:
+                preview = result['preview']
 
         items.append({
             'id': item_id,
@@ -1590,32 +1651,6 @@ def build_segment_from_markdown(segment):
 
 # ============================================================
 # FEED WRITE WITH RETENTION
-#
-# Bodies are split out of the feed JSON into per-item .md files
-# under feeds/bodies/{segment}/{id}.md. The feed keeps only the
-# metadata the card needs: title, desc, tag, url, image, preview,
-# color, published, order. This keeps the JSON small enough for
-# the WebView to parse instantly even when the pool grows.
-#
-# Retention: each build reads the previous feed, keeps every item
-# newer than RETENTION_DAYS, and merges it with the freshly
-# fetched items. New IDs win on collision. Bodies for items that
-# fall out of the window are deleted from disk, so the bodies
-# directory stays in sync with the feed.
-#
-# Transition handling: the write-bodies loop iterates the merged
-# pool, not just the freshly fetched items, and strips the body
-# field only at write time. On the first run after the split the
-# previous feed still carries inline bodies for every item, and
-# this loop writes each of them to disk exactly once. On every
-# run after that, carried-over items no longer have a body field
-# and the loop skips them without redundant disk I/O.
-#
-# Empty segments: git does not track empty directories, so a
-# segment whose every item failed would leave no trace on GitHub.
-# A .gitkeep file is written into each bodies/{segment}/ directory
-# so that the state of every segment is observable in the repo,
-# regardless of whether any body files were produced.
 # ============================================================
 
 def _body_path_for(segment, item_id):
@@ -1631,12 +1666,6 @@ def build_feed_with_retention(segment, new_items):
     bodies_dir = os.path.join(FEEDS_DIR, 'bodies', segment)
     os.makedirs(bodies_dir, exist_ok=True)
 
-    # Git does not track empty directories. Writing a .gitkeep
-    # here ensures that feeds/bodies/{segment}/ is committed even
-    # on runs where every item in the segment failed to produce
-    # a body. Without it, an entirely-failed segment is invisible
-    # on GitHub — you see news/ but not tutorials/, with no
-    # indication that tutorials was attempted.
     gitkeep_path = os.path.join(bodies_dir, '.gitkeep')
     if not os.path.isfile(gitkeep_path):
         try:
@@ -1645,8 +1674,6 @@ def build_feed_with_retention(segment, new_items):
         except Exception:
             pass
 
-    # Load previous feed metadata. It has no bodies now, so this
-    # is cheap regardless of pool size.
     prev_items = []
     if os.path.isfile(feed_path):
         try:
@@ -1660,7 +1687,6 @@ def build_feed_with_retention(segment, new_items):
     seen = set()
     merged = []
 
-    # New items take precedence.
     for item in new_items:
         iid = item.get('id')
         if not iid or iid in seen:
@@ -1668,15 +1694,6 @@ def build_feed_with_retention(segment, new_items):
         seen.add(iid)
         merged.append(item)
 
-    # Carry over previous items that are still inside the window.
-    #
-    # We do NOT strip the 'body' field here. The body-writing
-    # loop below handles both new and carried-over items
-    # uniformly. On the transition run, carried-over items still
-    # carry an inline body from the pre-split format, and the
-    # loop is what turns those into on-disk body files. On every
-    # subsequent run, carried-over items have no body field, so
-    # the loop skips them.
     for item in prev_items:
         iid = item.get('id')
         if not iid or iid in seen:
@@ -1692,10 +1709,6 @@ def build_feed_with_retention(segment, new_items):
         seen.add(iid)
         merged.append(item)
 
-    # Write bodies for every item that still has a 'body' field.
-    # The pop() here is the only place body text is removed from
-    # an item, so the metadata JSON written below never carries
-    # an inline body.
     for item in merged:
         body = item.pop('body', '') or ''
         if not body:
@@ -1707,9 +1720,6 @@ def build_feed_with_retention(segment, new_items):
         except Exception as e:
             print(f"  [Body] Write failed for {item['id']}: {e}")
 
-    # Remove bodies for items that fell out of the pool. The
-    # .gitkeep file is explicitly spared so the directory stays
-    # visible even if every body file is deleted.
     live_ids = set()
     for item in merged:
         live_ids.add(re.sub(r'[^A-Za-z0-9_\-]', '_', item.get('id', '')))
