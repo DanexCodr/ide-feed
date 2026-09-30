@@ -1,112 +1,232 @@
-I have always liked the idea of having one program to do everything on my computer.
-Also, I have always been a fan of text-based interfaces.
-These two preferences of mine scream Emacs user, but I have never really used it seriously.
+*Welcome to Internal Tech Emails: internal tech industry emails that surface in public records. 🔍 If you haven’t signed up, join 50,000+ others and get the newsletter:*
 
-My experience with Emacs has only been installing it every once in a while, opening it up,
-failing to understand how it works, and then uninstalling it again.
+**From:** Bill Gates  
+**Sent:** Wednesday, January 15, 2003 10:05 AM  
+**To:** Jim Allchin  
+**Cc:** Chris Jones; Bharat Shah; Joe Peterson; Will Poole; Brian Valentine; Anoop Gupta  
+**Subject:** Windows Usability Systematic degradation flame
 
-So why switch to Emacs now?
+I am quite disappointed at how Windows Usability has been going backwards and the program management groups don't drive usability issues.
 
-## What I Was Missing in Neovim
+Let me give you my experience from yesterday.
 
-I have successfully been using Neovim for quite some time and was very happy with it.
-The thing is, Neovim is meant to be used as a text editor, and to be frank: it excels at that.
-I love everything about Neovim: the ergonomic keybinds, the package system, the customizability, everything.
-I have been using it for software development and have had zero issues.
+I decided to download Moviemake and buy the Digital Plus pack r so I went to Microsoft.com. They have a download place so I went there.
 
-One concept I was always fascinated by was text-based browsers like [lynx](https://lynx.invisible-island.net/).
-Just being able to access all the information the web has to offer from my terminal felt like a great idea.
-In practice, of course, many modern web pages do not accomodate for browsers without javascript support,
-but that is besides my point.
+The first 5 times I used the site it timed out while trying to bring up the download page. Then after an 8 second delay I got it to come up
 
-Another idea that sparked interest in me was reading emails from the terminal.
-Or having a calendar in the terminal.
-Or chatting on IRC channels from the terminal.
+This site is so slow it is unusable.
 
-Basically, I love the terminal.
+It wasn't in the top 5 so I expanded the other 45.
 
-So what ended up happening was that I had all of these different programs to do different things.
-That was fine and it worked well, but each program had their own keybinds and conventions and things to be aware of.
+These 45 names are totally confusing. These names make stuff like: C:\Documents and Settings\billg\My Documents\My Pictures seem clear.
 
-Neovim was just that: one of the many programs I used. I just used it to edit text files.
+They are not filtered by the system I can in on and so many of the things are strange.
 
-I would have **loved** to have a program like Emacs that would compile all of these utilities into one large piece of software
-(I am aware that much of the functionality I mentioned is achieved through packages in Emacs, but I am mainly referring to having one
-large ecosystem to do all of those things rather than one literal codebase that does it).
+I tried scoping to Media stuff. Still no moviemaker. I typed in moviemaker. Nothing. I typed in movie maker. Nothing.
 
-## Why I Went With Doom Emacs
+So I gave up and sent mail to Amir saying - where is this Moviemaker download? Does it exist?
 
-When it comes to Emacs, I am very much a beginner.
-I am not a fan of using premade configurations for whatever software you use - whether we are talking about a window manager like i3 or Hyprland,
-or a text editor like Neovim.
+So they told me that using the download page to download something was not something they anticipated
 
-In fact, my Neovim config is written by me and has exactly what I need. Another nice bonus of doing this is that I know how everything works.
-This means that, should something break, I would be able to fix it.
-Or, if I need to add something to my config, I would know where to look.
+They told me to go to the main page search button and type movie maker (not moviemaker!).
 
-Now, if I look back at my Neovim journey, I have also experimented with prebuilt configurations for Neovim.
-If anybody knows about them, I have tried LunarVim (which I used for quite a while) and NvChad.
+I tried that   The site was pathetically slow but after 6 seconds of waiting up it came.
 
-Eventually, once I got comfortable with Neovim and figured out what I used frequently, what was left unused, and what I needed,
-I proceeded to write my own config.
+I thought for sure now I would see a button to just go do the download.
 
-It’s not like I did not try to use vanilla Emacs, but I just could not do it. I got some basic things working but it
-was taking such a long time that, at this pace, it would have taken me literal **months** of work to get to a point that would allow
-me to completely switch over from Neovim to Emacs even for my job.
+In fact it is more like a puzzle that you get to solve. It told me to go to Windows Update and do a bunch of incantations.
 
-This is the reason why I decided to go with Doom Emacs. On top of all the reasons mentioned above, in my research it seemed to be the case
-that Doom Emacs is ideal for people coming from Neovim, like me, since it uses Vim keybinds for everything.
-I can definitely confirm that Doom Emacs has eased the transition significantly and I could get up and running fairly quickly.
+This struck me as completely odd. Why should I have to go somewhere else and do a scan to download moviemaker?
 
-## Some Things I Like About Emacs
+So I went to Windows update. Windows Update decides I need to download a bunch of controls. Now just once but multiple times where I get to see weird dialog boxes.
 
-Since the built-in package manager has been introduced in Neovim, this is not as true anymore, but when I first started using Neovim,
-this very much did apply: with Emacs, installing new packages is incredibly easy.
+Doesn't Windows update know some key to talk to Windows?
 
-As long as you stick to the built-in repositories for Emacs packages (which are rather extensive), you can just do `M-x package-install` and
-install a new package. Everything is done automatically. This felt so great to me. It was a breath of fresh air compared to what I was used to.
+Then I did the scan. This took quite some time and I was told it was critical for me to download 17megs of stuff.
 
-Also, the setup required to get language servers working (especially before the introduction of the built-in lsp integration that modern Neovim ships with)
-is minimal compared to Neovim. Language servers and syntax highlighting have become a central part of my workflow when programming,
-and I believe that every serious editor that strives to gain traction should support TreeSitter and LSPs easily and (ideally) natively.
+This is after I was told we were doing delta patches to things but instead just to get 6 things that are labeled in the SCARIEST possible way I had to download 17meg.
 
-Also, another thing I thoroughly enjoyed in emacs is the extensive documentation. The documentation emacs has is not even comparable to the
-Neovim help pages. With emacs, you can easily figure out what a certain key combination does, or what key combination you need to press to
-trigger a certain command. You can easily search what commands there are via keywords. It is just so great.
+So I did the download. That part was fast. Then it wanted to do an install. This took 6 minutes and the machine was so slow I couldn't use it for anything else during this time.
 
-With vanilla emacs you could even press `C-h m` and it would open a list of all the possible actions one can take in that particular scenario
-(for those familiar with emacs, with “scenario” I mean major mode).
+What the heck is going on during those 6 minutes? That is crazy. This is after the download was finished.
 
-With Doom Emacs, `C-h m` becomes less useful since all actions are shadowed by the Doom keybinds, but that is completely fine since most
-commands start with space anyway, and when you press space and wait a second it opens this convenient little popup that shows you all possible
-ways of continuing this keyboard combination. It feels like searching through a menu rather than memorizing keybinds.
-With time you naturally get faster at executing the different keybinds you use often and this becomes second nature,
-but for newcomers like me this is a very convenient feature.
+Then it told me to reboot my machine. Why should I do that? I reboot every night - why should I reboot at that time?
 
-To be frank, there were plugins in Neovim that did this as well. But that is kind of the point: you had to know how to install plugins before you
-could get access to these kinds of features.
+So I did the reboot because it INSISTED on it. Of course that meant completely getting rid of all my Outlook state.
 
-And even then - as I said above - I did not find the Neovim help pages to be nearly as useful as the Emacs documentation pages (on top of Emacs having
-much better documentation navigation features).
+So I got back up and running and went to Windows Update again. I forgot why I was in Windows Update at all since all I wanted was to get Moviemaker.
 
-## What I Plan To Do With Emacs
+So I went back to Microsoft.com and looked at the instructions. I have to click on a folder called WindowsXP. Why should I do that? Windows Update knows I am on Windows XP.
 
-Ideally, as much as possible.
+What does it mean to have to click on that folder? So I get a bunch of confusing stuff but sure enough one of them is Moviemaker.
 
-At the moment I am still setting everything up and getting used to it. This blog article, for example, is written entirely in Emacs.
+So I do the download. The download is fast but the Install takes many minutes. Amazing how slow this thing is.
 
-*(By the way, the out-of-the-box Markdown support of Doom Emacs is extraordinary.)*
+At some point I get told I need to go get Windows Media Series 9 to download.
 
-In the coming days I would like to setup my emails properly (I have tried using Gnus, but will probably switch to Mu4e since it seems simpler),
-get to know org-mode much better and figure out how to use Git with Emacs (via Magit).
+So I decide I will go do that. This time I get dialogs saying things like "Open" or "Save". No guidance in the instructions which to do. I have no clue which to do.
 
-I might write some guides about these things, here on my blog.
+The download is fast and the install takes 7 minutes for this thing.
 
-## Conclusion
+So now I think I am going to have Moviemaker. I go to my add/remove programs place to make sure it is there.
 
-I just wanted to report on my first-impression when it comes to Emacs as a Neovim user.
-If you are thinking about switching, I cannot recommend Doom Emacs enough.
-It makes the transition much more seamless and I quite frankly hate the default Emacs keybindigs, so Doom Emacs makes everything
-much more usable and ergonomic. I use the Dvorak keyboard layout, so maybe Qwerty keybindings feel better, I am not sure.
+It is not there.
 
-Thank you for reading. As always, for questions or suggestions you can reach me at my email [info@eliasebner.com](mailto:info@eliasebner.com).
+What is there? The following garbage is there. Microsoft Autoupdate Exclusive test package, Microsoft Autoupdate Reboot test package, Microsoft Autoupdate testpackage1, Microsoft AUtoupdate testpackage2, Microsoft Autoupdate Test package3.
+
+Someone decided to trash the one part of Windows that was usable? The file system is no longer usable. The registry is not usable. This program listing was one sane place but now it is all crapped up.
+
+But that is just the start of the crap. Later I have listed things like Windows XP Hotfix see Q329048 for more information. What is Q329048? Why are these series of patches listed here? Some of the patches just things like Q810655 instead of saying see Q329048 for more information.
+
+What an absolute mess.
+
+Moviemaker is just not there at all.
+
+So I give up on Moviemaker and decide to download the Digital Plus Package.
+
+I get told I need to go enter a bunch of information about myself.
+
+I enter it all in and because it decides I have mistyped something I have to try again. Of course it has cleared out most of what I typed
+
+I try tryping the right stuff in 5 times and it just keeps clearing things out for me to type them in again.
+
+So after more than an hour of craziness and making my programs list garbage and being scared and seeing that Microsoft.com is a terrible website I haven't run Moviemaker and I haven't got the plus package
+
+The lack of attention to usability represented by these experiences blows my mind. I thought we had reached a low with Windows Network places or the messages I get when I try to use 802.11. (don't you just love that root certificate message?)
+
+When I really get to use the stuff I am sure I will have more feedback.  
+
+**From:** Will Poole  
+**Sent:** Wednesday, January 15, 2003 1:27 PM  
+**To:** Amir Majidimehr; Chris Jones  
+**Cc:** Dave Fester; Rick Thompson  
+**Subject:** FW: Windows Usability Systematic degradation flame
+
+Guess we should start working on a list of things that need to be fixed w/ the web sites, WU, and with windows, and identify owners. Bill's frustration is not unreasonable.  
+
+**From:** Amir Majidimehr  
+**Sent:** Wednesday, January 15, 2003 3:55 PM  
+**To:** Mike Beckerman; Tim Lebel; Dave Fester  
+**Subject:** FW: Windows Usability Systematic degradation flame
+
+Can you guys coordinate between you on how to deal with this situation on our bits? Bill's situation is worse than my personal experience but still, this aspect of the system needs to be looked at carefully and become a sign off item for each release.
+
+Please let me know which one of you going to be BOL for this moving forward.
+
+Amir  
+
+**From:** Dave Fester  
+**Sent:** Wednesday, January 15, 2003 3:58 PM  
+**To:** Amir Majidimehr; Mike Beckerman; Tim Lebel  
+**Subject:** RE: Windows Usability Systematic degradation flame
+
+I replied as well. I am owning the website issues, but Mike should own the others.  
+
+**From:** Mike Beckerman  
+**Sent:** Wednesday, January 15, 2003 4:28 PM  
+**To:** Dave Fester; Amir Majidimehr; Tim Lebel  
+**Subject:** RE: Windows Usability Systematic degradation flame
+
+I'm thinking about this and am discussing with my team.
+
+I don't know what it means to "own website issues", nor am I yet sure the best way to handle the complex mess of coordinating between product teams, WU, and MS.COM. Dave, would you please forward the other reply you mentioned?
+
+I expect to send more on this thread in a day or two.  
+
+**From:** Dave Fester  
+**Sent:** Wednesday, January 15, 2003 4:31 PM  
+**To:** Mike Beckerman; Amir Majidimehr; Tim Lebel  
+**Subject:** RE: Windows Usability Systematic degradation flame
+
+I am working with MS.com to directly address the download/discoverability of our bits (both MP9S and MM2)  
+
+**From:** Mike Beckerman  
+**Sent:** Wednesday, January 15, 2003 4:39 PM  
+**To:** John Martin; lan Mercer; Michael Halcoussis; Linda Averett  
+**Cc:** Chadd Knowlton; Ming-Chieh Lee  
+**Subject**: FW: Windows Usability Systematic degradation flame
+
+More.  
+
+**From:** Mike Beckerman  
+**Sent:** Friday, January 17, 2003 7:36 AM  
+**To:** Mike Beckerman; John Martin; lan Mercer; Michael Halcoussis; Linda Averett  
+**Cc:** Chadd Knowlton; Ming-Chieh Lee  
+**Subject:** RE: Windows Usability Systematic degradation flame
+
+haven't heard anything from any of you on this.
+
+My take is that this web-experience mess spans many groups and deliverables (like Plus), that we need one person/team to own the overall picture, driving it, tracking the experience, etc., and that WMPG isn't really the right place. I'm thinking Dave's team. What do you think?  
+
+**From:** John Martin  
+**Sent:** Friday, January 17, 2003 11:52 AM  
+**To:** Mike Beckerman; Ian Mercer; Michael Halcoussis; Linda Averett  
+**Cc:** Chadd Knowlton; Ming-Chieh Lee  
+**Subject:** RE: Windows Usability Systematic degradation flame
+
+I have always been concerned about this and feel that this has a lot of engineering implications. I also feel that the reason is it such a mess is because marketing teams own release to web in this company. Frankly, we should be up in arms about this and want to program manager and develop whatever code we need to to ensure that every customer that even thinks they want to download our bits can do so in as easy and painless a way as possible. Downloading is the first step to setup and we should think of them equally or as one experience. But, if you want nothing revolutionary and want to band-aid (which is fine and understandable) then I agree with your plan to give it to Dave.
+
+John  
+
+**From:** Ian Mercer  
+**Sent:** Friday, January 17, 2003 5:02 PM  
+**To:** John Martin; Mike Beckerman; Michael Halcoussis; Linda Averett  
+**Cc:** Chadd Knowlton; Ming-Chieh Lee; Allan Poore  
+**Subject:** RE: Windows Usability Systematic degradation flame
+
+I don't think you can abdicate this entirely to marketing. If WU is the preferred way to deliver bits to end users we all need to drive WU to deliver what we need, both individually and as a collective request from DMD.
+
+One of the biggest issues today is that WU provides no way to *promote* a download to an end-user. We want to promote MM2 and WMP9S to end-users as something new and cool that they can get for Windows. Three lines of text describing it buried under "Windows XP" in a page that the user has to purposefully go find just isn't good enough. Why can't the WU client-side piece proactively display a bubble "Look! Cool, new features for Windows XP" and the option to display a much richer "advertisement" for the feature if the user wants to read more?
+
+Other issues -  
+    MUI - I guess this is getting fixed now but it's always been an issue for us  
+    Link to download through WU - why can't we send a user right in to WU to get MM2 without them having to wade through the whole site?  
+    Critical updates that aren't really critical - if you machine is behind a firewall many just aren't critical  
+    Too many fixes bombarding users all the time - I routinely ignore them now and perhaps update once a month as otherwise I'd be rebooting all the time  
+    WU's inflexible release schedule. If there is a major tradeshow at which we want to announce we need flexibility in timing the release
+
+-Ian  
+
+**From:** Mike Beckerman  
+**Sent:** Friday, January 17, 2003 5:09 PM  
+**To:** lan Mercer; John Martin; Michael Halcoussis; Linda Averett  
+**Cc:** Chadd Knowlten; Ming-Chieh Lee; Allan Poore  
+**Subject:** RE: Windows Usability Systematic degradation flame
+
+So, I take from this that we have lots of opinions and input. However, no one appears to be saying that we, WMPG, are chartered and/or should own this. So my feedback on the thread would then be that Dave should take ownership for driving groups around today's inconsistencies, and that we should send this mail to Bharat (owns WU) as well and ask who in his team can take requirements from DMD.
+
+Any disagreement on this?  
+
+**[This document is from Comes v. Microsoft (2007).]**
+
+Previously: [Bill Gates: "The quality is giving us a bad name"](https://www.techemails.com/i/142894465/bill-gates-on-quality-experience) (October 19, 2000)
+
+Previously: [Bill Gates on iTunes Music Store](https://twitter.com/techemails/status/1413534752699830275) (April 30, 2003)
+
+Previously: [Bill Gates on the iPod](https://twitter.com/techemails/status/1423680978359312387) (November 2, 2003)
+
+If you **upgrade to a paid subscription**, you’ll receive access to the **[full archive of internal tech emails](https://files.techemails.com)**, with 250+ documents from Apple, Google, Meta, Microsoft, OpenAI, Tesla, and more. You’ll also support our work: every year, we track hundreds of court cases and review more than 10,000 filings to bring you @TechEmails.
+
+[More…](https://twitter.com/techemails)
+
+If it was Steve Jobs-
+
+He gets stuck once.
+
+“Why can’t I download Movie Maker?”
+
+Somebody explains:
+
+“Well, Steve, first you have to go to Windows Update, install the ActiveX controls, scan for updates, reboot, return to the website…”
+
+Jobs:
+
+“No.”
+
+the execs starts pointing fingers.
+
+Jobs:
+
+"I want my mother to type “Movie Maker,” click one button, and use Movie Maker.
+
+Everything between those two things is your problem.

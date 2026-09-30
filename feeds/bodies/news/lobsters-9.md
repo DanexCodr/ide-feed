@@ -1,232 +1,182 @@
-*Welcome to Internal Tech Emails: internal tech industry emails that surface in public records. 🔍 If you haven’t signed up, join 50,000+ others and get the newsletter:*
+I think I managed to build quite a nice and interesting test suite recently; I’ll do my best to describe it in this post.
 
-**From:** Bill Gates  
-**Sent:** Wednesday, January 15, 2003 10:05 AM  
-**To:** Jim Allchin  
-**Cc:** Chris Jones; Bharat Shah; Joe Peterson; Will Poole; Brian Valentine; Anoop Gupta  
-**Subject:** Windows Usability Systematic degradation flame
+It’s basically just a bunch of notes, and the code is not open-source, but I think these explanations can have more value than raw source code, especially if you want to adapt some of these ideas for one of your own projects.
 
-I am quite disappointed at how Windows Usability has been going backwards and the program management groups don't drive usability issues.
+## The application
 
-Let me give you my experience from yesterday.
+Let’s start with a quick description of *what* we want to actually test, because as you can imagine, this is crucial for everything else.
 
-I decided to download Moviemake and buy the Digital Plus pack r so I went to Microsoft.com. They have a download place so I went there.
+[Réécoute](https://reecoute.fr/) is a single-page web application (SPA), i.e., a website rendered with client-side JavaScript<sup>[1](https://reecoute.fr/tech_blog/2026-09-28_my-experience-writing-automated-tests-for-a-spa#note1)</sup>. It’s mainly an audio player, optimized for long recordings (typically 2 or 3 hours), with quite a few interactive features that couldn’t work with server-side rendering alone. It uses React, and the client-side JavaScript communicates with a single server by sending JSON over HTTP. Nothing special.
 
-The first 5 times I used the site it timed out while trying to bring up the download page. Then after an 8 second delay I got it to come up
+Now, how can we test that? Unlike a classic server-side rendered website, the complexity is split into two roughly equal parts between the backend and the client-side JavaScript. Ideally, we should test both together in a realistic fashion to exercise all the chatter between the client and the server. I’ve made the extreme choice of testing the app as a whole, using a real web browser.
 
-This site is so slow it is unusable.
+The project also has a few backend-only tests that I won’t discuss here because there is really nothing special about them.
 
-It wasn't in the top 5 so I expanded the other 45.
+## The main test suite
 
-These 45 names are totally confusing. These names make stuff like: C:\Documents and Settings\billg\My Documents\My Pictures seem clear.
+The main test suite is written with [Playwright](https://playwright.dev/), running against a real web browser. It consists of about 20 files, each containing between 1 and 4 test cases.
 
-They are not filtered by the system I can in on and so many of the things are strange.
+Regarding my personal preferences: I tend to write rather lengthy test cases that describe full user journeys, rather than small tests for individual steps. For an e-commerce website, for example, I would likely write a test that adds an item to the cart, signs up, goes to the checkout page, and actually purchases the item: it’s the most critical user journey for the business, and you do not want it to break. Of course, I also write smaller, specialized tests for things like sign-up, but IMO these tend to be somewhat less critical than the end-to-end flows.
 
-I tried scoping to Media stuff. Still no moviemaker. I typed in moviemaker. Nothing. I typed in movie maker. Nothing.
+## Data isolation between tests
 
-So I gave up and sent mail to Amir saying - where is this Moviemaker download? Does it exist?
+Tests are not jailed in isolated environments, because:
 
-So they told me that using the download page to download something was not something they anticipated
+- When using something like Playwright, this is very complicated to achieve with database transactions;
+- I could spawn an instance of the backend for each test, but it would be much slower, so I’m not going to do that;
+- Running each test on a tiny subset of the dataset does not help catch database queries that only slow down when there’s a lot of data;
+- It’s simply more complicated and less realistic than writing tests that run against the same database without disturbing other tests.
 
-They told me to go to the main page search button and type movie maker (not moviemaker!).
+Basically, I write tests just like anyone would use the app in production: each test creates its own objects without relying on any existing data, never touches data it did not create, and never cleans up anything. Data just accumulates. This strategy works really well for apps like Réécoute, where nothing is actually public.
 
-I tried that   The site was pathetically slow but after 6 seconds of waiting up it came.
+I use a few helper functions to create data (`createUser`, `createBand`,  `createSession`, etc.). Note that I do not use before/after hooks at all.
 
-I thought for sure now I would see a button to just go do the download.
+## Mocks
 
-In fact it is more like a puzzle that you get to solve. It told me to go to Windows Update and do a bunch of incantations.
+The test suite uses two kinds of mocks:
 
-This struck me as completely odd. Why should I have to go somewhere else and do a scan to download moviemaker?
+- Each external service has its own global mock: things like S3, Stripe, Twilio, etc. I tend to write one large, realistic mock for each of them. It’s much faster and more reliable than using actual third-party services, and it allows running the tests without an internet connection. These mocks are enabled by default and used across all tests.
+- For some complicated cases (emails and passkeys, especially), I have a few (2 or 3?) custom code paths enabled by test-only parameters/HTTP headers in API queries. These parameters are ignored by the backend in production builds.
 
-So I went to Windows update. Windows Update decides I need to download a bunch of controls. Now just once but multiple times where I get to see weird dialog boxes.
+(I really hate when a test suite forces you to write custom mocks for every single test…)
 
-Doesn't Windows update know some key to talk to Windows?
+The most complex mock I wrote for this project is probably the one for passkeys: I couldn’t get actual passkeys to work in headless Chromium, so I hacked together a fake client around the  [`passkey` crate](https://docs.rs/passkey/latest/passkey/). But it is very specific and I am not very proud of it, so I won’t go into details here!
 
-Then I did the scan. This took quite some time and I was told it was critical for me to download 17megs of stuff.
+## Speed
 
-This is after I was told we were doing delta patches to things but instead just to get 6 things that are labeled in the SCARIEST possible way I had to download 17meg.
+As you can imagine, browser automation is much slower than simply parsing HTTP response bodies, so without parallelism it can quickly become unmanageable. This is why Playwright runs test files in parallel by default. With Réécoute, I went a step further by enabling  `fullyParallel` in the Playwright config, so tests within the same file also run concurrently. However, the most important factor here is the app itself, since a test suite can’t be more efficient than the app being tested! To give you an idea, the Playwright suite currently completes in just over 20 seconds on my fanless M3 MacBook Air.
 
-So I did the download. That part was fast. Then it wanted to do an install. This took 6 minutes and the machine was so slow I couldn't use it for anything else during this time.
+Also, Playwright supports all major web browsers and runs your tests across 3 or 4 of them by default. I changed the settings to only use Chromium: modern browsers behave very similarly, this makes the suite 3 to 4 times faster to run, and it is nearly as effective.
 
-What the heck is going on during those 6 minutes? That is crazy. This is after the download was finished.
+## Reliability
 
-Then it told me to reboot my machine. Why should I do that? I reboot every night - why should I reboot at that time?
+Here’s the main downside to browser testing, especially for SPAs: because we are testing an entire app *and* an entire browser, it’s difficult to make tests perfectly reliable. Yet with a large test suite, you **must** have high reliability, because  [the more tests you have, the less reliable the overall suite becomes](https://en.wikipedia.org/wiki/Probability#Independent_events), and re-running failed suites is expensive.
 
-So I did the reboot because it INSISTED on it. Of course that meant completely getting rid of all my Outlook state.
+There is a trick here—it’s not pretty, but it works well: Playwright has a  [`retries`](https://playwright.dev/docs/api/class-testconfig#test-config-retries)  option, which I set to 2 in CI. When a test fails, it is retried individually up to 2 times. In practice, tests in Réécoute’s suite rarely fail and retry. I could probably eliminate flakes entirely if I spent a few hours on it, but I’m not sure it's worth the effort right now.
 
-So I got back up and running and went to Windows Update again. I forgot why I was in Windows Update at all since all I wanted was to get Moviemaker.
+In fact, the main issue I faced with reliability was related to dual server-side/client-side rendering, in other words, *hydration*. When a user navigates to a page with a text input field, the browser first fetches the server-side rendered HTML, and then downloads and runs the JavaScript that replaces the page. But if the user starts typing into the input  *before* React has initialized, the client-side code will ignore those edits. To prevent this issue, all inputs are disabled by default and are only enabled once their React component is actually ready. Here’s how I did it:
 
-So I went back to Microsoft.com and looked at the instructions. I have to click on a folder called WindowsXP. Why should I do that? Windows Update knows I am on Windows XP.
+```
+export const useReady = (): boolean => {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    setTimeout(() => setReady(true), 1);
+  }, []);
+  return ready;
+};
 
-What does it mean to have to click on that folder? So I get a bunch of confusing stuff but sure enough one of them is Moviemaker.
+const MyPageWithAForm = () => {
+  const ready = useReady();
+  …
 
-So I do the download. The download is fast but the Install takes many minutes. Amazing how slow this thing is.
+  return (
+    <form>
+      <input type="text" disabled={!ready} value={…} onChange={…} />
+    </form>
+  );
+}
+```
 
-At some point I get told I need to go get Windows Media Series 9 to download.
+I rely on the fact that Playwright waits until the input is enabled before filling it (just like a real user!). Another option would have been to make all forms submittable without JavaScript, but that would have been more work, and the app is kind of pointless without JavaScript anyway.
 
-So I decide I will go do that. This time I get dialogs saying things like "Open" or "Save". No guidance in the instructions which to do. I have no clue which to do.
+## Developer experience
 
-The download is fast and the install takes 7 minutes for this thing.
+The interactive Playwright UI is great; I use it a lot:
 
-So now I think I am going to have Moviemaker. I go to my add/remove programs place to make sure it is there.
+## Continuous integration
 
-It is not there.
+This is where Playwright really shines: when a test fails, it creates a  `playwright-report` directory containing HTML files that embed the **same** UI as the interactive Playwright runner, completely standalone! When tests fail in CI, you can simply upload this directory to your favorite S3-compatible cloud storage. It makes troubleshooting easy because the trace files include console logs, network request/response bodies, screenshots, and more.
 
-What is there? The following garbage is there. Microsoft Autoupdate Exclusive test package, Microsoft Autoupdate Reboot test package, Microsoft Autoupdate testpackage1, Microsoft AUtoupdate testpackage2, Microsoft Autoupdate Test package3.
+Running a headless browser in a CI environment is not always straightforward. I use the following Dockerfile:
 
-Someone decided to trash the one part of Windows that was usable? The file system is no longer usable. The registry is not usable. This program listing was one sane place but now it is all crapped up.
+```
+FROM --platform=linux/amd64 node:22.15.0-bookworm
 
-But that is just the start of the crap. Later I have listed things like Windows XP Hotfix see Q329048 for more information. What is Q329048? Why are these series of patches listed here? Some of the patches just things like Q810655 instead of saying see Q329048 for more information.
-
-What an absolute mess.
-
-Moviemaker is just not there at all.
-
-So I give up on Moviemaker and decide to download the Digital Plus Package.
-
-I get told I need to go enter a bunch of information about myself.
-
-I enter it all in and because it decides I have mistyped something I have to try again. Of course it has cleared out most of what I typed
-
-I try tryping the right stuff in 5 times and it just keeps clearing things out for me to type them in again.
-
-So after more than an hour of craziness and making my programs list garbage and being scared and seeing that Microsoft.com is a terrible website I haven't run Moviemaker and I haven't got the plus package
-
-The lack of attention to usability represented by these experiences blows my mind. I thought we had reached a low with Windows Network places or the messages I get when I try to use 802.11. (don't you just love that root certificate message?)
-
-When I really get to use the stuff I am sure I will have more feedback.  
-
-**From:** Will Poole  
-**Sent:** Wednesday, January 15, 2003 1:27 PM  
-**To:** Amir Majidimehr; Chris Jones  
-**Cc:** Dave Fester; Rick Thompson  
-**Subject:** FW: Windows Usability Systematic degradation flame
-
-Guess we should start working on a list of things that need to be fixed w/ the web sites, WU, and with windows, and identify owners. Bill's frustration is not unreasonable.  
-
-**From:** Amir Majidimehr  
-**Sent:** Wednesday, January 15, 2003 3:55 PM  
-**To:** Mike Beckerman; Tim Lebel; Dave Fester  
-**Subject:** FW: Windows Usability Systematic degradation flame
-
-Can you guys coordinate between you on how to deal with this situation on our bits? Bill's situation is worse than my personal experience but still, this aspect of the system needs to be looked at carefully and become a sign off item for each release.
-
-Please let me know which one of you going to be BOL for this moving forward.
-
-Amir  
-
-**From:** Dave Fester  
-**Sent:** Wednesday, January 15, 2003 3:58 PM  
-**To:** Amir Majidimehr; Mike Beckerman; Tim Lebel  
-**Subject:** RE: Windows Usability Systematic degradation flame
-
-I replied as well. I am owning the website issues, but Mike should own the others.  
-
-**From:** Mike Beckerman  
-**Sent:** Wednesday, January 15, 2003 4:28 PM  
-**To:** Dave Fester; Amir Majidimehr; Tim Lebel  
-**Subject:** RE: Windows Usability Systematic degradation flame
-
-I'm thinking about this and am discussing with my team.
-
-I don't know what it means to "own website issues", nor am I yet sure the best way to handle the complex mess of coordinating between product teams, WU, and MS.COM. Dave, would you please forward the other reply you mentioned?
-
-I expect to send more on this thread in a day or two.  
-
-**From:** Dave Fester  
-**Sent:** Wednesday, January 15, 2003 4:31 PM  
-**To:** Mike Beckerman; Amir Majidimehr; Tim Lebel  
-**Subject:** RE: Windows Usability Systematic degradation flame
-
-I am working with MS.com to directly address the download/discoverability of our bits (both MP9S and MM2)  
-
-**From:** Mike Beckerman  
-**Sent:** Wednesday, January 15, 2003 4:39 PM  
-**To:** John Martin; lan Mercer; Michael Halcoussis; Linda Averett  
-**Cc:** Chadd Knowlton; Ming-Chieh Lee  
-**Subject**: FW: Windows Usability Systematic degradation flame
-
-More.  
-
-**From:** Mike Beckerman  
-**Sent:** Friday, January 17, 2003 7:36 AM  
-**To:** Mike Beckerman; John Martin; lan Mercer; Michael Halcoussis; Linda Averett  
-**Cc:** Chadd Knowlton; Ming-Chieh Lee  
-**Subject:** RE: Windows Usability Systematic degradation flame
-
-haven't heard anything from any of you on this.
-
-My take is that this web-experience mess spans many groups and deliverables (like Plus), that we need one person/team to own the overall picture, driving it, tracking the experience, etc., and that WMPG isn't really the right place. I'm thinking Dave's team. What do you think?  
-
-**From:** John Martin  
-**Sent:** Friday, January 17, 2003 11:52 AM  
-**To:** Mike Beckerman; Ian Mercer; Michael Halcoussis; Linda Averett  
-**Cc:** Chadd Knowlton; Ming-Chieh Lee  
-**Subject:** RE: Windows Usability Systematic degradation flame
-
-I have always been concerned about this and feel that this has a lot of engineering implications. I also feel that the reason is it such a mess is because marketing teams own release to web in this company. Frankly, we should be up in arms about this and want to program manager and develop whatever code we need to to ensure that every customer that even thinks they want to download our bits can do so in as easy and painless a way as possible. Downloading is the first step to setup and we should think of them equally or as one experience. But, if you want nothing revolutionary and want to band-aid (which is fine and understandable) then I agree with your plan to give it to Dave.
-
-John  
-
-**From:** Ian Mercer  
-**Sent:** Friday, January 17, 2003 5:02 PM  
-**To:** John Martin; Mike Beckerman; Michael Halcoussis; Linda Averett  
-**Cc:** Chadd Knowlton; Ming-Chieh Lee; Allan Poore  
-**Subject:** RE: Windows Usability Systematic degradation flame
-
-I don't think you can abdicate this entirely to marketing. If WU is the preferred way to deliver bits to end users we all need to drive WU to deliver what we need, both individually and as a collective request from DMD.
-
-One of the biggest issues today is that WU provides no way to *promote* a download to an end-user. We want to promote MM2 and WMP9S to end-users as something new and cool that they can get for Windows. Three lines of text describing it buried under "Windows XP" in a page that the user has to purposefully go find just isn't good enough. Why can't the WU client-side piece proactively display a bubble "Look! Cool, new features for Windows XP" and the option to display a much richer "advertisement" for the feature if the user wants to read more?
-
-Other issues -  
-    MUI - I guess this is getting fixed now but it's always been an issue for us  
-    Link to download through WU - why can't we send a user right in to WU to get MM2 without them having to wade through the whole site?  
-    Critical updates that aren't really critical - if you machine is behind a firewall many just aren't critical  
-    Too many fixes bombarding users all the time - I routinely ignore them now and perhaps update once a month as otherwise I'd be rebooting all the time  
-    WU's inflexible release schedule. If there is a major tradeshow at which we want to announce we need flexibility in timing the release
-
--Ian  
-
-**From:** Mike Beckerman  
-**Sent:** Friday, January 17, 2003 5:09 PM  
-**To:** lan Mercer; John Martin; Michael Halcoussis; Linda Averett  
-**Cc:** Chadd Knowlten; Ming-Chieh Lee; Allan Poore  
-**Subject:** RE: Windows Usability Systematic degradation flame
-
-So, I take from this that we have lots of opinions and input. However, no one appears to be saying that we, WMPG, are chartered and/or should own this. So my feedback on the thread would then be that Dave should take ownership for driving groups around today's inconsistencies, and that we should send this mail to Bharat (owns WU) as well and ask who in his team can take requirements from DMD.
-
-Any disagreement on this?  
-
-**[This document is from Comes v. Microsoft (2007).]**
-
-Previously: [Bill Gates: "The quality is giving us a bad name"](https://www.techemails.com/i/142894465/bill-gates-on-quality-experience) (October 19, 2000)
-
-Previously: [Bill Gates on iTunes Music Store](https://twitter.com/techemails/status/1413534752699830275) (April 30, 2003)
-
-Previously: [Bill Gates on the iPod](https://twitter.com/techemails/status/1423680978359312387) (November 2, 2003)
-
-If you **upgrade to a paid subscription**, you’ll receive access to the **[full archive of internal tech emails](https://files.techemails.com)**, with 250+ documents from Apple, Google, Meta, Microsoft, OpenAI, Tesla, and more. You’ll also support our work: every year, we track hundreds of court cases and review more than 10,000 filings to bring you @TechEmails.
-
-[More…](https://twitter.com/techemails)
-
-If it was Steve Jobs-
-
-He gets stuck once.
-
-“Why can’t I download Movie Maker?”
-
-Somebody explains:
-
-“Well, Steve, first you have to go to Windows Update, install the ActiveX controls, scan for updates, reboot, return to the website…”
-
-Jobs:
-
-“No.”
-
-the execs starts pointing fingers.
-
-Jobs:
-
-"I want my mother to type “Movie Maker,” click one button, and use Movie Maker.
-
-Everything between those two things is your problem.
+RUN apt-get update && \
+  apt-get install -y --no-install-recommends socat && \
+  rm -rf /var/lib/apt/lists/*
+COPY package.json package-lock.json playwright.config.js ./
+RUN npm ci
+RUN npx playwright install-deps
+RUN npx playwright install chromium
+COPY . .
+
+ENTRYPOINT ["socat", "TCP4-LISTEN:4000,fork,reuseaddr", "TCP4:reecoute_test:4000"]
+```
+
+This image only runs Playwright; the app being tested runs in a separate container. Honestly, I don’t remember why I decided to use `socat` here—there’s probably a way to make it work without it<sup>[2](https://reecoute.fr/tech_blog/2026-09-28_my-experience-writing-automated-tests-for-a-spa#note2)</sup>.
+
+## Miscellaneous tricks I occasionally use
+
+### API tests using Playwright
+
+It’s not what Playwright was primarily designed for, but you can write API-only tests with it, using `request()`, and it works just fine.
+
+### Testing emails
+
+I implemented a test-only API route that returns the latest emails for a recipient. It is used like this:
+
+```
+/** Returns emails, newest first */
+export const listEmails = async ({ request, recipient_address }) => {
+  const res = await request.post(
+    "/_api/test_helpers/list_emails",
+    { data: { recipient_address } },
+  );
+  expect(res.ok()).toBeTruthy();
+  const { emails } = await res.json();
+  return emails;
+};
+
+const readOtpEmail = async ({ page, recipient_address }) => {
+  const emails = await listEmails({ request: page.request, recipient_address });
+  const email = emails[0];
+  expect(email.subject).toMatch(/^Your code is [0-9]{6} - Réécoute$/);
+  const code_match = /<h2>([0-9]{6})<\/h2>/.exec(email.html_part);
+  expect(code_match).toBeTruthy();
+  return code_match[1];
+};
+```
+
+The API route is disabled in production builds.
+
+### Simulating mouse movements and clicks
+
+I managed to write this one:
+
+```
+…
+// wait until the player is loaded
+await expect(page.getByRole("button", { name: "Play" })).toBeEnabled();
+await page.mouse.move(800, 300);
+await page.mouse.down();
+await page.mouse.move(700, 300);
+await new Promise((r) => setTimeout(r, 100));
+await page.mouse.move(700, 300);
+await page.mouse.up();
+await page.getByRole("button", { name: "Select" }).click();
+// scroll
+await page.mouse.move(800, 300);
+await page.mouse.down();
+await page.mouse.move(600, 300);
+await new Promise((r) => setTimeout(r, 100));
+await page.mouse.move(600, 300);
+await page.mouse.up();
+await page.getByRole("button", { name: "Create a clip" }).click();
+…
+```
+
+You may find it ugly, but it tests an important feature I really don't want to break. And believe it or not, despite the `setTimeout()`s, it is surprisingly reliable!
+
+## Things that could be improved
+
+Test coverage isn't measured at the moment 🙃. However, the most critical user journeys and all the “happy paths” of the important features are tested. I don’t mind if obscure code paths aren't covered—I just don’t want any critical bugs.
+
+I’d really like to set `retries` to zero in CI, and I don't think I'm far from that goal. I'm just too lazy to tackle it right now!
+
+### Updates
+
+2026-09-29: added a note about hydration in the “Reliability” section.
+
+1. In fact, Réécoute is also server-side rendered for speed, SEO, and the rare nerds who browse with JavaScript disabled. However, the primary features are unavailable without client-side rendering.
+2. I can tell that it was my own decision to use socat—no LLM was involved here! It’s a great example of a situation where a comment would have helped…
