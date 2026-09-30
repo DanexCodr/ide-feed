@@ -6,27 +6,31 @@ Segments produced:
   - news       : Hacker News + Lobsters + I Programmer + MIT News + daily.dev
   - tutorials  : Dev.to (filtered)
 
-Each item carries:
-  - image    : the article's og:image URL (may be empty)
-  - preview  : a data: URL carrying a 32px JPEG preview (may be empty)
-  - color    : a hex source color, used as fallback background
+Feed shape:
+  - feeds/{segment}.json          metadata only (title, desc, tag,
+                                  url, image, preview, color, published)
+  - feeds/bodies/{segment}/*.md   article body text, one file per item
 
-The preview is generated in the workflow. A tiny 32px JPEG is
-downloaded, downscaled, JPEG-encoded at low quality, base64-encoded,
-and written inline into the feed. The app sets it as the card
-background so the card paints a blurry colored blob immediately,
-then fades the full image on top when it downloads.
+Body text is split out of the feed JSON so the WebView can parse
+the feed instantly even when the pool grows to hundreds of items.
+The app fetches a body lazily the first time a reader is opened,
+and caches it in memory for the rest of the app session.
+
+Retention:
+  Each build merges the freshly fetched items with the previous
+  feed, keeps every item newer than RETENTION_DAYS, prunes older
+  items, and deletes their body files. The pool therefore grows
+  during busy periods and shrinks during quiet ones, without
+  needing a database.
 
 Pipeline for each article:
-  1. Fetch raw HTML. Strip XML-incompatible control characters
-     before anyone downstream sees the string.
+  1. Fetch raw HTML. Strip XML-incompatible control characters.
   2. trafilatura produces a plain-text mask.
   3. BeautifulSoup walks the raw HTML into semantic blocks.
-  4. Blocks whose text appears in the mask are kept, in order, and
-     emitted as Markdown.
+  4. Blocks whose text appears in the mask are kept, in order.
   5. The title is stripped, the body trimmed, prose enforced.
-  6. og:image is extracted. The image is fetched, downscaled to a
-     preview, and both URLs are written into the item.
+  6. og:image is extracted. The image is fetched, downscaled to
+     a preview, and both URLs are written into the item.
 
 No AI. No API keys. No model retirements. Deterministic output.
 """
@@ -41,7 +45,7 @@ import re
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from readability import Document
 from bs4 import BeautifulSoup, NavigableString
@@ -77,6 +81,8 @@ MIN_SENTENCE_LENGTH = 40
 PREVIEW_WIDTH = 32
 PREVIEW_QUALITY = 30
 PREVIEW_MAX_BASE64_BYTES = 8192
+
+RETENTION_DAYS = 7
 
 
 # ============================================================
@@ -1193,7 +1199,7 @@ def fetch_hacker_news():
         raw_items.sort(key=lambda x: x.get('score', 0), reverse=True)
 
         final = []
-        for item in raw_items[:12]:
+        for item in raw_items[:36]:
             if item.get('text'):
                 body = item['text']
                 body += f"\n\n[Discuss on Hacker News](https://news.ycombinator.com/item?id={item['hn_id']})"
@@ -1240,7 +1246,7 @@ def fetch_lobsters():
         with urllib.request.urlopen(req, timeout=10) as response:
             root = ET.fromstring(response.read())
 
-        for i, item in enumerate(root.findall('.//item')[:10]):
+        for i, item in enumerate(root.findall('.//item')[:30]):
             title = decode_entities(item.find('title').text)
             link = item.find('link').text
             pub_date = item.find('pubDate').text
@@ -1283,7 +1289,7 @@ def fetch_i_programmer():
         with urllib.request.urlopen(req, timeout=10) as response:
             root = ET.fromstring(response.read())
 
-        for i, item in enumerate(root.findall('.//item')[:15]):
+        for i, item in enumerate(root.findall('.//item')[:45]):
             title = decode_entities(item.find('title').text)
             link = item.find('link').text
             pub_date = item.find('pubDate').text
@@ -1326,7 +1332,7 @@ def fetch_devto_full():
     print("Fetching Dev.to...")
     items = []
     try:
-        list_url = "https://dev.to/api/articles?per_page=30&top=14&tag=programming"
+        list_url = "https://dev.to/api/articles?per_page=90&top=14&tag=programming"
         req = urllib.request.Request(list_url, headers={'User-Agent': 'DroidBuild-Agent/1.0'})
         with urllib.request.urlopen(req, timeout=10) as resp:
             articles = json.loads(resp.read().decode('utf-8'))
@@ -1335,7 +1341,7 @@ def fetch_devto_full():
         kept = 0
 
         for article in articles:
-            if kept >= 15:
+            if kept >= 45:
                 break
 
             list_title = article.get('title', '')
@@ -1404,7 +1410,7 @@ def fetch_daily_dev():
             data = json.loads(resp.read().decode('utf-8'))
 
         raw_items = []
-        for i, post in enumerate(data.get('data', [])[:10]):
+        for i, post in enumerate(data.get('data', [])[:30]):
             raw_items.append({
                 'id': f"dailydev-{post.get('id', i)}",
                 'title': decode_entities(post.get('title', 'Untitled')),
@@ -1461,7 +1467,7 @@ def fetch_mit_news():
         with urllib.request.urlopen(req, timeout=10) as response:
             root = ET.fromstring(response.read())
 
-        for i, item in enumerate(root.findall('.//item')[:10]):
+        for i, item in enumerate(root.findall('.//item')[:30]):
             title = decode_entities(item.find('title').text)
             link = item.find('link').text
             pub_date = item.find('pubDate').text
@@ -1559,6 +1565,122 @@ def build_segment_from_markdown(segment):
 
 
 # ============================================================
+# FEED WRITE WITH RETENTION
+#
+# Bodies are split out of the feed JSON into per-item .md files
+# under feeds/bodies/{segment}/{id}.md. The feed keeps only the
+# metadata the card needs: title, desc, tag, url, image, preview,
+# color, published, order. This keeps the JSON small enough for
+# the WebView to parse instantly even when the pool grows.
+#
+# Retention: each build reads the previous feed, keeps every item
+# newer than RETENTION_DAYS, and merges it with the freshly
+# fetched items. New IDs win on collision. Bodies for items that
+# fall out of the window are deleted from disk, so the bodies
+# directory stays in sync with the feed.
+#
+# Upgrade note: the first run after this change will read a
+# previous feed whose items still carry an inline "body" field.
+# Those fields are dropped from the metadata copy on the way in.
+# ============================================================
+
+def _body_path_for(segment, item_id):
+    safe = re.sub(r'[^A-Za-z0-9_\-]', '_', item_id)
+    return os.path.join(FEEDS_DIR, 'bodies', segment, safe + '.md')
+
+
+def build_feed_with_retention(segment, new_items):
+    """Merge new items with the previous feed, prune by age,
+    write bodies to disk, write the metadata-only feed JSON.
+    Returns the final item count."""
+    feed_path = os.path.join(FEEDS_DIR, segment + '.json')
+    bodies_dir = os.path.join(FEEDS_DIR, 'bodies', segment)
+    os.makedirs(bodies_dir, exist_ok=True)
+
+    # Load previous feed metadata. It has no bodies now, so this
+    # is cheap regardless of pool size.
+    prev_items = []
+    if os.path.isfile(feed_path):
+        try:
+            with open(feed_path, 'r', encoding='utf-8') as f:
+                prev_items = json.load(f).get('items', []) or []
+        except Exception:
+            prev_items = []
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=RETENTION_DAYS)
+
+    seen = set()
+    merged = []
+
+    # New items take precedence.
+    for item in new_items:
+        iid = item.get('id')
+        if not iid or iid in seen:
+            continue
+        seen.add(iid)
+        merged.append(item)
+
+    # Carry over previous items that are still inside the window.
+    for item in prev_items:
+        iid = item.get('id')
+        if not iid or iid in seen:
+            continue
+        pub = item.get('published', '')
+        if pub:
+            try:
+                dt = datetime.fromisoformat(pub.replace('Z', '+00:00'))
+                if dt < cutoff:
+                    continue
+            except Exception:
+                pass
+        seen.add(iid)
+        # Old feeds may still carry an inline body. Strip it so
+        # the metadata copy stays small.
+        item.pop('body', None)
+        merged.append(item)
+
+    # Write bodies for the new items. Previous items' body files
+    # were written by an earlier build and are still on disk.
+    for item in new_items:
+        body = item.pop('body', '') or ''
+        if body:
+            path = _body_path_for(segment, item['id'])
+            try:
+                with open(path, 'w', encoding='utf-8') as f:
+                    f.write(body)
+            except Exception as e:
+                print(f"  [Body] Write failed for {item['id']}: {e}")
+
+    # Remove bodies for items that fell out of the pool.
+    live_ids = set()
+    for item in merged:
+        live_ids.add(re.sub(r'[^A-Za-z0-9_\-]', '_', item.get('id', '')))
+    try:
+        for fn in os.listdir(bodies_dir):
+            if not fn.endswith('.md'):
+                continue
+            stem = fn[:-3]
+            if stem not in live_ids:
+                try:
+                    os.remove(os.path.join(bodies_dir, fn))
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    feed = {
+        'updated': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
+        'items': merged,
+    }
+
+    with open(feed_path, 'w', encoding='utf-8') as f:
+        json.dump(feed, f, indent=2, ensure_ascii=False)
+        f.write('\n')
+
+    return len(merged)
+
+
+# ============================================================
 # MAIN
 # ============================================================
 
@@ -1586,22 +1708,12 @@ def main():
         elif segment == 'tutorials':
             live_items = fetch_devto_full()
 
-        all_items = live_items + local_items
-        if not all_items:
-            continue
+        new_items = live_items + local_items
 
-        feed = {
-            'updated': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
-            'items': all_items,
-        }
-
-        out_path = os.path.join(FEEDS_DIR, segment + '.json')
-        with open(out_path, 'w', encoding='utf-8') as f:
-            json.dump(feed, f, indent=2, ensure_ascii=False)
-            f.write('\n')
-
-        print(f'wrote {out_path} ({len(feed["items"])} items)')
-        any_built = True
+        count = build_feed_with_retention(segment, new_items)
+        if count > 0:
+            print(f'wrote {FEEDS_DIR}/{segment}.json ({count} items)')
+            any_built = True
 
     if not any_built:
         print('no source directories found; nothing written')
