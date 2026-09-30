@@ -1,42 +1,153 @@
-Quick note before we begin: this is the first of two posts I’m publishing today. You’re welcome to skip ahead to: [Shin honkaku](https://dbushell.com/2026/09/28/shin-honkaku/) — it’s far more fun!
+Sony has progressively locked down what you can do with the PS5’s hardware. Streaming is a good example: the console gives you a nice, convenient **“Broadcast”** button, but the moment you want to do anything outside the handful of services Sony supports, it gets annoying very fast.
 
-I’ve waited long enough! I’ve entertained one “wait six months” too many!
+Third-party Bluetooth devices are the same story! Sony locks the wireless stack to their own peripherals, so your headphones or controllers from other brands simply won’t pair :/
 
-The TL;DR for my [updated AI policy](https://dbushell.com/ai/) has changed:
+## [#](https://yashgarg.dev/posts/hijacking-ps5-rtmp-stream/#the-problem)The Problem
+
+I often stream games with friends on [Discord](https://discord.com) who watch me play, but the PS5 doesn’t support screen sharing to Discord. The obvious fix is a capture card — plug the HDMI output into a [capture card](https://www.elgato.com/us/en/explorer/products/capture/what-is-a-capture-card/), feed it into [OBS](https://obsproject.com/) on your Mac, stream from there. But decent ones aren’t cheap, and I didn’t want to spend upwards of $100 just for this.
+
+## [#](https://yashgarg.dev/posts/hijacking-ps5-rtmp-stream/#remote-play)Remote Play
+
+[Remote Play](https://www.playstation.com/en-in/remote-play/) somewhat worked for me. I could connect the PS5 to my MacBook, share the Mac’s screen to Discord and play from there.
+
+The problem is that you need to connect everything to the Remote Play device: controller, earphones, etc. I also occasionally ran into input lag, and the stream quality is entirely controlled by the PS5. You can’t really configure anything.
+
+I didn’t want to change my physical setup every time I wanted to stream.
+
+## [#](https://yashgarg.dev/posts/hijacking-ps5-rtmp-stream/#how-ps5-streaming-works)How PS5 Streaming Works
+
+The PS5 supports streaming to [YouTube](https://youtube.com) and [Twitch](https://twitch.tv) by default if you’re signed into those accounts. The protocol used for this is [RTMP](https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol), or Real-Time Messaging Protocol, which is commonly used for live audio/video streaming.
+
+So when you start a broadcast, the PS5 roughly does this:
+
+![](https://yashgarg.dev/_astro/diagram-1-light.DQtKQAgY.svg)
+
+What if we could make our own device act as Twitch and receive that RTMP stream instead?
+
+![](https://yashgarg.dev/_astro/diagram-2-light.DTxc9dxk.svg)
+
+That’s the idea. The PS5 doesn’t hardcode Twitch’s IP, it looks it up via DNS every time. If we control what DNS returns, we control where the stream goes.
+
+## [#](https://yashgarg.dev/posts/hijacking-ps5-rtmp-stream/#finding-the-right-hostname)Finding the Right Hostname
+
+The obvious first attempt was to spoof `ingest.twitch.tv` directly. That’s the hostname the PS5 resolves when you hit broadcast, so pointing it at the Mac should work, right?
+
+Not quite. `ingest.twitch.tv:443` is actually a **discovery endpoint**, not the RTMP server itself. PS5 makes an HTTPS call to it asking “which regional ingest server should I use?” and Twitch responds with something like `ap-southeast-1.prod.fi.contribute.live-video.net`. Then the PS5 pushes the actual stream there.
+
+Spoofing that hostname, I ran into a different problem: the actual Twitch ingest uses **RTMPS** (RTMP over TLS on port 443), and PS5 validates the certificate against trusted [CAs](https://en.wikipedia.org/wiki/Certificate_authority). A self-signed cert doesn’t work, and there’s no way to install custom CAs on a PS5.
+
+I then tried YouTube as a workaround. Its RTMP ingest uses plain RTMP on port 1935, so there was no TLS certificate to deal with. The PS5 happily sent the stream to my Mac, so I knew the basic approach worked.
+
+The problem was that PS5 periodically checks YouTube’s API to make sure the stream is actually live. Since YouTube never received the stream, that check failed and it stopped broadcasting after about 60 seconds.
+
+That meant I needed to find a Twitch endpoint that used plain RTMP. The answer came from watching DNS logs while broadcasting:
 
 ```
-- I do not currently use AI for professional work.
-+ I do not and will not use AI.
+sudo tail -f /tmp/dnsmasq.log
+# Sep 22 23:20:28 dnsmasq: query[A] ingest.global-contribute.live-video.net from 192.168.8.171
+# Sep 22 23:20:28 dnsmasq: reply aps30.contribute.live-video.net is 35.55.13.0
 ```
 
-The absolute vileness of the AI industrial complex knows no bounds.
+The PS5 was resolving `ingest.global-contribute.live-video.net`, which chains down to `aps30.contribute.live-video.net`. That’s the real RTMP server. Spoofing `contribute.live-video.net` covers all subdomains and redirects the actual stream to the Mac without any certificate issues.
 
-Beyond morality — because let’s be honest few care — it’s very simple:
+## [#](https://yashgarg.dev/posts/hijacking-ps5-rtmp-stream/#dns-trick)DNS Trick
 
-**There is no worthwhile career in AI-*anything*.**
+The setup has two main parts: [`dnsmasq`](https://dnsmasq.org) and [`nginx-rtmp`](https://github.com/arut/nginx-rtmp-module). I built a small macOS menu bar app that bundles both and manages them.
 
-Simple as that. The AI industry is designed to dehumanise and commoditise labour. Everyone who has dedicated their life to token servitude has become a dull fungible meat proxy.
+![Menu bar app running nginx and dnsmasq](https://yashgarg.dev/_astro/macos-app_agYga.webp)
 
-The software and web development industries are leading this brain drain. I’ve observed devs go from the giddy thrills of gambling with their employer’s tokens, to the depressing realisation that they’ve been fooled by a small group of grifters and influencers.
+I run `dnsmasq` on my Mac and configure it to resolve Twitch’s ingest domains to my Mac’s LAN address:
 
-So many developers are giving up. Many have literally left the industry unable to find meaningful employment. Many more have figuratively quiet-quit. They clock in to babysit chatbots with no incentive to care about the output beyond quantity.
+```
+server=1.1.1.1
+server=8.8.8.8
 
-I’m done pretending there is any hope for the AI industry to redeem itself.
+# Redirect Twitch ingest traffic to the Mac
+address=/contribute.live-video.net/192.168.8.175
+address=/ingest.global-contribute.live-video.net/192.168.8.175
+address=/live.twitch.tv/192.168.8.175
+address=/live-sin.twitch.tv/192.168.8.175
+address=/live-nrt.twitch.tv/192.168.8.175
+address=/live-syd.twitch.tv/192.168.8.175
+address=/live-fra.twitch.tv/192.168.8.175
+address=/live-ams.twitch.tv/192.168.8.175
+address=/live-lhr.twitch.tv/192.168.8.175
+address=/live-jfk.twitch.tv/192.168.8.175
+address=/live-lax.twitch.tv/192.168.8.175
+address=/live-sea.twitch.tv/192.168.8.175
 
-I’m moving on to more interesting things. Barring a monumental power shift, collapse of the industrial complex, and rise in free range grass-fed “local AI” (lol) I won’t be looking back. Wake me up if anything changes!
+log-queries
+log-facility=/tmp/dnsmasq.log
 
-What does that mean, practically?
+no-hosts
+listen-address=0.0.0.0
+```
 
-## In practice
+`192.168.8.175` is my Mac’s IP. When the PS5 asks DNS for one of these Twitch endpoints, `dnsmasq` returns my Mac’s IP instead. The PS5 connects to my Mac thinking it’s Twitch.
 
-First and foremost I will continue to [build websites for **real people**](https://valleyfold.co.uk/). I set up shop as a limited company after a decade of freelancing to bolster my commitment.
+The last piece is pointing the PS5 at this DNS server. I have a [GL.iNet router](https://www.gl-inet.com/) running [OpenWRT](https://openwrt.org/), so I configured it to hand my Mac’s IP as the DNS server specifically for the PS5’s [DHCP](https://en.wikipedia.org/wiki/Dynamic_Host_Configuration_Protocol) lease.
 
-I will observe the AI industrial complex cautiously from afar, but I won’t allow the bullshit I see to rage-bait me. There will be times I’m obliged to call out [egregious insults to my profession](https://dbushell.com/2026/05/20/google-just-spat-in-my-face/). Otherwise, I’ll strive to ignore the echo chamber to protect my mental health.
+```
+# SSH into the router and run:
+uci add_list dhcp.lan.dhcp_option="tag:PS5,6,192.168.8.175"
+uci commit dhcp
+/etc/init.d/dnsmasq restart
+```
 
-I am distancing myself from peers I once respected who are all-in on chatbots<sup>†</sup>. It is not my task to help them. I have no interest in anyone wilfully funding billionaires’ fantasies. There are new people to meet who respect humanity.
+The `tag:PS5` part works because the PS5’s static lease already has that tag set in `/etc/config/dhcp`. Option `6` is the DHCP option for DNS server. The PS5 picks this up on its next DHCP renewal, no manual DNS configuration is required on the console!
 
-I feel happier about my future now. There is no longer any lingering doubt. The perpetual tech circus may be a threat to my patience and sanity but it won’t take my career.
+## [#](https://yashgarg.dev/posts/hijacking-ps5-rtmp-stream/#receiving-the-stream)Receiving the Stream
 
-So to immediately move on to more interesting things: my latest obsession is shin honkaku detective fiction! I’d highly recommend [The Tokyo Zodiac Murders](https://dbushell.com/notes/2026-08-31T10:53Z/) by *Sōji Shimada*, and [The Moai Island Puzzle](https://dbushell.com/notes/2026-09-19T06:00Z/) by *Alice Arisugawa* — both satisfying reads.
+For that, I’m using `nginx-rtmp`:
 
-<small><sup>†</sup> **Edit:** originally I wrote “lost to chatbot psychosis” here. A poor turn of phrase given the context. It wasn’t meant literally, and I should not be using it derogatorily. I very much empathise with victims of AI. Chalk it up to frustration with the industry and trying to edit multiple thoughts down to keep this brief.</small>
+```
+worker_processes 1;
+
+error_log /tmp/nginx-error.log warn;
+pid /tmp/nginx.pid;
+
+events {
+    worker_connections 512;
+}
+
+rtmp {
+    server {
+        listen 1935;
+        chunk_size 4096;
+        application ps5 {
+            live on;
+            record off;
+            sync 10ms;
+            # Notify our app when a stream starts
+            on_publish http://127.0.0.1:9988/on_publish;
+        }
+    }
+}
+
+http {
+    server {
+        listen 8080;
+        location /stat {
+            rtmp_stat all;
+        }
+    }
+}
+```
+
+The `on_publish` callback is how the menu bar app detects when the PS5 starts broadcasting. nginx fires a POST to `localhost:9988` with the stream name, and the app surfaces the full RTMP URL ready to copy.
+
+At this point, the PS5 is pushing its stream (1080p60, H.264, AAC stereo) directly to my Mac instead of Twitch.
+
+![](https://yashgarg.dev/_astro/diagram-3-light.Dd-yXgWU.svg)
+
+From here I can pull the stream into anything: OBS to re-stream it, record it locally, or just play it directly.
+
+## [#](https://yashgarg.dev/posts/hijacking-ps5-rtmp-stream/#watching-it)Watching It
+
+Instead of going through OBS, I used [`mpv`](https://mpv.io/) to pull the stream and shared the window to Discord. The low-latency profile keeps the delay less than a second:
+
+```
+mpv --profile=low-latency --audio-buffer=0.3 rtmp://127.0.0.1/ps5/stream-key
+```
+
+This has been quite reliable surprisingly. I’ve been using it for a few weeks now and haven’t had any issues. You can find the complete source code [here](https://github.com/yash-garg/PS5Streamer).

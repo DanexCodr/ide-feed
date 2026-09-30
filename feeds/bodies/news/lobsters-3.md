@@ -1,182 +1,415 @@
-I think I managed to build quite a nice and interesting test suite recently; I’ll do my best to describe it in this post.
+[Serde](https://serde.rs/) is an amazing serialization library for Rust and it
+has been a huge reason why I felt productive with it for years.  However already
+while at Sentry I got quite frustrated with some of the limitations with it but
+actually replacing Serde is tricky because of the might that it has in the
+ecosystem.  Also because it’s quite hard to actually do better without also
+making some potentially painful compromises.
 
-It’s basically just a bunch of notes, and the code is not open-source, but I think these explanations can have more value than raw source code, especially if you want to adapt some of these ideas for one of your own projects.
+Here are three examples of Serde corner cases that show poor interactions of
+Serde features or unexpected limitations:
 
-## The application
-
-Let’s start with a quick description of *what* we want to actually test, because as you can imagine, this is crucial for everything else.
-
-[Réécoute](https://reecoute.fr/) is a single-page web application (SPA), i.e., a website rendered with client-side JavaScript<sup>[1](https://reecoute.fr/tech_blog/2026-09-28_my-experience-writing-automated-tests-for-a-spa#note1)</sup>. It’s mainly an audio player, optimized for long recordings (typically 2 or 3 hours), with quite a few interactive features that couldn’t work with server-side rendering alone. It uses React, and the client-side JavaScript communicates with a single server by sending JSON over HTTP. Nothing special.
-
-Now, how can we test that? Unlike a classic server-side rendered website, the complexity is split into two roughly equal parts between the backend and the client-side JavaScript. Ideally, we should test both together in a realistic fashion to exercise all the chatter between the client and the server. I’ve made the extreme choice of testing the app as a whole, using a real web browser.
-
-The project also has a few backend-only tests that I won’t discuss here because there is really nothing special about them.
-
-## The main test suite
-
-The main test suite is written with [Playwright](https://playwright.dev/), running against a real web browser. It consists of about 20 files, each containing between 1 and 4 test cases.
-
-Regarding my personal preferences: I tend to write rather lengthy test cases that describe full user journeys, rather than small tests for individual steps. For an e-commerce website, for example, I would likely write a test that adds an item to the cart, signs up, goes to the checkout page, and actually purchases the item: it’s the most critical user journey for the business, and you do not want it to break. Of course, I also write smaller, specialized tests for things like sign-up, but IMO these tend to be somewhat less critical than the end-to-end flows.
-
-## Data isolation between tests
-
-Tests are not jailed in isolated environments, because:
-
-- When using something like Playwright, this is very complicated to achieve with database transactions;
-- I could spawn an instance of the backend for each test, but it would be much slower, so I’m not going to do that;
-- Running each test on a tiny subset of the dataset does not help catch database queries that only slow down when there’s a lot of data;
-- It’s simply more complicated and less realistic than writing tests that run against the same database without disturbing other tests.
-
-Basically, I write tests just like anyone would use the app in production: each test creates its own objects without relying on any existing data, never touches data it did not create, and never cleans up anything. Data just accumulates. This strategy works really well for apps like Réécoute, where nothing is actually public.
-
-I use a few helper functions to create data (`createUser`, `createBand`,  `createSession`, etc.). Note that I do not use before/after hooks at all.
-
-## Mocks
-
-The test suite uses two kinds of mocks:
-
-- Each external service has its own global mock: things like S3, Stripe, Twilio, etc. I tend to write one large, realistic mock for each of them. It’s much faster and more reliable than using actual third-party services, and it allows running the tests without an internet connection. These mocks are enabled by default and used across all tests.
-- For some complicated cases (emails and passkeys, especially), I have a few (2 or 3?) custom code paths enabled by test-only parameters/HTTP headers in API queries. These parameters are ignored by the backend in production builds.
-
-(I really hate when a test suite forces you to write custom mocks for every single test…)
-
-The most complex mock I wrote for this project is probably the one for passkeys: I couldn’t get actual passkeys to work in headless Chromium, so I hacked together a fake client around the  [`passkey` crate](https://docs.rs/passkey/latest/passkey/). But it is very specific and I am not very proud of it, so I won’t go into details here!
-
-## Speed
-
-As you can imagine, browser automation is much slower than simply parsing HTTP response bodies, so without parallelism it can quickly become unmanageable. This is why Playwright runs test files in parallel by default. With Réécoute, I went a step further by enabling  `fullyParallel` in the Playwright config, so tests within the same file also run concurrently. However, the most important factor here is the app itself, since a test suite can’t be more efficient than the app being tested! To give you an idea, the Playwright suite currently completes in just over 20 seconds on my fanless M3 MacBook Air.
-
-Also, Playwright supports all major web browsers and runs your tests across 3 or 4 of them by default. I changed the settings to only use Chromium: modern browsers behave very similarly, this makes the suite 3 to 4 times faster to run, and it is nearly as effective.
-
-## Reliability
-
-Here’s the main downside to browser testing, especially for SPAs: because we are testing an entire app *and* an entire browser, it’s difficult to make tests perfectly reliable. Yet with a large test suite, you **must** have high reliability, because  [the more tests you have, the less reliable the overall suite becomes](https://en.wikipedia.org/wiki/Probability#Independent_events), and re-running failed suites is expensive.
-
-There is a trick here—it’s not pretty, but it works well: Playwright has a  [`retries`](https://playwright.dev/docs/api/class-testconfig#test-config-retries)  option, which I set to 2 in CI. When a test fails, it is retried individually up to 2 times. In practice, tests in Réécoute’s suite rarely fail and retry. I could probably eliminate flakes entirely if I spent a few hours on it, but I’m not sure it's worth the effort right now.
-
-In fact, the main issue I faced with reliability was related to dual server-side/client-side rendering, in other words, *hydration*. When a user navigates to a page with a text input field, the browser first fetches the server-side rendered HTML, and then downloads and runs the JavaScript that replaces the page. But if the user starts typing into the input  *before* React has initialized, the client-side code will ignore those edits. To prevent this issue, all inputs are disabled by default and are only enabled once their React component is actually ready. Here’s how I did it:
+An internally tagged enum, with `serde_json`‘s `arbitrary_precision` feature
+turned on:
 
 ```
-export const useReady = (): boolean => {
-  const [ready, setReady] = useState(false);
-  useEffect(() => {
-    setTimeout(() => setReady(true), 1);
-  }, []);
-  return ready;
-};
+#[derive(Deserialize)]
+#[serde(tag = "type")]
+enum Shape {
+    Circle { radius: f64 },
+}
 
-const MyPageWithAForm = () => {
-  const ready = useReady();
-  …
+serde_json::from_str::<Shape>(r#"{"type": "Circle", "radius": 1.5}"#)
+// error: invalid type: map, expected f64
+```
 
-  return (
-    <form>
-      <input type="text" disabled={!ready} value={…} onChange={…} />
-    </form>
-  );
+Serde’s data model has no place for arbitrary precision numbers, so `serde_json`
+uses in-band signalling with a map with a magic key.  The enum has to buffer the
+fields until it has seen the tag, and the buffer does not know about the magic
+key.  Because Cargo features are unified, it’s enough for any crate in your
+dependency graph to turn the feature on.
+
+```
+#[derive(Deserialize)]
+struct Stats {
+    scores: HashMap<u32, u32>,
+}
+
+#[derive(Deserialize)]
+struct Report {
+    name: String,
+    #[serde(flatten)]
+    stats: Stats,
+}
+
+serde_json::from_str::<Report>(r#"{"name": "x", "scores": {"42": 23}}"#)
+// error: invalid type: string "42", expected u32 at line 1 column 35
+```
+
+`Stats` on its own parses `{"scores": {"42": 23}}` just fine.  JSON keys are
+always strings, and `serde_json` only turns them into integers if the type asks
+for one.  However once `flatten` buffers the value, `"42"` is just a string.
+The error also points at the end of the document rather than at the key.
+
+```
+fn from_hex<'de, D: Deserializer<'de>>(d: D) -> Result<u32, D::Error> { ... }
+
+#[derive(Deserialize)]
+struct Theme {
+    #[serde(deserialize_with = "from_hex")]
+    primary: u32,
+    #[serde(deserialize_with = "from_hex")]
+    accent: Option<u32>,
+}
+
+//error[E0308]: `?` operator has incompatible types
+//  |
+//  |     #[serde(deserialize_with = "from_hex")]
+//  |                                ^^^^^^^^^^ expected `Option<u32>`, found `u32`
+//  |
+//help: try wrapping the expression in `Some`
+//  |
+//  |     #[serde(deserialize_with = Some("from_hex"))]
+//  |                                +++++          +
+```
+
+A function cannot be passed as a type parameter, so there is no way to apply
+`from_hex` to the inside of an `Option`, a `Vec` or a map.  You write another
+function for every wrapper, and once you have `from_opt_hex` the field is no
+longer optional unless you also remember to add `#[serde(default)]`.
+
+None of these are bugs that are easy to fix in Serde.  They fall out of its
+design, and that design is protected by Serde’s stability guarantees.
+
+Back in 2022 I started an experiment called
+[Deser](https://github.com/mitsuhiko/deser).  It’s a serialization library for
+Rust that takes the user experience of [Serde](https://serde.rs/) and puts it on
+top of a completely different architecture inspired by
+[miniserde](https://github.com/dtolnay/miniserde).  I never really finished it
+and it sat around for a few years.  I picked it back up, and it has now reached
+a point where I think it’s worth looking at.  Even just to inspire others to
+see if they want to explore the space.
+
+The name is Serde with its two halves swapped.  Deser is Serde but the other way
+around.  In Serde, a type drives the deserialization process: a `Deserialize`
+impl asks the deserializer for the kind of value it expects, the format calls
+back into a visitor.  Every nested value is handled by recursion which makes
+Serde deserialization inherently grow the stack with each level of nesting.
+
+Deser on the other hand turns this around and the format tells the type of the
+next value and pushes events into a sink.  When a sink hits the start of a
+nested value, it doesn’t call into it but hands back a new sink to a driver,
+which keeps all state on the heap (in fact, in an arena).  On the way out,
+emitters return their nested values instead of recursing into them.
+
+That also means that Deser cannot support formats like protobuf that are not
+self describing.  They are in fact quite intentionally left out of the design
+entirely.  Which is one way to say: if you want to “fix” Serde, you need to
+make some other compromises.
+
+Most of the reasons for Deser’s ideas go back to [Sentry
+Relay](https://github.com/getsentry/relay), which processes enormous amounts of
+untrusted JSON.  Over the years when I was at Sentry we ran into the same set of
+problems again and again, and many of them are not really bugs in Serde but
+consequences of its design.  Serde’s stability guarantees mean that a lot of
+them cannot be fixed without breaking every format and every hand written
+implementation.  Most of these problems come from three decisions:
+
+1. **One set of traits for all formats.** Serde serves both self describing formats (JSON, YAML, TOML, …) and formats where the reader has to know the type upfront (postcard, bincode, protobuf, …). That is incredibly useful, but it means that some features only work with some formats, and you find out at runtime. In case of Serde it also has some odd wrinkles where a derived struct quietly accepts an array in place of an object in JSON for instance.
+2. **A fixed data model that loses information when buffering.** Internally tagged enums, untagged enums and `flatten` need to buffer values before they know what to do with them. The buffer can’t hold everything the format knew, errors lose their location and extensions to the ecosystem rely on in-band signalling to express things such as arbitrary precision numbers.
+3. **Recursion on the call stack.** Every level of nesting uses stack space. Formats protect against this with a recursion limit, but the moment you go through a code path that doesn’t have one (writing, dynamic values), deeply nested data can take down your process. It also means that a deserialization cannot be paused while you wait for more input.
+
+Many of the corresponding Serde issues have been open for years, and I wrote
+about [abusing Serde](https://lucumr.pocoo.org/2021/11/14/abusing-serde/) before.  People have tried
+different angles on this over the years.  Some went minimal and dropped most
+features to get fast compiles and no recursion.  dtolnay’s own
+[miniserde](https://github.com/dtolnay/miniserde) is the best example of that,
+and deser’s trait design was originally modelled after it.  Other recent
+attempts went for runtime reflection, or for a new data model with a focus on
+binary formats.
+
+If you want to read up on all of the collected challenges with Serde’s design,
+I maintain [a lengthy list here](https://github.com/mitsuhiko/deser/blob/main/SERDE.md).
+
+First of all I don’t think it’s likely that one can replace Serde.  [The orphan
+rule](https://smallcultfollowing.com/babysteps/blog/2022/04/17/coherence-and-crate-level-where-clauses/)
+entrenches Serde incredibly well in the ecosystem.  But some things are within
+the reach of a crate author’s control.  In case of Deser it’s completeness.
+
+Deser today implements all important self describing formats from YAML, JSON,
+TOML, CBOR, JSON5 and the likes, but also XML and plist to really close the gap.
+XML in particular is something Serde has declined to support, and it shows
+(more on that below).  At the very least format support should not be the
+reason not to use Deser.
+
+The second problem usually is that actually solving Serde’s issues comes at a
+significant cost in compile time and/or runtime performance.  Deser is no
+different.  While Deser’s compile times are a bit better than Serde’s, the
+binary bloat is quite a bit worse and the runtime performance is mixed.  It’s
+roughly comparable if you look at the numbers but depending on the format
+structure you are losing significantly from some of the tradeoffs.
+
+That said, it’s now in a state where it’s at least in principle a drop-in
+replacement where the tradeoffs might work well for users.
+
+## Deser’s Design
+
+Deser does not try to be significantly different than Serde on the surface
+level.  For most uses you derive `Serialize` and `Deserialize` and then start
+using it with your format implementing crate of choice.  Most attributes are
+very similar, though they are taking Rust expressions instead of strings.
+
+```
+use deser::{Serialize, Deserialize};
+
+#[derive(Debug, Serialize, Deserialize)]
+#[deser(rename_all = "camelCase")]
+pub struct Account {
+    id: u64,
+    account_holder: String,
+    #[deser(default)]
+    is_deactivated: bool,
+}
+
+let account: Account = deser_json::from_str(json)?;
+```
+
+The difference in the design would become more apparent if you implement a
+serializer or deserializer yourself.  Instead of visitors that call into each
+other recursively, deserializing a type creates a
+*sink* which receives events that are directly emitted by the parser, and
+*serializing produces emitters* that hand out values.  Nested sinks and emitters
+are handed back to a driver, which keeps them on the heap.  This design, which is
+entirely stolen from miniserde, gives some interesting consequences:
+
+On top of that are a lot of things that I just wanted to have:
+
+Here is a small configuration type that shows a few of these together:
+
+```
+use deser::adapters::DisplayFromStr;
+use deser::de::Recording;
+use deser::{Deserialize, Serialize};
+use deser_encoding::Hex;
+use deser_validate::{Check, NonEmpty, Range};
+use ipnet::IpNet;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Config {
+    // at least one 256-bit key, each written as hex
+    #[deser(as = Check<NonEmpty, Vec<Hex>>)]
+    secret_keys: Vec<[u8; 32]>,
+    // `IpNet` knows nothing about deser, but has `FromStr` and `Display`
+    #[deser(as = Option<Vec<DisplayFromStr>>)]
+    allowed_networks: Option<Vec<IpNet>>,
+    listeners: Vec<Listener>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[deser(tag = "type", rename_all = "snake_case")]
+pub enum Listener {
+    Unix { path: PathBuf },
+    Tcp {
+        host: IpAddr,
+        #[deser(as = Check<Range<1, 65535>>)]
+        port: u16,
+    },
+    // types this version does not know are kept and written back
+    #[deser(other)]
+    Other(#[deser(tag)] String, Recording),
 }
 ```
 
-I rely on the fact that Playwright waits until the input is enabled before filling it (just like a real user!). Another option would have been to make all forms submittable without JavaScript, but that would have been more work, and the app is kind of pointless without JavaScript anyway.
+Adapters are types, so `Hex` can go inside a `Vec`, and `DisplayFromStr` inside
+a `Vec` inside an `Option`.  Validators are adapters too, so
+`Check<NonEmpty, Vec<Hex>>` decodes the keys and then checks that there is at
+least one.  The catch-all variant keeps the tag and a recording of everything
+else in case someone wants to process it later.
 
-## Developer experience
-
-The interactive Playwright UI is great; I use it a lot:
-
-## Continuous integration
-
-This is where Playwright really shines: when a test fails, it creates a  `playwright-report` directory containing HTML files that embed the **same** UI as the interactive Playwright runner, completely standalone! When tests fail in CI, you can simply upload this directory to your favorite S3-compatible cloud storage. It makes troubleshooting easy because the trace files include console logs, network request/response bodies, screenshots, and more.
-
-Running a headless browser in a CI environment is not always straightforward. I use the following Dockerfile:
+Errors are something I care a lot about, so here is what happens when a value
+is wrong:
 
 ```
-FROM --platform=linux/amd64 node:22.15.0-bookworm
+secret_keys = ["9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"]
+allowed_networks = ["10.0.0.0/8", "fd00::/8"]
 
-RUN apt-get update && \
-  apt-get install -y --no-install-recommends socat && \
-  rm -rf /var/lib/apt/lists/*
-COPY package.json package-lock.json playwright.config.js ./
-RUN npm ci
-RUN npx playwright install-deps
-RUN npx playwright install chromium
-COPY . .
+[[listeners]]
+type = "unix"
+path = "/run/app.sock"
 
-ENTRYPOINT ["socat", "TCP4-LISTEN:4000,fork,reuseaddr", "TCP4:reecoute_test:4000"]
+[[listeners]]
+host = "127.0.0.1"
+port = 0
+type = "tcp"
+
+[[listeners]]
+type = "quic"
+host = "::1"
+alpn = ["h3"]
 ```
 
-This image only runs Playwright; the app being tested runs in a separate container. Honestly, I don’t remember why I decided to use `socat` here—there’s probably a way to make it work without it<sup>[2](https://reecoute.fr/tech_blog/2026-09-28_my-experience-writing-automated-tests-for-a-spa#note2)</sup>.
-
-## Miscellaneous tricks I occasionally use
-
-### API tests using Playwright
-
-It’s not what Playwright was primarily designed for, but you can write API-only tests with it, using `request()`, and it works just fine.
-
-### Testing emails
-
-I implemented a test-only API route that returns the latest emails for a recipient. It is used like this:
-
 ```
-/** Returns emails, newest first */
-export const listEmails = async ({ request, recipient_address }) => {
-  const res = await request.post(
-    "/_api/test_helpers/list_emails",
-    { data: { recipient_address } },
-  );
-  expect(res.ok()).toBeTruthy();
-  const { emails } = await res.json();
-  return emails;
-};
-
-const readOtpEmail = async ({ page, recipient_address }) => {
-  const emails = await listEmails({ request: page.request, recipient_address });
-  const email = emails[0];
-  expect(email.subject).toMatch(/^Your code is [0-9]{6} - Réécoute$/);
-  const code_match = /<h2>([0-9]{6})<\/h2>/.exec(email.html_part);
-  expect(code_match).toBeTruthy();
-  return code_match[1];
-};
+let config: Config = deser_toml::Deserializer::from_str(input)
+    .deserialize_with(|driver| driver.push_layer(PathLayer::new()))?;
 ```
 
-The API route is disabled in production builds.
+Note that here the tag of the internally tagged enum comes last which means that
+the values have to be buffered until the tag is known.  In Serde this is tricky
+and we would lose the location if we used some tricks to add it.  With Deser
+however, with the path layer enabled Deser you where in the structure the
+problem is:
 
-### Simulating mouse movements and clicks
-
-I managed to write this one:
+Deser really wants to be extensible, and XML is a more extreme example of the
+differences between Deser and Serde.  Here is an Atom entry that mixes in Dublin
+Core for the authors:
 
 ```
-…
-// wait until the player is loaded
-await expect(page.getByRole("button", { name: "Play" })).toBeEnabled();
-await page.mouse.move(800, 300);
-await page.mouse.down();
-await page.mouse.move(700, 300);
-await new Promise((r) => setTimeout(r, 100));
-await page.mouse.move(700, 300);
-await page.mouse.up();
-await page.getByRole("button", { name: "Select" }).click();
-// scroll
-await page.mouse.move(800, 300);
-await page.mouse.down();
-await page.mouse.move(600, 300);
-await new Promise((r) => setTimeout(r, 100));
-await page.mouse.move(600, 300);
-await page.mouse.up();
-await page.getByRole("button", { name: "Create a clip" }).click();
-…
+use chrono::{DateTime, Utc};
+use deser::Deserialize;
+use deser_value::Value;
+use deser_xml::DeserializerConfig;
+
+deser_xml::namespace!(
+    atom = "http://www.w3.org/2005/Atom",
+    dc = "http://purl.org/dc/elements/1.1/",
+);
+
+#[derive(Debug, Deserialize)]
+struct Entry {
+    #[deser(rename = atom!("title"))]
+    title: String,
+    #[deser(rename = dc!("creator"))]
+    creators: Vec<String>,
+    #[deser(rename = atom!("updated"))]
+    updated: DateTime<Utc>,
+}
+
+// entries we understand, and everything else is kept as it is
+#[derive(Debug, Deserialize)]
+#[deser(untagged)]
+enum Item {
+    Entry(Entry),
+    Other(Value),
+}
+
+let item: Item = DeserializerConfig::new()
+    .resolve_namespaces(true)
+    .from_str(r#"
+        <entry xmlns="http://www.w3.org/2005/Atom"
+               xmlns:d="http://purl.org/dc/elements/1.1/">
+          <title>Deser</title>
+          <d:creator>John</d:creator>
+          <updated>2026-09-29T21:00:00Z</updated>
+          <d:creator>Jane</d:creator>
+        </entry>
+    "#)?;
 ```
 
-You may find it ugly, but it tests an important feature I really don't want to break. And believe it or not, despite the `setTimeout()`s, it is surprisingly reliable!
+XML uses namespaces which means that names need to be matched by their namespace,
+not by the prefix the document happens to use.  Here the document says `d:` and
+the type says `dc!`.  `atom!("title")` is just the string
+`{http://www.w3.org/2005/Atom}title`, which works because attributes are
+expressions.  The two creators are collected into one `Vec` even though there is
+another element between them, and the text of `updated` goes straight into a
+`chrono` datetime.  Because the enum is untagged, the entry has to be buffered
+before a variant is picked, and deser’s buffer keeps both creators.  So the
+result is an `Entry` with John and Jane.
 
-## Things that could be improved
+quick-xml, the most popular XML crate for Serde, drops the prefixes and ignores
+namespaces entirely, so a `<x:title>` from some other namespace is happily
+accepted as the title of the entry.  The split list part though is considerably
+worse.  A plain `Entry` fails with a duplicate field error for `creator`, unless
+you turn on the `overlapped-lists` feature (which, remember, is a global
+additive flag that any crate could set).  That feature makes quick-xml read
+ahead to the end of the element and buffer everything in between, without a
+limit unless you set one.
 
-Test coverage isn't measured at the moment 🙃. However, the most critical user journeys and all the “happy paths” of the important features are tested. I don’t mind if obscure code paths aren't covered—I just don’t want any critical bugs.
+But the feature only helps when quick-xml is hooked up to the struct directly
+and no buffering is taking place.  Wrap the struct in the untagged enum and
+Serde buffers the entry itself.  Read from that buffer, `Entry` sees `creator`
+twice and fails again.  The fallback is a map, which keeps only the last
+`creator`, and there is no error.  With or without the feature you get this:
 
-I’d really like to set `retries` to zero in CI, and I don't think I'm far from that goal. I'm just too lazy to tackle it right now!
+```
+Other({"creator": {"$text": "Jane"}, "title": {"$text": "Deser"}, ...})
+```
 
-### Updates
+Notice how John is gone.
 
-2026-09-29: added a note about hydration in the “Reliability” section.
+Format specific extension types such as TOML datetimes are another case.  TOML
+has them natively, Serde’s data model does not, so the `toml` crate passes them
+on as a map with a magic key.  In Deser a datetime is an extension value, which
+formats that know it keep and all others write as a string:
 
-1. In fact, Réécoute is also server-side rendered for speed, SEO, and the rare nerds who browse with JavaScript disabled. However, the primary features are unavailable without client-side rendering.
-2. I can tell that it was my own decision to use socat—no LLM was involved here! It’s a great example of a situation where a comment would have helped…
+```
+let value: Value = deser_toml::from_str("released = 2026-09-29T21:00:00+02:00")?;
+
+deser_json::to_string(&value)?;
+// {"released":"2026-09-29T21:00:00+02:00"}
+deser_toml::to_string(&value)?;
+// released = 2026-09-29T21:00:00+02:00
+```
+
+The same with `serde_json::Value` gives you
+`{"released":{"$__toml_private_datetime":"2026-09-29T21:00:00+02:00"}}`, and
+reading the value into a `chrono::DateTime` fails outright with `invalid type: map, expected an RFC 3339 formatted date and time string`.
+
+So now that you know Deser is at least in theory cool, at what cost?
+
+It is not free.  The design relies on dynamic dispatch and on sinks and emitters
+that live on the heap, and that has considerable runtime overhead.  In my own
+measurements for JSON, Deser reads somewhere between 33% faster and 60% slower
+than `serde_json depending` on the data.  On average it’s about 10% slower for
+reading.  Writes are between three times as fast and 70% slower and a wash on
+average.  For YAML and TOML it’s noticeably faster than the Serde based crates,
+but that is more about the format implementations than the architecture.
+
+Compile times slightly are better, but not dramatically so.  Because it doesn’t
+monomorphize everything, release builds of derived code are about 2.3 times as
+fast as with Serde and that get a tiny bit better in practice for your own code
+as less recompilation is necessary.
+
+To make Deser’s design work at all, it also uses `unsafe` internally.  Most of
+this is to keep the chain of borrowed sinks on the heap.  I feel like this is
+fine in the days of Miri and agents, but I know it makes some folks uneasy.
+
+And well, the biggest cost is that it’s just not Serde.
+
+Quite a lot actually which might be surprising.  In addition to the core
+there is support for [derive](https://github.com/mitsuhiko/deser/tree/main/deser-derive).
+
+It supports all flavorts of JSON you can think of:
+[JSON](https://github.com/mitsuhiko/deser/tree/main/deser-json),
+[JSONC](https://github.com/mitsuhiko/deser/tree/main/deser-jsonc),
+[JSON5](https://github.com/mitsuhiko/deser/tree/main/deser-json5) and
+[HJSON](https://github.com/mitsuhiko/deser/tree/main/deser-hj).  (Fun fact here:
+they are all generated out of [one shared parser template](https://github.com/mitsuhiko/deser/tree/main/deser-template-json))
+For binary handling it supports
+[CBOR](https://github.com/mitsuhiko/deser/tree/main/deser-cbor) and
+[MessagePack](https://github.com/mitsuhiko/deser/tree/main/deser-msgpack).
+Additionally it does
+[YAML](https://github.com/mitsuhiko/deser/tree/main/deser-yaml) 1.1 and 1.2,
+[TOML](https://github.com/mitsuhiko/deser/tree/main/deser-toml),
+[XML](https://github.com/mitsuhiko/deser/tree/main/deser-xml) and all three
+flavors of Apple’s [plist](https://github.com/mitsuhiko/deser/tree/main/deser-plist)
+as well as [CSV/TSV](https://github.com/mitsuhiko/deser/tree/main/deser-csv),
+[urlencoded data](https://github.com/mitsuhiko/deser/tree/main/deser-urlencoded) and
+[environment variables](https://github.com/mitsuhiko/deser/tree/main/deser-env).
+For more crazy contraptions you can
+[attach path info](https://github.com/mitsuhiko/deser/tree/main/deser-path) or
+[capture location data](https://github.com/mitsuhiko/deser/tree/main/deser-location)
+as well as support for
+[debug printing](https://github.com/mitsuhiko/deser/tree/main/deser-debug).
+You can perform [validation](https://github.com/mitsuhiko/deser/tree/main/deser-validate)
+as you parse, opt into different
+[binary encodings](https://github.com/mitsuhiko/deser/tree/main/deser-encoding)
+in addition to base64, you can
+[bridge to serde](https://github.com/mitsuhiko/deser/tree/main/deser-serde) or
+capture
+[dynamic values](https://github.com/mitsuhiko/deser/tree/main/deser-value),
+[transcode](https://github.com/mitsuhiko/deser/tree/main/deser-transcode)
+between formats or hook it up with
+[tokio](https://github.com/mitsuhiko/deser/tree/main/deser-tokio).
+
+For documentation see [docs.rs/deser](https://docs.rs/deser/latest/deser/)
+and the code itself is [on GitHub](https://github.com/mitsuhiko/deser) alongside
+[many examples](https://github.com/mitsuhiko/deser/tree/main/examples).

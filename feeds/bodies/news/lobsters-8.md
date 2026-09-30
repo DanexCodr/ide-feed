@@ -1,232 +1,57 @@
-*Welcome to Internal Tech Emails: internal tech industry emails that surface in public records. 🔍 If you haven’t signed up, join 50,000+ others and get the newsletter:*
+Last week I published [What About Rails](https://jardo.dev/what-about-rails), a dive into DHH’s Rails World keynote. Smarter people than me had [interesting things to say](https://x.com/josevalim/status/2103751481757216781) about it:
 
-**From:** Bill Gates  
-**Sent:** Wednesday, January 15, 2003 10:05 AM  
-**To:** Jim Allchin  
-**Cc:** Chris Jones; Bharat Shah; Joe Peterson; Will Poole; Brian Valentine; Anoop Gupta  
-**Subject:** Windows Usability Systematic degradation flame
+> You have the most powerful tool you ever had, you have become a 1000x maker, and you can’t think of how to make your stack 10x better?
 
-I am quite disappointed at how Windows Usability has been going backwards and the program management groups don't drive usability issues.
+José Valim poses an excellent question. I tried to find an answer.
 
-Let me give you my experience from yesterday.
+## The Bottleneck Isn’t Gone
 
-I decided to download Moviemake and buy the Digital Plus pack r so I went to Microsoft.com. They have a download place so I went there.
+> They’re not gonna be web apps much longer. They’re gonna be native applications, because the price of developing those things has gone to damn near zero.
 
-The first 5 times I used the site it timed out while trying to bring up the download page. Then after an 8 second delay I got it to come up
+The move to native apps for the frontend and Rust on the backend isn’t about any particular technology. It’s about cost. DHH isn’t the first to make this case.
 
-This site is so slow it is unusable.
+Back in August, Dan Luu posted [There’s no reason for software to be slow anymore](https://danluu.com/perf-opt/). In it, he argued that the cost of specialized performance work has dropped so significantly (because LLMs) that it’s now cheap enough for almost anyone to do.
 
-It wasn't in the top 5 so I expanded the other 45.
+Luu is *much* more careful than DHH. He points out that agents overfit benchmarks, that they are poor at experimental design (without human assistance), and that the time to get a *rigorous* result hasn’t dropped, just the time to get an *interesting* one.
 
-These 45 names are totally confusing. These names make stuff like: C:\Documents and Settings\billg\My Documents\My Pictures seem clear.
+Shortly after, Varun Gandhi posted a response of his own, titled [There continue to be reasons for software to be slow](https://typesanitizer.com/blog/performance-issues.html). He points out the shape of the argument: X cost too much, LLMs divide the cost by a large number, so people will now do X. Gandhi argues that while this holds true for people like Luu (experts working on their own projects), those cases are rare.
 
-They are not filtered by the system I can in on and so many of the things are strange.
+Substitute the Rust backend, six native apps, or a CLI by last Friday for X and you get DHH’s keynote pitch. DHH *is* an expert working on his own product, at a company he controls. This is the kind of scenario that Gandhi argues is most likely to work. There’s not even a manager to squeeze the budget here. If it works anywhere, it works here. He took a best-case result and generalized it to “virtually all programmers, virtually all companies, by December.”
 
-I tried scoping to Media stuff. Still no moviemaker. I typed in moviemaker. Nothing. I typed in movie maker. Nothing.
+Gandhi’s most useful point is that writing<sup>[1](https://jardo.dev/hardly-promethean#block-222-fn1)</sup> the code was never the dominant cost. We also have to consider shipping the changes, maintaining them, and avoiding regressions. DHH’s experience with Hey Next is a week old. It’s not even a production system yet.
 
-So I gave up and sent mail to Amir saying - where is this Moviemaker download? Does it exist?
+He showed us this himself. Basecamp 5’s “Swiss cheese” architecture was born out of the reality that code was cheap, but coordination wasn’t. Gandhi tells a version of the same story: Bun’s LLM-assisted fork of Zig that compiles 4x faster but [can’t be upstreamed](https://ziggit.dev/t/bun-s-zig-fork-got-4x-faster-compilation-times/15183/18), because no one<sup>[2](https://jardo.dev/hardly-promethean#block-222-fn2)</sup> wants a non-deterministic compiler.
 
-So they told me that using the download page to download something was not something they anticipated
+Removing a bottleneck doesn’t remove the queue; it just shows you where the next constraint is. With LLMs, we’re moving the bottleneck one step to the right, from writing code to everything that happens after. DHH’s solution is to skip it.
 
-They told me to go to the main page search button and type movie maker (not moviemaker!).
+## Intolerance
 
-I tried that   The site was pathetically slow but after 6 seconds of waiting up it came.
+> Now, part of that is that these programming languages like Rust are tremendously verbose and unappealing for humans to look at. So I don’t, and I allow the agent to just spit out more than was necessary, in a way I would never tolerate from my Ruby code.
 
-I thought for sure now I would see a button to just go do the download.
+One of Gandhi’s reasons the cost argument fails is that people’s tolerance goes up. When work is asynchronous and agent-driven, we’re no longer face-to-face with slower git, laggier autocomplete, and longer builds. There’s no human sitting there waiting. If you still care about these things, you probably hate this.
 
-In fact it is more like a puzzle that you get to solve. It told me to go to Windows Update and do a bunch of incantations.
+DHH skips it all. You hand the task off “like you would a coworker” and “go back and review when there’s something ready.” “Review” doesn’t mean code review here; it means checking whether the button does the thing.
 
-This struck me as completely odd. Why should I have to go somewhere else and do a scan to download moviemaker?
+Maybe that’s okay for his personal one-shot projects. It sounds like it’s working, a week into Hey Next. But his tolerance going up doesn’t raise anyone else’s. He’s free to not care what’s in the Hey Next box, but lots of people care what’s in the Rails box. So much for “virtually all programmers.”
 
-So I went to Windows update. Windows Update decides I need to download a bunch of controls. Now just once but multiple times where I get to see weird dialog boxes.
+## The Scarcity Is Still Here
 
-Doesn't Windows update know some key to talk to Windows?
+So, back to Valim’s question. You have infinite tokens. You’re a 1000x maker. You can create anything. Could you not find something, *anything* to create for Rails?
 
-Then I did the scan. This took quite some time and I was told it was critical for me to download 17megs of stuff.
+This was never really about the budget. An increase in velocity doesn’t change priorities. Everything DHH built this year, he wanted for himself. Nothing he’s building needs Rails to be better, so he hasn’t made it better.
 
-This is after I was told we were doing delta patches to things but instead just to get 6 things that are labeled in the SCARIEST possible way I had to download 17meg.
+> We can now want everything. We can now get everything.
 
-So I did the download. That part was fast. Then it wanted to do an install. This took 6 minutes and the machine was so slow I couldn't use it for anything else during this time.
+So, what is this everything? Turns out it’s a calculator. And a video editor. And some presentation software. Yet another Linux distro. And a rewrite of his own product. He’s been handed *unlimited* tokens, and this is all he could dream up. There’s some scarcity here. Scarcity of ideas.
 
-What the heck is going on during those 6 minutes? That is crazy. This is after the download was finished.
+Look at that list. Not one single new idea. A microcosm of the industry right now. DHH’s wants are on display, and he wants nothing that isn’t his and nothing that didn’t already exist.
 
-Then it told me to reboot my machine. Why should I do that? I reboot every night - why should I reboot at that time?
+LLMs are exceptional at making things that already exist. Luu admits this; earlier models overfit to the point of [comedy](https://chat.mistral.ai/chat/50900a4b-014a-4214-857b-36c18d5e0727)<sup>[3](https://jardo.dev/hardly-promethean#block-222-fn3)</sup>. A calculator is a safe ask. In 2004, Rails wasn’t. It was novel, and celebrated for it.
 
-So I did the reboot because it INSISTED on it. Of course that meant completely getting rid of all my Outlook state.
+DHH’s keynote has this backwards. The era of hand-written code isn’t some charming thing we’ve outgrown. Before LLMs, executing on an idea took a hell of a lot more legwork. But you needed a spark first, and you still need it now.
 
-So I got back up and running and went to Windows Update again. I forgot why I was in Windows Update at all since all I wanted was to get Moviemaker.
+In 2005, “Look at all the things I’m not doing” was a boast. He replayed it this year for the parallel. From where I’m sitting, the thing he’s no longer doing is coming up with new ideas.
 
-So I went back to Microsoft.com and looked at the instructions. I have to click on a folder called WindowsXP. Why should I do that? Windows Update knows I am on Windows XP.
-
-What does it mean to have to click on that folder? So I get a bunch of confusing stuff but sure enough one of them is Moviemaker.
-
-So I do the download. The download is fast but the Install takes many minutes. Amazing how slow this thing is.
-
-At some point I get told I need to go get Windows Media Series 9 to download.
-
-So I decide I will go do that. This time I get dialogs saying things like "Open" or "Save". No guidance in the instructions which to do. I have no clue which to do.
-
-The download is fast and the install takes 7 minutes for this thing.
-
-So now I think I am going to have Moviemaker. I go to my add/remove programs place to make sure it is there.
-
-It is not there.
-
-What is there? The following garbage is there. Microsoft Autoupdate Exclusive test package, Microsoft Autoupdate Reboot test package, Microsoft Autoupdate testpackage1, Microsoft AUtoupdate testpackage2, Microsoft Autoupdate Test package3.
-
-Someone decided to trash the one part of Windows that was usable? The file system is no longer usable. The registry is not usable. This program listing was one sane place but now it is all crapped up.
-
-But that is just the start of the crap. Later I have listed things like Windows XP Hotfix see Q329048 for more information. What is Q329048? Why are these series of patches listed here? Some of the patches just things like Q810655 instead of saying see Q329048 for more information.
-
-What an absolute mess.
-
-Moviemaker is just not there at all.
-
-So I give up on Moviemaker and decide to download the Digital Plus Package.
-
-I get told I need to go enter a bunch of information about myself.
-
-I enter it all in and because it decides I have mistyped something I have to try again. Of course it has cleared out most of what I typed
-
-I try tryping the right stuff in 5 times and it just keeps clearing things out for me to type them in again.
-
-So after more than an hour of craziness and making my programs list garbage and being scared and seeing that Microsoft.com is a terrible website I haven't run Moviemaker and I haven't got the plus package
-
-The lack of attention to usability represented by these experiences blows my mind. I thought we had reached a low with Windows Network places or the messages I get when I try to use 802.11. (don't you just love that root certificate message?)
-
-When I really get to use the stuff I am sure I will have more feedback.  
-
-**From:** Will Poole  
-**Sent:** Wednesday, January 15, 2003 1:27 PM  
-**To:** Amir Majidimehr; Chris Jones  
-**Cc:** Dave Fester; Rick Thompson  
-**Subject:** FW: Windows Usability Systematic degradation flame
-
-Guess we should start working on a list of things that need to be fixed w/ the web sites, WU, and with windows, and identify owners. Bill's frustration is not unreasonable.  
-
-**From:** Amir Majidimehr  
-**Sent:** Wednesday, January 15, 2003 3:55 PM  
-**To:** Mike Beckerman; Tim Lebel; Dave Fester  
-**Subject:** FW: Windows Usability Systematic degradation flame
-
-Can you guys coordinate between you on how to deal with this situation on our bits? Bill's situation is worse than my personal experience but still, this aspect of the system needs to be looked at carefully and become a sign off item for each release.
-
-Please let me know which one of you going to be BOL for this moving forward.
-
-Amir  
-
-**From:** Dave Fester  
-**Sent:** Wednesday, January 15, 2003 3:58 PM  
-**To:** Amir Majidimehr; Mike Beckerman; Tim Lebel  
-**Subject:** RE: Windows Usability Systematic degradation flame
-
-I replied as well. I am owning the website issues, but Mike should own the others.  
-
-**From:** Mike Beckerman  
-**Sent:** Wednesday, January 15, 2003 4:28 PM  
-**To:** Dave Fester; Amir Majidimehr; Tim Lebel  
-**Subject:** RE: Windows Usability Systematic degradation flame
-
-I'm thinking about this and am discussing with my team.
-
-I don't know what it means to "own website issues", nor am I yet sure the best way to handle the complex mess of coordinating between product teams, WU, and MS.COM. Dave, would you please forward the other reply you mentioned?
-
-I expect to send more on this thread in a day or two.  
-
-**From:** Dave Fester  
-**Sent:** Wednesday, January 15, 2003 4:31 PM  
-**To:** Mike Beckerman; Amir Majidimehr; Tim Lebel  
-**Subject:** RE: Windows Usability Systematic degradation flame
-
-I am working with MS.com to directly address the download/discoverability of our bits (both MP9S and MM2)  
-
-**From:** Mike Beckerman  
-**Sent:** Wednesday, January 15, 2003 4:39 PM  
-**To:** John Martin; lan Mercer; Michael Halcoussis; Linda Averett  
-**Cc:** Chadd Knowlton; Ming-Chieh Lee  
-**Subject**: FW: Windows Usability Systematic degradation flame
-
-More.  
-
-**From:** Mike Beckerman  
-**Sent:** Friday, January 17, 2003 7:36 AM  
-**To:** Mike Beckerman; John Martin; lan Mercer; Michael Halcoussis; Linda Averett  
-**Cc:** Chadd Knowlton; Ming-Chieh Lee  
-**Subject:** RE: Windows Usability Systematic degradation flame
-
-haven't heard anything from any of you on this.
-
-My take is that this web-experience mess spans many groups and deliverables (like Plus), that we need one person/team to own the overall picture, driving it, tracking the experience, etc., and that WMPG isn't really the right place. I'm thinking Dave's team. What do you think?  
-
-**From:** John Martin  
-**Sent:** Friday, January 17, 2003 11:52 AM  
-**To:** Mike Beckerman; Ian Mercer; Michael Halcoussis; Linda Averett  
-**Cc:** Chadd Knowlton; Ming-Chieh Lee  
-**Subject:** RE: Windows Usability Systematic degradation flame
-
-I have always been concerned about this and feel that this has a lot of engineering implications. I also feel that the reason is it such a mess is because marketing teams own release to web in this company. Frankly, we should be up in arms about this and want to program manager and develop whatever code we need to to ensure that every customer that even thinks they want to download our bits can do so in as easy and painless a way as possible. Downloading is the first step to setup and we should think of them equally or as one experience. But, if you want nothing revolutionary and want to band-aid (which is fine and understandable) then I agree with your plan to give it to Dave.
-
-John  
-
-**From:** Ian Mercer  
-**Sent:** Friday, January 17, 2003 5:02 PM  
-**To:** John Martin; Mike Beckerman; Michael Halcoussis; Linda Averett  
-**Cc:** Chadd Knowlton; Ming-Chieh Lee; Allan Poore  
-**Subject:** RE: Windows Usability Systematic degradation flame
-
-I don't think you can abdicate this entirely to marketing. If WU is the preferred way to deliver bits to end users we all need to drive WU to deliver what we need, both individually and as a collective request from DMD.
-
-One of the biggest issues today is that WU provides no way to *promote* a download to an end-user. We want to promote MM2 and WMP9S to end-users as something new and cool that they can get for Windows. Three lines of text describing it buried under "Windows XP" in a page that the user has to purposefully go find just isn't good enough. Why can't the WU client-side piece proactively display a bubble "Look! Cool, new features for Windows XP" and the option to display a much richer "advertisement" for the feature if the user wants to read more?
-
-Other issues -  
-    MUI - I guess this is getting fixed now but it's always been an issue for us  
-    Link to download through WU - why can't we send a user right in to WU to get MM2 without them having to wade through the whole site?  
-    Critical updates that aren't really critical - if you machine is behind a firewall many just aren't critical  
-    Too many fixes bombarding users all the time - I routinely ignore them now and perhaps update once a month as otherwise I'd be rebooting all the time  
-    WU's inflexible release schedule. If there is a major tradeshow at which we want to announce we need flexibility in timing the release
-
--Ian  
-
-**From:** Mike Beckerman  
-**Sent:** Friday, January 17, 2003 5:09 PM  
-**To:** lan Mercer; John Martin; Michael Halcoussis; Linda Averett  
-**Cc:** Chadd Knowlten; Ming-Chieh Lee; Allan Poore  
-**Subject:** RE: Windows Usability Systematic degradation flame
-
-So, I take from this that we have lots of opinions and input. However, no one appears to be saying that we, WMPG, are chartered and/or should own this. So my feedback on the thread would then be that Dave should take ownership for driving groups around today's inconsistencies, and that we should send this mail to Bharat (owns WU) as well and ask who in his team can take requirements from DMD.
-
-Any disagreement on this?  
-
-**[This document is from Comes v. Microsoft (2007).]**
-
-Previously: [Bill Gates: "The quality is giving us a bad name"](https://www.techemails.com/i/142894465/bill-gates-on-quality-experience) (October 19, 2000)
-
-Previously: [Bill Gates on iTunes Music Store](https://twitter.com/techemails/status/1413534752699830275) (April 30, 2003)
-
-Previously: [Bill Gates on the iPod](https://twitter.com/techemails/status/1423680978359312387) (November 2, 2003)
-
-If you **upgrade to a paid subscription**, you’ll receive access to the **[full archive of internal tech emails](https://files.techemails.com)**, with 250+ documents from Apple, Google, Meta, Microsoft, OpenAI, Tesla, and more. You’ll also support our work: every year, we track hundreds of court cases and review more than 10,000 filings to bring you @TechEmails.
-
-[More…](https://twitter.com/techemails)
-
-If it was Steve Jobs-
-
-He gets stuck once.
-
-“Why can’t I download Movie Maker?”
-
-Somebody explains:
-
-“Well, Steve, first you have to go to Windows Update, install the ActiveX controls, scan for updates, reboot, return to the website…”
-
-Jobs:
-
-“No.”
-
-the execs starts pointing fingers.
-
-Jobs:
-
-"I want my mother to type “Movie Maker,” click one button, and use Movie Maker.
-
-Everything between those two things is your problem.
+1. “Writing” includes design and debugging, not just typing. [↩](https://jardo.dev/hardly-promethean#block-222-fnref1)
+2. Well, except for Bun, whose fork only has to work for them. [↩](https://jardo.dev/hardly-promethean#block-222-fnref2)
+3. Further reading: [Like Humans, AI Can Jump to Conclusions, Mount Sinai Study Finds](https://www.mountsinai.org/about/newsroom/2025/like-humans-ai-can-jump-to-conclusions-mount-sinai-study-finds) [↩](https://jardo.dev/hardly-promethean#block-222-fnref3)
