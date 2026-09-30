@@ -1,10 +1,10 @@
 {
-  "updated": "2026-09-30T06:17:50Z",
+  "updated": "2026-09-30T06:35:01Z",
   "items": [
     {
       "id": "hn-49892245",
       "title": "How Delhi cut electricity loss from 50 to 5 percent",
-      "desc": "By rbanffy | 486 points | 277 comments",
+      "desc": "By rbanffy | 490 points | 277 comments",
       "tag": "news",
       "published": "2026-09-29T12:43:29Z",
       "url": "https://spectrum.ieee.org/delhi-electricity-loss",
@@ -16,12 +16,12 @@
     {
       "id": "hn-49901736",
       "title": "Livenerf: Has Opus 5.5 been nerfed yet?",
-      "desc": "By bryan0 | 453 points | 186 comments",
+      "desc": "By bryan0 | 466 points | 197 comments",
       "tag": "news",
       "published": "2026-09-29T22:36:14Z",
       "url": "https://github.com/ninjahawk/livenerf",
       "color": "#FF6600",
-      "image": "https://opengraph.githubassets.com/d1f4f89b5413803fa9e3302a317509d87e9fa230e6dd9975f73e0d4c3151d9f7/ninjahawk/livenerf",
+      "image": "https://opengraph.githubassets.com/02faac8a0948b34ed183138597155128ab4e07e5a3eb5890d04b6822a347a621/ninjahawk/livenerf",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAAQACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAQQABf/EABQBAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhADEAAAAeiIMtOP/8QAGRAAAwEBAQAAAAAAAAAAAAAAAAERAgMh/9oACAEBAAEFAj0VM70+lRUVFR//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAYEAEBAAMAAAAAAAAAAAAAAAAAMQEQEf/aAAgBAQAGPwLfMxVVX//EABsQAAEFAQEAAAAAAAAAAAAAAAABESFhkTFx/9oACAEBAAE/IVd4Y9phJKpglXOngqaVNKmlTT//2gAMAwEAAgADAAAAEFHP/8QAFREBAQAAAAAAAAAAAAAAAAAAABH/2gAIAQMBAT8QV//EABURAQEAAAAAAAAAAAAAAAAAAAAR/9oACAECAQE/EEf/xAAeEAACAgICAwAAAAAAAAAAAAAAAREhUXExwYGx8f/aAAgBAQABPxBqm8kx0pL2MKYTIsmGqOMRMXqC/pHzRd0jj9I//9k=",
       "order": 2
     },
@@ -40,19 +40,19 @@
     {
       "id": "hn-49895304",
       "title": "PS5 Relapse Exploit",
-      "desc": "By therepanic | 271 points | 155 comments",
+      "desc": "By therepanic | 273 points | 161 comments",
       "tag": "news",
       "published": "2026-09-29T15:44:41Z",
       "url": "https://github.com/ntfargo/Relapse-Exploit",
       "color": "#FF6600",
-      "image": "https://opengraph.githubassets.com/2df6fff59004ac7f4259eb2d28f8d632e4fe43aa4cc39444c09898dda91bffe0/ntfargo/Relapse-Exploit",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAAQACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAAMBAgT/xAAVAQEBAAAAAAAAAAAAAAAAAAAAAf/aAAwDAQACEAMQAAAB3liJS4P/xAAaEAEAAQUAAAAAAAAAAAAAAAABAAIQEiAi/9oACAEBAAEFAlnVipy0/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFhAAAwAAAAAAAAAAAAAAAAAAEBEg/9oACAEBAAY/Aip//8QAGhAAAwEBAQEAAAAAAAAAAAAAAAERIYGhsf/aAAgBAQABPyFieLw1qa6hWbODlvhhhSn/2gAMAwEAAgADAAAAEPkv/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPxA//8QAFxEAAwEAAAAAAAAAAAAAAAAAAAERUf/aAAgBAgEBPxCoc0//xAAdEAEAAgICAwAAAAAAAAAAAAABABFBkTGhIVFh/9oACAEBAAE/EHom72QoARwlnczqfio6uoW+EW2Ny/Q3AW+TcpfJuf/Z",
+      "image": "https://opengraph.githubassets.com/480e0a9685688fcb5c2df38752f4944f2148bb05d94d96e5a41392aeef85aa61/ntfargo/Relapse-Exploit",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAAQACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAAMBAgT/xAAVAQEBAAAAAAAAAAAAAAAAAAAAAf/aAAwDAQACEAMQAAAB3liJS4P/xAAaEAEAAQUAAAAAAAAAAAAAAAABAAIQEiAi/9oACAEBAAEFAlnVipy0/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFhAAAwAAAAAAAAAAAAAAAAAAEBEg/9oACAEBAAY/Aip//8QAGhAAAwEBAQEAAAAAAAAAAAAAAAERIYGhsf/aAAgBAQABPyFieLw1qa6hWbODlvhhhSn/2gAMAwEAAgADAAAAEPkv/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPxA//8QAFxEAAwEAAAAAAAAAAAAAAAAAAAERUf/aAAgBAgEBPxCoc0//xAAcEAEAAgMBAQEAAAAAAAAAAAABABExQZGhUWH/2gAIAQEAAT8QeidvpCgBHSWezep/FR1dQt4Rba7L+DsBeTspeTs//9k=",
       "order": 4
     },
     {
       "id": "hn-49878857",
       "title": "A Staff Engineer's Guide to Inventing Work",
-      "desc": "By amortize | 233 points | 47 comments",
+      "desc": "By amortize | 237 points | 48 comments",
       "tag": "news",
       "published": "2026-09-28T14:46:07Z",
       "url": "https://sujithjay.com/inventing-work",
@@ -64,7 +64,7 @@
     {
       "id": "hn-49893157",
       "title": "Ask HN: What are you reading?",
-      "desc": "By dan-bailey | 220 points | 478 comments",
+      "desc": "By dan-bailey | 226 points | 483 comments",
       "tag": "news",
       "published": "2026-09-29T13:44:43Z",
       "url": "https://news.ycombinator.com/item?id=49893157",
@@ -76,7 +76,7 @@
     {
       "id": "hn-49899090",
       "title": "U.S. postal inspectors shut down website selling counterfeit postage labels",
-      "desc": "By ilamont | 204 points | 122 comments",
+      "desc": "By ilamont | 206 points | 122 comments",
       "tag": "news",
       "published": "2026-09-29T19:30:17Z",
       "url": "https://postalemployeenetwork.com/news/2026/09/26/u-s-postal-inspectors-shut-down-website-selling-millions-of-counterfeit-postage-labels/",
@@ -88,7 +88,7 @@
     {
       "id": "hn-49893002",
       "title": "Backblaze drive stats for Q2 2026",
-      "desc": "By HieronymusBosch | 147 points | 35 comments",
+      "desc": "By HieronymusBosch | 154 points | 35 comments",
       "tag": "news",
       "published": "2026-09-29T13:34:20Z",
       "url": "https://www.backblaze.com/blog/backblaze-drive-stats-for-q2-2026/",
@@ -100,7 +100,7 @@
     {
       "id": "hn-49897993",
       "title": "Vermont replacing power plants with home batteries",
-      "desc": "By devonnull | 143 points | 117 comments",
+      "desc": "By devonnull | 146 points | 118 comments",
       "tag": "news",
       "published": "2026-09-29T18:19:02Z",
       "url": "https://www.bbc.com/future/article/20260928-a-virtual-power-plant-hidden-in-vermont-homes-is-keeping-the-lights-on-during-storms",
@@ -112,7 +112,7 @@
     {
       "id": "hn-49898050",
       "title": "We’re forgetting what darkness feels like",
-      "desc": "By pseudolus | 127 points | 70 comments",
+      "desc": "By pseudolus | 130 points | 71 comments",
       "tag": "news",
       "published": "2026-09-29T18:22:40Z",
       "url": "https://www.theguardian.com/environment/2026/sep/29/night-sky-darkness-city-regulation",
@@ -124,7 +124,7 @@
     {
       "id": "hn-49890733",
       "title": "NASA asked several former SR-71A staffers to help secret restart",
-      "desc": "By ilamont | 114 points | 103 comments",
+      "desc": "By ilamont | 116 points | 107 comments",
       "tag": "news",
       "published": "2026-09-29T10:10:20Z",
       "url": "https://aviationweek.com/defense/aircraft-propulsion/nasa-asked-several-former-sr-71a-staffers-help-secret-restart",
@@ -136,7 +136,7 @@
     {
       "id": "hn-49894351",
       "title": "Show HN: NSL – WSL for Linux",
-      "desc": "By bketelsen | 112 points | 77 comments",
+      "desc": "By bketelsen | 115 points | 78 comments",
       "tag": "news",
       "published": "2026-09-29T14:51:36Z",
       "url": "https://frostyard.github.io/nsl/",
@@ -148,7 +148,7 @@
     {
       "id": "hn-49891203",
       "title": "Language models for text classification: From bag-of-words to Jev",
-      "desc": "By Anon84 | 73 points | 2 comments",
+      "desc": "By Anon84 | 77 points | 2 comments",
       "tag": "news",
       "published": "2026-09-29T11:06:25Z",
       "url": "https://magazine.sebastianraschka.com/p/classifier-history-and-jev",
@@ -158,33 +158,33 @@
       "order": 13
     },
     {
+      "id": "hn-49904408",
+      "title": "Tesla takes on $30B in credit as it approaches unprofitability",
+      "desc": "By ciconia | 77 points | 91 comments",
+      "tag": "news",
+      "published": "2026-09-30T04:37:37Z",
+      "url": "https://electrek.co/2026/09/29/tesla-takes-on-30-billion-in-credit-as-it-approaches-unprofitability/",
+      "color": "#FF6600",
+      "image": "https://electrek.co/wp-content/uploads/sites/3/2025/05/Elon-Musk-Tesla-Money-hero.png?resize=1200,628",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAARACADASIAAhEBAxEB/8QAGQAAAgMBAAAAAAAAAAAAAAAAAAMCBAUB/8QAFgEBAQEAAAAAAAAAAAAAAAAAAAEC/9oADAMBAAIQAxAAAAG1F1SadOu9FZ4J3TA//8QAGhAAAgMBAQAAAAAAAAAAAAAAAhEAAQMQMv/aAAgBAQABBQInCbByrfNCpjYlKFTbzfM/H//EABYRAAMAAAAAAAAAAAAAAAAAAAABEP/aAAgBAwEBPwEd/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAgEBPwEf/8QAGxABAQADAAMAAAAAAAAAAAAAAQAQESECMYH/2gAIAQEABj8C4x47+yLvJaeXvBMX/8QAHBAAAgMBAAMAAAAAAAAAAAAAAREAITFxEEFh/9oACAEBAAE/IQYMsqGgMUzBtSMMU5C/kr1nCo4sUvUtWuZTXUGdeN//2gAMAwEAAgADAAAAEJOP4//EABcRAQEBAQAAAAAAAAAAAAAAAAEAMRH/2gAIAQMBAT8QHvBtRs7f/8QAFxEBAQEBAAAAAAAAAAAAAAAAAAERMf/aAAgBAgEBPxC8TcVH/8QAIBABAAIBAwUBAAAAAAAAAAAAAQARIUFRsTFhgaHw0f/aAAgBAQABPxC6iAQaG8z36GF10gUGNUpR3l9kXBrSeB3htxoLo/YC5RWo1n4hJClL8TkcT7+09nxPVn//2Q==",
+      "order": 14
+    },
+    {
       "id": "hn-49895864",
       "title": "Needed 1+1, built a functional programming language",
-      "desc": "By birdculture | 71 points | 16 comments",
+      "desc": "By birdculture | 74 points | 17 comments",
       "tag": "news",
       "published": "2026-09-29T16:18:26Z",
       "url": "https://hereticpleb.vercel.app/blog/needed-one-plus-one/",
       "color": "#FF6600",
       "image": "",
       "preview": "",
-      "order": 14
-    },
-    {
-      "id": "hn-49904408",
-      "title": "Tesla takes on $30B in credit as it approaches unprofitability",
-      "desc": "By ciconia | 67 points | 72 comments",
-      "tag": "news",
-      "published": "2026-09-30T04:37:37Z",
-      "url": "https://electrek.co/2026/09/29/tesla-takes-on-30-billion-in-credit-as-it-approaches-unprofitability/",
-      "color": "#FF6600",
-      "image": "https://electrek.co/wp-content/uploads/sites/3/2025/05/Elon-Musk-Tesla-Money-hero.png?resize=1200,628",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAARACADASIAAhEBAxEB/8QAGQAAAgMBAAAAAAAAAAAAAAAAAAMCBAUB/8QAFgEBAQEAAAAAAAAAAAAAAAAAAAEC/9oADAMBAAIQAxAAAAG1F1SadOu9FZ4J3TA//8QAGhAAAgMBAQAAAAAAAAAAAAAAAhEAAQMQMv/aAAgBAQABBQInCbByrfNCpjYlKFTbzfM/H//EABYRAAMAAAAAAAAAAAAAAAAAAAABEP/aAAgBAwEBPwEd/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAgEBPwEf/8QAGxABAQADAAMAAAAAAAAAAAAAAQAQESECMYH/2gAIAQEABj8C4x47+yLvJaeXvBMX/8QAHBAAAgMBAAMAAAAAAAAAAAAAAREAITFxEEFh/9oACAEBAAE/IQYMsqGgMUzBtSMMU5C/krlnCo4sUvUtWuZTXUGdeN//2gAMAwEAAgADAAAAEJOP4//EABcRAQEBAQAAAAAAAAAAAAAAAAEAMRH/2gAIAQMBAT8QHvBtRs7f/8QAFxEBAQEBAAAAAAAAAAAAAAAAAAERMf/aAAgBAgEBPxC8TcVH/8QAIBABAAIBAwUBAAAAAAAAAAAAAQARIUFRsTFhgaHw0f/aAAgBAQABPxC6iAQaG8z36GF10gUGNUpR3l9kXBrSeB3ht5obo/YC5RWo1n4hJClL8TkcT7+09nxPVn//2Q==",
       "order": 15
     },
     {
       "id": "hn-49888182",
       "title": "When oil prices spike, where does the money go?",
-      "desc": "By thelastgallon | 61 points | 51 comments",
+      "desc": "By thelastgallon | 63 points | 55 comments",
       "tag": "news",
       "published": "2026-09-29T04:14:11Z",
       "url": "https://theconversation.com/when-oil-prices-spike-where-does-the-money-go-280763",
@@ -194,33 +194,33 @@
       "order": 16
     },
     {
+      "id": "hn-49903993",
+      "title": "PSSA: A non-transformer language model written from scratch in Rust",
+      "desc": "By sparticle62 | 59 points | 16 comments",
+      "tag": "news",
+      "published": "2026-09-30T03:19:54Z",
+      "url": "https://github.com/Sparticle62ops/pssa",
+      "color": "#FF6600",
+      "image": "https://opengraph.githubassets.com/5f1a42802c7d35723afafb0b9380d4ba89732ba90ac6e2aedd9ec4c3b6764111/Sparticle62ops/pssa",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAAQACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAAQBAv/EABQBAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhADEAAAAb+g2G0f/8QAGhAAAQUBAAAAAAAAAAAAAAAAAwECEBEhIP/aAAgBAQABBQK92BvIpeP/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAZEAABBQAAAAAAAAAAAAAAAAABEBEgMXH/2gAIAQEABj8CVjWR/8QAHBAAAwABBQAAAAAAAAAAAAAAAAERYSExUXGx/9oACAEBAAE/IW2heHdCyUC94qKsFWCrk//aAAwDAQACAAMAAAAQo+//xAAVEQEBAAAAAAAAAAAAAAAAAAABAP/aAAgBAwEBPxCRv//EABURAQEAAAAAAAAAAAAAAAAAAAEA/9oACAECAQE/EIS//8QAIBAAAgEDBAMAAAAAAAAAAAAAAREAITGRQVFhcaHB8P/aAAgBAQABPxAU3dufMTekxlY+IV1gCK7qqhfcZnyMAdcpWszP/9k=",
+      "order": 17
+    },
+    {
       "id": "hn-49896757",
       "title": "Show HN: A working 3D model of an Enigma machine",
-      "desc": "By primitivesuave | 54 points | 20 comments",
+      "desc": "By primitivesuave | 57 points | 20 comments",
       "tag": "news",
       "published": "2026-09-29T17:15:56Z",
       "url": "https://enigma.design",
       "color": "#FF6600",
       "image": "",
       "preview": "",
-      "order": 17
-    },
-    {
-      "id": "hn-49903993",
-      "title": "PSSA: A non-transformer language model written from scratch in Rust",
-      "desc": "By sparticle62 | 53 points | 13 comments",
-      "tag": "news",
-      "published": "2026-09-30T03:19:54Z",
-      "url": "https://github.com/Sparticle62ops/pssa",
-      "color": "#FF6600",
-      "image": "https://opengraph.githubassets.com/72c9e96ec77d2b90ac4448bb16d0935f6da2b3efab50b03f9967d8c551e24ba5/Sparticle62ops/pssa",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAAQACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAAQBAv/EABQBAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhADEAAAAb+g2G0f/8QAGhAAAQUBAAAAAAAAAAAAAAAAAwECEBEhIP/aAAgBAQABBQK92BvIpeP/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAZEAABBQAAAAAAAAAAAAAAAAABEBEgMXH/2gAIAQEABj8CVjWR/8QAHBAAAwABBQAAAAAAAAAAAAAAAAERYSExUXGx/9oACAEBAAE/IW2heHdCyUC94qKsFWCrk//aAAwDAQACAAMAAAAQo+//xAAVEQEBAAAAAAAAAAAAAAAAAAABAP/aAAgBAwEBPxCRv//EABURAQEAAAAAAAAAAAAAAAAAAAEA/9oACAECAQE/EIS//8QAHxAAAgEEAgMAAAAAAAAAAAAAAREAITFhkUFRcaHB/9oACAEBAAE/EBTd5c+4m+JjKx4hXWAIr2qqF9xuZdoA87StZuf/2Q==",
       "order": 18
     },
     {
       "id": "hn-49903712",
       "title": "Ballmer Peak",
-      "desc": "By thunderbong | 35 points | 1 comments",
+      "desc": "By thunderbong | 37 points | 5 comments",
       "tag": "news",
       "published": "2026-09-30T02:35:58Z",
       "url": "https://en.wikipedia.org/wiki/Ballmer_Peak",
@@ -232,7 +232,7 @@
     {
       "id": "hn-49903383",
       "title": "Strange Parodies of Atari 2600 Video Game Box Cover Art (2008)",
-      "desc": "By peter_d_sherman | 31 points | 21 comments",
+      "desc": "By peter_d_sherman | 34 points | 21 comments",
       "tag": "news",
       "published": "2026-09-30T01:47:14Z",
       "url": "https://mightygodking.com/2008/04/21/fun-from-yesterday/",
@@ -244,7 +244,7 @@
     {
       "id": "hn-49903713",
       "title": "Responsible Release of AI-Generated Mathematics",
-      "desc": "By aureianimus | 27 points | 17 comments",
+      "desc": "By aureianimus | 28 points | 23 comments",
       "tag": "news",
       "published": "2026-09-30T02:36:12Z",
       "url": "https://agmai.org/general-sep29/",
@@ -256,7 +256,7 @@
     {
       "id": "hn-49883913",
       "title": "Testing WebGPU data layouts with Facet",
-      "desc": "By luu | 10 points | 0 comments",
+      "desc": "By luu | 13 points | 0 comments",
       "tag": "news",
       "published": "2026-09-28T20:28:08Z",
       "url": "https://www.mattkeeter.com/blog/2026-08-23-wgpu-facet/",
@@ -351,11 +351,11 @@
     },
     {
       "id": "lobsters-6",
-      "title": "The Shell & Email",
+      "title": "How to speed up the Rust compiler in September 2026",
       "desc": "Source: Lobsters",
       "tag": "news",
-      "published": "Tue, 29 Sep 2026 15:14:41 -0500",
-      "url": "https://www.machtiani.chat/blogs/the-shell",
+      "published": "Tue, 29 Sep 2026 21:08:22 -0500",
+      "url": "https://nnethercote.github.io/2026/09/30/how-to-speed-up-the-rust-compiler-in-september-2026.html",
       "color": "#AC130D",
       "image": "",
       "preview": "",
@@ -363,11 +363,11 @@
     },
     {
       "id": "lobsters-7",
-      "title": "How to speed up the Rust compiler in September 2026",
+      "title": "The Shell & Email",
       "desc": "Source: Lobsters",
       "tag": "news",
-      "published": "Tue, 29 Sep 2026 21:08:22 -0500",
-      "url": "https://nnethercote.github.io/2026/09/30/how-to-speed-up-the-rust-compiler-in-september-2026.html",
+      "published": "Tue, 29 Sep 2026 15:14:41 -0500",
+      "url": "https://www.machtiani.chat/blogs/the-shell",
       "color": "#AC130D",
       "image": "",
       "preview": "",
@@ -398,7 +398,7 @@
       "order": 10
     },
     {
-      "id": "lobsters-10",
+      "id": "lobsters-11",
       "title": "Bill Gates tries to install Movie Maker",
       "desc": "Source: Lobsters",
       "tag": "news",
@@ -494,7 +494,19 @@
       "order": 18
     },
     {
-      "id": "lobsters-21",
+      "id": "lobsters-20",
+      "title": "How to work in a software engineering team (2022)",
+      "desc": "Source: Lobsters",
+      "tag": "news",
+      "published": "Tue, 29 Sep 2026 17:34:26 -0500",
+      "url": "https://kimmosaaskilahti.fi/blog/2022/02/25/how-to-work-in-a-software-engineering-team/",
+      "color": "#AC130D",
+      "image": "https://github.com/ksaaskil.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAAgACADASIAAhEBAxEB/8QAGAABAAMBAAAAAAAAAAAAAAAAAwABAgT/xAAWAQEBAQAAAAAAAAAAAAAAAAABAAL/2gAMAwEAAhADEAAAAS0b4YbhRbxSdw1B/8QAHBAAAgICAwAAAAAAAAAAAAAAAAECEQMxEiFB/9oACAEBAAEFAkMmS6EyFXkVNni29raLp82Wf//EABQRAQAAAAAAAAAAAAAAAAAAACD/2gAIAQMBAT8BH//EABYRAAMAAAAAAAAAAAAAAAAAAAABEP/aAAgBAgEBPwGs/8QAGRAAAwEBAQAAAAAAAAAAAAAAAAEQESCR/9oACAEBAAY/Auc8FUJaO7P/xAAdEAEAAgICAwAAAAAAAAAAAAABABEhQRBxMVHh/9oACAEBAAE/IfuJsqa9ReGpimR7cEIXJc0Imgww2xOL41liuiWdsRoz/9oADAMBAAIAAwAAABB4bED/xAAVEQEBAAAAAAAAAAAAAAAAAAAAAf/aAAgBAwEBPxCKiv/EABcRAAMBAAAAAAAAAAAAAAAAAAABECH/2gAIAQIBAT8QHgo//8QAHhABAQACAgIDAAAAAAAAAAAAAREAMSFBUXGRobH/2gAIAQEAAT8QByzRiiCya5xqoeT94sRQh6yAur52eMQsVQqWmKx7h95JQSvvG8nhZwaxCiLsenrHnyqXmTNRqkmFA9CmJZ2+XBNjRu4XpHWf/9k=",
+      "order": 19
+    },
+    {
+      "id": "lobsters-22",
       "title": "Hijacking the PS5's RTMP Stream",
       "desc": "Source: Lobsters",
       "tag": "news",
@@ -503,10 +515,10 @@
       "color": "#AC130D",
       "image": "https://s3.yashgarg.dev/posts/hijacking-ps5-rtmp-stream/cover.webp",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAASACADASIAAhEBAxEB/8QAGAABAQEBAQAAAAAAAAAAAAAAAAMCAQT/xAAXAQEBAQEAAAAAAAAAAAAAAAAAAgEE/9oADAMBAAIQAxAAAAHxaxXplO8SYl0a/8QAGxAAAgMAAwAAAAAAAAAAAAAAAQIAAxEQEiD/2gAIAQEAAQUCmGBGblrNC3dQTp8f/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAwEBPwEf/8QAFxEBAAMAAAAAAAAAAAAAAAAAAQAQEf/aAAgBAgEBPwHYN//EABkQAAIDAQAAAAAAAAAAAAAAAAERABAgIf/aAAgBAQAGPwKuC0oAoTn/xAAcEAEAAgIDAQAAAAAAAAAAAAABABEhYRAgMVH/2gAIAQEAAT8hiQKYfIVbpwOfso6yolJa2zfjfX//2gAMAwEAAgADAAAAEBmnw//EABQRAQAAAAAAAAAAAAAAAAAAACD/2gAIAQMBAT8QH//EABgRAQEAAwAAAAAAAAAAAAAAAAEAESFB/9oACAECAQE/EFckzuIv/8QAGxABAAMAAwEAAAAAAAAAAAAAAQARISAxQXH/2gAIAQEAAT8QjPwbXjNTdVhHGnGCBQA9Psw59aXPkKos3RZd+REQFkHRfH//2Q==",
-      "order": 19
+      "order": 20
     },
     {
-      "id": "lobsters-22",
+      "id": "lobsters-24",
       "title": "Fake Express Packages on npm Spread a Linux Worm",
       "desc": "Source: Lobsters",
       "tag": "news",
@@ -515,18 +527,6 @@
       "color": "#AC130D",
       "image": "https://safedep.io/images/express-impersonation-blog-banner.jpg",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAASACADASIAAhEBAxEB/8QAGAAAAwEBAAAAAAAAAAAAAAAAAAEDAgX/xAAVAQEBAAAAAAAAAAAAAAAAAAAAAf/aAAwDAQACEAMQAAAB5mnWoF5GWCCA/8QAGhAAAQUBAAAAAAAAAAAAAAAAAgADEBESIP/aAAgBAQABBQJUqlssk4Wi5//EABQRAQAAAAAAAAAAAAAAAAAAACD/2gAIAQMBAT8BH//EABQRAQAAAAAAAAAAAAAAAAAAACD/2gAIAQIBAT8BH//EABYQAQEBAAAAAAAAAAAAAAAAABEgAP/aAAgBAQAGPwKXNf/EABsQAAMAAgMAAAAAAAAAAAAAAAABERAgIUGB/9oACAEBAAE/ISuirBqCfB5fDHGtf//aAAwDAQACAAMAAAAQgkBB/8QAFhEBAQEAAAAAAAAAAAAAAAAAAAEh/9oACAEDAQE/ELiaqP/EABYRAQEBAAAAAAAAAAAAAAAAAAABEf/aAAgBAgEBPxCRiK//xAAbEAEBAQEBAQEBAAAAAAAAAAABEQAhQVFhof/aAAgBAQABPxAKwzYOlyNxH9MzjgJ+n9w0A9c9s8+aCyEOTtne+6DXvt8xjOd//9k=",
-      "order": 20
-    },
-    {
-      "id": "lobsters-24",
-      "title": "Leaving them behind",
-      "desc": "Source: Lobsters",
-      "tag": "news",
-      "published": "Mon, 28 Sep 2026 04:44:05 -0500",
-      "url": "https://dbushell.com/2026/09/28/leaving-them-behind/",
-      "color": "#AC130D",
-      "image": "https://dbushell.com/images/articles/2026-09-28-leaving-them-behind.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAARACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAAECBP/EABcBAQEBAQAAAAAAAAAAAAAAAAECAwT/2gAMAwEAAhADEAAAAeojixYyhHWgn//EABcQAAMBAAAAAAAAAAAAAAAAAAABETD/2gAIAQEAAQUCINZf/8QAFhEAAwAAAAAAAAAAAAAAAAAAAAEQ/9oACAEDAQE/AR3/xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAECAQE/AR//xAAUEAEAAAAAAAAAAAAAAAAAAAAw/9oACAEBAAY/Ak//xAAaEAACAgMAAAAAAAAAAAAAAAAAARAhESBR/9oACAEBAAE/ISwxQy+jzt//2gAMAwEAAgADAAAAEOS/g//EABcRAQADAAAAAAAAAAAAAAAAAAABEBH/2gAIAQMBAT8QYqX/xAAWEQEBAQAAAAAAAAAAAAAAAAABABD/2gAIAQIBAT8QI3//xAAdEAEBAAIBBQAAAAAAAAAAAAABABEhMRBRcZGh/9oACAEBAAE/EGFwhM41MHGvs48A8F3E9TnozN//2Q==",
       "order": 21
     },
     {
@@ -534,7 +534,7 @@
       "title": "AI-901: Introduction to AI in Azure",
       "desc": "Source: I Programmer",
       "tag": "news",
-      "published": "Wed, 30 Sep 2026 05:19:36 GMT",
+      "published": "Wed, 30 Sep 2026 06:19:37 GMT",
       "url": "http://www.i-programmer.info/news/150-training-a-education/19179-ai-901-introduction-to-ai-in-azure.html",
       "color": "#2196F3",
       "image": "http://www.i-programmer.info/images/stories/News/2026/Sep/B/azure_logo_chat.jpg",
@@ -546,7 +546,7 @@
       "title": "Programmers Guide To Containers  - Starting With Docker",
       "desc": "Source: I Programmer",
       "tag": "news",
-      "published": "Wed, 30 Sep 2026 05:19:36 GMT",
+      "published": "Wed, 30 Sep 2026 06:19:37 GMT",
       "url": "http://www.i-programmer.info/programming/241-devops/19178-programmers-guide-to-containers-starting.html",
       "color": "#2196F3",
       "image": "http://www.i-programmer.info/images/stories/Core/Containers/container360.jpg",
@@ -558,7 +558,7 @@
       "title": "Introducing The Enterprise Reasoning Initiative",
       "desc": "Source: I Programmer",
       "tag": "news",
-      "published": "Wed, 30 Sep 2026 05:19:36 GMT",
+      "published": "Wed, 30 Sep 2026 06:19:37 GMT",
       "url": "http://www.i-programmer.info/news/105-artificial-intelligence/19177-introducing-the-enterprise-reasoning-initiative.html",
       "color": "#2196F3",
       "image": "http://www.i-programmer.info/images/stories/News/2026/Sep/B/Enterprise_Reasoning_logo2.JPG",
@@ -570,7 +570,7 @@
       "title": "Amazon Aurora DSQL Adds Support For Foreign Key Constraints",
       "desc": "Source: I Programmer",
       "tag": "news",
-      "published": "Wed, 30 Sep 2026 05:19:36 GMT",
+      "published": "Wed, 30 Sep 2026 06:19:37 GMT",
       "url": "http://www.i-programmer.info/news/197-data-mining/19175-amazon-aurora-dsql-adds-support-for-foreign-key-constraints.html",
       "color": "#2196F3",
       "image": "http://www.i-programmer.info/images/stories/News/2025/June/A/Aurora_logo.JPG",
@@ -582,7 +582,7 @@
       "title": "VS Code Expands Codex Harness",
       "desc": "Source: I Programmer",
       "tag": "news",
-      "published": "Wed, 30 Sep 2026 05:19:36 GMT",
+      "published": "Wed, 30 Sep 2026 06:19:37 GMT",
       "url": "http://www.i-programmer.info/news/90-tools/19174-vs-code-expands-codex-harness.html",
       "color": "#2196F3",
       "image": "http://www.i-programmer.info/images/stories/News/2020/Aug/A/vscodeicon.jpg",
@@ -594,7 +594,7 @@
       "title": "Why Do We Try To Make Programming Like Something Else?",
       "desc": "Source: I Programmer",
       "tag": "news",
-      "published": "Wed, 30 Sep 2026 05:19:36 GMT",
+      "published": "Wed, 30 Sep 2026 06:19:37 GMT",
       "url": "http://www.i-programmer.info/professional-programmer/103-i-programmer/5850-why-do-we-try-to-make-programming-like-something-else.html",
       "color": "#2196F3",
       "image": "http://www.i-programmer.info/images/stories/Puzzles/elevator/waitingelevator.jpg",
@@ -606,7 +606,7 @@
       "title": "Robots Build Robots",
       "desc": "Source: I Programmer",
       "tag": "news",
-      "published": "Wed, 30 Sep 2026 05:19:36 GMT",
+      "published": "Wed, 30 Sep 2026 06:19:37 GMT",
       "url": "http://www.i-programmer.info/news/169-robotics/19173-robots-build-robots.html",
       "color": "#2196F3",
       "image": "http://www.i-programmer.info/images/stories/News/2026/Sep/B/ubtech.JPG",
@@ -618,7 +618,7 @@
       "title": "September Week 3",
       "desc": "Source: I Programmer",
       "tag": "news",
-      "published": "Wed, 30 Sep 2026 05:19:36 GMT",
+      "published": "Wed, 30 Sep 2026 06:19:37 GMT",
       "url": "http://www.i-programmer.info/i-programmer-weekly/246-i-programmer-weekly-2026/19167-september-week-3.html",
       "color": "#2196F3",
       "image": "http://www.i-programmer.info/images/stories/News/2012/NOV/A/IP2.jpg",
@@ -630,7 +630,7 @@
       "title": "Robot Rabbits Used To Catch Florida Pythons",
       "desc": "Source: I Programmer",
       "tag": "news",
-      "published": "Wed, 30 Sep 2026 05:19:36 GMT",
+      "published": "Wed, 30 Sep 2026 06:19:37 GMT",
       "url": "http://www.i-programmer.info/news/169-robotics/19172-robot-rabbits-used-to-catch-florida-pythons.html",
       "color": "#2196F3",
       "image": "http://www.i-programmer.info/images/stories/News/2026/Sep/B/rabbit1.jpg",
@@ -998,6 +998,30 @@
       "order": 30
     },
     {
+      "id": "lobsters-10",
+      "title": "Bill Gates tries to install Movie Maker",
+      "desc": "Source: Lobsters",
+      "tag": "news",
+      "published": "Mon, 28 Sep 2026 11:18:16 -0500",
+      "url": "https://www.techemails.com/p/bill-gates-tries-to-install-movie-maker",
+      "color": "#AC130D",
+      "image": "https://substackcdn.com/image/fetch/$s_!Kgd5!,w_1200,h_675,c_fill,f_jpg,q_auto:good,fl_progressive:steep,g_auto/https%3A%2F%2Fbucketeer-e05bbc84-baa3-437e-9518-adb32be77984.s3.amazonaws.com%2Fpublic%2Fimages%2F79fc15fc-6ea8-4426-acad-117e6c349ba0_922x876.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAAXACADASIAAhEBAxEB/8QAGAABAQEBAQAAAAAAAAAAAAAAAAQBAgX/xAAXAQADAQAAAAAAAAAAAAAAAAAAAQID/9oADAMBAAIQAxAAAAH0k/LVWy0okGk7UTX/xAAbEAACAQUAAAAAAAAAAAAAAAAAATECEBESIP/aAAgBAQABBQLjdmWUTdSf/8QAFxEAAwEAAAAAAAAAAAAAAAAAAAEQEf/aAAgBAwEBPwHaj//EABcRAAMBAAAAAAAAAAAAAAAAAAACEBH/2gAIAQIBAT8Bysf/xAAVEAEBAAAAAAAAAAAAAAAAAAAgMf/aAAgBAQAGPwI1/wD/xAAcEAEAAgIDAQAAAAAAAAAAAAABABARQSExUWH/2gAIAQEAAT8hrNOgCL7Tiz0h1awX7Cf/2gAMAwEAAgADAAAAEOjwwP/EABcRAAMBAAAAAAAAAAAAAAAAAAABERD/2gAIAQMBAT8QgTuv/8QAGBEBAAMBAAAAAAAAAAAAAAAAAQAQETH/2gAIAQIBAT8QHExyup//xAAgEAACAQMEAwAAAAAAAAAAAAAAAREQITFBYXGxgaHR/9oACAEBAAE/ECVyOCb0VGveXMz4LdDykvsQ0pNdqk+GTnJ//9k=",
+      "order": 11
+    },
+    {
+      "id": "lobsters-21",
+      "title": "Hijacking the PS5's RTMP Stream",
+      "desc": "Source: Lobsters",
+      "tag": "news",
+      "published": "Mon, 28 Sep 2026 06:45:16 -0500",
+      "url": "https://yashgarg.dev/posts/hijacking-ps5-rtmp-stream/",
+      "color": "#AC130D",
+      "image": "https://s3.yashgarg.dev/posts/hijacking-ps5-rtmp-stream/cover.webp",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAASACADASIAAhEBAxEB/8QAGAABAQEBAQAAAAAAAAAAAAAAAAMCAQT/xAAXAQEBAQEAAAAAAAAAAAAAAAAAAgEE/9oADAMBAAIQAxAAAAHxaxXplO8SYl0a/8QAGxAAAgMAAwAAAAAAAAAAAAAAAQIAAxEQEiD/2gAIAQEAAQUCmGBGblrNC3dQTp8f/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAwEBPwEf/8QAFxEBAAMAAAAAAAAAAAAAAAAAAQAQEf/aAAgBAgEBPwHYN//EABkQAAIDAQAAAAAAAAAAAAAAAAERABAgIf/aAAgBAQAGPwKuC0oAoTn/xAAcEAEAAgIDAQAAAAAAAAAAAAABABEhYRAgMVH/2gAIAQEAAT8hiQKYfIVbpwOfso6yolJa2zfjfX//2gAMAwEAAgADAAAAEBmnw//EABQRAQAAAAAAAAAAAAAAAAAAACD/2gAIAQMBAT8QH//EABgRAQEAAwAAAAAAAAAAAAAAAAEAESFB/9oACAECAQE/EFckzuIv/8QAGxABAAMAAwEAAAAAAAAAAAAAAQARISAxQXH/2gAIAQEAAT8QjPwbXjNTdVhHGnGCBQA9Psw59aXPkKos3RZd+REQFkHRfH//2Q==",
+      "order": 19
+    },
+    {
       "id": "hn-49866031",
       "title": "Stuck in the Suez Canal – the short version (2021)",
       "desc": "By joebig | 48 points | 6 comments",
@@ -1058,18 +1082,6 @@
       "order": 23
     },
     {
-      "id": "lobsters-11",
-      "title": "How to speed up the Rust compiler in September 2026",
-      "desc": "Source: Lobsters",
-      "tag": "news",
-      "published": "Tue, 29 Sep 2026 21:08:22 -0500",
-      "url": "https://nnethercote.github.io/2026/09/30/how-to-speed-up-the-rust-compiler-in-september-2026.html",
-      "color": "#AC130D",
-      "image": "",
-      "preview": "",
-      "order": 11
-    },
-    {
       "id": "lobsters-15",
       "title": "What Would A Serious AI Product Look Like?",
       "desc": "Source: Lobsters",
@@ -1080,18 +1092,6 @@
       "image": "https://en.gravatar.com/userimage/4935940/3f36deb2aefc09c0bcd985db2458f2b5.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAAgACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwQF/8QAFwEBAQEBAAAAAAAAAAAAAAAAAAECA//aAAwDAQACEAMQAAABg0jaJ49YUmSWltTXPvP/xAAcEAEBAQACAwEAAAAAAAAAAAACAQMREgQhIiP/2gAIAQEAAQUCArQwmaQLrFC8f4L+ijZfIz/MXnOn11POthzKknftNdxy3Wv/xAAYEQACAwAAAAAAAAAAAAAAAAAAEQEQIf/aAAgBAwEBPwGnhDP/xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAECAQE/AR//xAAiEAACAQMCBwAAAAAAAAAAAAAAARECITEQEiIyQVFhkaH/2gAIAQEABj8ChC3VXLO3RkM3Rkrq8GJn4J9iIXCVWpsso5V6ISh1aOFlYQovBLP/xAAdEAEAAgIDAQEAAAAAAAAAAAABABEhQTFRcZHh/9oACAEBAAE/Id240IrrBHODY3+TduHLa8fJdQqqEU1pkIXLefkyxLbNMHlCyiIUcT8QGDkV1GVjbKtoa2GBHwm7c//aAAwDAQACAAMAAAAQJgui/8QAGBEBAQEBAQAAAAAAAAAAAAAAAQARQSH/2gAIAQMBAT8QzsKsDx2AXW//xAAXEQEBAQEAAAAAAAAAAAAAAAABABEh/9oACAECAQE/EF7kLtnZTL//xAAkEAEAAgEDAgcBAAAAAAAAAAABESEAMUFhUfBxgZGhscHh0f/aAAgBAQABPxAUIwlVoOrhSPaqEXPGJEnW/ffJ98VCUkRkTJ5CpDYf1+MnWCg99zxkQpEr2jvznOfC5fQ5GodSRP0+TGAJaoTtDi7UFOTTELhYRI/cL1pcNJ09cUTlIEnaqTbScQDKtoNlX4Y6UpABAGf/2Q==",
       "order": 15
-    },
-    {
-      "id": "lobsters-20",
-      "title": "Fake Express Packages on npm Spread a Linux Worm",
-      "desc": "Source: Lobsters",
-      "tag": "news",
-      "published": "Tue, 29 Sep 2026 23:05:15 -0500",
-      "url": "https://safedep.io/dirtyblanket-express-impersonation-npm",
-      "color": "#AC130D",
-      "image": "https://safedep.io/images/express-impersonation-blog-banner.jpg",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAASACADASIAAhEBAxEB/8QAGAAAAwEBAAAAAAAAAAAAAAAAAAEDAgX/xAAVAQEBAAAAAAAAAAAAAAAAAAAAAf/aAAwDAQACEAMQAAAB5mnWoF5GWCCA/8QAGhAAAQUBAAAAAAAAAAAAAAAAAgADEBESIP/aAAgBAQABBQJUqlssk4Wi5//EABQRAQAAAAAAAAAAAAAAAAAAACD/2gAIAQMBAT8BH//EABQRAQAAAAAAAAAAAAAAAAAAACD/2gAIAQIBAT8BH//EABYQAQEBAAAAAAAAAAAAAAAAABEgAP/aAAgBAQAGPwKXNf/EABsQAAMAAgMAAAAAAAAAAAAAAAABERAgIUGB/9oACAEBAAE/ISuirBqCfB5fDHGtf//aAAwDAQACAAMAAAAQgkBB/8QAFhEBAQEAAAAAAAAAAAAAAAAAAAEh/9oACAEDAQE/ELiaqP/EABYRAQEBAAAAAAAAAAAAAAAAAAABEf/aAAgBAgEBPxCRiK//xAAbEAEBAQEBAQEBAAAAAAAAAAABEQAhQVFhof/aAAgBAQABPxAKwzYOlyNxH9MzjgJ+n9w0A9c9s8+aCyEOTtne+6DXvt8xjOd//9k=",
-      "order": 19
     },
     {
       "id": "lobsters-23",

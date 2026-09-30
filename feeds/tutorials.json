@@ -1,5 +1,5 @@
 {
-  "updated": "2026-09-30T06:17:57Z",
+  "updated": "2026-09-30T06:35:07Z",
   "items": [
     {
       "id": "devto-4701626",
@@ -62,12 +62,24 @@
       "color": "#3B49DF"
     },
     {
+      "id": "devto-3138911",
+      "title": "Dear Coder: Open This If You're Feeling AI FOMO",
+      "desc": "By Cesar Aguirre | 1 min read",
+      "tag": "tutorial",
+      "published": "2026-09-28T05:00:00Z",
+      "order": 6,
+      "url": "https://dev.to/canro91/dear-coder-open-this-if-youre-feeling-ai-fomo-58d4",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fbcz2rmmn05m2klpu6qdp.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAQAC/8QAFgEBAQEAAAAAAAAAAAAAAAAAAQAC/9oADAMBAAIQAxAAAAFMuiM0/wD/xAAZEAEAAgMAAAAAAAAAAAAAAAABABACITH/2gAIAQEAAQUCp1Bt5jP/xAAWEQEBAQAAAAAAAAAAAAAAAAABACH/2gAIAQMBAT8BGXL/xAAVEQEBAAAAAAAAAAAAAAAAAAAAAf/aAAgBAgEBPwFH/8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAGRAAAwADAAAAAAAAAAAAAAAAAAERMWHh/9oACAEBAAE/ISjxSjKy6HnQ+T//2gAMAwEAAgADAAAAEEFf/8QAFhEBAQEAAAAAAAAAAAAAAAAAAQAR/9oACAEDAQE/EEDNmn//xAAXEQEBAQEAAAAAAAAAAAAAAAABADFB/9oACAECAQE/EHYPb//EABsQAQADAQADAAAAAAAAAAAAAAEAETEhQVFx/9oACAEBAAE/EHiEAtG+ZUBXvT1Ge8AizE2hVTbnKLpcxGT6n//Z",
+      "color": "#3B49DF"
+    },
+    {
       "id": "devto-4752615",
       "title": "I Got Rejected 2 Minutes After Applying. So Much for 'Skills-Based Hiring.'",
       "desc": "By Mika Flowers | 4 min read",
       "tag": "tutorial",
       "published": "2026-09-26T22:36:24Z",
-      "order": 6,
+      "order": 7,
       "url": "https://dev.to/mikachu/i-got-rejected-2-minutes-after-applying-so-much-for-skills-based-hiring-4315",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fhcywgmryk9vk3mbipxyb.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAAECBP/EABQBAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhADEAAAAcLmiRh//8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQABBQIP/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFhAAAwAAAAAAAAAAAAAAAAAAACAx/9oACAEBAAY/AiP/AP/EABwQAAEDBQAAAAAAAAAAAAAAAAEAEDERIUGRwf/aAAgBAQABPyESjJ6W3scUf//aAAwDAQACAAMAAAAQa4//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/ED//xAAcEAEBAAMBAAMAAAAAAAAAAAABEQAhMVEQYYH/2gAIAQEAAT8Q4au+WXOhjaQqZ7r9fFDaUOnuElJLoHn1jBm2+uJFM//Z",
@@ -79,22 +91,10 @@
       "desc": "By S M Tahosin | 9 min read",
       "tag": "tutorial",
       "published": "2026-09-24T04:02:22Z",
-      "order": 7,
+      "order": 8,
       "url": "https://dev.to/smtahosin/python-thinks-different-what-actually-happens-inside-your-code-visual-guide-241l",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fi.imgur.com%2FjgDsd5D.jpeg",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwIF/8QAFgEBAQEAAAAAAAAAAAAAAAAAAQAC/9oADAMBAAIQAxAAAAHOYE0NMmX/xAAYEAADAQEAAAAAAAAAAAAAAAAAAQIREP/aAAgBAQABBQIlaUsN4qHXP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABcQAAMBAAAAAAAAAAAAAAAAAAARIEH/2gAIAQEABj8CELa//8QAGxAAAwACAwAAAAAAAAAAAAAAAAERIVEQQWH/2gAIAQEAAT8hRZCzsppL0KeHKLTGZXTKf//aAAwDAQACAAMAAAAQUm//xAAWEQADAAAAAAAAAAAAAAAAAAAAARH/2gAIAQMBAT8QaLD/xAAWEQEBAQAAAAAAAAAAAAAAAAAAETH/2gAIAQIBAT8QS6//xAAbEAACAgMBAAAAAAAAAAAAAAABEQAxIVGRgf/aAAgBAQABPxC0CO5Fn4o3OFkNQ0pQcBmmmYwewrcFss9jT//Z",
-      "color": "#3B49DF"
-    },
-    {
-      "id": "devto-3138911",
-      "title": "Dear Coder: Open This If You're Feeling AI FOMO",
-      "desc": "By Cesar Aguirre | 1 min read",
-      "tag": "tutorial",
-      "published": "2026-09-28T05:00:00Z",
-      "order": 8,
-      "url": "https://dev.to/canro91/dear-coder-open-this-if-youre-feeling-ai-fomo-58d4",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fbcz2rmmn05m2klpu6qdp.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAQAC/8QAFgEBAQEAAAAAAAAAAAAAAAAAAQAC/9oADAMBAAIQAxAAAAFMuiM0/wD/xAAZEAEAAgMAAAAAAAAAAAAAAAABABACITH/2gAIAQEAAQUCp1Bt5jP/xAAWEQEBAQAAAAAAAAAAAAAAAAABACH/2gAIAQMBAT8BGXL/xAAVEQEBAAAAAAAAAAAAAAAAAAAAAf/aAAgBAgEBPwFH/8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAGRAAAwADAAAAAAAAAAAAAAAAAAERMWHh/9oACAEBAAE/ISjxSjKy6HnQ+T//2gAMAwEAAgADAAAAEEFf/8QAFhEBAQEAAAAAAAAAAAAAAAAAAQAR/9oACAEDAQE/EEDNmn//xAAXEQEBAQEAAAAAAAAAAAAAAAABADFB/9oACAECAQE/EHYPb//EABsQAQADAQADAAAAAAAAAAAAAAEAETEhQVFx/9oACAEBAAE/EHiEAtG+ZUBXvT1Ge8AizE2hVTbnKLpcxGT6n//Z",
       "color": "#3B49DF"
     },
     {

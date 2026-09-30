@@ -1,186 +1,232 @@
-My [last
-post](https://nnethercote.github.io/2026/07/31/how-to-speed-up-the-rust-compiler-in-july-2026.html)
-on the Rust compiler’s performance was two months ago and a lot has happened
-since then.
+*Welcome to Internal Tech Emails: internal tech industry emails that surface in public records. 🔍 If you haven’t signed up, join 50,000+ others and get the newsletter:*
 
-## Overall progress
+**From:** Bill Gates  
+**Sent:** Wednesday, January 15, 2003 10:05 AM  
+**To:** Jim Allchin  
+**Cc:** Chris Jones; Bharat Shah; Joe Peterson; Will Poole; Brian Valentine; Anoop Gupta  
+**Subject:** Windows Usability Systematic degradation flame
 
-The measurements for the period 2026-07-29 to 2026-09-28 can be seen
-[here](https://perf.rust-lang.org/compare.html?start=1a833e16546c2eb012758ddd499964fd8afee29e&stat=wall-time&tab=compile&end=c1070d69382b8d2f2eb65119c738a77d9e324c9e&nonRelevant=true).
+I am quite disappointed at how Windows Usability has been going backwards and the program management groups don't drive usability issues.
 
-The mean wall-time reduction was 4.57%, which is a remarkable improvement in
-just two months. Of the 629 benchmark measurements, 555 of them improved and
-only 74 regressed. A number of benchmarks saw double-digit percentage
-reductions. The technical term for this result is “a sea of green”.
+Let me give you my experience from yesterday.
 
-## rustdoc
+I decided to download Moviemake and buy the Digital Plus pack r so I went to Microsoft.com. They have a download place so I went there.
 
-In my last post I mentioned how [Noah Lev](https://github.com/camelid) got some
-enormous speed wins on rustdoc. He recently wrote [a
-post](https://noahlev.org/blog/2026/08/27/making-rustdoc-faster) explaining in
-some detail exactly how he did this. It’s an interesting and satisfying read.
+The first 5 times I used the site it timed out while trying to bring up the download page. Then after an 8 second delay I got it to come up
 
-## Clippy
+This site is so slow it is unusable.
 
-[#159642](https://github.com/rust-lang/rust/pull/159642): In this PR
-[Jakub Beránek](https://github.com/Kobzol) enabled PGO for Clippy, giving
-wall-time improvements across most Clippy benchmarks, in the best case by 18%!
+It wasn't in the top 5 so I expanded the other 45.
 
-## LLVM update
+These 45 names are totally confusing. These names make stuff like: C:\Documents and Settings\billg\My Documents\My Pictures seem clear.
 
-[#158734](https://github.com/rust-lang/rust/pull/158734): In this PR [Nikita
-Popov](https://github.com/nikic) upgraded the LLVM version used by the compiler
-to LLVM 23. As often happens when we upgrade LLVM, we saw some nice speedups.
-The mean wall-time reduction across all benchmarks was 1.2%, which might not
-sound like much but is really impressive for a single PR. Great work from the
-LLVM folks!
+They are not filtered by the system I can in on and so many of the things are strange.
 
-## The new borrow checker
+I tried scoping to Media stuff. Still no moviemaker. I typed in moviemaker. Nothing. I typed in movie maker. Nothing.
 
-The new borrow checker, [Polonius](https://en.wikipedia.org/wiki/Polonius)
-[Alpha](https://en.wikipedia.org/wiki/Alpha) (no relation to
-[Napoleon](https://en.wikipedia.org/wiki/Napoleon_(disambiguation))
-[Dynamite](https://www.youtube.com/watch?v=gdZLi9oWNZg)), was
-[enabled on
-Nightly](https://blog.rust-lang.org/2026/08/04/enabling-polonius-alpha-on-nightly/).
-It is more precise than the existing borrow checker and accepts some valid
-programs that the old borrow checker would reject. It does do more work than the
-old borrow checker, enough to make a measurable difference to compile time in a
-minority of cases, including the popular `serde` crate. Fortunately, [Jack
-Huey](https://github.com/jackh726) has been on the case.
+So I gave up and sent mail to Amir saying - where is this Moviemaker download? Does it exist?
 
-[#161938](https://github.com/rust-lang/rust/pull/161938): In this PR Jack made
-some liveness computations lazy, which reduced instruction counts for `serde`
-by 3-5%, and for some other benchmarks by less than 1%.
+So they told me that using the download page to download something was not something they anticipated
 
-[#163027](https://github.com/rust-lang/rust/pull/163027): In this PR Jack
-adjusted a data structure and tweaked some inlining, for mostly sub-1%
-instruction count reductions across numerous benchmarks.
+They told me to go to the main page search button and type movie maker (not moviemaker!).
 
-There is more work to be done to reduce the remaining Polonius Alpha
-regressions, but it’s worth noting that the “sea of green” shows these
-regressions were swamped by the many other recent improvements.
+I tried that   The site was pathetically slow but after 6 seconds of waiting up it came.
 
-## The new trait solver
+I thought for sure now I would see a button to just go do the download.
 
-The new trait solver,
-[Penelope](https://en.wikipedia.org/wiki/Anne_Hathaway)
-[Hammertime](https://www.youtube.com/watch?v=q8WSdypJ4WA),
-*[Ed. note: is that right?]* was also [enabled on
-Nightly](https://blog.rust-lang.org/2026/08/21/enabling-next-solver-on-nightly/).
+In fact it is more like a puzzle that you get to solve. It told me to go to Windows Update and do a bunch of incantations.
 
-As I said, a lot has been happening.
+This struck me as completely odd. Why should I have to go somewhere else and do a scan to download moviemaker?
 
-Like the new borrow checker, the new trait solver is slower in a minority of
-cases. [Jana Dönszelmann](https://github.com/jdonszelmann) wrote a [detailed
-post](https://donsz.nl/blog/new-solver-performance) about the efforts to
-improve the performance of this new solver.
+So I went to Windows update. Windows Update decides I need to download a bunch of controls. Now just once but multiple times where I get to see weird dialog boxes.
 
-Jana’s post is detailed enough that I won’t say much more about the large
-amount of ongoing work on the new solver, but I will mention in passing the PRs
-I made:
-[#160479](https://github.com/rust-lang/rust/pull/160479),
-[#160605](https://github.com/rust-lang/rust/pull/160605),
-[#160801](https://github.com/rust-lang/rust/pull/160801),
-[#160892](https://github.com/rust-lang/rust/pull/160892),
-[#161077](https://github.com/rust-lang/rust/pull/161077),
-and [#161211](https://github.com/rust-lang/rust/pull/161211).
-Some of these reduced compile times greatly for certain outlier crates: 50%
-here, 25% there, 15% there, and [even
-more](https://github.com/rust-lang/rust/issues/159933#issuecomment-5333109889)
-on one stress test. And I am not the only one who has made progress here… go
-read Jana’s post.
+Doesn't Windows update know some key to talk to Windows?
 
-## xmakro
+Then I did the scan. This took quite some time and I was told it was critical for me to download 17megs of stuff.
 
-New contributor [xmakro](https://github.com/xmakro) continued their run of good
-improvements.
+This is after I was told we were doing delta patches to things but instead just to get 6 things that are labeled in the SCARIEST possible way I had to download 17meg.
 
-[#157281](https://github.com/rust-lang/rust/pull/157281): In this PR xmakro
-optimized impl handling when building the specialization graph. This gave a
-mean cycle count reduction of 1.58% across all benchmarks, which is huge for a
-single PR.
+So I did the download. That part was fast. Then it wanted to do an install. This took 6 minutes and the machine was so slow I couldn't use it for anything else during this time.
 
-[#158059](https://github.com/rust-lang/rust/pull/158059): In this PR xmakro
-optimized one aspect of the loading of incremental compilation data, reducing
-instruction counts across multiple benchmarks, in the best case by 6%.
+What the heck is going on during those 6 minutes? That is crazy. This is after the download was finished.
 
-[#160473](https://github.com/rust-lang/rust/pull/160473): In this PR xmakro
-avoided some allocations in a hot obligations processing path, reducing
-instruction counts across numerous benchmarks, in the best case by 2%.
+Then it told me to reboot my machine. Why should I do that? I reboot every night - why should I reboot at that time?
 
-[#160268](https://github.com/rust-lang/rust/pull/160268): In this PR xmakro
-avoided a lot of allocations by changing the old/new trait solver selection
-code to use static dispatch instead of dynamic dispatch. This gave mostly
-sub-1% instruction count reductions across a number of benchmarks. This hot
-allocation path had been showing up in profiles for a while and I had earlier
-tried exactly the same idea in
-[#155714](https://github.com/rust-lang/rust/pull/155714). But I got regressions
-on a couple of benchmarks, possibly due to slightly different choices of where
-to place some `#[inline]` attributes. It was good to see this obvious
-inefficiency fixed.
+So I did the reboot because it INSISTED on it. Of course that meant completely getting rid of all my Outlook state.
 
-## Dataflow analysis
+So I got back up and running and went to Windows Update again. I forgot why I was in Windows Update at all since all I wanted was to get Moviemaker.
 
-[#160193](https://github.com/rust-lang/rust/pull/160193): In this PR I changed
-the CFG traversal algorithm used by the dataflow analyses in the compiler.
-These analyses iterate to a fixpoint and the traversal algorithm can affect how
-quickly the fixpoint is reached. For most code the new algorithm makes no
-difference, but the `cranelift-codegen` crate has one enormous function with
-over 18,000 basic blocks. The old algorithm required 1.5 million calls to
-`apply_effects_in_block` to reach a fixpoint for the `EverInitializedPlaces`
-analysis used by the borrow checker; the new algorithm requires 90,000. This
-gave an enormous ~30% wall-time reduction for a `check` build of this crate.
+So I went back to Microsoft.com and looked at the instructions. I have to click on a folder called WindowsXP. Why should I do that? Windows Update knows I am on Windows XP.
 
-[#160033](https://github.com/rust-lang/rust/pull/160033): In this PR I made
-`EverInitializedPlaces` more efficient again, this time by not tracking
-unnecessary data for projections. This reduced instruction counts on the
-`match-stress` benchmark by 17%, and on a few other benchmarks by less than 1%.
+What does it mean to have to click on that folder? So I get a bunch of confusing stuff but sure enough one of them is Moviemaker.
 
-## LLMs
+So I do the download. The download is fast but the Install takes many minutes. Amazing how slow this thing is.
 
-They’ve gotten very good at certain kinds of analysis. I’m still writing all my
-own code and text, because (a) that’s paramount, and (b) the [project
-policy](https://forge.rust-lang.org/policies/llm-usage.html) requires it, but I
-had useful LLM analysis assistance on several of the PRs mentioned in this post.
+At some point I get told I need to go get Windows Media Series 9 to download.
 
-Anyway, enough about that.
+So I decide I will go do that. This time I get dialogs saying things like "Open" or "Save". No guidance in the instructions which to do. I have no clue which to do.
 
-## Miscellaneous
+The download is fast and the install takes 7 minutes for this thing.
 
-[#160535](https://github.com/rust-lang/rust/pull/160535): In this PR [Chris
-Denton](https://github.com/ChrisDenton) increased the default stack size used
-by the compiler, which allowed the removal of `ensure_sufficient_stack`, a
-manual stack extension mechanism sprinkled about in places prone to high levels
-of recursion. There was a lot of discussion about this one because it can be
-difficult to decide how to best deal with stack exhaustion. But the performance
-effects are clear, with reduced instruction counts across many benchmarks, in
-the best case by almost 3%.
+So now I think I am going to have Moviemaker. I go to my add/remove programs place to make sure it is there.
 
-[#160506](https://github.com/rust-lang/rust/pull/160506): The project uses a
-lot of “rollup” PRs, where multiple PRs are merged together. This is because we
-don’t have sufficient CI capacity to merge every PR individually. Normally PRs
-that affect performance are merged by themselves so we can measure their
-effects clearly. For the first time ever, at one point we had so many
-performance improvement PRs waiting in the merge queue that [Jonathan
-Brouwer](https://github.com/JonathanBrouwer) created a rollup containing 10
-performance-improving PRs to keep things moving! This is a good problem to
-have. And later on we had
-[#162859](https://github.com/rust-lang/rust/pull/162859) which contained four
-performance-improving PRs. (You needn’t worry about unexpected effects slipping
-in because we have the ability to run the perf benchmark suite on the
-individual PRs after merging, to make sure each PR had the expected performance
-effect.)
+It is not there.
 
-[#162747](https://github.com/rust-lang/rust/pull/162747): In this PR I made
-some minor improvements to the code that lowers AST to HIR. It was a cleanup
-that wasn’t expected to affect performance but it reduced instruction counts
-across numerous benchmarks, in the best case by 1.5%. Sometimes you get lucky.
+What is there? The following garbage is there. Microsoft Autoupdate Exclusive test package, Microsoft Autoupdate Reboot test package, Microsoft Autoupdate testpackage1, Microsoft AUtoupdate testpackage2, Microsoft Autoupdate Test package3.
 
-## Job status
+Someone decided to trash the one part of Windows that was usable? The file system is no longer usable. The registry is not usable. This program listing was one sane place but now it is all crapped up.
 
-Tomorrow I will start working at [Hexcat](https://hexcat.nl/) on the [compiler
-performance
-optimizations](https://goals.rust-lang.org/2026/compiler-performance-optimization.html)
-project goal. It’s exciting! Many thanks to Mara Bos, Predrag Gruevski, and all
-the other people who helped make this happen.
+But that is just the start of the crap. Later I have listed things like Windows XP Hotfix see Q329048 for more information. What is Q329048? Why are these series of patches listed here? Some of the patches just things like Q810655 instead of saying see Q329048 for more information.
+
+What an absolute mess.
+
+Moviemaker is just not there at all.
+
+So I give up on Moviemaker and decide to download the Digital Plus Package.
+
+I get told I need to go enter a bunch of information about myself.
+
+I enter it all in and because it decides I have mistyped something I have to try again. Of course it has cleared out most of what I typed
+
+I try tryping the right stuff in 5 times and it just keeps clearing things out for me to type them in again.
+
+So after more than an hour of craziness and making my programs list garbage and being scared and seeing that Microsoft.com is a terrible website I haven't run Moviemaker and I haven't got the plus package
+
+The lack of attention to usability represented by these experiences blows my mind. I thought we had reached a low with Windows Network places or the messages I get when I try to use 802.11. (don't you just love that root certificate message?)
+
+When I really get to use the stuff I am sure I will have more feedback.  
+
+**From:** Will Poole  
+**Sent:** Wednesday, January 15, 2003 1:27 PM  
+**To:** Amir Majidimehr; Chris Jones  
+**Cc:** Dave Fester; Rick Thompson  
+**Subject:** FW: Windows Usability Systematic degradation flame
+
+Guess we should start working on a list of things that need to be fixed w/ the web sites, WU, and with windows, and identify owners. Bill's frustration is not unreasonable.  
+
+**From:** Amir Majidimehr  
+**Sent:** Wednesday, January 15, 2003 3:55 PM  
+**To:** Mike Beckerman; Tim Lebel; Dave Fester  
+**Subject:** FW: Windows Usability Systematic degradation flame
+
+Can you guys coordinate between you on how to deal with this situation on our bits? Bill's situation is worse than my personal experience but still, this aspect of the system needs to be looked at carefully and become a sign off item for each release.
+
+Please let me know which one of you going to be BOL for this moving forward.
+
+Amir  
+
+**From:** Dave Fester  
+**Sent:** Wednesday, January 15, 2003 3:58 PM  
+**To:** Amir Majidimehr; Mike Beckerman; Tim Lebel  
+**Subject:** RE: Windows Usability Systematic degradation flame
+
+I replied as well. I am owning the website issues, but Mike should own the others.  
+
+**From:** Mike Beckerman  
+**Sent:** Wednesday, January 15, 2003 4:28 PM  
+**To:** Dave Fester; Amir Majidimehr; Tim Lebel  
+**Subject:** RE: Windows Usability Systematic degradation flame
+
+I'm thinking about this and am discussing with my team.
+
+I don't know what it means to "own website issues", nor am I yet sure the best way to handle the complex mess of coordinating between product teams, WU, and MS.COM. Dave, would you please forward the other reply you mentioned?
+
+I expect to send more on this thread in a day or two.  
+
+**From:** Dave Fester  
+**Sent:** Wednesday, January 15, 2003 4:31 PM  
+**To:** Mike Beckerman; Amir Majidimehr; Tim Lebel  
+**Subject:** RE: Windows Usability Systematic degradation flame
+
+I am working with MS.com to directly address the download/discoverability of our bits (both MP9S and MM2)  
+
+**From:** Mike Beckerman  
+**Sent:** Wednesday, January 15, 2003 4:39 PM  
+**To:** John Martin; lan Mercer; Michael Halcoussis; Linda Averett  
+**Cc:** Chadd Knowlton; Ming-Chieh Lee  
+**Subject**: FW: Windows Usability Systematic degradation flame
+
+More.  
+
+**From:** Mike Beckerman  
+**Sent:** Friday, January 17, 2003 7:36 AM  
+**To:** Mike Beckerman; John Martin; lan Mercer; Michael Halcoussis; Linda Averett  
+**Cc:** Chadd Knowlton; Ming-Chieh Lee  
+**Subject:** RE: Windows Usability Systematic degradation flame
+
+haven't heard anything from any of you on this.
+
+My take is that this web-experience mess spans many groups and deliverables (like Plus), that we need one person/team to own the overall picture, driving it, tracking the experience, etc., and that WMPG isn't really the right place. I'm thinking Dave's team. What do you think?  
+
+**From:** John Martin  
+**Sent:** Friday, January 17, 2003 11:52 AM  
+**To:** Mike Beckerman; Ian Mercer; Michael Halcoussis; Linda Averett  
+**Cc:** Chadd Knowlton; Ming-Chieh Lee  
+**Subject:** RE: Windows Usability Systematic degradation flame
+
+I have always been concerned about this and feel that this has a lot of engineering implications. I also feel that the reason is it such a mess is because marketing teams own release to web in this company. Frankly, we should be up in arms about this and want to program manager and develop whatever code we need to to ensure that every customer that even thinks they want to download our bits can do so in as easy and painless a way as possible. Downloading is the first step to setup and we should think of them equally or as one experience. But, if you want nothing revolutionary and want to band-aid (which is fine and understandable) then I agree with your plan to give it to Dave.
+
+John  
+
+**From:** Ian Mercer  
+**Sent:** Friday, January 17, 2003 5:02 PM  
+**To:** John Martin; Mike Beckerman; Michael Halcoussis; Linda Averett  
+**Cc:** Chadd Knowlton; Ming-Chieh Lee; Allan Poore  
+**Subject:** RE: Windows Usability Systematic degradation flame
+
+I don't think you can abdicate this entirely to marketing. If WU is the preferred way to deliver bits to end users we all need to drive WU to deliver what we need, both individually and as a collective request from DMD.
+
+One of the biggest issues today is that WU provides no way to *promote* a download to an end-user. We want to promote MM2 and WMP9S to end-users as something new and cool that they can get for Windows. Three lines of text describing it buried under "Windows XP" in a page that the user has to purposefully go find just isn't good enough. Why can't the WU client-side piece proactively display a bubble "Look! Cool, new features for Windows XP" and the option to display a much richer "advertisement" for the feature if the user wants to read more?
+
+Other issues -  
+    MUI - I guess this is getting fixed now but it's always been an issue for us  
+    Link to download through WU - why can't we send a user right in to WU to get MM2 without them having to wade through the whole site?  
+    Critical updates that aren't really critical - if you machine is behind a firewall many just aren't critical  
+    Too many fixes bombarding users all the time - I routinely ignore them now and perhaps update once a month as otherwise I'd be rebooting all the time  
+    WU's inflexible release schedule. If there is a major tradeshow at which we want to announce we need flexibility in timing the release
+
+-Ian  
+
+**From:** Mike Beckerman  
+**Sent:** Friday, January 17, 2003 5:09 PM  
+**To:** lan Mercer; John Martin; Michael Halcoussis; Linda Averett  
+**Cc:** Chadd Knowlten; Ming-Chieh Lee; Allan Poore  
+**Subject:** RE: Windows Usability Systematic degradation flame
+
+So, I take from this that we have lots of opinions and input. However, no one appears to be saying that we, WMPG, are chartered and/or should own this. So my feedback on the thread would then be that Dave should take ownership for driving groups around today's inconsistencies, and that we should send this mail to Bharat (owns WU) as well and ask who in his team can take requirements from DMD.
+
+Any disagreement on this?  
+
+**[This document is from Comes v. Microsoft (2007).]**
+
+Previously: [Bill Gates: "The quality is giving us a bad name"](https://www.techemails.com/i/142894465/bill-gates-on-quality-experience) (October 19, 2000)
+
+Previously: [Bill Gates on iTunes Music Store](https://twitter.com/techemails/status/1413534752699830275) (April 30, 2003)
+
+Previously: [Bill Gates on the iPod](https://twitter.com/techemails/status/1423680978359312387) (November 2, 2003)
+
+If you **upgrade to a paid subscription**, you’ll receive access to the **[full archive of internal tech emails](https://files.techemails.com)**, with 250+ documents from Apple, Google, Meta, Microsoft, OpenAI, Tesla, and more. You’ll also support our work: every year, we track hundreds of court cases and review more than 10,000 filings to bring you @TechEmails.
+
+[More…](https://twitter.com/techemails)
+
+If it was Steve Jobs-
+
+He gets stuck once.
+
+“Why can’t I download Movie Maker?”
+
+Somebody explains:
+
+“Well, Steve, first you have to go to Windows Update, install the ActiveX controls, scan for updates, reboot, return to the website…”
+
+Jobs:
+
+“No.”
+
+the execs starts pointing fingers.
+
+Jobs:
+
+"I want my mother to type “Movie Maker,” click one button, and use Movie Maker.
+
+Everything between those two things is your problem.
