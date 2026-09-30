@@ -266,6 +266,79 @@ def _looks_like_pdf_url(url):
     return path.endswith('.pdf')
 
 
+# ============================================================
+# ROBOTS.TXT
+#
+# A good-faith check. Almost every source we pull from allows
+# article fetching, and the ones that disallow are usually
+# disallowing admin paths, not articles. But running the check
+# costs little and demonstrates intent if a publisher ever asks.
+#
+# robots.txt is opt-out: a missing, empty, or unreachable file
+# means everything is allowed. We match only the "User-agent: *"
+# block, which is what all well-behaved crawlers do.
+# ============================================================
+
+_robots_cache = {}
+
+
+def _robots_allows(url):
+    """Return True unless the host's robots.txt explicitly
+    disallows this path for User-agent: *."""
+    try:
+        parsed = urllib.parse.urlparse(url)
+        origin = parsed.scheme + '://' + parsed.netloc
+        path = parsed.path or '/'
+    except Exception:
+        return True
+
+    if origin in _robots_cache:
+        rules = _robots_cache[origin]
+    else:
+        rules = ''
+        try:
+            req = urllib.request.Request(
+                origin + '/robots.txt',
+                headers={'User-Agent': 'DroidBuild/1.0 (+feed builder)'})
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                rules = resp.read(65536).decode('utf-8', errors='ignore')
+        except Exception:
+            rules = ''
+        _robots_cache[origin] = rules
+
+    if not rules:
+        return True
+
+    in_star = False
+    disallowed = []
+    for line in rules.splitlines():
+        line = line.split('#', 1)[0].strip()
+        if not line:
+            continue
+        lower = line.lower()
+        if lower.startswith('user-agent:'):
+            ua = line.split(':', 1)[1].strip()
+            in_star = (ua == '*')
+        elif in_star and lower.startswith('disallow:'):
+            rule = line.split(':', 1)[1].strip()
+            if rule:
+                disallowed.append(rule)
+
+    for rule in disallowed:
+        # robots.txt supports '*' as a wildcard and '$' as an
+        # end-of-path anchor. Convert to a regex.
+        pattern = re.escape(rule).replace(r'\*', '.*')
+        if pattern.endswith(r'\$'):
+            pattern = pattern[:-2] + '$'
+        try:
+            if re.match(pattern, path):
+                return False
+        except re.error:
+            continue
+
+    return True
+
+
 def fetch_html(url):
     """Fetch URL and return decoded, control-character-stripped
     HTML, or None when the response is not HTML.
@@ -351,7 +424,7 @@ def _is_usable_article_image(url):
       - placeholders (data:, blank.gif)
       - SVG files (logos, icons, share buttons)
       - common icon paths (favicon, apple-touch, /icons/, /social/)
-      - small / thumbnailed names (thumb, icon, logo, avatar)
+      - short filenames dominated by icon / logo / avatar / etc.
     """
     if _is_placeholder(url):
         return False
@@ -374,11 +447,23 @@ def _is_usable_article_image(url):
         if m in lower:
             return False
 
-    # Filename-level markers. Match on the last path segment.
+    # Filename-level markers. Only match when the filename is
+    # dominated by the marker, not when the marker appears as a
+    # substring inside a longer slug. "logo.png" is UI chrome;
+    # "how-we-built-our-logo-generator.png" is an article.
     name = lower.rsplit('/', 1)[-1]
+    stem = name.rsplit('.', 1)[0]  # strip extension for matching
+
     for marker in ('icon', 'logo', 'avatar', 'badge', 'share'):
-        if marker in name:
+        # Exact match: "logo.png"
+        if stem == marker:
             return False
+        # Short prefixed/suffixed forms: "logo-dark", "site-logo",
+        # "share-button", "avatar-32". Reject only when the marker
+        # is at one end AND the total stem is short (<= 20 chars).
+        if len(stem) <= 20:
+            if stem.startswith(marker + '-') or stem.endswith('-' + marker):
+                return False
 
     return True
 
@@ -985,6 +1070,10 @@ def readability_extract(html_text):
 
 def extract_article(url):
     if not url:
+        return None, ""
+
+    if not _robots_allows(url):
+        print(f"  [Skip] Disallowed by robots.txt: {url}")
         return None, ""
 
     if _looks_like_pdf_url(url):
