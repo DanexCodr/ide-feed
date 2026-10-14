@@ -1,55 +1,46 @@
-*Institutions are recalculating who controls the technology they rely on. Mozilla has an independent option to offer.*
+Many readers will be aware that an unusually high number of features
+have been reverted from the PostgreSQL 19 branch after the beta period
+began.  Having some reverts is not unusual, maybe one per cycle could
+be expected.  But this time around, about 8 to 10 significant
+features, depending on how you count, have been reverted, and some of
+them quite late in the beta period.  I have been on the receiving end
+of some of that, as the developer or committer of some of those
+features, and have gotten some questions about it, and so I want to
+take a moment to reflect on this.  I’ll try to extrapolate a little
+bit to similarly affected work that I was not actively involved in,
+but these are just my opinions at this point.
 
-For years, organizations consolidated technology around a small number of providers to make things simpler. Fewer systems. Tighter integrations. More economies of scale. But that consolidation went well beyond technology. It consolidated dependency, too. The resulting risks have been debated, studied, and challenged along the way, but concentration continued. More work, data and critical infrastructure kept moving to the same few providers, while credible alternatives narrowed.  
+So what happened?
 
-The deeper that dependency runs, the harder and more costly it becomes to change course. When something fails, changes or falls outside an institution’s control, that dependency becomes a risk for CIOs and CISOs to manage.
+I don’t think we, meaning all the developers affected, have had enough
+time to fully reflect on all this.  But here are some thoughts.  It’s
+probably a combination of these, and a different combination in the
+case of each reverted feature.
 
-Nowhere are these stakes more visible than in Europe. Now institutions are re-assessing. Governments are pushing for greater digital autonomy, while regulated industries face growing pressure to find and manage their dependencies.
+- Maybe we just didn’t do a good enough job. Maybe the code was just not good enough. We’ll learn and improve. It’s probably some of that, and I’m mentioning it here to not give the impression that it was only the other factors that I’m going to mention.
+- It could also be a coincidence. Maybe we had been on such a good roll that we attempted to tackle several features that turned out to be too hard, or at least too hard to finish in time.
+- Some of the reverted features had significant architectural defects that would have been hard to fix quickly and during beta. But there was also a long tail of relatively harmless issues involving various edge cases. In past times, many of these would not have surfaced until much later and we would have fixed them bit by bit over the subsequent five years. But with LLM-assisted code review, these kinds of things can get found much faster, and then you’re staring at a list of like forty defect reports. And even if each of them requires only a three-line fix on average, there is a fixed overhead to dealing with each of these, and then you run out of time. Most if not all of the affected reverted features were written a long time ago when LLM-assisted code review was not as useful as it is now, meaning that the effective quality bar has been raised after the time the feature was written and committed. Unless the capabilities of LLM-assisted code review keep improving at the current rate, this situation should sort itself out for future development cycles.
+- A corollary of that is that, at least for the most part, as far as I can tell, this situation is *not* due to “vibe coding”. This code was written well before that was a possibility.
+- Because of the Vulnpocalypse, many senior developers were busy between, say, April (the start of feature freeze for PostgreSQL 19, and also the start of the Vulnpocalypse) and August (the most recent PostgreSQL security release) with working on fixes for security issues. Because of that, the usual additional review and testing that happens during the beta period was reduced, and then picked up again in August. That’s possibly why a lot of new issues were discovered quite late in the beta period and why so many reverts happened so late, which is what made all of this so notable. Again, some issues were more fundamental but there was also a long tail of smaller issues, and I feel with more time, say, two months, these could have been addressed (given adequate focus, but note that the Vulnpocalypse is ongoing). But the community preferred trying to stick to the release schedule rather than delaying to get more fixes in. (And you never know how long a long tail really is.)
+- The complexity of the system has made some kinds of features extremely complex to get right, and there is not enough scaffolding in the code to support that. Consider, as an abstracted example, some SQL-level query language feature. Does it work with domains? How about with domains over a composite type? Where one of the fields is also a domain? And the domain has a not null constraint? And one of the columns was dropped and re-added? And this is part of a table partition that has been detached and reattached with a different column order? And this is part of a view that is called from a security-definer function from a trigger? And so on. No one can manually test this or even enumerate these test cases. But LLM-assisted fuzzing can find problems with this really quickly. So this probably needs to be part of feature development in the future. But we should also think about making the internal interfaces more robust so that each different combination of contexts doesn’t open up so many new possibilities of interactions. I like to say, in PostgreSQL, “everything works with everything”. This is part of the appeal, that you *can* construct cases like this and expect them to work. I don’t want to give up on that at all. But it does impose a significant penalty on feature development that everyone needs to be aware of.
+- As a final point, the PostgreSQL development community has been contemplating for some time the possibility of committing features with some kind of “experimental” status and then maturing them in the main tree. This would also be one possibility to address the previous point. This would have been a helpful tool for at least some of the reverted features, but we haven’t yet figured out a way to do this, and some of the work suffered from misunderstandings related to this. This is a concrete point to work on.
 
-There’s a name for much of this debate about technological control: “sovereignty.”
+So what’s next?
 
-What digital sovereignty means in practice varies. Across Europe, governments are investing in the security and resilience of critical IT infrastructure, reducing strategic dependencies and putting technological autonomy higher on national agendas. Different approaches, same underlying concern. Strip away the regional policy definitions and industry distinctions and a pretty practical, universal question emerges: how much technological dependency should we risk?
+First of all, from my personal perspective, thank you to everyone who
+has reached out in person or online to express support and
+encouragement.  That’s the most important thing.  I’m confident that
+many of the reverted features will come back before too long.
 
-And a very specific, very important layer has been largely missing from that conversation: the browser.
+PostgreSQL 19 will still be a great release.  REPACK CONCURRENTLY,
+logical replication of sequences (itself a previously reverted
+feature), and planner hinting with pg_plan_advice, just to pick a few
+headline items, will make this release very attractive.  And it will
+be very robust, after all the additional scrutiny.
 
-## The overlooked layer of modern business
-
-The browser. Applications run there. Employees authenticate in it. Sensitive data transits through it. Files are uploaded and downloaded and AI tools are increasingly used through it. That raises the same questions of dependency and control: whose browser technology are you relying on, and who controls the infrastructure used to manage it?
-
-## Introducing Firefox Enterprise
-
-![](https://blog.mozilla.org/wp-content/blogs.dir/278/files/2026/10/Data-Control-Hero1-2048x1152.png)
-
-[Firefox Enterprise](https://www.firefox.com/enterprise/) is built for organizations with strict security, governance, and compliance requirements. It pairs the Firefox browser, built on Mozilla’s independent [Gecko](https://blog.mozilla.org/netpolicy/2026/03/23/competition-innovation-and-the-future-of-the-web/) engine, with a management console organizations can run on their own infrastructure. From that console, IT teams can centrally manage browser policy and access, govern how data moves through the browser and set controls around AI use.
-
-IT and security teams get more control over their data, IT infrastructure and browser environment — helping strengthen technological independence and operational resilience.
-
-“If all your options are built with the same technology underneath, ‘choice’ is a lie. So is control,” said Anthony Enzor-DeMeo, CEO of Mozilla. “We built Firefox differently. And we’re bringing its independent architecture to institutions that are ready to rethink their dependencies and risk.”
-
-## Bringing the browser under control
-
-We’re starting with the browser because we see it as a key, but under-governed, layer. Firefox Enterprise gives institutions more control over the browser and the infrastructure managing it.
-
-And because Firefox runs on Gecko, the only major browser engine developed outside Google and Apple, institutions have another path towards reducing dependence on a single architecture.
-
-Finally, Firefox Enterprise is built to live alongside the systems that IT operations already use. Keep your identity provider. Keep your SIEM. Keep your MDM. Just add a browser whose management infrastructure you operate, so you decide where data lives and have greater visibility into how it moves.
-
-For us, supporting the goal of technological sovereignty comes down to four things: More control. More transparency. More choice. More resilience.
-
-[Learn more](https://www.firefox.com/enterprise/firefox-enterprise/) about Firefox Enterprise.
-
-## A big bet on familiar ground
-
-We know this territory. Independence isn’t a new direction for Mozilla. We’ve spent more than 25 years building and securing browser technology that intentionally works outside of the dominant architecture of the day. Firefox is used by roughly 200 million people every month and is already deployed across thousands of organizations.  
-
-That independence has always mattered to the web. Now it has practical value for institutions looking to reduce technological concentration — and dependency — in their own environments.
-
-## This is the beginning
-
-Our ambition is big but simple: make technology independence practical.
-
-That means putting institutions in real control of the infrastructure and data they depend on, without asking them to rebuild or start over. Closing blind spots. Defining where policies, access and data live. Keeping core management within the institution’s environment. And bringing an overlooked layer — the browser — under institutional control.
-
-Firefox Enterprise is unveiling across Europe with an initial sales focus on France, Germany, Austria and Switzerland, with more markets to follow. Thunderbird Enterprise is also in development, extending this customer-controlled approach to email and communications. We’ll have more to share as that work progresses.
-
-If your organization wants greater control over its browser infrastructure, we’d like to [work with you](https://www.firefox.com/enterprise/contact/).
+It’s difficult to predict things now.  A few months ago I said,
+PostgreSQL 20 might have no new features, just bug fixes.  It turned
+out that things moved even faster, and PostgreSQL 19 now, kind of, has
+half as many major features as then expected, but now we also already
+have a few nice 80%-ready features queued up for PostgreSQL 20 that
+just need those remaining 80% to get done!

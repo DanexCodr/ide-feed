@@ -89,5 +89,3 @@ Written by Nick G. and the source control team: S.G., R.K., Dan C., Garrett H., 
 ## Get the developer newsletter
 
 Product updates, how-tos, community spotlights, and more. Delivered monthly to your inbox.
-
-[Discuss on Hacker News](https://news.ycombinator.com/item?id=50073633)

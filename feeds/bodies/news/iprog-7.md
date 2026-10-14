@@ -1,2 +1,111 @@
-Margaret Hamilton, who developed the software for NASA's Apollo Missions which not only landed men on the moon in 1969 but also averted a crash landing, passed away on September 30, 2026, at the age of 90. It was this photo of Margaret Hamilton with the code written by her and her team that first brought her pioneering career to attention. Taken in 1969, it shows her beside a stack of printouts - the software listings that were essential for the Apollo XI mission. It went viral in 2014, and from being almost unheard of her amazing story became widely known, particularly as she was awarded the Presidential Medal of Honor by Barak Obama shortly afterwards. Due to this recogntion, by then in her eighties, Margaret Hamilton gave several interviews and told her remarkable story in her own words. The most comprehensive is this 3-hour account part of the Computer History Museum's Oral Histories: VIDEO For a brief look at the highlights this account comes from Makers:  VIDEO Margaret Hamilton was born in Paoli, Indiana, in 1936 and was keen on math from a young age. She earned a BA in mathematics with a minor in philosophy in 1958 and married shortly afterwards. She put graduiate school on hold and moved to Boston, Massachusetts where her hasband pursued a law degree at Harvard. She got a job in the meteorology department at MIT, working with professor of meteorology Edward N. Lorenz on weather prediction software. This was her entry point into computer programming, and her work would go on to inform Lorenz’s future publications on chaos theory. In her next role, as a programmer at MIT Lincoln Laboratory in 1961, working on the SAGE project, the United States’ first air defense system. Hamilton wrote software for the prototype AN/FSQ-7 computer (XD-1) began to take an interest in software reliability — a new and largely unexplored concept at the time. In 1965 Hamilton was preparing to pursue graduate studies when her husband saw an advertisement in the newspaper: The Instrumentation Lab at MIT, the Draper Lab, was seeking people to develop software to “send man to the moon.” Intrigued by the challenge, Hamilton applied, and was hired as the first programmer for the Apollo project at MIT, as well as the first female programmer in the project.  As a working mother, when working late, Hamilton would take Lauren her infant daughter to the Draper Lab. One day when playing with the mock up of the Apollo control panel, Lauren hit a switch that caused an error message to flash. Lauren had crashed the simulator by starting a pre-launch program called P01 while the simulator was in mid-flight. As a result of this incident, Hamilton wanted to add error-checking code to prevent the crash. This was denied on the grounds that "Astronauts don't make mistakes." so Hamilton resulted to a clear warning, "_**Do not select P01 during flight".**_ Despite this five days into the historic Apollo 8 flight, the first manned orbit of the moon, astronaut Jim Lovell inadvertently replicated Lauren's action and selected P01 during flight. Launching this routine had the effect of wiping out all the navigation data Lovell had been collecting and without that data, the Apollo navigation computer wouldn’t be able to figure out how to get the astronauts home. At least the cause of the problem was clear and Hamilton and her team started working on a fix. Nine hours later, after poring through the 8-inch-thick program listing they had a plan. Houston uploaded new navigational data and Apollo 8 and its crew returned to earth. Her attention to safety also saved the Apollo 11 mission. Moments before the Eagle module was set to land on the lunar surface, the onboard computer raised the alarm. It had detected a 1202 error: The computer was overloaded due to a fault in a hardware switch, and it was possible the system would not be able to handle the complex landing procedure. But Hamilton and her team had engineered priority-driven software, able to shut down unnecessary background tasks in order to prioritize mission-critical tasks. Houston trusted Hamilton’s software and allowed the mission to proceed, and two men walked on the moon for the first time.  Photo Credit: MIT Technology Review **Margaret Elaine Hamilton, née Heafield**  
-**(August 17, 1936 – September 30, 2026)** In the announcement of her death in MIT News, Olivier de Weck, the Apollo Program Professor and interim head of the MIT Department Aeronautics and Astronautics wrote: _“To say Margaret Hamilton was a pioneer — to say she was ahead of her time — would be a dramatic understatement. She was a software engineer at a time when that field was in its infancy, and she not only developed advanced code herself but also led a team in using that nascent technology to develop one of the most complex systems humanity had ever achieved_ _“The Apollo program still stands as one of our greatest testaments to the power of collaboration, ingenuity, and engineering, and Margaret Hamilton was a fundamental contributor to that program’s success. And for her that was just the beginning! She went on to become an entrepreneur and remained on the cutting edge of systems software throughout an extraordinary career, while acting as an advocate, mentor, and inspiration to millions.”_ _“Margaret Hamilton has been an inspiration to generations of computer scientists and engineers. Hers was a career dedicated to preventing errors and what she called ‘handling the unknown’. She personified leadership by example, and established a practice of software engineering based on problem-solving and systems engineering that we all benefit from.”_ For more about her story see **[Margaret Hamilton - Apollo and Beyond](<https://www.i-programmer.info/history/8-people/10030-margaret-hamilton-apollo-and-beyond.html>). **
+The Weekly Digest, an expanded version of the newsletter sent out to subscribers every Wednesday, itemises the new articles and news item posted by the I Programmer team and is a good way to get to know our content, which is "written by programmers, for programmers". To receive this digest automatically by email, sign up for our weekly [ newsletter. ](<https://www.i-programmer.info/register.html>) **October 1 - 7, 2026** | 
+
+### Featured Articles  
+
+---  
+
+* * *
+
+[ Pi IoT In Python Using Linux Drivers - GPIO Events ](<https://www.i-programmer.info/programming/148-hardware/19196-pi-iot-in-python-using-linux-drivers-gpio-events.html>)   
+07 Oct  |  Harry Fairhead and Mike James    
+[ ](<https://www.i-programmer.info/programming/148-hardware/19196-pi-iot-in-python-using-linux-drivers-gpio-events.html>) The GPIO driver in Linux used to be GPIO sysfs, but no longer. Now it's the GPIO character driver. Find out how to handle events. [ \+ Full Story ](<https://www.i-programmer.info/programming/148-hardware/19196-pi-iot-in-python-using-linux-drivers-gpio-events.html>)  
+
+* * *
+
+[ Inside the Computer - Addressing ](<https://www.i-programmer.info/babbages-bag/150-addressing.html>)   
+06 Oct  |  Harry Fairhead    
+[ ](<https://www.i-programmer.info/babbages-bag/150-addressing.html>) Where you store data is as important to the computer as the data itself, yet the importance of the address is often overlooked. In this introduction to the low-level mechanisms of addressing in assembler, it is surprising how easy it is to recognize familiar high-level abstractions. [ \+ Full Story ](<https://www.i-programmer.info/babbages-bag/150-addressing.html>)  
+
+### Programming News and Views  
+
+* * *
+
+[ Devs' Mental State Revealed ](<https://www.i-programmer.info/news/99-professional/19198-devs-mental-state-revealed.html>)   
+07 Oct  |  Sue Gee    
+[ ](<https://www.i-programmer.info/news/99-professional/19198-devs-mental-state-revealed.html>) The latest survey from DevGraphics isn't about JavaScript, or any other aspect of Web Development. Instead it asks about workplace issues, developers' health, hobbies and relationships, and other topics unrelated to code. New questions in the 2026 survey included ones about job security and mental state. [ \+ Full Story ](<https://www.i-programmer.info/news/99-professional/19198-devs-mental-state-revealed.html>)  
+
+* * *
+
+[ The ESP32 S31 Runs Linux ](<https://www.i-programmer.info/news/91-hardware/19197-the-esp32-s31-runs-linux.html>)   
+07 Oct  |  Harry Fairhead    
+[ ](<https://www.i-programmer.info/news/91-hardware/19197-the-esp32-s31-runs-linux.html>) With the price of single board computers like the Raspberry Pi increasing all the time, news that Espressif's latest low-cost ESP32 can run Linux is to be welcomed. And its official! [ \+ Full Story ](<https://www.i-programmer.info/news/91-hardware/19197-the-esp32-s31-runs-linux.html>)  
+
+* * *
+
+[ CISA's K-12 Cybersecurity Foundations ](<https://www.i-programmer.info/news/149-security/19195-cisas-k-12-cybersecurity-foundations.html>)   
+06 Oct  |  Nikos Vaggalis    
+[ ](<https://www.i-programmer.info/news/149-security/19195-cisas-k-12-cybersecurity-foundations.html>) The Cybersecurity and Infrastructure Security Agency (CISA) and the U.S. Department of Homeland Security have issued instructions on how to secure K-12 schools in the USA against cyber attacks. [ \+ Full Story ](<https://www.i-programmer.info/news/149-security/19195-cisas-k-12-cybersecurity-foundations.html>)  
+
+* * *
+
+[ Groovy 6 Improves Concurrency ](<https://www.i-programmer.info/news/80-java/19194-groovy-6-improves-concurrency.html>)   
+06 Oct  |  Kay Ewbank    
+[ ](<https://www.i-programmer.info/news/80-java/19194-groovy-6-improves-concurrency.html>) Groovy 6 has been released, with improvements focusing on async workflows, concurrency, and better verification for functional programming. [ \+ Full Story ](<https://www.i-programmer.info/news/80-java/19194-groovy-6-improves-concurrency.html>)  
+
+* * *
+
+[ Aspire 13.6 Adds Persistent Dashboards ](<https://www.i-programmer.info/news/89-net/19193-aspire-136-adds-persistent-dashboards.html>)   
+05 Oct  |  Alex Denham    
+[ ](<https://www.i-programmer.info/news/89-net/19193-aspire-136-adds-persistent-dashboards.html>) Aspire 13.6 has been released. It now has persistent dashboards that store resource snapshots and telemetry in SQLite, so you can revisit up to ten completed runs. Other improvements include first-party Java and Rust hosting, and preview Azure Connector Namespace support. [ \+ Full Story ](<https://www.i-programmer.info/news/89-net/19193-aspire-136-adds-persistent-dashboards.html>)  
+
+* * *
+
+[ NetBeans 31 Released ](<https://www.i-programmer.info/news/90-tools/19191-netbeans-31-released.html>)   
+05 Oct  |  Kay Ewbank    
+[ ](<https://www.i-programmer.info/news/90-tools/19191-netbeans-31-released.html>) Apache has released the latest version of the NetBeans cross-platform IDE. Version 31 has updated environment support, along with updates for Java development, and increased integration for Maven and Gradle. PHP and JavaFX also have improvements. [ \+ Full Story ](<https://www.i-programmer.info/news/90-tools/19191-netbeans-31-released.html>)  
+
+* * *
+
+[ Robot Meltdown ](<https://www.i-programmer.info/news/169-robotics/19190-robot-meltdown.html>)   
+04 Oct  |  Lucy Black    
+[ ](<https://www.i-programmer.info/news/169-robotics/19190-robot-meltdown.html>) A video of humanoid robots flinging themselves, one after another, into a vat of molten steel, has gone viral. It is almost impossible to watch as each of them approaches the end of the diving board and launches itself into the bubbling cauldron beneath. How have we allowed such wanton destruction to happen? [ \+ Full Story ](<https://www.i-programmer.info/news/169-robotics/19190-robot-meltdown.html>)  
+
+* * *
+
+[ IEEE Milestone For Colossus ](<https://www.i-programmer.info/news/82-heritage/19188-ieee-milestone-for-colossus.html>)   
+02 Oct  |  Sue Gee    
+[ ](<https://www.i-programmer.info/news/82-heritage/19188-ieee-milestone-for-colossus.html>) An IEEE Milestone plaque commemorating the Colossus Computers, and their designer Tommy Flowers, has been installed at Bletchley Park, the site of the British Government Code and Cypher School (GC&CS) during World War II. [ \+ Full Story ](<https://www.i-programmer.info/news/82-heritage/19188-ieee-milestone-for-colossus.html>)  
+
+* * *
+
+[ Meta VR Start Developer Competition Opens ](<https://www.i-programmer.info/news/204-challenges/19187-meta-vr-start-developer-competition-opens.html>)   
+02 Oct  |  Lucy Black    
+[ ](<https://www.i-programmer.info/news/204-challenges/19187-meta-vr-start-developer-competition-opens.html>) The second Meta VR Start Developer Competition has opened. It was announced at Meta Connect⁠ in September, and runs for eight weeks. Competitors are asked to build new experiences for Meta VR or significantly update something they've already built. There are $1M in total prizes across three genre tracks: entertainment, gaming, and productivity. [ \+ Full Story ](<https://www.i-programmer.info/news/204-challenges/19187-meta-vr-start-developer-competition-opens.html>)  
+
+* * *
+
+[ The CyberAgents Exchange ](<https://www.i-programmer.info/news/105-artificial-intelligence/19185-the-cyberagents-exchange.html>)   
+01 Oct  |  Nikos Vaggalis    
+[ ](<https://www.i-programmer.info/news/105-artificial-intelligence/19185-the-cyberagents-exchange.html>) Tenable has launched a open exchange for cybersecurity AI agents. Free and open-source it is a vendor-neutral, community-driven directory that allows security teams to discover, share and chain AI agents, skills, MCP servers and playbooks. [ \+ Full Story ](<https://www.i-programmer.info/news/105-artificial-intelligence/19185-the-cyberagents-exchange.html>)  
+
+* * *
+
+[ AG-UI Protocol Gets .NET SDK ](<https://www.i-programmer.info/news/89-net/19184-ag-ui-protocol-gets-net-sdk.html>)   
+01 Oct  |  Kay Ewbank    
+[ ](<https://www.i-programmer.info/news/89-net/19184-ag-ui-protocol-gets-net-sdk.html>) The .NET team has contributed a .NET SDK for AG-UI in collaboration with CopilotKit. The AG-UI .NET SDK is now kept in the AG-UI repository alongside the TypeScript and Python SDKs, and means any .NET service can now speak AG-UI directly. [ \+ Full Story ](<https://www.i-programmer.info/news/89-net/19184-ag-ui-protocol-gets-net-sdk.html>)  
+
+### Book Watch  
+
+* * *
+
+[ Programmers Guide To Containers with Docker and Visual Studio Code (I/O Press) ](<https://www.i-programmer.info/book-watch-archive/19199-programmers-guide-to-containers-with-docker-and-visual-studio-code-io-press.html>)   
+
+Containers are probably the most useful software development of the decade, but as a software developer you may not yet have tried to create your own. If you have, you may have discovered that practical, developer-focused guidance is difficult to come by. In this book, Mike James sets out to fill that gap and in particular it covers a pair of overlooked resources— the Visual Studio Code Container Tools Extension and its Dev Containers Extension. <ASIN:1918481083 > [ \+ Full Story ](<https://www.i-programmer.info/book-watch-archive/19199-programmers-guide-to-containers-with-docker-and-visual-studio-code-io-press.html>)  
+
+* * *
+
+[ Designing and Implementing Semantic Data Layers (Technics) ](<https://www.i-programmer.info/book-watch-archive/19192-designing-and-implementing-semantic-data-layers-technics.html>)   
+
+This book looks at semantic data layers and how to build them. Dave Wells argues that data management has always been messy. Inconsistent metrics, brittle integrations, data silos, and confusing dashboards persist even after heavy investment in data lakes, warehouses, pipelines, BI tools, metadata catalogs, and modern platforms. At the core, these are not technology problems; they're problems of meaning. <ASIN:B0H9587MLJ > [ \+ Full Story ](<https://www.i-programmer.info/book-watch-archive/19192-designing-and-implementing-semantic-data-layers-technics.html>)  
+
+* * *
+
+[ Programmers at Work (8080 Books) ](<https://www.i-programmer.info/book-watch-archive/19186-programmers-at-work-8080-books.html>)   
+
+Subtitled "Interviews with 19 programming visionaries who ignited the PC software revolution", this book is being republished to celebrate its 40th anniversary. It author, Susan Lammers was an early Microsoft employee who became Editor-in-Chief of Microsoft Press in the mid-1980s. While the original 1986 edition was published by Microsoft Press, there was a 1989 reprint by Tempus Books and now a third publisher, 8080 Books, is re-issuing it with, a new preface by Susan Lammers. The book brings together landmark interviews with nineteen of the most influential software architects who ever lived: Charles Simonyi, who shaped modern productivity software at Microsoft; Dan Bricklin and Bob Frankston, who invented the spreadsheet; Andy Hertzfeld, who conjured the original Macintosh and fifteen more who wrote the code that changed how humanity thinks, works, and creates. <ASIN:B0GPDDL55T > [ \+ Full Story ](<https://www.i-programmer.info/book-watch-archive/19186-programmers-at-work-8080-books.html>)  
+
+I Programmer has reported news for over 12 years. You can access [ I Programmer Weekly ](<https://www.i-programmer.info/i-programmer-weekly>) back to January 2012 for all the headlines plus the book reviews and articles.
+
+To keep up with the latest news and receive this digest automatically by email, [ sign up ](<https://www.i-programmer.info/register.html>) for our [ weekly newsletter ](<https://www.i-programmer.info/edit-profile.html?layout=form>) and follow us on [ Twitter, ](<http://twitter.com/Iprogrammerinfo>) [ Facebook, ](<http://www.facebook.com/pages/iProgrammer/127140977307932#%21/pages/iProgrammer/127140977307932?v=wall>) and [ LinkedIn ](<http://www.linkedin.com/company/i-programmer>) , where you are welcome to share all our stories.
+
+You can also subscribe to our RSS Feeds - we have one for [ Full Contents ](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=3&format=raw>) , another for [ News ](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=1&format=raw>) and also one for [ Books ](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=2&format=raw>) with details of reviews and additions to Book Watch.

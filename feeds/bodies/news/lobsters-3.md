@@ -1,34 +1,109 @@
-So a good while ago I added a fun curl version of my site, meant for viewing in the terminal. Try running these commands!
+Plasma 6.8 is released on a very special day: KDE’s 30th birthday. Today we celebrate three decades of the KDE community providing the world’s greatest free and open-source software.
 
-```
+Plasma 6.8 is no exception, offering enhancements across much of the user experience and beneath the surface.
 
-curl nytpu.com/gemlog/2026-03-18
-# or
-curl nytpu.com
-```
+6.8 is all about launching Plasma into the future: adding changes you’ll notice right away, combined with major but subtle improvements designed to set the stage for decades of service to come.
 
-(sorry Windows users, not my fault that ANSI escape codes are disabled-by-default in `cmd.exe`. And not my fault that in Powershell you have to use `curl.exe` instead of `curl` because Powershell inexplicably aliases that to `Invoke-WebRequest`.)
+Dive in and find out what the desktop environment of tomorrow looks like!
 
-I posted about it a bit on the Fediverse, but otherwise didn't elaborate much on it becuase I figured it was fairly self-explanatory. But I've had a handful of people ask me how I did it, so I decided it might actually be worth it to write a post about how I did it (…like seven months late).
+![Thumbnail for the KDE documentary](https://kde.org/announcements/plasma/6/6.8.0/03-documentary.webp)
 
-I should note this idea came from trinkey's (`curl trinkey.com`) and strongsand's (`curl proot.party`) curl sites, I didn't come up with it myself. Even though I did go about it quite a bit differently from them, all credit for the very cool idea goes to them.
+Part of our continued effort to bring digital control to everyone, a new “dwell clicker” feature can send a mouse click when the pointer stops moving. Designed especially for users with mobility issues, an external app is no longer required to use your system in this way; now it’s built right in!
 
-First, since it's the more interesting part, actually generating the ANSI-marked-up files to send to the clients. I entirely hand-wrote the [index page](https://git.sr.ht/~nytpu/nytpu.com/tree/master/item/static/curl/index.ansi) and [about page](https://git.sr.ht/~nytpu/nytpu.com/tree/master/item/static/curl/about.ansi).
+Plasma 6.8 gains support for the [Bikram Sambat](https://en.wikipedia.org/wiki/Vikram_Samvat) calendar in the Digital Clock, and the [Amharic](https://en.wikipedia.org/wiki/Amharic) language in the on-screen keyboard. These are just two more additions of the dozens incorporated into Plasma over recent versions in our effort to make Plasma a truly universal desktop.
 
-Note that I believe trinkey and strongsand generate theirs on-the-fly with the [ratatui](https://github.com/ratatui/ratatui) library (or similar), which is probably more convenient; hand-writing it seemed more expedient to me though.
+Gain an extreme level of control over your system with Plasma’s System Monitor. In Plasma 6.8, you can assign compute-intensive tasks to only the CPUs of your choosing from directly within the monitor, and keep your machine running smoothly.
 
-I had the main escape code—`ESC[`, i.e. `\x1b[`—<sup>[1](https://nytpu.com/gemlog/2026-03-18#fn:1)</sup> in a Vim register to easily paste when needed, and then the [Wikipedia page for the main graphics codes](https://en.wikipedia.org/wiki/ANSI_escape_code#Select_Graphic_Rendition_parameters) open to reference the specific escape codes. And, yeah, that's about it. I experimented to decide on consistent styling I liked, and just referenced the Gopher version of my pages when crafting the marked-up curl pages.
+![System Monitor app offering the possibility to change the CPU affinity for the plasmashell process](https://kde.org/announcements/plasma/6/6.8.0/20-systemmonitor-affinity.webp)
 
-Now, the notable thing about my version is that I have curl versions of the entirety of my blog, rather than just one or two pages being available. This is entirely due to a convenient coincidence: over four years ago I implemented outputting ANSI-marked-up plaintext in my custom markup language I use for my blog, [Gemroff](https://git.sr.ht/~nytpu/gemroff). Originally it was just to allow convenient previewing of drafts in the terminal while writing; but it was trivial to plug into my static site generator to immediately get Curl versions generated.
+You can also monitor your VRAM more easily, as it now shows the load as an easy-to-read percentage.
 
-I did manually write a [wrapper template for blog posts](https://git.sr.ht/~nytpu/nytpu.com/tree/master/item/templates/gemlog-post.ansi), as well as a [template for the index page listing posts](https://git.sr.ht/~nytpu/nytpu.com/tree/master/item/templates/gemlog-index.ansi), but that plus a few extra lines in my static site generator was all that was needed to wire it up.
+### Remote desktop
 
-This is the main thing that makes it hard to say it's easy! since it was only easy for me because I use an entirely custom markup language and static site generator and I happened to make the right design choices years ago—e.g. my SSG also happened to already have support for multiple, modular output formats instead of solely HTML like other SSGs, since I tri-host my site on HTTP, Gemini, and Gopher.
+We’ve invested a great deal of time into polishing the experience provided by Plasma’s built-in remote desktop server. In Plasma 6.8, you’ll be able to enjoy the following improvements — with more in the pipeline:
 
-However, offering nothing but a few hand-written pages for fun is a completely acceptable way to set up a site like this anyways, since it's just a neat gimmick and no one's likely to actually use it more than a few minutes of browsing.
+These features will only take effect in remote desktop client apps that support them.
 
-Finally, the last step is actually presenting the Curl version of your site to any user agent containing `curl`, which for me was just a [few changes to my Nginx config](https://nytpu.com/gemlog/files/nytpu.com.conf), with other servers it'd presumably be equivalently simple. The main feature I wanted was an override header (`X-Original: true`) so you could still get an unmodified HTTP response like someone casually running Curl likely wanted, and I wanted everything to be served statically still.
+![Plasma’s Remote Desktop settings and the KRDC application in use](https://kde.org/announcements/plasma/6/6.8.0/23-rdp.webp)
 
-And… that's really it! As I said, when I first set it up it seemed fairly self-explanatory to me, but it is very non-orthogonal to what people normally do with either web servers or ANSI escape codes so I can see where people's curiosity/confusion came from. It would be neat to see more sites doing this trick around!
+Spectacle can now optionally include both system audio and microphone input in its screen recordings, making it possible to narrate a recording or accurately record everything that’s going on.
 
-1. EMDASH! AI-GENERATED! acksually I'll have you know that my markup language has had [an explicit markup element for emdashes since November 2022](https://git.sr.ht/~nytpu/gemroff/tree/999d2f7da1757d756b9780c500f233d0b98e7628/item/doc/elements.md?view-source#L49). And believe it nor not: LLMs are trained on shit copied from actual authors, so LLMs wouldn't be using emdashes if they weren't already used in human-written works. And what, am I supposed to avoid having twenty parentheticals a paragraph, to where I feel the need to use emdashes to vary it up? Unthinkable! [↩︎](https://nytpu.com/gemlog/2026-03-18#fnref:1)
+Plasma’s screen sharing portal dialog lets you create a virtual screen to share, instead of an existing display. In Plasma 6.8, you can now specify the resolution of the virtual screen instead of being limited to only 1920 × 1080.
+
+![The screen sharing portal window showing the ability to select a custom resolution for the virtual display](https://kde.org/announcements/plasma/6/6.8.0/25-screencast-portal-resolution.webp)
+
+In addition, the quality of screen recordings and screencasts has been improved.
+
+We’ve added support for window rules that add desktop shadows, outlines, and rounded corners to client-side-decorated windows that can’t provide these visual niceties themselves. Plasma 6.8 ships with one such rule for Steam, making it feel more at home in Plasma.
+
+![](https://kde.org/announcements/plasma/6/6.8.0/30-steam-shadow-frame-before.webp)
+
+*Before*
+
+We’ve added new global shortcuts to help power users manage their open windows with the Task Manager widget. By pressing <kbd>Meta</kbd> + <kbd>Ctrl</kbd> + <kbd>Page Up</kbd> or <kbd>Page Down</kbd>, you can cycle between the previous and next tasks. By also holding <kbd>Shift</kbd>, you can move the active task backwards and forwards.
+
+### Theming
+
+Four months ago, Plasma 6.7 included an alpha release of the new Union theming system, demonstrating its ability to style Qt Quick applications.
+
+Plasma 6.8 builds on this with a beta release of Union, including not only refinements for Qt Quick theming, but also the ability to style Qt Widgets applications! This includes KDE’s more traditional desktop applications, such as Dolphin, Kate, and Konsole.
+
+While Union is not quite ready to be used by default, Plasma 6.8 brings it ever closer to being a single source of truth for styling all of KDE’s products, and more. To learn more about the current state of Union, read the blog posts from [Arjen](https://quantumproductions.info/articles/2026-08/union-summer-2026-update) and [Akseli](https://akselmo.dev/posts/union-qtwidgets/).
+
+To try Union, ensure the `union` package is installed (name may differ depending on your distribution), apply “Breeze (Union)” in *System Settings* → *Colors & Themes* → *Application Style*, then restart your apps or the system.
+
+Apps are expected to look nearly identical to how they do with the traditional Breeze theme. If you’ve found a Union-specific issue, [please report it](https://bugs.kde.org/enter_bug.cgi?product=Union).
+
+If you’re interested in experimenting with creating your own Union style, you can find out more [in Union’s documentation](https://api.kde.org/working-with-styles.html).
+
+### Wayland
+
+30 years is an impressive milestone for a community like KDE. But even older is the venerable [X Window System](https://en.wikipedia.org/wiki/X_Window_System) (or “X11”), first released in 1984! After 42 years of faithful service, support for starting X11 sessions in Plasma is being retired, in conjunction with full adoption of the newer [Wayland](https://en.wikipedia.org/wiki/Wayland_%28protocol%29) system.
+
+Compared to X11, Wayland offers better support for modern screens and graphics cards, and is actively developed.
+
+The small number of individual apps that still require X11 will continue to work via the “XWayland” compatibility layer.
+
+KDE applications will continue to support X11 for the foreseeable future.
+
+As part of the backend improvements included in Plasma 6.8, we’ve made changes to help Plasma load faster and use less memory. Discover’s update notifier now uses less memory, too.
+
+With KWin, NVIDIA GPUs now use triple buffering by default, and all users will have better-looking HDR when using an ICC color profile. We’ve also added support for the HLG transfer function, which means that certain media and applications that did not previously work in HDR are now working as expected.
+
+Plasma 6.8 is chock-full of smaller changes, including:
+
+To see a high-level overview of all user-facing changes, [see the Plasma 6.8 wiki page](https://community.kde.org/Plasma/Plasma_6#Plasma_6.8).
+
+To see the full list of *all* changes, read the [complete changelog](https://kde.org/announcements/changelogs/plasma/6/6.7.5-6.8.0/).
+
+## Live Images
+
+The easiest way to try it out is with a live image booted off a USB disk. Docker images also provide a quick and easy way to test Plasma.
+
+Distributions have created, or are in the process of creating, packages listed on our wiki page.
+
+Note that packages of this release might not be available on all distributions at the time of this announcement.
+
+You can install Plasma directly from source.
+
+## Feedback
+
+You can give us feedback and get updates on our social media channels:
+
+Discuss KDE on the [KDE Forums](https://discuss.kde.org/).
+
+You can provide feedback direct to the developers via the [#Plasma Matrix channel](https://go.kde.org/matrix/#/%23plasma:kde.org), [Plasma-devel mailing list](https://mail.kde.org/mailman/listinfo/plasma-devel) or report issues via [Bugzilla](https://bugs.kde.org/enter_bug.cgi?product=plasmashell&amp;format=guided). If you like what the team is doing, please let them know!
+
+Your feedback is greatly appreciated.
+
+## Supporting KDE
+
+KDE is a [Free Software](https://www.gnu.org/philosophy/free-sw.html) community that exists and grows only because of the help of many volunteers that donate their time and effort. KDE is always looking for new volunteers and contributions, whether it is help with coding, bug fixing or reporting, writing documentation, translations, promotion, money, etc. All contributions are gratefully appreciated and eagerly accepted. Please read through the [Supporting KDE page](https://kde.org/community/donations/) for further information or become a KDE e.V. supporting member through our [Join the Game](https://kde.org/community/donations/) initiative.
+
+KDE is an international technology team that creates free and open source software for desktop and portable computing. Among KDE’s products are a modern desktop system for Linux and UNIX platforms, comprehensive office productivity and groupware suites and hundreds of software titles in many categories including Internet and web applications, multimedia, entertainment, educational, graphics and software development. KDE software is translated into more than 60 languages and is built with ease of use and modern accessibility principles in mind. KDE’s full-featured applications run natively on Linux, BSD, Windows, Haiku, and macOS.
+
+*Trademark Notices.*  
+
+KDE<sup>®</sup> and the K Desktop Environment<sup>®</sup> logo are registered trademarks of KDE e.V..  
+Linux is a registered trademark of Linus Torvalds. UNIX is a registered trademark of The Open Group in the United States and other countries.  
+All other trademarks and copyrights referred to in this announcement are the property of their respective owners.

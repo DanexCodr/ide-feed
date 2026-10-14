@@ -1,116 +1,79 @@
-We at the Lix team are proud to announce our seventh major release, version 2.96 “Bingsu”.
+# Did Ente Locker copy my code without attribution?
 
-This release focuses on security, debugger support, quality-of-life improvements, and continues the work towards both the new [Cap’n’Proto RPC](https://capnproto.org/) protocol and Rust support.
+October 12, 2026
 
-> [Bingsu](https://en.wikipedia.org/wiki/Bingsu) is a milk-based Korean shaved ice dessert with sweet toppings that may include chopped fruit, condensed milk, fruit syrup, tteok, and red beans.
+The last blog post I wrote explained [why I chose to make FairScan open source](https://fairscan.org/blog/open-source-and-gpl/). In particular, I said I knew there was a risk when I published FairScan's code and I was ready to accept it. I didn't expect to face that reality so soon.
 
-Lix is a Nix implementation focused on reliability, predictability, friendliness, developed by a community of people from around the world. We have long term plans to incrementally evolve Nix to work in more places, to make it more reliable and secure, and to update the language and semantics to correct past mistakes and reduce errors, all the while providing an amazing tooling experience.
+## What happened to me over the past few weeks
 
-## Upgrading from CppNix or previous Lix versions
+I had never heard of Ente before September 16. On that day, I received an email from one of their engineers. The message thanked me for FairScan and announced that the Ente Locker app now used FairScan's segmentation model as part of a new document scanning feature. It referred to a blog post that credited FairScan's model and claimed that [Ente "wrote the image processing around it from scratch"](https://fairscan.org/blog/did-ente-locker-copy-my-code-without-attribution/from-scratch.webp).
 
-**WARNING**: We do not recommend to use `nix upgrade-nix`, please follow the instructions in [https://lix.systems/install/](https://lix.systems/install/) with the Lix’s upgrade shell script.
+I had put significant effort into FairScan's image processing so I was curious to see how Ente solved the same problems. What I found is that multiple image-processing implementations appeared to be almost direct translations of FairScan's implementations from Kotlin to Rust.
 
-The upgrade procedure depends on how you installed Lix or CppNix, and is fully described in the [Lix installation guide](https://lix.systems/install/).
+I replied by email on September 17. The engineer quickly answered that their blog post "could have been better phrased", and that it was reworded. I could see that [the new version](https://ente.com/blog/locker-document-scanner/) replaced the "from scratch" claim with something rather vague and still insisted on the segmentation model.
 
-If you are using Lix from nixpkgs on NixOS, you just need to upgrade your nixpkgs once the upgrade pull request has passed through the build farm into your channel; no other action is required.
+The same day, I sent a list of links to compare FairScan and Ente's code. I mentioned that I couldn't find any attribution to FairScan in the Ente repository.
 
-If you want to help us test the next version of Lix, consider running `main` by following the [beta guide](https://wiki.lix.systems/books/lix-contributors/page/lix-beta-guide).
+On September 21, I received a reply from the same engineer that those were "fairly standard image-processing methods" and that the code had been subsequently fully rewritten. In their repository, I found [a pull request affecting more than 6,000 lines](https://github.com/ente/ente/pull/13053). Of course, it cannot change the code that was distributed in Locker 1.0.9.
 
-## Changes
+On the same day, I sent an email to [copyright@ente.com](https://ente.com/contact/) to ask for the company's view on this. As of October 12, I still haven't received an answer.
 
-Lix 2.96 builds on the work of previous releases to improve the daemon, the protocols spoken with the daemon (both on a single machine and the ones used for remote builds), and brings many much-needed improvements to the debugger infrastructure.
+On September 29, I published [a post](https://mastodon.social/@pynicolas/117352788210310140) on Mastodon linking to [a GitHub gist where I documented this timeline as well as code similarities](https://gist.github.com/pynicolas/e018ef84464a2cf7949fa453e41cfead).
 
-Here’s a short list of the most exciting changes in Lix 2.96. This list is not as exhaustive as the [full release notes](https://docs.lix.systems/manual/lix/stable/release-notes/rl-2.96.html).
+## Standard methods or direct translation?
 
-### REPL and debugger support
+Feel free to have a look at the [code comparisons](https://gist.github.com/pynicolas/e018ef84464a2cf7949fa453e41cfead#code-comparison) in the gist  linked above and form your own opinion, even if you're not a developer. You can use the "split view" of your browser for side-by-side comparisons. Here's an example:
 
-Thanks to the tireless work of [blokyk](https://git.lix.systems/blokyk) the REPL and debugger are much improved in Lix 2.96. The debugger is now more stable, navigating within the debugger is much easier, and the information printed by the debugger is more readable.
+[![](https://fairscan.org/blog/did-ente-locker-copy-my-code-without-attribution/comparison.webp)](https://fairscan.org/blog/did-ente-locker-copy-my-code-without-attribution/comparison.webp)
 
-[eldritch horrors](https://git.lix.systems/pennae) have also switched the REPL backend from editline to [rustyline](https://github.com/kkawakam/rustyline), finally bringing proper UTF-8 support to the REPL.
+In the implementations I compared, I found the following similarities:
 
-### News from RPC
+- The same overall structure
+- The same algorithms
+- The same names for functions and variables
+- The same hard-coded values
 
-The experimental RPC protocol is now shipping under the `rpc-sockets` experimental feature. As one may guess this is still *highly experimental* and must be enabled not only with the experimental feature flag in your Lix config, but also requires system setup that is not yet done by the NixOS module. You can find an example configuration in the [NixOS module in the Lix repo](https://git.lix.systems/lix-project/lix/commit/103b91b0c77c662c50070f2b4700ffc0df12cbee#diff-c6352f13d264fb180d5409d66db94d50264ed9dd).
+To me, it looks like an almost direct translation from Kotlin to Rust. There are differences but they're not easy to spot.
 
-In future releases we plan to stabilize the RPC protocol and remove support for the legacy protocols we’ve been using to date to allow further evolution of Lix.
+Of course, I have a special position about this code. I wrote it, so I know where it comes from. I know it's the result of a lot of effort:
 
-### `ssh://` store URIs are now deprecated
+- I researched existing techniques like multi-scale Retinex, single view metrology, or gray world white balance.
+- I assembled an image pipeline that fits the segmentation model.
+- I started with some simple techniques (such as Douglas Peucker) that I later replaced.
+- I developed my own algorithm to approximate a quad based on contour orientation (which is probably not optimal).
+- I had to make choices about what a scan should look like: not all apps make the same choices.
+- I tested the behavior of my implementations and their parameter values on hundreds of images.
+- I fixed many bugs in my implementations.
+- I wrote blog posts about some of the numerous iterations I made, illustrating my trial and error process.
 
-To enable further RPC work and resolve some long-standing security inconsistencies we must remove `ssh://` store URIs. Lix 2.96 **deprecates `ssh://` store URIs**, but retains support for them without deprecation warnings. `ssh://` store URI support will be removed in Lix 2.97, `ssh-ng://` URIs will remain supported.
+How can that be called "standard methods"? I would like to know where similar code can be found because it would have saved me a lot of work. Actually, if it already existed, I would probably not have started FairScan.
 
-If you are using `ssh://` store URIs because `ssh-ng://` is missing features you need please get in touch so we can figure something out together. Note that `ssh-ng` has stricter security checks than `ssh` and no longer allows untrusted users to copy unsigned outputs to remote stores, *this is intentional*.
+## Silence discourages me
 
-### Breaking changes
+**Ente has not acknowledged the code similarities as an issue**, publicly or privately. In response to my comparisons, the engineer described the code as "fairly standard image-processing methods", but this didn't address the similarities I had pointed out. If there's no problem, why did they rewrite more than 6,000 lines in 3 days after my email? Why don't they answer my questions?
 
-Once again Lix must break sharp corners to make improvements possible and excise surprising behavior in user code.
+Here's the key: if Ente's code was derived from FairScan in a way that makes it subject to the [GPL](https://github.com/pynicolas/FairScan/blob/main/LICENSE), its distribution raises questions about compliance with that license.
 
-- `flake.nix` validation no longer relies on poorly documented triviality checks. Instead Lix now has only one rule for `flake.nix`: **no function calls are allowed outside of `outputs`.** This means that Lix now accepts `let` blocks and string interpolation in flake `inputs`, among other things. We consider this a breaking change because other Nix implementations may no longer be able to evaluate Flakes that were written using Lix.Many thanks to [piegames](https://git.lix.systems/piegames), [Qyriad](https://git.lix.systems/Qyriad) and [eldritch horrors](https://git.lix.systems/pennae).
-- The `floor` and `ceil` builtins now throw errors if their operation would have resulted in precision loss during the conversion from floating point to integers. Precision loss does not sound dramatic, but with numbers of sufficient magnitude this could result in positive floats being converted to negative integers.Many thanks to [jade](https://git.lix.systems/jade), [NaN-git](https://github.com/NaN-git) and [rootile](https://git.lix.systems/rootile).
-- Many nix3 CLI commands no longer build their arguments. This surprising behavior was commonly seen when `nix store delete` was called with a path that was not present in the store, causing the path to be downloaded just so that it could be deleted.Many thanks to [eldritch horrors](https://git.lix.systems/pennae).
-- Shadowing internal files via Nix search paths is now considered an error. Lix 2.95 already deprecated overriding the `nix` search path entry due to surprising effects that could have, Lix 2.96 now considers this an error if not explicitly configured otherwise.Many thanks to [thubrecht](https://git.lix.systems/tom-hubrecht), [jade](https://git.lix.systems/jade) and [eldritch horrors](https://git.lix.systems/pennae).
+Should I take legal action? That's not what I want for FairScan. But I also don't want this issue to remain unaddressed, leaving others to form their opinion based on Ente's public statements alone.
 
-## New features
+Ente widely promoted the new feature on social media and platforms such as Reddit. [Its CEO praised Locker publicly with these words: "Best opensource document scanner I've ever used".](https://lnkd.in/p/eTpnkpNu)
 
-- Nested arguments can be set with `--arg` and `--argstr`.Previously Lix would turn `--arg foo.bar.baz 1` into the set `{ "foo.bar.baz" = 1; }`, now it turns it into `{ foo.bar.baz = 1; }`. Attribute set merging rules are applied to these sets, making it much easier to use function that expect sets as arguments (such as nixpkgs, which expects a `config` set). The old behavior can be recovered by quoting the name, e.g. `--arg '"foo.bar.baz" 1'`.Many thanks to [ma27](https://git.lix.systems/ma27).
-- Inputs are now only fetched by one process at a time. This can be significant in CI situations where many processes may attempt to download the same input set concurrently. Previously all of them would download the set, now only one of them does and signals the others to wait for it to finish.Many thanks to [lheckemann](https://git.lix.systems/lheckemann).
-- Use [mimalloc](https://github.com/microsoft/mimalloc) for faster evaluation. We’ve seen 5-12% eval time improvements due to thisMany thanks to [getchoo](https://git.lix.systems/getchoo) and [lovesegfault](https://github.com/lovesegfault).
-- `nix doctor` has been extended greatly, including general system information and remote builder configuration in its report. It can now also automatically connect to configured remote builders and check their state as well.Many thanks to [rootile](https://git.lix.systems/rootile) and [raito](https://git.lix.systems/raito).
-- `ssh-ng` store URIs are now considered stable. The long-awaited feature parity between `ssh` and `ssh-ng` URIs has arrived, although only Lix 2.96 and newer will be able to take full advantage of this. Connecting to or from older Lixes or other Nix implementations will not see feature parity and silently fall back to the previous behavior.Many thanks to [eldritch horrors](https://git.lix.systems/pennae).
-- Channel references now support `zst`-compressed tarballs. This can greatly improve unpacking speed when using channels.Many thanks to [raito](https://git.lix.systems/raito) and [eldritch horrors](https://git.lix.systems/pennae).
+On my side, I've been very careful until now. I initially communicated only privately with Ente. When I published a Mastodon post, it was very factual: I didn't make spectacular accusations and maybe because of that, there were almost no reactions.
 
-### Improvements
+I suspect very few people know about this situation. From the outside, Ente can continue promoting its scanning feature without having to address the concerns I've raised. The issue remains unresolved and Ente can continue ignoring me.
 
-- The `ssl-cert-file` and `netrc-file` settings now report errors when set to files that don’t exist instead of being silently ignored.Many thanks to [Astreaprtcl](https://git.lix.systems/astreaprtcl).
-- Moving between stack frames in the debugger is now easier using offset instead of absolute numbers. While moving up or down some number of frames previously required remembering the frame number you were on you can now directly supply offsets, using `:st +l` to go from frame `n` to `n+k` and `:st -k` to go from `n` to `n-k`.Many thanks to [blokyk](https://git.lix.systems/blokyk).
-- `addErrorContext` frames are always printed in backtraces now, even without `--show-trace`. This makes explicit report locations, for example in the NixOS module system, much more useful.Many thanks to [blokyk](https://git.lix.systems/blokyk).
+The fact that almost no one reacted is discouraging to me. Over the past few weeks, I've spent more time thinking about this than working on the rest of FairScan. It probably doesn't deserve it but I simply can't accept that situation. What's the point of open-source transparency and accountability?
 
-### Fixes
+I'd genuinely like to hear from other developers who have looked at these comparisons. Do these similarities suggest that Ente's code was derived from FairScan? **I would be grateful to anyone who can share an independent perspective on this case.**
 
-- `nix-copy-closure --include-outputs` now actually works.Many thanks to [rkjnsn](https://git.lix.systems/rkjnsn).
-- Hash mismatch diagnostics now work with `structuredAttrs`. This fixes hash mismatch diagnostics with fetchers from modern nixpkgs.Many thanks to [keysmashes](https://github.com/keysmashes).
-- Subdaemons receive overridden settings from their parent daemon rather than using the system-wide configuration. This was broken by the switch to explicitly launched subdaemons in 2.95, making it impossible to configure subdaemons by providing command line arguments to the main daemon.Many thanks to [raito](https://git.lix.systems/raito).
+## Open source doesn't equal respect
 
-### Miscellanea
+This episode makes me take another look at my position about open source.
 
-- `ssh` and `ssh-ng` store URIs no longer honor the `max-connections` parameter. This parameter complicated the code immensely for no benefit to the average user and had many sharp corners when set explicitly.Many thanks to [eldritch horrors](https://git.lix.systems/pennae).
-- The `daemon-trust-override` experimental feature has been removed. It can still be emulated by e.g. setting the `NIX_CONFIG` environment variable appropriately.Many thanks to [eldritch horrors](https://git.lix.systems/pennae).
+FairScan is my attempt to make a respectful app: an app that is both [respectful to its users](https://fairscan.org/blog/a-respectful-app/) and respectful in the way it's made. I think it's now clearer to me that those two aspects don't necessarily go together. I still believe that open source is one of the best ways users have to assess whether an app can be trusted (caveat: it can still contain [anti-features](https://f-droid.org/docs/Anti-Features/)). However, it's perfectly possible to make an open source app in a disrespectful way, for example by copy-pasting code without acknowledging its origins.
 
-### And so much more
+Yes, the risk I identified before publishing my code is real. In fact, any open source code can be copied without attribution. I knew that closed-source software could incorporate open-source code without complying with its license, and that proving such a violation could be difficult. Maybe I accepted this risk because I cannot know when it actually happens. What I didn't consider was that open-source software could do the same, and that in that case, I could see it with my own eyes.
 
-Many more changes have gone into Lix 2.96, most of them internal. We hope to ship a stable RPC-based daemon in one of the upcoming releases, including remote build support using this new protocol.
+I knew that other projects could reuse FairScan's code even if they don't share my vision, but I did expect that the origins of the code would be acknowledged honestly.
 
-## What is planned for the future?
-
-### Lix 2.96.1
-
-We are releasing 2.96 together with security releases on stable branches. A few things we wanted to finish for 2.96 have been delayed somewhat, and we expect to release 2.96.1 with a few more improvements soon:
-
-- proper --keep-going support when using --store ssh-ng://..., not just when using ssh-ng remotes as remote builders
-- SHA256 support for Git fetchers for both Flakes and other users
-- better diagnostics on MacOS for garbage collection failures caused by TCC permissions
-- .narinfo cache soundness improvements to enable key rollovers for binary caches
-- allow pass more settings to the daemon and remote builders, e.g. log-lines
-
-### News from Rust integration
-
-Rust integration has moved along apace, and it is now possible to write significant portions of new features without touching *too much* C++ code. We’ve decided to use [zngur](https://github.com/hkalbasi/zngur/) for interop due to its great flexibility and active maintenance, and we’ve already ported a number of features to Rust like this. The REPL is now backed by Rust, as is remote builder configuration and much of the hash conversion code.
-
-## Want to help Lix? Consider donating to Lix!
-
-Following Lix integration in AFNix, Lix now has [an Open Collective](https://opencollective.com/lix-project) and can receive donations.
-
-We run infrastructure across x86_64-linux, aarch64-linux, and aarch64-darwin. Some of it is in-kind and sponsored. Current costs are around 100€/month.
-
-If you value self-hosting and benefit from Lix, please consider donating. Every contribution helps sustain the project.
-
-## Credits
-
-Thanks, as always, to the following groups:
-
-- The large community who beta tested the upcoming release by running `main` in production since the 2.95 branch-off. We really appreciate having immediate feedback on our work and the trust of running main alongside us means a lot to us. We know we tested the patience of some of you, we thank you for that.If you want to run Lix main yourself, see [the beta guide](https://wiki.lix.systems/books/lix-contributors/page/lix-beta-guide) for details.
-- Everyone who contributed by filing bugs and giving us feedback on Matrix.
-- All the first time contributors who made their first contributions to a Nix implementation in Lix. We are eternally grateful to everyone who helped us out on the numerous important but tedious issues.
-- All the contributors who have helped us with the backlog of bugs.
-- The CppNix contributors and CppNix team, without whom we would not have this software, and who wrote some of the improvements ported into this release.
-
-Onwards and upwards for the next release. We look forward to continuing to work together with everyone to build a better foundation for the evolution of Nix.
+What happened is something I wasn't ready for. I put a lot of myself into FairScan, perhaps too much: seeing my work dismissed as if it had no value is very hard not to take personally. Today, this makes me question my motivation to contribute to open-source software.

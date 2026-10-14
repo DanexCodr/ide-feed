@@ -1,67 +1,77 @@
-*Hi there, argmin readers! Today’s post looks at part of OpenAI’s math repository that claims to compute faster Fourier transforms. It’s more technical than usual, but I tried to add some tutorial material for people who need a refresher course on signal processing or computational complexity.*
+Short version: [Bru](https://bru.works) is an Android app and web client that lets you read and send SMS messages from your browser, via your phone. It is currently available from the [IzzyOnDroid](https://apt.izzysoft.de/fdroid/index/apk/works.bru) app repository, but hopefully soon on F-Droid, and possibly Google Play.
 
-The Fast Fourier Transform is one of the most important innovations in digital signal processing and one of my favorite algorithms. The FFT is a fast way to extract the frequency content of signals, letting you rapidly analyze, filter, and manipulate frequencies across different bands of the spectrum.
+I used:
 
-The Fourier transform computes the energy in each frequency band through a simple dot product.[1](https://www.argmin.net/p/faster-fourier-transforms#footnote-1) Let x denote your input, a length n array of samples, and f a frequency. Then the amount of frequency content in x at f can be computed by the formula:
+- Plain HTML, JavaScript and CSS
+- Rust
+- Iroh, as WASM in the browser, and via the available Kotlin bindings
+- Kotlin
 
-![](https://www.argmin.net/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fcc4ac8d0-d276-469b-805d-6623001ec4a6_126x72.png)
+## Longer version
 
-For digital signals, a bit of math shows you only need to compute n of these dot products, one at each multiple of the frequency 2𝜋/n, to understand all of the frequency content. Naively, this requires n multiplications and additions for each frequency. Hence, computing the entire Fourier transform appears to require n<sup>2</sup> arithmetic operations.
+Since the start of the summer this year I have tinkered with [Bru](https://bru.works). The **b**idirectional **r**emote **u**plink for your Android phone. *Bru* is also the  Norwegian word for *bridge*. And yes, the name is of course a backronym. Since I started using a T9 phone as my daily driver, I have more than once wished I could break out into a full qwerty keyboard when typing out long messages or having a longer conversation. Don't get me wrong, I love the tactile buttons, but for me, nothing beats an actual keyboard when writing. Another thing I wanted to solve was that every SMS was a prompt to take my phone out, opening the door for endless distractions. And yes, this could have been solved with notification settings, self discipline and yada yada...
 
-The *fast* Fourier transform is a clever recursive procedure devised by James Cooley and John Tukey in 1965.[2](https://www.argmin.net/p/faster-fourier-transforms#footnote-2) The main idea is that a length-n Fourier transform can be computed by shuffling the input vector, computing two Fourier transforms of length n/2 on the shuffled components, and then recombining the outputs using atomic arithmetic operations. The shuffles and recombinations take a linear number of arithmetic operations. Repeating this procedure iteratively, namely, log<sub>2</sub>(n) times, computes the full discrete Fourier transform. With the bookkeeping, the FFT computes a length-n Fourier transform in fewer than 5 n log2 n arithmetic operations.
+## Maybe I should not reinvent the wheel?
 
-To make this acceleration concrete, when n is 1,000, n^2 is 1,000,000 and 5 * n log n is around 50,000, a 20-fold speedup. When n is 1,000,000, the speedup is 10,000-fold. These speedups can be the difference between a transform being computable or not given the constraints of a signal processing application.
+> The best code is no code at all. Every new line of code you willingly bring into the world is code that has to be debugged, code that has to be read and understood, code that has to be supported. Every time you write new code, you should do so reluctantly, under duress, because you completely exhausted all your other options.
+>
+> — Jeff Atwood
 
-Since the invention of the FFT, people have looked for even faster Fourier transforms. One question is just how fast you can go. It seems like you probably need at least n operations to compute the FFT, as it takes n steps just to write it down. The FFT is 5*log<sub>2</sub>(n) times slower than that reasonable speed limit, and that 5*log<sub>2</sub>(n) factor can be big. It’s 200 when n is a trillion. Can you do something clever to reduce that prefactor of 200?
+While my first instinct was "oooh I can build thing", I recognized that this might be a problem others have had and solved before me. I did some searching, and tested some alternatives. It is quite possible I have left out several good candidates, but these are the ones I looked at.
 
-Well, lo and behold, in the massive paper dump OpenAI took on the mathematics world last week, they claim to have a faster Fourier transform. The main claim from their discriminatively named “main.pdf” is
+### Google Messages
 
-![](https://www.argmin.net/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F7ac9d9d8-620b-4fe3-86c6-fb61cc54b169_1582x302.png)
+The default SMS app from Google actually has a "Device pairing" option. Sign in to [https://messages.google.com/web](https://messages.google.com/web) and pair your phone, and it works pretty well. But for one, it is limited to the Google app, and I have (*very*) gradually tried to limit my reliance on big G. With that said, my only real gripe is that you have to re-pair very frequently. Often enough that during my limited testing I was quite annoyed. But if you are using Google Messages anyway, this might be the right solution for you.
 
-I was intrigued about what was going on here. The log(n) term, in theory, was a teeny tiny bit smaller than in the standard FFT.
+### KDE Connect
 
-Did I read this paper? Of course not. No one at OpenAI read this paper either, so why should I? I did what every other mathematician in the world does with AI slop mathematics: I fed it back into the slop machine and ran an information retrieval session with a chatbot interface to extract salient facts. Anthropomorphically speaking: I asked ChatGPT what it thinks about its own output. This is how we do mathematical research now. What a world.
+Sigh. I really wanted this to be the solution. The ambitions are great. KDE is great! Open source! It even has a MacBook client, being a Linux-adjacent project. But I could not get it to work reliably. The pairing process was buggy. Sometimes connectivity would break, even with the phone and laptop on the same network. I found the options for configuration overwhelming, and in good Linux-fashion, there is ample room for some UX improvements. But the biggest problem was that I found the whole experience ... clunky? For all I know the Linux client is leaps and bounds better than the Mac one, though. Maybe this is the right solution for you?
 
-Unfortunately, I did not find a faster Fourier transform. Instead, I found the rot that develops inside applied mathematical theory when formalism becomes so detached from reality that a “breakthrough” is nothing more than an artifact of mathematicians not being able to properly specify the rules of their games in natural language.
+### Pushbullet
 
-First, “big-O” notation has been so abused that it has become meaningless. Let’s review the definition, which impressed me as an undergrad. An algorithm has running time T(n) = O(F(n)) if there exists an integer N and a constant C such that
+Pushbullet has been around for a long time. And to be fair, I didn't really give them a fair chance. I tried it years ago, and found it aggravatingly unreliable and buggy. Dropped notifications, SMSes reported as "sent" never ended up actually sent, messages I had already answered suddenly triggering notifications again. Things may have improved, I didn't bother to check. I am listing it here for completeness' sake.
 
-![](https://www.argmin.net/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fa6d8b2c4-17e0-48bb-8fa8-9e6c627e6051_314x26.png)
+## A wheelwright I shall be
 
-That is, the number of steps the algorithm actually takes is upper bounded by a constant times some convenient function F(n) as long as n is large. F(n) is usually something familiar and interpretable, like a polynomial or exponential function. This notation says that we only care about what happens when the size of the computation is large. We care about the *asymptotic* growth rate of the computation time. All constants are equivalent.
+Okay, so I might have really wanted to build this thing just for the sake of it, regardless of the alternatives.
 
-Big-O notation is useful for shortcuts in algorithmic accounting, but it also allows for remarkable logical laziness. If we want a practically faster FFT, we want an algorithm that requires fewer than 50n operations for reasonably sized n. But O(n) does not mean 50 n. It could mean 10<sup>80</sup> n. This would be considered a “linear time” algorithm. An algorithm that requires n + 10<sup>80</sup> is also considered a linear time algorithm in the big-O regime. An algorithm that only has linear-time guarantees when n is greater than 10<sup>80</sup> is also considered linear time. 10<sup>80</sup> is approximately equal to the number of atoms in the known universe. That is why Richard Lipton and Ken Regan call algorithms with unfathomably large hidden constants *[galactic algorithms](https://link.springer.com/chapter/10.1007/978-3-642-41422-0_20)*.
+I decided on some goals for the project:
 
-So why is this new FFT result interesting? Well, note that in big-O notation, it is technically *asymptotically *faster than the Cooley-Tukey algorithm because
+- Free as in beer, free as in speech.
+- No account or user profile. No saving anything about anyone.
+- No backend service (except the relays).
+- Messages should be end-to-end encrypted (duh).
+- Keep dependencies to a minimum.
+- No web framework for the client.
+- Ideally it should be self-hostable.
+- No agentic coding. I have used Claude as a rubber duck/documentation know-it-all/security reviewer.
 
-![](https://www.argmin.net/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F416c8d3a-5933-46a1-b7d8-42e14c841d36_258x32.png)
+I started out with the obvious problem: how can I get the phone and the browser to talk to each other? Being familiar with WireGuard, I first thought about baking that into an app on the phone that could serve a REST(ish) endpoint that a client on the same network could access. As an easy way to start prototyping I installed Tailscale on my phone and on my laptop, as Tailscale is WireGuard under the hood, and gives you a stable IP address for the devices on the network. The architecture at that point was polling based, the web client would poll the server running on the phone periodically and look for new messages. While I had a nagging feeling that this might not be optimal for many reasons (battery life on the phone for one) I just wanted something that worked to iterate on.
 
-I mean, sure. But given the constants, the algorithm runs faster only when n is impossibly large. Roughly, you need
+After some evenings of hitting my head against the wall that is Android development I had a rudimentary app working, running in the background on the phone and serving the available SMS threads, secured with a hard-coded token just in case. With that in place I could start working on a client.
 
-![](https://www.argmin.net/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fecf0f831-8a5b-4c70-8873-90a287596a77_122x36.png)
+## Back to the basics
 
-whatever the hell that number means.
+As stated, I wanted to build this as a statically hosted web app, and without any web framework. I wanted to get a feel for how it is to develop like this in 2026. Having relied almost solely on React professionally, and SvelteKit in my spare time, I wanted to do something different. I first imagined the client as a typewriter with the paper sticking out of the top sort of thing, but ended up turning the skeuomorphism down a few notches. I kept the monospaced Courier font and off-white though.
 
-Lipton and Regan argue galactic algorithms are useful because they spur research. Once you show a running time is asymptotically possible, you can spend your time finding an algorithm that practically achieves this provable running time. Maybe you can send your AI agent swarms after it. You do you. Maybe you can get a practical algorithm out, but I don’t know of any legitimate examples where this happened. I’m particularly doubtful here, because the model of “computation” OpenAI uses bears no resemblance to an actual computer.
+The client is built as `index.html` files in a folder hierarchy, an increasingly unmaintainable `style.css` and typed JavaScript with ESM modules and custom elements for the reused components like header and footer. This does mean the components are rendered client side instead of being baked into prerendered static pages which I would have preferred. There are no architectures without tradeoffs, and the alternative would have been to copy-paste the shared code across several pages and remembering to keep them in sync. Not horroble, but not great either.
 
-“The model uses exact complex arithmetic.” That means it assumes you can store and multiply complex numbers at arbitrary precision. Indeed, the algorithm requires you to multiply complex numbers whose magnitudes grow *superpolynomially* with n. If you stored these numbers as bits, the memory requirement would effectively be exponential in the input length. It assumes you can multiply such arbitrarily large complex numbers together in a single operation. We do not have computers that can do this. So even if this theorem in main.pdf is “true” (no one knows, and I don’t care), it’s not actually solving the problem we set out to solve when looking for a faster FFT.
+![screenshot of Bru client](https://sverre.me/projects/bru/image.png)
 
-For people familiar with theoretical analyses of the FFT, that you need an absurd model of computation to break the FFT speed limit isn’t surprising.  In 1973, [Jacques Morgenstern proved](https://dl.acm.org/doi/10.1145/321752.321761) that you couldn’t get a Fourier transform faster than ½ n log n if you required that complex coefficients used in the computation had bounded magnitude. That should have been the end of the story! But it wasn’t. People said Morgenstern’s restricted coefficient model was too restrictive. Forty years later, Nir Ailon showed that you couldn’t compute an FFT faster than n log n without severe [numerical](https://arxiv.org/abs/1403.1307) [instabilities](https://arxiv.org/abs/1404.1741). This was also too restrictive for some people, I guess.
+## Tin cans on string
 
-This new OpenAI result is thus less a mathematical breakthrough and more an oddity of computer scientists being bad at formalizing their design specifications. The “theoretical” definition of a computer is very far removed from the computers we actually build. The “faster” Fourier transform is merely an example where theory gets so unmoored from the original question that an “open problem” becomes nothing more than an academic status puzzle. The solution is like what happens when you set computational bot streams at impossible problems and find them [engaging in illegal hacking](https://en.wikipedia.org/wiki/OpenAI_rogue_agent_breach_of_Hugging_Face).
+While the prototype worked, there were some things I needed to figure out. For my own personal use, depending on Tailscale as an additional app was not a problem, but it would greatly reduce the number of other people that would bother to install it. And while solving problems for myself is enough by itself, creating something that others might find useful as well is very rewarding. Embedding the WireGuard tunnel library seemed like a logical step, but before I started on that, I found Iroh.
 
-Many of the other “big” results in this OpenAI slopository could be critiqued in the same way. For example, one of those results was a galactic algorithm to multiply two matrices in O(n^2.25) operations. The construction used in the paper does not let you even estimate the constant that hides inside big O.[3](https://www.argmin.net/p/faster-fourier-transforms#footnote-3) It may as well be infinite, computable only with the divine music of the spheres.
+Sometimes the stars align. A post announcing Iroh 1.0.0 came up in one of my feeds, and I knew this could be the right fit. In essence, Iroh is a dumb pipe. You put stuff in at one end, it comes out the other. "Dial keys, not IPs" is the mantra. And being built with Rust, it works in the browser when compiled to WebAssembly. And with the Android SDK available, it was exactly what I needed.
 
-Still, if written substantially better, these papers would have made it into the most prestigious publication venues for the theory of computer science (i.e., refereed conference proceedings from STOC or FOCS).[4](https://www.argmin.net/p/faster-fourier-transforms#footnote-4) The matrix multiplication paper would have likely won awards. But neither of these has anything to do with computers!
+Iroh works by establishing a direct peer-to-peer connection between your devices. It does this with the help of relays, servers that both devices can reach. When a device starts up, it connects to a relay. When one device wants to talk to another, they first swap addresses through the relay. Then both start firing packets at each other at the same time. Each router sees the incoming traffic as a reply to something it sent out itself, and lets it through. This is called hole punching, and works in most network topologies. When it doesn't, say on a locked-down corporate network, the traffic is forwarded via the relay.
 
-This is because the theory of computer science has a culture that actively discourages running algorithms on a computer. It’s acceptable to write papers in theory conferences that assert an algorithm exists without ever writing it down. The theory of computer science has become a form of mathematics that doesn’t concern itself with computers, and it offers little reward for impact outside those mathematical pursuits. I explained this to a friend who remarked to me that “theory” has the transdisciplinary meaning of “hiding in obscurity of one’s own making.”
+Browsers aren't allowed to send raw UDP packets, so hole punching isn't possible there, and the Bru web client always goes through a relay. The connection is still end-to-end encrypted, so the relay can't read your messages. A desktop application, or a terminal based one, would be able to do actual peer-to-peer communication.
 
-AI is really good at automating our worst tendencies. It amplifies the unspoken cultural practices no one likes, but no individual can reasonably deviate from. It exploits the mechanized traditions recalcitrant to collective action. In that vein, AI can now write useless theory papers. But perhaps in the absurdity of the distasteful OpenAI trash dump of proofs, we can all look up and realize together that we should consider doing something else.
+The juicy center of the client, the Iroh-related code, is written in Rust and compiled to WebAssembly with `wasm-pack`. The module exposes a single `Bru` struct that the JavaScript code can use. It has methods for opening a connection, sending and receiving data, health checks and so on. Having wasm-pack generate the bindings and glue code makes using WebAssembly as easy as any other JS module.
 
-The wikipedia page says it should be credited to Gauss in 1805! Proper credit assignment is a perennial problem in academia.
+## Self hosting and hacking
 
-That one shows that for every epsilon greater than 0, there is a constant C so that T(n) <= n^(2.25 +epsilon + C/log(n)). No matter which queries I try, I can’t get an OpenAI model to give a quantitative estimate of C. Whatever!
+Since the Iroh relay is open source and can be run on whatever server you want, and the client is simple static files, the whole stack can be self-hosted if one is so inclined. There is a settings menu in both the client and the Android app to configure the relay in use.
 
-One nice thing about proving that something is possible epsilon faster than O(f(n)) time is that you can stop looking for a proof that the best you can do is O(f(n)).
-
-Thanks for writing this up. A few weeks ago Anthropic publushed a blog post about "using claude to speed up protein structure prediction." I did a little testing myself and found that basically 100% of the "speedup" was from turning on cuda graphs and all the "optimized kernels" did not add much. Good (in some cosmic sense) to see that the pattern is similar for these math results.
+The "protocol" is also open, and there is no reason why a user could not build their own client. I am hoping someone will. Maybe a CLI, desktop app, AI agent integration (or maybe that is not a good idea?) or maybe something completely different. If I get the drive to do it, I might extract the relevant code into a self-contained library others can use.

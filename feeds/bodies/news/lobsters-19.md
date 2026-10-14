@@ -1,88 +1,70 @@
-In the [curl 8.23.0 release](https://daniel.haxx.se/blog/2026/10/14/curl-8-23-0/) we shipped a fix for one of the worst vulnerabilities in curl in a long time. We grade it severity HIGH. It is known as [CVE-2026-92392](https://curl.se/docs/CVE-2026-92392.html) with the title *HTTP/2 upload Use-After-Free*.
+OpenChamber. OpenAI. Open WebUI. OpenDoor. OpenTable. OpenClaw. Open weights.
+        Open this. Open that. The word has been opened so many times it no longer closes.
+        **OpenFatigue™** is the first fully Open-branded platform for people who are
+        *exhausted* by fully Open-branded platforms.
 
-This post explains the bug, what the problem can lead to, and something about why it happened and what we have done to make it harder to introduce a problem like this in curl again in the future.
+*Free as in “free trial.” Not free as in freedom. Not free as in beer. Free as in “we'll email you.”
 
-This is a much simplified explanation. Please refer to the original report for all the details and the full reproducible Docker image for all the low-level fun and education you could possibly want. I highly recommend doing that; the report and the reproducible are awesome.
+Logos withheld to remain open about our closed relationship with trademark law. None of these companies endorse us. Most have never heard of us. That's fine. We're tired.
 
-## Use-After-Free
+Features
 
-It is a [use-after-free](https://en.wikipedia.org/wiki/Dangling_pointer), which is a classic problem in memory-unsafe programming languages, like C, where we erroneously have a lingering pointer left, pointing to memory that is already freed, and yet we use that pointer and the memory it points to.
+### Open-ish Licensing
 
-This family of errors is especially bad when a malicious actor can affect the content that gets stored into that memory area that is still used even though it was freed.  Tricking the program to do something unintended.
+Our license is open for anyone to read. Using, modifying, or distributing the software is a separate conversation with Legal.
 
-## HTTP/2 is multiplexed
+Download our model weights after agreeing to a 41-page acceptable use policy, a monthly-active-user cap, and a vibe check.
 
-This problem involves HTTP/2. HTTP/2 is a multiplexed protocol, meaning that it handles multiple logical transfers over the same physical connection. curl needs to keep track of a number of transfers at the same time, and when data arrives or is to be sent off, it needs to keep things apart appropriately.
+We publish a high-resolution screenshot of our source code every quarter. Pull requests may be submitted by fax.
 
-## Handles
+Built by a vibrant community of one (1) maintainer, currently on sabbatical. Enterprise Edition includes the other features.
 
-For every transfer done using libcurl, the application creates and sets up a dedicated *handle*. We call it an *easy handle*. This handle is kept around for as long as the transfer is in progress, and the application can close and free it once the operation is completed. When doing multiple transfers, multiple handles are used.
+Our door is always open. The building is badge-access only. The badge reader is closed source.
 
-libcurl also has *multi handles*, which is a super handle type that holds any amount of *easy handles*. This handle, and the corresponding multi interface, makes it possible to drive any amount of concurrent transfers. A transfer done with libcurl always has at least one multi handle and one easy handle. (Sometimes the multi handle is hiddenly used under the hood.)
+Our roadmap is completely public, entirely aspirational, and subject to change by a non-profit board that may or may not exist next week.
 
-## The setup
+The Openness Meter™
 
-In order to trigger this problem, we need an application (such as the curl command line tool) to do an upload over HTTP/2 to a server. By default, libcurl negotiates HTTP/2 when a HTTPS:// URLs is used and the server agrees.
+Drag the slider to calibrate your openness to industry standards.
 
-When the upload has started, the server pauses the send by zeroing the HTTP/2 window size, returns a piece of the response and then it resets the stream, which shuts down the transfer – but not the connection. curl then correctly pulls down the entire transfer, but it accidentally leaves a lingering pointer to the involved *easy handle*.
+Open Name Generator™
 
-When the application finds out that the transfer completed (with an error), it subsequently frees the easy handle and then, and here comes the problematic part: cleans up the multi handle.
+Every great company starts with “Open” and a noun. We automated the noun.
 
-## The mistake
+OpenFatigue
 
-At this point, the *easy handle* was just freed but there is still a reference to that handle. When libcurl shuts down the multi handle, it misunderstands the situation, allocates memory to download data into, finds the still dangling pointer and manages to *download data* from the server that ends up in the very same memory previously used for the easy handle.
+Is It Open?™
 
-In this process, it sends off a request that leaks internal client details, which includes information about local addresses, which is crucial. Modern operating systems use [Address Space Layout Randomization](https://en.wikipedia.org/wiki/Address_space_layout_randomization) (ASLR), so a server needs this clue in order to generate a good attack payload.
+Enter any product. Our closed-source model will tell you how open it is.
 
-Subsequently, when libcurl deals with this received data (using the handle the dangling pointer points to) in the download buffer, it uses a function pointer that now has been modified by data just downloaded from the server, and then *it runs remote code*.
+Pricing
 
-## An illustration
+### Open
 
-Here’s a simplified 6-step illustration.
+$0/mo*
 
-![](https://daniel.haxx.se/blog/wp-content/uploads/2026/10/RCE-explained.png)
+Most Open
 
-## Conditions to trigger
+$49/mo/seat/token/vibe
 
-In order to actually successfully execute remote code, lots of several specific conditions need to be met and we deem it extremely difficult to meet these requirements in the wild, which is why we decided this is “only” severity HIGH and not CRITICAL.
+Contact Sales
 
-1. The victim needs to actually attempt to upload data to a malicious server, meaning that the server certificate must remain valid.
-2. The size of the upload needs to be roughly the right size (~135KB)
-3. The attacker needs to know curl’s architecture to generate and deliver the right code
-4. The attack requires a specific sequence of allocations and allocation sizes so that the data from the server ends up in the right place (from the attacker’s view). This pattern differs between Linux distros, libc versions/flavors, TLS certificate bundles, libcurl using applications and more.
-5. nghttp2 and OpenSSL/TLS 1.3 behavior, including allocation effects around session tickets
-6. The payload storage area is small (around 23 bytes)
+† Pricing is open to interpretation. * Excludes inference, storage, egress, ingress, regress, tokens, the tokens used to count tokens, and vibes.
 
-The most likely outcome of an attempted attack is rather just a crash. We estimate that the chance for a successful attack is slim.
+Testimonials
 
-## How was this found?
+Symptoms
 
-This problem was found and reported by Luna Tong  at Anthropic using their new OSS Scanner. Presumably this involves their AI models.
+Consult your nearest four-freedoms practitioner if symptoms persist for more than one funding cycle.
 
-## How do we fix this?
+This is the most common early symptom. Your brain has learned that “open” now precedes words like “waitlist,” “API key,” and “enterprise tier.” This is a healthy defense mechanism.
 
-In general we have over the last few years been working on reducing the amount of internal pointers to handles that needs to be correct, and instead we store transfer identifiers that we look-up on demand. While this is a tiny bit slower, it is more foolproof when there are logical mistakes like the one mentioned here.
+Congratulations — you are developing immunity. Look for phrases like “acceptable use,” “non-commercial,” “field of use,” and “we reserve the right.” None of those are open source. Real open source licenses let you use, study, modify, and share — for any purpose.
 
-We also of course continue to add more tests and we verify the code with more tools and analyzers in order to find additional similar mistakes.
+Neither can we. One of them sells houses, one books dinner, one serves models, one is a chamber, one is a claw. We stopped asking. Please do not open the claw.
 
-Multiplexed protocols like HTTP/2 have this challenge that there are many concurrent transfers going and they all have different life-times and with memory-unsafe languages, dangling pointer mistakes can indeed be fatal.
+Weights without training data, training code, or a permissive license are a binary you're allowed to download. It's nice! It's just… a binary you're allowed to download.
 
-This is of course no guarantee that we do not have or will not introduce another use-after-free in the code now or later.
+The term has a [specific, published definition](https://opensource.org/osd) from the Open Source Initiative, and there's also an [Open Source AI Definition](https://opensource.org/ai/open-source-ai-definition). Supporting projects that meet them is the only known cure for OpenFatigue.
 
-## Again on the language
-
-libcurl is written in C – a memory unsafe language. With a *memory-safe* language, this mistake could probably have been avoided.
-
-We have worked on curl for almost thirty years, and have over this time manage to make a rather polished transfer engine. For the longest time there really was no memory-safe alternative that also allowed libcurl to be a low-level library available on hundreds of operating systems and several dozen CPU architectures. It even barely exist alternatives now.
-
-We do not rewrite curl. Not into another language but also not in C. We are set to iterate, polish, improve, refactor over and over until the end of time.
-
-Porting curl to another language (like rust) would be a monstrous undertaking that would be slow and introduce lots of new short to medium term problems. Not to mention that the existing curl team is not rust experts and that libcurl is currently portable to many more platforms and environments than rust itself is.
-
-## Release schedule
-
-When this vulnerability was confirmed by the curl security team just hours after it was submitted to us on September 15. We immediately realized the significance and decided to rush the pending next release. However, we still wanted to be careful, follow the procedures and not create any further problems or mistakes by stressing it too much. That’s how we ended up just shortening the release cycle with two weeks. Down from eight to six weeks from the previous release. This allowed us to also merge and fix many more vulnerabilities and general bugs in the same release.
-
-## CVSS
-
-We [never provide CVSS](https://daniel.haxx.se/blog/2025/01/23/cvss-is-dead-to-us/) for our published vulnerabilities as we don’t think we can do a job there. Others will provide them even for our flaws.
+Join 8,412,903 people who have clicked a button labeled “Open” and found a form.

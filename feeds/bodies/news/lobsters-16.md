@@ -1,161 +1,116 @@
-We are pleased to announce the release of version 0.14.0 of [Creusot](https://creusot.rs),
-our formal verification tool for Rust.
+We at the Lix team are proud to announce our seventh major release, version 2.96 “Bingsu”.
 
-In this post, we highlight a small selection of new features.
-See the full [changelog](https://github.com/creusot-rs/creusot/blob/master/CHANGELOG.md#0140---2026-10-09)
-for the rest.
+This release focuses on security, debugger support, quality-of-life improvements, and continues the work towards both the new [Cap’n’Proto RPC](https://capnproto.org/) protocol and Rust support.
 
-# What's new in Creusot?
+> [Bingsu](https://en.wikipedia.org/wiki/Bingsu) is a milk-based Korean shaved ice dessert with sweet toppings that may include chopped fruit, condensed milk, fruit syrup, tteok, and red beans.
 
-## Partial orders
+Lix is a Nix implementation focused on reliability, predictability, friendliness, developed by a community of people from around the world. We have long term plans to incrementally evolve Nix to work in more places, to make it more reliable and secure, and to update the language and semantics to correct past mistakes and reduce errors, all the while providing an amazing tooling experience.
 
-Previously, Creusot restricted its specification of `PartialOrd` to total
-orders. Since version 0.13.0, we have relaxed it to allow partial orders.
-(We skipped a devlog entry for 0.13.0 so let's talk about this here.)
+## Upgrading from CppNix or previous Lix versions
 
-Our previous definition of total order (`OrdLogic`) relied on the
-comparison function `cmp_log` (the logic counterpart to `cmp`), which returns an `Ordering`.
+**WARNING**: We do not recommend to use `nix upgrade-nix`, please follow the instructions in [https://lix.systems/install/](https://lix.systems/install/) with the Lix’s upgrade shell script.
 
-```
-// Old definition of total order
-pub trait OrdLogic {
-    #[logic]
-    fn cmp_log(self, other: Self) -> Ordering;
+The upgrade procedure depends on how you installed Lix or CppNix, and is fully described in the [Lix installation guide](https://lix.systems/install/).
 
-    // ... (laws and other comparison operators)
-}
-```
+If you are using Lix from nixpkgs on NixOS, you just need to upgrade your nixpkgs once the upgrade pull request has passed through the build farm into your channel; no other action is required.
 
-That had the benefit of making totality an implicit consequence of the type of the function:
-any two elements must compare either `Less` , `Equal`, or `Greater`.
+If you want to help us test the next version of Lix, consider running `main` by following the [beta guide](https://wiki.lix.systems/books/lix-contributors/page/lix-beta-guide).
 
-With the switch to partial orders, a traditional formulation based on a
-boolean comparison function ("`<`", aka. `lt_log`) becomes more natural.
-A strict partial order (`PartialOrdLogic`) consists of a comparison function `lt_log` which
-is irreflexive and transitive. Totality becomes another law: for all `x`, `y`,
-the trijunction `x < y || x == y || y < x` must hold.
+## Changes
 
-```
-// (New) definition of partial order
-pub trait PartialOrdLogic {
-    /// `self < other` in logic
-    #[logic]
-    fn lt_log(self, other: Self) -> bool;
+Lix 2.96 builds on the work of previous releases to improve the daemon, the protocols spoken with the daemon (both on a single machine and the ones used for remote builds), and brings many much-needed improvements to the debugger infrastructure.
 
-    // ... (laws (irreflexivity, transitivity) and other comparison operators)
-}
+Here’s a short list of the most exciting changes in Lix 2.96. This list is not as exhaustive as the [full release notes](https://docs.lix.systems/manual/lix/stable/release-notes/rl-2.96.html).
 
-// New definition of total order
-pub trait OrdLogic {
-    /// The order is total
-    #[logic(law)]
-    #[ensures(self < other || self == other || other < self)]
-    fn lt_log_total(self, other: Self);
-}
-```
+### REPL and debugger support
 
-Interestingly, none of our existing proofs were affected by this change.
-Our automated provers just took it in stride.
+Thanks to the tireless work of [blokyk](https://git.lix.systems/blokyk) the REPL and debugger are much improved in Lix 2.96. The debugger is now more stable, navigating within the debugger is much easier, and the information printed by the debugger is more readable.
 
-## Logic VC gen
+[eldritch horrors](https://git.lix.systems/pennae) have also switched the REPL backend from editline to [rustyline](https://github.com/kkawakam/rustyline), finally bringing proper UTF-8 support to the REPL.
 
-Creusot now generates verification conditions (VCs) for snapshots,
-which are logic expressions embedded in Rust programs.
-In particular, this enhances the use of "lemma functions",
-a common idiom in verification tools similar to Creusot.
+### News from RPC
 
-For example, you can encode a lemma as a logic function such as this,
-which logically amounts to the proposition `forall<x> hyp(x) -> concl(x)`:
+The experimental RPC protocol is now shipping under the `rpc-sockets` experimental feature. As one may guess this is still *highly experimental* and must be enabled not only with the experimental feature flag in your Lix config, but also requires system setup that is not yet done by the NixOS module. You can find an example configuration in the [NixOS module in the Lix repo](https://git.lix.systems/lix-project/lix/commit/103b91b0c77c662c50070f2b4700ffc0df12cbee#diff-c6352f13d264fb180d5409d66db94d50264ed9dd).
 
-```
-#[logic]
-#[requires(hyp(x))]
-#[ensures(concl(x))]
-fn lemma(x: usize) {}
-```
+In future releases we plan to stabilize the RPC protocol and remove support for the legacy protocols we’ve been using to date to allow further evolution of Lix.
 
-Then, inside a program function you can call `lemma` inside a `snapshot!`:
+### `ssh://` store URIs are now deprecated
 
-```
-fn f(n: usize) {
-   snapshot!(lemma(n));
-}
-```
+To enable further RPC work and resolve some long-standing security inconsistencies we must remove `ssh://` store URIs. Lix 2.96 **deprecates `ssh://` store URIs**, but retains support for them without deprecation warnings. `ssh://` store URI support will be removed in Lix 2.97, `ssh-ng://` URIs will remain supported.
 
-Creusot now translates this call to an assertion that `hyp(n)` (the precondition of `lemma`) is true
-and an assumption that `concl(n)` (its postcondition) is true. Notably, these statements
-are specialized to `n`, the argument of `lemma`, so we avoid relying on provers to
-instantiate the universal quantifier in `forall<x> hyp(x) -> concl(x)`.
+If you are using `ssh://` store URIs because `ssh-ng://` is missing features you need please get in touch so we can figure something out together. Note that `ssh-ng` has stricter security checks than `ssh` and no longer allows untrusted users to copy unsigned outputs to remote stores, *this is intentional*.
 
-It should be said that this new feature specifically enables *logic* functions to be
-used as lemma functions.
-Before, you could already do something similar with program functions:
+### Breaking changes
 
-```
-#[requires(hyp(x))]
-#[ensures(concl(x))]
-fn lemma(x: usize) {}
+Once again Lix must break sharp corners to make improvements possible and excise surprising behavior in user code.
 
-fn f(n: usize) {
-    lemma(n);
-}
-```
+- `flake.nix` validation no longer relies on poorly documented triviality checks. Instead Lix now has only one rule for `flake.nix`: **no function calls are allowed outside of `outputs`.** This means that Lix now accepts `let` blocks and string interpolation in flake `inputs`, among other things. We consider this a breaking change because other Nix implementations may no longer be able to evaluate Flakes that were written using Lix.Many thanks to [piegames](https://git.lix.systems/piegames), [Qyriad](https://git.lix.systems/Qyriad) and [eldritch horrors](https://git.lix.systems/pennae).
+- The `floor` and `ceil` builtins now throw errors if their operation would have resulted in precision loss during the conversion from floating point to integers. Precision loss does not sound dramatic, but with numbers of sufficient magnitude this could result in positive floats being converted to negative integers.Many thanks to [jade](https://git.lix.systems/jade), [NaN-git](https://github.com/NaN-git) and [rootile](https://git.lix.systems/rootile).
+- Many nix3 CLI commands no longer build their arguments. This surprising behavior was commonly seen when `nix store delete` was called with a path that was not present in the store, causing the path to be downloaded just so that it could be deleted.Many thanks to [eldritch horrors](https://git.lix.systems/pennae).
+- Shadowing internal files via Nix search paths is now considered an error. Lix 2.95 already deprecated overriding the `nix` search path entry due to surprising effects that could have, Lix 2.96 now considers this an error if not explicitly configured otherwise.Many thanks to [thubrecht](https://git.lix.systems/tom-hubrecht), [jade](https://git.lix.systems/jade) and [eldritch horrors](https://git.lix.systems/pennae).
 
-The difference is that (1) this version introduces a Rust function call, however
-trivial it may be, and (2) it must pass the borrow checker, which may require
-boilerplate to work around when all you wanted is to state some facts.
-In contrast, snapshots are entirely erased, so it is clear that
-they are there only for the sake of formal proof.
-Thus, these newly generated VCs for snapshots let us draw clearer boundaries
-between the worlds of programs and proofs.
+## New features
 
-It may seem surprising that Creusot did not already do this. This comes down to
-the fact that programs and specifications are written in two separate languages,
-with their own semantics, and thus with different mechanisms and motivations for generating VCs.
-Without going into too much details, VCs were originally not generated for `snapshot!`
-because it isn't necessary for soundness, but it turns out to help catch mistakes
-in specifications quicker (such as out-of-bounds indexing), on top of enabling
-new techniques such as that described above.
+- Nested arguments can be set with `--arg` and `--argstr`.Previously Lix would turn `--arg foo.bar.baz 1` into the set `{ "foo.bar.baz" = 1; }`, now it turns it into `{ foo.bar.baz = 1; }`. Attribute set merging rules are applied to these sets, making it much easier to use function that expect sets as arguments (such as nixpkgs, which expects a `config` set). The old behavior can be recovered by quoting the name, e.g. `--arg '"foo.bar.baz" 1'`.Many thanks to [ma27](https://git.lix.systems/ma27).
+- Inputs are now only fetched by one process at a time. This can be significant in CI situations where many processes may attempt to download the same input set concurrently. Previously all of them would download the set, now only one of them does and signals the others to wait for it to finish.Many thanks to [lheckemann](https://git.lix.systems/lheckemann).
+- Use [mimalloc](https://github.com/microsoft/mimalloc) for faster evaluation. We’ve seen 5-12% eval time improvements due to thisMany thanks to [getchoo](https://git.lix.systems/getchoo) and [lovesegfault](https://github.com/lovesegfault).
+- `nix doctor` has been extended greatly, including general system information and remote builder configuration in its report. It can now also automatically connect to configured remote builders and check their state as well.Many thanks to [rootile](https://git.lix.systems/rootile) and [raito](https://git.lix.systems/raito).
+- `ssh-ng` store URIs are now considered stable. The long-awaited feature parity between `ssh` and `ssh-ng` URIs has arrived, although only Lix 2.96 and newer will be able to take full advantage of this. Connecting to or from older Lixes or other Nix implementations will not see feature parity and silently fall back to the previous behavior.Many thanks to [eldritch horrors](https://git.lix.systems/pennae).
+- Channel references now support `zst`-compressed tarballs. This can greatly improve unpacking speed when using channels.Many thanks to [raito](https://git.lix.systems/raito) and [eldritch horrors](https://git.lix.systems/pennae).
 
-## rust-analyzer integration
+### Improvements
 
-It is finally possible to use Go-to-definition in Pearlite specifications.
+- The `ssl-cert-file` and `netrc-file` settings now report errors when set to files that don’t exist instead of being silently ignored.Many thanks to [Astreaprtcl](https://git.lix.systems/astreaprtcl).
+- Moving between stack frames in the debugger is now easier using offset instead of absolute numbers. While moving up or down some number of frames previously required remembering the frame number you were on you can now directly supply offsets, using `:st +l` to go from frame `n` to `n+k` and `:st -k` to go from `n` to `n-k`.Many thanks to [blokyk](https://git.lix.systems/blokyk).
+- `addErrorContext` frames are always printed in backtraces now, even without `--show-trace`. This makes explicit report locations, for example in the NixOS module system, much more useful.Many thanks to [blokyk](https://git.lix.systems/blokyk).
 
-![Screenshot of go-to-definition working in the middle of a Creusot specification](https://devlog.creusot.rs/creusot-go-to-definition.png)
+### Fixes
 
-To start, we needed to make rust-analyzer expand the code of specifications.
-In normal compilation, specification macros (`#[requires]`, `#[ensures]`,
-`proof_assert!`, `snapshot!`, etc.) erase themselves, discarding their contents.
-We just needed to pass options to rust-analyzer for it to expand those macros the same way Creusot does
-(see [our guide for the relevant rust-analyzer settings](https://guide.creusot.rs/quickstart/editor_config.html)).
+- `nix-copy-closure --include-outputs` now actually works.Many thanks to [rkjnsn](https://git.lix.systems/rkjnsn).
+- Hash mismatch diagnostics now work with `structuredAttrs`. This fixes hash mismatch diagnostics with fetchers from modern nixpkgs.Many thanks to [keysmashes](https://github.com/keysmashes).
+- Subdaemons receive overridden settings from their parent daemon rather than using the system-wide configuration. This was broken by the switch to explicitly launched subdaemons in 2.95, making it impossible to configure subdaemons by providing command line arguments to the main daemon.Many thanks to [raito](https://git.lix.systems/raito).
 
-One worry we had was that Pearlite macros expand to not quite valid Rust code,
-not meant to be compiled by rustc:
-it passes the type checker, but not the borrow checker.
-Luckily for us, rust-analyzer does not do borrow checking,
-so it doesn't see any problem with the expanded code.
+### Miscellanea
 
-With that done, Go-to-definition did start to work, but it returned numerous irrelevant results.
-The problem was that the tokens produced by Pearlite macros carried spans that were
-too coarse-grained.
+- `ssh` and `ssh-ng` store URIs no longer honor the `max-connections` parameter. This parameter complicated the code immensely for no benefit to the average user and had many sharp corners when set explicitly.Many thanks to [eldritch horrors](https://git.lix.systems/pennae).
+- The `daemon-trust-override` experimental feature has been removed. It can still be emulated by e.g. setting the `NIX_CONFIG` environment variable appropriately.Many thanks to [eldritch horrors](https://git.lix.systems/pennae).
 
-To explain it very roughly, when you activate Go-to-definition,
-rust-analyzer looks for identifiers in the final AST whose span ranges over your cursor.
-For example, `a + b` in Pearlite expands to a method call
-`::creusot_std::logic::ops::AddLogic::add_logic(a, b)`,
-where every generated token carries the span of the whole expression `a + b`.
-Hence, Go-to-definition from anywhere in that expression ends up looking up the definitions
-of all of `creusot_std`, `logic`, `ops`, `AddLogic`, and `add_logic`.
+### And so much more
 
-In this case, we'd like to only look up `add_logic`, and only when the cursor is right next to `+`.
-The fix is to make the token `add_logic` have the span of `+`, and
-to make the other identifiers have a zero-width span,
-which seems to be enough for rust-analyzer to ignore them.
+Many more changes have gone into Lix 2.96, most of them internal. We hope to ship a stable RPC-based daemon in one of the upcoming releases, including remote build support using this new protocol.
 
-Many thanks to Sarah Quiñones for figuring all this out.
-This fix makes navigating specifications in Creusot much more pleasant.
+## What is planned for the future?
 
-Thanks for tuning in. If you have any questions about Creusot, you are welcome to join
-[our Zulip channel](https://why3.zulipchat.com/#narrow/channel/341707-creusot),
-or to open a [discussion](https://github.com/creusot-rs/creusot/discussions)
-or an [issue](https://github.com/creusot-rs/creusot/issues) on the Creusot repository.
+### Lix 2.96.1
+
+We are releasing 2.96 together with security releases on stable branches. A few things we wanted to finish for 2.96 have been delayed somewhat, and we expect to release 2.96.1 with a few more improvements soon:
+
+- proper --keep-going support when using --store ssh-ng://..., not just when using ssh-ng remotes as remote builders
+- SHA256 support for Git fetchers for both Flakes and other users
+- better diagnostics on MacOS for garbage collection failures caused by TCC permissions
+- .narinfo cache soundness improvements to enable key rollovers for binary caches
+- allow pass more settings to the daemon and remote builders, e.g. log-lines
+
+### News from Rust integration
+
+Rust integration has moved along apace, and it is now possible to write significant portions of new features without touching *too much* C++ code. We’ve decided to use [zngur](https://github.com/hkalbasi/zngur/) for interop due to its great flexibility and active maintenance, and we’ve already ported a number of features to Rust like this. The REPL is now backed by Rust, as is remote builder configuration and much of the hash conversion code.
+
+## Want to help Lix? Consider donating to Lix!
+
+Following Lix integration in AFNix, Lix now has [an Open Collective](https://opencollective.com/lix-project) and can receive donations.
+
+We run infrastructure across x86_64-linux, aarch64-linux, and aarch64-darwin. Some of it is in-kind and sponsored. Current costs are around 100€/month.
+
+If you value self-hosting and benefit from Lix, please consider donating. Every contribution helps sustain the project.
+
+## Credits
+
+Thanks, as always, to the following groups:
+
+- The large community who beta tested the upcoming release by running `main` in production since the 2.95 branch-off. We really appreciate having immediate feedback on our work and the trust of running main alongside us means a lot to us. We know we tested the patience of some of you, we thank you for that.If you want to run Lix main yourself, see [the beta guide](https://wiki.lix.systems/books/lix-contributors/page/lix-beta-guide) for details.
+- Everyone who contributed by filing bugs and giving us feedback on Matrix.
+- All the first time contributors who made their first contributions to a Nix implementation in Lix. We are eternally grateful to everyone who helped us out on the numerous important but tedious issues.
+- All the contributors who have helped us with the backlog of bugs.
+- The CppNix contributors and CppNix team, without whom we would not have this software, and who wrote some of the improvements ported into this release.
+
+Onwards and upwards for the next release. We look forward to continuing to work together with everyone to build a better foundation for the evolution of Nix.

@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-14T11:25:06Z",
+  "updated": "2026-10-14T16:46:08Z",
   "items": [
     {
       "id": "devto-4821943",
@@ -290,27 +290,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4791043",
-      "title": "Everyone Told You to Grind DSA. They Left Out Two Things.",
-      "desc": "By James Anderson | 7 min read",
-      "tag": "tutorial",
-      "published": "2026-10-03T08:11:03Z",
-      "order": 25,
-      "url": "https://dev.to/james_anderson_h/the-developer-triangle-dsa-ai-and-the-skill-that-actually-gets-you-hired-as-a-beginner-2g5m",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fbooqrb1mohrt5491m21d.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAAEDBP/EABQBAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhADEAAAAeG5ig//xAAWEAEBAQAAAAAAAAAAAAAAAAARACD/2gAIAQEAAQUCI3//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAUEAEAAAAAAAAAAAAAAAAAAAAw/9oACAEBAAY/Ag//xAAaEAADAAMBAAAAAAAAAAAAAAAAAREgIVFh/9oACAEBAAE/IUkWyekxvh//2gAMAwEAAgADAAAAELhv/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPxA//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPxA//8QAHRABAAICAgMAAAAAAAAAAAAAAQARITEQQVFhgf/aAAgBAQABPxBTKtNRy5/DcUNOJXiX6OBroYhKAT//2Q==",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4789632",
       "title": "AI Coding Has Made Project-Switching Way Too Easy",
       "desc": "By Jessica Doering | 6 min read",
       "tag": "tutorial",
       "published": "2026-10-03T01:16:40Z",
-      "order": 26,
+      "order": 25,
       "url": "https://dev.to/sizzlebop/ai-coding-has-made-project-switching-way-too-easy-1bef",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F9z7xdclqy06bsqtez5a4.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwIA/8QAFgEBAQEAAAAAAAAAAAAAAAAAAAEC/9oADAMBAAIQAxAAAAEbDXVOCH//xAAZEAADAQEBAAAAAAAAAAAAAAABAhEhEBL/2gAIAQEAAQUCC6Z6WMQcDTlgFn//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAbEAACAQUAAAAAAAAAAAAAAAAAAREQEiFBYf/aAAgBAQAGPwKdHBmFWS4//8QAGxABAAMAAwEAAAAAAAAAAAAAAQARITFBYaH/2gAIAQEAAT8hTtL7tQcXueCuK0RErYgb3Kio1dzijeJ2Xyf/2gAMAwEAAgADAAAAEONf/8QAFxEBAQEBAAAAAAAAAAAAAAAAAREAMf/aAAgBAwEBPxAndCjv/8QAFhEBAQEAAAAAAAAAAAAAAAAAEQEA/9oACAECAQE/EFhpSG//xAAdEAEBAAIDAAMAAAAAAAAAAAABEQAhMVFhQYHR/9oACAEBAAE/EBbCcAU6N4cWktJ18P3ggQNlNA+dY20gFy+ZMD6MVJCDzlSlRdTAjG1Zw0n7n//Z",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4791043",
+      "title": "Everyone Told You to Grind DSA. They Left Out Two Things.",
+      "desc": "By James Anderson | 7 min read",
+      "tag": "tutorial",
+      "published": "2026-10-03T08:11:03Z",
+      "order": 26,
+      "url": "https://dev.to/james_anderson_h/the-developer-triangle-dsa-ai-and-the-skill-that-actually-gets-you-hired-as-a-beginner-2g5m",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fbooqrb1mohrt5491m21d.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAAEDBP/EABQBAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhADEAAAAeG5ig//xAAWEAEBAQAAAAAAAAAAAAAAAAARACD/2gAIAQEAAQUCI3//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAUEAEAAAAAAAAAAAAAAAAAAAAw/9oACAEBAAY/Ag//xAAaEAADAAMBAAAAAAAAAAAAAAAAAREgIVFh/9oACAEBAAE/IUkWyekxvh//2gAMAwEAAgADAAAAELhv/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPxA//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPxA//8QAHRABAAICAgMAAAAAAAAAAAAAAQARITEQQVFhgf/aAAgBAQABPxBTKtNRy5/DcUNOJXiX6OBroYhKAT//2Q==",
       "color": "#3B49DF"
     },
     {
@@ -326,6 +326,18 @@
       "color": "#3B49DF"
     },
     {
+      "id": "devto-4839843",
+      "title": "I Removed Passwords From My App. Here’s What the Login Flow Looks Like Now",
+      "desc": "By Hadil Ben Abdallah | 10 min read",
+      "tag": "tutorial",
+      "published": "2026-10-14T13:13:55Z",
+      "order": 28,
+      "url": "https://dev.to/hadil/i-removed-passwords-from-my-app-heres-what-the-login-flow-looks-like-now-51k9",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F59hogzzu95alwslfiqt3.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAgAE/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAL/2gAMAwEAAhADEAAAAcCNco0f/8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQABBQIP/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAGxAAAgEFAAAAAAAAAAAAAAAAAAERICExQZH/2gAIAQEAAT8hE50uE3wqv//aAAwDAQACAAMAAAAQU+//xAAVEQEBAAAAAAAAAAAAAAAAAAABEP/aAAgBAwEBPxBn/8QAFhEBAQEAAAAAAAAAAAAAAAAAAQAR/9oACAECAQE/EDJL/8QAGhAAAwEBAQEAAAAAAAAAAAAAAAERIVFBcf/aAAgBAQABPxBfKNaJ4T4340PvgnCmEP/Z",
+      "color": "#3B49DF"
+    },
+    {
       "id": "devto-4827917",
       "title": "Rant on how I actually found joy with AI again",
       "desc": "By OssiDev | 5 min read",
@@ -335,18 +347,6 @@
       "url": "https://dev.to/rcls/rant-on-how-i-actually-found-joy-with-ai-again-1l07",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Foflmprtf4n45jricvlf0.jpg",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAgME/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAH/2gAMAwEAAhADEAAAAcFc6S0yT//EABkQAAIDAQAAAAAAAAAAAAAAAAABAhESE//aAAgBAQABBQJRtczmSjRZpmmWf//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABgQAAIDAAAAAAAAAAAAAAAAAAEQESBh/9oACAEBAAY/ApQ23//EABkQAAIDAQAAAAAAAAAAAAAAAAABETFhQf/aAAgBAQABPyG8Dipk2EexMumhsNnZ/9oADAMBAAIAAwAAABCsf//EABURAQEAAAAAAAAAAAAAAAAAAAAh/9oACAEDAQE/EKr/xAAVEQEBAAAAAAAAAAAAAAAAAAAAIf/aAAgBAgEBPxCI/8QAGBABAAMBAAAAAAAAAAAAAAAAAQARITH/2gAIAQEAAT8QsUAGoZIo3UaFxi8OZNajtQKhVF+pmJrOTvln/9k=",
-      "color": "#3B49DF"
-    },
-    {
-      "id": "devto-4786643",
-      "title": "zenkai: The App Launcher I Wrote Because I Wanted Something Fast and Beautiful",
-      "desc": "By Dayvster 🌊 | 11 min read",
-      "tag": "tutorial",
-      "published": "2026-10-02T09:47:37Z",
-      "order": 29,
-      "url": "https://dev.to/dayvster/zenkai-the-app-launcher-i-wrote-because-i-wanted-something-fast-and-beautiful-1gkc",
-      "image": "https://media2.dev.to/dynamic/image/width=1200,height=627,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fql289bq2cedhqg0gig6q.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAARACADASIAAhEBAxEB/8QAGAAAAwEBAAAAAAAAAAAAAAAAAAECAwT/xAAVAQEBAAAAAAAAAAAAAAAAAAAAAf/aAAwDAQACEAMQAAAB7lVxi9oKYUID/8QAGhABAAIDAQAAAAAAAAAAAAAAAQARECAiMf/aAAgBAQABBQJQbJZLI+mL60//xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAEDAQE/AR//xAAWEQADAAAAAAAAAAAAAAAAAAAAEBH/2gAIAQIBAT8BI//EABoQAAMBAAMAAAAAAAAAAAAAAAABMREQIEH/2gAIAQEABj8CiIiIiPeczr//xAAeEAADAAAHAQAAAAAAAAAAAAAAAREQIDFRgcHh8f/aAAgBAQABPyGAB+wfYFbsEujgxIsNwkty/wD/2gAMAwEAAgADAAAAECd4HP/EABcRAAMBAAAAAAAAAAAAAAAAAAABERD/2gAIAQMBAT8QrK9//8QAGBEAAgMAAAAAAAAAAAAAAAAAEVEAARD/2gAIAQIBAT8QFKAt/8QAIBABAAEDAwUAAAAAAAAAAAAAAREAIVEQIGExQYGxwf/aAAgBAQABPxBpNg7oUNifFnTNX/ipIETMKlcJeA91Al/LLosF84Jxt//Z",
       "color": "#3B49DF"
     }
   ]
