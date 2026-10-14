@@ -1,55 +1,51 @@
-It all started with some exasperated emails. Back in 2009, a group of researchers began venting their frustration with the programming languages designed to help scientists and other researchers perform complex mathematical operations and statistical simulations without learning how to code. These programming languages were rigid and slow. If scientists built something that really worked, they’d need to rewrite the entire program in another language just to run it more quickly.
+Self-driving cars are often controlled by deep learning models that sometimes fail in unexpected situations. For instance, the car might inexplicably brake and block the path of an oncoming emergency vehicle. A human driver or passenger may need to react rapidly to prevent a collision.
 
-The emails turned into a research project at MIT with the mission of building an easy-to-use, high-performance programming language called Julia, which is designed for scientific research, data analysis, and modeling complex systems such as jet engines, drugs, financial markets, and robots, to name a few examples.
+To help humans better anticipate a vehicle’s mistakes, researchers from MIT and autonomous vehicle technology company [Motional](https://motional.com/) developed a new method that provides clear explanations of the underlying model’s decisions.
 
-That research project turned into a lab at MIT, and the lab turned into the company [JuliaHub](https://juliahub.com/). Along the way, Julia gained a loyal following among scientists, engineers, mathematicians, and others. Today, the free and open-source language counts more than 1 million users, including people working in thousands of companies and universities around the world.
+Usually, the internal reasoning process of a deep learning model is opaque and difficult to understand. But the new method, called the Concept-Wrapper Network (CW-Net), translates that reasoning process into concepts that faithfully describe the autonomous vehicle’s decisions without altering its driving performance.
 
-It is only a slight exaggeration to say Julia has been used to model everything under the sun, from the behavior of tiny atoms to [semiconductors](https://juliahub.com/videos/software-at-asml-the-force-behind-making-microchips), neural networks, [race cars](https://juliahub.com/case-studies/williams-racing-unlocks), and airplanes. It has also been used to study much beyond the sun, with astronomers [using Julia for imaging black holes](https://www.youtube.com/watch?v=xk-SIRH3sbE).
+CW-Net explains the decisions of machine learning-based planners using understandable concepts, like “approaching stopped vehicle” or “close to cyclist.” These explanations can correct misconceptions drivers and passengers have about vehicle behavior and improve their situational awareness.
 
-Julia’s secret sauce is in the way it compiles code depending on the type of data being used. Such “just-in-time compilation” makes Julia faster and more flexible than other numerical programming languages.
+In road tests on a private track, CW-Net explanations helped safety drivers more accurately predict vehicle behavior; a larger simulation study with nonexpert users yielded similar results. These experiments show how CW-Net can provide important feedback for engineers as they troubleshoot in-vehicle artificial intelligence systems. In the longer term, this technique could boost the safety and transparency of autonomous vehicles, while building appropriate trust in drivers and passengers.
 
-“Scientists and engineers are not programmers. Building scientific applications with multidisciplinary teams of scientists, engineers, and programmers is challenging,” JuliaHub co-founder and CEO Viral Shah says. “We asked: What if you could equip the scientists and engineers with a programming language that allowed them to express their ideas at a high level and also get great software performance?”
+“This work shows how explanations are supportive to the human’s mental model and understanding of the behavior of a system, and how it could be used in engineering and development to improve the technology,” says Julie Shah, an MIT professor of aeronautics and astronautics, director of the Interactive Robotics Group in the Computer Science and Artificial Intelligence Laboratory (CSAIL), and co-senior author of the [paper on CW-Net](https://www.nature.com/articles/s41586-026-10950-5). “Unless we are building these technologies in a way that we can rely on and predict their behavior, then it is a shaky and unsafe foundation for their use.”
 
-Making programming easy for non-programmers has been a north star for JuliaHub’s founders, who include Julia co-creators Shah, MIT professor of mathematics Alan Edelman, Jeff Bezanson SM ’12, PhD ’15, and former MIT research scientist Stefan Karpinski.
+She is joined on the paper by lead author Eoin Kenny, a former MIT postdoc who is now a senior AI researcher at J.P. Morgan Chase; co-senior author Momchil Tomov, a staff research scientist at Motional; as well as Motional team members Akshay Dharmavaram, Sang Uk Lee, Tung Phan-Minh, Shreyas Rajesh, Yunqing Hu, and [Laura Major, president and CEO of Motional](https://motional.com/laura-major). The research [appears today in *Nature*](https://www.nature.com/articles/s41586-026-10950-5).
 
-In April, JuliaHub’s team took another big step in that direction with the [launch of Dyad 3.0](https://juliahub.com/blog/juliahub-announces-dyad3.0-general-availability), the latest version of its AI platform to help engineering teams accelerate the development of complex physical systems like rockets, heat pumps, and satellites. Engineers are already using Dyad to direct autonomous AI agents as they work through physics simulations, safety analyses, quality controls, and more.
+**Faithful explanations**
 
-“With [Dyad](https://juliahub.com/products/dyad) 3.0, [you can upload data and design documents and the system will design an entire aircraft](https://juliahub.com/videos/automating-aerospace-systems-engineering-pdf-to-simulation-with-the-dyad-agent) for you,” Shah says. “Working with customers like Boeing, we are building agentic hardware design capabilities for engineers. Simplistically, you want to say, ‘Okay computer, build me a plane’; upload the design documents; and have the system account for all the physics, compile all the code, verify everything, and build the entire design agentically.”
+Machine-learning-based planners act as the “brain” of a self-driving car. These powerful deep-learning architectures process data from the vehicle’s cameras and lidar sensors, generate a high-level summary of the vehicle’s environment, decide what the car should do next, and output a trajectory for it to follow.
 
-**Humble beginnings**
+The planners are usually black-box models, which means their internal decision-making process is so complex it is difficult to understand. This can leave scientists and safety drivers in the dark about why an autonomous vehicle made an unexpected decision, like phantom braking.
 
-After discussing the need for better programming languages for scientists and other researchers, Julia’s co-creators started the Julia Lab around 2009. The Julia Lab remains active in MIT’s Computer Science and Artificial Intelligence Laboratory.
+The researchers designed CW-Net to explain a vehicle’s decisions using understandable concepts, while ensuring those explanations accurately reflect the true reasons behind its behavior.
 
-The core idea was to create a high-performance platform that would excel at engineering, scientific, and mathematics applications. Shah says before Julia, scientists and engineers would either have to hire someone to build software for them or accept the slow performance of the few programming languages designed for them.
+“Especially in high-stakes settings like self-driving cars, it’s important that the explanations are not potentially misleading. Because CW-Net is causally faithful in how it makes decisions, that provides certain guarantees around the explanations,” Kenny says.
 
-“We wanted to create something as easy to use as Python or MATLAB but as fast as the C programming language,” Shah says. “We built Julia for ourselves.”
+CW-Net is a “concept classifier,” an AI algorithm that has been trained to predict the high-level concepts that exist within input data. The researchers plug the CW-Net module into the middle of an autonomous vehicle’s existing machine-learning planner architecture.
 
-Edelman says at first, the researchers didn’t think anyone would want their creation.
+It translates the model’s internal reasoning process into understandable concepts, like “approaching stopped vehicle” or “close to cyclist.” Then it forces the final piece of the planning model architecture to use those concepts when it decides what the vehicle should do next. In this way, CW-Net ensures the concepts faithfully explain the vehicle’s actions.
 
-“We figured it would take 10 years before anyone was interested, but we said, ‘Patience is a virtue, so let’s do it,’” Edelman recalls.
+At the same time, CW-Net uses the concepts it classified to generate clear explanations that are output along with the vehicle trajectory, in real-time.
 
-The MIT researchers announced Julia with a blog post in 2012. They quickly realized many other researchers shared their frustration.
+“Instead of just wondering why the car stopped, having real-time data provides feedback that lets you test the system during deployment. You could also give that data to an engineer to potentially improve the system,” Kenny says.
 
-“When we first started, we were targeting interactive research workflows, but increasingly people are using it for everything,” Bezanson says. “Now we’re moving the whole stack of the language onto smaller, embedded devices as we evolve with our users.”
+The researchers trained CW-Net to predict concepts using a dataset of 130 million examples of scenes from self-driving cars, with multiple labeled concepts in each scene. Using such a large, labeled dataset enables it to identify concepts accurately in a wide range of settings.
 
-Since those early days, Edelman has taught a class on Julia with students from nearly every department at MIT. Today, he often learns students are already using Julia when they enroll in the class for applications as wide ranging as robotics, astronomy, physics simulations, and finance.
+They also designed CW-Net to mimic the driving decisions of machine-learning-based planners, so the module would not negatively impact vehicle performance.
 
-“Researchers come up to me and say, ‘I tell my supervisor I’m using Julia because it’s fast, but don’t tell them I’m using Julia because it’s really fun,’” Edelman says. “The key thing is Julia’s abstractions. A lot of times a coding language forces you to solve the one problem you’re thinking about. Julia’s language makes it so you’re solving not only the problem you’re thinking about, but other people’s problems around the world too. It encourages you to solve problems more generally.”
+In the end, CW-Net generates accurate, understandable explanations without altering the original deep learning model.
 
-As Julia gained popularity, researchers around the world started asking the Julia team for support. By 2015, the demand became strong enough that they decided to start JuliaHub and help users through the company full-time. They received support from the MIT Deshpande Center for Technological Innovation and others at MIT to get the company off the ground.
+**Improving situational awareness**
 
-JuliaHub’s work has evolved from simply helping users to advancing the language more generally. That’s powered an impressive list of creations from Julia’s loyal users. Julia has been used to simulate computer circuits, detect health disparities, model global climates and oceans, analyze brain activity, and more.
+To test CW-Net, the researchers deployed the module on a real autonomous driving test vehicle (a Motional robotaxi) on a private track with a safety driver. They found that CW-Net helped the safety driver better predict how the vehicle would behave in surprising situations.
 
-After someone built a pharmaceutical modeling platform in Julia, it was used to accelerate development of Moderna’s Covid-19 vaccine. In another case, researchers used Julia to create a [program for avoiding aircraft collisions](https://juliahub.com/case-studies/lincoln-labs). They found it ran about 50 times faster than an earlier version built on Python. Engineers at Meta used Julia to develop a better audio codec for WhatsApp’s 4 billion users.
+For instance, the vehicle consistently stopped when it approached a cyclist, and the safety driver assumed it did so because it detected that cyclist. But CW-Net explanations revealed that the model wasn’t properly configured to detect the cyclist and chose a trajectory that would have caused a collision. Instead, it stopped because its emergency braking procedure kicked in when it got too close.
 
-“Over the years we’ve seen industrial, government, and academic users doing all kinds of interesting things with the Julia language,” Edelman says. “It’s honestly surprised us in many ways, the wide-ranging things people are using it for.”
+Armed with this information about the model’s mistake, the safety driver could reduce speed or engage manual driving mode sooner in similar situations. This could also help engineers fix the model to avoid this failure in the future.
 
-**Autonomous design**
+In larger online simulation studies using real driving situations captured on the roads of Las Vegas, the researchers saw similar results. CW-Net explanations significantly improved participants’ abilities to predict how an autonomous vehicle will behave.
 
-JuliaHub launched Dyad 1.0 in June of 2025 as a research agent to accelerate programming and Dyad 2.0 in December. The founders believe Dyad 3.0 represents a new level of ability and autonomy for designing complex systems.
+In the future, the researchers could extend CW-Net so the module can cover more concepts and explore different training and design techniques that could boost performance and improve interpretability.
 
-“One important thing about Dyad is that it is a physics compiler and hence [enforces physical laws](https://help.juliahub.com/dyad/stable/tutorials/getting-started.html),” Shah explains. “General AI systems often solve physical problems in ways that violate physical laws. When using the Dyad agent, it will detect such violations and guide the agent in the direction of the physically correct solution. We expect it will decrease design times in product engineering by orders of magnitude, leading to months of work being accomplished in hours.”
-
-One way Edelman sees the impact of Julia is through his class. One student recently used Dyad to model how robots move around in space. Another used it to build a rocket engine.
-
-“At the end he said, ‘I couldn’t believe how easy that was — I just got a rocket engine!’” Edelman recalls.
+“Our study shows how crucial interpretability can be to these high-stakes environments, and how it should be on the mind of people as they are making AI in the future, for self-driving cars or other safety-critical environments,” Kenny says.

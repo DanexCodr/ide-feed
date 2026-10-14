@@ -1,25 +1,49 @@
-Modern processors are fast, in part, because they guess. Rather than waiting to find out which way a program will branch, a chip predicts the likely path and races ahead. When the guess is right, time is saved. When it's wrong, the work is discarded, but traces of it linger. Since the [Spectre](https://news.mit.edu/2018/mit-csail-dawg-better-security-against-spectre-meltdown-attacks-1018) vulnerability was disclosed in 2018, attackers have known how to read those traces to pull secrets out of memory they should never see.
+A region of the brain called the striatum is critical for many cognitive and motor functions, including decision-making, control of movement, habit formation, and processing of reward. It also plays a role in addiction and is significantly affected by Huntington’s disease, schizophrenia, and other disorders.
 
-Chipmakers and operating system developers have spent years building defenses. A [new study](https://people.csail.mit.edu/mengjia/data/2026.USENIX.TONTOU.pdf) from MIT's Computer Science and Artificial Intelligence Laboratory (CSAIL) shows that a key assumption behind many of them doesn't hold.
+In work that could help scientists devise new treatments for those diseases, MIT researchers have generated a new atlas of the neurons found within the striatum. Using single-cell RNA sequencing and other techniques, they were able to identify 31 subgroups of neurons based on which genes they express.
 
-The defenses work by wiping or isolating the processor's prediction machinery, removing anything an attacker might have planted. The catch, as Daniël Trujillo, a PhD student in the MIT Department of Electrical Engineering and Computer Science (EECS), and Mengjia Yan, an assistant professor in EECS, point out, is that the wipe and the moment the predictions get used can't happen at the same instant. There is always a gap — sometimes only a handful of instructions wide. Anything that runs in that gap can dirty the machinery all over again. The researchers call this class of attack "[TONTOU](https://people.csail.mit.edu/mengjia/data/2026.USENIX.TONTOU.pdf)."
+These groups include neurons that are involved in addiction, depression, and schizophrenia. The researchers also discovered why some neurons of the striatum are more vulnerable to Huntington’s disease. All of these results, the researchers say, could help scientists develop new drugs to combat these conditions.
 
-**Mind the gap**
+“We see this as the foundation that will allow more studies in our Huntington’s disease and opioid use disorder projects. We needed a roadmap of what is there,” says Myriam Heiman, the Picower Professor of Neuroscience and director of MIT’s Picower Institute for Learning and Memory.
 
-Their contribution is a reliable way to get code into that gap. Computers constantly pause whatever they're doing to handle interrupts: small, routine tasks triggered by timers, network traffic, and hardware. Ordinary programs can set those timers themselves. By tuning a timer with enough precision, Trujillo and Yan can make the processor take its detour at exactly the wrong moment, and the interrupt execution does the contaminating. They call the technique "interrupt injection."
+Heiman; Manolis Kellis, a professor of computer science in MIT’s Computer Science and Artificial Intelligence Laboratory (CSAIL) and a member of the Broad Institute of MIT and Harvard; and Dana Gabuzda, a principal investigator at Dana-Farber Cancer Institute and a professor of neurology at Brigham and Women’s Hospital and Harvard Medical School, are the senior authors of the study, which appears today in *Cell*. MIT postdoc Raleigh Linville and MIT graduate student Benjamin James are the paper’s lead authors.
 
-The team tested four processor generations from Intel and AMD, and got mispredictions on both. On Intel chips, the attack defeated two different protections, one built in software for older parts, one built into the silicon of newer ones. Curiously, the newer protection held firm on one Intel generation and failed on another, suggesting chipmakers implement the same nominal defense in meaningfully different ways.
+**Mapping the striatum**
 
-AMD's defense, called saferet, cleans the prediction machinery immediately before each use, leaving a vulnerable window just two instructions wide, which typically execute within tens of nanoseconds. The researchers hit it anyway, by slowing down the processor at that exact spot to make the target easier to strike.
+The striatum, located deep within the brain, receives diverse inputs from the cortex, midbrain, hippocampus, and other regions, which it uses to coordinate planning, movement, and decision-making, as well as processing reward. In this study, the researchers focused on the most populous cell type in the striatum, a type of inhibitory neuron called the medium spiny neuron, which responds to dopamine.
 
-**From a bad guess to a password file**
+Most of these medium spiny neurons belong to either the direct pathway, which helps to promote movement, or the indirect pathway, which suppresses unwanted movements. These pathways are distinguishable by what type of dopamine receptor they express — dopamine receptor 1 (D1) or dopamine receptor 2 (D2).
 
-To show what this means in practice, the team built a working exploit on an AMD system running a current Linux kernel. They first stripped away a defense that scrambles where the operating system sits in memory, succeeding in all 10 tries in about nine minutes each. That helped them read protected memory at roughly five bytes per second — slow, but fast enough to locate and copy "/etc/shadow," the file storing the system's root password hash, in half their attempts.
+Beyond these two divisions, scientists knew that there were many subpopulations performing different roles, especially in the anatomically ventral (lower) regions of the striatum. However, it has been difficult to generate a consensus on how to classify these cells, in part because prior studies focused on specific subregions, meaning that overarching principles of striatal cellular organization were lacking.
 
-The paper suggests cleaning the prediction machinery a second time, when the interrupt finishes. That looks workable on AMD. On Intel it may backfire: Because the attack relies on the interrupt leaving behind a consistent state rather than any particular one, the standard fix could make the attack more reliable, not less. Newer Intel chips include a dedicated instruction that appears to help.
+To overcome that challenge, the researchers worked closely with brain banks in the United States and Canada to collect postmortem striatal samples representing diverse anatomical regions.
 
-The other option, blocking interrupts during the vulnerable window, would likely cost too much performance to be practical.
+Then, they used three different techniques to analyze the samples, including single-cell RNA sequencing — a method that can measure RNA molecules within individual cells to reveal which genes are being expressed. Two additional techniques — multiplexed fluorescent in situ hybridization and spatial transcriptomics — allowed the researchers to identify spatial principles of organization within the tissue.
 
-Trujillo and Yan notified AMD and Intel in early February and reached Linux kernel maintainers in March, coordinating with AMD to warn cloud providers and other downstream customers. AMD then released a patch that mitigates the attack, which can be obtained by updating your operating system. Their code is publicly available.
+Using these techniques, the researchers were able to identify 31 different subpopulations of neurons, including nine types of medium spiny neurons. Among their medium spiny neuron types are two “outlier” populations that appear to play important roles in schizophrenia, substance use disorder, and depression.
 
-The research was supported, in part, by the U.S. Air Force Office of Scientific Research under an award made through the U.S. Department of War, and ACE, one of the seven centers in JUMP 2.0, a program sponsored by the U.S. Defense Advanced Research Projects Agency (DARPA). It was presented at both Black Hat USA and USENIX Security this month.
+One of those populations, known as D1 outliers, showed high expression of genes involved in addiction and substance use disorder, especially genes related to opioid response. Another population, called D2 outliers, showed high expression of genes that respond to antidepressants. And, both populations appeared to respond strongly to clozapine, an antipsychotic drug used to treat schizophrenia.
+
+Clozapine is among the most effective antipsychotics available, but it’s not widely used in the United States because it can cause a fatal blood disorder in a small percentage of patients. Now that researchers know which cells the drug acts on, they may be able to design more targeted therapeutics to overcome psychosis, but without the harmful side effects, Heiman says.
+
+**Huntington’s vulnerability**
+
+Another key finding of the paper helps to shed light on why the dorsal (upper) part of the striatum is more vulnerable to Huntington’s disease. The disease is caused by an inherited version of the huntingtin gene that carries too many repetitive DNA segments, called CAG repeats.
+
+The researchers found that dorsal populations of medium spiny neurons express higher levels of the genes MSH2 and MSH3, which play a role in increasing the number of CAG repeats found in the huntingtin gene. As more of those repeats accumulate, the mutated version of the huntingtin protein becomes more harmful to cells.
+
+The researchers also found that a rare population of medium spiny neurons that forms island-like structures in the ventral striatum was more resistant to the accumulation of CAG repeats. Further study of this class of cells might help researchers learn how to induce other medium spiny neurons to become more resistant to the disease, Heiman says.
+
+“Looking at the genes that these neurons express or don’t express might give us some clues as to how to make other medium spiny neurons resilient like them,” she says.
+
+**Insights into substance use disorders**
+
+The researchers also compared their findings from human tissue samples to samples from mice and found several differences, especially in the expression of genes related to drug response and substance use disorders. One such gene, which encodes the mu opioid receptor (OPRM1), is highly expressed in the human D1 outlier population, but not in the corresponding population of neurons in mice.
+
+This means that standard mouse models may not fully capture the biology of opioid responses, and that engineering mice to express this receptor in a similar manner to humans could make those models significantly more accurate.
+
+“Some of the diversity we’re seeing in the human ventral striatum is species-specific and has implications for modeling substance use disorder in rodents,” Heiman says. “Now that we understand better the species differences, we can use the rodent models for specific questions that apply for conserved genes, but we could also think about humanizing some models.”
+
+The researchers hope that this map, built from tissue contributions by brain donors and their families, and assembled across disciplines and institutions, will provide an important starting point for researchers pursuing new treatments for some of the most difficult-to-treat brain disorders.
+
+The research was funded, in part, by the National Institutes of Health, the G. Harold and Leila Y. Mathers Charitable Foundation, the Freedom Together Foundation, the Natalia Mental Health Foundation, the Biswas Family Foundation, and the Milken Institute.

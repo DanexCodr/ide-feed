@@ -1,57 +1,181 @@
-Last week I published [What About Rails](https://jardo.dev/what-about-rails), a dive into DHH’s Rails World keynote. Smarter people than me had [interesting things to say](https://x.com/josevalim/status/2103751481757216781) about it:
+> **tl;dr** [jinx](https://fzakaria.github.io/jinx) is a tool that compiles Nix to TypeScript. All of nixpkgs, each 231,777 attribute, produces **the exact** drvPath Nix does. [Open the playground](https://fzakaria.github.io/jinx) or [evaluate hello in your browser tab](https://fzakaria.github.io/jinx/nixpkgs/#attr=hello) with no Nix installed anywhere. 😈
 
-> You have the most powerful tool you ever had, you have become a 1000x maker, and you can’t think of how to make your stack 10x better?
+Despite my admiration and joy for Nix, the language and tool, it is not what is magical. The store model is the great idea. Any similar tool built
+on the same model will have the same magical properties of reproducibility, and hermeticity.
 
-José Valim poses an excellent question. I tried to find an answer.
+I have spent [a lot](https://fzakaria.com/2026/09/11/a-nix-store-is-three-functions) [of posts](https://fzakaria.com/2026/09/24/every-package-is-already-installed) exploring what falls out of the Nix ecosystem, but the language itself is a small lazy functional language with a derivation primitive. You could design another one in a weekend.
 
-## The Bottleneck Isn’t Gone
+What you cannot design in a weekend is [nixpkgs](https://github.com/NixOS/nixpkgs): twenty years of fixes, every cross-compilation workaround, every `stdenv` phase, every patched `configure` script, every “this library needs this flag on aarch64-darwin” that somebody already solved. As of October 2026, it is 140,000-plus packages that build. That is the magic sauce 🥫, and it is written in Nix, so if you want it you write Nix.
 
-> They’re not gonna be web apps much longer. They’re gonna be native applications, because the price of developing those things has gone to damn near zero.
+Unfortunately it is also the trap. Anyone who wants to explore the store-model space from a different direction, a new language, a new evaluator, a new editor experience, must then start from zero packages. This is the graveyard where other reimplementations or forks of Nix go to die.
 
-The move to native apps for the frontend and Rust on the backend isn’t about any particular technology. It’s about cost. DHH isn’t the first to make this case.
+If however you could take the whole tree of nixpkgs and transform it into something another ecosystem already speaks, you could explore the store model without abandoning the twenty years of work that went into nixpkgs. 💡
 
-Back in August, Dan Luu posted [There’s no reason for software to be slow anymore](https://danluu.com/perf-opt/). In it, he argued that the cost of specialized performance work has dropped so significantly (because LLMs) that it’s now cheap enough for almost anyone to do.
+I chose TypeScript. Why? Why not!?
 
-Luu is *much* more careful than DHH. He points out that agents overfit benchmarks, that they are poor at experimental design (without human assistance), and that the time to get a *rigorous* result hasn’t dropped, just the time to get an *interesting* one.
+[![Ian Malcolm from Jurassic Park: your scientists were so preoccupied with whether or not they could, they didn't stop to think if they should](https://fzakaria.com/assets/images/derived/jurassic_park_jinx_meme-1000w.webp)](https://fzakaria.com/assets/images/jurassic_park_jinx_meme.jpg)
 
-Shortly after, Varun Gandhi posted a response of his own, titled [There continue to be reasons for software to be slow](https://typesanitizer.com/blog/performance-issues.html). He points out the shape of the argument: X cost too much, LLMs divide the cost by a large number, so people will now do X. Gandhi argues that while this holds true for people like Luu (experts working on their own projects), those cases are rare.
+TypeScript has a breadth of tooling and is supported in *nearly* every browser. It has an incredibly flexible type system that means we can express the shape of a derivation and all the oddities within Nix’s lazy evaluation model.
 
-Substitute the Rust backend, six native apps, or a CLI by last Friday for X and you get DHH’s keynote pitch. DHH *is* an expert working on his own product, at a company he controls. This is the kind of scenario that Gandhi argues is most likely to work. There’s not even a manager to squeeze the budget here. If it works anywhere, it works here. He took a best-case result and generalized it to “virtually all programmers, virtually all companies, by December.”
+I am a frontend impaired “noob” but I thought the idea was worth exploring.
 
-Gandhi’s most useful point is that writing<sup>[1](https://jardo.dev/hardly-promethean#block-222-fn1)</sup> the code was never the dominant cost. We also have to consider shipping the changes, maintaining them, and avoiding regressions. DHH’s experience with Hey Next is a week old. It’s not even a production system yet.
+[jinx](https://fzakaria.github.io/jinx) is the result. It is a transpiler that takes a `.nix` file and produces a `.ts` file that evaluates to the same value, with the same thunks, the same derivation strings, and the same drvPaths.
 
-He showed us this himself. Basecamp 5’s “Swiss cheese” architecture was born out of the reality that code was cheap, but coordination wasn’t. Gandhi tells a version of the same story: Bun’s LLM-assisted fork of Zig that compiles 4x faster but [can’t be upstreamed](https://ziggit.dev/t/bun-s-zig-fork-got-4x-faster-compilation-times/15183/18), because no one<sup>[2](https://jardo.dev/hardly-promethean#block-222-fn2)</sup> wants a non-deterministic compiler.
+I then compiled all of nixpkgs with it. Every attribute, every package, every module, every `stdenv` and `lib` function: 231,777 attributes in total.
 
-Removing a bottleneck doesn’t remove the queue; it just shows you where the next constraint is. With LLMs, we’re moving the bottleneck one step to the right, from writing code to everything that happens after. DHH’s solution is to skip it.
+The compiled tree lives at [fzakaria/jinx-nixpkgs](https://github.com/fzakaria/jinx-nixpkgs), one commit per nixpkgs revision.
 
-## Intolerance
+## [§](https://fzakaria.com/2026/10/12/nixpkgs-for-the-frontend-impaired#what-it-does)What it does
 
-> Now, part of that is that these programming languages like Rust are tremendously verbose and unappealing for humans to look at. So I don’t, and I allow the agent to just spit out more than was necessary, in a way I would never tolerate from my Ruby code.
+Each `.nix` file becomes one `.ts` module of the same name in a tree that mirrors the source. A lambda is an arrow function, a `let` is a block of consts, an attribute set is an object literal, `import` is `require`. You can *read* it.
 
-One of Gandhi’s reasons the cost argument fails is that people’s tolerance goes up. When work is asynchronous and agent-driven, we’re no longer face-to-face with slower git, laggier autocomplete, and longer builds. There’s no human sitting there waiting. If you still care about these things, you probably hate this.
+```
+$ jinx compile pkgs/by-name/he/hello/package.nix
+```
 
-DHH skips it all. You hand the task off “like you would a coworker” and “go back and review when there’s something ready.” “Review” doesn’t mean code review here; it means checking whether the button does the thing.
+```
+// Generated by jinx from .../pkgs/by-name/he/hello/package.nix. Do not edit.
+import * as nix from "../../../../.jinx/runtime/index.ts";
 
-Maybe that’s okay for his personal one-shot projects. It sounds like it’s working, a week into Hey Next. But his tolerance going up doesn’t raise anyone else’s. He’s free to not care what’s in the Hey Next box, but lots of people care what’s in the Rails box. So much for “virtually all programmers.”
+const here = nix.here(import.meta.url);
+const formals$1 = { args: { callPackage: false, fetchurl: false, hello: false, lib: false, nixos: false, stdenv: false, testers: false }, ellipsis: false };
 
-## The Scarcity Is Still Here
+export default nix.lambda((args) => {
+  const $ = nix.formals(args, formals$1);
+  const callPackage = nix.arg($, "callPackage");
+  const fetchurl = nix.arg($, "fetchurl");
+  ...
+  return nix.app(nix.sel(stdenv, "mkDerivation"), (finalAttrs) => ({
+    pname: "hello",
+    version: "2.12.2",
+    src: nix.thunk(() => nix.app(fetchurl, {
+      url: nix.thunk(() => nix.str`mirror://gnu/hello/hello-${nix.sel(finalAttrs, "version")}.tar.gz`),
+      hash: "sha256-...",
+    })),
+    ...
+  }));
+}, formals$1);
+```
 
-So, back to Valim’s question. You have infinite tokens. You’re a 1000x maker. You can create anything. Could you not find something, *anything* to create for Rails?
+Nix is lazy, so the emitted code wraps an expression in `nix.thunk(() => ...)` wherever Nix would allocate a thunk. 🤮
 
-This was never really about the budget. An increase in velocity doesn’t change priorities. Everything DHH built this year, he wanted for himself. Nothing he’s building needs Rails to be better, so he hasn’t made it better.
+The `jinx` evaluation writes nothing to `/nix/store`. `jinx instantiate` writes the `.drv` closure and `nix-store --realise` builds the derivation.
 
-> We can now want everything. We can now get everything.
+```
+$ jinx eval hello.nix
+{ drv = "/nix/store/j8q5j0x495vfrxgha5m6q40yjdi59334-hello-2.12.2.drv";
+out = "/nix/store/18bbdvag5v2f3d4y37pdbkzvh7s71cw4-hello-2.12.2"; }
 
-So, what is this everything? Turns out it’s a calculator. And a video editor. And some presentation software. Yet another Linux distro. And a rewrite of his own product. He’s been handed *unlimited* tokens, and this is all he could dream up. There’s some scarcity here. Scarcity of ideas.
+$ nix-instantiate --eval --strict hello.nix
+{ drv = "/nix/store/j8q5j0x495vfrxgha5m6q40yjdi59334-hello-2.12.2.drv";
+out = "/nix/store/18bbdvag5v2f3d4y37pdbkzvh7s71cw4-hello-2.12.2"; }
+```
 
-Look at that list. Not one single new idea. A microcosm of the industry right now. DHH’s wants are on display, and he wants nothing that isn’t his and nothing that didn’t already exist.
+We produce **the exact same** `.drv` and the exact same `drvPath` Nix would. That is the key to unlocking nixpkgs in another ecosystem: the store does not know the difference.
 
-LLMs are exceptional at making things that already exist. Luu admits this; earlier models overfit to the point of [comedy](https://chat.mistral.ai/chat/50900a4b-014a-4214-857b-36c18d5e0727)<sup>[3](https://jardo.dev/hardly-promethean#block-222-fn3)</sup>. A calculator is a safe ask. In 2004, Rails wasn’t. It was novel, and celebrated for it.
+## [§](https://fzakaria.com/2026/10/12/nixpkgs-for-the-frontend-impaired#nothing-lost-in-translation)Nothing lost in translation
 
-DHH’s keynote has this backwards. The era of hand-written code isn’t some charming thing we’ve outgrown. Before LLMs, executing on an idea took a hell of a lot more legwork. But you needed a spark first, and you still need it now.
+We can prove our translation is faithful. We evaluate every attribute of nixpkgs’ own CI configuration, [ci/eval/outpaths.nix](https://github.com/NixOS/nixpkgs/blob/6510408d147d8c5e6d76043e899e9251756f6a75/ci/eval/outpaths.nix), with `jinx` and with [nix-eval-jobs](https://github.com/NixOS/nix-eval-jobs), and compare all the `drvPaths`.
 
-In 2005, “Look at all the things I’m not doing” was a boast. He replayed it this year for the parallel. From where I’m sitting, the thing he’s no longer doing is coming up with new ideas.
+On nixpkgs [6510408d](https://github.com/NixOS/nixpkgs/commit/6510408d147d8c5e6d76043e899e9251756f6a75), on x86_64-linux, aarch64-linux and aarch64-darwin:
 
-1. “Writing” includes design and debugging, not just typing. [↩](https://jardo.dev/hardly-promethean#block-222-fnref1)
-2. Well, except for Bun, whose fork only has to work for them. [↩](https://jardo.dev/hardly-promethean#block-222-fnref2)
-3. Further reading: [Like Humans, AI Can Jump to Conclusions, Mount Sinai Study Finds](https://www.mountsinai.org/about/newsroom/2025/like-humans-ai-can-jump-to-conclusions-mount-sinai-study-finds) [↩](https://jardo.dev/hardly-promethean#block-222-fnref3)
+| attributes | identical drvPath | fail on both sides | differ | fail on one side only |
+| --- | --- | --- | --- | --- |
+| 231,777 | 229,063 | 2,714 | 0 | 0 |
+
+Zero differences or failing on one side.<sup>1</sup>1The 2,714 that fail on both sides are the attributes Nix refuses to evaluate such as unsupported platform, broken, or insecure.
+
+## [§](https://fzakaria.com/2026/10/12/nixpkgs-for-the-frontend-impaired#but-seriously-why)But seriously, why?
+
+Evaluating nixpkgs in TypeScript is ~3-5x slower. If that is all it did, that would not be very interesting. The point is not to make Nix faster, it is to make Nixpkgs *accessible* to the TypeScript ecosystem.
+
+Here are some “fun” things you can do with it.
+
+**Profile an evaluation.** `node --cpu-prof` on `firefox.drvPath`, folded through the source maps so every frame is a line of nixpkgs. Click it for the whole SVG.
+
+[![The top of a flame graph of evaluating firefox.drvPath, every frame a nixpkgs line](https://fzakaria.com/assets/images/jinx_flamegraph_firefox.png)](https://fzakaria.com/assets/images/jinx_flamegraph_firefox.svg)
+
+**Complete nixpkgs in your editor.** Automatic language server protocol support for every attribute in nixpkgs, with source maps to the original `.nix` file. TypeScript’s type system is expressive enough to model the shape of a derivation, so you get completion and type checking for free.
+
+[![pkgs.neo completing to neovim, neofetch and the rest; pkgs.rigrep underlined as an error](https://fzakaria.com/assets/images/jinx_typed_nixpkgs.png)](https://fzakaria.com/assets/images/jinx_typed_nixpkgs.png)
+
+**Step through a package.** Source maps put a breakpoint on a `.nix` line. Open the compiled tree in VS Code or Chrome DevTools, break in `pkgs/by-name/he/hello/package.nix`, and step into `stdenv.mkDerivation` as it builds the attribute set.
+
+```
+$ node --inspect-brk --enable-source-maps src/cli/main.ts eval hello.nix
+```
+
+**Ask nixpkgs a question in a loop.**  Interrogate and explore nixpkgs in a REPL or a script without having to remember the incantation to get a JSON dump of the whole tree and pipe it through `jq`.
+
+```
+import { loadNixpkgs } from "jinx";
+
+const pkgs = loadNixpkgs("/path/to/nixpkgs");
+const gpl = [];
+for (const name of Object.keys(pkgs.lib.licenses)) {
+  if (pkgs.lib.licenses[name].spdxId?.startsWith("GPL")) {
+    gpl.push(name);
+  }
+}
+console.log(JSON.stringify(gpl));
+```
+
+**Unit test Nix with node:test.** A `lib` function or a package definition is a function in a module, so it has a unit test like any other function in any other language.
+
+```
+test("hello builds the derivation Nix would", () => {
+  assert.equal(
+    pkgs.hello.drvPath,
+    "/nix/store/cnraiw0hbdl6jzdhbkn8dah2hqj7xgij-hello-2.12.3.drv",
+  );
+});
+```
+
+**Write a package in TypeScript.** The compiled form from `jinx` is faithful to Nix down to every thunk, which makes it exact and miserable to write by hand. Alternatively, there is a much nicer hand-written form.
+It interoperates with nixpkgs, so a package in TypeScript can call `stdenv.mkDerivation` and depend on anything in `pkgs`.
+
+```
+const hello = pkgs.stdenv.mkDerivation({
+  pname: "hello",
+  version: "2.12.2",
+  src: pkgs.fetchurl({
+    url: "mirror://gnu/hello/hello-2.12.2.tar.gz",
+    hash: "sha256-WpqZbcKSzCTc9BHO6H6S9qrluNE72caBm0x6nc4IGKs=",
+  }),
+  meta: { license: pkgs.lib.licenses.gpl3Plus },
+});
+
+console.log(hello.drvPath);
+```
+
+**It runs in a browser.** TypeScript is supported in every modern browser.
+You can evaluate nixpkgs in your tab, and it will fetch the compiled modules from GitHub as it needs them.<sup>2</sup>2There is probably some fun *code golf* trying to create output paths that you then subsequently boot with [trynix](https://fzakaria.com/2026/09/04/any-nix-package-live-in-your-browser) without ever using Nix.
+
+## [§](https://fzakaria.com/2026/10/12/nixpkgs-for-the-frontend-impaired#is-it-slow)Is it slow?
+
+Yep it’s slow, but crucially not *too* slow.
+
+When warm, with the modules compiled and V8’s code cache populated, per attribute on my laptop:
+
+| probe | nix | jinx warm | warm / nix | peak RSS nix | peak RSS jinx |
+| --- | --- | --- | --- | --- | --- |
+| `lib` | 0.53 s | 1.31 s | 2.5x | 238 MB | 501 MB |
+| `hello` | 0.37 s | 1.72 s | 4.6x | 88 MB | 376 MB |
+| `firefox` | 3.19 s | 11.44 s | 3.6x | 488 MB | 1608 MB |
+| `nixos` | 4.21 s | 21.35 s | 5.1x | 603 MB | 2377 MB |
+
+A first evaluation that has to compile every module it reaches is 3x to 10x in speed and memory is ~2x-4x because thunks are very expensive to the garbage-collector.<sup>3</sup>3You can find the full benchmark table and the raw data on the [benchmark page](https://fzakaria.github.io/jinx/bench/)
+
+Let’s say it is five times slower than a C++ interpreter that has had twenty years of people shaving it, from a brand new compiler that runs on a JavaScript engine. That strikes me as a fine place to start. 🤷
+
+## [§](https://fzakaria.com/2026/10/12/nixpkgs-for-the-frontend-impaired#can-i-try)Can I try?
+
+The source is at [github.com/fzakaria/jinx](https://github.com/fzakaria/jinx).
+
+It has no dependencies, no native code, and no daemon. You can run it with Node 24 or in your browser. The compiled nixpkgs tree is at [github.com/fzakaria/jinx-nixpkgs](https://github.com/fzakaria/jinx-nixpkgs).
+
+I am a little annoyed that I have to keep disclosing that I used “AI” for the code. People seem to enjoy “outing” you for you it, as it is some morale failing. Let me save them the trouble: an AI co-authored a lot of this software with me.
+
+[![A red rubber stamp in the style of a 100% beef label: premium quality, 100% AI, always fresh](https://fzakaria.com/assets/images/derived/100_percent_ai_stamp-1280w.webp)](https://fzakaria.com/assets/images/100_percent_ai_stamp.png)
+
+Here is your stamp. You can stop reading here if that is a dealbreaker, the derivations will not change their hashes for you.

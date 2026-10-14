@@ -1,325 +1,115 @@
-I suspect it to be a common character trait among us hackers: I give
-myself a hard time disposing of hardware.  So my most recent computing
-device for everyday tasks is a Pinebook Pro, leaving you to guess how
-old my other devices are.  Why buy new when stuff still works?
+If you're not new here, you know that most of my older posts read more like technical articles than *opinion* pieces. So, to change things up, this is probably the first "true" blog post I publish here. I'm going to share a personal (subjective) opinion, with the goal of getting you thinking about the direction our industry is heading.
 
-Anyhow, my desktop machine's motherboard is particularly noisy
-(there's quite a lot of hiss you'd also get if you probed some
-computing device with a solenoid—and I do not appreciate that except
-when performing experimental live music), but which sound-card should
-I buy?  Turns out there is a Rane SL3 laying around in my studio—an
-artifact from a previous life when I was DJ-ing sub-bass heavy music
-from Tempa, Skull Disko and Kraken Recordings.  Out of curiosity I
-plug the device's USB into my machine: the blue LED turns on and I can
-confirm that at least the device's USB works:
+A few days ago, while playing music with some friends, we drifted onto the topic of how music production quality has dropped over the last few decades, and how the value people place on music has changed.
 
-```
-$ lsusb
-[...]
-Bus 003 Device 002: ID 1cc5:0001 Rane Corporation SL 3
-[...]
-```
+Everyone in the group is in their late 30s or early 40s, so our view is shaped mostly by the last 30 years. And, as you might expect, our group of boring middle-aged men agreed that:
 
-But will audio work with my machine?  Does it—maybe—already work, just
-like that?  I check my output capable sound devices using
-`pavucontrol`—without success.
+- Overall, the quality and refinement of music production have decreased.
+- Music has lost some of its value and no longer feels as essential as it once did.
 
-The Rane SL3 is quite a potent audio interface with 6 input and 6
-output channels (3 stereo pairs each, the inputs being capable for
-amplifying and equalizing vinyl signals).  Being sold for its
-once-upon-a-time top-notch Serato Scratch software it was capable to
-emulate the feeling of playing vinyl discs (which you could scratch!)
-when in fact playing audio from a computer.  This was a crucial step
-in the transition from DJs wanting more adequate haptic feedback for
-their work than what CD players (and their controllers) had to offer.
-Of course, nowadays "CD players" are the de-facto standard with the
-"player" not having much to do with optical storage anymore, and all
-the functionality that *Serato Scratch* on your laptop used to offer
-already included in them.  What a time to be alive!
+To be clear, we're not saying great music isn't still being made. There are plenty of talented people making excellent music right now. The problem is that most people will never hear their names, and they get little visibility or recognition.
 
-Since I know of no better purpose for it (my years as a DJ have passed
-leaving little to no nostalgia), I plan to use the device.  Having
-become a GNU/hacker in the meantime, the option of switching operating
-systems just to use an audio device is completely out of the question.
-Computing freedom is essential to my life and shall not be compromised
-by the simple convenience to listen to audio.  I also don't have time
-for such shenanigans.  So I start searching.
+So here is my (controversial) take, up front:
 
-Unfortunately, there is nothing readily packaged in GNU Guix (which
-is, of course, the best of all package managers and operating
-systems).
+And I believe software is heading down exactly the same road music already took.
 
-```
-$ guix search "rane.*sl3"
-$
-```
+### What Happened to Music
 
-So I query a web search engine and promptly find [a software repository
-that hosts a Linux kernel module](https://github.com/nvgeele/snd-rane-sl3).  Awesome!
+When we tried to work out why, we kept landing on the same answer: making music became **easy and cheap**.
 
-## Packaging a Linux audio driver module for GNU Guix
+Thirty years ago, recording a decent album meant a studio, an engineer, tape, rented time, and a label willing to bet money on you. That cost was a filter. It wasn't a fair filter, and plenty of great artists never got through it, but it meant that whatever reached the shelves had been worked on, argued over, and polished, because a lot of money and many people's time were riding on it.
 
-Figuring this would just work—why would anyone craft such a thing and
-publish it if it did not—I figure all that is missing is this piece of
-readily available code running on my machine.  In the *industry* we
-call this process packaging.  Packaging software in Guix is—in my
-experience—usually relatively easy.  And in the cases where it is not,
-we are a wonderful community that strives to enable and empower fellow
-users (and contributors).
+Then the tools got cheaper. A laptop, a DAW, and a pair of headphones replaced the studio. Loops, presets, sample packs, AutoTune and, more recently, AI generation removed most of the remaining friction. Distribution followed the same path: you no longer needed a label or a record shop, just an upload button.
 
-I use a yasnippet template in GNU Emacs for the package outline, fill
-in the various places (TAB and type, yeah!) and build the package.  I
-have to turn off tests (because there are none) and comment that fact.
-Since there is no `configure' phase I delete it. Then I add a simple
-`cd` invokation to the build process.  That is
-all.  Guix' `linux-module-build-system` and the `linux-libre-headers`
-input are doing all the legwork.
+On paper this is wonderful, and in many ways it is. Far more people can make music now. But a couple of things happened alongside it:
 
-Of course I did not know about that build system—this is the first
-time I package a Linux module.  But a query on [libera.chat](https://libera.chat)'s #guix
-(Guix' official IRC channel) quickly yielded this possibility.
+- Volume exploded. Record label executives have put new uploads at roughly 100,000 tracks a day across platforms, and even the lower estimates had Spotify alone taking in around 49,000 a day. Nobody can listen to more than a tiny fraction.
+- The craft got skipped. When the tools do the hard parts for you, it becomes possible to release something without ever learning why it works. A lot of what gets published sounds "fine," and fine is the problem.
+- Value moved away from the work. When something is endless and almost free, people stop treating it as precious. We used to save up for an album, play it until we knew every second of it, and read the liner notes. Today music is mostly background, a flat monthly fee for access to everything, which in practice means attachment to very little.
+- Visibility replaced quality. With so much out there, what wins is not necessarily the best work but whatever the algorithm, the marketing budget, or a viral moment pushes. Formulaic, safe, generic tracks are perfectly suited to that system.
 
-```
-(define-public snd-rane-sl3
-  (let ((commit "01099892261b55ec5ee814292d840eeb664c1904")
-        (revision "0"))
-    (package
-      (name "snd-rane-sl3")
-      (version (git-version "0" revision commit))
-      (source (origin
-                (method git-fetch)
-                (uri (git-reference
-                       (url "https://github.com/nvgeele/snd-rane-sl3")
-                       (commit commit)))
-                (file-name (git-file-name name version))
-                (sha256
-                 (base32
-                  "1j2aan5xmbi8hgkzzwjb7rarqh4g65rg3s1qd1c8x5m6fpqdnvli"))))
-      (build-system linux-module-build-system)
-      (arguments
-       (list
-        #:tests? #f ; No tests.
-        #:phases
-        #~(modify-phases %standard-phases
-            (delete 'configure)
-            (add-before 'build 'change-directory
-              (lambda _
-                (chdir "snd-rane-sl3"))))))
-      (inputs (list linux-libre-headers))
-      (home-page "https://github.com/nvgeele/snd-rane-sl3")
-      (synopsis "Linux ALSA kernel driver for the Rane SL3 USB Audio interface")
-      (description "snd-rane-sl3 provides a native Linux kernel module that
-enables the Rane SL3 to work as a standard ALSA audio device, supporting 6
-channels (3 stereo pairs) of 24-bit PCM audio at 44.1kHz and 48kHz sample
-rates.")
-      (license license:gpl3))))
-```
+### Two Acts
 
-It may not look especially beautiful, at first, but I am convinced you
-intuitively understand the vast majority of what is going on here.
+One of my favorite music commentators, Rick Beato, discusses this point very well in [his remarks](https://www.youtube.com/embed/1bZ0OSEViyo) on the history of the music business and technology. He splits this into two acts, and both map very well onto what I'm also observing in other industries.
 
-This is what amazes me with people using not-that-modern build
-infrastructure.  A simple package definition (and a reference to a
-specific Guix checkout) is all it takes for me to reproduce software
-builds other people just crafted.  Reproducibility is not—how it is
-attempted in too many other build environments and processes—a costly,
-painful, exhausting add-on, it is a pillar of our computing and
-enables us to collaborate and push our computing at relative ease,
-where not-so-modern workflows either need to use giant binary packages
-to reproduce software bit-by-bit or outright refuse to do so, leaving
-bug-hunts in manually traversing differences in the dependency trees
-of their builds.
+##### Act One: Too Easy to Make
 
-## Mainlining the package
+Early recording studios had singers and musicians crowd around the mouth of a large cone-shaped horn. Their sound would travel down the horn's throat, vibrating a stylist, and cutting the audio directly into a cylinder made of soft wax—ultimately capturing a live performance.
 
-Since the package is licensed with a freedom respecting
-license—version 3 of the GNU General Public License (GPL) — I open [a
-Pull Request](https://codeberg.org/guix/guix/pulls/6969) on Codeberg to add the package to the main Guix
-repository.  At GNU Guix we work relentlessly to provide as many users
-with all the free, working, up-to-date software they could possibly
-want.  So each contribution, each new package enables more users to
-get the most out of their computing: like in this case the usage of a
-completely fine and working sound-card.
+In the 1940s and 50s, Frank Sinatra stood in front of an orchestra with one microphone and sang the take.
 
-Pull Requests are how we invite other community members in our
-community to review our changes and give input whether they still see
-potential to improve the patch.  There is an implicit(?) agreement
-that good quality in software is when code is understandable and thus
-maintainable (by humans).
+Then came multitrack machines and *punch-ins*, then [AutoTune](https://en.wikipedia.org/wiki/AutoTune) in 1998, then tools like *Beat Detective* that snap every drum hit to the grid. The swing and the human feel is simply gone!
 
-## Testing
+- Budgets went, craft went with them. Around 2000, the money to hire great session drummers dried up. Instead of better musicians, records got fixed in the computer: the drums, then the bass, then the guitars.
+- Presets instead of skill. Amp modelers, preset sounds, and MIDI packs with pre-programmed chord progressions mean everyone is using the same algorithms.
+- Everything starts to sound the same. Over-reliance on the same tools makes music more formulaic, which is why, he argues, the same trap beats have been in vogue for so long: people know they work, so they keep using them.
+- Quantity over quality. Easier production means faster production, which means an oversaturated market where exceptional work is harder to find.
 
-But now to the real question: how should I test that package?  Since
-the package describes a Linux kernel module, I'd have to add it to my
-operating system definition, reconfigure my system, reboot it,
-eliminate bugs and continue this cycle over and over again until it
-works.  But since that machine is operational (and does other tasks in
-the background) I'd rather not reconfigure my system on top of a
-source checkout which I would have to roll-back (or pass the
-`–allow-downgrades` flag to a future `guix pull` invocation).  The
-good news is: there is no need to go down that route.  Instead I do
-the following:
+And then there's AI. Beato even mentions he gets about 20 emails a day that start with something like *"I wrote a song that I think can be a hit. I used AI to do it because I know nothing about making music."*
 
-I adjust the `bare-bones.tmpl` minimal operating system example
-that comes with the Guix source repository to
+He also makes a point that stuck with me: **even the shortcuts depend on craft**. Samples come from people who knew how to record them. AI models are trained on music made by people who knew how to make it.
 
-1. refer to the new package in the `loadable-kernel-modules` field and
-2. add alsa-utils to the packages field.
+##### Act Two: Too Easy to Consume
 
-```
-  modified   gnu/system/examples/bare-bones.tmpl
-@@ -4,7 +4,7 @@
+The current state of streaming is similar to a kitchen tap. Turn it on... music flows down the drain, then turn it off.
 
- (use-modules (gnu))
- (use-service-modules networking ssh)
--(use-package-modules screen ssh)
-+(use-package-modules audio linux screen ssh)
+In 2025, more than 100,000 new songs were added to streaming platforms every day! That's more than one song per second, for the entire year.
 
- (operating-system
-   (host-name "komputilo")
-@@ -20,6 +20,7 @@
-   ;; It's fitting to support the equally bare bones ‘-nographic’
-   ;; QEMU option, which also nicely sidesteps forcing QWERTY.
-   (kernel-arguments (list "console=ttyS0,115200"))
-+  (kernel-loadable-modules (list snd-rane-sl3))
-   (file-systems (cons (file-system
-                         (device (file-system-label "my-root"))
-                         (mount-point "/")
-@@ -43,7 +44,7 @@
-                %base-user-accounts))
+Now, if you are as old as I am, you probably remember the perceived value that one single track had! And that value was both financial and emotional. We mowed other people's lawns to be able to buy a 10-dollar record, then we played it over and over. Got used to it. Learned from it. That single album (which was already designed and crafted with a *sequence* of songs in mind) took us months to consume. We shared them with friends, read the credits on the back cover, spoke about our favorite artists when we should be paying attention in school, and many of those songs became almost supporting characters in the most special moments of our lives.
 
-   ;; Globally-installed packages.
--  (packages (cons screen %base-packages))
-+  (packages (cons* alsa-utils screen %base-packages))
+Today, all of Bach, Michael Jackson, Miles Davis, and Kendrick Lamar costs $10.99 a month, which is the price of what we used to pay for one album!
 
-   ;; Add services to the baseline: a DHCP client and an SSH
-   ;; server.  You may wish to add an NTP service here.
-```
+What struck me most is that none of this is really about talent. It's what happens to any craft when making it becomes nearly free, consuming it becomes nearly free, and the reward for doing it well disappears. Good music didn't disappear. It got buried, and the average experience of music got thinner.
 
-I build an emulation-ready image at the ease of a simple command-line
-invocation like this:
+I confess I had to pause and really reflect about these ideas. My mind is in conflict because we often tend to think of "democratization" as something inheritely good and unquestionable (sacrosanct).
 
-```
-$ ./pre-inst-env guix system vm gnu/system/examples/bare-bones.tmpl
-```
+### Is Software Next?
 
-from the source checkout where I have the package definition for the
-kernel module ready.  This returns the path to the script that starts
-that VM on the standard output.  This is very convenient, because it
-allows me to build and start the machine while passing options.
+For most of my career, the process of crafting software required *some* sweat. Even when I was working with dumbed-down technologies, like MUMPS and ZIM-L4G (both designed to be easy and tailored for rapid-development), the entire team was required to understand the language, the platform, the architecture, the edge cases, and the hundred small decisions that separate something that works from something that works *well*. That difficulty was our studio time and our tape. It slowed everyone down, and it also forced a certain level of care.
 
-But how can I conduct the test?  I have real, physical hardware
-attached to my workstation and a kernel-module in a virtual machine.
-Research on the interwebs yields that I need to give myself permission
-so that `qemu` can actually route through USB devices.  I do so by
-changing ownership of the relevant Bus/Device pair (see the output of
-`lsusb` above for the correct numbers) which is in my case:
+AI is removing that friction at a speed music never experienced. Today someone with no programming background can describe an app in a few sentences, "vibe code" their way through the errors, and publish it the same afternoon. App stores, game stores, plugin marketplaces, and SaaS directories are already filling up with titles that look alike, work alike, and were clearly cheap to make.
 
-```
-$ sudo chown $(whoami) /dev/bus/usb/003/002
-```
+Putting music and software examples next to each other, and they line up almost one for one:
 
-After a bunch of trial-and-error iterations I end up with these qemu
-options:
+| Music | Software |
+| --- | --- |
+| Quantized drums that are "perfect" but have no feel | Generated code that technically works, but nobody truly understands |
+| Amp modelers, presets, and MIDI chord packs | The same templates, UI kits, and AI-suggested patterns in every app |
+| "I used AI because I know nothing about making music" | "I built this app with AI and I know nothing about programming" |
+| Samples come from people who knew how to record them | AI coding tools were trained on decades of code by people who knew what they were doing |
+| 100,000 new songs a day | A thousand nearly identical to-do apps, games, and SaaS clones |
+| Everything for $10.99 a month | An expectation that software should be free, or nearly free |
 
-```
-$(./pre-inst-env guix system vm gnu/system/examples/bare-bones.tmpl) \
-    -usb \
-    -device qemu-xhci \
-    -device usb-host,hostbus=003,hostaddr=002 \
-    -nographic
-```
+If the music story is any guide, I expect a few things to follow:
 
-This launches a non-graphical virtual machine running the GNU system
-into which I can login simply stating the username `root'.  I check
-for the USB device, then for the module in the VM.
+- A flood of "fine." Most of these products will technically work. They'll also be generic, shallow, and built without any real understanding of the problem, the user, or the code underneath. Nobody will have sweated over the details, because nobody had to.
+- Hidden costs pushed onto users. In music, low effort mostly means a boring song. In software it can mean security holes, lost data, abandoned products, and bugs nobody understands well enough to fix, including the person who "wrote" it.
+- Value draining from software itself. If anything can be generated in an afternoon, people will start expecting software to be free or nearly free, the same way they now expect music to be. That pressure lands on everyone, including the teams still doing careful work.
+- Discovery becoming the real product. When there are a thousand nearly identical apps, the one that wins is rarely the best built. It's the one with the best marketing, the best SEO, or the luckiest launch.
 
-```
-root@komputilo ~# lsusb
-Bus 001 Device 001: ID 1d6b:0001 Linux Foundation 1.1 root hub
-Bus 002 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
-Bus 002 Device 002: ID 1cc5:0001 Rane Corporation SL 3
-Bus 003 Device 001: ID 1d6b:0003 Linux Foundation 3.0 root hub
-root@komputilo ~# lsmod | grep rane
-snd_rane_sl3           40960  0
-snd_pcm               188416  1 snd_rane_sl3
-snd                   147456  3 snd_timer,snd_rane_sl3,snd_pcm
-```
+I want to be fair here: lowering the barrier is not a bad thing in itself. Plenty of people who were locked out of building software will now make genuinely useful things, just as home recording gave us artists who would never have gotten a record deal. I use these tools myself. The question isn't whether ease of creation is good or bad. It's what happens to quality and value when **effort stops being part of the price**.
 
-This looks promising!  The device was attached, the kernel recognized
-it and correctly loaded the module to speak to it.  Now let's test
-audio!
+### The Exceptions
 
-```
-root@komputilo ~# aplay -l
-**** List of PLAYBACK Hardware Devices ****
-card 0: RaneSL3 [Rane SL3], device 0: Rane SL3 [Rane SL3]
-  Subdevices: 1/1
-  Subdevice #0: subdevice #0
-```
+Great music is still being made, and I know great software will still be made. But look closely at the exceptions in music today and you'll notice a pattern: they are the people who chose the hard way when the easy way was right there. The band that records live in a room looking for a 'warm-sounding' song. The drummer who refuses to be quantized. The artist who spends two years on an album instead of two days on a track. They are exceptions precisely because they go against the easy, cheap way of making things.
 
-Awesome: the ALSA utilities recognize the audio device!  Now let's
-hear it.  Since I only have two speaker channels set up in my studio
-(and let's be real: hearing stereo sound to me seems like an adequate
-test for the kernel module to work) I run `speaker-test` with the two
-channel option after hooking up the first stereo output pair of the
-sound-card to my sound system:
+I think software will go the same way. When generating something becomes trivial, the scarce things become:
 
-```
-root@komputilo ~# speaker-test -c 2
+- Taste: knowing what to build, and just as importantly, what to leave out.
+- Understanding: knowing why the code works, so you can fix it, secure it, and evolve it for years, not just ship it once.
+- Care for the details: the parts no prompt asks for. The edge case handled gracefully, the error message that actually helps, the screen that loads fast on a bad connection.
+- Trust: being the team people know will still be there, still maintaining the product, next year.
 
-speaker-test 1.2.11
+None of that comes from the tool. It comes from people who enjoy the process enough to keep caring about it! Similar to a 17-year-old who couldn't believe he was getting paid to have fun writing obscure config files for HP-UX servers.
 
-Playback device is default
-Stream parameters are 48000Hz, S16_LE, 2 channels
-Using 16 octaves of pink noise
-Rate set to 48000Hz (requested 48000Hz)
-Buffer size range from 2 to 14563
-Period size range from 1 to 7281
-Periods = 4
-was set period_size = 7281
-was set buffer_size = 14563
- 0 - Front Left
- 1 - Front Right
-Time per period = 5.473943
-```
+### Is there a Conclusion?
 
-What a peaceful, calming sensation that floods my body hearing that
-pink noise coming out of my speakers.  Now all I have to do is to wait
-for someone (other than myself) in the audio team to approve of my
-Pull Request, push the change, pull, add the module to my operating
-system configuration(s), reconfigure, reboot and I will be able to
-enjoy non-hissy sound!
+So, does ease of creation lower quality and value? My honest answer is **yes, overall it does**. And I know this sounds horribly elitist, but I'm trying to set aside my automatic aversion to the word *elitist* and honestly examine whether we're losing more than we're gaining when we become too concerned about offending (or even excluding) others.
 
-## The aftermath
+Ease of creation lowers the minimum effort needed to put something out into the world, and the average quality drops with it. Quality doesn't disappear completely, but it becomes the exception rather than the norm: diluted, harder to find, and easier to undervalue. Music didn't lose its great artists. It lost the conditions that made people notice and value them.
 
-After input from an audio-team's colleague we agreed that a Linux
-kernel module should not live in any of the audio-team's modules, but
-rather in `gnu/packages/linux.scm`, together with other Linux
-packages.  As much as this package is audio-related, this very piece
-of software *only* works with a Linux kernel.  And since works are
-ongoing in the GNU Hurd parts of the world, we wisely anticipate that
-we don't want to clean up later when we can do it now.
+Software is standing at that same door right now. We can let it become an endless stream of cheap, generic titles, or we can use these new tools to spend less time on the boring parts and more time on the parts that actually matter.
 
-So I fix my commit, rebase it onto current master, force-push the
-branch so the Pull Request reflects my changes and request a review
-from the kernel team.  Unfortunately noone in that team found time to
-review my request within a week's time.  As a committer to the GNU
-Guix project I am allowed to push my own changes even when they are
-not approved in a review process, but only if I am confident that they
-are good and I have waited for at least one week.  So I eventually
-did.  Then I pulled, added the module to my system definition,
-reconfigured my system, rebooted and… TADAA!  Finally am able enjoy
-non-noisy audio on my machine.
+I don't have a neat conclusion, and that's fine. This was never meant to be a technical article. So I'll leave you with the question my friends and I couldn't settle:
 
-If it weren't for…
-
-After a few minutes I notice some irregular short periods of silence
-while playing music.  I never had this before, so this must be cause
-in my audio device change.  Using `pw-jack qjackctl` I spawn a GUI in
-which I can increase the device's audio buffer, which I do.
-Everything is just fine after that change.
-
-And just like that, with not that much effort, I was able to save a
-piece of hardware to become trash and enable other owners of that
-hardware to use it, indefinitely, for free.  Free software
+I'd genuinely like to hear what you think. You can yell at me on [Twitter](https://twitter.com/pikuma). And if you're one of those people who enjoys learning how things *really* work under the hood, remember to visit the [courses](https://pikuma.com/courses) page.

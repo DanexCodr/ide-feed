@@ -1,65 +1,33 @@
-Over the past 80 years, America’s bold, sustained investment in scientific research, and the** **discoveries, ideas and innovations that flowed from it made America a world leader. The nation’s scientific leadership has been essential to our shared prosperity and national security, and delivered real benefits for all Americans.
+*The deployment of automated software systems called AI agents has recently exploded. A November 2025 report by *[*MIT Sloan School of Management and Boston Consulting Group*](https://sloanreview.mit.edu/projects/the-emerging-agentic-enterprise-how-leaders-must-navigate-a-new-age-of-ai/)* found that 35 percent of surveyed businesses had already deployed AI agents, while another 44 percent planned to implement agentic AI soon. *
 
-On June 16, *Scientific American* released a special section, “[The Young American Scientists](https://www.scientificamerican.com/report/young-american-scientists-2026/),” which celebrates early-career professionals actively engaged in scientific research, and features commentary from MIT faculty on why they continue to be so devoted to curiosity-driven science, demonstrating how their hard work and dedication make Americans safer, healthier, and more prosperous. Among the section’s profiles are many MIT faculty, students, and alumni, who share their advice for young scientists and their reasons for optimism in uncertain times.
+*To understand the fundamentals and potential impacts of these increasingly popular tools*, MIT News* spoke with Phillip Isola, an associate professor in the Department of Electrical Engineering and Computer Science (EECS) and a member of the Computer Science and Artificial Intelligence Laboratory (CSAIL), who studies the intelligence AI agents possess, as well as the underlying models and mechanisms that power agentic AI systems.*
 
-[President Sally Kornbluth emphasizes](https://www.scientificamerican.com/article/sally-kornbluth/) the importance of curiosity-driven research, noting that discovery “is part of our American DNA and has yielded vast returns to the citizens of this country and the world.” She adds, “what’s needed is a rededication to public investment in American science. Even if I were not the leader of a premier scientific institution, this is what I’d say. Investing in American science is not a gamble; if you look back in time, there is no question about the benefits.”
+**Q: **What is agentic AI and how is it different from generative AI models like ChatGPT and Claude?
 
-Adds [Institute Prof. Robert Langer](https://www.scientificamerican.com/article/robert-langer/): “What American science has done over the past 50, 100 years has been remarkable.”
+**A: **Agentic AI is AI that takes actions in the world. These actions could be a physical action, like robotic manipulation, or a digital action, like booking a flight. On the other hand, we think of generative AI as making up stories, poems, art, and images, rather than taking actions for us.
 
-*Scientific American* notes that at MIT, that commitment to discovery is reflected in initiatives such as [Curiosity on a Mission](https://curiositymission.org/) and the [Generative AI Impact Consortium](https://news.mit.edu/2025/introducing-mit-generative-ai-impact-consortium-0203), which are aimed at finding “solutions to real-world problems in a way that is beneficial to society.” “On one hand, we’re at a time, technologically, where things could not be more exciting [and] our science [could not be] more cutting-edge. At the same time, we’ve never seen a situation where people felt so uncertain about the continuity of science funding, particularly when it comes to the basic discovery science that fuels the economy and will fuel societal impact a decade or two from now,” says Kornbluth.
+The word “agent” is just a brand name. It usually means AI that is going to help people interact with an application, a website, or the physical world. Most agents we encounter today are digital agents, like customer service agents you can talk with about product complaints.
 
-**The first sparks**
+Most companies that offer agents use the same few AI models under the hood and give them the ability to take actions and remember what happened. An agent starts with a fundamental generative AI system, like Claude, at the core. Then companies put different wrappers around that foundation model for their product or application. Those wrappers might be specific tools that agent can use, and those tools depend on the application. Maybe the agent has access to a calculator so it can solve math problems, or maybe it has access to a more complicated hard drive and operating system so it can remember a firm’s financial data and past business negotiations.
 
-Witnessing invention can spark a lifelong fascination with science. After the launch of Sputnik, the world’s first artificial satellite, Prof. Alan Lightman “became entranced with the idea of building a rocket” of his own. In his essay “[My childhood in science](https://www.scientificamerican.com/article/alan-lightman-on-his-childhood-in-science/),” Lightman describes how these early scientific memories and experiments have shaped him to be a well-rounded writer and physicist.
+The biggest challenge in developing agentic AI comes from a lack of training data. If I want to create a system that can go online and book a flight for me, that seems pretty simple. But we don’t have a lot of data that spells out exactly how to do that — where to move the mouse, which buttons to click on, what to do if something goes wrong, or how to call somebody and negotiate about the price of the airline ticket. One way to train a system like this is to have the AI agent visit airline websites, try things out, and see what works and what doesn’t work. These environments are hard to model, so often the agent must learn by trial and error.
 
-“Now more than ever, when much of the world, including the U.S., has lost its moral compass, leading to a dog-eat-dog mentality, we need science combined with literature, philosophy, history and art. We need to discover not only the physical world but also our own humanity,” writes Lightman.
+**Q: **What are some promising applications of agentic AI?
 
-Likewise, [Prof. John Urschel](https://www.scientificamerican.com/article/john-urschel/), a former NFL player, emphasizes the importance of collaboration and having a wide range of interests.
+**A: **I think the area where we’ve seen the most success has been with coding agents. This is something that evolved from generative AI. People trained language models on code, and then they can predict what a human would do to solve a coding problem. In addition, an agent can learn to do this by going through a feedback loop where it tries out different solutions and checks to see if it got the answer right. As long as it can check the answer, the AI agent can perform this trial-and-error loop until it figures out a good strategy.
 
-“A lot of good research happens when people can draw on tools, techniques and insights from different areas, disciplines and even fields. I hope we can encourage promising young scientists to establish strong, broad backgrounds and to communicate frequently with those outside their particular areas,” says Urschel.
+But there is always a balance between automating decision making versus simply assisting and informing humans. Analytical AI methods, like the systems that help predict possible outcomes of decisions, are not agentic in nature, but are very informative to human decision-makers. For cases that are either high-stakes or safety-critical, like medicine, security, high-level business policies, etc., the technology might not be ready for AI to completely automate those processes, or we might not even be comfortable with that.
 
-**Invention and discovery**
+**Q: **Are there risks we should be thinking about when using AI agents?
 
-*Scientific American *highlights students and alumni looking to better the world by doing everything from investigating neurological disease to securing our energy future.
+**A: **One big risk area comes from the fact that it is often very easy to get agents to do certain types of work for you. With coding agents, you can “vibe code” and just ask the agent to make a code for you, so you don’t have to do the hard work yourself. There is a big risk that, because it is so easy, people will not put enough effort into verifying that it is doing the right thing. Bugs will be introduced, private data will get leaked — this is already happening.
 
-At MIT, [Visiting Scientist Alice Stanton](https://www.scientificamerican.com/article/alice-stanton/) developed miBrain, a 3D tissue model of the human brain, to help scientists develop personalized treatments for Alzheimer’s and Parkinson’s. Stanton has developed a miniature version of miBrain, a brain-on-a-chip, to better test therapeutics.
+Agents aren’t perfect, in the sense that they might make mistakes because they are not well-trained and don’t know what to do. But even if they are very competent, if a human doesn’t use them appropriately or gives them an instruction that is too vague, the AI agent could make a mistake because the human made a mistake. If humans are less involved in thinking through all the consequences, I think we might be more prone to making those mistakes.
 
-Stanton notes “the road to effective treatments is long and bumpy,” compounded by cuts to federal funding. “When we have a loved one who gets sick, we want a treatment—we want something to cure them. It doesn’t come out of thin air,” she explains.
+An additional aspect is the risk of de-skilling. It is unclear how far this will go, but when we are relying on agents to do our homework, our coding, and our math, we might lose the ability to do that ourselves, and we might lose that ability too soon because the technology is not yet ready to fully automate those processes.
 
-[Bob Mumgaard](https://www.scientificamerican.com/article/bob-mumgaard/) PhD ‘08, CEO of Commonwealth Fusion Systems is working to commercialize fusion power. “Whether in areas such as fusion—or in drugs by design for diseases such as Alzheimer’s and Parkinson’s or in [the creation of] materials we never thought possible—our ability to use new tools to tackle some of these big, meaty problems is super exciting,” Mumgaard emphasizes.
+**Q: **What does the future hold for agentic AI?
 
-[Graduate student Alex Zhang](https://www.scientificamerican.com/article/alex-l-zhang/) tackles context rot: the phenomenon when AI language models degrade as they produce more information. To solve this issue, Zhang develops recursive language models (RLMs) that enable the model to work with itself to reevaluate reasoning.
+**A: **What we think of now as agentic AI refers to large language models using tools to interact with digital and physical systems. One obvious limitation is that, under the hood, these have the architecture of a language model and are trained on text data. To make even more powerful AI agents, we might need to model videos, physical forces, time series, radar scans, and other modalities. We might need to have models with fundamentally different architectures that can handle continuous data, high-dimensional data, stochastic data, and so on.
 
-“The types of research that I want to work on are things that I think should be shared for the benefit of people in general,” says Zhang.
-
-**The benefits of scientific collaboration **
-
-What happens when scientific disciplines join forces at MIT?
-
-[Prof. Emery Brown](https://www.scientificamerican.com/article/emery-brown/) highlighted the MIT [Health and Life Sciences Collaborative](https://heals.mit.edu/) (HEALS), noting that the effort brings together scientists and engineers from a variety of backgrounds to tackle the most pressing health challenges of our times.
-
-Brown explains that with President Kornbluth’s support, HEALS encourages “faculty to look more deeply into solving health care problems. The enthusiasm for HEALS has been contagious across the campus.”
-
-[MIT alumna Lucy Jones PhD ‘81](https://www.scientificamerican.com/article/lucy-jones/), who is known for her work advancing public safety during earthquakes and for developing the first American earthquake drill called the Great ShakeOut, shared the necessity of collaboration in developing scientific solutions for pressing real-world problems.
-
-“Solutions have to be done in collaboration, which means spending time with policymakers,” says Jones.
-
-Jones also shares how scientific advances in computing have helped make Americans around the country safer when the ground starts to shake.
-
-“My first year in grad school, I was reading paper seismograms. Now everything is computerized. We used to do field deployments; now we have permanent networks. We’re starting to use fiber‑optic cables as seismometers,” says Jones. “Computers have changed everything, including science.”
-
-**The state of American science **
-
-Within the profiles, interviewees were asked what needs to change in American science right now. Many expressed concerns with federal funding.
-
-“I’m fortunate to work with extraordinary students and postdocs, but the infrastructure that lets them do their best work is under real stress: funding instability at the National Institutes of Health and the National Science Foundation, immigration uncertainty for international scientists and an erosion of public trust in expertise,” says [Prof. Feng Zhang](https://www.scientificamerican.com/article/feng-zhang/).
-
-Zhang developed CRISPR-based genome editing tools, which could increase our understanding human diseases and lead to new treatments. “We can lose the lead rapidly if we do not protect our innovation ecosystem,” he says.
-
-Positive developments include the progress [Prof. Alan Guth](https://www.scientificamerican.com/article/alan-guth/) has witnessed in cosmology.
-
-“With new techniques, we’re able to unravel, to make sense out of, what we’re observing,” says Guth. “A lot of progress has been made on those lines, so in terms of the physics of the field, I think things are going great. But to me, the real problem is the prospects for future funding.”
-
-[Langer](https://www.scientificamerican.com/article/robert-langer/) shares his faith in the durability and strength of America’s science and innovation ecosystem.
-
-“I look at the history of American innovation and education over the past 250 years, and it’s been spectacular,” says Langer. “Plenty of times there’ve been setbacks. We’ve had world wars, you know, we’ve had depressions, and people keep persisting and keep learning. They keep discovering and they keep inventing. So that gives me a lot of cause for hope. This is not the worst time by any means.”
+But, on the other hand, maybe an extremely good coding model could act as a puppeteer to interface with sensors, actuators, and web APIs? Perhaps, once you have a super-smart reasoning system that understands math, language, and code, you can give it a camera and a keyboard and it will figure out what to do in the spatial domain. Is the next wave of AI just going to be Claude with sensors, actuators, and tools, or is it going to be something built in a new way from the ground up? That’s the big question a lot of people in AI are grappling with right now.

@@ -1,63 +1,17 @@
-Researchers from MIT and elsewhere have developed a more user-friendly and efficient method to help networking engineers identify potential system failures before they cause major problems, like a cloud service outage that leaves millions of users unable to access applications.
+Justin Solomon, associate professor in the MIT Department of Electrical Engineering and Computer Science (EECS), has been appointed associate dean of engineering education in the MIT School of Engineering, effective July 1.
 
-The technique uncovers hidden blind spots that might cause a shortcut algorithm to fail unexpectedly when it is deployed.
+In this new role, Solomon will focus on advancing innovation in engineering education across the school. He will help shape new pedagogical approaches in the context of an AI-enabled world and will explore experiential, hands-on, and other modes of learning. Working closely with academic departments, Solomon will serve as a thought partner in integrating AI into curricula and will help facilitate interdisciplinary and shared teaching opportunities across departments and other schools. He will also play a key role in helping the school implement relevant recommendations from the Committee on AI Use in Teaching, Learning, and Research Training.
 
-This new approach can identify worse-case scenarios that an engineer might miss if they use a traditional method that compares an algorithm against a set of human-designed past test cases. It is also less labor-intensive than other verification tools that require engineers to rewrite an algorithm in a complex mathematical code each time they want to test it.
+Solomon will explore opportunities to build industry collaborations, including new models for internships and industry-engaged learning on campus. Collaborating with department heads and the School of Engineering leadership team, he will also support faculty in designing new courses and evolving existing programs to meet emerging opportunities in engineering.
 
-Instead of needing a mathematical reformulation, the new method reads the algorithm’s source code directly and automatically searches for worse-case scenarios that lead to the highest level of underperformance.
+“Justin’s interdisciplinary approach will be especially valuable as we continue to evolve engineering education to meet new opportunities and challenges. His extensive experience applying AI across a wide range of domains will help each academic department thoughtfully integrate AI and new educational models into their curricula,” says Paula T. Hammond, dean of the School of Engineering and Institute Professor. “I look forward to the vision and perspective he will bring to the school’s leadership team.”
 
-By helping engineers quickly and easily stress-test a networking algorithm before deployment, the method could catch failure modes that might otherwise only appear in a real outage. The technique could also be used to analyze the risks of deploying AI-generated code.
+A dedicated educator, Solomon has played a central role in shaping computing education at MIT. He is a key contributor to the Common Ground for Computing, where he co-teaches the core class 6.C01 ([Modeling with Machine Learning: From Algorithms to Applications](https://computing.mit.edu/cross-cutting/common-ground-for-computing-education/common-ground-subjects/c01-c51-modeling-machine-learning/)) with Regina Barzilay, the Delta Electronics Professor in the MIT Department of Electrical Engineering and Computer Science and affiliate faculty member at the Institute for Medical Engineering and Science. Within EECS, he teaches 6.7350 (Numerical Algorithms for Computing and Machine Learning) as well as 6.8410 (Shape Analysis). He is also the founder of the [Summer Geometry Initiative](https://sgi.mit.edu/), a six-week program that introduces students to geometry processing through intensive training, collaboration, and research experiences.
 
-“We need to have good tools to measure the worse-case scenario performance of our algorithms so we know what could happen before we put them into production. This is an easy-to-use tool that can be plugged into current systems so we can find the best algorithm to use and ensure the worse-case scenarios are identified in advance,” says Pantea Karimi, an electrical engineering and computer science (EECS) graduate student and lead author of a paper on this new technique.
+Solomon’s dedication to teaching and helping students has been honored with various awards, including the EECS Outstanding Educator Award and the Burgess (1952) and Elizabeth Jamieson Prize for Excellence in Teaching. He is the author of “Numerical Algorithms,” a textbook that presents a modern approach to numerical analysis for computer science students.
 
-She is joined on the paper by senior authors Mohammad Alizadeh, an associate professor of EECS and a member of the Computer Science and Artificial Intelligence Laboratory (CSAIL); and Behnaz Arzani, a principal researcher at Microsoft Research; along with Ryan Beckett, Siva Kesava Reddy Karkarla, and Pooria Namyar, researchers at Microsoft Research; and Santiago Segarra, a professor at Rice University. The research will be presented at the USENIX Symposium on Networked Systems Design and Implementation.
+Solomon is a principal investigator at MIT’s Computer Science and Artificial Intelligence Laboratory (CSAIL), where he leads the [Geometric Data Processing Group](https://groups.csail.mit.edu/gdpgroup/). His research sits at the intersection of geometry and computation, with applications spanning computer graphics, autonomous navigation, political redistricting, physical simulation, 3D modeling, and medical imaging. He is also a core faculty member of the MIT-IBM Watson AI Lab, contributing to research that advances the foundations and applications of artificial intelligence.
 
-**Assessing algorithms**
+His scholarly contributions have been recognized with numerous distinctions, including the [2023 Harold E. Edgerton Faculty Achievement Award](https://news.mit.edu/2023/ellen-roche-justin-solomon-edgerton-award-winners-0419) for exceptional contributions in teaching, research, and service. In 2025, he was named a [Schmidt Polymath](https://www.schmidtsciences.org/schmidt-science-polymaths/), supporting interdisciplinary research across areas such as acoustics and climate that rely on large-scale simulation of physical systems.
 
-In large systems like cloud servers, the tried-and-true algorithms that route data from one place to another or are often too computationally intensive to run in a feasible amount of time.
-
-So, engineers and researchers develop suboptimal algorithms called heuristics that can run much faster. However, there could be unexpected but plausible circumstances that will cause a heuristic to underperform or fail when deployed.
-
-A heuristic can route millions of data requests across a cloud network in seconds, but under the wrong conditions — like an unusual traffic pattern or a sudden spike in demand — the shortcut can break down in ways the designer never anticipated.
-
-When these problems occur, a company may have no choice but to drop some requests that can’t be processed.
-
-The firm could also deliberately allocate more resources in advance to head-off a potential disaster, leading to higher overall costs and wasted electricity from underutilization.
-
-“This is really bad for a company because, either way, they are going to lose a lot of money. If this particular scenario hasn’t happened before and was never tested, how would a developer know in advance before it happens?” Karimi says.
-
-Stress-testing heuristics typically involves running a new algorithm in simulation using a set of human-designed test cases and manually comparing the performance with a previous algorithm. But this is time-consuming and can leave blind spots if an engineer doesn’t know to test for certain situations.
-
-Alternatively, engineers could use a verification tool to evaluate the performance of their heuristic more systematically. However, these tools require the engineer to encode the algorithm into a complex, mathematical formula that can take days to flesh out. The process, which doesn’t work for every type of heuristic, must be repeated each time the engineer changes the code.
-
-Instead, the researchers developed a more user-friendly and efficient verification tool, called MetaEase, that analyzes the heuristic’s existing implementation code directly to identify the biggest risks of deploying it.
-
-“This would reduce the friction of using these heuristic analysis tools,” Karimi says.
-
-She began this work during an internship at Microsoft Research, where the team previously developed MetaOpt, a heuristic analyzer that requires engineers to rewrite their algorithms as formal optimization models. MetaEase grew out of the desire to remove that barrier.
-
-**Maximizing the gap**
-
-MetaEase is driven by two key innovations. First, it uses a technique called symbolic execution to map out the different decision points in the heuristic's code. These are places where the algorithm might behave differently depending on the input.
-
-This technique produces a set of representative starting points, each corresponding to a distinct behavior the heuristic could exhibit.
-
-Second, from these starting points, MetaEase utilizes a guided search to systematically move toward inputs that make the heuristic perform as poorly as possible, compared to the optimal algorithm.
-
-In machine learning, for instance, an input could be a set of user queries to an AI chatbot at a given time.
-
-“In this way, we have exploited every possible heuristic behavior and used special techniques to move in the direction where we think the performance gap is going to increase,” Karimi explains.
-
-In the end, MetaEase identifies the input that maximizes the performance gap between the heuristic and an optimal benchmark.
-
-With this information, a heuristic developer could inspect the input to understand what went wrong and incorporate safeguards that will prevent the problem from happening during deployment.
-
-In simulated experiments, MetaEase often identified inputs with larger performance gaps than traditional methods — pinpointing more catastrophic worse-case scenarios. And it did so much more efficiently.
-
-It was also able to analyze a recent networking heuristic that no state-of-the-art method could handle.
-
-In the future, the researchers want to enhance MetaEase so it can process additional types of types of data, like categorical inputs. They also want to improve the scalability of their method and adapt MetaEase to evaluate more complex heuristics.
-
-“Reasoning about the worst-case performance of deployed heuristics is a hard and longstanding problem. MetaEase makes tangible progress by analyzing heuristics directly from source code, eliminating the need for formal models that have historically limited who can use such analysis tools. I was pleasantly surprised that it handles non-convex and randomized heuristics by combining symbolic execution with gradient-based search in a practical and effective way,” says Ratul Mahajan of the University of Washington Paul G. Allen School of Computer Science and Engineering, who was not involved with this research.
-
-This research was funded, in part, by a Microsoft Research internship and the U.S. National Science Foundation (NSF).
+Solomon joined the MIT faculty in 2016. He previously held an NSF Mathematical Sciences Postdoctoral Research Fellowship in Princeton University’s Program in Applied and Computational Mathematics. He earned his bachelor’s, master’s, and doctoral degrees from Stanford University. While studying at Stanford, he also worked as a research assistant at Pixar Animation Studios.

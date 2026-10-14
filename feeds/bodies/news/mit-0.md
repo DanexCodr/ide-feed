@@ -1,45 +1,83 @@
-RNA vaccines, which have been proven effective against Covid-19, are now being developed for many other diseases, including cancer. One of the drawbacks to these vaccines is that they require ultracold storage, but researchers from MIT have found a promising way to overcome that limitation.
+The global building boom of power-hungry data centers is straining electrical grids, causing greater reliance on energy from polluting fossil fuels.
 
-With help from an AI algorithm, the researchers tweaked the formulation surrounding the lipid nanoparticles that are typically used to deliver mRNA vaccines, making the vaccines more heat-resistant. Using this approach, they formulated vaccines that could remain stable even when stored at room temperature for up to a year, or at nearly 100 degrees Fahrenheit for two months.
+Christina Delimitrou, a newly tenured associate professor at MIT, is fighting this environmental threat by rethinking how the computer servers and networking equipment inside those data centers operate.
 
-When Covid-19 vaccines carried by these particles were administered to mice, they generated just as strong an immune response as an RNA Covid-19 vaccine similar to one developed by Moderna. By using the AI algorithm to predict the optimal formulations for the particles, the researchers were able to cut down the number of experiments they needed to do, which rapidly sped up the development process.
+She and her group apply machine learning to make large-scale data centers more efficient, secure, and reliable. They redesign outdated cloud computing systems, develop methods to manage shared hardware resources, and create streamlined server architectures.
 
-“The real beauty of this algorithm is that we can use it with small data sets,” says Ana Jaklenec, a principal investigator in MIT’s Koch Institute for Integrative Cancer Research. “It’s really hard to run thousands of experiments, so this algorithm allows us to more easily achieve formulations with features that we want — in this case, stability.”
+These advances allow data center operators to coax more computational power out of existing hardware.
 
-Jaklenec and Robert Langer, the David H. Koch Institute Professor, are the senior authors of the paper, which [appears today in *Nature Biotechnology*](https://www.nature.com/articles/s41587-026-03331-w). Graduate student Jinbi Tian and postdoc Khanh Tran are the lead authors of the paper.
+“If data centers are not utilized to the best of their capabilities, then they will burn much more power than they need to meet growing user demand,” says Delimitrou, the KDD Career Development Associate Professor in Communications and Technology in the Department of Electrical Engineering and Computer Science (EECS) and a member of the Computer Science and Artificial Intelligence Laboratory (CSAIL). “There is a lot of bloating, especially on the software side of these systems. If we can remove that bloating in a way that doesn’t compromise performance, then we won’t need to build as many new data centers.”
 
-**Stable vaccines**
+She also harnesses AI to help programmers find and fix problems in cloud-based applications, like music-streaming services or video conferencing systems. This eliminates application downtime that hampers performance and drains computational resources.
 
-RNA is a highly fragile molecule, so researchers stabilize it with lipid nanoparticles (LNPs) that protect the RNA from degradation and help it get into cells. However, these RNA-LNP vaccines still need to be kept cold (-20 to -80 degrees Celsius), which makes it difficult to ship them to regions that don’t have cold-storage facilities available.
+“By managing resources more effectively in the cloud, the end user gets more predictable performance from the application running on their smartphone,” she adds.
 
-Making these vaccines more heat-tolerant would not only enable them to be distributed more widely, but could also help researchers develop new vaccines that could be administered through novel methods such as microneedle patches. These patches contain hundreds of vaccine-filled microneedles, which dissolve when the patch is applied to the skin, releasing the vaccine.
+**Mathematical beginnings**
 
-To create more stable RNA vaccines, researchers have experimented with adding a variety of excipients — sugars, salts, or polymers — to the LNPs. Jaklenec and Langer recently developed polymer-stabilized LNPs that can withstand higher temperatures, but those LNPs were slightly different from the FDA-approved formulations that were used for the Moderna and Pfizer Covid-19 vaccines.
+Delimitrou grew up in a midsized town within the vast plains of northern Greece. Her early interest in math and science was sparked, in part, by the ancient history of her homeland, where Euclid and Pythagoras studied mathematical problems more than 2,000 years ago.
 
-In their new paper, the researchers wanted to see if they could find a way to make those FDA-approved formulations more stable at high temperatures.
+“In Greece, there is a long tradition of geometry,” she says.
 
-They began by reusing some of the excipients that had worked in their earlier efforts, but they were “really getting stuck,” Jaklenec says. “We were trying to use and screen excipients that we’ve previously used successfully to stabilize LNPs, but it just wasn’t working. It was really frustrating for the team.”
+She also drew scientific inspiration from her parents. Her mother worked as a chemical engineer and her father as a pharmacist — and both encouraged their daughter’s innate curiosity.
 
-To speed up their progress, the researchers decided to try a machine-learning approach. Working with researchers at MIT’s Computer Science and Artificial Intelligence Lab (CSAIL), they developed an algorithm that can make predictions based on very small datasets.
+Her early affinity for math led Delimitrou to study computer engineering at the National Technical University of Athens, even though she didn’t know much about the field. She quickly gravitated toward courses that focused on the applied science of engineering.
 
-“We’d used our algorithms for various automated experimental design applications before, but never on a biological problem like vaccine stability,” says Mina Konaković Luković, an assistant professor of electrical engineering and computer science in MIT’s Computer Science and Artificial Intelligence Laboratory (CSAIL), who is also an author of the paper. “It was surprising to see how quickly the algorithm converged on a stable formulation — getting there in just a handful of iterations, rather than the exhaustive search that would normally be required.”
+For her diploma thesis — a project all students complete during their fifth and final year of study — she studied resource management in a computer when multiple applications are running at once.
 
-The researchers used this algorithm to analyze nearly 50 FDA-approved excipients. For each excipient, the researchers first measured how well it stabilized RNA when incorporated into an LNP. They used these particles to deliver mRNA encoding a protein called firefly luciferase, which produces bioluminescence, into cells. By measuring how much light was emitted by the cells, the researchers could determine how effectively each excipient protected the mRNA.
+“A lot of the challenges I was looking at then would get much harder if, instead of a single system, you had 100,000 of these systems. That was a problem that piqued my interest,” she says.
 
-The researchers chose five of the most promising excipients and used their AI algorithm to predict ratios of those excipients that would best stabilize LNPs similar to those used by Moderna. Based on those predictions, the researchers tested two formulations at a time in cells, fed those results back into the algorithm, and generated more predictions. After several rounds, they chose one formulation that appeared promising enough to test in animal studies.
+Seeking to make a bigger impact as a researcher, Delimitrou pursued a graduate degree at Stanford University. She began tackling inefficiencies in cloud computing systems and large-scale data centers, which was a rapidly growing area of research.
 
-This process took only a few weeks, much less than it would have taken without guidance from the AI algorithm.
+Through that work, Delimitrou and her research mentor, Christos Kozyrakis, the Leonard Bosack and Sandy K. Lerner Professor of Engineering, realized many large computing systems were underutilized.
 
-“Before we implemented the AI algorithm, we spent several months testing different combinations and also doing the prescreening of all the excipients that we could find, but nothing would get us to 100 percent stability,” Tran says.
+“You would expect, with all the demand for these systems, that they should be running close to 100 percent capacity. But we found that most were running at only about 15 percent capacity,” she says. “This is not a resource-efficient or sustainable way of scaling these systems.”
 
-**Robust immune responses**
+**Applying AI**
 
-To test the heat resistance of their new LNP formulation, the researchers used the particles to package Covid-19 mRNA antigens, then dehydrated them using a process called vacuum drying. These particles were then stored at 37 degrees Celsius (98 degrees Fahrenheit) for two months, or at room temperature for one year. Mice that were vaccinated with these particles, even after long-term storage, showed equivalent immune responses to mice that received vaccines carried by LNPs similar to the original Moderna formulation.
+To push that utilization closer to 100 percent, she began investigating machine-learning solutions to streamline cumbersome computational processes. Machine learning could automate resource management operations in the cloud, identifying solutions that developers might miss on their own.
 
-The researchers also used their new heat-resistant formulation to create solid microneedle patches that could deliver a SARS-CoV-2 antigen. These patches generated an immune response similar to that produced by the injectable RNA vaccines.
+“Applying machine learning to solve a large-scale system problem was a novel approach at the time. It was a bit risky because people had not yet shown that these techniques would work,” Delimitrou says. “But empirical approaches require a lot of expertise, and the scale of the system is so large that it is difficult for users to manage. This is why machine learning is often the best solution.”
 
-“Our approach broadens the application of not only mRNA vaccines, but also therapeutics or advanced drug-delivery platforms like controlled-release particles or microneedle patches, which requires the formulation to either be in solid state or to be stable at higher temperature,” Tian says.
+After earning her PhD, Delimitrou continued this line of work as an assistant professor at Cornell University.
 
-The researchers also showed that they could use their algorithm to stabilize other LNP formulations, including one similar to those used by Pfizer to deliver its Covid-19 vaccine. This formulation uses the same excipients as the one the MIT team developed for the Moderna LNP, but in a different ratio. For each LNP, once a heat-resistant formulation has been developed, it could be adapted to deliver any type of mRNA payload, the researchers say.
+One tool her group developed, Seer, uses deep learning to anticipate and prevent problems in web applications before they happen. This averts widespread slowdowns that may occur if a developer tries to fix a problem manually.
 
-The research was, in part, funded by the Gates Foundation.
+As she delved deeper into cloud computing, Delimitrou observed that cloud applications were changing. Developers were now splitting applications into smaller pieces to spread across multiple servers, which increases the speed of deployment.
+
+“But the servers were not built for this new style of application design. So, I rethought some of my earlier work to build machine-learning systems for this new class of applications,” she says.
+
+To tackle these new challenges, she found herself collaborating more often with faculty members who had different software and hardware expertise. Those collaborations opened exciting new research areas.
+
+A few years later, she decided to join MIT because of the opportunity to collaborate with researchers at the top of their fields in hardware and software engineering. She became an assistant professor in EECS in 2022.
+
+**Creative approaches**
+
+At MIT, Delimitrou also enjoys the teaching aspect of her role. One of her favorite courses to teach is 6.191 (Computation Structure), a popular undergraduate class with about 350 students each semester.
+
+While it’s challenging to keep the course material fresh when the field constantly evolves, she strives to inspire creativity in her students.
+
+“I want the students to learn how to think and learn on their own. Part of that involves shifting away from formulaic assignments and making classes more open-ended. I’d rather give the students something to make them think more deeply,” she says.
+
+In the lab, a creative mindset helps Delimitrou and her team identify novel solutions to problems in cloud computing that others might overlook.
+
+For instance, she extended prior work on debugging problems in cloud applications to encompass not just errors in the code, but also security issues that can make user data vulnerable to hackers.
+
+She also uses AI to redesign software systems so they better fit the capabilities of existing hardware.
+
+“One of the challenges when it comes to applying AI to these systems is that the AI is not interpretable,” she says. “A lot of the work we are doing now involves adding explainability into these AI tools so people can get useful feedback from the system.”
+
+That not only helps developers ensure AI is giving the right answer, but also provides insights into how to design systems better in the future.
+
+She finds that studying these large-scale cloud computing systems is becoming more challenging because tech companies that operate data centers use proprietary hardware, unlike the commodity equipment of early cloud computing days, as well as software systems that can’t be accessed by academic teams. A solution that works in the lab might not work in the real world.
+
+To that end, Delimitrou and her group create clones of proprietary systems and applications. One tool they developed, called Ditto, mimics an application’s structure and performance characteristics, enabling a wide range of studies.
+
+She expects her work to continue shifting as machine-learning models become more advanced, opening new possibilities to boost application performance and hardware efficiency.
+
+“But you still have to use AI carefully. While it can greatly accelerate the application development side, we still need to audit it and be especially careful about how these models are applied so we don’t lose the ability to gain insights out of the solutions AI is giving,” she says.
+
+Outside the lab, Delimitrou enjoys spending time with her husband and 1-year-old daughter.
+
+While she doesn’t have as much time for hobbies these days, she also enjoys gardening and building an electrical toy train track for her daughter, as well as playing classical piano and painting nature scenes. She became interested in painting at Cornell, where she would often paint the many waterfalls near the campus.
+
+Whether she is working in the garden or painting, Delimitrou says she finds spending time outdoors to be a relaxing escape from the technical nature of her work, but also an important reminder of the role her research plays in sustainability.

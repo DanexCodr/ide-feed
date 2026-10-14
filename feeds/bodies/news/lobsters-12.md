@@ -1,151 +1,77 @@
-Are generative (randomized) tests significantly more effective than example-based
-unit-tests at discovering bugs? There’s
-[an interesting discussion about this on lobste.rs](https://lobste.rs/s/mkv2pl/unit_tests_mark_territory_more_than#c_5nimhl).
-One argument in favor of unit tests is, paraphrasing
+Short version: [Bru](https://bru.works) is an Android app and web client that lets you read and send SMS messages from your browser, via your phone. It is currently available from the [IzzyOnDroid](https://apt.izzysoft.de/fdroid/index/apk/works.bru) app repository, but hopefully soon on F-Droid, and possibly Google Play.
 
-To me, it seems that generative testing should shake out that particular
-creature, so I wrote [a lil fuzzer](https://github.com/matklad/regex-fuzz)
-of my own, and it indeed discovered *another* bug in that version of `regex`,
-and then the one I was after. I didn’t find anything in the latest version. I
-like to do a write up about the process, as it is a good case study for how one
-approaches a problem like this.
+I used:
 
-I want to be extra clear that my argument is very weak here, as I know exactly
-the bug I am after, and I even know that fuzzers can find it. My primary goal is
-to teach you the techniques, leaving it to your judgment just how effective they
-are. That being said, I think finding a *second* bug validates the approach
-somewhat.
+- Plain HTML, JavaScript and CSS
+- Rust
+- Iroh, as WASM in the browser, and via the available Kotlin bindings
+- Kotlin
 
-I also want to emphasize that writing fuzzers to find known bugs is far from an
-idle amusement. While I believe that generative testing is very powerful,
-relative to its cost, it’s always a question whether a particular test is
-thorough enough. And it never is, you *will* find more bugs elsewhere (that’s
-why defense in depth and *runtime* mitigations are critical). And, whenever you
-have a pest that dodged your fuzzers, your first order of business is to treat
-this event as a bug in the *fuzzer*, and change it so that it can find this and
-related bugs. Only then you are allowed to add a fix and a unit test!
+## Longer version
 
-## [The Bug](https://matklad.github.io/2026/09/19/finding-bugs.html#The-Bug)
+Since the start of the summer this year I have tinkered with [Bru](https://bru.works). The **b**idirectional **r**emote **u**plink for your Android phone. *Bru* is also the  Norwegian word for *bridge*. And yes, the name is of course a backronym. Since I started using a T9 phone as my daily driver, I have more than once wished I could break out into a full qwerty keyboard when typing out long messages or having a longer conversation. Don't get me wrong, I love the tactile buttons, but for me, nothing beats an actual keyboard when writing. Another thing I wanted to solve was that every SMS was a prompt to take my phone out, opening the door for endless distractions. And yes, this could have been solved with notification settings, self discipline and yada yada...
 
-For `".abb|b"` regex and `"zabb"` input, an older version of `regex` crate
-returned `b` as the first match, which is incorrect, because the entire `zabb`
-matches:
+## Maybe I should not reinvent the wheel?
 
-How do we find this, or something *like* this?
+> The best code is no code at all. Every new line of code you willingly bring into the world is code that has to be debugged, code that has to be read and understood, code that has to be supported. Every time you write new code, you should do so reluctantly, under duress, because you completely exhausted all your other options.
+>
+> — Jeff Atwood
 
-Regular expression engines are one of the easiest things to apply generative
-testing to, they are pure algorithms. While few large systems are *just* an
-algorithm, algorithms are everywhere inside components of interesting systems,
-so this is a hands-on knowledge.
+While my first instinct was "oooh I can build thing", I recognized that this might be a problem others have had and solved before me. I did some searching, and tested some alternatives. It is quite possible I have left out several good candidates, but these are the ones I looked at.
 
-And by far the most important technique for testing algorithms is to compare
-with the known right answer, with an oracle. Implement both `O(N log N)` and
-`O(N^2)` versions of the algorithm, and match the answers.
+### Google Messages
 
-To be fair, the original comment mentioned that the their fuzzer didn’t find the
-issue because they didn’t have access to an oracle. However, if you are
-designing a reliable system, it’s part of your job to ensure it has an oracle!
-One of the first things we did for our
-[Jepsen test](https://jepsen.io/analyses/tigerbeetle-0.16.11) at TigerBeetle was to
-[expose internal timestamps](https://github.com/tigerbeetle/tigerbeetle/pull/2481)
-via API, to make it easier for Jepsen to find bugs (TigerBeetle is
-[co-designed](https://tigerbeetle.com/blog/2026-08-20-protocol-aware-dst/) with
-its internal simulator
-[VOPR](https://github.com/tigerbeetle/tigerbeetle/blob/47aeb2212a255273dda508288412e537d11e4b7c/docs/internals/vopr.md)
-which naturally has access to timestamps and anything else). And for, a regex
-engine, coming up with an oracle shouldn’t be hard, as they typically already
-come with multiple specialized implementations under a single facade, and the
-implementations can be cross-checked against each other.
+The default SMS app from Google actually has a "Device pairing" option. Sign in to [https://messages.google.com/web](https://messages.google.com/web) and pair your phone, and it works pretty well. But for one, it is limited to the Google app, and I have (*very*) gradually tried to limit my reliance on big G. With that said, my only real gripe is that you have to re-pair very frequently. Often enough that during my limited testing I was quite annoyed. But if you are using Google Messages anyway, this might be the right solution for you.
 
-But the `regex` case is even simpler (which makes it an excellent case study).
-There’s `regex_lite` crate that provides the same API.
+### KDE Connect
 
-So here’s a plan: generate a regular expression, an input text, and check that
-`regex` and `regex_lite` give identical answers.
+Sigh. I really wanted this to be the solution. The ambitions are great. KDE is great! Open source! It even has a MacBook client, being a Linux-adjacent project. But I could not get it to work reliably. The pairing process was buggy. Sometimes connectivity would break, even with the phone and laptop on the same network. I found the options for configuration overwhelming, and in good Linux-fashion, there is ample room for some UX improvements. But the biggest problem was that I found the whole experience ... clunky? For all I know the Linux client is leaps and bounds better than the Mac one, though. Maybe this is the right solution for you?
 
-## [Generating a String](https://matklad.github.io/2026/09/19/finding-bugs.html#Generating-a-String)
+### Pushbullet
 
-I’ll start with code that generates a random string, as it is simpler, but still
-shows some non-trivial ideas. First, we’ll need a random number generator:
+Pushbullet has been around for a long time. And to be fair, I didn't really give them a fair chance. I tried it years ago, and found it aggravatingly unreliable and buggy. Dropped notifications, SMSes reported as "sent" never ended up actually sent, messages I had already answered suddenly triggering notifications again. Things may have improved, I didn't bother to check. I am listing it here for completeness' sake.
 
-There are fancier techniques, which can give you
-[test-case minimization](https://matklad.github.io/2026/04/20/test-case-minimization.html),
-[exhaustive search](https://matklad.github.io/2021/11/07/generate-all-the-things.html), or
-[coverage guided exploration](https://llvm.org/docs/LibFuzzer.html), but the
-insight is that even a humble PRNG is brutally effective, if you put it to good use.
+## A wheelwright I shall be
 
-When you start with randomized testing, the instinct is to generate something
-big, no, HUGE! Surely regex will choke on 5 GiBs of input? This is usually a
-wrong call. Bugs *usually* involve small, but tricky examples, weaponizing
-interactions between a few features. A string where all characters are the same
-is more likely to trigger a bug than a purely random string where every
-character is unique.
+Okay, so I might have really wanted to build this thing just for the sake of it, regardless of the alternatives.
 
-So my default approach to generating strings is this. *First*, I fix the
-alphabet of possible characters. A nice way to get one is to `sort | unique` all
-the unit tests. Then, for each particular string, I pick a *subset* of that
-alphabet. I want strings that use all the characters, but I also want long
-strings with only `a` and `b`! Then I generate a string using the given subset
-of the alphabet, where the length of the string is also picked at random.
+I decided on some goals for the project:
 
-To make fuzzing efficient, I want to keep each iteration as fast as possible, so
-I make sure to re-use the memory across iterations,
-[static allocation](https://github.com/tigerbeetle/tigerbeetle/blob/47aeb2212a255273dda508288412e537d11e4b7c/docs/ARCHITECTURE.md#static-memory-allocation)
-in the small:
+- Free as in beer, free as in speech.
+- No account or user profile. No saving anything about anyone.
+- No backend service (except the relays).
+- Messages should be end-to-end encrypted (duh).
+- Keep dependencies to a minimum.
+- No web framework for the client.
+- Ideally it should be self-hostable.
+- No agentic coding. I have used Claude as a rubber duck/documentation know-it-all/security reviewer.
 
-There’s a nice way to think about this two step process, generating alphabet
-first, and then generating a string. To generate a string, you need a
-distribution of characters. You *can* use the same distribution for each of the
-million iterations. But an easy way to spice things up is to make the
-distribution *itself* random. I file this “randomize distributions themselves” idea under
-[swarm testing](https://tigerbeetle.com/blog/2025-04-23-swarm-testing-data-structures/).
+I started out with the obvious problem: how can I get the phone and the browser to talk to each other? Being familiar with WireGuard, I first thought about baking that into an app on the phone that could serve a REST(ish) endpoint that a client on the same network could access. As an easy way to start prototyping I installed Tailscale on my phone and on my laptop, as Tailscale is WireGuard under the hood, and gives you a stable IP address for the devices on the network. The architecture at that point was polling based, the web client would poll the server running on the phone periodically and look for new messages. While I had a nagging feeling that this might not be optimal for many reasons (battery life on the phone for one) I just wanted something that worked to iterate on.
 
-## [Generating a Regex Distribution](https://matklad.github.io/2026/09/19/finding-bugs.html#Generating-a-Regex-Distribution)
+After some evenings of hitting my head against the wall that is Android development I had a rudimentary app working, running in the background on the phone and serving the available SMS threads, secured with a hard-coded token just in case. With that in place I could start working on a client.
 
-Let’s apply the same tricks when generating a regex:
+## Back to the basics
 
-- pick a subset of active regex features,
-- pick size at random,
-- re-use memory.
+As stated, I wanted to build this as a statically hosted web app, and without any web framework. I wanted to get a feel for how it is to develop like this in 2026. Having relied almost solely on React professionally, and SvelteKit in my spare time, I wanted to do something different. I first imagined the client as a typewriter with the paper sticking out of the top sort of thing, but ended up turning the skeuomorphism down a few notches. I kept the monospaced Courier font and off-white though.
 
-Let’s start with the first one:
+The client is built as `index.html` files in a folder hierarchy, an increasingly unmaintainable `style.css` and typed JavaScript with ESM modules and custom elements for the reused components like header and footer. This does mean the components are rendered client side instead of being baked into prerendered static pages which I would have preferred. There are no architectures without tradeoffs, and the alternative would have been to copy-paste the shared code across several pages and remembering to keep them in sync. Not horroble, but not great either.
 
-Regexes have alternation `r1|r2`, repetition `r*`, wildcard `.`, and literals
-`a`. Rather then binary enabling or disabling a particular feature, I assign
-each feature a weight between 0 and 100, which is a bit more general. The `sum`
-is the total of all weights. To select a feature at random, we need to generate
-a number in `0..sum` and find which segment it falls into.
+![screenshot of Bru client](https://sverre.me/projects/bru/image.png)
 
-In anything more serious, I’d introduce explicit types for probabilities and
-distributions, but just a two-digit number is perfectly serviceable in the
-small.
+## Tin cans on string
 
-This is how I generate `ReOptions`, making sure that literals always have
-non-zero weight, and also selecting an alphabet for them:
+While the prototype worked, there were some things I needed to figure out. For my own personal use, depending on Tailscale as an additional app was not a problem, but it would greatly reduce the number of other people that would bother to install it. And while solving problems for myself is enough by itself, creating something that others might find useful as well is very rewarding. Embedding the WireGuard tunnel library seemed like a logical step, but before I started on that, I found Iroh.
 
-## [Generating a Regex](https://matklad.github.io/2026/09/19/finding-bugs.html#Generating-a-Regex)
+Sometimes the stars align. A post announcing Iroh 1.0.0 came up in one of my feeds, and I knew this could be the right fit. In essence, Iroh is a dumb pipe. You put stuff in at one end, it comes out the other. "Dial keys, not IPs" is the mantra. And being built with Rust, it works in the browser when compiled to WebAssembly. And with the Android SDK available, it was exactly what I needed.
 
-So now we can generate a regular expression. This is convenient to do
-recursively. To avoid allocations, an output buffer is passed through. To
-control regex length, a `size` parameter is also threaded, and “branching”
-recursive invocations divide the `size` between the children:
+Iroh works by establishing a direct peer-to-peer connection between your devices. It does this with the help of relays, servers that both devices can reach. When a device starts up, it connects to a relay. When one device wants to talk to another, they first swap addresses through the relay. Then both start firing packets at each other at the same time. Each router sees the incoming traffic as a reply to something it sent out itself, and lets it through. This is called hole punching, and works in most network topologies. When it doesn't, say on a locked-down corporate network, the traffic is forwarded via the relay.
 
-## [Search Loop](https://matklad.github.io/2026/09/19/finding-bugs.html#Search-Loop)
+Browsers aren't allowed to send raw UDP packets, so hole punching isn't possible there, and the Bru web client always goes through a relay. The connection is still end-to-end encrypted, so the relay can't read your messages. A desktop application, or a terminal based one, would be able to do actual peer-to-peer communication.
 
-Given that compiling regular expressions is somewhat slow, it seems like a good
-idea to try multiple strings for the same pair of regular expressions, which
-gives the following code:
+The juicy center of the client, the Iroh-related code, is written in Rust and compiled to WebAssembly with `wasm-pack`. The module exposes a single `Bru` struct that the JavaScript code can use. It has methods for opening a connection, sending and receiving data, health checks and so on. Having wasm-pack generate the bindings and glue code makes using WebAssembly as easy as any other JS module.
 
-It produces examples similar to those in the issue, with a common suffix:
+## Self hosting and hacking
 
-but also examples which somewhat different, without the shared suffix:
+Since the Iroh relay is open source and can be run on whatever server you want, and the client is simple static files, the whole stack can be self-hosted if one is so inclined. There is a settings menu in both the client and the Android app to configure the relay in use.
 
-All together:
-
-Takeaways:
-
-- Fuzzing against an oracle is effective, which is a strong motivation to build an oracle!
-- Go for small, tricky examples, rather than large uniform ones.
-- Real fuzzers are cool, but, if you know something, even xoroshiro can be dangerous.
-- Black box testing is cool, but co-designing system and its testing harness is a point of leverage (build an oracle!).
-- This stuff is not rocket science, you don’t need a Haskell PhD to apply these ideas.
+The "protocol" is also open, and there is no reason why a user could not build their own client. I am hoping someone will. Maybe a CLI, desktop app, AI agent integration (or maybe that is not a good idea?) or maybe something completely different. If I get the drive to do it, I might extract the relevant code into a self-contained library others can use.

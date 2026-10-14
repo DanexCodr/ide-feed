@@ -1,1 +1,223 @@
-![A stylized illustration of a backup symbol with a lock icon in the center.](https://signal.org/blog/images/backup-improvements-header.png)Last September, we [introduced](https://signal.org/blog/introducing-secure-backups/) an optional new way to automatically keep your Signal data safely and securely backed up so that important messages and memories can be easily recovered if something unexpected happens to one of your devices. We’ve been listening to your feedback and working hard on several improvements over the past year.We hinted at several of these “future plans” when Signal Secure Backups were first announced, and the future is now available on all platforms with the launch of iOS version 8.30 today.Here’s an overview of everything that’s changed since the initial release.Backing up to a Destination of Your Choice![Side-by-side screenshots showing the on-device backups interface.](https://signal.org/blog/images/backup-improvements-on-device.png)Available on Signal Desktop and Signal iOS for the first time, and fully revamped on Signal Android, on-device backups provide another way to preserve an end-to-end encrypted copy of your Signal messages.On-device backups have been available on Android for many years, but they now utilize the same cross-platform format that’s supported by Signal Desktop and Signal iOS, and they incorporate additional improvements as well. Previously, the local Signal Android backups included everything in a single archive, so daily snapshots took up a lot of extra space. Now backup media gets stored in a separate folder so it’s easier to periodically sync, and duplicate files are only stored once, which also helps save space if you decide to mirror an on-device backup to an external hard drive or NAS server on your home network.Cross-platform SupportNow you can bring your Signal chats with you when you get a new device, even if you decide to switch to a completely different platform. Signal Secure Backups and on-device backups can be created and restored across every supported operating system: Android, iOS, Linux, macOS, and Windows.Storage Optimization![A screenshot showing a banner that says "Save space with paid backups" and a second screenshot showing the "Optimize Signal storage" setting.](https://signal.org/blog/images/backup-improvements-storage-optimization.png)Make room for new memories by automatically optimizing storage space and offloading older photos and videos. When this feature is enabled, a small thumbnail remains saved on your device in place of the original file. The full-size copy remains securely stored in your paid backup account, and it can be seamlessly retrieved and displayed when you tap on that attachment.Offloading unused media can significantly reduce the amount of storage space that Signal is using. For example, 5,120 megabytes (a.k.a. 5GB) of unused media becomes approximately 600 megabytes after enabling the Optimize Signal Storage setting, leaving you with a lot more room to receive new images and videos.Attachment Backfill for Linked Devices![In the background, a screenshot shows a blurred thumbnail of an image with a download icon. In the foreground, the same chat window shows the image fully visible and clear.](https://signal.org/blog/images/backup-improvements-attachment-backfill.png)For a small monthly fee that helps cover storage costs for end-to-end encrypted attachments, up to 100 gigabytes of media can be backed up with a paid Signal Secure Backups plan. The free plan still lets you keep your text messages backed up, but only covers the last 45 days of media.Attachment backfill can help bridge this gap by synchronizing media and attachments across linked devices. For instance, if you open a message thread on a newly linked laptop and scroll beyond the 45-day limit, Signal Desktop can now securely request a copy of any missing files directly from your primary device as an end-to-end encrypted attachment.You could always forward yourself one of your own messages too, but this simplifies the process by automatically restoring attachments and media from your primary device with a single tap.Some Constraints and OptimizationsWith every new feature idea comes the reality of building performant, robust software that runs reliably and efficiently on millions of devices. We made a few decisions in the process of building these new backup features that might not be exactly what we’d like in a magical world where the bytes and bandwidth are free and software systems never fail. Some may see these as limitations; we see them as trade-offs necessary for a real-world deployment.Signal Secure BackupsFor the sake of efficiency, very long messages are sent as text attachments. Individual messages up to 128 kilobytes (approximately 1/4 of an average book) can be backed up for free, but larger messages are subject to the same 45-day limit for media attachments on free accounts.In order to conserve upload bandwidth on mobile connections, your Signal client only needs to back up a single encrypted copy of a given attachment even if you receive multiple copies of the same file. As an additional optimization, when you enable a paid backup account for the first time, existing end-to-end encrypted attachments within the 45-day download expiration window can be transferred to your new paid backup account without having to be uploaded again.Attachments are never de-duplicated across accounts and they are always end-to-end encrypted, but specialized users with unique requirements can choose to utilize on-device backups and synchronize files to their own server for uncommon use cases where copying end-to-end encrypted attachments and performing basic per-user de-duplication on end-to-end encrypted attachments are considered relevant metadata.<sup>[1](https://signal.org/blog/backup-improvements/#fn:1)</sup>The hosted Signal Secure Backups service implements another layer of security using a supplemental cryptographic key that rotates daily. This key is [securely stored](https://github.com/signalapp/SecureValueRecovery2) in a Trusted Execution Environment, and it cannot decrypt any backups without your recovery key, which provides the primary layer of end-to-end encryption.The sole purpose of this additional key is to add a layer of [forward secrecy](https://en.wikipedia.org/wiki/Forward_secrecy) to your end-to-end encrypted backups. Signal clients also use [remote attestation](https://en.wikipedia.org/wiki/Trusted_Computing#REMOTE-ATTESTATION) to ensure and verify that the old key is discarded every time it is replaced. Trusted Execution Environments are currently the best way to protect this supplemental key, but this may change in the future as additional research and improvements occur in this space.On-device BackupsWith Signal Secure Backups, your phone can request that the server securely copy recent end-to-end encrypted attachments from ephemeral storage to get a head start on backing up the last 45 days of media.For an on-device backup, everything needs to be copied from scratch, and this may result in using more bandwidth or disk space depending on your chosen storage location.Unlike Signal Secure Backups on a paid/free plan, given the need to support any generic storage layer (a personal drive, a NAS server in your house, third-party storage services, etc.), on-device backups cannot utilize the same Trusted Execution Environment described above to provide [forward secrecy](https://en.wikipedia.org/wiki/Forward_secrecy).Your on-device backup recovery key can decrypt all past backups wherever they are stored, instead of only the most-recent backup.For example, if you’re storing backups on a USB drive, you may want to periodically delete previous backups. As always, it’s important to keep your recovery key safe and **never share it with anyone**. Signal Android and Signal iOS can also integrate with the password manager of your choice to store this information.Signal Secure Backups and on-device backups in Signal currently exclude disappearing messages that are scheduled to vanish within 24 hours.When you use the hosted Signal Secure Backups service we provide, a new backup is created every 24 hours and the previous backup is automatically removed. However, on-device backups work differently, and the storage layer is separate from the on-device backup process so this cannot be automated in the same way.Expired disappearing messages in an on-device backup are automatically skipped during the transfer process when you restore that backup, but you may want to take additional steps such as setting a shorter expiration timer for disappearing messages in on-device backups.Thank You, Next![Three iPhones next to each other, displaying the "Transfer Account," "Pair With Your New Device," and "Transferring Data" screens that comprise the iOS device-to-device transfer feature.](https://signal.org/blog/images/backup-improvements-ios-device-transfer.png)Also available in the latest iOS release, and just in time for your next upgrade, the revamped device-to-device migration experience makes it easier than ever to securely transfer your Signal information from an old iPhone to a new iPhone over a local end-to-end encrypted wireless link using Wi-Fi Aware networking for dramatically improved speed and reliability too.<sup>[2](https://signal.org/blog/backup-improvements/#fn:2)</sup>Whether or not you choose to subscribe to a paid backup plan, we hope these features give you more control over how to manage and preserve your Signal data while providing new options for keeping your messages safe.This wraps up the first phase of the backups project, but we’re hard at work on several non-backup improvements too.We’d like to express our sincere appreciation for everyone who gave us valuable feedback throughout this process, especially those of you who helped us test new functionality and ideas during the beta period 💙The Signal service does not store any of this metadata. [↩](https://signal.org/blog/backup-improvements/#fnref:1)Device-to-device transfers are already supported in Signal Android as well. [↩](https://signal.org/blog/backup-improvements/#fnref:2)  [** Tweet](https://twitter.com/intent/tweet?text=Back+to+Backups%3A+A+Year+in+Review&url=https://signal.org/blog/backup-improvements/&via=signalapp&related=signalapp) [** Facebook](https://facebook.com/sharer.php?u=https://signal.org/blog/backup-improvements/)Don't have Signal? [Give it a try!](https://signal.org/download/)
+During the last 3 months, I spent some of my time and tokens decompiling a popular first-person shooter.
+The goal was not to reach a simple proof-of-concept state.
+Instead, we really wanted an accurate, stable and feature-complete recreation of the game.
+
+The avid reader of my blog might have noticed that I had previously written two posts that have since been removed.
+Everyone else might now be wondering which game I am talking about.
+To both of you I can only say that corporate America was here to ruin our fun.
+
+However, that’s fine. This post is not about the game, it’s also less about the process of decompilation.
+It’s more about AI orchestration and how to optimize infrastructure, setup and harness for optimal results.
+
+This project was done with the help of [RektInator](https://x.com/RektInator), [Future](https://x.com/RisottoNeroHit), [st0rm](https://x.com/NamelessNoobs) and other members of the community. A big thank you to all of them.
+
+# What Was Our Goal?[#](https://momo5502.com/posts/2026-10-09-game-decompilation/#what-was-our-goal)
+
+We aimed at an accurate decompilation of the game to C++.
+Besides obvious semantic correctness, we had quite a few more requirements:
+We wanted readable C++ source that compiles.
+Given how old the game is, we also wanted security and bug fixes, but also portability improvements. It would be nice to run the game on Linux, macOS, in the browser, …
+
+We later deferred modernization and portability to focus entirely on reconstructing the original behavior.
+
+Obviously, the overall goal was to learn how to effectively orchestrate autonomous AI agents over the course of months.
+
+# The Initial Setup[#](https://momo5502.com/posts/2026-10-09-game-decompilation/#the-initial-setup)
+
+We started with Claude Max (20x), then added Codex Pro and used both subscriptions simultaneously.
+Model choice varied a lot. We had been using Sonnet 5 most of the time, but Opus 5.5, Luna, Sol and Terra were also used a lot.
+More on that later.
+
+Claude agents were running in Claude Code CLI, Codex agents in Codex CLI.
+We also tried other agent harnesses, but the choice barely mattered, so we stuck to the defaults.
+
+## Progress Tracking[#](https://momo5502.com/posts/2026-10-09-game-decompilation/#progress-tracking)
+
+Using GitHub CLI, the agents manage GitHub issues to track their progress.
+There is one issue per translation unit (.cpp file).
+Additionally, labels help group and prioritize issues.
+
+![](https://momo5502.com/posts/2026-10-09-game-decompilation/images/issues.png)
+
+## Communication[#](https://momo5502.com/posts/2026-10-09-game-decompilation/#communication)
+
+Agents communicate via [Discord](https://www.datacamp.com/tutorial/claude-code-channels).
+All of them have access to one channel and can both post and read all messages in there.
+
+Discord allows agent-2-agent communication, as well as human-2-agent.
+So other participants can talk to them, without needing machine access.
+
+A GitHub webhook posts CI failures into the shared channel, so agents get notified when something broke.
+
+![](https://momo5502.com/posts/2026-10-09-game-decompilation/images/discord.png)
+
+## Disassembly & Decompilation[#](https://momo5502.com/posts/2026-10-09-game-decompilation/#disassembly--decompilation)
+
+Agents have been using the official [ida-mcp](https://github.com/HexRaysSA/ida-mcp) by Hex-Rays almost the entire time.
+It works great. It’s super stable, it’s headless and supports everything needed for this project. I can only recommend it.
+
+# The First Month[#](https://momo5502.com/posts/2026-10-09-game-decompilation/#the-first-month)
+
+We had 4 agents running at that time.
+
+3 worker agents decompiling and committing and one reviewer agent that passively coordinates and reviews commits to flag bugs.
+
+Agents managed to decompile about 80% of the game and visible progress was made.
+The game launched, the main menu was visible and we were able to load maps.
+
+We spent a lot of those 4 weeks optimizing our setup:
+
+We reduced token consumption by triggering earlier compactions.  
+
+The default compaction threshold is 90% context fill. We reduced it down to 42%.
+Decompilation consists of a lot of volatile information: A function that was decompiled is now irrelevant and could be removed from the context. So earlier compactions help remove such “junk” from the context.
+
+We also noticed that agents tend to lose focus over time. Even within the span of one compaction cycle, agents can drift and lose focus, the more data the context holds.
+
+Agents sometimes moved to another function before finishing the previous one. They also started idling while watching CI, despite receiving failure notifications on Discord. Occasionally, they closed issues without thoroughly checking whether the work was actually complete.
+
+Working side by side in a terminal, you can steer the agents to prevent that, but when letting them work autonomously, steering is not possible.
+
+To prevent that, we wrote a document defining our goal, how agents should work, what they must avoid and how to handle specific situations.
+
+An hourly cron job automatically injected a request for agents to reread this document, keeping the instructions fresh in their context. While this might not be the ideal method to keep agents focused, it worked really well through the end of the project.
+
+Lots of time was spent refining the instruction document. As the content is extremely specific to this project, it makes less sense to share it here, though.
+
+## However…[#](https://momo5502.com/posts/2026-10-09-game-decompilation/#however)
+
+… despite all our efforts optimizing setup and infrastructure, we need to talk about the quality of the work.
+
+Constant progress (game starting, menu rendering, maps loading) led us to believe the quality of the decompilation was great.
+
+It was not. Despite the code being extremely readable, it was semantically wrong.
+
+Agents used wrong function signatures, types or struct layouts.
+They invented logic or removed it where deemed unnecessary.
+
+Beyond semantic errors, agents also introduced unnecessary architectural changes.
+As an example, the game has certain configuration variables that it accesses via global variables.
+The agents had turned this constant memory access into hash tables with a lookup that was orders of magnitude more expensive.
+
+And that’s just one example of the many things that went wrong.
+
+## Why is that?[#](https://momo5502.com/posts/2026-10-09-game-decompilation/#why-is-that)
+
+While a reviewer helps catch bugs, it does not work well for anything beyond that.
+Architectural decisions were not questioned, as long as they aligned with the goal.
+
+The main reason for that is that we didn’t have objective acceptance criteria.
+We never properly defined “correctness”. Therefore it was hard for the reviewer to judge which change is correct and what’s wrong.
+
+Obviously it had the game as reference, but given that we had modernization and portability on the list as well, certain deviations were not treated as bugs.  
+
+Interestingly, comments in the commits or code led the reviewer to accept deviations, due to whatever justification the worker agent had written down. The workers’ comments effectively acted as unintentional prompt injection: the reviewer accepted their justifications instead of independently checking the deviations against the original.
+
+# The Oracle[#](https://momo5502.com/posts/2026-10-09-game-decompilation/#the-oracle)
+
+What we needed was an automated check that tells agents whether a reconstructed function matches the original. It should verify identical semantics. A simple PASS or FAIL signal would be enough and the agent can figure out on its own what’s wrong.
+
+## Byte Matching Decompilation[#](https://momo5502.com/posts/2026-10-09-game-decompilation/#byte-matching-decompilation)
+
+The simplest way to achieve this was byte matching decompilation.
+
+We switched to the compiler used to build the original game and wrote a script that performs the comparison.
+
+The script reads our reconstructed OBJ file and the game EXE/PDB (having the PDB is great and makes things slightly simpler, but the process can work just as well without a PDB).
+
+It then extracts the function data from OBJ and EXE and compares all bytes.
+If they match, the function is exact, otherwise it fails and the agent needs to rework the function.
+
+![](https://momo5502.com/posts/2026-10-09-game-decompilation/images/graph.png)
+
+References to other functions or data won’t necessarily match byte for byte, because their encoded values depend on where the targets end up in the compiled binary.
+
+Luckily, the OBJ file records these references as relocations. We can exclude the relocation bytes from the direct comparison and instead verify that both versions reference the same symbol with the same offset.
+
+![](https://momo5502.com/posts/2026-10-09-game-decompilation/images/bytes.png)
+
+The script then does the same for data and types.
+
+Agents can then use this script to verify their work, before pushing it.
+
+Reconstructed functions are recorded in a set of text files.
+CI can then use these text files to verify all recorded functions and alert in case of regressions.
+
+## Cheating[#](https://momo5502.com/posts/2026-10-09-game-decompilation/#cheating)
+
+The first thing agents did when we introduced this script was write inline assembly.
+
+This obviously defeats the purpose. So we had to refine our instructions to disallow certain constructs. Naked functions, object patching, inline assembly and embedding bytes in the code were forbidden verbally.
+Given how easy it is to scan for those constructs, verbal rules were enough.
+
+However, agents repeatedly tried to modify this script to exclude their function from comparison.
+
+To prevent them from doing this, CI hashes the verification script and compares it against a stored GitHub Actions secret.
+
+## Trade-Offs[#](https://momo5502.com/posts/2026-10-09-game-decompilation/#trade-offs)
+
+### Cons[#](https://momo5502.com/posts/2026-10-09-game-decompilation/#cons)
+
+Functions can be hard to match. Register selection, inlining decisions and calling conventions can be difficult to reproduce exactly. In rare cases, we also observed different compiler output from identical inputs.
+Agents now need much longer for decompilation, without necessarily producing better results. A function can have identical semantics, despite showing certain divergences, e.g. independent instructions that are shuffled.
+
+### Pros[#](https://momo5502.com/posts/2026-10-09-game-decompilation/#pros)
+
+Matching functions are guaranteed to have identical semantics.
+This preserves the original behavior, including any existing bugs, and prevents reconstruction errors in those functions.
+On top of this, the reviewer agent is not needed anymore.
+
+Another benefit is that cheaper, less capable models can now reliably work on the task.
+Previously models like Haiku or Luna were a bad fit and produced extremely bad results. However, given this strict acceptance criterion, they now have enough feedback to produce incredible results, reducing the costs drastically and allowing the project to scale up massively.
+
+# Final State[#](https://momo5502.com/posts/2026-10-09-game-decompilation/#final-state)
+
+With our new verification harness, agents have been working for almost 2 more months now.
+99% of the game’s functions are present in our reconstructed source, with 83% of all functions being byte exact.
+
+![](https://momo5502.com/posts/2026-10-09-game-decompilation/images/progress.png)
+
+For the most part, we have been using 14 Luna and 2 Opus 5.5 agents throughout the final weeks.
+
+At that scale, workers used separate branches and submitted their changes through pull requests.
+
+This is also where Discord stopped scaling well. So many agents spamming the channel is nonsense.
+We restricted messages to which issues they were taking and CI coordination. That kept communication to a minimum.
+However, the further we got into the project, the less we needed to talk to the agents. Human-2-agent communication was no longer needed as they worked fully autonomously.
+For other projects at that scale, I would likely choose something other than Discord.
+
+At this point, we’re hitting diminishing returns. The remaining functions mostly have certain non-deterministic characteristics or can’t be matched due to other circumstances, e.g. identical COMDAT folding in the linker that we cannot reliably reproduce.
+
+The Opus 5.5 agents are still able to move forward and get the remaining functions matched. However, the game runs flawlessly now. There are no noticeable bugs and all features of the original game are present.
+
+The remaining functions have been reworked repeatedly. While they still don’t match byte for byte, we believe their semantics are correct.
+
+Continuing the byte matching process for them would consume more tokens without meaningfully improving the result.
+That means, the project can be considered done now.
+
+# Lessons[#](https://momo5502.com/posts/2026-10-09-game-decompilation/#lessons)
+
+This project has taught us a lot. Here are the most valuable takeaways at a glance:
+
+- Precise instructions are necessary. Agents have the desire to cheat if the assignment leaves room for interpretation.
+- Correctness should be defined and machine-checkable. Humans are notoriously incapable of precisely articulating their intent. Therefore, I don’t think reviewers will ever be enough. A reliable verification harness that delivers an objective PASS or FAIL signal is the best feedback an agent can get. Obviously not every project has the luxury decompilation has. Yet, I think for every project it is possible to get close to that, with enough creativity.
+- A good harness makes cheaper models viable. When feedback is precise and acceptance is strict, smarter models don’t necessarily perform better.
+- Instructions decay over time. Agents forget or treat certain rules as less important, the more time passes and the more context gets compacted. During interactive work, you can correct that drift as it happens. When agents work autonomously, it can go unnoticed and undermine the quality of their work. The hourly refresh of the instructions solved that.
+- Generating code is cheap now. Throw it away if it’s bad. After the first 4 weeks, when we noticed the code was bad, we tried to salvage it. This did in fact cost us more time than starting from scratch.
+- Correctness is so much more important than productivity. Reducing token consumption, scaling up agents, optimizing agent throughput, etc. is great and all, but if the result is bad, it doesn’t help much.
+
+# Final Words[#](https://momo5502.com/posts/2026-10-09-game-decompilation/#final-words)
+
+This was honestly such a valuable project and I learned so much.
+I don’t think writing down these takeaways can convey the sheer amount of lessons we’ve learned throughout the process.
+
+So many things went wrong, yet so much went right. As AI agents take on more software development work, orchestrating them becomes a new, much more demanding task for humans.
+
+Scaling up to 15+ agents revealed even more difficulties. Agents periodically wiped the VM because of malformed commands.
+There are already sandboxing solutions for Windows, yet none of what I have seen currently fits my needs. I have started extending [Sogen](https://sogen.dev), my userspace emulator, to provide lightweight and scalable sandboxing capabilities. However, it will take a while before this becomes even remotely production ready.
+
+Given that the VMs were wiped, we unfortunately lost a bunch of session logs. So I don’t know the exact number of tokens that were spent.
+My estimate is something between 600-700 billion tokens. This figure might seem high. However, given that we have used Luna for the most part, it might in fact not be.
+Probably around 300 billion tokens were spent with Luna. Compared to Astra, with a ratio of 100:1, that equates to ~3 billion Astra tokens.
+
+For obvious reasons, none of the code will be shared. Everything will stay private and I will use it for my own needs only.

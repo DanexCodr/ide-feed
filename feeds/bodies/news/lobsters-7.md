@@ -1,63 +1,116 @@
-Exactly a week ago (as a joke), I started writing THC, my “Turbo Haskell compiler,” while on vacation visiting [Bartosz Milewski](https://bartoszmilewski.com/).
+We at the Lix team are proud to announce our seventh major release, version 2.96 “Bingsu”.
 
-It has grown a tiny bit since then.
+This release focuses on security, debugger support, quality-of-life improvements, and continues the work towards both the new [Cap’n’Proto RPC](https://capnproto.org/) protocol and Rust support.
 
-THC now implements every one of GHC 9.14.1’s prim-ops and provides a JIT for GHC Core that runs Haskell on the JVM. It uses the approach for running typed functional languages I developed several years ago in [Cadenza](https://github.com/ekmett/cadenza) ([talk](https://www.youtube.com/watch?v=gbmURWs_SaU)), using [Truffle](https://www.graalvm.org/latest/graalvm-as-a-platform/language-implementation-framework/) and [GraalVM](https://www.graalvm.org/).
+> [Bingsu](https://en.wikipedia.org/wiki/Bingsu) is a milk-based Korean shaved ice dessert with sweet toppings that may include chopped fruit, condensed milk, fruit syrup, tteok, and red beans.
 
-GHC still handles parsing, typechecking, desugaring, and Core optimization. THC takes over from there, compiling and executing that Core through its own runtime on Truffle/GraalVM. Advanced language features such as Template Haskell and Linear Haskell are fully supported.
+Lix is a Nix implementation focused on reliability, predictability, friendliness, developed by a community of people from around the world. We have long term plans to incrementally evolve Nix to work in more places, to make it more reliable and secure, and to update the language and semantics to correct past mistakes and reduce errors, all the while providing an amazing tooling experience.
 
-While it can be used as a JIT for GHC-grade Haskell, it also supports ahead-of-time (AOT) compilation with Native Image, allowing it to produce executables.
+## Upgrading from CppNix or previous Lix versions
 
-THC is capable of JIT- or AOT-compiling a number of Haskell programs, including `pandoc`, `happy`, `alex`, and, as of today, even GHC itself!
+**WARNING**: We do not recommend to use `nix upgrade-nix`, please follow the instructions in [https://lix.systems/install/](https://lix.systems/install/) with the Lix’s upgrade shell script.
 
-THC resolves packages using Cabal and fully supports packages with multiple libraries, including Backpack.
+The upgrade procedure depends on how you installed Lix or CppNix, and is fully described in the [Lix installation guide](https://lix.systems/install/).
 
-## Borrowing libraries
+If you are using Lix from nixpkgs on NixOS, you just need to upgrade your nixpkgs once the upgrade pull request has passed through the build farm into your channel; no other action is required.
 
-THC provides polyglot FFI to [Python](https://github.com/oracle/graalpython), [Ruby](https://github.com/truffleruby/truffleruby), [R](https://github.com/oracle/fastr), and [JavaScript](https://github.com/oracle/graaljs), letting Haskell raid libraries from other languages and bring their output straight into a JIT-compiled Haskell program. Conversion between `Data.Text` and Truffle strings over FFI is zero-copy for UTF-8-encoded strings inside other polyglot languages.
+If you want to help us test the next version of Lix, consider running `main` by following the [beta guide](https://wiki.lix.systems/books/lix-contributors/page/lix-beta-guide).
 
-The idea is that if you need a data frame, want to run an LLM, or want a D3.js visualization, you should just pass `Text` out through foreign imports. Quasi-quotation-based `inline-<language name>` style bindings should be pretty easy to implement as well.
+## Changes
 
-C/C++ bits in your Haskell libraries are run via FFI to native-mode [Sulong](https://www.graalvm.org/latest/reference-manual/llvm/) (LLVM on the JVM). Managed-mode Sulong, where LLVM is interpreted inside the JVM and pointers are managed and garbage-collected, is also available, but is not used by the normal `foreign import` path.
+Lix 2.96 builds on the work of previous releases to improve the daemon, the protocols spoken with the daemon (both on a single machine and the ones used for remote builds), and brings many much-needed improvements to the debugger infrastructure.
 
-## Evaluation and concurrency
+Here’s a short list of the most exciting changes in Lix 2.96. This list is not as exhaustive as the [full release notes](https://docs.lix.systems/manual/lix/stable/release-notes/rl-2.96.html).
 
-Internally, THC supports two different backends for Truffle evaluation: a bytecode-based JIT target and a traditional AST-based JIT target. Both can run in a single-threaded or multi-threaded style, with additional locking for the latter. It also supports GHC bytecode itself, so it can run BCO code as produced by GHCi.
+### REPL and debugger support
 
-THC fully supports `throwTo`, asynchronous exceptions that leave behind resumable code, and masking.
+Thanks to the tireless work of [blokyk](https://git.lix.systems/blokyk) the REPL and debugger are much improved in Lix 2.96. The debugger is now more stable, navigating within the debugger is much easier, and the information printed by the debugger is more readable.
 
-THC supports both “normal” Java threading and [Project Loom](https://openjdk.org/projects/loom/), upon which it offers lightweight GHC-style green threading with a HEC-style runtime executor permitting cheap `MVar`s and the like.
+[eldritch horrors](https://git.lix.systems/pennae) have also switched the REPL backend from editline to [rustyline](https://github.com/kkawakam/rustyline), finally bringing proper UTF-8 support to the REPL.
 
-## SIMD
+### News from RPC
 
-THC supports SIMD using the relatively limited supply of available GHC prim-ops, but it can also go further, allowing runtime selection of the SIMD “species” width and JIT-compiling loops using that information through the incubating [Vector API](https://openjdk.org/jeps/508) (`jdk.incubator.vector`). This lets the JIT start to earn its keep!
+The experimental RPC protocol is now shipping under the `rpc-sockets` experimental feature. As one may guess this is still *highly experimental* and must be enabled not only with the experimental feature flag in your Lix config, but also requires system setup that is not yet done by the NixOS module. You can find an example configuration in the [NixOS module in the Lix repo](https://git.lix.systems/lix-project/lix/commit/103b91b0c77c662c50070f2b4700ffc0df12cbee#diff-c6352f13d264fb180d5409d66db94d50264ed9dd).
 
-In fact, nothing prevents the runtime from providing complete `RuntimeRep`-polymorphic code at runtime other than the fact that we have no Core that takes advantage of that freedom!
+In future releases we plan to stabilize the RPC protocol and remove support for the legacy protocols we’ve been using to date to allow further evolution of Lix.
 
-## Tail calls
+### `ssh://` store URIs are now deprecated
 
-Hot tail calls become loops. When execution has to fall back to ordinary calls, THC periodically unwinds the accumulated stack frames.
+To enable further RPC work and resolve some long-standing security inconsistencies we must remove `ssh://` store URIs. Lix 2.96 **deprecates `ssh://` store URIs**, but retains support for them without deprecation warnings. `ssh://` store URI support will be removed in Lix 2.97, `ssh-ng://` URIs will remain supported.
 
-Previous efforts to run functional code on the JVM, such as the [Eta programming language](https://eta-lang.org/) and the design I used with Runar Bjarnason for trampolining Scalaz’s monads, used a trampoline mechanism. THC instead uses a code transformation trick to keep hot tail calls inside tight basic-block-style loops with side exits.
+If you are using `ssh://` store URIs because `ssh-ng://` is missing features you need please get in touch so we can figure something out together. Note that `ssh-ng` has stricter security checks than `ssh` and no longer allows untrusted users to copy unsigned outputs to remote stores, *this is intentional*.
 
-During recursion in tracing mode, THC fills a 64-bit [Bloom filter](https://en.wikipedia.org/wiki/Bloom_filter) to detect likely recursive tail calls. When it finds a likely hit, it throws a slow-path exception to connect the continuation with the launch site, and then custom Truffle nodes get Graal to transform the current tail-call loop across function bodies into a tight loop. False positives mean extra slow-path work; they don’t change the program’s result.
+### Breaking changes
 
-When later code paths diverge, THC tries to grow additional side loops, like a tracing JIT, until it hits the JVM’s limits on function body size. At that point, it’ll finally spill a tail call in a way that “leaks” a stack frame.
+Once again Lix must break sharp corners to make improvements possible and excise surprising behavior in user code.
 
-That leak is temporary. We can compact the accumulated stack frames using a trick somewhat similar to [CHICKEN Scheme’s garbage collection strategy](https://www.more-magic.net/posts/internals-gc.html), reusing the machinery we needed to support resumable code in the presence of asynchronous exceptions. The result is that hot loops can run *very* hot indeed.
+- `flake.nix` validation no longer relies on poorly documented triviality checks. Instead Lix now has only one rule for `flake.nix`: **no function calls are allowed outside of `outputs`.** This means that Lix now accepts `let` blocks and string interpolation in flake `inputs`, among other things. We consider this a breaking change because other Nix implementations may no longer be able to evaluate Flakes that were written using Lix.Many thanks to [piegames](https://git.lix.systems/piegames), [Qyriad](https://git.lix.systems/Qyriad) and [eldritch horrors](https://git.lix.systems/pennae).
+- The `floor` and `ceil` builtins now throw errors if their operation would have resulted in precision loss during the conversion from floating point to integers. Precision loss does not sound dramatic, but with numbers of sufficient magnitude this could result in positive floats being converted to negative integers.Many thanks to [jade](https://git.lix.systems/jade), [NaN-git](https://github.com/NaN-git) and [rootile](https://git.lix.systems/rootile).
+- Many nix3 CLI commands no longer build their arguments. This surprising behavior was commonly seen when `nix store delete` was called with a path that was not present in the store, causing the path to be downloaded just so that it could be deleted.Many thanks to [eldritch horrors](https://git.lix.systems/pennae).
+- Shadowing internal files via Nix search paths is now considered an error. Lix 2.95 already deprecated overriding the `nix` search path entry due to surprising effects that could have, Lix 2.96 now considers this an error if not explicitly configured otherwise.Many thanks to [thubrecht](https://git.lix.systems/tom-hubrecht), [jade](https://git.lix.systems/jade) and [eldritch horrors](https://git.lix.systems/pennae).
 
-When benchmarking `Data.Map` in particular, I found it needed something like 66 fallback trampoline calls compared to several million fast-path calls.
+## New features
 
-## Performance
+- Nested arguments can be set with `--arg` and `--argstr`.Previously Lix would turn `--arg foo.bar.baz 1` into the set `{ "foo.bar.baz" = 1; }`, now it turns it into `{ foo.bar.baz = 1; }`. Attribute set merging rules are applied to these sets, making it much easier to use function that expect sets as arguments (such as nixpkgs, which expects a `config` set). The old behavior can be recovered by quoting the name, e.g. `--arg '"foo.bar.baz" 1'`.Many thanks to [ma27](https://git.lix.systems/ma27).
+- Inputs are now only fetched by one process at a time. This can be significant in CI situations where many processes may attempt to download the same input set concurrently. Previously all of them would download the set, now only one of them does and signals the others to wait for it to finish.Many thanks to [lheckemann](https://git.lix.systems/lheckemann).
+- Use [mimalloc](https://github.com/microsoft/mimalloc) for faster evaluation. We’ve seen 5-12% eval time improvements due to thisMany thanks to [getchoo](https://git.lix.systems/getchoo) and [lovesegfault](https://github.com/lovesegfault).
+- `nix doctor` has been extended greatly, including general system information and remote builder configuration in its report. It can now also automatically connect to configured remote builders and check their state as well.Many thanks to [rootile](https://git.lix.systems/rootile) and [raito](https://git.lix.systems/raito).
+- `ssh-ng` store URIs are now considered stable. The long-awaited feature parity between `ssh` and `ssh-ng` URIs has arrived, although only Lix 2.96 and newer will be able to take full advantage of this. Connecting to or from older Lixes or other Nix implementations will not see feature parity and silently fall back to the previous behavior.Many thanks to [eldritch horrors](https://git.lix.systems/pennae).
+- Channel references now support `zst`-compressed tarballs. This can greatly improve unpacking speed when using channels.Many thanks to [raito](https://git.lix.systems/raito) and [eldritch horrors](https://git.lix.systems/pennae).
 
-The runtime can also use [compressed ordinary object pointers (compressed oops)](https://docs.oracle.com/en/java/javase/25/vm/java-hotspot-virtual-machine-performance-enhancements.html). These represent heap references as 32-bit offsets rather than full 64-bit pointers, reducing the memory occupied by references and helping more data fit in cache. With the JVM’s usual 8-byte object alignment, this limits the heap to roughly 32 GB when running in this mode.
+### Improvements
 
-Performance was a key consideration for the first couple of days of development. For tests on `Data.Map` and the like, I was able to get things to run within a general range of 3× faster to 3× slower after warmup, mostly hovering around 10–20% slower than GHC. That said, we haven’t been benchmarking for the last few days while we raced for broader coverage and suffered a 10× or so performance regression on some easy benchmarks in the meantime. Development effort continues to plug away at these to keep it under control.
+- The `ssl-cert-file` and `netrc-file` settings now report errors when set to files that don’t exist instead of being silently ignored.Many thanks to [Astreaprtcl](https://git.lix.systems/astreaprtcl).
+- Moving between stack frames in the debugger is now easier using offset instead of absolute numbers. While moving up or down some number of frames previously required remembering the frame number you were on you can now directly supply offsets, using `:st +l` to go from frame `n` to `n+k` and `:st -k` to go from `n` to `n-k`.Many thanks to [blokyk](https://git.lix.systems/blokyk).
+- `addErrorContext` frames are always printed in backtraces now, even without `--show-trace`. This makes explicit report locations, for example in the NixOS module system, much more useful.Many thanks to [blokyk](https://git.lix.systems/blokyk).
 
-We haven’t yet tested whether stack growth on non-tail-call paths remains bounded relative to GHC’s stack usage. Ensuring that bound remains possible future work.
+### Fixes
 
-## Development
+- `nix-copy-closure --include-outputs` now actually works.Many thanks to [rkjnsn](https://git.lix.systems/rkjnsn).
+- Hash mismatch diagnostics now work with `structuredAttrs`. This fixes hash mismatch diagnostics with fetchers from modern nixpkgs.Many thanks to [keysmashes](https://github.com/keysmashes).
+- Subdaemons receive overridden settings from their parent daemon rather than using the system-wide configuration. This was broken by the switch to explicitly launched subdaemons in 2.95, making it impossible to configure subdaemons by providing command line arguments to the main daemon.Many thanks to [raito](https://git.lix.systems/raito).
 
-The code is available at [github.com/ekmett/thc](https://github.com/ekmett/thc), with [documentation](https://ekmett.github.io/thc/) covering how to build, run, and use THC.
+### Miscellanea
 
-Development is proceeding on `irc.libera.chat` in the [##thc channel](https://web.libera.chat/##thc).
+- `ssh` and `ssh-ng` store URIs no longer honor the `max-connections` parameter. This parameter complicated the code immensely for no benefit to the average user and had many sharp corners when set explicitly.Many thanks to [eldritch horrors](https://git.lix.systems/pennae).
+- The `daemon-trust-override` experimental feature has been removed. It can still be emulated by e.g. setting the `NIX_CONFIG` environment variable appropriately.Many thanks to [eldritch horrors](https://git.lix.systems/pennae).
+
+### And so much more
+
+Many more changes have gone into Lix 2.96, most of them internal. We hope to ship a stable RPC-based daemon in one of the upcoming releases, including remote build support using this new protocol.
+
+## What is planned for the future?
+
+### Lix 2.96.1
+
+We are releasing 2.96 together with security releases on stable branches. A few things we wanted to finish for 2.96 have been delayed somewhat, and we expect to release 2.96.1 with a few more improvements soon:
+
+- proper --keep-going support when using --store ssh-ng://..., not just when using ssh-ng remotes as remote builders
+- SHA256 support for Git fetchers for both Flakes and other users
+- better diagnostics on MacOS for garbage collection failures caused by TCC permissions
+- .narinfo cache soundness improvements to enable key rollovers for binary caches
+- allow pass more settings to the daemon and remote builders, e.g. log-lines
+
+### News from Rust integration
+
+Rust integration has moved along apace, and it is now possible to write significant portions of new features without touching *too much* C++ code. We’ve decided to use [zngur](https://github.com/hkalbasi/zngur/) for interop due to its great flexibility and active maintenance, and we’ve already ported a number of features to Rust like this. The REPL is now backed by Rust, as is remote builder configuration and much of the hash conversion code.
+
+## Want to help Lix? Consider donating to Lix!
+
+Following Lix integration in AFNix, Lix now has [an Open Collective](https://opencollective.com/lix-project) and can receive donations.
+
+We run infrastructure across x86_64-linux, aarch64-linux, and aarch64-darwin. Some of it is in-kind and sponsored. Current costs are around 100€/month.
+
+If you value self-hosting and benefit from Lix, please consider donating. Every contribution helps sustain the project.
+
+## Credits
+
+Thanks, as always, to the following groups:
+
+- The large community who beta tested the upcoming release by running `main` in production since the 2.95 branch-off. We really appreciate having immediate feedback on our work and the trust of running main alongside us means a lot to us. We know we tested the patience of some of you, we thank you for that.If you want to run Lix main yourself, see [the beta guide](https://wiki.lix.systems/books/lix-contributors/page/lix-beta-guide) for details.
+- Everyone who contributed by filing bugs and giving us feedback on Matrix.
+- All the first time contributors who made their first contributions to a Nix implementation in Lix. We are eternally grateful to everyone who helped us out on the numerous important but tedious issues.
+- All the contributors who have helped us with the backlog of bugs.
+- The CppNix contributors and CppNix team, without whom we would not have this software, and who wrote some of the improvements ported into this release.
+
+Onwards and upwards for the next release. We look forward to continuing to work together with everyone to build a better foundation for the evolution of Nix.

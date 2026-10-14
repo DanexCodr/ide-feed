@@ -1,59 +1,41 @@
-To accelerate and refine decision-making in a fast-paced, global marketplace, enterprises may deploy generative artificial intelligence models to help summarize and interpret the charts that often fill market summaries and financial reports.
+A new kernel, or core program within an operating system, gives researchers a cleaner view of what’s happening inside a processor. Called [Fractal](https://people.csail.mit.edu/mengjia/data/2026.SP.fractal.pdf) and developed at MIT, the kernel has already surfaced previously unknown behavior in Apple’s M1.
 
-But even the latest vision-language models sometimes struggle with this task, since it requires a model to integrate visual, numerical, and linguistic understanding. A company that invests in a state-of-the-art model might still receive inaccurate or incomplete information.
+When security researchers want to understand what a modern processor is really doing with the kind of detail that determines whether attacks like Spectre and Meltdown are possible, they usually run their experiments on top of an operating system that was never built for the job. They open up macOS or Linux, patch the kernel by hand, and hope the modifications hold. The approach is unstable, hard to reproduce, and on Apple’s platforms, slated for deprecation.
 
-To fill this performance gap, researchers from MIT and the MIT-IBM Computing Research Lab developed a multifaceted resource for AI users that is specifically designed to teach vision-language models (VLMs) how to effectively interpret charts.
+A team at MIT’s Computer Science and Artificial Intelligence Laboratory (CSAIL) decided to build something different. Fractal, an operating system kernel written from the ground up, treats the hardware itself as the object of study. Its first major use, a deep look at branch predictors — a CPU’s way of guessing what code to run next, before it knows for certain, so it doesn’t have to waste time waiting to find out — inside Apple’s M1 processor, has already turned up findings that prior work missed, including the first evidence that a class of speculative attack known as “Phantom” affects Apple Silicon.
 
-They used a novel data generation method to build a state-of-the-art dataset that includes more than a million varied charts. The dataset also encodes many visual, linguistic, and numerical components of each chart image, which enable models to robustly reason about the information in a chart.
+“We’re using hardware in ways it wasn’t designed for,” says Joseph Ravichandran, the MIT PhD student in electrical engineering and computer science (EECS) who led the project. “It’s not even obvious that this is a possible thing you could do with the hardware. But we found a way to pull all these different primitives off. It’s like a microscope. If you’ve got a hand magnifying glass, you can see a little bit. But if you had an electron microscope, now we’re really talking. That’s what Fractal is. The electron microscope of operating systems.”
 
-The researchers used this dataset, called [ChartNet](https://arxiv.org/pdf/2603.27064), to train a series of open-source VLMs.  Many of these smaller models significantly outperformed orders of magnitude larger, commercial models on tasks like data extraction and chart summarization.
+**A clean room for chip research**
 
-By enabling open-source models to outperform their commercial counterparts, ChartNet could allow small firms with limited budgets to more readily utilize AI. The open-source dataset can be used to improve the capabilities of AI models for tasks like business trend analysis and scientific figure interpretation.
+The core problem Fractal solves is one that researchers have worked around for years. Modern processors keep state in many internal structures: branch predictors, caches, translation lookaside buffers, and more. To study how those structures behave across the boundary between user code and kernel code, two domains the chip is supposed to keep isolated, researchers need to run nearly identical experiments on each side of that boundary. On a general-purpose operating system, that is very difficult. The system itself manages privilege levels, address spaces, and scheduling, and it injects its own activity into every measurement.
 
-“We developed ChartNet to be a one-stop shop for chart understanding, covering basically anything that an AI model and a practitioner who is training that model might need. We hope our work motivates researchers to achieve state-of-the-art performance with smaller models that don’t require infinite amounts of computation,” says Jovana Kondic, an MIT electrical engineering and computer science (EECS) graduate student and lead author of a [paper on ChartNet](https://arxiv.org/pdf/2603.27064).
+Fractal inverts the model. It boots directly on bare metal, with no other software running, and exposes primitives that let a single experiment switch privilege levels at runtime while executing the same instructions in the same address space. The team calls the underlying technique multi-privilege concurrency, and it relies on a new construct they introduced: the outer kernel thread, which sits inside a user process’s memory but executes with kernel privileges.
 
-She is joined on the paper by many co-authors from MIT, the MIT-IBM Computing Research Lab, and IBM Research, including Pengyuan Li, a research staff member at IBM Research; Dhiraj Joshi, a senior scientist at IBM Research; Isaac Sanchez, a software engineer at IBM Research; Aude Oliva, director of strategic industry engagement at the MIT Schwarzman College of Computing, MIT director of the MIT-IBM Computing Research Lab, and a senior research scientist in the Computer Science and Artificial Intelligence Laboratory (CSAIL); and Rogerio Feris, a principal scientist and manager at the MIT-IBM Computing Research Lab. The research will be presented at IEEE Computer Vision and Pattern Recognition Conference.
+The result is an experimental setup with almost no background noise. Where measurements taken under macOS or Linux are blurred by interrupts, scheduler activity, and address-space management, Fractal produces flat baselines and clean signals.
 
-**A dataset bottleneck**
+**What Fractal found on the M1**
 
-Researchers have made great strides developing generative AI models that excel at natural language processing and reasoning about natural images. But less work has focused on interpreting complex multimodal data contained within charts, Kondic says.
+Apple’s M1 implements an ARM specification called CSV2, which is supposed to prevent code running in one privilege level from steering speculation in another. Using Fractal, the MIT team confirmed that the protection works for the execute stage of indirect branch prediction: a user-mode program cannot make the kernel speculatively execute a chosen target through the indirect branch predictor.
 
-Yet for large and small businesses in nearly every industry, chart understanding is a critical task.
+But the team also found something the chip’s designers may not have intended. The CPU still fetches the target into the instruction cache before the protection kicks in. That fetch is observable through a side channel, which means user code can still influence what the kernel pulls into its caches across the privilege boundary. The same pattern appeared between processes assigned different address space identifiers.
 
-“The finance industry thrives on charts. If vision-language models can extract information out of charts, like descriptions of trends, that facilitates a lot of workflows that happen downstream,” Joshi says.
+The team also produced the first evidence that Apple Silicon exhibits Phantom speculation, a class of misprediction previously demonstrated only on AMD and Intel processors. In Phantom, ordinary instructions, including a no-op, can be misinterpreted by the CPU as branches, triggering speculative behavior the program never asked for. On the M1, Fractal showed that Phantom fetches succeed across both privilege levels and address spaces, though the execute phase remains blocked.
 
-The lack of high-quality training data is a major bottleneck holding back the development of VLMs that can accurately interpret charts. Many datasets contain limited chart images pulled from the internet and often lack the necessary scale and additional information to help a model interpret the underlying data.
+A separate Fractal experiment overturned a finding from earlier work on the M1’s conditional branch predictor, which had reported that cross-privilege training worked on Apple’s performance cores, but not its efficiency cores. The Fractal team showed that the conditional branch predictor has no privilege isolation at all, on either core type, and that the earlier result was likely an artifact of macOS quietly migrating threads between cores during system calls.
 
-“A vision-language model, unlike our brains, may need to see thousands of examples during training to reliably recognize something as a line chart,” Kondic says.
+“For us, it is a true independent variable,” Ravichandran says. “You change the privilege level, nothing else changes. The only thing that could explain whether the attack succeeds or not is the privilege level.”
 
-The researchers sought to overcome those shortcomings by generating synthetic data. Synthetic data are artificially generated by algorithms to mimic the statistical properties of actual data.
+**A tool, not a one-off**
 
-The ChartNet dataset holds more a million high-quality chart images, along with the corresponding code used to generate each chart, a textual description, and a table that contains its numerical information. In addition, each datapoint includes question-and-answer pairs to teach the model how to correctly answer questions about the chart image.
+Fractal supports x86_64, ARM64, and RISC-V, and consists of more than 31,000 lines of code. The team designed it as infrastructure rather than as a single experiment, with familiar POSIX system calls, a C library, and ports of standard tools like vim, GCC, and the dash shell, so that researchers can move existing experiment code over with minimal friction.
 
-“These additional modes of data guide the model to connect and align the different pieces of information that the chart image encodes,” Kondic says.
+The MIT team disclosed its M1 findings to Apple’s product security team. In an unusual reversal, Apple’s engineers also examined Fractal.
 
-**Data generation**
+The longer-term ambition is bigger than any single result. Ravichandran wants Fractal to become to microarchitecture research what tools like QEMU and FFmpeg are to their fields: shared infrastructure that the whole community builds on.
 
-To build ChartNet, the researchers created a two-step, synthetic data generation pipeline.
+“My hope is that our results as a community get significantly more reliable, significantly more accurate,” says Ravichadran. “With this reduced noise, this clarity, and this guarantee that you’re running on the right core, on the right system.”
 
-First, their automated system translates any pre-existing set of chart images into code. Then the system iteratively augments that code to change different aspects of each chart, such as chart type, data values, topic, colors, etc.
+“Fractal is a strong architecture contribution because it turns an often ad hoc microarchitectural reverse-engineering workflow into reusable research infrastructure,” says University of Southern California assistant professor Mengyuan Li, who wasn’t involved in the paper. “By reducing software noise and giving researchers tighter control across privilege boundaries, it makes difficult hardware experiments much easier to interpret.”
 
-“We can start from a single chart that we use as a seed and come up with hundreds of augmentations of it. This is how we were able to build a dataset with more than a million diverse images,” Kondic explains.
-
-They also incorporated an automated quality check process to ensure the synthetic data are high quality. This process verifies that the code is executable and rendered chart images are accurate and clean.
-
-“We don’t want to just be generating diverse samples. We also want the information to be presented in a meaningful way,” she says.
-
-ChartNet also includes a selection of chart datapoints annotated by human experts. This provides access to additional types of charts and supporting data that carry validity guarantees.
-
-A practitioner could use the annotated data to fine-tune an existing VLM, further boosting performance for a specific application, Joshi adds**.**
-
-The researchers tested ChartNet by training IBM’s Granite Vision series of models as well as several other open-source models of various sizes and evaluating them on various chart interpretation tasks. The dataset improved the accuracy of all models in chart reconstruction, chart data extraction, chart summarization, and chart question answering.
-
-With ChartNet, small open-source models consistently outperformed much larger  commercial models.
-
-“A lot of prior training datasets only focused on answering simple questions about a chart. We tried to go beyond that with ChartNet by generating data that support all aspects of robust chart understanding,” Kondic says.
-
-In the future, the researchers plan to continue expanding ChartNet by incorporating data with added levels of complexity. They also want to draw on feedback from the research community.
-
-This research was funded, in part, by the MIT-IBM Computing Research Lab.
+Ravichandran worked with Mengjia Yan, an MIT associate professor of EECS and CSAIL principal investigator, on the paper. Their work was supported, in part, by the National Science Foundation, the U.S. Air Force Office of Scientific Research, and ACE, which is part of a program sponsored by the U.S. Defense Advanced Research Projects Agency. They presented their work at the IEEE Symposium on Security and Privacy in San Francisco, California.

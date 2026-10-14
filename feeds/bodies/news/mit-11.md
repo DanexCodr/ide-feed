@@ -1,57 +1,51 @@
-Imagine a bottle of hazardous chemicals sitting on a laboratory shelf that changes its appearance to alert scientists that its lid is not properly secured, potentially preventing a dangerous spill.
+When an artificial intelligence image generator produces a portrait, whose work went into it? The question sits at the center of lawsuits, licensing deals, and proposed regulations worldwide. Artists want credit. Companies want clarity. Policymakers want a way to assign responsibility.
 
-A new 3D-printing system created by MIT researchers enables users to produce interactive objects like this chemical bottle, which change their appearance when they are pressed, slid, or turned, without the use of any internal electronics.
+New work from a team of researchers at MIT's Computer Science and Artificial Intelligence Laboratory (CSAIL) suggests that for models trained on large datasets, the question may often have no answer. It's not that the tools for finding it are inadequate. The connection itself has disappeared.
 
-Their system simplifies the process of designing and fabricating 3D objects with mechanically switchable surface appearances, enabling individuals without technical expertise to quickly generate dynamic everyday objects.
+The scientists identified a phenomenon they call attribution decay, where the more data a generative model is trained on, the less any individual training example matters to any particular output. It feels counterintuitive, but at sufficiently large scales, they find, you can often remove any single image from the training data, or every image by a given artist, or every photograph of a given person, and the generated sample doesn't change.
 
-The design and fabrication system combines specially arranged optical layers with built-in mechanical parts so a single object can display different images or patterns. The resulting objects change appearance based on user interactions like screwing on a lid or flipping a switch, and they can be manufactured in one pass on a multimaterial 3D printer.
+And if removing something changes nothing, the researchers argue, it can't be said to be responsible for anything.
 
-The system can be used to fabricate a range of interactive objects that don’t require fragile electronic circuits, such as adaptable warning signs that could withstand foul weather or dynamic packaging that alerts users if fasteners came loose during shipping.
+"If you take away a piece of data and the output of the model doesn't change, then that piece of data didn't affect the output," says Zheng Dai SM ’21, PhD ’24, former MIT CSAIL researcher and lead author on the work. "So it doesn't make much sense to attribute the output to that piece of data. And if you then do this one at a time for every other piece of data and find that the output doesn’t change for any of them either, then it doesn't make much sense to attribute the output to any one of them."
 
-The end-to-end system could also streamline rapid prototyping of adaptable objects for artistic, architectural, and engineering applications.
+"All previous methods were approximate," says MIT Professor David Gifford, who is an MIT CSAIL principal investigator. "They really could not absolutely show that deleting individual things did not change the output. This paper introduces the first method that is absolute. You're actually deleting the inputs and deleting all influences of the inputs. This is the first exact method for doing large-scale deletion efficiently and showing that the results don't change."
 
-“With our system, an object can tell you whether you are using it properly, without the need for sensors or any complicated electronics. The interactive display is mechanical, so you can create a self-contained, multistate, interactive device that a user can control very intuitively,” says Yunyi Zhu, a graduate student in the MIT Department of Electrical Engineering and Computer Science (EECS) and lead author of a paper on this platform.
+Dai and Gifford's project is described in an open-access [paper published today in *Nature Communications*](https://www.nature.com/articles/s41467-026-75667-5).
 
-Her co-authors include Dingning Cao, an MIT undergraduate; Jeremy Mrzyglocki, a graduate student at the Technical University of Munich; Stefanie Mueller, an associate professor in EECS and the Department of Mechanical Engineering at MIT and a member of the Computer Science and Artificial Intelligence Laboratory (CSAIL); and Narjes Pourjafarian, a postdoc at Northeastern University. The research will be presented at the ACM Symposium on User Interface Software and Technology.
+**The retraining problem**
 
-**Mechanically switchable surfaces**
+Testing this idea directly meant answering a what-if question. What would this model have produced if it had never seen this particular image? Answering it honestly means retraining the model from scratch without that image, then doing it again for the next image, and the next. With millions of training examples, the math quickly becomes prohibitive, which is why prior work in the attribution field has relied on approximations that estimate a training example's influence, rather than actually removing it.
 
-Many interactive products rely on screens and electronics to change their appearance. But if these dynamic objects are exposed to water or harsh chemicals, or are squished, twisted, or pressed with great force, the fragile electronics could be damaged.
+Their workaround is an architecture they built themselves, called a "diffusion ensemble." Instead of one monolithic model, it's made up of many smaller components, each trained on a different slice of the data. Want to know what the model would do without a particular image? Just switch off the parts that saw it. No retraining, no approximation. What's left is a true counterfactual model, not an estimate of one.
 
-On the other hand, conventional methods that use surface optics to change an object’s appearance without electronics typically utilize static labels like stickers or curved lenses to create different visual effects based on where the user is looking, limiting interactivity.
+Of course, a clever architecture only matters if it still works as a generator. So the team put the ensembles head to head with 24 conventional diffusion models trained on the exact same data. The images came out looking about as good by standard measures.
 
-To simplify the process of making dynamic, interactive objects that don’t require electronics, the MIT researchers developed a system that automatically converts a user’s design into a 3D printer-ready model of an object with a mechanically switchable surface appearance.
+One nice surprise in the numbers: The more training data, the better the ensembles held up against their single-model counterparts, a hint that they may actually be more data-efficient.
 
-Their design, [ShiftLens](https://hcie.csail.mit.edu/research/shiftlens/shiftlens.html), creates switchable appearances by combining two optical layers on an object’s surface. It places a layer of special lenses over an underlying, patterned backplane.
+"When you have low amounts of data, they do very poorly," says Dai. "But if you have more data, it actually scales better compared to the vanilla diffusion model."
 
-The object displays different visual states based on the motion between the two layers.
+**Exploring a counterfactual universe**
 
-The lens layer contains an array of tiny lenticular lenses, curved lenses which steer light differently depending on the viewing angle of the user. The pattern layer contains strips of images that correspond to multiple appearances of the object surface.
+With ablation working, the researchers could finally ask their question at scale. Take one generated image, then imagine every alternate version of it, each produced by removing a different piece of the training data. The team calls this the image's counterfactual universe. The distance between the original and its most different alternate, the counterfactual radius, captures the most that any single piece of training data could have mattered.
 
-When the user shifts the lens layer, different parts of the backplane come into view. The lenses magnify these parts of the backplane image, changing the surface appearance.  
+They trained 24 ensembles on datasets from 256 images to more than 160,000, pulled from seven public collections including CIFAR-10, CelebA, MetFaces, and ArtBench. The pattern was consistent: The bigger the training set, the smaller the radius, shrinking along an inverse power law. It held whether differences were measured pixel by pixel or by semantic meaning, with statistical significance both ways.
 
-“The biggest challenge in this project was to make sure all moving parts align. We need to make sure that the optical effect, mechanical linkages, and computational graphics align with one another,” Zhu says.
+The team also stress-tested their own result. Maybe ablation itself was the culprit? They redid it the brute-force way at small scale, training 1,282 separate models, and the decay showed up anyway. Maybe bigger datasets just make each removal proportionally smaller? They pinned the removed fraction in place, and it persisted. Fixed epochs, text-prompted models, class-conditioned models, four similarity metrics — the finding survived everything.
 
-**A straightforward system**
+**The privacy paradox**
 
-To simplify the design process, the researchers created a user-friendly tool that does all this work behind the scenes.
+The implications run in a direction that surprised the researchers themselves.
 
-It automatically generates a ShiftLens structure based on a few inputs, including images of the visual states the user wants to achieve and the desired shape and curves of the object.
+Gifford sees the finding as bearing directly on the legal question of whether model outputs are derivative works.
 
-“Another challenge is to communicate to users who are not familiar with optics or mechanical structures and let them specify and achieve what they have in mind,” she says.
+"One way to think about this is that these models are creative. They are not simply copying what they are fed, but creating brand new outputs. If those outputs have nothing to do with any individual piece of training data, that raises questions about fair use, about whether the outputs are themselves copyrightable as novel works, and about how authors get compensated when what comes out of a model isn't attributable to anything on the internet."
 
-The researchers thought carefully about how to communicate the limitations of the ShiftLens design tool to the user. For instance, ShiftLens is not compatible with all objects, since it requires a shifting motion to enable interaction between the two layers.
+Gifford also notes that the work shows how to produce outputs that are guaranteed to be unattributable, a capability he frames as an obligation for the industry, rather than a loophole.
 
-Users can either incorporate a ShiftLens into the design of an object that has this type of interaction built-in, like the rotation of a lipstick tube, or integrate an actuation mechanism like a switch, knob, or roller.
+"In order for these companies to claim their outputs aren't derivative of the internet in a copyright-infringing way, they need to revise their models to take advantage of the advances in this work, so they can show they're not creating derivatives of individual people or items."
 
-“With ShiftLens, users can control what an object looks like while they are using it,” she says.
+The work looks at diffusion models, now dominant in generating audiovisual media and prevalent in scientific applications including protein structure modeling and therapeutic discovery. Whether the same decay holds for the large language models at the center of the highest-profile copyright litigation is still an open question.
 
-The researchers showcased how someone might use ShiftLens by fabricating a range of interactive objects.
+"If attribution worked, it would reliably tell us whether similarities between a model's output and a copyright-protected work are due to copying or coincidence," says James Grimmelmann, a law professor at Cornell Law School and Cornell Tech. "But this paper provides reason to think that attribution will fail for interesting models. Instead, technologists and courts will need to resort to other methods for assessing copying."
 
-In one experiment, they created a chemical bottle that turns green and displays a check mark when the cap is securely tightened, but turns red and displays an exclamation mark when it is loose. For another demonstration, they fabricated a tic-tac-toe game with squares that can display a red X, a blue O, or no letter, depending on which direction a user turns a knob.
-
-While the ShiftLens tool is designed to simplify the fabrication process for makers, the techniques could be scaled up for commercial and industrial applications, Zhu says. For instance, it could be used to design piping that can change its appearance to identify a damaged connection that is causing a leak.
-
-“The leaking sink in my apartment would be a lot easier to fix if it could tell me where the leak was coming from,” Zhu adds.
-
-The researchers want to explore additional applications in future work. They also plan to develop an algorithm that can generate a ShiftLens structure with fewer user inputs, simplifying the design process. In addition, they plan to enhance the design tool so users can incorporate a wider variety of actuation mechanisms.
+Dai and Gifford's work was supported by Schmidt Futures.
