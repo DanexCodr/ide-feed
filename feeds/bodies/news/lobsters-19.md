@@ -1,115 +1,88 @@
-The 6.12 release for [Qt Framework](https://www.qt.io/development/qt-framework?hsLang=en) is now available, with improved cybersecurity, UI performance, and a wealth of capabilities to mix-and-match from across your architectural layers. As a [Long-Term Support release](https://www.qt.io/development/qt-framework/qt-lts?hsLang=en), Qt 6.12 is not a simple incremental update, but a culmination of various efforts started years ago. Take a closer look.
+In the [curl 8.23.0 release](https://daniel.haxx.se/blog/2026/10/14/curl-8-23-0/) we shipped a fix for one of the worst vulnerabilities in curl in a long time. We grade it severity HIGH. It is known as [CVE-2026-92392](https://curl.se/docs/CVE-2026-92392.html) with the title *HTTP/2 upload Use-After-Free*.
 
-## The Release at a Glance
+This post explains the bug, what the problem can lead to, and something about why it happened and what we have done to make it harder to introduce a problem like this in curl again in the future.
 
-Once again, the release comes with a wealth of improvements, fixes, and new capabilities. Here's a super-summary of our highlights.
+This is a much simplified explanation. Please refer to the original report for all the details and the full reproducible Docker image for all the low-level fun and education you could possibly want. I highly recommend doing that; the report and the reproducible are awesome.
 
-Helpful for proprietary products in the EU, Qt 6.12 meets the requirements set by the Cyber Resilience Act (CRA). But the cybersecurity work done for that benefits also those outside the scope of the new law.
+## Use-After-Free
 
-[if !supportLists][endif]Qt Canvas Painter, the new accelerated, imperative painting engine, is out of Technical Preview. Alongside, there’s now a new QML Canvas2D type for easy use. More at [Qt CanvasPainter Is Out of TP](https://www.qt.io/blog/qt-6.12-released#canvaspainter).
+It is a [use-after-free](https://en.wikipedia.org/wiki/Dangling_pointer), which is a classic problem in memory-unsafe programming languages, like C, where we erroneously have a lingering pointer left, pointing to memory that is already freed, and yet we use that pointer and the memory it points to.
 
-There’s a new StyleKit in Labs for you to try out. It allows you to create a consistent style for a hybrid application that uses both Widgets and Qt Quick. More at [StyleKit Is Available in Labs: Try It Out](https://www.qt.io/blog/qt-6.12-released#stylekit).
+This family of errors is especially bad when a malicious actor can affect the content that gets stored into that memory area that is still used even though it was freed.  Tricking the program to do something unintended.
 
-### Less Complex Tech Stack
+## HTTP/2 is multiplexed
 
-[if !supportLists][endif]There are various improvements in QRangeModel, the C++ container helper class, including is built-in sorting support, drag & drop control, faster searching, and further customization. More at [QRangeModel](https://www.qt.io/blog/qt-6.12-released#qrangemodel).
+This problem involves HTTP/2. HTTP/2 is a multiplexed protocol, meaning that it handles multiple logical transfers over the same physical connection. curl needs to keep track of a number of transfers at the same time, and when data arrives or is to be sent off, it needs to keep things apart appropriately.
 
-For QtGrpc, there are improvements on network efficiency, including client-side compression for messages, and limiting incoming message size. More at [gRPC](https://www.qt.io/blog/qt-6.12-released#grpc).
+## Handles
 
-### Hot Reload for QML
+For every transfer done using libcurl, the application creates and sets up a dedicated *handle*. We call it an *easy handle*. This handle is kept around for as long as the transfer is in progress, and the application can close and free it once the operation is completed. When doing multiple transfers, multiple handles are used.
 
-The hot reload mechanism is now built-in into the QML Engine. It enables a live preview of your running QML code while you are editing it.
+libcurl also has *multi handles*, which is a super handle type that holds any amount of *easy handles*. This handle, and the corresponding multi interface, makes it possible to drive any amount of concurrent transfers. A transfer done with libcurl always has at least one multi handle and one easy handle. (Sometimes the multi handle is hiddenly used under the hood.)
 
-Qt 6.12 officially supports HarmonyOS as a Long-Term Support (LTS) platform, bringing the same guarantees for stability, maintenance, and support that Qt already delivers across its other major platforms.
+## The setup
 
-Qt 6.12 is a Long-Term Support (LTS) release. The [Qt LTS releases](https://www.qt.io/development/qt-framework/qt-lts?hsLang=en) are designed, above all, to provide stability and reliability over a five-year maintenance period. Especially appreciated for developing proprietary software, the LTS releases overlap, allowing you to plan and carry out the updates to the newer version in an organized manner.
+In order to trigger this problem, we need an application (such as the curl command line tool) to do an upload over HTTP/2 to a server. By default, libcurl negotiates HTTP/2 when a HTTPS:// URLs is used and the server agrees.
 
-There is a new Qt LTS release every 2 years, now 6.12 being the newest.
+When the upload has started, the server pauses the send by zeroing the HTTP/2 window size, returns a piece of the response and then it resets the stream, which shuts down the transfer – but not the connection. curl then correctly pulls down the entire transfer, but it accidentally leaves a lingering pointer to the involved *easy handle*.
 
-![Qt 6.12 LTS on the timeline with other Qt 6 Minor releases](https://www.qt.io/hs-fs/hubfs/QtLTS-612Highlight-Illustration-1200x628.webp?width=3603&height=1884&name=QtLTS-612Highlight-Illustration-1200x628.webp)
+When the application finds out that the transfer completed (with an error), it subsequently frees the easy handle and then, and here comes the problematic part: cleans up the multi handle.
 
-Especially for those selling proprietary products to the European market, there’s urgency around getting compliant with the new [EU Cyber Resilience Act (CRA)](https://www.qt.io/development/qt-framework/easier-cra-compliance?hsLang=en). However, the regulatory cybersecurity work benefits also those who aren’t affected by the CRA.
+## The mistake
 
-### Cybersecurity Beyond Regulations
+At this point, the *easy handle* was just freed but there is still a reference to that handle. When libcurl shuts down the multi handle, it misunderstands the situation, allocates memory to download data into, finds the still dangling pointer and manages to *download data* from the server that ends up in the very same memory previously used for the easy handle.
 
-Regulatory requirements aside, there are various improvements helping you build more secure software. Qt 6.12 LTS ships without known exploitable vulnerabilities and it is secure by default, with sustained security updates, a new vulnerability disclosure process, and [guaranteed response times (SLAs)](https://www.qt.io/terms-conditions/coordinated-vulnerability-disclosure-policy-2026-09?hsLang=en) for commercial customers. Security-critical items are marked in Qt’s source code files and information on run security tests shared transparently. Further, we commit to ensuring that the latest 3rd party libraries are integrated.
+In this process, it sends off a request that leaks internal client details, which includes information about local addresses, which is crucial. Modern operating systems use [Address Space Layout Randomization](https://en.wikipedia.org/wiki/Address_space_layout_randomization) (ASLR), so a server needs this clue in order to generate a good attack payload.
 
-The commercial Qt 6.12 LTS is compliant with the [EU Cyber Resilience Act (CRA)](https://www.qt.io/development/qt-framework/easier-cra-compliance?hsLang=en) now, so that you can get your product ready and compliant on time. The first CRA deadline passed on September 11th, and the final one is approaching fast. The regulation brings many requirements on internal processes and legal assessments as well as product-related aspects.
+Subsequently, when libcurl deals with this received data (using the handle the dangling pointer points to) in the download buffer, it uses a function pointer that now has been modified by data just downloaded from the server, and then *it runs remote code*.
 
-Qt 6.12 is built to meet the requirements set by the CRA as we today know will take effect in December 2027. In the coming maintenance releases, we will continue to ensure that the 6.12 release conforms to the regulation throughout its 5-year support period. This not only allows you to get your product ready on time but also provides a foundation to rely on over the years. [Qt 6.12 comes with the CRA Declaration of Conformity](https://www.qt.io/terms-conditions/declarations-of-conformity/qt6.12?hsLang=en), which doesn’t make your product automatically CRA-compliant (you’ll always have to do your own CRA work) but it does give many things ready-made for Qt’s part of your product.
+## An illustration
 
-In addition, Qt Framework helps you meet CRA’s technical feature requirements, such as secure-by-default authentication and verification, the software bill of materials (SBOM), and secure-by-design software.
+Here’s a simplified 6-step illustration.
 
-Learn more about how Qt 6.12 can significantly reduce your CRA-related efforts and risks:
+![](https://daniel.haxx.se/blog/wp-content/uploads/2026/10/RCE-explained.png)
 
-Looking at our [UI framework](https://www.qt.io/development/qt-framework/ui-framework?hsLang=en), we keep bringing in new capabilities for creating modern user interfaces; the past years have seen new Qt Quick controls like the Safe Area, Context Menu, Search Field, Double Spin box, and a new layout type with the FlexBox layout. We’ve also expanded the Vector Image module, supporting more properties and animations for SVG and Lottie files.
+## Conditions to trigger
 
-On the side of completely new things, let’s take a closer look at the new accelerated imperative painting engine and new QML Canvas2D type for easy use, how it improves also graphs performance. In addition, we invite you to try out our new StyleKit.
+In order to actually successfully execute remote code, lots of several specific conditions need to be met and we deem it extremely difficult to meet these requirements in the wild, which is why we decided this is “only” severity HIGH and not CRITICAL.
 
-### Qt CanvasPainter Is Out of TP: A New Way of Drawing with High Performance
+1. The victim needs to actually attempt to upload data to a malicious server, meaning that the server certificate must remain valid.
+2. The size of the upload needs to be roughly the right size (~135KB)
+3. The attacker needs to know curl’s architecture to generate and deliver the right code
+4. The attack requires a specific sequence of allocations and allocation sizes so that the data from the server ends up in the right place (from the attacker’s view). This pattern differs between Linux distros, libc versions/flavors, TLS certificate bundles, libcurl using applications and more.
+5. nghttp2 and OpenSSL/TLS 1.3 behavior, including allocation effects around session tickets
+6. The payload storage area is small (around 23 bytes)
 
-We received a lot of great feedback to Qt CanvasPainter after its [introduction earlier this year](https://www.qt.io/blog/2d-rendering-introducing-qt-canvas-painter?hsLang=en) as technology preview in Qt 6.11. An imperative painter-like rendering API for C++ and QML that uses the GPU for hardware acceleration, and that can use shaders for rich and high performant visual effects, has evidently been missing in Qt for a long time! In Qt 6.12, after a fair amount of optimization work, API refinement, and closing of feature gaps, we are taking the core API of the module out of Technology Preview. It's ready for production for both C++ and QML developers, and we are very excited to see what you all are going to create with this.
+The most likely outcome of an attempted attack is rather just a crash. We estimate that the chance for a successful attack is slim.
 
-The most significant addition is the introduction of the Canvas2D element. The Canvas2D API is modelled after the HTML Canvas, and makes it easy to use JavaScript to draw shapes that then get rendered efficiently by Qt CanvasPainter, via Qt's Rendering Hardware Interface (QRhi), on the GPU. Canvas2D is a significant architectural upgrade and modern replacement of the Qt Quick Canvas element.
+## How was this found?
 
-![Canvas2D Oscillograph](https://www.qt.io/hs-fs/hubfs/Canvas2D%20Oscillograph.png?width=8088&height=5496&name=Canvas2D%20Oscillograph.png)
+This problem was found and reported by Luna Tong  at Anthropic using their new OSS Scanner. Presumably this involves their AI models.
 
-As a brand-new API, the Canvas2D element remains in technology preview, together with the QCanvasCustomBrush C++ class.
+## How do we fix this?
 
-[Qt Graphs](https://www.qt.io/development/qt-framework/graphs?hsLang=en) also had quite some improvements. Responding to popular demand, we added a logarithmic axis to the Graphs2D capabilities, and more customization options for axis labels. End-user interactions have become easier with built-in zoom and pan interactions, and we have implemented several improvements to performance and usability.
+In general we have over the last few years been working on reducing the amount of internal pointers to handles that needs to be correct, and instead we store transfer identifiers that we look-up on demand. While this is a tiny bit slower, it is more foolproof when there are logical mistakes like the one mentioned here.
 
-For high-performance use cases, especially when visualizing large amounts of fast-changing data, we have implemented a rendering backend for 2D graphs using CanvasPainter, which for now is opt-in at configure time. We want to make sure that it’s rock solid before making it the default, so we are looking forward to your feedback when using this backend.
+We also of course continue to add more tests and we verify the code with more tools and analyzers in order to find additional similar mistakes.
 
-### StyleKit Is Available in Labs: Try It Out
+Multiplexed protocols like HTTP/2 have this challenge that there are many concurrent transfers going and they all have different life-times and with memory-unsafe languages, dangling pointer mistakes can indeed be fatal.
 
-The [new StyleKit module](https://doc.qt.io/qt-6/qtlabsstylekit-index.html) addresses several problems at once: creating a consistent style for a hybrid application that uses both Widgets and Qt Quick; doing so in a modern, design system and tooling-friendly way that cleanly maps to how such a system might be defined in tools like Figma; and a clean separation of UI component structure and styleable attributes, making it easy to define dark, light, and high-contrast themes without having to repeatedly specify that a button is a rectangle with a label.
+This is of course no guarantee that we do not have or will not introduce another use-after-free in the code now or later.
 
-Qt StyleKit provides a QML-based styling API that lets you style both Widgets and Qt Quick from a single source that configures property-value pairs, such as geometry and colors.
+## Again on the language
 
-![Example of the new StyleKit in Qt 6.12 Labs](https://www.qt.io/hs-fs/hubfs/Qt612-ReleaseBlog-StyleKitDarkModeExample.webp?width=1860&height=1839&name=Qt612-ReleaseBlog-StyleKitDarkModeExample.webp)
+libcurl is written in C – a memory unsafe language. With a *memory-safe* language, this mistake could probably have been avoided.
 
-Thanks to property propagation, defining a style using StyleKit greatly avoids repetition, while using using established QML techniques for property animations makes it easy to define smooth transitions between control and widget states. Support for theming, control variations, and extensibility for custom controls, make StyleKit a powerful solution for defining the design of a complex user experience that looks great across devices, system configurations, and for users with different preferences.
+We have worked on curl for almost thirty years, and have over this time manage to make a rather polished transfer engine. For the longest time there really was no memory-safe alternative that also allowed libcurl to be a low-level library available on hundreds of operating systems and several dozen CPU architectures. It even barely exist alternatives now.
 
-## Less Complex Tech Stack
+We do not rewrite curl. Not into another language but also not in C. We are set to iterate, polish, improve, refactor over and over until the end of time.
 
-Beyond the UIs, there is a lot to bringing efficiency and reducing complexity throughout the architectural layers. We’re constantly finding ways to make it easier for you to integrate your old and new code, re-using what you already know through architectural layers, APIs to tooling, and desktop to MCUs. Here are some highlights from the 6.12 release.
+Porting curl to another language (like rust) would be a monstrous undertaking that would be slow and introduce lots of new short to medium term problems. Not to mention that the existing curl team is not rust experts and that libcurl is currently portable to many more platforms and environments than rust itself is.
 
-### QRangeModel
+## Release schedule
 
-QRangeModel was [introduced on Qt 6.10](https://www.qt.io/blog/a-model-for-all-ranges?hsLang=en), receiving further [improvements on Qt 6.10](https://www.qt.io/blog/new-in-qt-6.11-qrangemodel-updates-and-qrangemodeladapter?hsLang=en) and continuous growing on the current release. For a quick remainder, QRangeModel is a helper class that turns regular iterable C++ containers into types that the model/view framework of Qt can easily display.
+When this vulnerability was confirmed by the curl security team just hours after it was submitted to us on September 15. We immediately realized the significance and decided to rush the pending next release. However, we still wanted to be careful, follow the procedures and not create any further problems or mistakes by stressing it too much. That’s how we ended up just shortening the release cycle with two weeks. Down from eight to six weeks from the previous release. This allowed us to also merge and fix many more vulnerabilities and general bugs in the same release.
 
-Coming fresh in Qt 6.12 is built-in sorting support which allows the model to sort its data directly, without needing a separate class. Also, there are new properties to control what kind of drag & drop actions are allowed and what happens with the existing data on this operation. Also, faster searching with the match() method and further customization for header data and per-row or per-item behavior round up the changes are introduced in this release.
+## CVSS
 
-### gRPC
-
-For the QtGrpc module, 6.12 focus is on network efficiency. With client-side compression for messages, it is possible to select and apply the available compression algorithms, saving communication bandwidth. On top of that, now it is also possible to limit how large a server's incoming message is allowed to be, protecting clients from being overwhelmed by an unexpectedly huge or malformed response.
-
-## Other Notable Improvements
-
-While there’s plenty to note, let’s focus here on Hot Reload for QML, and the support for a new platform, HarmonyOS.
-
-### Hot Reload for QML: No More Losing Your Place
-
-The QML Engine has been extended to enable native support of the hot reload mechanism, and the `qmlpreview` tool has been reworked to use it. This enables a live preview of your running QML code, showing visually the outcome of your edits on the UI as you make them, in the IDE.
-
-The Hot Reload is available in Qt Creator and from the command line via `qmlpreview`.
-
-Read more about QML Hot Reload, how it works, and what’s still planned, in Ulf’s blog:
-
-Starting with Qt 6.12, Qt officially supports HarmonyOS as a Long-Term Support (LTS) platform, bringing the same guarantees for stability, maintenance, and support that Qt already delivers across its other major platforms. This reinforces Qt's cross-platform nature further; existing Qt applications can now extend into HarmonyOS without a re-architected codebase, cutting development time and speeding time-to-market.
-
-HarmonyOS already spans a wide range of device categories in China, from IoT and automotive to PCs and tablets, and Qt's support opens that ecosystem in both directions: Chinese Qt applications can reach a global audience, and enterprises entering the China market gain a proven, LTS-backed path onto Huawei's platform.
-
-### What Else Is New?
-
-The above highlights some of the big additions in Qt 6.12. In the [What’s New in Qt 6.12](https://doc.qt.io/qt-6/whatsnew612.html) document you’ll find a lot of other things, such as the new QtQuick.Controls.Native style, additional joint types for Qt Quick 3D Physics, WebAssembly audio and video improvements, and smaller compiled-in resources thanks to content deduplication in the Resource Compiler (rcc).
-
-## Thanks
-
-Qt 6.12 is the result of work by many people across the Qt community and we want to thank every one of you. Everyone who got a patch merged into the Qt source code for this release is named at the end of [release notes](https://code.qt.io/cgit/qt/qtreleasenotes.git/about/qt/6.12.0/release-note.md).
-
-Code is only part of the story. Bug reports, feature requests and feedback on the Beta releases and technology preview modules shaped what went into Qt 6.12. Thank you all who took the time to share them. And a big thank you to the people who worked behind the scenes to get the release shipped!
-
-## Update Today
-
-As always, the new release is available through the Qt installer. You can also [download](https://www.qt.io/download?hsLang=en) the release via our website or your [Qt Account](https://account.qt.io/) page.
+We [never provide CVSS](https://daniel.haxx.se/blog/2025/01/23/cvss-is-dead-to-us/) for our published vulnerabilities as we don’t think we can do a job there. Others will provide them even for our flaws.

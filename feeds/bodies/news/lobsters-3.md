@@ -1,46 +1,34 @@
-Many readers will be aware that an unusually high number of features
-have been reverted from the PostgreSQL 19 branch after the beta period
-began.  Having some reverts is not unusual, maybe one per cycle could
-be expected.  But this time around, about 8 to 10 significant
-features, depending on how you count, have been reverted, and some of
-them quite late in the beta period.  I have been on the receiving end
-of some of that, as the developer or committer of some of those
-features, and have gotten some questions about it, and so I want to
-take a moment to reflect on this.  I’ll try to extrapolate a little
-bit to similarly affected work that I was not actively involved in,
-but these are just my opinions at this point.
+So a good while ago I added a fun curl version of my site, meant for viewing in the terminal. Try running these commands!
 
-So what happened?
+```
 
-I don’t think we, meaning all the developers affected, have had enough
-time to fully reflect on all this.  But here are some thoughts.  It’s
-probably a combination of these, and a different combination in the
-case of each reverted feature.
+curl nytpu.com/gemlog/2026-03-18
+# or
+curl nytpu.com
+```
 
-- Maybe we just didn’t do a good enough job. Maybe the code was just not good enough. We’ll learn and improve. It’s probably some of that, and I’m mentioning it here to not give the impression that it was only the other factors that I’m going to mention.
-- It could also be a coincidence. Maybe we had been on such a good roll that we attempted to tackle several features that turned out to be too hard, or at least too hard to finish in time.
-- Some of the reverted features had significant architectural defects that would have been hard to fix quickly and during beta. But there was also a long tail of relatively harmless issues involving various edge cases. In past times, many of these would not have surfaced until much later and we would have fixed them bit by bit over the subsequent five years. But with LLM-assisted code review, these kinds of things can get found much faster, and then you’re staring at a list of like forty defect reports. And even if each of them requires only a three-line fix on average, there is a fixed overhead to dealing with each of these, and then you run out of time. Most if not all of the affected reverted features were written a long time ago when LLM-assisted code review was not as useful as it is now, meaning that the effective quality bar has been raised after the time the feature was written and committed. Unless the capabilities of LLM-assisted code review keep improving at the current rate, this situation should sort itself out for future development cycles.
-- A corollary of that is that, at least for the most part, as far as I can tell, this situation is *not* due to “vibe coding”. This code was written well before that was a possibility.
-- Because of the Vulnpocalypse, many senior developers were busy between, say, April (the start of feature freeze for PostgreSQL 19, and also the start of the Vulnpocalypse) and August (the most recent PostgreSQL security release) with working on fixes for security issues. Because of that, the usual additional review and testing that happens during the beta period was reduced, and then picked up again in August. That’s possibly why a lot of new issues were discovered quite late in the beta period and why so many reverts happened so late, which is what made all of this so notable. Again, some issues were more fundamental but there was also a long tail of smaller issues, and I feel with more time, say, two months, these could have been addressed (given adequate focus, but note that the Vulnpocalypse is ongoing). But the community preferred trying to stick to the release schedule rather than delaying to get more fixes in. (And you never know how long a long tail really is.)
-- The complexity of the system has made some kinds of features extremely complex to get right, and there is not enough scaffolding in the code to support that. Consider, as an abstracted example, some SQL-level query language feature. Does it work with domains? How about with domains over a composite type? Where one of the fields is also a domain? And the domain has a not null constraint? And one of the columns was dropped and re-added? And this is part of a table partition that has been detached and reattached with a different column order? And this is part of a view that is called from a security-definer function from a trigger? And so on. No one can manually test this or even enumerate these test cases. But LLM-assisted fuzzing can find problems with this really quickly. So this probably needs to be part of feature development in the future. But we should also think about making the internal interfaces more robust so that each different combination of contexts doesn’t open up so many new possibilities of interactions. I like to say, in PostgreSQL, “everything works with everything”. This is part of the appeal, that you *can* construct cases like this and expect them to work. I don’t want to give up on that at all. But it does impose a significant penalty on feature development that everyone needs to be aware of.
-- As a final point, the PostgreSQL development community has been contemplating for some time the possibility of committing features with some kind of “experimental” status and then maturing them in the main tree. This would also be one possibility to address the previous point. This would have been a helpful tool for at least some of the reverted features, but we haven’t yet figured out a way to do this, and some of the work suffered from misunderstandings related to this. This is a concrete point to work on.
+(sorry Windows users, not my fault that ANSI escape codes are disabled-by-default in `cmd.exe`. And not my fault that in Powershell you have to use `curl.exe` instead of `curl` because Powershell inexplicably aliases that to `Invoke-WebRequest`.)
 
-So what’s next?
+I posted about it a bit on the Fediverse, but otherwise didn't elaborate much on it becuase I figured it was fairly self-explanatory. But I've had a handful of people ask me how I did it, so I decided it might actually be worth it to write a post about how I did it (…like seven months late).
 
-First of all, from my personal perspective, thank you to everyone who
-has reached out in person or online to express support and
-encouragement.  That’s the most important thing.  I’m confident that
-many of the reverted features will come back before too long.
+I should note this idea came from trinkey's (`curl trinkey.com`) and strongsand's (`curl proot.party`) curl sites, I didn't come up with it myself. Even though I did go about it quite a bit differently from them, all credit for the very cool idea goes to them.
 
-PostgreSQL 19 will still be a great release.  REPACK CONCURRENTLY,
-logical replication of sequences (itself a previously reverted
-feature), and planner hinting with pg_plan_advice, just to pick a few
-headline items, will make this release very attractive.  And it will
-be very robust, after all the additional scrutiny.
+First, since it's the more interesting part, actually generating the ANSI-marked-up files to send to the clients. I entirely hand-wrote the [index page](https://git.sr.ht/~nytpu/nytpu.com/tree/master/item/static/curl/index.ansi) and [about page](https://git.sr.ht/~nytpu/nytpu.com/tree/master/item/static/curl/about.ansi).
 
-It’s difficult to predict things now.  A few months ago I said,
-PostgreSQL 20 might have no new features, just bug fixes.  It turned
-out that things moved even faster, and PostgreSQL 19 now, kind of, has
-half as many major features as then expected, but now we also already
-have a few nice 80%-ready features queued up for PostgreSQL 20 that
-just need those remaining 80% to get done!
+Note that I believe trinkey and strongsand generate theirs on-the-fly with the [ratatui](https://github.com/ratatui/ratatui) library (or similar), which is probably more convenient; hand-writing it seemed more expedient to me though.
+
+I had the main escape code—`ESC[`, i.e. `\x1b[`—<sup>[1](https://nytpu.com/gemlog/2026-03-18#fn:1)</sup> in a Vim register to easily paste when needed, and then the [Wikipedia page for the main graphics codes](https://en.wikipedia.org/wiki/ANSI_escape_code#Select_Graphic_Rendition_parameters) open to reference the specific escape codes. And, yeah, that's about it. I experimented to decide on consistent styling I liked, and just referenced the Gopher version of my pages when crafting the marked-up curl pages.
+
+Now, the notable thing about my version is that I have curl versions of the entirety of my blog, rather than just one or two pages being available. This is entirely due to a convenient coincidence: over four years ago I implemented outputting ANSI-marked-up plaintext in my custom markup language I use for my blog, [Gemroff](https://git.sr.ht/~nytpu/gemroff). Originally it was just to allow convenient previewing of drafts in the terminal while writing; but it was trivial to plug into my static site generator to immediately get Curl versions generated.
+
+I did manually write a [wrapper template for blog posts](https://git.sr.ht/~nytpu/nytpu.com/tree/master/item/templates/gemlog-post.ansi), as well as a [template for the index page listing posts](https://git.sr.ht/~nytpu/nytpu.com/tree/master/item/templates/gemlog-index.ansi), but that plus a few extra lines in my static site generator was all that was needed to wire it up.
+
+This is the main thing that makes it hard to say it's easy! since it was only easy for me because I use an entirely custom markup language and static site generator and I happened to make the right design choices years ago—e.g. my SSG also happened to already have support for multiple, modular output formats instead of solely HTML like other SSGs, since I tri-host my site on HTTP, Gemini, and Gopher.
+
+However, offering nothing but a few hand-written pages for fun is a completely acceptable way to set up a site like this anyways, since it's just a neat gimmick and no one's likely to actually use it more than a few minutes of browsing.
+
+Finally, the last step is actually presenting the Curl version of your site to any user agent containing `curl`, which for me was just a [few changes to my Nginx config](https://nytpu.com/gemlog/files/nytpu.com.conf), with other servers it'd presumably be equivalently simple. The main feature I wanted was an override header (`X-Original: true`) so you could still get an unmodified HTTP response like someone casually running Curl likely wanted, and I wanted everything to be served statically still.
+
+And… that's really it! As I said, when I first set it up it seemed fairly self-explanatory to me, but it is very non-orthogonal to what people normally do with either web servers or ANSI escape codes so I can see where people's curiosity/confusion came from. It would be neat to see more sites doing this trick around!
+
+1. EMDASH! AI-GENERATED! acksually I'll have you know that my markup language has had [an explicit markup element for emdashes since November 2022](https://git.sr.ht/~nytpu/gemroff/tree/999d2f7da1757d756b9780c500f233d0b98e7628/item/doc/elements.md?view-source#L49). And believe it nor not: LLMs are trained on shit copied from actual authors, so LLMs wouldn't be using emdashes if they weren't already used in human-written works. And what, am I supposed to avoid having twenty parentheticals a paragraph, to where I feel the need to use emdashes to vary it up? Unthinkable! [↩︎](https://nytpu.com/gemlog/2026-03-18#fnref:1)

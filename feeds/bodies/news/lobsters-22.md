@@ -1,37 +1,58 @@
-One good trick when trying to look for ways to optimize software is to stay away from areas that are very likely already quite well optimized, and instead focus on areas that might have been overlooked, either because they are too obscure or don’t show up during regular profiling sessions. This tactic worked well in the past, as shown with my optimization of [tooltip creation](https://larstofus.com/2025/09/02/speeding-up-the-unreal-editor-launch-by-not-spawning-38000-tooltips/), or the loading of [editor localization files](https://larstofus.com/2025/09/02/speeding-up-the-unreal-editor-launch-by-not-spawning-38000-tooltips/).
+Back in August I mentioned the new [curl performance tests](https://daniel.haxx.se/blog/2026/08/14/curl-performance-2/) we have running. I figured it could be apt to return to this topic just to mention some of the initial outcomes.
 
-So when profiling the editor launch (again), this is why I mostly skip over any functions that contain words like “Shader Compilation” or “Shader Source” when I stumble over them in my profiler. The compilation of shaders is a famously long and elaborate process, and I’m pretty sure that very smart people at Epic already spent a lot of time optimizing those areas. That’s the reason why I would, for example, skip the function “Compile Global Shader Map,” even though its runtime would be typically multiple seconds:
+When the team gets a new set of charts, graphs and plots that visualize something, like performance, they offer an excellent opportunity for us to try to make them look better. This new setup is no exception.
 
-![](https://larstofus.com/wp-content/uploads/2026/10/image.png)
+The performance tests have only been running for just a little over two months but they have already made us improve curl performance in several areas. Of course, for most transfers these changes won’t make many visible differences to users. This is more in the vein that every little bit counts and that nothing should run slower than it has to.
 
-This was, at least, true until one day I skipped over it using an unusually high zoom level and saw one of the functions that was called by it:
+This is a list of some improvements that are included in the curl 8.23.0 release, to be shipped tomorrow on October 14.
 
-![](https://larstofus.com/wp-content/uploads/2026/10/image-1.png)
+## faster base64 encoding and decoding
 
-I am certainly not an expert for hash algorithms, but SHA1 is one of the (very few) hash algorithms that even I know. And seeing this hash algorithm being used to hash shaders seemed somehow wrong to me. That’s because [SHA1](https://en.wikipedia.org/wiki/SHA-1) <s>is</s> was a cryptographically safe hashing algorithm, originally developed by the NSA  (yes, that one). And even though it has been cryptographically  broken years ago and actually shouldn’t be used for sensitive information anymore, this origin means that it is – to put it politely – not particularly fast.  
-What does not fast mean in this context? Well see for yourself in this [comparison test](https://aras-p.info/blog/2016/08/09/More-Hash-Function-Tests/) of a bunch of commonly used hash algorithms that Aras Pranckevičius did a few years ago (actually, it was 10 years ago – I’m getting old). SHA1 was not even included as an actual competitor, but as the start of the article notes just “to illustrate the performance differences.” Ouch.  
-That’s especially annoying since the data being hashed is the shader source code, including all comments and copyright notice:
+With a few different changes, the internal base64 encoding function is more than twice as fast, while base64 decoding is 40% faster.
 
-![](https://larstofus.com/wp-content/uploads/2026/10/image-3.png)
+## faster URL encoding and decoding
 
-This means both that we have to hash a lot of data (source files can be quite big) and that there is no reason to hash it using a cryptographically secure hash, since it is no sensitive data.
+Meaning percent encoding the octets that are not safe to use in URLs. The decoding function now runs more than twice as fast compare to before, while the encoding function is around four times as fast.
 
-Therefore, not using a cryptographically safe but fast hash algorithm should be an easy win, right? And the linked article already presented a good alternative, for which I even found an existing implementation in Unreal’s code base: xxHash.
+## faster date parsing
 
-Note before somebody asks: xxHash is not necessarily the fastest hash. Other, potentially even faster hashes [do exist,](https://aras-p.info/blog/2026/03/07/Rapidhash-Unity-port/) but for now, using a faster hash that is already a used and tested part of the engine we are working on is a much more straightforward option.   
-Changing the used hash wasn’t too complicated, even though I had to change more places in the code than expected, since all places where the produced hash was stored or passed also had to be updated. A nice side effect of this change was that the stored hashes were a bit smaller than before (8 instead of 20 bytes).  
-But, of course, the effect that I made the change for wasn’t about memory, but CPU time. For testing purposes, I opened one of Unreal’s own sample projects, [Electric Dreams](https://www.fab.com/listings/d79688f5-29be-4fb2-a650-2d4a813f5306?lang=en), in the editor 5 times, both with and without the change, for a total of 10 runs. Profiling was done with [Superluminal](https://superluminal.eu/).
+Converting a date provided in plain ASCII text, as is used in for example cookie headers, to the epoch – number of seconds since Jan 1st 1970, is now more than twice as fast as before. Mostly thanks to completely replaced functions for week day, month name and time zone name lookups.
 
-![](https://larstofus.com/wp-content/uploads/2026/10/image-4.png)
+## faster URL parsing
 
-To put the following numbers into perspective, let me note that I will mostly talk about the overall CPU time, summed up over all threads, not just the time on the game thread. This is not done to artificially inflate the numbers, but to make the numbers more consistent and easier to compare. The actual effect on the editor start time is (very roughly) the measured time divided by the number of cores.
+Parsing a full URL to split it up into separate components as well as confirming its validity is a core component of curl, and libcurl exposes this functionality in its API.
 
-In the vanilla version of the engine, a whopping 12.90 seconds were spent in FSHA1::Update. In the modified version using xxHash, this time shrunk to just 1.59 seconds spent in FXxHash64Builder::Update. That’s eight times faster! Mission accomplished.
+In a test with several hundred different URLs, the new version executes 20-30% faster than before – with an improved ability to return precisely what the problem was when the URL is considered invalid.
 
-Normally, this article would now end with a link to a pull request so that anybody interested in the change could integrate it into their own version of the engine while we wait and hope that somebody at Epic would see the pull request and merge it into the main branch.  
-Well, this time I have even better news: The change already got accepted! (not merged however, this seems still to take a few days more)  
-I submitted the pull request just a few days before writing this article you can check it out [here](https://github.com/EpicGames/UnrealEngine/pull/15237). (If you can’t access the link, make sure that your Unreal account is linked to your GitHub account and you are logged in. You can find more information in the [official documentation](https://www.unrealengine.com/ue-on-github)).   
-Those few days were already enough for somebody at Epic to not only review my change but also polish it up. So let’s take a look some of the changes that were done to my proposed change:  
-One very smart feat that I hadn’t thought of was to wrap the xxHash into another struct, FShaderHash. This doesn’t change the behavior right now but will make it easier to change the hash algorithm again in the future if an even faster one is needed without changing the code in many different places.  
-Fixed a compile error for non-editor builds: That was an oversight on my sight. I had only tested my change in an editor build, mainly because my original profiling was also done in editor. I might need to add non-editor builds to my growing list of checks to do before a pull request in the future.  
-And that was it. If you enjoyed this article and want to read more about game optimization in the future, consider following me on [BlueSky](https://bsky.app/profile/larstofus.bsky.social), [Mastodon](https://mastodon.gamedev.place/@LarsThiessen)or [Linkedin](http://www.linkedin.com/in/larstofus)where I post all my articles. Or subscribe directly to my blog right below the article.
+## faster printf() calls
+
+For portability and now historical reasons, libcurl has its own printf() implementation. This ensures that it always works identically on all platforms but it also makes it our job to make sure it executes as fast as possible.
+
+Most printf() calls now run slightly faster (5-15%) because it handles “chunks” instead of single byte-by-byte at a time.
+
+## faster number parsing
+
+We have a generic internal function in curl that converts a number provided in ascii to its binary version (for decimal, hexadecimal and octal). It handles 64 bit values, has overflow detection and supports a maximum. This parser now runs almost twice as fast as before thanks to a simple trick to avoid the boundary check for most loops.
+
+## smaller structs
+
+The *easy handle* was 4256 bytes large two months ago, it is now 3064 bytes. About 28% trimmed off. One of these structs is allocated for every concurrent transfer done with libcurl.
+
+There is also one *multi handle* allocated for each set of transfer. This struct shrunk from 900 bytes to 656: 27%.
+
+The *connectdata struct* that is allocated once per connection libcurl handles, went down from 824 to 656 bytes: slightly over 20%.
+
+## fewer and smaller allocations
+
+For the test case where we count all allocations necessary for the curl tool to download a single 512MB file over clear text HTTP://, it went down from 100 to 96 used allocations. Not too exciting perhaps but it is now really hard to squeeze this further!
+
+Mostly thanks to the decreased struct sizes mentioned above, this use case of a single HTTP download now only use 126,875 bytes allocated at peak. Down from 130,622 bytes two months ago. Also quite difficult to trim further.
+
+It should be noted that the download buffer is 102,400 bytes of this amount. If we exclude that buffer from the count, curl is using 15% less memory.
+
+## Easy to check
+
+If you think you can speed up any of these functions, it is now very easy to check: the tests are there in the git repository, ready to be invoked by anyone!
+
+1. ![](https://secure.gravatar.com/avatar/3f96dcc15163444bfde7626f54c56ff1037b6b45a262c52c6e1dc6d39dc70285?s=68&d=monsterid&r=g) **Jeremy Robst** says: .comment-author [October 13, 2026 at 14:07](https://daniel.haxx.se/blog/2026/10/13/a-slightly-faster-slimmer-curl/#comment-27558) .comment-metadata .comment-meta Sorry, very pedantic but I don’t understand some of the percentages for the smaller structs 4256 bytes to 3064; that’s 1192 bytes saved or 28% of 4256. 900 bytes to 656 is 27% saved 824 to 656 bytes is just over 20% saved. .comment-content [Reply](https://daniel.haxx.se/blog/2026/10/13/a-slightly-faster-slimmer-curl/?replytocom=27558#respond) .comment-body .children
+  1. ![](https://secure.gravatar.com/avatar/69fdca87edd17cee21ca2e79fc2ff671d644603c3dc27167430f3cd3dbab7ba8?s=68&d=monsterid&r=g) **[Daniel Stenberg](https://daniel.haxx.se/)** says: .comment-author [October 13, 2026 at 14:11](https://daniel.haxx.se/blog/2026/10/13/a-slightly-faster-slimmer-curl/#comment-27559) .comment-metadata .comment-meta I clearly failed at math here… Thanks, the post has been corrected. .comment-content [Reply](https://daniel.haxx.se/blog/2026/10/13/a-slightly-faster-slimmer-curl/?replytocom=27559#respond) .comment-body

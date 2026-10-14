@@ -1,163 +1,55 @@
-The SQL language has a paradoxical fate.  Although it was deliberately designed to appeal to a human user, nowadays most of SQL code is written—or rather generated—by the computer.  Many computer programs need to query some database, and, for the vast majority of database servers, the only supported query language is SQL.  But generating SQL is difficult because of the complicated and obscure rules of its quasi-English grammar (its original name SEQUEL stands for Structured *English* Query Language).  For this reason, programs that interact with a database often use specialized libraries for generating SQL queries.
+Linux draws a distinction between code running in kernel (kernel space) and applications running in userland (user space). This is enforced at the hardware level - in x86-speak<sup>[1](https://codon.org.uk/~mjg59/blog/p/linux-lockdown-and-hibernation-again/#fn:1)</sup>, kernel space code runs in ring 0 and user space code runs in ring 3<sup>[2](https://codon.org.uk/~mjg59/blog/p/linux-lockdown-and-hibernation-again/#fn:2)</sup>. If you’re running in ring 3 and you attempt to touch memory that’s only accessible in ring 0, the hardware will raise a fault. No matter how privileged your ring 3 code, you don’t get to touch ring 0.
 
-One of such libraries is FunSQL.  FunSQL is designed with two goals in mind: supporting the full range of SQL's querying capabilities and exposing these capabilities in a compositional, data-oriented interface.  This combination of goals makes FunSQL a perfect tool for data analysis in SQL and differentiates it from all the other query building libraries.  Many query builders offer good coverage of SQL features, fewer provide data-oriented interface, but only FunSQL combines them in a single package.
+Kind of. In theory. Traditionally this wasn’t well enforced. At the most basic level, since root can load kernel modules, you could just build a kernel module that performed any kernel modifications you wanted and then have root load it. Technically user space code wasn’t modifying kernel space code, but the difference was pretty semantic rather than useful. But it got worse - root could also map memory ranges belonging to PCI devices<sup>[3](https://codon.org.uk/~mjg59/blog/p/linux-lockdown-and-hibernation-again/#fn:3)</sup>, and if the device could perform DMA you could just ask the device to overwrite bits of the kernel<sup>[4](https://codon.org.uk/~mjg59/blog/p/linux-lockdown-and-hibernation-again/#fn:4)</sup>. Or root could modify special CPU registers (“Model Specific Registers”, or MSRs) that alter CPU behaviour via the /dev/msr interface, and compromise the kernel boundary that way.
 
-And yet the difference between FunSQL and other query builders is not immediately apparent.  In fact, the interfaces of various query building libraries seem almost identical.  A query that finds *100 oldest male patients* (in the [OMOP CDM](https://ohdsi.github.io/CommonDataModel/cdm53.html) database) is assembled with FunSQL as follows:
+It turns out that there were a number of ways root was effectively equivalent to ring 0, and the boundary was more about reliability (ie, a process running as root that ends up misbehaving should still only be able to crash itself rather than taking down the kernel with it) than security. After all, if you were root you could just replace the on-disk kernel with a backdoored one and reboot. Going deeper, you could replace the bootloader with one that automatically injected backdoors into a legitimate kernel image. We didn’t have any way to prevent this sort of thing, so attempting to harden the root/kernel boundary wasn’t especially interesting.
 
-```julia
-From(:person) |>
-Where(Get.gender_concept_id .== 8507) |>
-Order(Get.year_of_birth) |>
-Limit(100) |>
-Select(Get.person_id)
-```
+In 2012 Microsoft started requiring vendors ship systems with UEFI Secure Boot, a firmware feature that allowed<sup>[5](https://codon.org.uk/~mjg59/blog/p/linux-lockdown-and-hibernation-again/#fn:5)</sup> systems to refuse to boot anything without an appropriate signature. This not only enabled the creation of a system that drew a strong boundary between root and kernel, it arguably required one - what’s the point of restricting what the firmware will stick in ring 0 if root can just throw more code in there afterwards? What ended up as the Lockdown Linux Security Module provides the tooling for this, blocking userspace interfaces that can be used to modify the kernel and enforcing that any modules have a trusted signature.
 
-The same query can be written in Ruby using [Active Record Query Interface](https://guides.rubyonrails.org/active_record_querying.html):
+But that comes at something of a cost. Most of the features that Lockdown blocks are fairly niche, so the direct impact of having it enabled is small. Except that it also blocks hibernation<sup>[6](https://codon.org.uk/~mjg59/blog/p/linux-lockdown-and-hibernation-again/#fn:6)</sup>, and it turns out some people were using that. The obvious question is “what does hibernation have to do with keeping root out of kernel space”, and the answer is a little convoluted and is tied into how Linux implements hibernation. Basically, Linux saves system state into the swap partition and modifies the header to indicate that there’s a hibernation image there instead of swap. On the next boot, the kernel sees the header indicating that it’s a hibernation image, copies the contents of the swap partition back into RAM, and then jumps back into the old kernel code. What ensures that the hibernation image was actually written out by the kernel? Absolutely nothing, which means a motivated attacker with root access could turn off swap, write a hibernation image to the swap partition themselves, and then reboot. The kernel would happily resume into the attacker’s image, giving the attacker control over what gets copied back into kernel space.
 
-```ruby
-Person
-.where("gender_concept_id = ?", 8507)
-.order(:year_of_birth)
-.limit(100)
-.select(:person_id)
-```
+This is annoying, because normally when we think about attacks on swap we mitigate it by requiring an encrypted swap partition. But in this case, our attacker is root, and so already has access to the plaintext version of the swap partition. Disk encryption doesn’t save us here. We need some way to verify that the hibernation image was written out by the kernel, not by root. And thankfully we have some tools for that.
 
-Or in PHP with [Laravel's Query Builder](https://laravel.com/docs/9.x/queries):
+Trusted Platform Modules (TPMs) are cryptographic coprocessors<sup>[7](https://codon.org.uk/~mjg59/blog/p/linux-lockdown-and-hibernation-again/#fn:7)</sup> capable of doing things like generating encryption keys and then encrypting things with them. You can ask a TPM to encrypt something with a key that’s tied to that specific TPM - the OS has no access to the decryption key, and nor does any other TPM. So we can have the kernel generate an encryption key, encrypt part of the hibernation image with it, and then have the TPM encrypt it. We store the encrypted copy of the key in the hibernation image as well. On resume, the kernel reads the encrypted copy of the key, passes it to the TPM, gets the decrypted copy back and is able to verify the hibernation image.
 
-```php
-DB::table('person')
-->where('gender_concept_id', '=', 8507)
-->orderBy('year_of_birth')
-->limit(100)
-->select('person_id')
-```
+That’s great! Except root can do exactly the same thing. This tells us the hibernation image was generated on this machine, but doesn’t tell us that it was done by the kernel. We need some way to be able to differentiate between keys that were generated in kernel and ones that were generated in userland. TPMs have the concept of “localities” (effectively privilege levels) that would be perfect for this. Userland is only able to access locality 0, so the kernel could simply use locality 1 to encrypt the key. Unfortunately, localities are typically only available on systems that implement a [Dynamic Root of Trust Measurement](https://trustedcomputinggroup.org/resource/d-rtm-architecture-specification/) like Intel’s TXT, and most consumer systems have no support for this. So, we need another approach.
 
-In C#'s [EF/LINQ](https://docs.microsoft.com/en-us/ef/core/querying/):
+TPMs have a set of Platform Configuration Registers (PCRs), intended for keeping a record of system state. The OS isn’t able to modify the PCRs directly. Instead, the OS provides a cryptographic hash of some material to the TPM. The TPM takes the existing PCR value, appends the new hash to that, and then stores the hash of the combination in the PCR - a process called “extension”. This means that the new value of the TPM depends not only on the value of the new data, it depends on the previous value of the PCR - and, in turn, that previous value depended on its previous value, and so on. The only way to get to a specific PCR value is to either (a) break the hash algorithm, or (b) perform exactly the same sequence of writes. On system reset the PCRs go back to a known value, and the entire process starts again.
 
-```csharp
-Person
-.Where(p => p.gender_concept_id == 8507)
-.OrderBy(p => p.year_of_birth)
-.Take(100)
-.Select(p => new { person_id = p.person_id });
-```
+Some PCRs are different. PCR 23, for example, can be reset back to its original value without resetting the system. We can make use of that. The first thing we need to do is to prevent userland from being able to reset or extend PCR 23 itself. All TPM accesses go through the kernel, so this is a simple matter of parsing the write before it’s sent to the TPM and returning an error if it’s a sensitive command that would touch PCR 23. We now know that any change in PCR 23’s state will be restricted to the kernel.
 
-Or in R with [dbplyr](https://dbplyr.tidyverse.org/):
+When we encrypt material with the TPM, we can ask it to record the PCR state. This is given back to us as metadata accompanying the encrypted secret. Along with the metadata is an additional signature created by the TPM, which can be used to prove that the metadata is both legitimate and associated with this specific encrypted data. In our case, that means we know what the value of PCR 23 was when we encrypted the key. That means that if we simply extend PCR 23 with a known value in-kernel before encrypting our key, we can look at the value of PCR 23 in the metadata. If it matches, the key was encrypted by the kernel - userland can create its own key, but it has no way to extend PCR 23 to the appropriate value first. We now know that the key was generated by the kernel.
 
-```r
-tbl(conn, "person") %>%
-filter(gender_concept_id == 8507) %>%
-arrange(year_of_birth) %>%
-head(100) %>%
-select(person_id)
-```
+Unfortunately it turns out that some people actually make use of PCR 23, and
+restricting it to the kernel makes them sad. There are other resettable PCRs, but only in non-0 localities, so (a) we can’t reset them on most systems and (b) we’ll just find someone who uses them anyway and run into the same problem. We need a different approach.
 
-In each of these code samples, the query is assembled using essentially the same interface.  Stripped of its syntactic shell, the process of assembling the query can be visualized as a diagram of five processing nodes connected in a pipeline:
+Thankfully TPMs have a small chunk of non-volatile RAM that can be used for storing things, and by “storing” I mean they can be used in a range of different ways. One of these is effectively as additional PCRs. These values can be configured such that they work the same way as PCRs, with the only way to modify them being to append a new hash to their existing value and update the new value to the hash of that merged value. We can allocate one of these for in-kernel use and reject any access from userspace, and also there are officially allocated ranges (so people shouldn’t be using random values) and the namespace is large enough anyway that w eshouldn’t collide with anyone, so we can carve one of those out and use it for this purpose.
 
-![100 oldest male patients](https://mechanicalrabbit.github.io/FunSQL.jl/stable/two-kinds-of-sql-query-builders/100-oldest-male-patients.drawio.svg)
+Unfortunately, though, these NV indexes aren’t included in the creation data we get when we create a key, so we need another approach. TPMs have the concept of sessions, a series of commands executed in sequence. A flag allows these sessions to be “audited”, with the TPM keeping a running track of the hash of the commands executed and the results returned. At the end of the session you can ask for a signed copy of this hash, and if you’ve kept a log of all the commands then you can verify that they match that signed hash and know that this log represents a real communication with the TPM. If we read the NV index and generate the key inside the same session, we can verify that the key we’re looking at was created while the NV index had a specific value, and if only the kernel can set that value then we know that the key was generated by the kernel.
 
-It is precisely the fact that the query is progressively assembled using atomic, independent components that lets us call this interface *compositional*.
+Or, well, can we? Only new kernels would impose the restriction on modifying that NV index. An attacker could boot an old kernel, generate a key there in userland, sign a hibernation image with it, and then reboot into a new kernel. The new kernel would see a valid signature with a valid NV index associated with it and have no way to know it was generated from userland rather than the kernel. We need to be able to tell the difference between kernels that implement this feature and ones that don’t, and we need to do that without being able to go back in time to change old kernel behaviour. We can extend a PCR to indicate we implement the new functionality, but so can an attacker running an old kernel.
 
-However we did claim that FunSQL differs from all the other query building libraries, and now apparently proved the opposite?  As a matter of fact, there is a difference, even if it is not reflected in notation.  To demonstrate this, let us rearrange this pipeline, moving the `Order` and the `Limit` nodes in front of `Where`.
+The normal approach to determining whether an event occurred in a specific phase of the boot process is to “cap” the PCRs - extend them with a known value that indicates a transition between stages of the boot process. Any events that occur before the cap event must have occurred in the previous stage of boot, and since the final PCR value depends on the order of measurements and not just the contents of those measurements, if a PCR is capped before userland runs, userland can’t fake the same PCR value afterwards. If Linux capped the PCRs before userland started running, we’d be able to place a measurement there before the cap occurred and then prove that that extension occurred before userland had the opportunity to interfere. We could simply place a statement that the kernel supported the NV index restrictions there, and we’d be fine.
 
-![100 oldest male patients ⟹ Males among 100 oldest patients](https://mechanicalrabbit.github.io/FunSQL.jl/stable/two-kinds-of-sql-query-builders/males-among-100-oldest-patients.drawio.svg)
+Unfortunately Linux doesn’t currently do this, and adding support for doing so doesn’t fix the problem - if an attacker boots a kernel that doesn’t cap a PCR, they can just cap it themselves from userland. So, we’re faced with the same problem: booting an older kernel allows the system to be placed in an identical state to the current kernel, and a fake hibernation image can be written out. Solving this requires a PCR that was being modified after kernel code was running, but before userland was started, even with existing kernels.
 
-How does this rearrangement affect the output of the query?  Perhaps unexpectedly, the answer depends on the library.  With FunSQL, as well as EF/LINQ and dbplyr, it changes the output from *100 oldest male patients* to *the males among 100 oldest patients*.  But not so with the other two libraries, Active Record and Laravel, where rearranging the pipeline has *no* effect on the output.
+Thankfully, there is one! PCR 5 is [defined](https://trustedcomputinggroup.org/wp-content/uploads/TCG_PCClient_PFP_r1p05_v23_pub.pdf) as containing measurements related to boot management configuration and data. One of the measurements it contains is the result of the UEFI ExitBootServices() call. ExitBootServices() is called at the transition from the UEFI boot environment to the running OS, and the kernel contains code that executes before it. So, if we measure an assertion regarding whether or not we support restricted access to NV indexes into PCR 5 before we call ExitBootServices(), this will prevent userspace from spoofing us (because userspace will only be able to extend PCR 5 after the firmware extended PCR 5 in response to ExitBootServices() being called). Obviously this depends on the firmware actually performing the PCR 5 extension when ExitBootServices() is called, but if firmware’s out of spec then I don’t think there’s any real expectation of it being secure enough for any of this to buy you anything anyway.
 
-To summarize, the following query builders are sensitive to the order of the pipeline nodes:
+That’s what [this patchset](https://lore.kernel.org/linux-pm/20261008132532.1155166-1-matthewg@nvidia.com/) does. Review feedback so far seems positive, although James Bottomley [suggested](https://lore.kernel.org/linux-pm/aeedde06c51910afe5231d9f359bb8767c01b5bd.camel@HansenPartnership.com/) a design improvement. My approach of using an NV index as a PCR and generating a signing key made sense as a consequence of my original approach involving PCR 23, which had been to use the key creation data and not use audit sessions at all. But the goal isn’t to use a key - it’s to prove that hibernation occurred in-kernel, and while signing is one way of doing that, there are others. His suggestion is to simply record the hash of the hibernation image into the NV index and then read that back as part of the audit session. On resume we verify the audit session log is legitimate, read the hibernation image, and compare the hash of the hibernation image against the hash in the log. If it matches, and if the PCR 5 value matches, we know the audit session happened in kernel and that the hibernation image hasn’t been modified.
 
-- FunSQL
-- EF/LINQ
-- dbplyr
+It still seems like we’re missing something, though. If we’re not storing a key anywhere, how do we verify the audit session? To explain this we’re going to need to go into some details about how TPM keys work in the first place. TPMs can produce a special kind of key called an Attestation Key, or AK. Attestation keys are used to sign attestation statements from the TPM, such as PCR quotes or audit logs. We need a separate key type for this in order to prove that the signature was generated as part of an attestation - normal TPM signing keys are fundamentally designed to sign arbitrary material, and so can be used by userland to sign something that looks identical to an attestation record. By being able to distinguish the types of key the TPM uses, we can prove that a signature was generated using an AK, and so know that it’s a real TPM attestation (because nothing other than the TPM can sign stuff with an AK).
 
-And the following are not:
+But even beyond this distinction, TPMs have different key types. Ordinary keys are generated using an RNG and will be unique. Primary keys are generated using a seed that is used as an input into a key derivation function. For a given TPM, using the same seed to generate the same type of primary key will always generate the same primary key<sup>[8](https://codon.org.uk/~mjg59/blog/p/linux-lockdown-and-hibernation-again/#fn:8)</sup>. We can have the kernel deterministically generate an AK during suspend in order to sign the audit log, and then generate the same key again on resume to validate it. This means we don’t need any other form of trusted storage for the AK - the TPM already provides that functionality.
 
-- Active Record
-- Laravel
+This is all rather complicated but I’ve been thinking about this for some time now and I haven’t come up with a cleaner solution. The only real open issue is the degree to which machines actually perform the PCR 5 extension. If it turns out there’s a bunch that don’t we’ll need to come up with some alternative approach to identifying whether the kernel supports this functionality, but the design is such that that should be invisible to userspace so adding alternatives later shouldn’t be an issue. Filtering accesses to the NV index is also not super clean, and depends on there not being alternative mechanisms to get at the TPM by sending raw commands. Again, this is intended to be opaque to userland and can be improved if we come up with something better later on (such as a secure way to pass a secret to the kernel on boot that can be used as an auth value for acess to the NV index).
 
-These are the two kinds of query builders from this article's title.  But how can these libraries act so differently while sharing the same interface?  To answer this question, we need to focus on what is only implicitly present on the pipeline diagram: the information that is processed by the pipeline nodes.
+Anyway. Time to go and fix the next thing.
 
-!["Where" node](https://mechanicalrabbit.github.io/FunSQL.jl/stable/two-kinds-of-sql-query-builders/where-node.drawio.svg)
-
-A node with one incoming and one outgoing arrow symbolizes a processing unit that takes the input data, transforms it, and emits the output data.  While the character of the data is not revealed, it is tempting to assume it to be the tabular data extracted from the database.
-
-!["Where" node acting on data](https://mechanicalrabbit.github.io/FunSQL.jl/stable/two-kinds-of-sql-query-builders/where-node-acting-on-data.drawio.svg)
-
-But this can't be right, at least not literally, because a SQL query builder cannot read the data in the database.  Instead, the query builder generates a SQL query:
-
-```sql
-SELECT "person_1"."person_id"
-FROM "person" AS "person_1"
-WHERE ("person_1"."gender_concept_id" = 8507)
-ORDER BY "person_1"."year_of_birth"
-LIMIT 100
-```
-
-But if we assume for a moment that pipeline nodes could process the data directly, we would expect that both the pipeline and the corresponding SQL query produce the same output.  In other words, the role of the pipeline is to specify the expected output of the SQL query.  This is how pipeline nodes are interpreted by FunSQL and the other two libraries, EF/LINQ and dbplyr.  We can call such query builders *data-oriented*.
-
-The conversion of the pipeline to SQL is not always that straightforward.  Even though we could freely reorder the nodes in a pipeline, we cannot do the same to the clauses in a SQL query.  This is because the SQL grammar arranges the clauses in a rigid order:
-
-1. FROM, followed by zero, one or more
-2. JOIN, followed by
-3. WHERE, followed by
-4. GROUP BY, followed by
-5. HAVING, followed by
-6. ORDER BY, followed by
-7. LIMIT, followed by
-8. SELECT, written at the top of the query, but the last one to perform.
-
-This order is compatible with the first pipeline, in which the `Where` node is followed by `Order` and `Limit`, but not the second pipeline, where these nodes change their relative positions.  So how could the second pipeline be converted to SQL?  We would be out of options if we were still using the original SQL standard, SQL-86, but the next revision of the language, SQL-92, recognized this limitation.  Regrettably, it did not relax this rigid clause order. Instead, SQL-92 introduced a workaround: a query can be extended by nesting it into the next query's `FROM` clause.  This gives us a method for converting an arbitrary pipeline into SQL: break the pipeline into smaller chunks that comply with the SQL clause order, convert each chunk into a SQL query, and then nest all these queries together:
-
-```sql
-SELECT "person_2"."person_id"
-FROM (
-  SELECT
-    "person_1"."person_id",
-    "person_1"."gender_concept_id"
-  FROM "person" AS "person_1"
-  ORDER BY "person_1"."year_of_birth"
-  LIMIT 100
-) AS "person_2"
-WHERE ("person_2"."gender_concept_id" = 8507)
-```
-
-The SQL grammar has a number of deficiencies, including rigid clause order, query nesting, and nonsensical position of the `SELECT` clause.  The position of `SELECT` violates the execution flow of the query, and this violation is aggravated by query nesting.  Complex SQL queries often require multiple levels of nesting, which makes such queries bloated and difficult to interpret.  This is where data-oriented query builders, which do not constrain the order of pipeline nodes, offer an improvement over plain SQL.
-
-What about the other kind of query builders?  Active Record and Laravel employ a pipeline of exactly the same form, but because it is not sensitive to the order of the nodes, it must work on a different principle.  Indeed, this pipeline generates a SQL query by incrementally assembling the SQL syntax tree.  Because of the rigid clause order, a SQL syntax tree can be faithfully represented as a composite data structure with slots specifying the content of the `SELECT`, `FROM`, `WHERE`, and the other clauses:
-
-```julia
-struct SQLQuery
-    select
-    from
-    joins
-    where
-    groupby
-    having
-    orderby
-    limit
-end
-```
-
-Individual slots of this structure are populated by the corresponding pipeline nodes.
-
-!["Where" node acting on the syntax tree](https://mechanicalrabbit.github.io/FunSQL.jl/stable/two-kinds-of-sql-query-builders/where-node-acting-on-syntax-tree.drawio.svg)
-
-This explains why the pipeline is insensitive to the order of the nodes. Indeed, as long as the content of the slots stays the same, it makes no difference in what order the slots are populated.
-
-![Pipeline is insensitive to the order of the nodes](https://mechanicalrabbit.github.io/FunSQL.jl/stable/two-kinds-of-sql-query-builders/pipeline-insensitive-to-node-order.drawio.svg)
-
-This method of incrementally constructing a composite structure is known as the [*builder pattern*](https://en.wikipedia.org/wiki/Builder_pattern).  We can call the query builders that employ this pattern *syntax-oriented*.
-
-Both data-oriented and syntax-oriented query builders are compositional: the difference is in the nature of the information processed by the units of composition.  Data-oriented query builders incrementally refine the query output; syntax-oriented query builders incrementally assemble the SQL syntax tree.  Their interfaces look almost identical, but their methods of operation are fundamentally different.
-
-But which one is better?  Syntax-oriented query builders have two definite advantages: they are easy to implement and they could support the full range of SQL features.  Indeed, the interface of a syntax-oriented query builder is just a collection of builders for the SQL syntax tree.  How complete the representation of the syntax tree determines how well various SQL features are supported.
-
-On the other hand, syntax-oriented query builders are harder to *use*.  As they directly represent the SQL grammar, they inherit all of its deficiencies.  In particular, the rigid clause order makes it difficult to assemble complex data processing pipelines, especially when the arrangement of pipeline nodes is not predetermined.
-
-A data-oriented query builder directly represents data processing nodes, which makes assembling data processing pipelines much more straightforward—as long as we can find the necessary nodes among those offered by the builder.  But where does the builder get its collection of data processing nodes?  And how can we tell if this collection is complete?
-
-One way to implement a data-oriented query builder is to adapt a general-purpose query framework.  Indeed, this is the origin of EF/LINQ, which is adapted from [LINQ](https://docs.microsoft.com/en-us/dotnet/standard/using-linq), and dbplyr, which is adapted from [dplyr](https://dplyr.tidyverse.org/).  The query framework determines what processing nodes are available and how they operate. In principle, any query framework could be adapted to SQL databases by introducing just one new node, a node that loads the content of a database table.  If we place this node at the beginning of a pipeline and make the rest of it out of regular nodes, we obtain a pipeline that processes data from a SQL database.  However, this pipeline will be very inefficient compared to a SQL engine, which can use indexes to avoid loading the entire table into memory and thus can process the same data much faster.  This is why EF/LINQ and dbplyr generate a SQL query that replaces the pipeline as a whole.  The pipeline itself no longer runs directly, but now serves as a specification, with the assumption that if it *were* to run, it would produce the same output as the SQL query. This method of transforming a general-purpose query framework to a SQL query builder is called *SQL pushdown*.
-
-However, SQL pushdown has a serious limitation.  A general-purpose query framework is not designed with SQL compatibility in mind.  For this reason, some of the pipelines assembled within this framework cannot be converted to SQL. Even worse, many useful SQL queries have no equivalent pipelines and thus cannot be generated using SQL pushdown.  Indeed, SQL accumulated a wide range of features and capabilities since it first appeared in 1974.  The first revision of the SQL standard, SQL-86, already supported Cartesian products, filtering, grouping, aggregation, and correlated subqueries.  The next revision, SQL-92, added many join types and introduced query nesting.  SQL:1999 greatly expanded its analytical capabilities by adding two types of queries: recursive queries, for processing hierarchical data, and data cube queries, which generalize histograms, cross-tabulations, roll-ups, drill-downs, and sub-totals.  The follow-up revision, SQL:2003, added support for aggregate functions over a running window.  Admittedly, SQL is a quintessential *enterprise abomination*, a hodgepodge of features added to support every imaginable use case, but with inadequate syntax, weird gaps in functionality, and no regards to internal consistency.  Nevertheless, the breadth of SQL's capabilities has not been matched by any other query framework, including LINQ or dplyr.  So when we generate SQL queries using EF/LINQ or dbplyr, a large subset of these capabilities remains inaccessible.
-
-FunSQL is a data-oriented query builder created specifically to expose full expressive power of SQL.  Unlike EF/LINQ and dbplyr, FunSQL was not adapted from an existing query framework, but was carefully designed from scratch to match SQL's capabilities.  These capabilities include, for example, support for correlated subqueries and lateral joins (with [`Bind`](https://mechanicalrabbit.github.io/FunSQL.jl/stable/reference/#Bind) node), aggregate and window functions (using [`Group`](https://mechanicalrabbit.github.io/FunSQL.jl/stable/reference/#Group) and [`Partition`](https://mechanicalrabbit.github.io/FunSQL.jl/stable/reference/#Partition) nodes), as well as recursive queries (with [`Iterate`](https://mechanicalrabbit.github.io/FunSQL.jl/stable/reference/#Iterate) node).  This comprehensive support for SQL capabilities makes FunSQL the only SQL query builder suitable for assembling complex data processing pipelines.  Moreover, even though FunSQL pipelines cannot be run directly, every FunSQL node has a well-defined data processing semantics, which means that, in principle, FunSQL could be developed into a full-blown query framework.  This potentially opens a path for replacing SQL with an equally powerful, but a more coherent and expressive query language.
+1. Other architectures use different terminology here, such as “supervisor” and “user” mode, but it’s broadly equivalent [↩︎](https://codon.org.uk/~mjg59/blog/p/linux-lockdown-and-hibernation-again/#fnref:1)
+2. In theory rings 1 and 2 would allow you to run drivers with privileges somewhere between full kernel access and userland applications, but in reality we just don’t talk about them in polite company [↩︎](https://codon.org.uk/~mjg59/blog/p/linux-lockdown-and-hibernation-again/#fnref:2)
+3. This is how graphics worked in Linux before kernel modesetting turned up. XFree86 would just map your GPU’s registers into userland and poke them directly. This was not a huge win for stability [↩︎](https://codon.org.uk/~mjg59/blog/p/linux-lockdown-and-hibernation-again/#fnref:3)
+4. IOMMUs can help you here, by restricting the memory PCI devices can DMA to or from. The kernel then gets to allocate ranges for device buffers and configure the IOMMU such that the device can’t DMA to anything else. Except that region of memory may still contain sensitive material such as function pointers, and attacks like this can still cause you problems as a result. [↩︎](https://codon.org.uk/~mjg59/blog/p/linux-lockdown-and-hibernation-again/#fnref:4)
+5. [This describes](https://mjg59.dreamwidth.org/23817.html) why I’m using “allowed” rather than “required” here [↩︎](https://codon.org.uk/~mjg59/blog/p/linux-lockdown-and-hibernation-again/#fnref:5)
+6. Saving the system state to disk and powering down the platform entirely - significantly slower than suspending the system while keeping state in RAM, but also resilient against the system losing power. [↩︎](https://codon.org.uk/~mjg59/blog/p/linux-lockdown-and-hibernation-again/#fnref:6)
+7. With some handwaving around “coprocessor”. TPMs can’t be part of the OS or the system firmware, but they don’t technically need to be an independent component. Intel have a TPM implementation that runs on the Management Engine, a separate processor built into the motherboard chipset. AMD have one that runs on the Platform Security Processor, a small ARM core built into their CPU. Various ARM implementations run a TPM in Trustzone, a special CPU mode that (in theory) is able to access resources that are entirely blocked off from anything running in the OS, kernel or otherwise. [↩︎](https://codon.org.uk/~mjg59/blog/p/linux-lockdown-and-hibernation-again/#fnref:7)
+8. Unless the TPM is cleared, in which case it’ll generate a new internal seed and now the keys will be different to before the clear [↩︎](https://codon.org.uk/~mjg59/blog/p/linux-lockdown-and-hibernation-again/#fnref:8)
