@@ -1,231 +1,276 @@
-I’ve always had a foot in the self-hosting world, long before it was called that. My freshman year of university, I ran a website from a Linux box underneath my bed. There was some downtime when my roommate got tired of the fan noise and turned it off. For several years I ran [MythTV](https://www.mythtv.org/), then [XBMC](https://github.com/xbmc/xbmc) (later known as Kodi).
-
-Recently, I lived for a few years in India, where streaming services are extremely inexpensive by western standards. We had Netflix, Disney Plus (Hotstar in India), and Spotify. After leaving India, I was unwilling to pay western prices for these services. But I had also become fed up with the engagement treadmill, particularly for my son. We wanted to limit his viewing choices to certain programming, but the constant “recommended for you” and “up next” caused conflict. While there are ways to limit content to specific titles, or disable auto-play, doing this for each service and keeping track of when client applications change and need to be reconfigured is too much work.
-
-So, I “cut the cord” in a different sense, ditching streaming services for self-hosted [Jellyfin](https://jellyfin.org/). Over the course of the next year and a half, Jellyfin opened the door to self-hosting many other services, reducing my dependence on cloud service providers, and providing a welcome stability. No longer am I constantly confronted with unnecessary site redesigns, new features of questionable value, and a barrage of e-mails about terms-of-service updates, binding arbitration, data breaches, etc. I read the release notes of new versions of the software I host and decide if and when I want to upgrade.
-
-## Rules
-
-I have a few ground rules.
-
-With the exception of VPN servers that run on my router, I do not expose any services directly to the public internet. I don’t care how convenient it would be, or how secure an application is. Especially with AI-assisted hacking, I simply don’t think it’s wise. My ISP also uses [CGNAT](https://en.wikipedia.org/wiki/Carrier-grade_NAT) for its IPv4 addresses, so my home network is not directly reachable from the public internet via IPv4. My VPN servers are only publicly routable on IPv6, a limitation that has some downsides but is workable for my use cases, and likely helps limit unfriendly attempted connections. The biggest downside is that my VPN will almost never function on a public Wifi network, since these rarely offer IPv6. When using my phone, I can disable Wi-Fi and connect over mobile data… if there is service.
-
-I prefer running services natively when possible, but will containerize complex services or those with many dependencies. Love: a service that’s a single Go binary. A service that only comes as a Docker compose file and wants to run MySQL, Redis, and three other containers? I’m already looking for an alternative. If the dependencies aren’t overwhelming, native is better, faster, and more efficient. I can use the same management tools and commands across multiple services. There’s no mental overhead of having to get into this container to run some command, finding out this container is missing curl, that one runs busybox so all the arguments are different, or dealing with a virtual network and host port mapping.
-
-Related, I don’t do Docker anymore. It’s not really a principled position, but I grew tired of having to manage a completely separate service control system on my server. I’m already using systemd, and at this point [Podman’s integration with systemd](https://docs.podman.io/en/v5.0.1/markdown/podman-systemd.unit.5.html) is excellent.
-
-## Hardware
-
-Last year I bought a Beelink Mini PC, specifically an S12 Pro with an Intel N100 processor, 16 GB RAM, and a 512 GB internal SSD. It was before the rampocalypse, so I paid EUR 180. The same listing on Amazon is currently EUR 359. Ouch! Attached to the server is a 6 TB hard drive for media storage.
-
-My [comment on Hacker News](https://news.ycombinator.com/item?id=49985548#50014938) about what I self-host prompted some questions about how all of this could run on 16 GB RAM. As I describe below, there are some choices I’ve made that reduce resource demand on my server, but ultimately it turns out you don’t need much hardware to run a lot of stuff. Obviously I’m not running any local inference on this hardware, but for everything non-AI, it has just worked out of the box, or with some simple configuration tweaks.
-
-## Services
-
-In alphabetical order.
-
-### Actual Budget
-
-Budgeting software with desktop clients and a web application, custom reports, and rules-based categorization. I only use this for budgeting and checking/savings/credit accounts. For tracking investment accounts, I use a cloud service. Some day I’ll try to move away from the latter…
-
-While [Actual Budget](https://actualbudget.org/docs/releases/) supports automatic transaction import from various banks, I don’t use this feature. Instead, after each month end, I download the prior month’s transactions (OFX format preferred, CSV if no other option) and import them manually. This works for me because I primarily use Actual Budget for expense tracking, not… actual… budgeting.
-
-Podman.
-
-### Audiobookshelf
-
-Add, download and store audiobooks and podcasts on your server, listen to them on your phone. I haven’t used the audiobook feature much, I set it up more for my kids, but it has very nice chapter handling. In the past for podcasts I used PlayerFM, then Pocket Casts, but now unless I’m out of the house without VPN connectivity, I use [Audiobookshelf](https://audiobookshelf.org/).
-
-Native.
-
-### Automatic Ripping Machine (ARM)
-
-[ARM](https://github.com/automatic-ripping-machine/automatic-ripping-machine) automates ripping and transcoding DVDs (and Blu-rays, but I don’t do those). Yes, it’s 2026 and I still rip DVDs. Remember, we cut the cord, so not only is this a conduit for new-to-us content, but it’s also a way for us to get bilingual content (English and French).
-
-Podman.
-
-### Backrest
-
-Web UI for [Restic](https://restic.net/) backup software. Backups are important! Especially for Immich (photos). Restic does a good job deduplicating and compressing backed up data, and [Backrest](https://github.com/garethgeorge/backrest) makes it easy to manage the storage retention policies. Notifications in case of failure go to Gotify.
-
-Native.
-
-### Beszel
-
-[Beszel](https://beszel.dev/) is a simple monitoring dashboard that collects basic stats from agents (in the old-fashioned sense of a small background service) to display CPU load, memory and disk usage, temperature, battery, etc. Helps me keep an eye on various other hosts I have around the house (several Rapsberry Pis and a Proxmox cluster that may be the subject of a future post).
-
-Native.
-
-### Caddy
-
-[Caddy](https://caddyserver.com/) is a web server and reverse proxy. Early on I didn’t understand the value of a reverse proxy, and I thought I would be fine accessing my services with a local DNS name, or even IP address, and port number. But then I started adding more and more services, and some required HTTPS. So I got a domain name (not this one) and set up Caddy to automatically obtain LetsEncrypt SSL certificates, and now nearly all of my services are accessible on my LAN (or over VPN) with HTTPS and friendly subdomain names. Adding a new service is a quick edit to the Caddyfile.
-
-Native.
-
-### Cockpit
-
-[Cockpit](https://cockpit-project.org/) is a web-based admin console for the server. It uses normal system authentication methods. For me, it’s mainly useful for spotting failed services when no notifications are set up for them.
-
-Native.
-
-### Forgejo
-
-[Forgejo](https://forgejo.org/) is a fork of Gitea, and deploys as a single binary. Github’s uptime is the butt of a lot of jokes these days, but I also appreciate the speed of having my own git remote. Eventually I’ll set up CI/CD and runners, if only to deploy this blog.
-
-Native.
-
-### FreshRSS
-
-[Web-based RSS reader](https://www.freshrss.org/). These days I basically visit two websites, though, so I’ve not been using it much. I do subscribe to the Github releases of some of the services I self-host so I can check out the features and bugfixes in new versions.
-
-Native.
-
-### Frigate
-
-Network video recorder (NVR). I first started with [Zoneminder](https://zoneminder.com/) because I’m of a certain age. But it became clear that Zoneminder is past its prime. [Frigate](https://github.com/blakeblackshear/frigate) has been fantastic. I run it with 8 IP cameras. It provides alerts for people and cars entering the driveway, integrates with Home Assistant to power various automations (e.g., when a person is detected in the backyard, turn on the camera floodlight). I may write a future post with some details about my IP camera adventures.
-
-I run all of my cameras at lower resolutions than they support, primarily to avoid Wi-Fi network congestion. Most cameras also support an even lower-resolution RTSP substream, which is what Frigate uses for motion and object detection. Keeping the camera resolutions low avoids excessive CPU and memory from video processing, and excessive disk usage from recordings. They are good enough to identify faces, and privacy laws in my country prohibit filming public rights of way, so my cameras are not aimed at distant points.
-
-Podman.
-
-### Gonic
-
-Subsonic-compatible server written in Go. I purchased a perpetual Subsonic license a long time ago, but the original project is ancient and the modern alternatives are better. I run two separate instances of [Gonic](https://github.com/sentriz/gonic), one serves kid music, the other serves adult music.
-
-Native.
-
-### Gotify
-
-Simple notification service written in Go. Many self-hosted services directly support [Gotify](https://gotify.net/) notifications, or can send them via a custom HTTP POST. In conjunction with Uptime Kuma, I use Gotify to get notifications about any services or devices that are down, what my kids are watching on Jellyfin, when a new podcast episode is available in Audiobookshelf, etc.
-
-Native.
-
-### Home Assistant
-
-[Home Assistant](https://www.home-assistant.io/) probably deserves its own post. It’s fantastic, and I cannot imagine trying to accomplish the same things within a proprietary ecosystem like Google Home, Amazon Alexa, or Apple Home. Things are better now that device manufacturers are standardizing on protocols like Matter, but the control and flexibility you get with Home Assistant is hard to beat. It has a steep learning curve, though, and I need to think about realistic ways to handle potential server failure without compromising the functionality of my home.
-
-Podman.
-
-### Homepage
-
-At some point I realized I was running so many services, I needed another service just to keep track of them all. [Homepage](https://gethomepage.dev/) was a good solution. It has widgets for almost all the services I run, so I can get a quick overview of what’s going on, or just a quick link to the subdomain of a service.
-
-Podman.
-
-### Immich
-
-Google Photos alternative. I was tired of Google constantly promoting paid storage plans in their apps. I was able to manage my storage space, but my wife was always about to run out of room. We moved to [Immich](https://immich.app/) last year, just after version 2 was released. It’s much faster to load pages full of photos when all the network activity is within your house. I’ve come up with a solution for sharing albums with family, as well. Still a lot of work to do with Immich - I have many duplicates, and now that storage isn’t a concern, I’ve been less disciplined about culling photos and videos.
-
-Podman.
-
-### Jellyfin
-
-As I mentioned in the introduction, I’ve self-hosted media for a long time, going all the way back to MythTV twenty-some years ago. [Jellyfin](https://jellyfin.org/) is opinionated about its media organization, but it generally works well. I only use it for movies, TV, and home videos, so I can’t speak to its other features (e-books, music, photos, etc.). While my son still remembers Netflix, he is satisfied with Jellyfin. I appreciate the lack of auto-play, never seeing recommendations, and not having to scroll past a bunch of garbage to find what I want to watch.
-
-One of my ways of managing resource demand is by generally preferring 720p media over 1080p or higher. And obviously when ripping DVDs, it’s either 576p or 480p. I do have a 4k TV, but it’s not extremely large, and while I can tell the difference in resolution between SD and HD, for almost everything, 720p seems to be good enough for me.
-
-Podman.
-
-### Music Player Daemon (MPD)
-
-Sometimes there are solutions that just work, and don’t really need to change. I think [MPD](https://www.musicpd.org/) is one of these. It’s been around for 23 years. While Gonic is great for listening to music on my phone, even streaming music from home to my phone while I’m away via VPN, MPD is how I play music through Snapcast to the whole house audio system. I run two instances of MPD, one for music, and one for podcasts.
-
-Native.
-
-### PocketBase
-
-I used to keep track of transactions and receipts for special accounts (HSA, 529, etc.) in a SQLite file I accessed directly with SQL Workbench/J. But things became more complicated as I moved between countries, currencies, and different insurance systems, and also wanted to offer my wife the ability to enter transactions. I migrated to [PocketBase](https://pocketbase.io/), which is ultimately still just a SQLite file, but with a nice web-based management frontend that I abuse as a generic CRUD frontend. It’s simple enough for my wife to use as well, and I can still run arbitrary queries against the underlying database file.
-
-Native.
-
-### Readeck
-
-[Readeck](https://readeck.org/en/) lets me tag and archive copies of stuff I read. I was a heavy [Zotero](https://www.zotero.org/) user in graduate school, but I’ve not needed to write a bibliography in years. However, I still read things that I want to ensure I can access later. I tried [Wallabag](https://wallabag.org/) first, but it had trouble archiving things that were paywalled, even when I was logged in on my phone. In contrast, Readeck will archive what my phone is seeing and store it on my server.
-
-Native.
-
-### Samba
-
-[Samba](https://www.samba.org/) provides shared network storage, making it easy to copy files to and from the server, or share important documents with my wife. It’s funny how a file sharing protocol first developed in the 1980s and most associated with Windows remains the best option for cross-platform file sharing on a LAN.
-
-Native.
-
-### slskd
-
-Native.
-
-### Snapcast
-
-[Snapcast](https://github.com/snapcast/snapcast) provides whole-house synchronized audio. Think Sonos, but without the expensive vendor lock-in and planned obsolescence. This also deserves its own post. It’s complicated to set up, but it works really well. I eventually plan to purchase some additional devices primarily for use as Snapcast receivers.
-
-Native.
-
-### Syncthing
-
-[Syncthing](https://syncthing.net/) is part of a backup strategy for my photos in Immich. I’ve set up a one-way sync (receive only) on my Macbook, so that a copy of all the photos in Immich eventually make their way to my Macbook’s external drive.
-
-Native.
-
-### Transmission Daemon
-
-This one is also [self-explanatory](https://github.com/transmission/transmission/).
-
-Native.
-
-### Uptime Kuma
-
-After a few instances of my wife saying “X isn’t working” and needing to restart a service manually, I realized I needed a way to keep track of what services were running, or not. [Uptime Kuma](https://github.com/louislam/uptime-kuma) is simple but has a useful set of features. I can ping devices to ensure they’re online, check the status of Podman containers, look for HTTP 2XX response codes from various services, or even parse a JSON payload and extract some details for the health check. If something goes down, I can send a Gotify notification (after a few retries, of course).
-
-Podman.
-
-### Vaultwarden
-
-Self-hosted version of Bitwarden. For years, I used [KeePass](https://keepass.info/), but never had a good syncing solution, so just avoided logging into things on my phone. Meanwhile, my wife used LastPass, which had various breaches and incidents, besides autofill just not working very well. Migrating her to KeePass was not practical, and I settled on [VaultWarden](https://github.com/dani-garcia/vaultwarden), which is an open-source API-compatible reimplementation of BitWarden that works with the official BitWarden clients. I’m not a huge fan of the BitWarden browser extension, but it’s mostly fine. The Android application is good enough, and syncs seamlessly and automatically when I’m connected to my LAN; otherwise, I can connect via VPN and manually trigger a sync if needed.
-
-I am a little concerned that Bitwarden may eventually become hostile to VaultWarden and break the client compatibility. At this point, the only other major Bitwarden compatible client I’m aware of is [Keyguard](https://github.com/AChep/keyguard-app), which does not have an open source license and uses a freemium model.
-
-Podman.
-
-### Vikunja
-
-I’ve been a Trello user for about a decade. But after Trello’s [disastrous multi-day outage](https://trello.status.atlassian.com/incidents/h11gfkgvjhhk) earlier this year, I decided to find a self-hosted alternative. I ruled out anything that involved spinning up a PostgreSQL or MySQL database for a service that will serve two users. [Vikunja](https://vikunja.io/) uses SQLite by default, though it can be configured to use other database backends. It’s not perfect, and the Android application has some missing features, but it’s good enough for me. Single binary deployment? Yes, please.
-
-Podman.
-
-### Yubal
-
-Simple web application to download YouTube Music playlists. I normally use [yt-dlp](https://github.com/yt-dlp/yt-dlp) for downloading YouTube videos, or [NewPipe](https://newpipe.net/) for watching on my phone, but [Yubal](https://github.com/guillevc/yubal) will properly name, organize, and tag music downloaded from YouTube Music.
-
-Podman.
-
-## Non-Services
-
-Here are a few things I don’t self-host, tried but decided against, or am unlikely to try.
-
-### The *arr Stack
-
-[Sonarr, Lidarr, Radarr](https://wiki.servarr.com/), etc. Every time I read about setting it up, it just sounds like a resource-intensive mess that’s fundamentally prone to frequent breakage. That’s the opposite of what I’m looking for when choosing self-hosted services.
-
-### Collabora Online
-
-While it would be nice to completely part ways with Google, it’s hard to beat Google Docs as a highly convenient and easily accessible way to store and share information. Still, I choose LibreOffice Writer and Calc unless I have a specific reason why the document needs to be in the cloud. Since I already have a shared network drive, it seems pointless to run a service like [Collabora Online](https://www.collaboraonline.com/) (a web-based office suite) instead of just using LibreOffice locally.
-
-### Firefly III
-
-I tried [Firefly III](https://www.firefly-iii.org/) before Actual Budget, thinking I needed built-in support for multiple currencies. It was a complex setup, involving multiple containers, including a container just for importing data. Actual Budget was much simpler to set up and use. For my foreign currency accounts, I have my own simple script to handle exchange rate conversion, so everything in Actual Budget stays in USD.
-
-### Owntracks
-
-I like Google Maps Timeline, but after Google limited the location data to the individual device, I hoped to find a self-hosted version. But I could never get the [OwnTracks](https://owntracks.org/) Android application to consistently report my position, no matter how many battery or location settings I tried. [Dawarich](https://dawarich.app/docs/intro/) is another option in this space, but it wants to run “at least” four containers (PostgreSQL, Redis, Sidekiq, web application). For me, that’s not a compelling trade of resources required versus value I’m likely to obtain.
-
-### Music Assistant
-
-[Music Assistant](https://www.music-assistant.io/) might work better for you if you don’t already have a music setup you like. In my case, I already had Gonic, Snapcast, and MPD working well. Music Assistant felt like it wanted to “own” everything; for example, it seemed to continually rearrange my Snapcast device groups.
-
-### E-mail
-
-Self-hosting e-mail seems like a lot of work for very little benefit. I cannot risk not being able to send or receive e-mails. Eventually I would like to transition away from Gmail to a paid provider.
-
-## Conclusion
-
-That’s 17 native services and 11 Podman services, all managed by systemd. `htop` currently shows about 7.5 GB of memory in use, and CPUs fluctuating between 30% and 40%. It turns out this Mini PC can run a lot! Given how expensive computer hardware has become due to the AI crunch, I hope we’ll continue to see self-hostable projects that prioritize simplicity and efficiency.
+ZXC is a lossless data compression library written in C, distributed as **libzxc**. It is designed for data that is compressed once and read many times: firmware images, game assets, application bundles, and content delivered to many devices. The encoder spends extra time up front so that decompression runs at several gigabytes per second on ARM and x86. At every compression level ZXC decodes faster than LZ4, and produces output of equal or smaller size.
+
+ZXC is free software, released under the [BSD 3-Clause License](https://opensource.org/license/bsd-3-clause). It has no dependencies, and official bindings exist for Rust, Python, Node.js and Go.
+
+Development happens on [GitHub](https://github.com/hellobertrand/zxc).
+
+**The current release is ZXC 0.15.0**, released on 2026-10-13.
+  See the [changelog](https://libzxc.org/docs/changelog/) for what changed, and [Downloading ZXC](https://libzxc.org/#download) below.
+
+## Specifications
+
+| Parameter | Value | Notes |
+| --- | --- | --- |
+| Compression levels | 1 to 7 | Default 3 |
+| Block size | 4 KB to 2 MB, powers of two | Default 512 KB; 256 KB for streaming |
+| Decompression context | ≈ 512 KB | At the default block size |
+| Compression context | ≈ 1.78 MB | ≈ 1.03 MB with 256 KB blocks |
+| In-place decompression margin | ≈ 1 % of the archive | Use `zxc_decompress_inplace_bound()` |
+| Random access | O(1) per block | Requires a seek table (`-S`) |
+| Integrity | Optional per-block checksum | rapidhash |
+| Dictionaries | External `.zxd` file | Referenced by a 32-bit ID |
+| Threading | Multi-threaded streaming | Thread count detected automatically |
+| Architectures | x86_64, ARM64, ARMv7, ARMv6, RISC-V, POWER, s390x, i386 | Tested in CI |
+| Wire format | Version 9 | [Specification](https://libzxc.org/docs/format/) |
+| Library name | libzxc | pkg-config `libzxc`; CMake `zxc::zxc_lib`; Debian `libzxc-dev` |
+| Language, dependencies | C17, none | Bindings for Rust, Python, Node.js, Go |
+| License | BSD 3-Clause |  |
+
+## Why ZXC?
+
+LZ4 is symmetric: it compresses about as fast as it decompresses. That suits logs and swap, but not data that is shipped. A firmware image is compressed once on a build server and decompressed on every device that installs it, so time saved during compression helps nobody.
+
+ZXC moves the work to the encoder. Match selection, optimal parsing and statistics tuning are done once, and the bitstream is laid out for the pipelines and branch predictors of modern processors. The decoder stays short, has few branches, and uses SIMD where it is available.
+
+Typical uses:
+
+- Firmware and over-the-air updates. In-place decompression keeps peak memory close to the decompressed size.
+- Game assets and application start-up, where load time and battery use matter.
+- Packaged artefacts and content delivery, where more original data is delivered per byte read from disk or network.
+- Read-heavy storage. Seekable archives can decode any block without reading the blocks before it.
+
+## Features
+
+- Seekable archives. An optional seek table gives O(1) random access to any block.
+- In-place decompression. Decode inside a single buffer with about 1 % overhead instead of a second allocation.
+- Trained dictionaries. zxc --train builds a dictionary for small, similar payloads such as JSON documents, log lines or RPC messages.
+- Multi-threaded streaming. The file and stream interfaces split work across processor cores.
+- Hand-written SIMD. SSE2, AVX2 and AVX-512 with run-time selection on x86; NEON on ARMv8 and later.
+- Portable. Tested on x86_64, ARM64, ARMv7, ARMv6, RISC-V, POWER, s390x and i386.
+- Careful interface. Every call takes an explicit output capacity. The library is thread-safe, with reusable contexts for tight loops and static contexts for targets without a heap.
+- Optional checksums. Per-block integrity checks based on rapidhash.
+- Documented format. The wire format (version 9) is specified in full, and public conformance vectors let others write independent decoders.
+
+## Compression levels
+
+Seven levels trade compression time for size. Decompression stays in the multi-GB/s range at every level. Level 3 is the default.
+
+| Level | Name | Suited for | Size % | Decode MB/s | Encode MB/s |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Fastest | Real-time assets, games, UI | 61.76 | 13,513 | 886 |
+| 2 | Fast | Real-time assets, games, UI | 53.86 | 11,320 | 588 |
+| 3 | Default | General use; smaller and faster to decode than LZ4 | 46.65 | 9,707 | 267 |
+| 4 | Balanced | General use, a little denser | 43.43 | 8,790 | 194 |
+| 5 | Compact | Embedded and firmware | 40.83 | 8,118 | 114 |
+| 6 | Density | Archives and read-mostly data; beats LZ4HC on both axes | 36.28 | 6,884 | 14.5 |
+| 7 | Ultra | When size dominates; smaller than zstd -1, decodes about 2× faster | 33.09 | 5,054 | 9.71 |
+
+Size is the compressed size as a percentage of `silesia.tar`. Speeds are single-threaded on Apple M2 with lzbench 2.4.1. Blocks are 512 KB by default; use `-B 256K` for streaming or memory-constrained targets.
+
+## Benchmarks
+
+ZXC is included in the two main open-source compression benchmark suites, [lzbench](https://github.com/inikep/lzbench) and [TurboBench](https://github.com/powturbo/TurboBench), so the figures below can be reproduced with either tool alongside more than 70 other codecs. Benchmarks also run on every commit on x86_64 and ARM64 machines; see the [latest results](https://github.com/hellobertrand/zxc/actions/workflows/benchmark.yml).
+
+The decoder's speed is paid for at compression time, and on this axis LZ4 and Zstandard are ahead. Levels 1 and 2 still compress at several hundred MB/s; levels 6 and 7 run at about 10 MB/s, slower than `lz4hc -9`, and are meant for data that is compressed once and read many times.
+
+Raw decode speed leaves out half of the picture. When the decoder is fed from a disk, a network or another core, the compressed bytes are what is scarce, and what matters is how much original data each compressed megabyte yields. Effective throughput combines both: decode speed × 100 / ratio (%). On this measure every ZXC level is ahead of LZ4, on all four processors.
+
+Dividing the clock frequency by the decompression speed gives the cost of each decompressed byte in processor cycles, which compares processors running at different frequencies. ZXC spends less than one cycle per byte at every level.
+
+Apple M2, macOS 26, Clang 21, -march=native. Single thread, lzbench 2.4.1, `silesia.tar`. Speeds in MB/s; size as a percentage of the input.
+
+| Codec and level | Compression | Decompression | Size % |
+| --- | --- | --- | --- |
+| zxc -1 | 886 | 13,513 | 61.76 |
+| zxc -2 | 588 | 11,320 | 53.86 |
+| zxc -3 | 267 | 9,707 | 46.65 |
+| zxc -4 | 194 | 8,790 | 43.43 |
+| zxc -5 | 114 | 8,118 | 40.83 |
+| zxc -6 | 14.5 | 6,884 | 36.28 |
+| zxc -7 | 9.71 | 5,054 | 33.09 |
+| lz4 | 814 | 4,774 | 47.60 |
+| lz4 --fast -17 | 1,347 | 5,609 | 62.15 |
+| lz4hc -9 | 48.4 | 4,522 | 36.75 |
+| lzav -1 | 686 | 3,876 | 39.91 |
+| snappy | 661 | 3,258 | 47.85 |
+| zstd --fast --1 | 723 | 2,538 | 41.01 |
+| zstd -1 | 645 | 1,803 | 34.53 |
+| zstd -3 | 375 | 1,680 | 31.20 |
+| zlib -1 | 135 | 378 | 36.45 |
+
+Google Axion (Neoverse V2), GCP C4A, GCC 14.4, -march=native. Single thread, lzbench 2.4.1, `silesia.tar`. Speeds in MB/s; size as a percentage of the input.
+
+| Codec and level | Compression | Decompression | Size % |
+| --- | --- | --- | --- |
+| zxc -1 | 885 | 9,564 | 61.76 |
+| zxc -2 | 593 | 7,895 | 53.86 |
+| zxc -3 | 256 | 6,571 | 46.65 |
+| zxc -4 | 186 | 6,105 | 43.43 |
+| zxc -5 | 109 | 5,683 | 40.83 |
+| zxc -6 | 13.5 | 4,950 | 36.28 |
+| zxc -7 | 8.82 | 3,563 | 33.09 |
+| lz4 | 730 | 4,258 | 47.60 |
+| lz4 --fast -17 | 1,278 | 4,954 | 62.15 |
+| lz4hc -9 | 43.2 | 3,850 | 36.75 |
+| lzav -1 | 576 | 2,949 | 39.91 |
+| snappy | 566 | 2,295 | 47.85 |
+| zstd --fast --1 | 302 | 2,291 | 41.01 |
+| zstd -1 | 523 | 1,642 | 34.53 |
+| zstd -3 | 329 | 1,525 | 31.20 |
+| zlib -1 | 115 | 389 | 36.45 |
+
+AMD EPYC 9B45 (Zen 5), GCP C4D, GCC 14.4, -march=native. Single thread, lzbench 2.4.1, `silesia.tar`. Speeds in MB/s; size as a percentage of the input.
+
+| Codec and level | Compression | Decompression | Size % |
+| --- | --- | --- | --- |
+| zxc -1 | 868 | 11,609 | 61.76 |
+| zxc -2 | 585 | 10,332 | 53.86 |
+| zxc -3 | 253 | 8,335 | 46.65 |
+| zxc -4 | 183 | 7,508 | 43.43 |
+| zxc -5 | 110 | 7,014 | 40.83 |
+| zxc -6 | 15.3 | 6,045 | 36.28 |
+| zxc -7 | 10.2 | 4,724 | 33.09 |
+| lz4 | 766 | 5,052 | 47.60 |
+| lz4 --fast -17 | 1,284 | 5,305 | 62.15 |
+| lz4hc -9 | 45.4 | 4,861 | 36.75 |
+| lzav -1 | 699 | 3,603 | 39.91 |
+| snappy | 564 | 2,420 | 47.89 |
+| zstd --fast --1 | 664 | 2,451 | 41.01 |
+| zstd -1 | 606 | 1,898 | 34.53 |
+| zstd -3 | 369 | 1,733 | 31.20 |
+| zlib -1 | 134 | 392 | 36.45 |
+
+AMD EPYC 7B13 (Zen 3), GCP C2D, GCC 14.4, -march=native. Single thread, lzbench 2.4.1, `silesia.tar`. Speeds in MB/s; size as a percentage of the input.
+
+| Codec and level | Compression | Decompression | Size % |
+| --- | --- | --- | --- |
+| zxc -1 | 724 | 8,155 | 61.76 |
+| zxc -2 | 481 | 6,807 | 53.86 |
+| zxc -3 | 214 | 5,252 | 46.65 |
+| zxc -4 | 157 | 4,952 | 43.43 |
+| zxc -5 | 93.3 | 4,779 | 40.83 |
+| zxc -6 | 11.9 | 4,290 | 36.28 |
+| zxc -7 | 7.97 | 3,188 | 33.09 |
+| lz4 | 638 | 3,883 | 47.60 |
+| lz4 --fast -17 | 1,108 | 4,485 | 62.15 |
+| lz4hc -9 | 37.1 | 3,731 | 36.75 |
+| lzav -1 | 459 | 2,955 | 39.91 |
+| snappy | 507 | 1,837 | 47.89 |
+| zstd --fast --1 | 486 | 1,784 | 41.01 |
+| zstd -1 | 444 | 1,339 | 34.53 |
+| zstd -3 | 232 | 1,178 | 31.20 |
+| zlib -1 | 106 | 358 | 36.45 |
+
+## Downloading ZXC
+
+Source and binary archives for Linux, macOS and Windows are published on the [releases page](https://github.com/hellobertrand/zxc/releases). Each archive carries SLSA build provenance, which you can check with:
+
+```
+gh attestation verify zxc-0.15.0-linux-x86_64.tar.gz --repo hellobertrand/zxc
+```
+
+ZXC is also packaged by distributions and package managers:
+
+```
+sudo apt install zxc libzxc-dev
+```
+
+```
+brew install zxc
+```
+
+```
+vcpkg install zxc
+```
+
+```
+conan install -r conancenter --requires="zxc/[*]" --build=missing
+```
+
+```
+winget install hellobertrand.zxc
+```
+
+Which version each distribution currently ships is tracked by [Repology](https://repology.org/project/zxc/versions):
+
+[![Packaging status of ZXC across distributions and package managers, from Repology.](https://repology.org/badge/vertical-allrepos/zxc.svg)](https://repology.org/project/zxc/versions)
+
+To build from source you need CMake 3.14 or later and a C17 compiler (GCC, Clang or MSVC):
+
+```
+git clone https://github.com/hellobertrand/zxc.git
+cd zxc
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel
+sudo cmake --install build
+```
+
+The installation provides CMake (`find_package(zxc)`, target `zxc::zxc_lib`) and pkg-config (`libzxc`) files. Meson users can include ZXC as a subproject; see the [integration guide](https://libzxc.org/docs/install/).
+
+## Quick start
+
+The `zxc` command reads and writes files or pipes, and can be used as a compressor by `tar`:
+
+```
+# Compress (level 3 by default), then decompress
+zxc -5 assets.tar assets.tar.zxc
+zxc -d assets.tar.zxc assets.tar
+
+# Seekable archive, for random access
+zxc -S big.bin big.bin.zxc
+
+# As a compressor for tar
+tar -I 'zxc -5' -cf data.tar.zxc data/
+
+# Measure speed on your own machine
+zxc -b input_file
+```
+
+From C, the buffer interface compresses and decompresses in one call each:
+
+```
+#include "zxc.h"
+
+uint64_t bound = zxc_compress_bound(src_size);
+zxc_compress_opts_t c = {
+    .level            = ZXC_LEVEL_DEFAULT,
+    .checksum_enabled = 1,
+};
+int64_t csize = zxc_compress(src, src_size, dst, bound, &c);
+
+zxc_decompress_opts_t d = { .checksum_enabled = 1 };
+int64_t n = zxc_decompress(dst, csize, out, out_cap, &d);
+if (n < 0)
+    fprintf(stderr, "zxc: %s\n", zxc_error_name((int)n));
+```
+
+See the [examples](https://libzxc.org/docs/examples/) for the streaming, context, seekable and dictionary interfaces, the [API reference](https://libzxc.org/docs/api/) for every function, and the [manual page](https://libzxc.org/docs/cli/) for all command options.
+
+## Language bindings
+
+The official bindings are maintained in the main repository and released with the library. They are published as `zxc-compress`, because the name `zxc` is taken on some registries.
+
+| Language | Installation | Package |
+| --- | --- | --- |
+| Rust | `cargo add zxc-compress` | [crates.io](https://crates.io/crates/zxc-compress) |
+| Python | `pip install zxc-compress` | [PyPI](https://pypi.org/project/zxc-compress) |
+| Node.js | `npm install zxc-compress` | [npm](https://www.npmjs.com/package/zxc-compress) |
+| Go | `go get github.com/hellobertrand/zxc/wrappers/go` | [source](https://github.com/hellobertrand/zxc/tree/main/wrappers/go) |
+| WebAssembly | build with Emscripten | [source](https://github.com/hellobertrand/zxc/tree/main/wrappers/wasm) |
+
+Bindings maintained by others: [go-zxc](https://github.com/meysam81/go-zxc) (Go), [zxc-nim](https://github.com/openpeeps/zxc-nim) (Nim), and a [Free Pascal port](https://github.com/Xelitan/Free-Pascal-port-of-ZXC-compressor-decompressor).
+
+## Testing
+
+- Fuzzed around the clock by Google OSS-Fuzz, with eight harnesses covering compression, decompression, the block API, in-place decoding, streaming, seekable archives and dictionaries; they reach over 80 % of the library's lines (coverage history).
+- The same harnesses run under ClusterFuzzLite on every pull request.
+- AddressSanitizer, UndefinedBehaviorSanitizer and Valgrind in continuous integration; Cppcheck, the Clang Static Analyzer and CodeQL on every change; continuous security analysis of the code and its dependencies by Snyk.
+- Decoder conformance vectors and byte-exact tests of the encoder output, so that the wire format cannot change by accident.
+- Builds and tests across several operating systems, compilers and eight processor architectures.
+- Pinned CI dependencies, tracked by the OpenSSF Scorecard.
+
+## Getting help and contributing
+
+Questions and ideas are welcome in [GitHub Discussions](https://github.com/hellobertrand/zxc/discussions). Please report bugs on the [issue tracker](https://github.com/hellobertrand/zxc/issues), and security problems privately as described in the [security policy](https://github.com/hellobertrand/zxc/security/policy).
+
+Contributions are welcome; read the [contribution guidelines](https://github.com/hellobertrand/zxc/blob/main/.github/CONTRIBUTING.md) first. You can also support the project through [GitHub Sponsors](https://github.com/sponsors/hellobertrand).

@@ -1,116 +1,88 @@
-We at the Lix team are proud to announce our seventh major release, version 2.96 “Bingsu”.
+In the [curl 8.23.0 release](https://daniel.haxx.se/blog/2026/10/14/curl-8-23-0/) we shipped a fix for one of the worst vulnerabilities in curl in a long time. We grade it severity HIGH. It is known as [CVE-2026-92392](https://curl.se/docs/CVE-2026-92392.html) with the title *HTTP/2 upload Use-After-Free*.
 
-This release focuses on security, debugger support, quality-of-life improvements, and continues the work towards both the new [Cap’n’Proto RPC](https://capnproto.org/) protocol and Rust support.
+This post explains the bug, what the problem can lead to, and something about why it happened and what we have done to make it harder to introduce a problem like this in curl again in the future.
 
-> [Bingsu](https://en.wikipedia.org/wiki/Bingsu) is a milk-based Korean shaved ice dessert with sweet toppings that may include chopped fruit, condensed milk, fruit syrup, tteok, and red beans.
+This is a much simplified explanation. Please refer to [the original report](https://hackerone.com/reports/4030333) for all the details and the full reproducible Docker image for all the low-level fun and education you could possibly want. I highly recommend doing that; the report and the reproducible are awesome.
 
-Lix is a Nix implementation focused on reliability, predictability, friendliness, developed by a community of people from around the world. We have long term plans to incrementally evolve Nix to work in more places, to make it more reliable and secure, and to update the language and semantics to correct past mistakes and reduce errors, all the while providing an amazing tooling experience.
+## Use-After-Free
 
-## Upgrading from CppNix or previous Lix versions
+It is a [use-after-free](https://en.wikipedia.org/wiki/Dangling_pointer), which is a classic problem in memory-unsafe programming languages, like C, where we erroneously have a lingering pointer left, pointing to memory that is already freed, and yet we use that pointer and the memory it points to.
 
-**WARNING**: We do not recommend to use `nix upgrade-nix`, please follow the instructions in [https://lix.systems/install/](https://lix.systems/install/) with the Lix’s upgrade shell script.
+This family of errors is especially bad when a malicious actor can affect the content that gets stored into that memory area that is still used even though it was freed.  Tricking the program to do something unintended.
 
-The upgrade procedure depends on how you installed Lix or CppNix, and is fully described in the [Lix installation guide](https://lix.systems/install/).
+## HTTP/2 is multiplexed
 
-If you are using Lix from nixpkgs on NixOS, you just need to upgrade your nixpkgs once the upgrade pull request has passed through the build farm into your channel; no other action is required.
+This problem involves HTTP/2. HTTP/2 is a multiplexed protocol, meaning that it handles multiple logical transfers over the same physical connection. curl needs to keep track of a number of transfers at the same time, and when data arrives or is to be sent off, it needs to keep things apart appropriately.
 
-If you want to help us test the next version of Lix, consider running `main` by following the [beta guide](https://wiki.lix.systems/books/lix-contributors/page/lix-beta-guide).
+## Handles
 
-## Changes
+For every transfer done using libcurl, the application creates and sets up a dedicated *handle*. We call it an *easy handle*. This handle is kept around for as long as the transfer is in progress, and the application can close and free it once the operation is completed. When doing multiple transfers, multiple handles are used.
 
-Lix 2.96 builds on the work of previous releases to improve the daemon, the protocols spoken with the daemon (both on a single machine and the ones used for remote builds), and brings many much-needed improvements to the debugger infrastructure.
+libcurl also has *multi handles*, which is a super handle type that holds any amount of *easy handles*. This handle, and the corresponding multi interface, makes it possible to drive any amount of concurrent transfers. A transfer done with libcurl always has at least one multi handle and one easy handle. (Sometimes the multi handle is hiddenly used under the hood.)
 
-Here’s a short list of the most exciting changes in Lix 2.96. This list is not as exhaustive as the [full release notes](https://docs.lix.systems/manual/lix/stable/release-notes/rl-2.96.html).
+## The setup
 
-### REPL and debugger support
+In order to trigger this problem, we need an application (such as the curl command line tool) to do an upload over HTTP/2 to a server. By default, libcurl negotiates HTTP/2 when a HTTPS:// URLs is used and the server agrees.
 
-Thanks to the tireless work of [blokyk](https://git.lix.systems/blokyk) the REPL and debugger are much improved in Lix 2.96. The debugger is now more stable, navigating within the debugger is much easier, and the information printed by the debugger is more readable.
+When the upload has started, the server pauses the send by zeroing the HTTP/2 window size, returns a piece of the response and then it resets the stream, which shuts down the transfer – but not the connection. curl then correctly pulls down the entire transfer, but it accidentally leaves a lingering pointer to the involved *easy handle*.
 
-[eldritch horrors](https://git.lix.systems/pennae) have also switched the REPL backend from editline to [rustyline](https://github.com/kkawakam/rustyline), finally bringing proper UTF-8 support to the REPL.
+When the application finds out that the transfer completed (with an error), it subsequently frees the easy handle and then, and here comes the problematic part: cleans up the multi handle.
 
-### News from RPC
+## The mistake
 
-The experimental RPC protocol is now shipping under the `rpc-sockets` experimental feature. As one may guess this is still *highly experimental* and must be enabled not only with the experimental feature flag in your Lix config, but also requires system setup that is not yet done by the NixOS module. You can find an example configuration in the [NixOS module in the Lix repo](https://git.lix.systems/lix-project/lix/commit/103b91b0c77c662c50070f2b4700ffc0df12cbee#diff-c6352f13d264fb180d5409d66db94d50264ed9dd).
+At this point, the *easy handle* was just freed but there is still a reference to that handle. When libcurl shuts down the multi handle, it misunderstands the situation, allocates memory to download data into, finds the still dangling pointer and manages to *download data* from the server that ends up in the very same memory previously used for the easy handle.
 
-In future releases we plan to stabilize the RPC protocol and remove support for the legacy protocols we’ve been using to date to allow further evolution of Lix.
+In this process, it sends off a request that leaks internal client details, which includes information about local addresses, which is crucial. Modern operating systems use [Address Space Layout Randomization](https://en.wikipedia.org/wiki/Address_space_layout_randomization) (ASLR), so a server needs this clue in order to generate a good attack payload.
 
-### `ssh://` store URIs are now deprecated
+Subsequently, when libcurl deals with this received data (using the handle the dangling pointer points to) in the download buffer, it uses a function pointer that now has been modified by data just downloaded from the server, and then *it runs remote code*.
 
-To enable further RPC work and resolve some long-standing security inconsistencies we must remove `ssh://` store URIs. Lix 2.96 **deprecates `ssh://` store URIs**, but retains support for them without deprecation warnings. `ssh://` store URI support will be removed in Lix 2.97, `ssh-ng://` URIs will remain supported.
+## An illustration
 
-If you are using `ssh://` store URIs because `ssh-ng://` is missing features you need please get in touch so we can figure something out together. Note that `ssh-ng` has stricter security checks than `ssh` and no longer allows untrusted users to copy unsigned outputs to remote stores, *this is intentional*.
+Here’s a simplified 6-step illustration.
 
-### Breaking changes
+![](https://daniel.haxx.se/blog/wp-content/uploads/2026/10/RCE-explained.png)
 
-Once again Lix must break sharp corners to make improvements possible and excise surprising behavior in user code.
+## Conditions to trigger
 
-- `flake.nix` validation no longer relies on poorly documented triviality checks. Instead Lix now has only one rule for `flake.nix`: **no function calls are allowed outside of `outputs`.** This means that Lix now accepts `let` blocks and string interpolation in flake `inputs`, among other things. We consider this a breaking change because other Nix implementations may no longer be able to evaluate Flakes that were written using Lix.Many thanks to [piegames](https://git.lix.systems/piegames), [Qyriad](https://git.lix.systems/Qyriad) and [eldritch horrors](https://git.lix.systems/pennae).
-- The `floor` and `ceil` builtins now throw errors if their operation would have resulted in precision loss during the conversion from floating point to integers. Precision loss does not sound dramatic, but with numbers of sufficient magnitude this could result in positive floats being converted to negative integers.Many thanks to [jade](https://git.lix.systems/jade), [NaN-git](https://github.com/NaN-git) and [rootile](https://git.lix.systems/rootile).
-- Many nix3 CLI commands no longer build their arguments. This surprising behavior was commonly seen when `nix store delete` was called with a path that was not present in the store, causing the path to be downloaded just so that it could be deleted.Many thanks to [eldritch horrors](https://git.lix.systems/pennae).
-- Shadowing internal files via Nix search paths is now considered an error. Lix 2.95 already deprecated overriding the `nix` search path entry due to surprising effects that could have, Lix 2.96 now considers this an error if not explicitly configured otherwise.Many thanks to [thubrecht](https://git.lix.systems/tom-hubrecht), [jade](https://git.lix.systems/jade) and [eldritch horrors](https://git.lix.systems/pennae).
+In order to actually successfully execute remote code, lots of several specific conditions need to be met and we deem it extremely difficult to meet these requirements in the wild, which is why we decided this is “only” severity HIGH and not CRITICAL.
 
-## New features
+1. The victim needs to actually attempt to upload data to a malicious server, meaning that the server certificate must remain valid.
+2. The size of the upload needs to be roughly the right size (~135KB)
+3. The attacker needs to know curl’s architecture to generate and deliver the right code
+4. The attack requires a specific sequence of allocations and allocation sizes so that the data from the server ends up in the right place (from the attacker’s view). This pattern differs between Linux distros, libc versions/flavors, TLS certificate bundles, libcurl using applications and more.
+5. nghttp2 and OpenSSL/TLS 1.3 behavior, including allocation effects around session tickets
+6. The payload storage area is small (around 23 bytes)
 
-- Nested arguments can be set with `--arg` and `--argstr`.Previously Lix would turn `--arg foo.bar.baz 1` into the set `{ "foo.bar.baz" = 1; }`, now it turns it into `{ foo.bar.baz = 1; }`. Attribute set merging rules are applied to these sets, making it much easier to use function that expect sets as arguments (such as nixpkgs, which expects a `config` set). The old behavior can be recovered by quoting the name, e.g. `--arg '"foo.bar.baz" 1'`.Many thanks to [ma27](https://git.lix.systems/ma27).
-- Inputs are now only fetched by one process at a time. This can be significant in CI situations where many processes may attempt to download the same input set concurrently. Previously all of them would download the set, now only one of them does and signals the others to wait for it to finish.Many thanks to [lheckemann](https://git.lix.systems/lheckemann).
-- Use [mimalloc](https://github.com/microsoft/mimalloc) for faster evaluation. We’ve seen 5-12% eval time improvements due to thisMany thanks to [getchoo](https://git.lix.systems/getchoo) and [lovesegfault](https://github.com/lovesegfault).
-- `nix doctor` has been extended greatly, including general system information and remote builder configuration in its report. It can now also automatically connect to configured remote builders and check their state as well.Many thanks to [rootile](https://git.lix.systems/rootile) and [raito](https://git.lix.systems/raito).
-- `ssh-ng` store URIs are now considered stable. The long-awaited feature parity between `ssh` and `ssh-ng` URIs has arrived, although only Lix 2.96 and newer will be able to take full advantage of this. Connecting to or from older Lixes or other Nix implementations will not see feature parity and silently fall back to the previous behavior.Many thanks to [eldritch horrors](https://git.lix.systems/pennae).
-- Channel references now support `zst`-compressed tarballs. This can greatly improve unpacking speed when using channels.Many thanks to [raito](https://git.lix.systems/raito) and [eldritch horrors](https://git.lix.systems/pennae).
+The most likely outcome of an attempted attack is rather just a crash. We estimate that the chance for a successful attack is slim.
 
-### Improvements
+## How was this found?
 
-- The `ssl-cert-file` and `netrc-file` settings now report errors when set to files that don’t exist instead of being silently ignored.Many thanks to [Astreaprtcl](https://git.lix.systems/astreaprtcl).
-- Moving between stack frames in the debugger is now easier using offset instead of absolute numbers. While moving up or down some number of frames previously required remembering the frame number you were on you can now directly supply offsets, using `:st +l` to go from frame `n` to `n+k` and `:st -k` to go from `n` to `n-k`.Many thanks to [blokyk](https://git.lix.systems/blokyk).
-- `addErrorContext` frames are always printed in backtraces now, even without `--show-trace`. This makes explicit report locations, for example in the NixOS module system, much more useful.Many thanks to [blokyk](https://git.lix.systems/blokyk).
+This problem was found and reported by Luna Tong  at Anthropic using their new OSS Scanner. Presumably this involves their AI models.
 
-### Fixes
+## How do we fix this?
 
-- `nix-copy-closure --include-outputs` now actually works.Many thanks to [rkjnsn](https://git.lix.systems/rkjnsn).
-- Hash mismatch diagnostics now work with `structuredAttrs`. This fixes hash mismatch diagnostics with fetchers from modern nixpkgs.Many thanks to [keysmashes](https://github.com/keysmashes).
-- Subdaemons receive overridden settings from their parent daemon rather than using the system-wide configuration. This was broken by the switch to explicitly launched subdaemons in 2.95, making it impossible to configure subdaemons by providing command line arguments to the main daemon.Many thanks to [raito](https://git.lix.systems/raito).
+In general we have over the last few years been working on reducing the amount of internal pointers to handles that needs to be correct, and instead we store transfer identifiers that we look-up on demand. While this is a tiny bit slower, it is more foolproof when there are logical mistakes like the one mentioned here.
 
-### Miscellanea
+We also of course continue to add more tests and we verify the code with more tools and analyzers in order to find additional similar mistakes.
 
-- `ssh` and `ssh-ng` store URIs no longer honor the `max-connections` parameter. This parameter complicated the code immensely for no benefit to the average user and had many sharp corners when set explicitly.Many thanks to [eldritch horrors](https://git.lix.systems/pennae).
-- The `daemon-trust-override` experimental feature has been removed. It can still be emulated by e.g. setting the `NIX_CONFIG` environment variable appropriately.Many thanks to [eldritch horrors](https://git.lix.systems/pennae).
+Multiplexed protocols like HTTP/2 have this challenge that there are many concurrent transfers going and they all have different life-times and with memory-unsafe languages, dangling pointer mistakes can indeed be fatal.
 
-### And so much more
+This is of course no guarantee that we do not have or will not introduce another use-after-free in the code now or later.
 
-Many more changes have gone into Lix 2.96, most of them internal. We hope to ship a stable RPC-based daemon in one of the upcoming releases, including remote build support using this new protocol.
+## Again on the language
 
-## What is planned for the future?
+libcurl is written in C – a memory unsafe language. With a *memory-safe* language, this mistake could probably have been avoided.
 
-### Lix 2.96.1
+We have worked on curl for almost thirty years, and have over this time manage to make a rather polished transfer engine. For the longest time there really was no memory-safe alternative that also allowed libcurl to be a low-level library available on hundreds of operating systems and several dozen CPU architectures. It even barely exist alternatives now.
 
-We are releasing 2.96 together with security releases on stable branches. A few things we wanted to finish for 2.96 have been delayed somewhat, and we expect to release 2.96.1 with a few more improvements soon:
+We do not rewrite curl. Not into another language but also not in C. We are set to iterate, polish, improve, refactor over and over until the end of time.
 
-- proper --keep-going support when using --store ssh-ng://..., not just when using ssh-ng remotes as remote builders
-- SHA256 support for Git fetchers for both Flakes and other users
-- better diagnostics on MacOS for garbage collection failures caused by TCC permissions
-- .narinfo cache soundness improvements to enable key rollovers for binary caches
-- allow pass more settings to the daemon and remote builders, e.g. log-lines
+Porting curl to another language (like rust) would be a monstrous undertaking that would be slow and introduce lots of new short to medium term problems. Not to mention that the existing curl team is not rust experts and that libcurl is currently portable to many more platforms and environments than rust itself is.
 
-### News from Rust integration
+## Release schedule
 
-Rust integration has moved along apace, and it is now possible to write significant portions of new features without touching *too much* C++ code. We’ve decided to use [zngur](https://github.com/hkalbasi/zngur/) for interop due to its great flexibility and active maintenance, and we’ve already ported a number of features to Rust like this. The REPL is now backed by Rust, as is remote builder configuration and much of the hash conversion code.
+When this vulnerability was confirmed by the curl security team just hours after it was submitted to us on September 15. We immediately realized the significance and decided to rush the pending next release. However, we still wanted to be careful, follow the procedures and not create any further problems or mistakes by stressing it too much. That’s how we ended up just shortening the release cycle with two weeks. Down from eight to six weeks from the previous release. This allowed us to also merge and fix many more vulnerabilities and general bugs in the same release.
 
-## Want to help Lix? Consider donating to Lix!
+## CVSS
 
-Following Lix integration in AFNix, Lix now has [an Open Collective](https://opencollective.com/lix-project) and can receive donations.
-
-We run infrastructure across x86_64-linux, aarch64-linux, and aarch64-darwin. Some of it is in-kind and sponsored. Current costs are around 100€/month.
-
-If you value self-hosting and benefit from Lix, please consider donating. Every contribution helps sustain the project.
-
-## Credits
-
-Thanks, as always, to the following groups:
-
-- The large community who beta tested the upcoming release by running `main` in production since the 2.95 branch-off. We really appreciate having immediate feedback on our work and the trust of running main alongside us means a lot to us. We know we tested the patience of some of you, we thank you for that.If you want to run Lix main yourself, see [the beta guide](https://wiki.lix.systems/books/lix-contributors/page/lix-beta-guide) for details.
-- Everyone who contributed by filing bugs and giving us feedback on Matrix.
-- All the first time contributors who made their first contributions to a Nix implementation in Lix. We are eternally grateful to everyone who helped us out on the numerous important but tedious issues.
-- All the contributors who have helped us with the backlog of bugs.
-- The CppNix contributors and CppNix team, without whom we would not have this software, and who wrote some of the improvements ported into this release.
-
-Onwards and upwards for the next release. We look forward to continuing to work together with everyone to build a better foundation for the evolution of Nix.
+We [never provide CVSS](https://daniel.haxx.se/blog/2025/01/23/cvss-is-dead-to-us/) for our published vulnerabilities as we don’t think we can do a job there. Others will provide them even for our flaws.

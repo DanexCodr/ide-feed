@@ -1,110 +1,79 @@
-Much has been said about the DHH keynote that he gave at RailsWorld. To me, it was the voice of a person in an existential crisis, but also a very jaded one. “Look how I don’t care anymore, and you should not care either” is not a great message when you are *the* headline speaker at the conference - let’s call it CareConf - that you have, yourself, lobbied for.
+# Did Ente Locker copy my code without attribution?
 
-The message from the supreme leader was clear: we vibe-rewrote HEY in a more performant way, it worked great, we neither need nor care about Rails anymore. I honestly believe that, instead of amassing even more applause via vitriolic truth-bombing, he could have just left the toy he no longer loves - including its community - in peace.
+October 12, 2026
 
-But here is the thing: the rich and famous losing interest in the good stuff does not oblige the rest of us to. If anything, it frees up the room.
+The last blog post I wrote explained [why I chose to make FairScan open source](https://fairscan.org/blog/open-source-and-gpl/). In particular, I said I knew there was a risk when I published FairScan's code and I was ready to accept it. I didn't expect to face that reality so soon.
 
-🧭 I am currently available for contract work.
-              [Hire me](https://stanquette.nl/hire) to help make your Rails app better!
+## What happened to me over the past few weeks
 
-I must admit that for a few days I felt very depressed about it all. Not about “AIs writing all the code” - that much is clear to me, and I do not lament the changing landscape of the *craft* - I do lament the landscape of *usage*, which is a topic for another article. It is abundantly clear that the LLMs are here to stay, that typing every single line by hand is no longer sustainable, and that the scales have shifted profoundly. What made me depressed was just how little care there was about the Ruby ecosystem and community, and the disdain with which David flushed the entire Rails and Ruby culture down the drain for the sake of “running it on a single Raspberry Pi”, as he put it.
+I had never heard of Ente before September 16. On that day, I received an email from one of their engineers. The message thanked me for FairScan and announced that the Ente Locker app now used FairScan's segmentation model as part of a new document scanning feature. It referred to a blog post that credited FairScan's model and claimed that [Ente "wrote the image processing around it from scratch"](https://fairscan.org/blog/did-ente-locker-copy-my-code-without-attribution/from-scratch.webp).
 
-What I am actually observing is something different: a renaissance, even though quite a few prominent Rubyists have moved on to other stacks - which are now much more open to exploration, as you don’t have to write all that… gunk - let’s call it what it is - by hand. A detailed unpack of 7 little-endian integers is not particularly interesting, nor artistic - it’s just gunk, and I won’t miss it. Unless struct packing is needed to make it fast, but then we can always art-direct additionally.
+I had put significant effort into FairScan's image processing so I was curious to see how Ente solved the same problems. What I found is that multiple image-processing implementations appeared to be almost direct translations of FairScan's implementations from Kotlin to Rust.
 
-There was an interesting time in German history, right between the two World Wars - the “interbellum”, the time of the Weimar Republic. It was very turbulent, and a lot of it wasn’t pretty in the slightest - social difficulties, unemployment, incredible inflation, squalid living conditions, the emergence of the wildest movements, cabarets and cults imaginable… but there was also something else. The “Roaring Twenties” of Weimar Germany also produced an incredible number of great, whimsical, fascinating artistic movements. From the Bauhaus to the Berlin gay cabarets, from Kurt Weill to Fritz Lang’s *Metropolis* - it was a booming time, and a lot of what appeared then is still valued and cherished today.
+I replied by email on September 17. The engineer quickly answered that their blog post "could have been better phrased", and that it was reworded. I could see that [the new version](https://ente.com/blog/locker-document-scanner/) replaced the "from scratch" claim with something rather vague and still insisted on the segmentation model.
 
-And it was a technological boom as well - the ever more widespread use of electricity, the large-scale deployment of modern pharmaceuticals, the subways, the automobile… fascinating times.
+The same day, I sent a list of links to compare FairScan and Ente's code. I mentioned that I couldn't find any attribution to FairScan in the Ente repository.
 
-I know how that era ended, and no - that is not the part of the analogy I am after. The part I am after is this: the old order had lost interest, nobody was in charge, the ground was shifting under everybody’s feet - and *that* is precisely when the most interesting work got made. Great turmoil, great industrial change, no adult supervision. Sound familiar?
+On September 21, I received a reply from the same engineer that those were "fairly standard image-processing methods" and that the code had been subsequently fully rewritten. In their repository, I found [a pull request affecting more than 6,000 lines](https://github.com/ente/ente/pull/13053). Of course, it cannot change the code that was distributed in Locker 1.0.9.
 
-And the Ruby community has always been artistic, as early as the work of _why. Aesthetics were, after all, what drew a lot of people into Rails. The fact that you didn’t need the parentheses. The fact that thingswerenotwritteninoneword as if invented by a Dutchman, that there was no “this is an attribute and this is a method” confusion… a lot of things about the language were just aesthetically brilliant.
+On the same day, I sent an email to [copyright@ente.com](https://ente.com/contact/) to ask for the company's view on this. As of October 12, I still haven't received an answer.
 
-And with the abundance of new tooling, the right mindset to look at the state of the ecosystem is this:
+On September 29, I published [a post](https://mastodon.social/@pynicolas/117352788210310140) on Mastodon linking to [a GitHub gist where I documented this timeline as well as code similarities](https://gist.github.com/pynicolas/e018ef84464a2cf7949fa453e41cfead).
 
-Why, of all the things we now *can do* in Ruby, do we choose to do Rust vibe-rewrites? Of course, the story goes, all of those apps we have will just magically transform into accelerated, opaque binary blobs of SIMD goodness - with the LLMs translating our every decision, explicit or implicit, with the rigours of comparison testing (or by reading <del>tea leaves</del> matrix coefficients). Why even spend precious tokens on improving the gardens we already live in if you can raze them to the ground and replace them with glorious concrete?
+## Standard methods or direct translation?
 
-## But of course nobody ever does that
+Feel free to have a look at the [code comparisons](https://gist.github.com/pynicolas/e018ef84464a2cf7949fa453e41cfead#code-comparison) in the gist  linked above and form your own opinion, even if you're not a developer. You can use the "split view" of your browser for side-by-side comparisons. Here's an example:
 
-And, luckily, the razing and replacement is not the only thing that is happening. Otherwise the story would be all too sad.
+[![](https://fairscan.org/blog/did-ente-locker-copy-my-code-without-attribution/comparison.webp)](https://fairscan.org/blog/did-ente-locker-copy-my-code-without-attribution/comparison.webp)
 
-See, there was a sizeable number of problems with the Ruby runtime and the “scene” that were, technically, just “too much”.
+In the implementations I compared, I found the following similarities:
 
-- It would be a pain to generate a PDF with layout - there were no libraries
-- You could no longer build native GUI applications - there were no libraries
-- You could not easily produce native gems - unless you were prepared to spell out the hundreds of ubf_unblock and INT2FIX with exquisite precision…
+- The same overall structure
+- The same algorithms
+- The same names for functions and variables
+- The same hard-coded values
 
-All of these were *shitty* problems. They were just too much for even a team of 3 to take on, and sometimes even more people would not have been enough. The barrier to getting them into applications - even if we had them - was high, as release cycles on Rails apps were not that quick at most companies. And a lot of people would just throw up their hands in desperation and utter The Spell Of Dread:
+To me, it looks like an almost direct translation from Kotlin to Rust. There are differences but they're not easy to spot.
 
-> Nobody does this sort of thing with Ruby anyway.
+Of course, I have a special position about this code. I wrote it, so I know where it comes from. I know it's the result of a lot of effort:
 
-The playbook of the incantation of The Spell Of Dread is, as we all remember, that right after we chant “Rails developers are hard to hire”, whereupon all the people hating Ruby get to do a little dance confirming them to be right.
+- I researched existing techniques like multi-scale Retinex, single view metrology, or gray world white balance.
+- I assembled an image pipeline that fits the segmentation model.
+- I started with some simple techniques (such as Douglas Peucker) that I later replaced.
+- I developed my own algorithm to approximate a quad based on contour orientation (which is probably not optimal).
+- I had to make choices about what a scan should look like: not all apps make the same choices.
+- I tested the behavior of my implementations and their parameter values on hundreds of images.
+- I fixed many bugs in my implementations.
+- I wrote blog posts about some of the numerous iterations I made, illustrating my trial and error process.
 
-But right now, the equation has changed dramatically. Let me give you a simple example.
+How can that be called "standard methods"? I would like to know where similar code can be found because it would have saved me a lot of work. Actually, if it already existed, I would probably not have started FairScan.
 
-## One does not simply generate an invoice
+## Silence discourages me
 
-One of the typically shitty problems with Ruby has been PDF generation. As recently as 18 months ago, a Rubyist willing to produce PDF files from their Rails app would be facing a choice of a number of options, all equally unappealing:
+**Ente has not acknowledged the code similarities as an issue**, publicly or privately. In response to my comparisons, the engineer described the code as "fairly standard image-processing methods", but this didn't address the similarities I had pointed out. If there's no problem, why did they rewrite more than 6,000 lines in 3 days after my email? Why don't they answer my questions?
 
-- Run Gotenberg to have a Chromium render the HTML, then transform it into PDF
-- Use Ferrum to spin up a local Chromium and do the same
-- Use Prawn and fight its nearly per-character manual coordinate placement
-- Use wkhtmltopdf, which was abandoned nearly four years ago, and wrestle with building it and its requisite dependencies
-- Use hexapdf and be prepared to license it commercially due to the rules of the AGPL
+Here's the key: if Ente's code was derived from FairScan in a way that makes it subject to the [GPL](https://github.com/pynicolas/FairScan/blob/main/LICENSE), its distribution raises questions about compliance with that license.
 
-Prawn was great back in the day, but very challenging - primarily because it mandates nearly full *manual* layout, without any proper metrics or composer features. A *composer* is the engine that helps you place and balance typeset characters so that they fit into a pre-sized block. Sometimes, you also want to adjust that block so that your layout looks better - something that CSS actually excels at. And you want hyphenation and SVG output too…
+Should I take legal action? That's not what I want for FairScan. But I also don't want this issue to remain unaddressed, leaving others to form their opinion based on Ente's public statements alone.
 
-While Cursor and other “first wave” AI tools made wrestling Prawn somewhat more pleasant, it was still a long way from “easy” - in all aspects.
+Ente widely promoted the new feature on social media and platforms such as Reddit. [Its CEO praised Locker publicly with these words: "Best opensource document scanner I've ever used".](https://lnkd.in/p/eTpnkpNu)
 
-That’s the very definition of “doing X sucks in Ruby”, and it would be a fair argument to not use the platform at all - for some. Or for running extra microservices (or gigaservices, as any Docker image with Chromium inside should rather be named, given its size).
+On my side, I've been very careful until now. I initially communicated only privately with Ente. When I published a Mastodon post, it was very factual: I didn't make spectacular accusations and maybe because of that, there were almost no reactions.
 
-Now - fast forward to this September. In the span of just a few months we have not one, but two *excellent* libraries for generating PDFs.
+I suspect very few people know about this situation. From the outside, Ente can continue promoting its scanning feature without having to address the concerns I've raised. The issue remains unresolved and Ente can continue ignoring me.
 
-[sghtmltopdf](https://github.com/waka/sghtmltopdf) by Waka creatively reimagines wkhtmltopdf by replacing its WebKit heart with a vibed Rust-based layout engine built on [Servo](https://servo.org) crates, which supports a significant subset of CSS layout directives - and a tasty dose of [Typst](https://github.com/typst/typst)-originating Rust libraries for font handling, metrics, line composition… I was able to move my entire invoice generation to it from Ferrum in about an hour. Initially it had some rough edges, but it took the community about a week to sand them away, and it became great. Not “manual certificate layout of 3 text blocks” great, but a genuine “6 page invoice with tables, blocks, and vector graphics” great, with the generation of a document taking double-digit milliseconds.
+The fact that almost no one reacted is discouraging to me. Over the past few weeks, I've spent more time thinking about this than working on the rest of FairScan. It probably doesn't deserve it but I simply can't accept that situation. What's the point of open-source transparency and accountability?
 
-[stationery](https://github.com/zoolutions/stationery) by Mikael Henriksson takes a different approach - one closer to Prawn, with a healthy dose of [Phlex](https://www.phlex.fun) thrown in. It readily accepts the fact that a PDF is just… text - and, therefore, should be unashamedly output from any tool that is able to write a text file somewhere. It adapts Phlex-y view components and blocks, wraps them with some delightful layout primitives - and the result is an even more Ruby-spirited way to output PDFs, with performance comparable to the Rust motor of sghtmltopdf.
+I'd genuinely like to hear from other developers who have looked at these comparisons. Do these similarities suggest that Ente's code was derived from FairScan? **I would be grateful to anyone who can share an independent perspective on this case.**
 
-I was able to retool to both in a very short timespan, and still have a bit of difficulty picking one. We went from “absolute wasteland with all available options being very bad” to “you can pick between two great options”, very quickly.
+## Open source doesn't equal respect
 
-## We do things because we want to
+This episode makes me take another look at my position about open source.
 
-And it does not stop at PDFs. There are Qt bindings in development again - decent, *big* Qt bindings. Something that was horrible in Ruby for as long as I remember it existing. Schwad has resurrected Shoes in the form of [Scarpe](https://github.com/scarpe-team/scarpe) - not as a bleak Java jar requiring SWT, JRuby and the kitchen sink but as a proper graphics backend driven from Ruby scripts, all with native graphics. RMagick is having regular releases again and working beautifully. The [GD bindings](https://github.com/ggerman/ruby-libgd) are being worked on.
+FairScan is my attempt to make a respectful app: an app that is both [respectful to its users](https://fairscan.org/blog/a-respectful-app/) and respectful in the way it's made. I think it's now clearer to me that those two aspects don't necessarily go together. I still believe that open source is one of the best ways users have to assess whether an app can be trusted (caveat: it can still contain [anti-features](https://f-droid.org/docs/Anti-Features/)). However, it's perfectly possible to make an open source app in a disrespectful way, for example by copy-pasting code without acknowledging its origins.
 
-On my end - I have been confronted with some sizeable ETL projects that involved Rails, and a pain point I would always stumble into was Parquet. It was just not possible to output it easily from a Rails app - we always had to either downgrade to CSVs, or rig some weird CDC pipeline that would bypass the app altogether, just for the sake of producing a data lake. My opinion at the time was that Parquet is grossly overengineered, while you can do CSV with a blunt fork. And that it was a pain to work with in any environment which was not 100% Apache-big-data-culture native (read: not C++, Java or Python).
+Yes, the risk I identified before publishing my code is real. In fact, any open source code can be copied without attribution. I knew that closed-source software could incorporate open-source code without complying with its license, and that proving such a violation could be difficult. Maybe I accepted this risk because I cannot know when it actually happens. What I didn't consider was that open-source software could do the same, and that in that case, I could see it with my own eyes.
 
-And that irked me. No, it can’t be that “our little toy language is just too slow and too small and who cares about it anyway” - Parquet files are just bytes. Another homegrown swizzled-and-zigzagged byte encoding convention, struct repeats, pluggable compression modules and native-width types, plus some facilities for encoding… it’s just *convoluted.* It is not so special as to require native code, and not so big as to require a whole *shelf of JARs* - it was just too big of a bother to address. The few libraries that did exist handled it through linking with `GObject` and who knows what else. And that desert lasted for more than a decade. Now I was able to build a full Parquet library - [herringbone](https://github.com/julik/herringbone) - in the span of a few days. Something that used to be a drag of a problem with Rails ETL is just a non-issue - there is a Ruby library that is convenient for both humans and agents, it streams, it uses native compression modules where appropriate, and it requires minimal user code - even with some fairly advanced things like Parquet encryption.
+I knew that other projects could reuse FairScan's code even if they don't share my vision, but I did expect that the origins of the code would be acknowledged honestly.
 
-No, you can’t really one-shot such a library yet. You do need to know what you want, and you do need to iterate so that it becomes polished and fast. Or, to say it differently: you will one-shot it, but the result won’t be aesthetically good. Ruby stuff has to look (and feel) good. Now I no longer have to spend days figuring out the intricacies of Thrift bit packing (I don’t miss that crap either) - I can design the API top-down and guide the LLM through making it.
-
-Previously, producing a library like this would have taken me a few months. Producing [zip_kit](https://github.com/julik/zip_kit) took 3 months (amortized over a decade, with 2 months concentrated around its inception), and the Parquet spec is 5x the size of the ZIP APPNOTE document. If ZIP is an architectural alco-trip, Parquet is a fear-and-loathing type architecture astronautics adventure.
-
-That’s not to mention the 6 or so micro-libraries I had to knock out just for calling some cloud services that didn’t bother providing Ruby SDKs. Or at least 2 feature flag service libraries that I know are both of questionable quality and/or packaging, and could very well use some reversing and redoing, in style.
-
-## We do things because we need to
-
-Another characteristic pain point with Ruby and Rails apps has been gRPC. I have yet to see a Rubyist who had to use gRPC in anger and had 0 issues with it. Hanging threads, fork unfriendliness, weird protobuf compatibility issues… the list goes on and on. Now Samuel just goes and [redoes an Async-friendly gRPC](https://github.com/socketry/async-grpc) - because we are no longer bound by the constraint of “big team at X is maintaining this thing and they got reorged for the 6th time this year, and nobody would ever be able to figure it out”. We can front-load the damn thing into the LLM wood chipper and have it help us figure it out, and then do it the way it should have been done from the beginning.
-
-Protobufs, which are the foundation of gRPC, are also not quite a walk in the park in the Ruby world. It seems very simple, *mundane* even - how hard can it be to `pack` a few bytes into a binary string?
-
-Turns out - you can make it as hard as the headcount of staff/principal engineers across your teams permits. The official Ruby protobuf gem requires native code. Every proto message is a handle to a native object, which cannot be marshalled or dispatched to another process easily. Introspection is limited and has a weird API. You need a separate package (`protoc`, the protobuf compiler) just to convert a `.proto` file into a Ruby file with some boilerplate in it denoting the fields you carry. It is, honestly, an utter overkill of a juggernaut for what amounts to a `Marshal.dump` - with a whole heap of native, compiled code to drag along.
-
-And native code requires compilation. And ABI-compatible prebuilt gems for several platforms × versions of Ruby you need to support. And the recommended Ruby C API changes from version to version. And it hampers GC unless you are very, very careful, and requires meticulous GVL management to be performant…
-
-Should we just cope with this and see this as normal? That’s the next target. If you want it too - get in touch, I might have something for you to play with.
-
-## Damn lies, but statistics
-
-Anecdotes are nice, but I wanted to check whether what I am seeing is just a bubble of my own timeline. So I went to the [rubygems dataset that ClickHouse hosts](https://clickhouse.com/blog/announcing-ruby-gem-analytics-powered-by-clickhouse) and counted something very dumb: how many gem *names* got occupied for the first time in the last twelve months, versus the twelve months before that. Not downloads, not versions - just “a name that did not exist on rubygems.org, and now does”.
-
-The raw number is nonsense - it includes a few thousand yanked typosquats and a handful of accounts emitting a gem per API endpoint - so out went everything that is not indexed, and out went every prefix family of 20+ gems coming from three or fewer accounts. What is left is the boring, organic, one-off stuff - `sidekiq-buffered`, `schema_reaper`, `k8s-rails`, `rspec-hopper`. Of that there were about 4,600 in the year to October 2025, and about 8,900 in the year since: *1.9 times more.* The line sat at roughly 400 to 500 a month through all of 2025 and then jumped to 800 to 1,600 a month from March 2026 onwards. It is not a slope, it is a step.
-
-That is the abundance of software everyone keeps talking about, and it has reached our toy little language too. I can’t tell you whether these are new people or the same people on a hot streak - the data doesn’t know, and neither do I - but twice as often, the thing someone needed got packaged and published rather than shrugged off with The Spell Of Dread. Make of the quality what you will - some of it is garbage, some of it is `herringbone`, and I will let you decide which is which - but the decision to *build the thing at all* is being made twice as often as a year ago. That is the renaissance I am talking about.
-
-## No excuses
-
-And it is not only libraries. Performance is a superb topic to tackle. The work [Sam Ruby is doing](https://github.com/rubys/roundhouse) on his Roundhouse cross-compiler is formidable, and can get us faster-running applications with some wild brute-force optimizations nobody thought possible. Tobi goes in and [redoes Campfire with vanilla Ruby instead of Rails](https://github.com/tobi/campfire-once-ruby-ractor) - Falcon, Ractors, plain modules over SQLite, byte-identical HTML - and gets pages served 15 to 27 times faster…
-
-And all of that makes life better for everyone doing Ruby and Rails, *today.* Not “in a year when LLMs will catch up” or “your CISO finally approves GitHub Copilot”. Not “in a few months once we have our [governance strategy](https://codeberg.org/mosscap/governance) figured out”. Today.
-
-We can literally go and fix the stuff that was extremely annoying for years, quickly, for relatively modest amounts of money.
-
-The only thing we need is to be even moderately curious, instead of waiting for permission. Nobody in Berlin in 1925 was waiting for the Kaiser to come back and approve the cabaret - the Kaiser had retired to the Netherlands, and the cabaret was *better* for it.
+What happened is something I wasn't ready for. I put a lot of myself into FairScan, perhaps too much: seeing my work dismissed as if it had no value is very hard not to take personally. Today, this makes me question my motivation to contribute to open-source software.
