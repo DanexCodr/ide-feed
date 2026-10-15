@@ -1,53 +1,120 @@
-As more developers begin to use Linux desktops, they become more attractive to attackers: high-privilege, high-value, and easy for admins to overlook. A developer using Linux for day-to-day development may interact with source code repositories, continuous integration and continuous delivery (CI/CD) pipelines, cloud infrastructure, container environments and internal development platforms. If their workstation is compromised, an attacker doesn’t just gain access to a laptop, but a foothold in the pipelines that build and ship the organization’s software. As Linux adoption expands beyond the data center, organizations need a consistent approach to protecting Linux wherever it is used.
+Remote attestation is a term for technology which is used to verify the software
+that another device is running. Usually remote attestation technology is implemented
+in hardware, making it difficult to get around.
 
-That’s why we’ve extended our industry-leading endpoint protection in Microsoft Defender, bringing enterprise-grade protection, detection, vulnerability management and response capabilities to Linux workstations.
+It is a building block of extremely restrictive DRM systems, as it allows a third
+party to police what the user can or can't run on a device that is (at least
+supposed to be) theirs.
 
-#### Enterprise-grade protection for Linux desktops
+An example of an implementation of remote attestation is Google Play Integrity.
+This is software that can tell a third party whether you are running a Google-approved
+Android system. It is mainly (but not exclusively) used by bank and government
+apps.
 
-Defender support for Linux workstations spans all three key areas of endpoint security:
+The reason it is implemented is "security", but as I'll talk about in the next
+section, the actual reason is one of control. It allows Google to decide what
+someone can or can't run on their device. It strips all ownership of a device
+that should be yours away and puts Google in control as the arbiter of what is
+or is not acceptable.
 
-##### Protect and detect
+Because of this, the user can't choose what they do with their devices anymore,
+they can only do what is approved by Google. If they exercise their freedom at
+all, by using a modified version of Android, an alternative operating system,
+or emulating the app, the app will refuse to run.
 
-- Endpoint detection and response (EDR)
-- Microsoft Defender next-gen antivirus
-- Threat analytics
+Do you want to be able to use your banking app on your laptop or desktop? Tough
+luck! You're not allowed to. (Even though you should be! Emulation is great for
+interoperability!)
 
-##### Exposure management
+Some may tell you that the built-in Android hardware attestation is a good
+alternative, it is not. It still does the same thing.
+There is also Volla's [Unified Attestation](https://uattest.net), which is the
+same thing, just with a different authority.
+None of these are solutions as they just replace one authority with another.
 
-- Microsoft Defender Vulnerability Management
-- Device inventory
-- Security settings management
+This is an autonomy, freedom and interoperability nightmare, and must not be
+tolerated. There should not be any external authority able to police what I do
+on my own devices.
 
-##### Investigate and respond
+On the Apple side, there is Apple App Attest, which is the same harmful technology.
 
-- Advanced hunting
-- Live response
-- Device isolation
+Currently, (as far as I am aware) remote attestation isn't used on consumer
+desktop systems, but we need to stay vigilant to make sure it never does.
+Object to it whenever it even gets suggested.
 
-The result is broader Linux protection, delivered through the tools and processes security teams already trust.
+Note: [A friend](https://gaysex.cloud/notes/ap633tnb5fia0145) has made me aware
+that anti-cheat systems use remote attestation. So it is in use on desktop systems.
+Anti-cheat systems are their own flavor of abuse, and somehow my mind sorted them
+into a different bucket. Still, yikes.
 
-#### Give security teams a consistent and simplified view across the endpoint estate
+A common justification that is given for remote attestation is "security". At
+face value, this may make some sense, as the remote server can verify that you
+are running a "legitimate" copy of the software on a "legitimate" operating
+system.
 
-With Defender on Linux desktops, organizations can:
+The big problem here is that someone has to decide what is legitimate and what
+is not, and that this remote party is almost never the user of the software. In
+effect, what remote attestation does is give someone else the ability to decide
+what you can or can't do on a device you should own.
 
-- Onboard quickly using the deployment methods already validated for Linux servers
-- Reduce operational complexity by protecting Linux desktops and servers with one agent and one security operations experience
-- Improve visibility across heterogeneous endpoint environments
-- Strengthen developer workstation security where users interact with source code, cloud infrastructure and other critical resources
-- Accelerate investigation and response through a consistent security operations experience
+This then begs the question: Security for **who**? It's definitely not for the
+user, as they are locked out of their device. Their security and autonomy have
+been harmed significantly.
 
-Defender protects Linux desktops with the same deployment organizations already use to protect Linux servers. There is no separate desktop-specific agent to deploy or maintain, and existing deployment packages, deployment methods and security capabilities on Linux servers extend directly to Linux workstations.
+If someone can't run whatever operating system they'd like and still be able to
+use the apps they need, then they are completely at the mercy of whoever is
+the authority judging what software is good and what software is bad. We all know
+how that ends, as big tech companies never have the best interests of the user
+in mind. Whenever the interests overlap, that is a freak accident, not the norm.
 
-Defender automatically identifies whether a Linux device is a server or a workstation, so devices appear correctly within inventory and security workflows without any additional administrative effort. With Microsoft Defender, security operations teams can gain visibility into Linux workstations alongside the rest of their enterprise endpoint estate. They can respond through a single portal, whether Linux is running in the data centre, in the cloud, or on an engineer’s desk.
+All of the security is for the authority judging your device, none of it is for
+you.
 
-#### Get started
+Our personal devices are in a very real sense extensions to our body, which means
+that bodily autonomy should in some way extend to them. What this means is that
+everyone must have **full** control of their personal devices and everything that
+runs on them.
 
-Defender support is based on the underlying Linux distribution and kernel version, regardless of the desktop environment running on top of the distribution. Every distribution currently supported by Microsoft Defender on Linux servers is supported on Linux desktops as well — including RHEL, CentOS, Ubuntu, Debian, SLES, Fedora and Oracle Linux, running GNOME, KDE or other desktop environments.
+This includes having access to all of the code and being able to do whatever
+you want with it, including modifying it, building it yourself, and sending
+copies to anyone. (modified or not)
 
-Defender on Linux desktops requires the standalone **Microsoft Defender for Endpoint Plan 2** or **Microsoft 365 E5** and **E7**.
+There should be nothing that the user is not allowed to do on their own devices,
+and every single application running on their device must be held to the same
+standard. It is your device, so everything must run under your rules, and only
+your rules, no others.
 
-If your organization runs Linux on developer, engineering or security desktops, now is the time to close that visibility gap. To join the public preview, onboard eligible Linux workstations using any of the existing deployment methods. Before you begin, review [what’s new in Defender](https://learn.microsoft.com/en-us/defender-endpoint/whats-new-in-microsoft-defender-endpoint#september-2026) and complete the [pre-requisites](https://learn.microsoft.com/en-us/defender-endpoint/mde-linux-prerequisites#supported-linux-distributions).
+The developer or their company should not have any say over how you use your
+device, you should be able to run their software in whichever way you wish and
+they must not be able to prevent that. You should also be able to emulate
+whatever you like.
 
-This is another step towards our vision of helping organizations secure every endpoint, no matter which operating system or platform.
+It's **your** device, no-one except you should be able to decide what runs on it
+and in what way it runs. Any app running on your system is supposed to be under
+your full control.
 
-To learn more about endpoint protection with Microsoft Defender, check out our [website](https://www.microsoft.com/security/business/endpoint-security/microsoft-defender-endpoint). To learn more about Microsoft Security solutions, visit our [website.](https://www.microsoft.com/en-us/security/business) Bookmark the [Security blog](https://www.microsoft.com/security/blog/) to keep up with our expert coverage on security matters. Follow us on LinkedIn ([Microsoft Security](https://www.linkedin.com/showcase/microsoft-security/)) and X ([@MSFTSecurity](https://twitter.com/@MSFTSecurity)) for the latest news and updates on cybersecurity.
+Remote attestation is a technology that might have some use cases, but the
+overwhelming majority of those use cases are extremely hostile to the user. For
+that reason, I believe it must be objected to in its entirety. Our personal
+devices should be ours, and ours only. They must not be under the control of
+anyone else, and no one should be able to decide whether our devices or the
+software they run are legitimate or not.
+
+- ![This website was created using makko](https://lumi.codeberg.page/badges/makko.webp)
+- ![UBlock Origin Now!](https://lumi.codeberg.page/badges/ublock.png)
+- 
+- 
+- 
+- 
+- 
+- 
+- ![Fuck AI Code, Writing, Music, Art and Chat](https://lumi.codeberg.page/badges/fuckaieverything.gif)
+- ![Polyproto](https://lumi.codeberg.page/badges/polyproto.png)
+- ![Polyphony](https://lumi.codeberg.page/badges/polyphony.gif)
+- 
+- ![No AI](https://lumi.codeberg.page/badges/noai.png)
+- ![Codeberg](https://lumi.codeberg.page/badges/codeberg.gif)
+- ![Starlight Network](https://lumi.codeberg.page/badges/starlightnetwork.png)
+- ![AerynOS](https://lumi.codeberg.page/badges/aerynos.png)
+- ![Keep Android Open](https://lumi.codeberg.page/badges/keepandroidopen.png)
+- ![People Pledge](https://lumi.codeberg.page/badges/peoplepledge.png)

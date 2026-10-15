@@ -1,17 +1,53 @@
-GitLab warned users today to immediately patch a maximum-severity vulnerability in the CI/CD Regular Expression Compiler that could let remote attackers run arbitrary code on targeted instances.
+As more developers begin to use Linux desktops, they become more attractive to attackers: high-privilege, high-value, and easy for admins to overlook. A developer using Linux for day-to-day development may interact with source code repositories, continuous integration and continuous delivery (CI/CD) pipelines, cloud infrastructure, container environments and internal development platforms. If their workstation is compromised, an attacker doesn’t just gain access to a laptop, but a foothold in the pipelines that build and ship the organization’s software. As Linux adoption expands beyond the data center, organizations need a consistent approach to protecting Linux wherever it is used.
 
-Tracked as [CVE-2026-97229](https://docs.gitlab.com/releases/patches/patch-release-gitlab-19-4-2-released/#cve-2026-97229---integer-overflow-issue-in-cicd-regular-expression-compiler-impacts-gitlab-ceee), this critical security flaw was discovered by a security researcher using the '[joaxcar](https://hackerone.com/joaxcar)' handle and reported via GitLab's HackerOne bug bounty program.
+That’s why we’ve extended our industry-leading endpoint protection in Microsoft Defender, bringing enterprise-grade protection, detection, vulnerability management and response capabilities to Linux workstations.
 
-CVE-2026-97229 stems from an [integer overflow weakness](https://cwe.mitre.org/data/definitions/190.html) in GitLab's CI/CD Regular Expression Compiler, which parses, compiles, and evaluates regular expressions in projects' pipeline configuration files.
+#### Enterprise-grade protection for Linux desktops
 
-"GitLab has remediated an issue that, under certain conditions, could have allowed an unauthenticated user to execute arbitrary code on the GitLab server via a specially crafted regular expression in a CI/CD configuration, due to insufficient regular expression validation," [the company explained](https://docs.gitlab.com/releases/patches/patch-release-gitlab-19-4-2-released/#cve-2026-97229---integer-overflow-issue-in-cicd-regular-expression-compiler-impacts-gitlab-ceee) in a Monday advisory.
+Defender support for Linux workstations spans all three key areas of endpoint security:
 
-GitLab fixed the security issue in GitLab Community Edition (CE) and Enterprise Edition (EE) versions from 19.2 before 19.2.8, 19.3 before 19.3.4, and 19.4 before 19.4.2, and urged users to patch their servers immediately.
+##### Protect and detect
 
-"These versions contain important bug and security fixes, and we strongly recommend that all self-managed GitLab installations be upgraded to one of these versions immediately," it warned. "GitLab.com is already running the patched version. GitLab Dedicated customers do not need to take action."
+- Endpoint detection and response (EDR)
+- Microsoft Defender next-gen antivirus
+- Threat analytics
 
-CISA [has flagged five GitLab flaws](https://www.cisa.gov/known-exploited-vulnerabilities-catalog?search=&field_date_added_wrapper=all&field_cve=&sort_by=field_date_added&items_per_page=All&url=&f%5B0%5D=vendor_project%3A808) abused in attacks since November 2021, including one that was exploited by ransomware gangs.
+##### Exposure management
 
-GitLab says that over 30 million registered users and more than 50% of Fortune 100 companies use its DevSecOps platform, including Nvidia, T-Mobile, Lockheed Martin, Airbus, and Goldman Sachs.
+- Microsoft Defender Vulnerability Management
+- Device inventory
+- Security settings management
 
-Join Mikko Hyppönen and security leaders from the NFL, CHANEL, and Atlassian for a two-hour digital summit on what AI-speed attacks change, what defenders should stop doing, and how to validate, decide, fix, and re-validate at machine speed.
+##### Investigate and respond
+
+- Advanced hunting
+- Live response
+- Device isolation
+
+The result is broader Linux protection, delivered through the tools and processes security teams already trust.
+
+#### Give security teams a consistent and simplified view across the endpoint estate
+
+With Defender on Linux desktops, organizations can:
+
+- Onboard quickly using the deployment methods already validated for Linux servers
+- Reduce operational complexity by protecting Linux desktops and servers with one agent and one security operations experience
+- Improve visibility across heterogeneous endpoint environments
+- Strengthen developer workstation security where users interact with source code, cloud infrastructure and other critical resources
+- Accelerate investigation and response through a consistent security operations experience
+
+Defender protects Linux desktops with the same deployment organizations already use to protect Linux servers. There is no separate desktop-specific agent to deploy or maintain, and existing deployment packages, deployment methods and security capabilities on Linux servers extend directly to Linux workstations.
+
+Defender automatically identifies whether a Linux device is a server or a workstation, so devices appear correctly within inventory and security workflows without any additional administrative effort. With Microsoft Defender, security operations teams can gain visibility into Linux workstations alongside the rest of their enterprise endpoint estate. They can respond through a single portal, whether Linux is running in the data centre, in the cloud, or on an engineer’s desk.
+
+#### Get started
+
+Defender support is based on the underlying Linux distribution and kernel version, regardless of the desktop environment running on top of the distribution. Every distribution currently supported by Microsoft Defender on Linux servers is supported on Linux desktops as well — including RHEL, CentOS, Ubuntu, Debian, SLES, Fedora and Oracle Linux, running GNOME, KDE or other desktop environments.
+
+Defender on Linux desktops requires the standalone **Microsoft Defender for Endpoint Plan 2** or **Microsoft 365 E5** and **E7**.
+
+If your organization runs Linux on developer, engineering or security desktops, now is the time to close that visibility gap. To join the public preview, onboard eligible Linux workstations using any of the existing deployment methods. Before you begin, review [what’s new in Defender](https://learn.microsoft.com/en-us/defender-endpoint/whats-new-in-microsoft-defender-endpoint#september-2026) and complete the [pre-requisites](https://learn.microsoft.com/en-us/defender-endpoint/mde-linux-prerequisites#supported-linux-distributions).
+
+This is another step towards our vision of helping organizations secure every endpoint, no matter which operating system or platform.
+
+To learn more about endpoint protection with Microsoft Defender, check out our [website](https://www.microsoft.com/security/business/endpoint-security/microsoft-defender-endpoint). To learn more about Microsoft Security solutions, visit our [website.](https://www.microsoft.com/en-us/security/business) Bookmark the [Security blog](https://www.microsoft.com/security/blog/) to keep up with our expert coverage on security matters. Follow us on LinkedIn ([Microsoft Security](https://www.linkedin.com/showcase/microsoft-security/)) and X ([@MSFTSecurity](https://twitter.com/@MSFTSecurity)) for the latest news and updates on cybersecurity.

@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-15T11:01:59Z",
+  "updated": "2026-10-15T16:32:31Z",
   "items": [
     {
       "id": "devto-4821943",
@@ -146,27 +146,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4791909",
-      "title": "I Made 866 Commits in 5 Weeks. My Understanding Didn't Keep Up.",
-      "desc": "By Mika Flowers | 7 min read",
-      "tag": "tutorial",
-      "published": "2026-10-03T11:53:28Z",
-      "order": 13,
-      "url": "https://dev.to/mikachu/i-made-866-commits-in-5-weeks-my-understanding-didnt-keep-up-cmo",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fqqd5zylxhjf21t3car2e.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAAECA//EABYBAQEBAAAAAAAAAAAAAAAAAAIAAf/aAAwDAQACEAMQAAABbnUIlm3/xAAZEAACAwEAAAAAAAAAAAAAAAAAAQIRMSH/2gAIAQEAAQUCV2yDYzgo2Y57/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFhABAQEAAAAAAAAAAAAAAAAAIQAg/9oACAEBAAY/AmJ1/8QAHRAAAgEEAwAAAAAAAAAAAAAAAAERECFRkTFBcf/aAAgBAQABPyFuAO4yHMnT4exSTfYussc//9oADAMBAAIAAwAAABAAT//EABURAQEAAAAAAAAAAAAAAAAAAAAB/9oACAEDAQE/EFf/xAAVEQEBAAAAAAAAAAAAAAAAAAAAAf/aAAgBAgEBPxBH/8QAHBABAAIDAAMAAAAAAAAAAAAAAQARITFRQWGh/9oACAEBAAE/EEKgKx7gc6J2clwN0W/IKWAFTdGXzXiBsYswwUTs/9k=",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4852470",
       "title": "Requests, Promises, Assertions, and Declarations: Rewriting Our AI Agent Workflow as a 1986 'Committed Speech' Machine",
       "desc": "By Randal L. Schwartz | 26 min read",
       "tag": "tutorial",
       "published": "2026-10-14T19:53:12Z",
-      "order": 14,
+      "order": 13,
       "url": "https://dev.to/gde/requests-promises-assertions-and-declarations-rewriting-our-ai-agent-workflow-as-a-1986-4k4c",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F80k088q9sdie6yq9pbha.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAwEBAAAAAAAAAAAAAAAAAQIDAAT/xAAVAQEBAAAAAAAAAAAAAAAAAAABAP/aAAwDAQACEAMQAAAB5RMxVGyf/8QAGRAAAwADAAAAAAAAAAAAAAAAAAERECFC/9oACAEBAAEFAuSQbwijWv/EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABcQAAMBAAAAAAAAAAAAAAAAAAEQICH/2gAIAQEABj8CC2v/xAAaEAEBAAMBAQAAAAAAAAAAAAABABExUSFB/9oACAEBAAE/IUBPr7Yzqw6NllUDk0ZTu2C//9oADAMBAAIAAwAAABA/H//EABcRAAMBAAAAAAAAAAAAAAAAAAABESH/2gAIAQMBAT8QpiZ//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPxA//8QAHBABAAICAwEAAAAAAAAAAAAAAQARITFBUXFh/9oACAEBAAE/EEh1ughfi33KfoQl3QeRQONCYQ43UQtWu7hAwcP2f//Z",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4791909",
+      "title": "I Made 866 Commits in 5 Weeks. My Understanding Didn't Keep Up.",
+      "desc": "By Mika Flowers | 7 min read",
+      "tag": "tutorial",
+      "published": "2026-10-03T11:53:28Z",
+      "order": 14,
+      "url": "https://dev.to/mikachu/i-made-866-commits-in-5-weeks-my-understanding-didnt-keep-up-cmo",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fqqd5zylxhjf21t3car2e.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAAECA//EABYBAQEBAAAAAAAAAAAAAAAAAAIAAf/aAAwDAQACEAMQAAABbnUIlm3/xAAZEAACAwEAAAAAAAAAAAAAAAAAAQIRMSH/2gAIAQEAAQUCV2yDYzgo2Y57/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFhABAQEAAAAAAAAAAAAAAAAAIQAg/9oACAEBAAY/AmJ1/8QAHRAAAgEEAwAAAAAAAAAAAAAAAAERECFRkTFBcf/aAAgBAQABPyFuAO4yHMnT4exSTfYussc//9oADAMBAAIAAwAAABAAT//EABURAQEAAAAAAAAAAAAAAAAAAAAB/9oACAEDAQE/EFf/xAAVEQEBAAAAAAAAAAAAAAAAAAAAAf/aAAgBAgEBPxBH/8QAHBABAAIDAAMAAAAAAAAAAAAAAQARITFRQWGh/9oACAEBAAE/EEKgKx7gc6J2clwN0W/IKWAFTdGXzXiBsYswwUTs/9k=",
       "color": "#3B49DF"
     },
     {
@@ -218,12 +218,24 @@
       "color": "#3B49DF"
     },
     {
+      "id": "devto-4848909",
+      "title": "Git, Docker, and IPFS All Hide the Same Beautiful Idea",
+      "desc": "By James Anderson | 7 min read",
+      "tag": "tutorial",
+      "published": "2026-10-14T08:50:45Z",
+      "order": 19,
+      "url": "https://dev.to/james_anderson_h/git-docker-and-ipfs-all-hide-the-same-beautiful-idea-3j0",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Frjjnmpeah3gqjvc4u80m.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAAECBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHhZiUh/8QAFhABAQEAAAAAAAAAAAAAAAAAEQAg/9oACAEBAAEFAiN//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAGRABAAIDAAAAAAAAAAAAAAAAAQAxEBEg/9oACAEBAAE/IQJcQW41z//aAAwDAQACAAMAAAAQnX//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/ED//xAAdEAEAAQMFAAAAAAAAAAAAAAABABARITFRcZHR/9oACAEBAAE/EDK2Y2mpvAQMPsEl8Tqg2p//2Q==",
+      "color": "#3B49DF"
+    },
+    {
       "id": "devto-4833419",
       "title": "I was chasing the job market. One comment on DEV.to made me rethink everything",
       "desc": "By EffessDev | 3 min read",
       "tag": "tutorial",
       "published": "2026-10-12T14:44:25Z",
-      "order": 19,
+      "order": 20,
       "url": "https://dev.to/effessdev/i-was-chasing-the-job-market-one-comment-on-devto-made-me-rethink-everything-4h20",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fcphbk52yjayt0h7tak46.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwIE/8QAFgEBAQEAAAAAAAAAAAAAAAAAAAEC/9oADAMBAAIQAxAAAAEGFNy86Qf/xAAXEAEBAQEAAAAAAAAAAAAAAAABABEh/9oACAEBAAEFAgsAkty3o27f/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFREBAQAAAAAAAAAAAAAAAAAAABH/2gAIAQIBAT8Bqv/EABgQAAMBAQAAAAAAAAAAAAAAAAAQETEB/9oACAEBAAY/AtKtUIdP/8QAGhAAAwADAQAAAAAAAAAAAAAAAAERITFRQf/aAAgBAQABPyHshY5JVVEmX8GCxDZJvdjaODR//9oADAMBAAIAAwAAABAd7//EABgRAAMBAQAAAAAAAAAAAAAAAAABESEx/9oACAEDAQE/EJOi1w//xAAXEQADAQAAAAAAAAAAAAAAAAAAAREh/9oACAECAQE/EKWDg//EABsQAQEBAQEAAwAAAAAAAAAAAAERACFhMUFx/9oACAEBAAE/EBE6P3AE2LDuQJCXEmcPdZDoUhM9mJrx+stlgKHkyikX5ct3/9k=",
@@ -235,7 +247,7 @@
       "desc": "By Randal L. Schwartz | 15 min read",
       "tag": "tutorial",
       "published": "2026-10-10T01:15:07Z",
-      "order": 20,
+      "order": 21,
       "url": "https://dev.to/gde/surviving-the-200k-token-lobotomy-how-unix-initd-and-memento-made-my-ai-coding-agent-immune-to-2f74",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fg7swfw5prf9o7zrcrnkn.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAQMCBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHnoNrKuT//xAAZEAEAAgMAAAAAAAAAAAAAAAABABAREkH/2gAIAQEAAQUCmkwFcW//xAAVEQEBAAAAAAAAAAAAAAAAAAAAEf/aAAgBAwEBPwGI/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAGBAAAgMAAAAAAAAAAAAAAAAAABARIFH/2gAIAQEABj8CW1g//8QAGRABAAMBAQAAAAAAAAAAAAAAAQARITGB/9oACAEBAAE/ITTjLVp6yk5aJRxhmORnrcF7c104T//aAAwDAQACAAMAAAAQpH//xAAVEQEBAAAAAAAAAAAAAAAAAAAAEf/aAAgBAwEBPxC1v//EABURAQEAAAAAAAAAAAAAAAAAAAAR/9oACAECAQE/EKr/xAAbEAEAAgMBAQAAAAAAAAAAAAABABEhMUGBUf/aAAgBAQABPxAZFD689lCAOiVAgtMjqmagR6G/YmhItkor1ncPhklauNNhDBP/2Q==",
@@ -247,7 +259,7 @@
       "desc": "By Sergei Parfenov | 4 min read",
       "tag": "tutorial",
       "published": "2026-10-07T16:52:57Z",
-      "order": 21,
+      "order": 22,
       "url": "https://dev.to/p0rt/what-agent-builders-can-borrow-from-openais-math-research-53mn",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto/https%3A%2F%2Fsergei-parfenov.com%2Fassets%2Fcovers%2Fopenai-math-symptomato.webp",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwQB/8QAFQEBAQAAAAAAAAAAAAAAAAAAAQL/2gAMAwEAAhADEAAAAZlBqKA0yv/EABgQAAMBAQAAAAAAAAAAAAAAAAABAhEh/9oACAEBAAEFAiZKjlTgnhN8qmaz/8QAFREBAQAAAAAAAAAAAAAAAAAAAAL/2gAIAQMBAT8BQ//EABURAQEAAAAAAAAAAAAAAAAAAAAB/9oACAECAQE/AVf/xAAaEAABBQEAAAAAAAAAAAAAAAAxAAECEBEg/9oACAEBAAY/Asi6PAv/xAAbEAADAAMBAQAAAAAAAAAAAAAAAREhMVFBkf/aAAgBAQABPyF5dM4K00Yj5EZSsa+Bq1XpNfYWe9I//9oADAMBAAIAAwAAABDYT//EABcRAAMBAAAAAAAAAAAAAAAAAAABESH/2gAIAQMBAT8QmE1n/8QAFxEBAQEBAAAAAAAAAAAAAAAAAQARMf/aAAgBAgEBPxA7By//xAAdEAEAAgMBAAMAAAAAAAAAAAABABEhQVExYaHR/9oACAEBAAE/ECGTojB2BrdWj34sgyiUJq/K5EywnHIjpbaDslSvWGma5EJN5fuKCIbR3r9n/9k=",
@@ -259,7 +271,7 @@
       "desc": "By Yash Kumar Saini | 4 min read",
       "tag": "tutorial",
       "published": "2026-10-05T09:12:47Z",
-      "order": 22,
+      "order": 23,
       "url": "https://dev.to/yashksaini/dev-log-24-hardening-the-p2p-stack-from-flaky-tests-to-websocket-fixes-55f",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F99537lhxr01kt8nq46j3.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAQIDBP/EABQBAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhADEAAAAcNJMMCh/8QAGRAAAwADAAAAAAAAAAAAAAAAAAEQERIh/9oACAEBAAEFAhcNhuIxP//EABURAQEAAAAAAAAAAAAAAAAAAAEQ/9oACAEDAQE/ASf/xAAVEQEBAAAAAAAAAAAAAAAAAAABEP/aAAgBAgEBPwFn/8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAGRABAQEBAQEAAAAAAAAAAAAAAQARITFB/9oACAEBAAE/IWSTe7cbgErL8sZ5Gxdm/9oADAMBAAIAAwAAABBf3//EABcRAQEBAQAAAAAAAAAAAAAAAAEAITH/2gAIAQMBAT8QxI9v/8QAFhEAAwAAAAAAAAAAAAAAAAAAARAR/9oACAECAQE/EKK//8QAGxABAAMAAwEAAAAAAAAAAAAAAQARMSFBUWH/2gAIAQEAAT8QBTt/clzStsXJbgjQrINVlV4RF8Ralb2csQOp2Hqf/9k=",
@@ -271,22 +283,10 @@
       "desc": "By Fayaz | 4 min read",
       "tag": "tutorial",
       "published": "2026-10-05T07:53:32Z",
-      "order": 23,
+      "order": 24,
       "url": "https://dev.to/fm/does-your-favorite-ai-toolss-cache-hit-mean-your-projects-uniqueness-miss-dk3",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Frznvzqwg10cjgb3qx4pf.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwIE/8QAFQEBAQAAAAAAAAAAAAAAAAAAAgH/2gAMAwEAAhADEAAAAc7EtKQQsf/EABkQAQEBAQEBAAAAAAAAAAAAAAECAyESEf/aAAgBAQABBQKMvROXA5YgvT75dKCtKo//xAAYEQADAQEAAAAAAAAAAAAAAAAAAQIRMf/aAAgBAwEBPwGsXRTJ/8QAGBEAAgMAAAAAAAAAAAAAAAAAAAERIjH/2gAIAQIBAT8BlvCx/8QAGRAAAwADAAAAAAAAAAAAAAAAAAERECFR/9oACAEBAAY/ArmnDTIRs//EABwQAAICAwEBAAAAAAAAAAAAAAABESExQWFxof/aAAgBAQABPyFibxPwZBy74P0sc9EYCpxjqsqWYIAdGCDw/9oADAMBAAIAAwAAABAvf//EABYRAQEBAAAAAAAAAAAAAAAAAAEAIf/aAAgBAwEBPxAnVaF//8QAFxEBAQEBAAAAAAAAAAAAAAAAAQARQf/aAAgBAgEBPxAXd6b/xAAeEAEBAAICAgMAAAAAAAAAAAABEQAhMVFBkWGB4f/aAAgBAQABPxB+Qo0fZxUsgQib/MXZqohxRmb7068d+8e6g6EAyqB0gZ8C5oTicF946EtqAM//2Q==",
-      "color": "#3B49DF"
-    },
-    {
-      "id": "devto-4848909",
-      "title": "Git, Docker, and IPFS All Hide the Same Beautiful Idea",
-      "desc": "By James Anderson | 7 min read",
-      "tag": "tutorial",
-      "published": "2026-10-14T08:50:45Z",
-      "order": 24,
-      "url": "https://dev.to/james_anderson_h/git-docker-and-ipfs-all-hide-the-same-beautiful-idea-3j0",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Frjjnmpeah3gqjvc4u80m.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAAECBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHhZiUh/8QAFhABAQEAAAAAAAAAAAAAAAAAEQAg/9oACAEBAAEFAiN//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAGRABAAIDAAAAAAAAAAAAAAAAAQAxEBEg/9oACAEBAAE/IQJcQW41z//aAAwDAQACAAMAAAAQnX//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/ED//xAAdEAEAAQMFAAAAAAAAAAAAAAABABARITFRcZHR/9oACAEBAAE/EDK2Y2mpvAQMPsEl8Tqg2p//2Q==",
       "color": "#3B49DF"
     },
     {
