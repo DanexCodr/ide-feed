@@ -1,231 +1,300 @@
-I’ve always had a foot in the self-hosting world, long before it was called that. My freshman year of university, I ran a website from a Linux box underneath my bed. There was some downtime when my roommate got tired of the fan noise and turned it off. For several years I ran [MythTV](https://www.mythtv.org/), then [XBMC](https://github.com/xbmc/xbmc) (later known as Kodi).
-
-Recently, I lived for a few years in India, where streaming services are extremely inexpensive by western standards. We had Netflix, Disney Plus (Hotstar in India), and Spotify. After leaving India, I was unwilling to pay western prices for these services. But I had also become fed up with the engagement treadmill, particularly for my son. We wanted to limit his viewing choices to certain programming, but the constant “recommended for you” and “up next” caused conflict. While there are ways to limit content to specific titles, or disable auto-play, doing this for each service and keeping track of when client applications change and need to be reconfigured is too much work.
-
-So, I “cut the cord” in a different sense, ditching streaming services for self-hosted [Jellyfin](https://jellyfin.org/). Over the course of the next year and a half, Jellyfin opened the door to self-hosting many other services, reducing my dependence on cloud service providers, and providing a welcome stability. No longer am I constantly confronted with unnecessary site redesigns, new features of questionable value, and a barrage of e-mails about terms-of-service updates, binding arbitration, data breaches, etc. I read the release notes of new versions of the software I host and decide if and when I want to upgrade.
-
-## Rules
-
-I have a few ground rules.
-
-With the exception of VPN servers that run on my router, I do not expose any services directly to the public internet. I don’t care how convenient it would be, or how secure an application is. Especially with AI-assisted hacking, I simply don’t think it’s wise. My ISP also uses [CGNAT](https://en.wikipedia.org/wiki/Carrier-grade_NAT) for its IPv4 addresses, so my home network is not directly reachable from the public internet via IPv4. My VPN servers are only publicly routable on IPv6, a limitation that has some downsides but is workable for my use cases, and likely helps limit unfriendly attempted connections. The biggest downside is that my VPN will almost never function on a public Wifi network, since these rarely offer IPv6. When using my phone, I can disable Wi-Fi and connect over mobile data… if there is service.
-
-I prefer running services natively when possible, but will containerize complex services or those with many dependencies. Love: a service that’s a single Go binary. A service that only comes as a Docker compose file and wants to run MySQL, Redis, and three other containers? I’m already looking for an alternative. If the dependencies aren’t overwhelming, native is better, faster, and more efficient. I can use the same management tools and commands across multiple services. There’s no mental overhead of having to get into this container to run some command, finding out this container is missing curl, that one runs busybox so all the arguments are different, or dealing with a virtual network and host port mapping.
-
-Related, I don’t do Docker anymore. It’s not really a principled position, but I grew tired of having to manage a completely separate service control system on my server. I’m already using systemd, and at this point [Podman’s integration with systemd](https://docs.podman.io/en/v5.0.1/markdown/podman-systemd.unit.5.html) is excellent.
-
-## Hardware
-
-Last year I bought a Beelink Mini PC, specifically an S12 Pro with an Intel N100 processor, 16 GB RAM, and a 512 GB internal SSD. It was before the rampocalypse, so I paid EUR 180. The same listing on Amazon is currently EUR 359. Ouch! Attached to the server is a 6 TB hard drive for media storage.
-
-My [comment on Hacker News](https://news.ycombinator.com/item?id=49985548#50014938) about what I self-host prompted some questions about how all of this could run on 16 GB RAM. As I describe below, there are some choices I’ve made that reduce resource demand on my server, but ultimately it turns out you don’t need much hardware to run a lot of stuff. Obviously I’m not running any local inference on this hardware, but for everything non-AI, it has just worked out of the box, or with some simple configuration tweaks.
-
-## Services
-
-In alphabetical order.
-
-### Actual Budget
-
-Budgeting software with desktop clients and a web application, custom reports, and rules-based categorization. I only use this for budgeting and checking/savings/credit accounts. For tracking investment accounts, I use a cloud service. Some day I’ll try to move away from the latter…
-
-While [Actual Budget](https://actualbudget.org/docs/releases/) supports automatic transaction import from various banks, I don’t use this feature. Instead, after each month end, I download the prior month’s transactions (OFX format preferred, CSV if no other option) and import them manually. This works for me because I primarily use Actual Budget for expense tracking, not… actual… budgeting.
-
-Podman.
-
-### Audiobookshelf
-
-Add, download and store audiobooks and podcasts on your server, listen to them on your phone. I haven’t used the audiobook feature much, I set it up more for my kids, but it has very nice chapter handling. In the past for podcasts I used PlayerFM, then Pocket Casts, but now unless I’m out of the house without VPN connectivity, I use [Audiobookshelf](https://audiobookshelf.org/).
-
-Native.
-
-### Automatic Ripping Machine (ARM)
-
-[ARM](https://github.com/automatic-ripping-machine/automatic-ripping-machine) automates ripping and transcoding DVDs (and Blu-rays, but I don’t do those). Yes, it’s 2026 and I still rip DVDs. Remember, we cut the cord, so not only is this a conduit for new-to-us content, but it’s also a way for us to get bilingual content (English and French).
-
-Podman.
-
-### Backrest
-
-Web UI for [Restic](https://restic.net/) backup software. Backups are important! Especially for Immich (photos). Restic does a good job deduplicating and compressing backed up data, and [Backrest](https://github.com/garethgeorge/backrest) makes it easy to manage the storage retention policies. Notifications in case of failure go to Gotify.
-
-Native.
-
-### Beszel
-
-[Beszel](https://beszel.dev/) is a simple monitoring dashboard that collects basic stats from agents (in the old-fashioned sense of a small background service) to display CPU load, memory and disk usage, temperature, battery, etc. Helps me keep an eye on various other hosts I have around the house (several Rapsberry Pis and a Proxmox cluster that may be the subject of a future post).
-
-Native.
-
-### Caddy
-
-[Caddy](https://caddyserver.com/) is a web server and reverse proxy. Early on I didn’t understand the value of a reverse proxy, and I thought I would be fine accessing my services with a local DNS name, or even IP address, and port number. But then I started adding more and more services, and some required HTTPS. So I got a domain name (not this one) and set up Caddy to automatically obtain LetsEncrypt SSL certificates, and now nearly all of my services are accessible on my LAN (or over VPN) with HTTPS and friendly subdomain names. Adding a new service is a quick edit to the Caddyfile.
-
-Native.
-
-### Cockpit
-
-[Cockpit](https://cockpit-project.org/) is a web-based admin console for the server. It uses normal system authentication methods. For me, it’s mainly useful for spotting failed services when no notifications are set up for them.
-
-Native.
-
-### Forgejo
-
-[Forgejo](https://forgejo.org/) is a fork of Gitea, and deploys as a single binary. Github’s uptime is the butt of a lot of jokes these days, but I also appreciate the speed of having my own git remote. Eventually I’ll set up CI/CD and runners, if only to deploy this blog.
-
-Native.
-
-### FreshRSS
-
-[Web-based RSS reader](https://www.freshrss.org/). These days I basically visit two websites, though, so I’ve not been using it much. I do subscribe to the Github releases of some of the services I self-host so I can check out the features and bugfixes in new versions.
-
-Native.
-
-### Frigate
-
-Network video recorder (NVR). I first started with [Zoneminder](https://zoneminder.com/) because I’m of a certain age. But it became clear that Zoneminder is past its prime. [Frigate](https://github.com/blakeblackshear/frigate) has been fantastic. I run it with 8 IP cameras. It provides alerts for people and cars entering the driveway, integrates with Home Assistant to power various automations (e.g., when a person is detected in the backyard, turn on the camera floodlight). I may write a future post with some details about my IP camera adventures.
-
-I run all of my cameras at lower resolutions than they support, primarily to avoid Wi-Fi network congestion. Most cameras also support an even lower-resolution RTSP substream, which is what Frigate uses for motion and object detection. Keeping the camera resolutions low avoids excessive CPU and memory from video processing, and excessive disk usage from recordings. They are good enough to identify faces, and privacy laws in my country prohibit filming public rights of way, so my cameras are not aimed at distant points.
-
-Podman.
-
-### Gonic
-
-Subsonic-compatible server written in Go. I purchased a perpetual Subsonic license a long time ago, but the original project is ancient and the modern alternatives are better. I run two separate instances of [Gonic](https://github.com/sentriz/gonic), one serves kid music, the other serves adult music.
-
-Native.
-
-### Gotify
-
-Simple notification service written in Go. Many self-hosted services directly support [Gotify](https://gotify.net/) notifications, or can send them via a custom HTTP POST. In conjunction with Uptime Kuma, I use Gotify to get notifications about any services or devices that are down, what my kids are watching on Jellyfin, when a new podcast episode is available in Audiobookshelf, etc.
-
-Native.
-
-### Home Assistant
-
-[Home Assistant](https://www.home-assistant.io/) probably deserves its own post. It’s fantastic, and I cannot imagine trying to accomplish the same things within a proprietary ecosystem like Google Home, Amazon Alexa, or Apple Home. Things are better now that device manufacturers are standardizing on protocols like Matter, but the control and flexibility you get with Home Assistant is hard to beat. It has a steep learning curve, though, and I need to think about realistic ways to handle potential server failure without compromising the functionality of my home.
-
-Podman.
-
-### Homepage
-
-At some point I realized I was running so many services, I needed another service just to keep track of them all. [Homepage](https://gethomepage.dev/) was a good solution. It has widgets for almost all the services I run, so I can get a quick overview of what’s going on, or just a quick link to the subdomain of a service.
-
-Podman.
-
-### Immich
-
-Google Photos alternative. I was tired of Google constantly promoting paid storage plans in their apps. I was able to manage my storage space, but my wife was always about to run out of room. We moved to [Immich](https://immich.app/) last year, just after version 2 was released. It’s much faster to load pages full of photos when all the network activity is within your house. I’ve come up with a solution for sharing albums with family, as well. Still a lot of work to do with Immich - I have many duplicates, and now that storage isn’t a concern, I’ve been less disciplined about culling photos and videos.
-
-Podman.
-
-### Jellyfin
-
-As I mentioned in the introduction, I’ve self-hosted media for a long time, going all the way back to MythTV twenty-some years ago. [Jellyfin](https://jellyfin.org/) is opinionated about its media organization, but it generally works well. I only use it for movies, TV, and home videos, so I can’t speak to its other features (e-books, music, photos, etc.). While my son still remembers Netflix, he is satisfied with Jellyfin. I appreciate the lack of auto-play, never seeing recommendations, and not having to scroll past a bunch of garbage to find what I want to watch.
-
-One of my ways of managing resource demand is by generally preferring 720p media over 1080p or higher. And obviously when ripping DVDs, it’s either 576p or 480p. I do have a 4k TV, but it’s not extremely large, and while I can tell the difference in resolution between SD and HD, for almost everything, 720p seems to be good enough for me.
-
-Podman.
-
-### Music Player Daemon (MPD)
-
-Sometimes there are solutions that just work, and don’t really need to change. I think [MPD](https://www.musicpd.org/) is one of these. It’s been around for 23 years. While Gonic is great for listening to music on my phone, even streaming music from home to my phone while I’m away via VPN, MPD is how I play music through Snapcast to the whole house audio system. I run two instances of MPD, one for music, and one for podcasts.
-
-Native.
-
-### PocketBase
-
-I used to keep track of transactions and receipts for special accounts (HSA, 529, etc.) in a SQLite file I accessed directly with SQL Workbench/J. But things became more complicated as I moved between countries, currencies, and different insurance systems, and also wanted to offer my wife the ability to enter transactions. I migrated to [PocketBase](https://pocketbase.io/), which is ultimately still just a SQLite file, but with a nice web-based management frontend that I abuse as a generic CRUD frontend. It’s simple enough for my wife to use as well, and I can still run arbitrary queries against the underlying database file.
-
-Native.
-
-### Readeck
-
-[Readeck](https://readeck.org/en/) lets me tag and archive copies of stuff I read. I was a heavy [Zotero](https://www.zotero.org/) user in graduate school, but I’ve not needed to write a bibliography in years. However, I still read things that I want to ensure I can access later. I tried [Wallabag](https://wallabag.org/) first, but it had trouble archiving things that were paywalled, even when I was logged in on my phone. In contrast, Readeck will archive what my phone is seeing and store it on my server.
-
-Native.
-
-### Samba
-
-[Samba](https://www.samba.org/) provides shared network storage, making it easy to copy files to and from the server, or share important documents with my wife. It’s funny how a file sharing protocol first developed in the 1980s and most associated with Windows remains the best option for cross-platform file sharing on a LAN.
-
-Native.
-
-### slskd
-
-Native.
-
-### Snapcast
-
-[Snapcast](https://github.com/snapcast/snapcast) provides whole-house synchronized audio. Think Sonos, but without the expensive vendor lock-in and planned obsolescence. This also deserves its own post. It’s complicated to set up, but it works really well. I eventually plan to purchase some additional devices primarily for use as Snapcast receivers.
-
-Native.
-
-### Syncthing
-
-[Syncthing](https://syncthing.net/) is part of a backup strategy for my photos in Immich. I’ve set up a one-way sync (receive only) on my Macbook, so that a copy of all the photos in Immich eventually make their way to my Macbook’s external drive.
-
-Native.
-
-### Transmission Daemon
-
-This one is also [self-explanatory](https://github.com/transmission/transmission/).
-
-Native.
-
-### Uptime Kuma
-
-After a few instances of my wife saying “X isn’t working” and needing to restart a service manually, I realized I needed a way to keep track of what services were running, or not. [Uptime Kuma](https://github.com/louislam/uptime-kuma) is simple but has a useful set of features. I can ping devices to ensure they’re online, check the status of Podman containers, look for HTTP 2XX response codes from various services, or even parse a JSON payload and extract some details for the health check. If something goes down, I can send a Gotify notification (after a few retries, of course).
-
-Podman.
-
-### Vaultwarden
-
-Self-hosted version of Bitwarden. For years, I used [KeePass](https://keepass.info/), but never had a good syncing solution, so just avoided logging into things on my phone. Meanwhile, my wife used LastPass, which had various breaches and incidents, besides autofill just not working very well. Migrating her to KeePass was not practical, and I settled on [VaultWarden](https://github.com/dani-garcia/vaultwarden), which is an open-source API-compatible reimplementation of BitWarden that works with the official BitWarden clients. I’m not a huge fan of the BitWarden browser extension, but it’s mostly fine. The Android application is good enough, and syncs seamlessly and automatically when I’m connected to my LAN; otherwise, I can connect via VPN and manually trigger a sync if needed.
-
-I am a little concerned that Bitwarden may eventually become hostile to VaultWarden and break the client compatibility. At this point, the only other major Bitwarden compatible client I’m aware of is [Keyguard](https://github.com/AChep/keyguard-app), which does not have an open source license and uses a freemium model.
-
-Podman.
-
-### Vikunja
-
-I’ve been a Trello user for about a decade. But after Trello’s [disastrous multi-day outage](https://trello.status.atlassian.com/incidents/h11gfkgvjhhk) earlier this year, I decided to find a self-hosted alternative. I ruled out anything that involved spinning up a PostgreSQL or MySQL database for a service that will serve two users. [Vikunja](https://vikunja.io/) uses SQLite by default, though it can be configured to use other database backends. It’s not perfect, and the Android application has some missing features, but it’s good enough for me. Single binary deployment? Yes, please.
-
-Podman.
-
-### Yubal
-
-Simple web application to download YouTube Music playlists. I normally use [yt-dlp](https://github.com/yt-dlp/yt-dlp) for downloading YouTube videos, or [NewPipe](https://newpipe.net/) for watching on my phone, but [Yubal](https://github.com/guillevc/yubal) will properly name, organize, and tag music downloaded from YouTube Music.
-
-Podman.
-
-## Non-Services
-
-Here are a few things I don’t self-host, tried but decided against, or am unlikely to try.
-
-### The *arr Stack
-
-[Sonarr, Lidarr, Radarr](https://wiki.servarr.com/), etc. Every time I read about setting it up, it just sounds like a resource-intensive mess that’s fundamentally prone to frequent breakage. That’s the opposite of what I’m looking for when choosing self-hosted services.
-
-### Collabora Online
-
-While it would be nice to completely part ways with Google, it’s hard to beat Google Docs as a highly convenient and easily accessible way to store and share information. Still, I choose LibreOffice Writer and Calc unless I have a specific reason why the document needs to be in the cloud. Since I already have a shared network drive, it seems pointless to run a service like [Collabora Online](https://www.collaboraonline.com/) (a web-based office suite) instead of just using LibreOffice locally.
-
-### Firefly III
-
-I tried [Firefly III](https://www.firefly-iii.org/) before Actual Budget, thinking I needed built-in support for multiple currencies. It was a complex setup, involving multiple containers, including a container just for importing data. Actual Budget was much simpler to set up and use. For my foreign currency accounts, I have my own simple script to handle exchange rate conversion, so everything in Actual Budget stays in USD.
-
-### Owntracks
-
-I like Google Maps Timeline, but after Google limited the location data to the individual device, I hoped to find a self-hosted version. But I could never get the [OwnTracks](https://owntracks.org/) Android application to consistently report my position, no matter how many battery or location settings I tried. [Dawarich](https://dawarich.app/docs/intro/) is another option in this space, but it wants to run “at least” four containers (PostgreSQL, Redis, Sidekiq, web application). For me, that’s not a compelling trade of resources required versus value I’m likely to obtain.
-
-### Music Assistant
-
-[Music Assistant](https://www.music-assistant.io/) might work better for you if you don’t already have a music setup you like. In my case, I already had Gonic, Snapcast, and MPD working well. Music Assistant felt like it wanted to “own” everything; for example, it seemed to continually rearrange my Snapcast device groups.
-
-### E-mail
-
-Self-hosting e-mail seems like a lot of work for very little benefit. I cannot risk not being able to send or receive e-mails. Eventually I would like to transition away from Gmail to a paid provider.
-
-## Conclusion
-
-That’s 17 native services and 11 Podman services, all managed by systemd. `htop` currently shows about 7.5 GB of memory in use, and CPUs fluctuating between 30% and 40%. It turns out this Mini PC can run a lot! Given how expensive computer hardware has become due to the AI crunch, I hope we’ll continue to see self-hostable projects that prioritize simplicity and efficiency.
+Creating a direct connection between *any* two computers (not just from client
+to server) over the internet is notoriously difficult. Many home networks are
+behind NATs which prevent new inbound connections. Sometimes these NATs are from
+the ISP (carrier-grade NATs) which are impossible to work around with port
+forwarding and/or UPnP. While
+[hole punching techniques](https://en.wikipedia.org/wiki/Hole_punching_(networking))
+*can* break through NATs, it's far from guaranteed. Thus, we need something that
+works in the general case: **relays**.
+
+Relays are servers, accessible over the public internet, that act as a proxy
+between two computers that cannot directly connect. In
+[Goblins 0.12](https://spritely.institute/news/spritely-goblins-v0-12-0-released-two-new-netlayers-join-the-ocapn-family-and-more.html)
+we introduced a *federated* relay named "prelay". While OCapN traffic is
+encrypted in transit, the prelay crucially lacks
+[end-to-end encryption (E2EE)](https://en.wikipedia.org/wiki/End-to-end_encryption).
+E2EE secures all the messages so they can only be read by their intended
+recipient, preventing intemediatory parties (like the relay) from tampering with
+or reading them. Due to the lack of E2EE, the relay was named "prelay"
+(pre-relay) to dissuade its use. Thanks to a
+[grant from NLnet](https://nlnet.nlproject/OCapN-federatedrelays/), we're happy
+to announce that the next release of Goblins will include a federated, E2EE
+relay implementation!
+
+Having a relay that we could recommend has become even more of a critical part
+of the OCapN story as we've developed [Hoot](https://spritely.institute/hoot/),
+our Scheme to WebAssembly compiler. The web is a challenging environment in
+which to build peer-to-peer applications. Most of the patterns and available
+APIs are designed around client-server architectures and centralized certificate
+authorities for security. While relays are unsatisfying compared to making
+direct connections, they enable peer-to-peer applications to communicate in
+these hostile environments.
+
+In addition to implementing the E2EE relay for Goblins, our NLnet grant also
+includes writing a specification for the OCapN group so that the relay can be
+broadly supported by other OCapN implementations.
+
+## Design
+
+We wanted OCapN relays to have the following qualities:
+
+1. Stateless: no storage of user data; easy to replace or migrate
+2. Federated: reduces the power any one relay holds over the wider network
+3. End-to-end encrypted: prevents man-in-the-middle and replay attacks; perfect forward secrecy
+
+Our existing "prelay" already has the first two properties.  To get E2EE, we
+chose to build upon the [Noise Protocol](https://noiseprotocol.org/).
+
+Noise is actually a well-established framework of different patterns and
+ciphers. This allows applications to pick the pattern which is most suitable to
+their needs. It's also a protocol family which has widespread use (WireGuard,
+WhatsApp, etc.) and has been scrutinised a great deal. None of us at Spritely
+are cryptographers by training, so using an off-the-shelf protocol also ensures
+we're avoiding any mistakes in protocol design.
+
+So how can we use Noise with OCapN? When connecting to an OCapN peer, there is a
+[Locator](https://github.com/ocapn/ocapn/blob/main/draft-specifications/Locators.md#ocapn-peer)
+which encodes three components about the remote peer:
+
+1. Designator: self-authenticating identity (usually a public key)
+2. Transport: a symbol identifying the kind of netlayer it is (such as onion)
+3. Hints: a hashmap of routing data (such as IP, port, etc.)
+
+Each netlayer decides what goes into these fields, and the union of both the
+designator and transport should uniquely identify the peer. Noise uses two kinds
+of keys:
+
+1. static: a key that doesn't change between sessions
+2. ephemeral: a key that is generated fresh for each session
+
+An important step each netlayer needs to consider is something called *peer
+authentication*, which verifies that a peer is who they say they are. OCapN
+requires that there exists
+[**at most one** connection](https://github.com/ocapn/ocapn/blob/main/draft-specifications/CapTP%20Specification.md#opstart-session)
+between any two peers at a given time. Ensuring there is only ever one
+session between any two peers is essential to allow for object identity
+comparison and preventing unnecessary
+[3rd party handoffs](https://github.com/ocapn/ocapn/blob/main/draft-specifications/CapTP%20Specification.md#third-party-handoffs).
+An OCapN implementation will enforce this by reusing connections or closing new
+inbound connections if one already exists. Without peer authentication, a
+malicious peer could impersonate another peer causing a denial of service to the
+peer whose identity was stolen.
+
+As described above, the designator is a public key, which allows the peer to
+prove their identity by using its private key. Noise has a pattern for this
+known as `XK`, where the initiator knows the key of the responder and will
+verify it. The `X` is referring to the initiator's static key being transmitted
+to the responder. The `K` is referring to the initiator already knowing the
+responder's public key. The public key of a peer is encoded and placed in the
+designator for the initiator to use.
+
+Noise also allows the use of different key generation algorithms, cipher suites,
+and hashes. This is great as we needed to select something which has
+implementations both in commonly available cryptographic libraries and within
+the browser (for Hoot). X25519 keys are well supported in all those situations,
+as are AESGCM cipher suites and SHA256 hashes. These are all available in
+GnuTLS (what we're using on the Guile VM) and in the
+[SubtleCrypto API](https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto)
+(that we're using on the web).
+
+## Guile Noise library
+
+Of course, to use Noise we need an implementation. Noise is popular enough that
+there's quite a few implementations for different languages. Unfortunately,
+Guile is not one of them, so that meant writing our own Noise library.
+
+The [Guile Noise library](https://codeberg.org/spritely/guile-noise) we've
+written doesn't require users to know the intricate workings of Noise, but Noise
+is interesting and so let's take a brief look at how it works and my
+implementation experience. The
+[Noise specification](https://noiseprotocol.org/noise.html) is actually pretty
+approachable and is built around three conceptual objects:
+
+- CipherState: holds a key and a hash; provides encryption, decryption, and rekeying
+- SymmetricState: holds a chaining key and hash output; uses CipherState for encryption, as well as deriving new keys and hashes
+- HandshakeState: holds state for the initial handshake and handles reading and writing of handshake messages
+
+The Noise protocol starts with a handshake. This is turn-based where the
+initiator goes first and writes their handshake message. The receiver then reads
+that message and writes their own. This continues until the handshake is
+complete. After which you only need the `CipherState` which can encrypt and
+decrypt messages (and if desired
+[rekey](https://noiseprotocol.org/noise.html#rekey)).
+
+Interestingly, Noise defines a small intepreter which defines a limited set of
+operations. The handshake patterns are then defined in terms of these
+operations. I won't go through all of them (see the spec if you're interested),
+but the `XK` pattern is defined as:
+
+```
+pre-message <- s
+-> e es
+<- e ee
+-> s se
+```
+
+This is a handshake consisting of three messages (and a
+pre-message). Pre-messages are not exchanged as part of the Noise handshake
+itself, they're messages which are expected to have happened out-of-band prior
+to connection. In this case `<- s` means the static key from the responder is
+sent to the initiator. This happens by it being encoded in the OCapN peer
+locator as we discussed above. The arrows show the direction with the left side
+being the initiator and the right being the responder.
+
+I'll just cover the first message, `-> e es`. This message is for the
+initiator to send to the responder as it starts with `->`. The operations are:
+
+- e: generates an emphemeral key, transmits the public part, and mixes it into an internal hash
+- es: derives a new key (from the ephemeral key and responders static key) and mixes it into its own key
+
+This allows a Noise library to easily support lots of different patterns. Each
+pattern can define it's pre-messages and handshake messages (all of which are
+defined in the spec) and the implementation just needs to go through and perform
+the steps.
+
+Once the handshake is complete, the Noise library will create two `CipherState`
+objects. The first is used for encrypting and decrypting the initiator's
+messages, the second for the responder's messages.
+
+The Guile library implements all 12 of the
+[fundamental interactive patterns](https://noiseprotocol.org/noise.html#interactive-handshake-patterns-fundamental).
+We built this library to work on both Hoot and the Guile VM. It currently uses
+`SubtleCrypto` for Hoot and GnuTLS for the Guile VM, but it's written so users
+of the library can add support for other crypto libraries. Our library comes
+with support for X25519 key generation, AES-GCM ciphers, and SHA256 and
+SHA512 hash functions. Noise not only provides an approachable spec, but also a
+set of
+[test vectors](https://github.com/noiseprotocol/noise_wiki/wiki/Test-vectors) to
+help implementation. These are a set of messages which Noise should exchange for
+a given pattern and keys. Our library has been tested against all the vectors
+for patterns and crypto that we support and the test runner checks them on Hoot
+as well as the Guile VM.
+
+## Noise netlayer design
+
+OCapN is a layered protocol consisting of CapTP (Capability Transport Protocol)
+and many *netlayers*. A netlayer sends encoded messages between two peers over a
+particular medium. This allows the higher-level CapTP to be *transport
+agnostic*. For example, the
+[Onion netlayer](https://files.spritely.institute/docs/guile-goblins/latest/Tor-Onion-Services.html)
+provides transport over Tor Onion services. However, netlayers can be defined
+not only in terms of a specific transport protocol, but also in terms of
+*another netlayer*. We call these *meta netlayers*.
+
+Noise itself isn't designed with a specific transport protocol in mind, and the
+Noise netlayer isn't either. Indeed many netlayers might want to rely on the
+properties of Noise for many different reasons. Even netlayers which provide
+strong encryption, like Tor, may wish to rely on Noise for its bidirectional
+peer authentication properties (Tor authenticates outbound connections to a
+hidden service, but not the reverse).
+
+The Noise netlayer thus composes with any other netlayer. Composing the Noise
+netlayer and prelay netlayer yields an *end-to-end encrypted relay netlayer*!
+
+How does this work? The Noise netlayer spawns a sort of "bootstrap" object (not
+the same
+[bootstrap](https://github.com/ocapn/ocapn/blob/main/draft-specifications/CapTP%20Specification.md#bootstrap-object)
+if you're familiar with CapTP). The bootstrap object is encoded within the OCapN
+peer locator, and can be *enlivened* to make a live reference when making a new
+outbound connection. Each side spawns an
+[inbox and outbox pair](https://files.spritely.institute/docs/guile-goblins/latest/Inbox.html),
+and the initiating peer delivers their outbox to the bootstrap object. The
+bootstrap object sets up its side of Noise and makes its own inbox-outbox pair
+returning its outbox. Each side is then able to deliver messages to each other
+by sending messages to the remote outbox object. Each side then follows the
+handshake procedure. Once complete, encrypted messages can be exchanged by using
+the Noise encrypt procedure and decrypted when read from the inbox.
+
+Looking at the test code which uses the
+[TCP+TLS netlayer](https://files.spritely.institute/docs/guile-goblins/latest/TCP-_002b-TLS.html),
+layering on Noise encryption is just a few lines of code:
+
+```
+(define a-mycapn
+  (with-vat vat-a
+    ;; Spawn the TCP+TLS netlayer
+    (define tcp-tls-netlayer (spawn ^tcp-tls-netlayer "127.0.0.1"))
+    ;; Spawn the Noise netlayer, passing in the TCP+TLS netlayer
+    (define noise-netlayer (spawn ^noise-netlayer tcp-tls-netlayer))
+    ;; Spawn the MyCapN object (CapTP)
+    (spawn-mycapn noise-netlayer)))
+```
+
+## The Relay netlayer
+
+So, how does this work with the relay? Well, since we already have an
+non-E2EE relay and now have seen we can compose Noise and get the properties of
+both, we can simply pass in the prelay netlayer to Noise netlayer and get an
+E2EE relay. Of course, we don't want to ask users of the netlayer to do
+this. We'll be replacing the prelay module with a new relay module that is
+always end-to-end encrypted.
+
+While the relay design (in its non-E2EE form) isn't new to Goblins, it's
+worth quickly taking a look at how the relay works. The relay itself is built on
+the idea of a relay client and a relay server. On the relay server there are two
+actors:
+
+1. Controller: allows the client to steer its own relay accepting new inbound connections and making new outbound connections
+2. Endpoint: which is encoded in the OCapN locator and is publicly accessible, a relay server messages this object when establishing a new connection to the peer
+
+This makes the relay *federated*. Two OCapN peers can use different relay
+servers and still communicate using OCapN between the two relay servers. When a
+client wants to make an outbound connection to a peer on another relay server,
+the relay can enliven the endpoint sturdyref (getting a live object) and send a
+message to it.
+
+The animation above shows the flow between two peers using federation. It starts
+with two actors on two different peers, Alice (on peer A) and Bob (on peer B).
+Alice has a *sturdyref* (an OCapN locator specifying an object) to Bob. Here's
+how the flow works:
+
+1. Peer A first sets itself up with the controller by registering an object a-incoming with the controller. This object can be used when establishing new connections.
+2. Alice has a sturdyref to Bob but wants a a live reference to Bob that she can message, she asks her MyCapN to /enliven/ it.
+3. MyCapN creates an adeliver object which faciliates the connection. It then sends a message to the relay controller with the sturdyref and adeliver object and asks the relay to make a new connection.
+4. The controller extracts the endpoint object for Peer B's relay from the sturdyref and enlivens it forming a new connection between the two relays. It also spawns a new rarelay object to facilitate communication between these two peers and hands this back to adeliver.
+5. The controller then sends the rarelay object to the endpoint on B's relay. B's relay then spawns its own analog to the object rbrelay.
+6. Peer B's relay reaches out to the b-incoming object, allowing it to establish a new connection to Peer B. It passes along the rbrelay object.
+7. Peer B's MyCapN object spawns a new bdeliver object which facilitates its connection.
+
+This gives the two peers a connection to one another, even though neither share
+a common relay server. The relay is designed to be completely stateless, i.e. it
+doesn't hold on to data, configuration, or anything else.
+
+One of the lessons we've learned since co-authoring ActivityPub is it's crucial
+to reduce the impact of servers on their users. In ActivityPub, each instance (a
+server) stores all the data for its users and performs all the operations their
+behalf. This means the user needs to trust the server a lot, and if the user's
+instance shuts down, or they simply wish to migrate, moving to another server is
+difficult.
+
+Learning from those problems, it was critical for us to make sure the server
+was stateless. The relay itself stores no state/data for a user and, aside from
+connecting to another peer, the only behavior it's expected to perform is
+relaying messages. This makes changing relay servers incredibly easy. The user
+simply needs to find another (or setup their own) relay server and include that
+in their sturdy references instead.
+
+## Future work
+
+The work isn't done, though. Adding support to Goblins was just one part of the
+NLnet grant. We'll be contributing specifications for the encrypted relay to the
+[OCapN standardization group](https://ocapn.org/) so others can implement
+it. Ridley, who has implemented
+[OCapN in Dart](https://codeberg.org/ridley/DObjects), has already implemented
+their own [Noise library](https://codeberg.org/ridley/dart_noise) in preparation
+for the E2EE relay. As part of the grant work within the OCapN group, we'll also
+be adding support to the [test suite](https://github.com/ocapn/ocapn-test-suite)
+to allow both testing new relay implementations, and testing the rest of OCapN
+over the relay.
+
+Another milestone of the grant is to implement a Guix service to make it easy to
+run an instance of the relay. The relay doesn't take many resources to run and
+it has very few dependencies, so it should be easy for others to package for
+their distributions and run on the cheapest VPS or old computers users might
+have around their home. We are looking forward to the deployment of a vast
+network of OCapN relays.
+
+## Thanks to our supporters
+
+Your support makes our work possible!  If you like what we do, please
+consider [becoming a Spritely supporter today](https://spritely.institute/donate)!

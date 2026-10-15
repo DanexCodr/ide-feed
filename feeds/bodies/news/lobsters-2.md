@@ -1,29 +1,162 @@
-decomp.dev was born in 2024 as a way to centralize matching decompilation progress and to help expand a community of talented, like-minded folks.
+This is one of a three-part mini series about how I’m using modern C as of late 2026.
 
-Historically, matching decompilation has been a brutally difficult, time consuming task, on the scale of years for any moderately-sized game with a number of active contributors. As we developed better tooling and shared knowledge around the intricacies of decompilation, the compilers, and the games themselves, progress began to accelerate.
+Before C23, I was [taken in](https://www.youtube.com/watch?v=443UNeGrFoM) by *How I Program C* for years and years, and would even feel guilty for choosing C99 instead of `-ansi -pedantic`. But holy crap man I’m done being a doomsday prepper! These days I maintain a large-enough project with enough users where I could stand less foot-shooting. (I’ve also got bills to pay.)
 
-AI's use in decompilation has been experimented with for years, with mixed results. Starting with the release of Opus 4.6 and GPT-5.4 in early 2026, it was clear that the models were being trained on matching decompilation (they appeared to know our specific tools and how to use them without explicit guidance), and could achieve decent results inside of an established, clean codebase with exhaustive documentation. However, those results still required a significant amount of human cleanup and fixes for obvious issues or cheating (code that *technically* compiles to the same machine code, but could not be reasonably passed as what the original developers wrote), and the cost per task was prohibitively expensive relative to the results.
+So here’s three modern C conventions which started to rise naturally from adding `-std=c23` to my zig build:
 
-Recent models (like GPT-6-Astra) shifted things even further: they are significantly better at following complex directions, cross-referencing resources for symbols or debug information, and writing natural code with enough guidance. They are also exceptionally good permuters: they can write small scripts that test many different source code forms and combinations to find a match, even across files and headers to cover aspects like inlined helpers, signature changes, and operation ordering. In addition, their ability to remain coherent and focused across long-horizon tasks allows them to work continuously without going off the rails. Finally, they can achieve these better results faster and cheaper than earlier models could.
+## 1. Unused? Maybe? (Yes)
 
-It is now clear that, with the right guidance, human input, and code reviews, AI can expedite the decompilation process in a significant way. What is also now clear is that the community aspect of decompilation has been broken. Our projects have always been open source to encourage contributions and to benefit the community as a whole. Bad actors have been abusing this in increasingly troublesome ways:
+Our first one is centered around `[[nodiscard]]`. If I draw an app window or panel I require the caller to interrogate the rect of the thing that was just rendered:
 
-- Forking existing decompilation projects to "finish" them with AI. Every project works differently: some may not want to use AI for legal or ethical reasons, and others may be okay with AI, or use AI themselves, but do not want drive-by contributions from folks who have put no effort into making sure the contributions are good. The bottom line is that these kinds of hostile forks put little to no effort into meaningfully contributing to existing projects, tearing apart our community fabric.
-- Racing to port games, especially utilizing decompilations that they did not contribute to. Yes, now anyone with an AI subscription can manage to create a port or static recompilation that functions at a basic level. Compared to the decompilation process itself, porting is relatively easy, especially with the established tools written by talented humans. While community members put in the effort to decompile a game, opportunists have frequently raced to release a half-baked, barely-functional port from it.
-- Conflating decompilation and ports. For years, decompilation communities attempted to establish that decompilation is primarily for research: we love these games and want to understand how they work, and to uncover the mysteries that the original developers left behind. That's not to say that ports aren't fun too; they're just not the sole reason a decompilation exists. Sloptubers and subreddits like /r/decomps have done immense damage here, freely using "decomp" to mean "PC port".
+```c
+[[nodiscard]] rect_t draw_screen(/* ... */) {
+    rect_t screen_r = { };
+    // Draw stuff
+    // ...
+    return screen_r;
+}
+```
 
-decomp.dev was originally designed to gamify decompilation: watching the progress go up was a fun way to stay motivated when every fraction of a percent took real human effort. Today, that same idea has warped decompilation into a hollow numbers game, exacerbated by folks who just want to burn tokens to make number go up or "port game to PC", all else be damned. While the increased attention *has* brought in genuine folks who want to learn and contribute meaningfully, I believe that decomp.dev serving as a public index and leaderboard is now causing more harm than good.
+It’s a business logic bug if my caller doesn’t capture the rectangle for later processing. Therefore `[[nodiscard]]` has been such a godsend for fixing bugs… Except there’s a choice few instances where I will draw something with *no genuine use* for the resulting rect:
 
-## What happens now?
+```c
+enum screen_opt popup_options = /* ... */ ;
+draw_screen(popup_options, /* ... */); // ERROR: damn you [[nodiscard]]
+```
 
-decomp.dev will continue to track existing projects and serve individual project pages and historical data, but the main index and adding new projects are disabled.
+Clang will error out here. I could capture the var and never use it but…
 
-## Can I fork and host my own version of decomp.dev?
+```c
+rect_t rect = draw_screen(/* ... */); // ERROR: unused variable (I have `-Werror` enabled)
+```
 
-No. decomp.dev's repository has never had an open source license, and I continue to reserve all rights to the (entirely human written) code. Any replica must not use decomp.dev's code in any form.
+Pre-C23 I could solve this through an `UNUSED()` macro:
 
-## Why not just forbid AI-assisted projects?
+```c
+#ifndef UNUSED
+#define UNUSED(x) (void)(x)
+#endif
 
-I have long held the opinion that AI is not the issue by itself, and we now know it can help tremendously when used correctly. "Slop" comes in many forms, is hard to define, and even harder to moderate. As a sole hobbyist, I don't have the energy (or desire) to define what makes a "good" decompilation and enforce that consistently across the hundreds of projects on the site.
+rect_t rect = draw_screen(/* ... */);
+UNUSED(rect); // Silences the compiler, but now I'm sad.
+```
 
-As this era of decompilation comes to a close, I want to thank everyone who's been involved and contributed to our projects, communities and tools. The people and passion behind these projects have always been what's made them fun and rewarding.
+But now with C23 I’ve deleted the macro in favor of `[[maybe_unused]]`:
+
+```c
+[[maybe_unused]] rect_t rect = draw_screen(...); // OK
+```
+
+Phew I feel better. I’ve also noticed this is happening all over the place: lots of different routines returning different types that are marked with `[[nodiscard]]`. So for those few exceptions why not just go for:
+
+```c
+[[maybe_unused]] auto _ = foo(); // A new pattern emerges
+```
+
+Bonus: For any macro fans out there a fellow indie dev (Zardium) offered an additional improvement. From our chat server:
+
+> Zardium: #define _ [[maybe_unused]] auto CONCAT_MACRO(zz,**COUNTER**)
+
+> Abner: ahh, unique varname. nice one
+
+> Zardium: you could take the auto out if you don’t want it to look so weird. then it acts exactly like the _ in other languages, where it can be redefined
+
+> Abner: Yep totally. Although here I was celebrating my removal of a macro… XD
+
+## 2. More Perfect Unions
+
+I’ve been cheated and lied to: designated initializers DO NOT clear my struct to zero and I can’t even trust `{0}` anymore. (Talk about a betrayal.) The problem is I’ll often have data types like this contrived timestamp:
+
+```c
+typedef struct {
+    Type type;
+    char buf[MAX];
+    union {
+        time_t time;
+        float dt;
+        date_t date;
+    };
+} stamp_t;
+```
+
+And if I partially initialize one:
+
+```c
+stamp_t stamp = { .type = STAMP_TYPE_BLA_BLA };
+```
+
+While it does mean we successfully zeroed out `buf` (thanks to [empty initialization](https://en.cppreference.com/c/language/initialization#Empty_initialization)), those union members are just a different beast. It also doesn’t matter if we go with `stamp_t stamp = {0}` instead. My dear reader: I’ve made the costly mistake of assuming `date` would clear to zero!
+
+As I Spongebob-panicked in public Lobsters member [accelbread](https://lobste.rs/~accelbread) offered a sage revelation:
+
+> accelbread: It used to be that GCC would fully zero the union anyways, and clang would only zero the time_t, though around a year ago they swapped behaviors iirc. Either way, standard only requires the time_t be zeroed and not whole union. GCC has a flag to always zero whole union. Also C23 initialization always inits whole union
+
+Wait WHAT? clang and GCC SWAPPED what now? I won’t investigate further. Everything about this is *dangerous af* unless we hug C23 tightly and never let go:
+
+```c
+stamp_t stamp = { }; // Fully clears to zero (C23)
+stamp.type = STAMP_TYPE_BLA_BLA;
+```
+
+Accelbread went on to say two more things:
+
+1. “Note the C23 zero init whole thing is nothing in the brackets, not 0 in brackets; { 0 } does same thing as before C23”
+2. “Also if you control union layout, putting largest member first is safest”
+
+Yessir.
+
+## 3. Enums In C Were Magic (And I Don’t Like It)
+
+If I want to customize some dialog box I’ll use bit flags:
+
+```c
+enum {
+    OPT_AUTOSCROLL = (1 << 0),
+    OPT_NOCURSOR   = (1 << 1),
+    OPT_CENTERED   = (1 << 2),
+    OPT_NOCLOSE    = (1 << 3),
+    // ...
+};
+
+[[nodiscard]] bool draw_warning(const char* msg, int opt);
+```
+
+Even if we disagree with this approach lots of relevant libraries or projects do it:
+
+```c
+_ = draw_warning("you done messed up A-A-RON", OPT_CENTERED | OPT_NOCLOSE);
+```
+
+Of course, erroneous bit shifting will land anyone into trouble and yield comical numbers. Thankfully C enums are a plain `int` underneath so the compiler will warn us if we defined a bad constant inside the enum that won’t fit.
+
+I’m kidding. Sigh. Well, I’m growing fearful of sage revelations but this one comes from [Modern C](https://gustedt.gitlabpages.inria.fr/modern-c/) by Jens Gustedt:
+
+> Jens: If enumeration constants do not fit into signed int, if possible, the enumeration type is adjusted such that it can store all enumeration constants.
+
+Noooooo!
+
+> Jens: The property that an an enumeration type is adjusted such that it fits all its constants could have surprising effects
+
+*sobs*
+
+> Jens: So, it is preferable to specify the underlying integer type explicitly
+
+THERE IS HOPE?
+
+```c
+enum options : int {
+    OPT_AUTOSCROLL = (1 << 0),
+    OPT_NOCURSOR   = (1 << 1),
+    OPT_CENTERED   = (1 << 2),
+    OPT_NOCLOSE    = (1 << 3),
+    // ...
+};
+```
+
+It compiles! We shoot. We score. We stick with C23.
+
+## Epilogue
+
+In part two of our mini series I’ll discuss three more conventions that I’ve fleshed out thanks to modern C: starting with safer macro usage (forgive me Zig folks.)
+
+*P.S. If you want to shape this discussion [maybe join](https://handmadecities.com/chat) the Handmade Cities server!*

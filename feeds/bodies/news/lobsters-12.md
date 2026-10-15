@@ -1,162 +1,120 @@
-This is one of a three-part mini series about how I’m using modern C as of late 2026.
+Remote attestation is a term for technology which is used to verify the software
+that another device is running. Usually remote attestation technology is implemented
+in hardware, making it difficult to get around.
 
-Before C23, I was [taken in](https://www.youtube.com/watch?v=443UNeGrFoM) by *How I Program C* for years and years, and would even feel guilty for choosing C99 instead of `-ansi -pedantic`. But holy crap man I’m done being a doomsday prepper! These days I maintain a large-enough project with enough users where I could stand less foot-shooting. (I’ve also got bills to pay.)
+It is a building block of extremely restrictive DRM systems, as it allows a third
+party to police what the user can or can't run on a device that is (at least
+supposed to be) theirs.
 
-So here’s three modern C conventions which started to rise naturally from adding `-std=c23` to my zig build:
+An example of an implementation of remote attestation is Google Play Integrity.
+This is software that can tell a third party whether you are running a Google-approved
+Android system. It is mainly (but not exclusively) used by bank and government
+apps.
 
-## 1. Unused? Maybe? (Yes)
+The reason it is implemented is "security", but as I'll talk about in the next
+section, the actual reason is one of control. It allows Google to decide what
+someone can or can't run on their device. It strips all ownership of a device
+that should be yours away and puts Google in control as the arbiter of what is
+or is not acceptable.
 
-Our first one is centered around `[[nodiscard]]`. If I draw an app window or panel I require the caller to interrogate the rect of the thing that was just rendered:
+Because of this, the user can't choose what they do with their devices anymore,
+they can only do what is approved by Google. If they exercise their freedom at
+all, by using a modified version of Android, an alternative operating system,
+or emulating the app, the app will refuse to run.
 
-```c
-[[nodiscard]] rect_t draw_screen(/* ... */) {
-    rect_t screen_r = { };
-    // Draw stuff
-    // ...
-    return screen_r;
-}
-```
+Do you want to be able to use your banking app on your laptop or desktop? Tough
+luck! You're not allowed to. (Even though you should be! Emulation is great for
+interoperability!)
 
-It’s a business logic bug if my caller doesn’t capture the rectangle for later processing. Therefore `[[nodiscard]]` has been such a godsend for fixing bugs… Except there’s a choice few instances where I will draw something with *no genuine use* for the resulting rect:
+Some may tell you that the built-in Android hardware attestation is a good
+alternative, it is not. It still does the same thing.
+There is also Volla's [Unified Attestation](https://uattest.net), which is the
+same thing, just with a different authority.
+None of these are solutions as they just replace one authority with another.
 
-```c
-enum screen_opt popup_options = /* ... */ ;
-draw_screen(popup_options, /* ... */); // ERROR: damn you [[nodiscard]]
-```
+This is an autonomy, freedom and interoperability nightmare, and must not be
+tolerated. There should not be any external authority able to police what I do
+on my own devices.
 
-Clang will error out here. I could capture the var and never use it but…
+On the Apple side, there is Apple App Attest, which is the same harmful technology.
 
-```c
-rect_t rect = draw_screen(/* ... */); // ERROR: unused variable (I have `-Werror` enabled)
-```
+Currently, (as far as I am aware) remote attestation isn't used on consumer
+desktop systems, but we need to stay vigilant to make sure it never does.
+Object to it whenever it even gets suggested.
 
-Pre-C23 I could solve this through an `UNUSED()` macro:
+Note: [A friend](https://gaysex.cloud/notes/ap633tnb5fia0145) has made me aware
+that anti-cheat systems use remote attestation. So it is in use on desktop systems.
+Anti-cheat systems are their own flavor of abuse, and somehow my mind sorted them
+into a different bucket. Still, yikes.
 
-```c
-#ifndef UNUSED
-#define UNUSED(x) (void)(x)
-#endif
+A common justification that is given for remote attestation is "security". At
+face value, this may make some sense, as the remote server can verify that you
+are running a "legitimate" copy of the software on a "legitimate" operating
+system.
 
-rect_t rect = draw_screen(/* ... */);
-UNUSED(rect); // Silences the compiler, but now I'm sad.
-```
+The big problem here is that someone has to decide what is legitimate and what
+is not, and that this remote party is almost never the user of the software. In
+effect, what remote attestation does is give someone else the ability to decide
+what you can or can't do on a device you should own.
 
-But now with C23 I’ve deleted the macro in favor of `[[maybe_unused]]`:
+This then begs the question: Security for **who**? It's definitely not for the
+user, as they are locked out of their device. Their security and autonomy have
+been harmed significantly.
 
-```c
-[[maybe_unused]] rect_t rect = draw_screen(...); // OK
-```
+If someone can't run whatever operating system they'd like and still be able to
+use the apps they need, then they are completely at the mercy of whoever is
+the authority judging what software is good and what software is bad. We all know
+how that ends, as big tech companies never have the best interests of the user
+in mind. Whenever the interests overlap, that is a freak accident, not the norm.
 
-Phew I feel better. I’ve also noticed this is happening all over the place: lots of different routines returning different types that are marked with `[[nodiscard]]`. So for those few exceptions why not just go for:
+All of the security is for the authority judging your device, none of it is for
+you.
 
-```c
-[[maybe_unused]] auto _ = foo(); // A new pattern emerges
-```
+Our personal devices are in a very real sense extensions to our body, which means
+that bodily autonomy should in some way extend to them. What this means is that
+everyone must have **full** control of their personal devices and everything that
+runs on them.
 
-Bonus: For any macro fans out there a fellow indie dev (Zardium) offered an additional imrpovement. From our chat server:
+This includes having access to all of the code and being able to do whatever
+you want with it, including modifying it, building it yourself, and sending
+copies to anyone. (modified or not)
 
-> Zardium: #define _ [[maybe_unused]] auto CONCAT_MACRO(zz,**COUNTER**)
+There should be nothing that the user is not allowed to do on their own devices,
+and every single application running on their device must be held to the same
+standard. It is your device, so everything must run under your rules, and only
+your rules, no others.
 
-> Abner: ahh, unique varname. nice one
+The developer or their company should not have any say over how you use your
+device, you should be able to run their software in whichever way you wish and
+they must not be able to prevent that. You should also be able to emulate
+whatever you like.
 
-> Zardium: you could take the auto out if you don’t want it to look so weird. then it acts exactly like the _ in other languages, where it can be redefined
+It's **your** device, no-one except you should be able to decide what runs on it
+and in what way it runs. Any app running on your system is supposed to be under
+your full control.
 
-> Abner: Yep totally. Although here I was celebrating my removal of a macro… XD
+Remote attestation is a technology that might have some use cases, but the
+overwhelming majority of those use cases are extremely hostile to the user. For
+that reason, I believe it must be objected to in its entirety. Our personal
+devices should be ours, and ours only. They must not be under the control of
+anyone else, and no one should be able to decide whether our devices or the
+software they run are legitimate or not.
 
-## 2. More Perfect Unions
-
-I’ve been cheated and lied to: designated initializers DO NOT clear my struct to zero and I can’t even trust `{0}` anymore. (Talk about a betrayal.) The problem is I’ll often have data types like this contrived timestamp:
-
-```c
-typedef struct {
-    Type type;
-    char buf[MAX];
-    union {
-        time_t time;
-        float dt;
-        date_t date;
-    };
-} stamp_t;
-```
-
-And if I partially initialize one:
-
-```c
-stamp_t stamp = { .type = STAMP_TYPE_BLA_BLA };
-```
-
-While it does mean we successfully zeroed out `buf` (thanks to [empty initialization](https://en.cppreference.com/c/language/initialization#Empty_initialization)) those union members are just a different beast. My dear reader: I’ve made the costly mistake of assuming `date` would clear to zero!
-
-As I Spongebob-panicked in public Lobsters member [accelbread](https://lobste.rs/~accelbread) offered a sage revelation:
-
-> accelbread: It used to be that GCC would fully zero the union anyways, and clang would only zero the time_t, though around a year ago they swapped behaviors iirc. Either way, standard only requires the time_t be zeroed and not whole union. GCC has a flag to always zero whole union. Also C23 initialization always inits whole union
-
-Wait WHAT? clang and GCC SWAPPED what now? I won’t investigate further. Everything about this is *dangerous af* unless we hug C23 tightly and never let go:
-
-```c
-stamp_t stamp = { };
-stamp.type = STAMP_TYPE_BLA_BLA;
-```
-
-Accelbread went on to say two more things:
-
-1. “Note the C23 zero init whole thing is nothing in the brackets, not 0 in brackets; { 0 } does same thing as before C23”
-2. “Also if you control union layout, putting largest member first is safest”
-
-Yessir.
-
-## 3. Enums In C Were Magic (And I Don’t Like It)
-
-If I want to customize some dialog box I’ll use bit flags:
-
-```c
-enum {
-    OPT_AUTOSCROLL = (1 << 0),
-    OPT_NOCURSOR   = (1 << 1),
-    OPT_CENTERED   = (1 << 2),
-    OPT_NOCLOSE    = (1 << 3),
-    // ...
-};
-
-[[nodiscard]] bool draw_warning(const char* msg, int opt);
-```
-
-Even if we disagree with this approach lots of relevant libraries or projects do it:
-
-```c
-_ = draw_warning("you done messed up A-A-RON", OPT_CENTERED | OPT_NOCLOSE);
-```
-
-Of course, erroneous bit shifting will land anyone into trouble and yield comical numbers. Thankfully C enums are a plain `int` underneath so the compiler will warn us if we defined a bad constant inside the enum that won’t fit.
-
-I’m kidding. Sigh. Well, I’m growing fearful of sage revelations but this one comes from [Modern C](https://gustedt.gitlabpages.inria.fr/modern-c/) by Jens Gustedt:
-
-> Jens: If enumeration constants do not fit into signed int, if possible, the enumeration type is adjusted such that it can store all enumeration constants.
-
-Noooooo!
-
-> Jens: The property that an an enumeration type is adjusted such that it fits all its constants could have surprising effects
-
-*sobs*
-
-> Jens: So, it is preferable to specify the underlying integer type explicitly
-
-THERE IS HOPE?
-
-```c
-enum options : int {
-    OPT_AUTOSCROLL = (1 << 0),
-    OPT_NOCURSOR   = (1 << 1),
-    OPT_CENTERED   = (1 << 2),
-    OPT_NOCLOSE    = (1 << 3),
-    // ...
-};
-```
-
-It compiles! We shoot. We score. We stick with C23.
-
-## Epilogue
-
-In part two of our mini series I’ll discuss three more conventions that I’ve fleshed out thanks to modern C: starting with safer macro usage (forgive me Zig folks.)
-
-*P.S. If you want to shape this discussion [maybe join](https://handmadecities.com/chat) the Handmade Cities server!*
+- ![This website was created using makko](https://lumi.codeberg.page/badges/makko.webp)
+- ![UBlock Origin Now!](https://lumi.codeberg.page/badges/ublock.png)
+- 
+- 
+- 
+- 
+- 
+- 
+- ![Fuck AI Code, Writing, Music, Art and Chat](https://lumi.codeberg.page/badges/fuckaieverything.gif)
+- ![Polyproto](https://lumi.codeberg.page/badges/polyproto.png)
+- ![Polyphony](https://lumi.codeberg.page/badges/polyphony.gif)
+- 
+- ![No AI](https://lumi.codeberg.page/badges/noai.png)
+- ![Codeberg](https://lumi.codeberg.page/badges/codeberg.gif)
+- ![Starlight Network](https://lumi.codeberg.page/badges/starlightnetwork.png)
+- ![AerynOS](https://lumi.codeberg.page/badges/aerynos.png)
+- ![Keep Android Open](https://lumi.codeberg.page/badges/keepandroidopen.png)
+- ![People Pledge](https://lumi.codeberg.page/badges/peoplepledge.png)

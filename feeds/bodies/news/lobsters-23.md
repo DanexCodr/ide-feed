@@ -1,222 +1,109 @@
-It sends a `GET` request to `url` and returns the HTTP status code.
+Plasma 6.8 is released on a very special day: KDE’s 30th birthday. Today we celebrate three decades of the KDE community providing the world’s greatest free and open-source software.
 
-Using HTTP/1 (`GODEBUG=http2client=0`), calling this function 100 times against
-[index.golang.org](https://index.golang.org) takes ~710 milliseconds on Go 1.26
-on my machine. On Go 1.27, the same program takes ~150 milliseconds.
+Plasma 6.8 is no exception, offering enhancements across much of the user experience and beneath the surface.
 
-That is almost 5 times faster! How is such a drastic performance difference
-possible?
+6.8 is all about launching Plasma into the future: adding changes you’ll notice right away, combined with major but subtle improvements designed to set the stage for decades of service to come.
 
-## The cost of establishing HTTP connections
+Dive in and find out what the desktop environment of tomorrow looks like!
 
-To understand the difference, consider what happens on the network when we make
-an HTTP request.
+![Thumbnail for the KDE documentary](https://kde.org/announcements/plasma/6/6.8.0/03-documentary.webp)
 
-Go’s [`net/http`](https://go.dev/pkg/net/http) package supports HTTP/1.0, HTTP/1.1, and
-HTTP/2. All three run over TCP, and usually over TLS when talking to HTTPS
-endpoints. Making a request over a new connection looks something like this:
+Part of our continued effort to bring digital control to everyone, a new “dwell clicker” feature can send a mouse click when the pointer stops moving. Designed especially for users with mobility issues, an external app is no longer required to use your system in this way; now it’s built right in!
 
-1. TCP handshake (1 RTT): the client sends a SYN packet, the server replies with SYN-ACK, and the client replies with ACK. Because the client can send the first TLS message alongside that final ACK, establishing the TCP connection takes 1 round-trip time (RTT).
-2. TLS handshake (2 RTT): next, a TLS handshake exchanges encryption keys and verifies the server’s identity; using TLS 1.2, this takes 2 RTT.
-3. HTTP request: with the keys exchanged, HTTP requests can finally be sent after a total of 3 RTT.
+Plasma 6.8 gains support for the [Bikram Sambat](https://en.wikipedia.org/wiki/Vikram_Samvat) calendar in the Digital Clock, and the [Amharic](https://en.wikipedia.org/wiki/Amharic) language in the on-screen keyboard. These are just two more additions of the dozens incorporated into Plasma over recent versions in our effort to make Plasma a truly universal desktop.
 
-These round trips (plus some CPU time spent on TLS handshakes) add up quickly.
-In cross-region communications, one-way latencies often reach or exceed the 50
-ms (100 ms RTT) shown in the diagram above. Compared to the 300 ms spent just
-setting up the connection, the HTTP request itself can be cheap to serve, taking
-only a little over 1 RTT when bandwidth is plentiful or the HTTP response is
-small.
+Gain an extreme level of control over your system with Plasma’s System Monitor. In Plasma 6.8, you can assign compute-intensive tasks to only the CPUs of your choosing from directly within the monitor, and keep your machine running smoothly.
 
-Even in more favorable conditions, opening a new connection can still be
-expensive. Our opening benchmark queries
-[index.golang.org](https://index.golang.org), which is distributed worldwide and
-supports TLS 1.3. This means that latency is relatively low, and the TLS
-handshake can actually finish in just 1 RTT. Even so, the performance difference
-is still very noticeable.
+![System Monitor app offering the possibility to change the CPU affinity for the plasmashell process](https://kde.org/announcements/plasma/6/6.8.0/20-systemmonitor-affinity.webp)
 
-## Connection reuse
+You can also monitor your VRAM more easily, as it now shows the load as an easy-to-read percentage.
 
-To avoid paying this setup cost on every request, HTTP clients and servers try
-to reuse existing connections across multiple requests when possible. The
-mechanics of this differ based on the HTTP version:
+### Remote desktop
 
-- HTTP/1.0: while not part of the official specification, clients and servers often opt into connection reuse by sending a Connection: keep-alive header. Reuse continues until either endpoint omits the header or sends a Connection: close header.
-- HTTP/1.1: connections are persistent by default, and can be reused for subsequent requests and responses unless either side declares otherwise by sending a Connection: close header.
-- HTTP/2: multiple requests and responses can be multiplexed over a single TCP connection.
+We’ve invested a great deal of time into polishing the experience provided by Plasma’s built-in remote desktop server. In Plasma 6.8, you’ll be able to enjoy the following improvements — with more in the pipeline:
 
-## When connection reuse fails
+These features will only take effect in remote desktop client apps that support them.
 
-In HTTP/1 (both HTTP/1.0 and HTTP/1.1), multiple requests and responses on the
-same connection are sent sequentially on the wire. If two `GET` requests are
-sent to [index.golang.org](https://index.golang.org) over the same TCP
-connection, the responses arrive as a single stream of bytes:
+![Plasma’s Remote Desktop settings and the KRDC application in use](https://kde.org/announcements/plasma/6/6.8.0/23-rdp.webp)
 
-As shown in the diagram, [`net/http.Get`](https://go.dev/pkg/net/http#Get) reads and parses
-the status line and headers from the byte stream to populate
-[`net/http.Response`](https://go.dev/pkg/net/http#Response), then returns immediately. The
-response body remains unread on the connection and is consumed only as the
-caller reads from [`net/http.Response.Body`](https://go.dev/pkg/net/http#Response.Body).
+Spectacle can now optionally include both system audio and microphone input in its screen recordings, making it possible to narrate a recording or accurately record everything that’s going on.
 
-Because responses are sent back-to-back on the same stream,
-[`net/http`](https://go.dev/pkg/net/http) can only find the start of the next response after
-the current response body has been read to the very end (as determined by the
-`Content-Length` or `Transfer-Encoding` header).
+Plasma’s screen sharing portal dialog lets you create a virtual screen to share, instead of an existing display. In Plasma 6.8, you can now specify the resolution of the virtual screen instead of being limited to only 1920 × 1080.
 
-Now look back at our example program, where we never read `resp.Body`:
+![The screen sharing portal window showing the ability to select a custom resolution for the virtual display](https://kde.org/announcements/plasma/6/6.8.0/25-screencast-portal-resolution.webp)
 
-```go
-func getStatus(url string) (int, error) {
-    resp, err := http.Get(url)
-    if err != nil {
-        return 0, err
-    }
-    defer resp.Body.Close()
-    return resp.StatusCode, nil
-}
-```
+In addition, the quality of screen recordings and screencasts has been improved.
 
-Through Go 1.26, when `resp.Body.Close` is called, [`net/http`](https://go.dev/pkg/net/http)
-sees that there is still an unread response body. Realizing that it cannot reuse
-the connection, it abandons the existing connection and creates new connections
-for its next requests, causing it to repeatedly incur the cost of establishing
-new connections.
+We’ve added support for window rules that add desktop shadows, outlines, and rounded corners to client-side-decorated windows that can’t provide these visual niceties themselves. Plasma 6.8 ships with one such rule for Steam, making it feel more at home in Plasma.
 
-(HTTP/2 does not have this problem. Because it multiplexes streams of frames
-over a single connection rather than sending responses strictly back-to-back, an
-unread response body on one stream does not block other requests from sharing
-the connection.)
+![](https://kde.org/announcements/plasma/6/6.8.0/30-steam-shadow-frame-before.webp)
 
-## Where failed connection reuse hurts
+*Before*
 
-This subtlety of HTTP/1 connection reuse can cause silent performance
-degradation in seemingly innocuous code.
+We’ve added new global shortcuts to help power users manage their open windows with the Task Manager widget. By pressing <kbd>Meta</kbd> + <kbd>Ctrl</kbd> + <kbd>Page Up</kbd> or <kbd>Page Down</kbd>, you can cycle between the previous and next tasks. By also holding <kbd>Shift</kbd>, you can move the active task backwards and forwards.
 
-As in our opening example, a client might only care about an API response’s
-status code. However, the API endpoint it is talking to might send bodies that
-provide more detailed but ultimately unused information, such as `{"success": true, "message": "update processed"}`. This will unfortunately cause connection
-reuse to fail.
+### Theming
 
-Even programs that do read the response body can run into this issue if they
-stop just short of the end of the body. For example,
-[`encoding/json.Decoder`](https://go.dev/pkg/encoding/json#Decoder) stops reading as soon as
-it sees the closing `}` of a JSON object. If a server sends a JSON response
-terminated with a newline, decoding the JSON object will leave the newline still
-unread. The connection cannot be reused for a new request until that newline is
-consumed. Thus, a healthy connection might end up being abandoned, even though
-it was only a single byte away from being reusable.
+Four months ago, Plasma 6.7 included an alpha release of the new Union theming system, demonstrating its ability to style Qt Quick applications.
 
-## The manual solution
+Plasma 6.8 builds on this with a beta release of Union, including not only refinements for Qt Quick theming, but also the ability to style Qt Widgets applications! This includes KDE’s more traditional desktop applications, such as Dolphin, Kate, and Konsole.
 
-The unread body problem has been a long-standing sharp edge. Over the years,
-many Go developers came up with their own workarounds. Most commonly, this is
-done by draining the response body prior to closing it:
+While Union is not quite ready to be used by default, Plasma 6.8 brings it ever closer to being a single source of truth for styling all of KDE’s products, and more. To learn more about the current state of Union, read the blog posts from [Arjen](https://quantumproductions.info/articles/2026-08/union-summer-2026-update) and [Akseli](https://akselmo.dev/posts/union-qtwidgets/).
 
-```go
-func getStatus(url string) (int, error) {
-    resp, err := http.Get(url)
-    if err != nil {
-        return 0, err
-    }
-    drainAndCloseBody(resp.Body)
-    return resp.StatusCode, nil
-}
+To try Union, ensure the `union` package is installed (name may differ depending on your distribution), apply “Breeze (Union)” in *System Settings* → *Colors & Themes* → *Application Style*, then restart your apps or the system.
 
-func drainAndCloseBody(body io.ReadCloser) {
-    io.Copy(io.Discard, body) // Drain the response body before closing it.
-    body.Close()
-}
-```
+Apps are expected to look nearly identical to how they do with the traditional Breeze theme. If you’ve found a Union-specific issue, [please report it](https://bugs.kde.org/enter_bug.cgi?product=Union).
 
-While this works for small responses, if the unread body is large, establishing
-a new TCP connection can be faster than downloading and discarding the rest of
-the body. A better approach is to cap the number of bytes we are willing to
-drain:
+If you’re interested in experimenting with creating your own Union style, you can find out more [in Union’s documentation](https://api.kde.org/working-with-styles.html).
 
-```go
-func drainAndCloseBody(body io.ReadCloser) {
-    io.CopyN(io.Discard, body, 256<<10) // Only drain up to 256 KB.
-    body.Close()
-}
-```
+### Wayland
 
-However, a server might send a response body that trickles in slowly, so we also
-need to cap the time we spend draining:
+30 years is an impressive milestone for a community like KDE. But even older is the venerable [X Window System](https://en.wikipedia.org/wiki/X_Window_System) (or “X11”), first released in 1984! After 42 years of faithful service, support for starting X11 sessions in Plasma is being retired, in conjunction with full adoption of the newer [Wayland](https://en.wikipedia.org/wiki/Wayland_%28protocol%29) system.
 
-```go
-func drainAndCloseBody(body io.ReadCloser) {
-    drainDone := make(chan struct{}, 1)
-    go func() {
-        io.CopyN(io.Discard, body, 256<<10) // Only drain up to 256 KB.
-        drainDone <- struct{}{}
-    }()
-    // Only spend at most 50 ms trying to drain the response body.
-    select {
-    case <-drainDone:
-    case <-time.After(50 * time.Millisecond):
-        // If we reach the 50 ms timeout, body.Close will run and interrupt the
-        // io.CopyN, preventing goroutine leaks.
-    }
-    body.Close()
-}
-```
+Compared to X11, Wayland offers better support for modern screens and graphics cards, and is actively developed.
 
-Of course, we also do not want to block for up to 50 milliseconds when closing a
-response body. Instead, we can drain the body asynchronously in the background
-and let it race against subsequent requests:
+The small number of individual apps that still require X11 will continue to work via the “XWayland” compatibility layer.
 
-```go
-func drainAndCloseBody(body io.ReadCloser) {
-    drainDone := make(chan struct{}, 1)
-    go func() {
-        io.CopyN(io.Discard, body, 256<<10) // Only drain up to 256 KB.
-        drainDone <- struct{}{}
-    }()
-    go func() {
-        // Only spend at most 50 ms trying to drain the response body.
-        select {
-        case <-drainDone:
-            // If the drain can finish before a new request is sent, the
-            // connection will be reused; otherwise, a new connection is
-            // created, and the current connection will be put in a pool of
-            // idle connections, potentially being reused for another future
-            // request.
-        case <-time.After(50 * time.Millisecond):
-            // If we reach the 50 ms timeout, body.Close will run and interrupt
-            // the io.CopyN, preventing goroutine leaks.
-        }
-        body.Close()
-    }()
-}
-```
+KDE applications will continue to support X11 for the foreseeable future.
 
-As we can see, draining response bodies safely is surprisingly tricky and
-cumbersome. Worse, as the practice of draining response bodies spread, some
-nuances were often lost. This has led to misunderstandings such as attempting to
-drain response bodies for HTTP/2 connections, when doing so is unnecessary.
+As part of the backend improvements included in Plasma 6.8, we’ve made changes to help Plasma load faster and use less memory. Discover’s update notifier now uses less memory, too.
 
-## The current state and conclusion
+With KWin, NVIDIA GPUs now use triple buffering by default, and all users will have better-looking HDR when using an ICC color profile. We’ve also added support for the HLG transfer function, which means that certain media and applications that did not previously work in HDR are now working as expected.
 
-Starting in Go 1.27, [`net/http.Transport`](https://go.dev/pkg/net/http#Transport)
-automatically does everything we have implemented in the code above: it will
-asynchronously drain an unread HTTP/1 response body for up to 50 ms or 256 KB.
-It also implements additional optimizations; for example, when a response
-contains the `Connection: close` header, draining the body is guaranteed to be
-wasted work, and it therefore skips doing so. Note that this behavior might
-evolve in future versions of Go, as other possible enhancements become apparent.
+Plasma 6.8 is chock-full of smaller changes, including:
 
-As a general best practice, we now recommend that users simply close their HTTP
-bodies once they no longer need them, like in our original example:
+To see a high-level overview of all user-facing changes, [see the Plasma 6.8 wiki page](https://community.kde.org/Plasma/Plasma_6#Plasma_6.8).
 
-```go
-func getStatus(url string) (int, error) {
-    resp, err := http.Get(url)
-    if err != nil {
-        return 0, err
-    }
-    defer resp.Body.Close()
-    return resp.StatusCode, nil
-}
-```
+To see the full list of *all* changes, read the [complete changelog](https://kde.org/announcements/changelogs/plasma/6/6.7.5-6.8.0/).
 
-Go is all about simplicity. Let your code stay clean and simple, and let
-[`net/http`](https://go.dev/pkg/net/http) deal with the complexities on your behalf.
+## Live Images
+
+The easiest way to try it out is with a live image booted off a USB disk. Docker images also provide a quick and easy way to test Plasma.
+
+Distributions have created, or are in the process of creating, packages listed on our wiki page.
+
+Note that packages of this release might not be available on all distributions at the time of this announcement.
+
+You can install Plasma directly from source.
+
+## Feedback
+
+You can give us feedback and get updates on our social media channels:
+
+Discuss KDE on the [KDE Forums](https://discuss.kde.org/).
+
+You can provide feedback direct to the developers via the [#Plasma Matrix channel](https://go.kde.org/matrix/#/%23plasma:kde.org), [Plasma-devel mailing list](https://mail.kde.org/mailman/listinfo/plasma-devel) or report issues via [Bugzilla](https://bugs.kde.org/enter_bug.cgi?product=plasmashell&amp;format=guided). If you like what the team is doing, please let them know!
+
+Your feedback is greatly appreciated.
+
+## Supporting KDE
+
+KDE is a [Free Software](https://www.gnu.org/philosophy/free-sw.html) community that exists and grows only because of the help of many volunteers that donate their time and effort. KDE is always looking for new volunteers and contributions, whether it is help with coding, bug fixing or reporting, writing documentation, translations, promotion, money, etc. All contributions are gratefully appreciated and eagerly accepted. Please read through the [Supporting KDE page](https://kde.org/community/donations/) for further information or become a KDE e.V. supporting member through our [Join the Game](https://kde.org/community/donations/) initiative.
+
+KDE is an international technology team that creates free and open source software for desktop and portable computing. Among KDE’s products are a modern desktop system for Linux and UNIX platforms, comprehensive office productivity and groupware suites and hundreds of software titles in many categories including Internet and web applications, multimedia, entertainment, educational, graphics and software development. KDE software is translated into more than 60 languages and is built with ease of use and modern accessibility principles in mind. KDE’s full-featured applications run natively on Linux, BSD, Windows, Haiku, and macOS.
+
+*Trademark Notices.*  
+
+KDE<sup>®</sup> and the K Desktop Environment<sup>®</sup> logo are registered trademarks of KDE e.V..  
+Linux is a registered trademark of Linus Torvalds. UNIX is a registered trademark of The Open Group in the United States and other countries.  
+All other trademarks and copyrights referred to in this announcement are the property of their respective owners.

@@ -1,120 +1,147 @@
-Remote attestation is a term for technology which is used to verify the software
-that another device is running. Usually remote attestation technology is implemented
-in hardware, making it difficult to get around.
+Forgejo [version 17.0](https://forgejo.org/download/) was released on 15 October 2026. Forgejo is a lightweight, community-developed, self-hosted platform for code collaboration.
 
-It is a building block of extremely restrictive DRM systems, as it allows a third
-party to police what the user can or can't run on a device that is (at least
-supposed to be) theirs.
+This article contains a selection of the changes that were introduced. A complete list of changes is available [in the release notes](https://codeberg.org/forgejo/forgejo/src/branch/forgejo/release-notes-published/17.0.0.md).
 
-An example of an implementation of remote attestation is Google Play Integrity.
-This is software that can tell a third party whether you are running a Google-approved
-Android system. It is mainly (but not exclusively) used by bank and government
-apps.
+A [dedicated test instance](https://v17.next.forgejo.org/) is available to try it out. Before upgrading, it is *strongly recommended* to make a full backup as explained in the [upgrade guide](https://forgejo.org/docs/v17.0/admin/upgrade/) and carefully read *all breaking changes* from the [release notes](https://codeberg.org/forgejo/forgejo/src/branch/forgejo/release-notes-published/17.0.0.md).
+If in doubt, do not hesitate to ask for help [in the chat room](https://matrix.to/#/#forgejo-chat:matrix.org).
 
-The reason it is implemented is "security", but as I'll talk about in the next
-section, the actual reason is one of control. It allows Google to decide what
-someone can or can't run on their device. It strips all ownership of a device
-that should be yours away and puts Google in control as the arbiter of what is
-or is not acceptable.
+## Breaking changes
 
-Because of this, the user can't choose what they do with their devices anymore,
-they can only do what is approved by Google. If they exercise their freedom at
-all, by using a modified version of Android, an alternative operating system,
-or emulating the app, the app will refuse to run.
+In rendered documents, absolute links to resources inside a repository are now resolved with respect to the root of the repository. <sup>[!12939](https://codeberg.org/forgejo/forgejo/pulls/12939)</sup>  
 
-Do you want to be able to use your banking app on your laptop or desktop? Tough
-luck! You're not allowed to. (Even though you should be! Emulation is great for
-interoperability!)
+This is a breaking change from the previous behaviour when these links were rendered using the root of the instance. Absolute links in issue and pull request descriptions and comments remain rendered with respect to the instance’s root. <sup>[!13993](https://codeberg.org/forgejo/forgejo/pulls/13993)</sup>
 
-Some may tell you that the built-in Android hardware attestation is a good
-alternative, it is not. It still does the same thing.
-There is also Volla's [Unified Attestation](https://uattest.net), which is the
-same thing, just with a different authority.
-None of these are solutions as they just replace one authority with another.
+This change increases the compatibility with other Git forges and thus, makes migrations to Forgejo even easier.
 
-This is an autonomy, freedom and interoperability nightmare, and must not be
-tolerated. There should not be any external authority able to police what I do
-on my own devices.
+Action run webhook events are replaced by the more capable and less problematic workflow run events. <sup>[!14351](https://codeberg.org/forgejo/forgejo/pulls/14351)</sup> The action run events have been deprecated for removal in a future Forgejo version. Unfortunately, it is not possible to migrate existing webhooks to the new events automatically because some headers (`X-*-Event`, `X-*-Event-Type`) and the `action` key have changed, which might break existing receivers. Furthermore, completion notifications are only emitted after all jobs of a run have terminated. <sup>[!12598](https://codeberg.org/forgejo/forgejo/pulls/12598)</sup>
 
-On the Apple side, there is Apple App Attest, which is the same harmful technology.
+Please inspect existing webhooks and manually migrate them to the workflow run events after verifying that the webhook receivers can process them without issues.
 
-Currently, (as far as I am aware) remote attestation isn't used on consumer
-desktop systems, but we need to stay vigilant to make sure it never does.
-Object to it whenever it even gets suggested.
+For repositories that contain a [`FUNDING.yml`](https://forgejo.org/docs/v17.0/user/repository/funding/) file, Forgejo shows a new “Donate” button which presents a list of donation options when clicked.
 
-Note: [A friend](https://gaysex.cloud/notes/ap633tnb5fia0145) has made me aware
-that anti-cheat systems use remote attestation. So it is in use on desktop systems.
-Anti-cheat systems are their own flavor of abuse, and somehow my mind sorted them
-into a different bucket. Still, yikes.
+Additionally, for users and organizations that have such file in their `.profile` repository, a similar button appears on their profile pages.
 
-A common justification that is given for remote attestation is "security". At
-face value, this may make some sense, as the remote server can verify that you
-are running a "legitimate" copy of the software on a "legitimate" operating
-system.
+This feature currently exists only in the web interface, but we are considering to implement an API surface for it. If you have a use cases for such API feature, please help shape it by sharing your feedback in [the dedicated issue](https://codeberg.org/forgejo/forgejo/issues/14075).
 
-The big problem here is that someone has to decide what is legitimate and what
-is not, and that this remote party is almost never the user of the software. In
-effect, what remote attestation does is give someone else the ability to decide
-what you can or can't do on a device you should own.
+![When applicable, a new "Donate" button appears in the repository's button banner, between the existing RSS and Watch buttons. The new button features a pink heart icon.](https://forgejo.org/_astro/2026-10-funding-yml.2cSfMSPe_ZwIxlL.webp)
 
-This then begs the question: Security for **who**? It's definitely not for the
-user, as they are locked out of their device. Their security and autonomy have
-been harmed significantly.
+### Auto-completion for issues and pull requests
 
-If someone can't run whatever operating system they'd like and still be able to
-use the apps they need, then they are completely at the mercy of whoever is
-the authority judging what software is good and what software is bad. We all know
-how that ends, as big tech companies never have the best interests of the user
-in mind. Whenever the interests overlap, that is a freak accident, not the norm.
+When authoring an issue, pull request, or comment, Forgejo will offer auto-completion for issues and pull requests. <sup>[!8088](https://codeberg.org/forgejo/forgejo/pulls/8088)</sup> To activate the auto-completion, type `#` for issues or pull requests, or `!` for pull requests only. To refine the suggestions, either continue with a search term or an issue or pull request number.
 
-All of the security is for the authority judging your device, none of it is for
-you.
+![An example auto-completion drop-down, showing suggested issues and pull requests after # is typed in a comment field](https://forgejo.org/_astro/2026-10-issue-pr-autocompletion.BRc5wkLd_Z1zWRP4.webp)
 
-Our personal devices are in a very real sense extensions to our body, which means
-that bodily autonomy should in some way extend to them. What this means is that
-everyone must have **full** control of their personal devices and everything that
-runs on them.
+Forgejo’s [Git LFS](https://git-lfs.com) support is being overhauled. While most changes are under the hood, a string of smaller improvements are visible to users. Those include navigation and overview improvements in the LFS settings, new views to discover the commits that refer to a given LFS file, and better handling of pointers.
 
-This includes having access to all of the code and being able to do whatever
-you want with it, including modifying it, building it yourself, and sending
-copies to anyone. (modified or not)
+![Web UI-based list of all LFS files associated with a Forgejo repository. On the left side, there is a "Settings" sidebar; the "LFS" section is expanded and shows the options "Overview", "Locks" and "Pointer files". Next to the sidebar, there is a table with 4 table rows; one for each LFS file present. Each row contains the OID of the LFS file, its size, when it was last updated, as well as two buttons: "Find commits" and a "Delete" button.](https://forgejo.org/_astro/2026-10-lfs-overview.BHGKqn-z_Z21Mh8r.webp)
 
-There should be nothing that the user is not allowed to do on their own devices,
-and every single application running on their device must be held to the same
-standard. It is your device, so everything must run under your rules, and only
-your rules, no others.
+Forgejo can be configured so that when adding a user to an organization, they are not added to the organization instantly but instead receive an invitation that can be accepted or declined. This behavior can be enabled by setting `[service].ADD_MEMBERS_BY_INVITATIONS = true` in Forgejo’s `app.ini`.
 
-The developer or their company should not have any say over how you use your
-device, you should be able to run their software in whichever way you wish and
-they must not be able to prevent that. You should also be able to emulate
-whatever you like.
+Authentication providers are still able to add users to organizations with no action on their part.
 
-It's **your** device, no-one except you should be able to decide what runs on it
-and in what way it runs. Any app running on your system is supposed to be under
-your full control.
+The invitations are visible on the organization profile and are sent out by email. By default they expire after 14 days.
 
-Remote attestation is a technology that might have some use cases, but the
-overwhelming majority of those use cases are extremely hostile to the user. For
-that reason, I believe it must be objected to in its entirety. Our personal
-devices should be ours, and ours only. They must not be under the control of
-anyone else, and no one should be able to decide whether our devices or the
-software they run are legitimate or not.
+Work is ongoing to make those invitations visible in the in-app notifications.
 
-- ![This website was created using makko](https://lumi.codeberg.page/badges/makko.webp)
-- ![UBlock Origin Now!](https://lumi.codeberg.page/badges/ublock.png)
-- 
-- 
-- 
-- 
-- 
-- 
-- ![Fuck AI Code, Writing, Music, Art and Chat](https://lumi.codeberg.page/badges/fuckaieverything.gif)
-- ![Polyproto](https://lumi.codeberg.page/badges/polyproto.png)
-- ![Polyphony](https://lumi.codeberg.page/badges/polyphony.gif)
-- 
-- ![No AI](https://lumi.codeberg.page/badges/noai.png)
-- ![Codeberg](https://lumi.codeberg.page/badges/codeberg.gif)
-- ![Starlight Network](https://lumi.codeberg.page/badges/starlightnetwork.png)
-- ![AerynOS](https://lumi.codeberg.page/badges/aerynos.png)
-- ![Keep Android Open](https://lumi.codeberg.page/badges/keepandroidopen.png)
-- ![People Pledge](https://lumi.codeberg.page/badges/peoplepledge.png)
+![Page of organization displaying a banner with text: "You are invited to join team Owners in this organization."](https://forgejo.org/_astro/2026-10-org-invite.CXPATz7d_64fsY.webp)
+
+A user can now be added or invited to multiple teams in one go, without going through each needed team individually. <sup>[!11848](https://codeberg.org/forgejo/forgejo/pulls/11848)</sup>
+
+![Modal dialog with options to search for a user to add and checkboxes with corresponding teams to add a user to](https://forgejo.org/_astro/2026-10-org-add-dialog.ruxIzoxk_ZDsts1.webp)
+
+Markdown contents of comments can now be easily copied via the ellipsis menu. <sup>[!13083](https://codeberg.org/forgejo/forgejo/pulls/13083)</sup>
+
+![Comment ellipsis menu with highlighted option: Copy comment Markdown](https://forgejo.org/_astro/2026-10-copy-md.B99e4OW5_1QL1nF.webp)
+
+The Forgejo HTTP API received multiple enhancements related to Forgejo Actions:
+
+- Entire workflow runs and individual jobs can now be rerun by sending requests to /repos/{owner}/{repo}/actions/runs/{run_id}/rerun and /repos/{owner}/{repo}/actions/jobs/{job_id}/rerun respectively. [!13924](https://codeberg.org/forgejo/forgejo/pulls/13924) The workflow runs or jobs must have completed. Otherwise, they cannot be rerun. However, individual completed jobs can be rerun while the workflow run is still being executed.
+- The HTTP endpoints for obtaining job logs gained substring filters [!12821](https://codeberg.org/forgejo/forgejo/pulls/12821) and the ability to only return the logs of a particular step with /jobs/{job_id}/logs?step=N. [!12799](https://codeberg.org/forgejo/forgejo/pulls/12799) In addition to plain text, the logs can be requested as NDJSON with ?format=ndjson. [!12820](https://codeberg.org/forgejo/forgejo/pulls/12820)
+- /repos/{owner}/{repo}/actions/jobs/{job_id} enables users to get the details of a particular job. [!12799](https://codeberg.org/forgejo/forgejo/pulls/12799)
+
+Forgejo now displays job summaries generated by Forgejo Runner 13.2 or newer. <sup>[!14076](https://codeberg.org/forgejo/forgejo/pulls/14076)</sup>
+
+Job summaries are Markdown documents that belong to a particular Forgejo Actions job. They are displayed above the logs. All Markdown features supported by Forgejo can be used — including tables, [Mermaid](https://mermaid.ai/open-source/intro/syntax-reference.html) diagrams, and formulas written in [KaTeX](https://katex.org/).
+
+![A summary of an example job showing TUnit test results and a Mermaid diagram](https://forgejo.org/_astro/actions-step-summary.BSNwEhUM_ZwxP1i.webp)
+
+Job summaries are assembled from one or more Markdown fragments that are written by a step to the file `$FORGEJO_STEP_SUMMARY`. `$GITHUB_STEP_SUMMARY` is supported, too, for compatibility with existing actions and easing the transition from GitHub.
+
+Maintainers and pull-requests creators can now directly push to the [AGit](https://forgejo.org/docs/latest/user/git-cli/agit-support/) refs:
+
+```
+# Pull Request Creator
+git checkout -b local-branch
+git push origin HEAD:refs/for/main/agit-topic
+
+# Maintainer/Reviewer can pull the code to a local branch
+git fetch origin refs/pull/3/head:local-branch
+git switch local-branch
+
+# Maintainers and Pull Request creator need some further git config
+git config push.default upstream
+git config branch.local-branch.merge refs/pull/3/head
+git config branch.local-branch.remote origin
+
+# NEW: Maintainer and Pull Request creator can now (force) push and pull to this ref
+git push
+git pull
+```
+
+More events have been added to Forgejo’s webhooks. Webhooks can now be triggered when the status of a Forgejo Actions workflow job changes. <sup>[!14334](https://codeberg.org/forgejo/forgejo/pulls/14334)</sup> As usual, it is possible to receive notifications in various chat applications like Discord or Matrix. Alternatively, Forgejo is able to notify a remote server using an HTTP request. Users have the possibility to select which statuses, like “waiting” or “cancelled,” they want to receive notifications for.
+
+While prior versions of Forgejo could already trigger notifications for “action runs,” that capability was limited to completion events. It has been enhanced to match the capabilities of workflow job events. <sup>[!14351](https://codeberg.org/forgejo/forgejo/pulls/14351)</sup> Users can now select which statuses they want to receive notifications for. The old “action runs” events have been deprecated and will be removed in a future Forgejo version.
+
+Forgejo can now migrate repositories from Bitbucket Data center (formerly Bitbucket Server). Pull requests, reviews, comments (including multi-line comments), threads and replies can also be imported during the process. <sup>[!13288](https://codeberg.org/forgejo/forgejo/pulls/13288)</sup>
+Authentication uses an HTTP access token, and “HTTPS SCM Hosting” must be enabled on Bitbucket as Forgejo migrations clone over HTTPS.
+
+![Migration page showing all the platforms repositories can be migrated from, which now includes a "BitbucketDC" entry](https://forgejo.org/_astro/2026-10-bitbucket-data-center.OTqq5qJB_1qpLOK.webp)
+
+When migrating repositories from Gogs, Gitlab, Gitea, or Forgejo, the repository avatar images are now migrated, too. <sup>[!12921](https://codeberg.org/forgejo/forgejo/pulls/12921)</sup>
+
+A new guide on [how to backup and restore](https://forgejo.org/docs/latest/admin/setup/backup/) a Forgejo instance has been added to Forgejo’s documentation. In particular, it points out the most important secrets that need to be backed up for proper instance restoration.
+
+Based on [the release schedule](https://forgejo.org/docs/v17.0/admin/release-schedule/), major releases are published every three months. Patch releases are published more frequently, depending on the severity of the bug or security fixes they contain. Forgejo v17.0 is a non-LTS release. It will be supported until **28 January 2027**.
+
+| **Version** | **Release date** | **End Of Life** |
+| --- | --- | --- |
+| 15.0 (LTS) | 16 April 2026 | 15 July 2027 |
+| 16.0 | 16 July 2026 | 29 October 2026 |
+| 17.0 | 15 October 2026 | **28 January 2027** |
+| 18.0 | 14 January 2027 | 29 April 2027 |
+| 19.0 (LTS) | 15 April 2027 | 13 July 2028 |
+
+Releases are built daily from the latest changes found in the [v17.0/forgejo](https://codeberg.org/forgejo/forgejo/src/branch/v17.0/forgejo) development branch. They are deployed to the [https://v17.next.forgejo.org](https://v17.next.forgejo.org) instance for manual verification in case a bug fix is of particular interest ahead of the next patch release. It can also be installed locally with:
+
+Their names are staying the same, but they are replaced by new builds every day.
+
+See the [download page](https://forgejo.org/download/) for instructions on how to install Forgejo.
+
+### Upgrading
+
+Carefully read the [breaking changes](https://codeberg.org/forgejo/forgejo/src/branch/forgejo/release-notes-published/17.0.0.md)
+section of the release notes.
+
+The actual upgrade process is as simple as replacing the binary or container image
+with the corresponding [Forgejo binary](https://codeberg.org/forgejo/forgejo/releases/tag/v17.0.0)
+or [container image](https://codeberg.org/forgejo/-/packages/container/forgejo/17.0.0).
+If you’re using the container images, you can use the
+[`17.0` tag](https://codeberg.org/forgejo/-/packages/container/forgejo/17.0)
+to stay up to date with the latest `17.0.Y` patch release automatically.
+
+Make sure to check the [Forgejo upgrade documentation](https://forgejo.org/docs/v17.0/admin/upgrade)
+for recommendations on how to properly back up your instance before the upgrade.
+
+If you have any feedback or suggestions for Forgejo, do not hold back; it is also your project.
+Open an issue in [the issue tracker](https://codeberg.org/forgejo/forgejo/issues)
+for feature requests or bug reports, reach out [on the Fediverse](https://floss.social/@forgejo),
+or drop into [the Matrix space](https://matrix.to/#/#forgejo:matrix.org)
+([main chat room](https://matrix.to/#/#forgejo-chat:matrix.org)) and say hi!
+
+### Donate
+
+Forgejo is proud to be [funded transparently](https://codeberg.org/forgejo/sustainability/). Additionally, it accepts donations [through Liberapay](https://liberapay.com/forgejo). It is also possible to [donate to Codeberg e.V.](https://docs.codeberg.org/improving-codeberg/donate/) in case the Liberapay option does not work out for you, and part of the funding is used to [compensate for work on Forgejo](https://codeberg.org/forgejo/sustainability/#forgejo-resources-per-year).
+
+However, the Liberapay team allows for money to go directly to developers without a round-trip to Codeberg. Additionally, Liberapay allows for a steady and reliable funding stream next to other options, a crucial aspect for the project. The distribution of funds through Liberapay is [transparently controlled using the decision-making process](https://codeberg.org/forgejo/governance/src/branch/main/TEAMS.md#liberapay-team-members), and Forgejo contributors are encouraged to consider applying to benefit from this funding opportunity.
+
+Thank you for using Forgejo and considering a donation, if your financial situation allows.
