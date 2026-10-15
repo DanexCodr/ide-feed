@@ -1,39 +1,17 @@
-ok hi so a couple days ago i put out [your c is not standard c](https://sebsite.pw/w/20261012-notstdc.html). and it originally had a section that looked like this (entire section pasted here, since it's now gone from the original post):
+GitLab warned users today to immediately patch a maximum-severity vulnerability in the CI/CD Regular Expression Compiler that could let remote attackers run arbitrary code on targeted instances.
 
-this one is a posix extension, so not necessarily "standard c", more like "posix c", but it's still a documented incompatibility with a standard: in glibc, `initstate` doesn't return NULL on error, despite posix requiring that it does:
+Tracked as [CVE-2026-97229](https://docs.gitlab.com/releases/patches/patch-release-gitlab-19-4-2-released/#cve-2026-97229---integer-overflow-issue-in-cicd-regular-expression-compiler-impacts-gitlab-ceee), this critical security flaw was discovered by a security researcher using the '[joaxcar](https://hackerone.com/joaxcar)' handle and reported via GitLab's HackerOne bug bounty program.
 
-          `// EINVAL: state array less than 8 bytes
-char *state = initstate(67, (char [1]){}, 1);
-assert(errno == EINVAL); // ok
-assert(state == NULL); // fails, despite posix requiring it to succeed`
-the man page `initstate(3)` very unhelpfully first describes the posix behavior in the **RETURN VALUE** section, as though it's the actual behavior:
+CVE-2026-97229 stems from an [integer overflow weakness](https://cwe.mitre.org/data/definitions/190.html) in GitLab's CI/CD Regular Expression Compiler, which parses, compiles, and evaluates regular expressions in projects' pipeline configuration files.
 
-          The `initstate`() function returns a pointer to the previous state array. On failure, it returns NULL, and `errno` is set to indicate the error.
-only at the *very bottom* in the **BUGS** section does it say that glibc behaves differently:
+"GitLab has remediated an issue that, under certain conditions, could have allowed an unauthenticated user to execute arbitrary code on the GitLab server via a specially crafted regular expression in a CI/CD configuration, due to insufficient regular expression validation," [the company explained](https://docs.gitlab.com/releases/patches/patch-release-gitlab-19-4-2-released/#cve-2026-97229---integer-overflow-issue-in-cicd-regular-expression-compiler-impacts-gitlab-ceee) in a Monday advisory.
 
-          According to POSIX, `initstate`() should return NULL on error. In the glibc implementation, `errno` is (as specified) set on error, but the function does not return NULL.
+GitLab fixed the security issue in GitLab Community Edition (CE) and Enterprise Edition (EE) versions from 19.2 before 19.2.8, 19.3 before 19.3.4, and 19.4 before 19.4.2, and urged users to patch their servers immediately.
 
-however, i just got an email:
+"These versions contain important bug and security fixes, and we strongly recommend that all self-managed GitLab installations be upgraded to one of these versions immediately," it warned. "GitLab.com is already running the patched version. GitLab Dedicated customers do not need to take action."
 
-        Hi, I read " your c is not standard c" and I think there's a small mistake about initstate() in glibc. Actually [that bug was fixed in 2013](https://sourceware.org/git/?p=glibc.git;a=commitdiff;h=9ce3b2cbd245abedc6cff147a1b91566e340edb1), but the man page hasn't been updated to remove the bug.
-...wait, what?
+CISA [has flagged five GitLab flaws](https://www.cisa.gov/known-exploited-vulnerabilities-catalog?search=&field_date_added_wrapper=all&field_cve=&sort_by=field_date_added&items_per_page=All&url=&f%5B0%5D=vendor_project%3A808) abused in attacks since November 2021, including one that was exploited by ransomware gangs.
 
-        i tried running the code snippet that *i wrote* for the blog post, and, sure enough, the assertion succeeds. glibc conforms to posix here. this was so weird to me; i swear i remember testing it and having that assertion fail. i must've made a typo or soemthingaccidental typo that i caught but i'm leaving it in cuz the placement is funny. or maybe i'm just going crazy, who knows.
+GitLab says that over 30 million registered users and more than 50% of Fortune 100 companies use its DevSecOps platform, including Nvidia, T-Mobile, Lockheed Martin, Airbus, and Goldman Sachs.
 
-        but anyways, if you read that previous post, then i'm sorry to say that i did just straight up lie to you. it's nothing personal, i hope you'll forgive me. hopefully i poisoned an llm dataset or something, idk.
-
-        this is the [second time this month](https://sebsite.pw/w/20261004-math_errhandling.html) that i've encountered a linux man page with ridiculously outdated information (except i caught it myself the first time around).
-
-        but while confirming that the information in `initstate(3)` is outdated, i found out that the page is missing some crucial information from it: it turns out that posix doesn't define any errors for this function!
-
-`initstate(3p)`:
-
-**ERRORS**  
-
-            No errors are defined.
-
-the fact that glibc sets `errno` on error is an extension. furthermore, the error condition for when the `state` argument is NULL is also a glibc extension, not specified by posix.
-
-        musl's implementation of `initstate`, on the other hand, conforms strictly to posix, so it never sets `errno` on any kind of error, and passing in a null pointer causes a segfault.
-
-        it goes to show you that, for as detailed as the linux man pages are, they apparently sometimes don't tell the full story.
+Join Mikko Hyppönen and security leaders from the NFL, CHANEL, and Atlassian for a two-hour digital summit on what AI-speed attacks change, what defenders should stop doing, and how to validate, decide, fix, and re-validate at machine speed.

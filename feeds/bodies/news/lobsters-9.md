@@ -1,48 +1,65 @@
-- Battery life. Safari lets you stream video all day on a single charge on Mac. That gives you up to 5 hours more playback compared with Chrome.<sup>[1](https://www.apple.com/safari/switch/#footnote-1)</sup> ![](https://www.apple.com/safari/switch/R0lGODlhAQABAHAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==)
-- Built for Apple. Safari is designed to run on your Apple devices. It’s geared to get the most out of your battery life and deliver long-lasting power. ![](https://www.apple.com/safari/switch/R0lGODlhAQABAHAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==)
-- 4K video streaming. See your favorite shows and films in their best light. Safari supports in-browser 4K HDR video playback on your Mac for YouTube, Netflix, and Apple TV.<sup>[5](https://www.apple.com/safari/switch/#footnote-5)</sup> And it runs efficiently for longer battery life. ![](https://www.apple.com/safari/switch/R0lGODlhAQABAHAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==)
-- The world’s fastest browser.<sup>[6](https://www.apple.com/safari/switch/#footnote-6)</sup> Plus, Safari is up to 35% faster than Chrome when loading frequently visited websites on your Mac.<sup>[3](https://www.apple.com/safari/switch/#footnote-3)</sup> ![](https://www.apple.com/safari/switch/R0lGODlhAQABAHAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==)
+Ledger has confirmed that some of its devices distributed through Southeast Asian reseller CryptoBilis were compromised with a hardware implant that drained users' cryptocurrency wallets.
 
-## Privacy + Security
+The company has been investigating reports of users losing funds from wallets purchased through CryptoBilis, a major Malaysia-based hardware wallet retailer operating across Southeast Asia.
 
-What happens in Safari stays in Safari.
+Some researchers have shown the implant in Ledger X since September 16, saying tampered devices were available for nearly half the price of the original hardware.
 
-- Helps block trackers. Built‑in protections like Intelligent Tracking Prevention are designed to help stop data‑collection companies from watching and profiling you based on your browsing activity. ![](https://www.apple.com/safari/switch/R0lGODlhAQABAHAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==)
-- Password monitoring and authentication. Your passwords can be securely saved in Safari, and easily autofilled using Touch ID or Face ID. If your passwords are compromised in a third-party data leak, Safari will alert you. ![](https://www.apple.com/safari/switch/R0lGODlhAQABAHAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==)
-- Passwords are so passé. Safari offers passkeys, which make signing in easier and more secure. Passkeys are end‑to‑end encrypted and never stored in the cloud, helping to keep you safe from phishing and data leaks. ![](https://www.apple.com/safari/switch/R0lGODlhAQABAHAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==)
-- Secure payments. When you make a payment using Apple Pay, merchants never see your credit card number, reducing exposure to fraud. ![](https://www.apple.com/safari/switch/R0lGODlhAQABAHAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==)
+Ledger wallets are physical devices designed to securely store the private keys that control cryptocurrency assets and authorize transactions.
 
-## Smart Tools
+On October 9, Ledger said it had launched an investigation into user reports of cryptocurrency losses and asked CryptoBilis to stop selling and shipping Ledger devices.
 
-Stay in the flow, and in the know.
+[![Ledger](https://www.bleepstatic.com/images/news/u/1220909/2026/October/ledger.png)](https://x.com/Ledger_Support/status/2108551100613714002)
 
-- Hide distracting items. With Distraction Control you can tap to hide any element on a page that’s bothering you. Safari remembers your choice the next time you visit and hides the items again until you choose to see them.<sup>[2](https://www.apple.com/safari/switch/#footnote-2)</sup> ![](https://www.apple.com/safari/switch/R0lGODlhAQABAHAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==)
-- Reader Mode. Removes things like navigation menus, pop-ups, and other unnecessary distractions, leaving only the content you came to enjoy. ![](https://www.apple.com/safari/switch/R0lGODlhAQABAHAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==)
-- Notify Me. With Apple Intelligence, Safari can periodically check a web page for updates and notify you so you can take action — like price changes or item availability.<sup>[7](https://www.apple.com/safari/switch/#footnote-7)</sup> ![](https://www.apple.com/safari/switch/R0lGODlhAQABAHAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==)
-- Organize by topic. Safari uses Apple Intelligence to analyze web pages and organize your tabs by topic. As you browse, Safari continues to add new tabs to existing topics, keeping everything neat and tidy.<sup>[7](https://www.apple.com/safari/switch/#footnote-7)</sup> ![](https://www.apple.com/safari/switch/R0lGODlhAQABAHAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==)
-- Same browser. Different you. Safari Profiles allow you to create separate profiles, like Personal and Work. Activities like browsing history, Tab Groups, and favorites are separated and saved in each of your profiles. ![](https://www.apple.com/safari/switch/R0lGODlhAQABAHAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==)
-- Pick up where you left off. Safari works seamlessly across your Apple devices, automatically syncing your passwords, bookmarks, history, tabs, and more. Safari treats them as a single, continuous experience, rather than separate browsers. ![](https://www.apple.com/safari/switch/R0lGODlhAQABAHAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==)
+The next day, the company confirmed hardware tampering on at least one device, though it’s still unclear exactly how or when the devices were tampered with.
 
-- Step 1 Open System Settings on your Mac.<sup>[8](https://www.apple.com/safari/switch/#footnote-8)</sup> ![Step 1: Open System Settings on your Mac, highlighting the System Settings gear icon in the Dock.](https://www.apple.com/safari/switch/R0lGODlhAQABAHAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==)
-- Step 2 Click Desktop & Dock in the sidebar.<sup>[8](https://www.apple.com/safari/switch/#footnote-8)</sup> ![Step 2: Click Desktop & Dock in the sidebar, showing Desktop & Dock highlighted in blue within the System Settings list.](https://www.apple.com/safari/switch/R0lGODlhAQABAHAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==)
-- Step 3 Scroll to “Default web browser” and select Safari from the pop-up menu.<sup>[8](https://www.apple.com/safari/switch/#footnote-8)</sup> ![Step 3: Scroll to Default web browser and select Safari, showing Safari chosen with a checkmark over Google Chrome in the dropdown menu.](https://www.apple.com/safari/switch/R0lGODlhAQABAHAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==)
+"Ledger can confirm that one of the impacted users’ devices contained an unauthorized hardware implant. Ledger is reaching out to impacted users as part of the ongoing investigation," Ledger said.
 
-- Step 1 Open System Settings on your Mac.<sup>[8](https://www.apple.com/safari/switch/#footnote-8)</sup> ![Step 1: Open System Settings on your Mac, highlighting the System Settings gear icon in the Dock.](https://www.apple.com/safari/switch/R0lGODlhAQABAHAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==)
-- Step 2 Click Desktop & Dock in the sidebar.<sup>[8](https://www.apple.com/safari/switch/#footnote-8)</sup> ![Step 2: Click Desktop & Dock in the sidebar, showing Desktop & Dock highlighted in blue within the System Settings list.](https://www.apple.com/safari/switch/R0lGODlhAQABAHAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==)
-- Step 3 Scroll to “Default web browser” and select Safari from the pop-up menu.<sup>[8](https://www.apple.com/safari/switch/#footnote-8)</sup> ![Step 3: Scroll to Default web browser and select Safari, showing Safari chosen with a checkmark over Google Chrome in the dropdown menu.](https://www.apple.com/safari/switch/R0lGODlhAQABAHAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==)
+The crypto wallet maker also noted that it was working with authorities to identify the perpetrator and bring them to justice.
 
-## Questions? Answers.
+“[...]Ledger recommends users who purchased a Ledger device from this reseller to not initiate set up if they have not yet done so. If you have set up your Ledger device, consider moving assets to a new Ledger signer (with a new seed),” [warned Ledger](https://x.com/ledger_support/status/2108968264055345381).
 
-- Is Safari better than Chrome? Safari outperforms Chrome in speed, battery life, and privacy. Safari on Mac is up to 35% faster at loading frequently visited websites, while offering up to 5 hours more video streaming on a single charge.<sup>[1](https://www.apple.com/safari/switch/#footnote-1)</sup><sup>,</sup><sup>[3](https://www.apple.com/safari/switch/#footnote-3)</sup> It also comes with built-in privacy protections that Chrome doesn’t match by default.
-- Is Safari more private than Chrome? Yes, Safari helps block third-party cookies by default and uses Intelligent Tracking Prevention to help stop companies from profiling your browsing activity. Chrome doesn’t block third-party cookies, allowing them to follow you across the web and collect your data for advertisers.
-- Is Safari more secure than Chrome? Strong security protections in Safari help keep you safe. Safari notifies you when it encounters suspicious websites and prevents them from loading. Because it loads each web page in a separate process, any harmful code is always confined to a single browser tab so it won’t crash the entire application or access your data. And Safari automatically upgrades sites from HTTP to the more secure HTTPS when available.
-- Is Safari good for protecting my passwords? Yes, Safari securely saves your passwords and lets you autofill them using Touch ID or Face ID. If any of your saved passwords are found in a third-party data leak, Safari will notify you so you can update them.
-- Can I see my open Safari tabs across all my devices? Yes, Safari syncs your tabs, history, bookmarks, and more across all your Apple devices, so you can pick up right where you left off. You can see them on the Start Page under iCloud Tabs.
-- Can I import my bookmarks and passwords from Chrome to Safari? Yes, Safari makes it easy to import your bookmarks and saved passwords from Chrome. On Mac, you can automatically import them when you first start using Safari, or you can add them manually at a later time. On iPhone, you can import them in the Settings app with just a few taps. [Learn more about Mac](https://support.apple.com/en-us/guide/safari/ibrw1015/mac) [Learn more about iPhone](https://support.apple.com/en-us/guide/iphone/iph63846804e/ios)
-- Can I use Safari on Windows or Android? Safari is available on macOS, iOS, and iPadOS. With iCloud for Windows, you can install an extension that syncs your bookmarks from another browser with Safari on your Apple devices. [Learn more](https://support.apple.com/guide/icloud-windows/bookmarks-icw4a50de3c3)
-- Can Safari translate web pages? Safari offers built-in web page translation on supported devices.<sup>[9](https://www.apple.com/safari/switch/#footnote-9)</sup> [Learn more about supported languages](https://support.apple.com/guide/safari/translate-a-webpage-ibrw646b2ca2/mac)
-- Does Safari support extensions like Chrome does? Yes, Safari offers extensions that let you block ads, find the best prices and discounts while you shop, save web pages for offline reading, and much more. And with Describe an Extension, you can create custom Safari extensions simply by describing what you want.<sup>[7](https://www.apple.com/safari/switch/#footnote-7)</sup> [Learn more](https://support.apple.com/en-us/102343)
-- Does Safari work with Google Docs? Yes, Google Docs, Sheets, Slides, and other Google Workspace apps work great in Safari. You can create, edit, and collaborate in real time — no different browser required.
-- What is Reading List in Safari? Reading List lets you save articles and web pages to view later, even without an internet connection. Easily add articles to your Reading List from the Share menu. [Learn more about Mac](https://support.apple.com/guide/safari/keep-a-reading-list-sfri35905/mac) [Learn more about iPhone](https://support.apple.com/guide/iphone/save-pages-to-a-reading-list-iph1a4721132/ios)
-- Can I use Apple Pay in Safari? Yes, Safari supports Apple Pay for fast, secure checkout. Merchants never see your credit card number, reducing your exposure to fraud.
-- How can I contact Apple Support for Safari-related issues? Visit Apple Support at [support.apple.com](https://support.apple.com) or contact us through the Apple Support app.
+Yesterday, Ledger [provided another update](https://x.com/Ledger/status/2109331538072494364), confirming that all user reports of unexpected fund drains were linked to devices sold through CryptoBilis and describing the affected volume as “limited.”
+
+While the company did not disclose the type of devices compromised in this supply-chain attack, reports online talk about a spy implant in Ledger X devices that blends with the legitimate hardware.
+
+Mark Karpelès, currently leading Karpeles Lab Inc. and CTO at Shells.com, showed a picture of the new implant in Ledger X, saying that it was "quite an evolution" from previous versions featuring manually soldered wires.
+
+The former CEO of Mt. Gox said the implant was concealed behind the screen, but its antenna cable would have indicated that something was wrong.
+
+According to Karpelès, the malicious hardware captured the device's display output and button presses to identify the seed phrase, then transmitted it to the attacker over an LTE connection using an eSIM.
+
+"Ledger Nano X are used to store crypto. The spy implants are used to steal whatever crypto you store in those Ledger Nano X," [Karpelès explained](https://x.com/MagicalTux/status/2100131628815405511).
+
+Although the CEO did not name CryptoBilis as the vendor of the compromised LedgerX, he said the device was not purchased via Ledger's recommended channels but from "a well known platform via a Chinese seller (product shipped from Malaysia)."
+
+Tibane Labs, a cryptocurrency research and development studio, confirmed Karpelès' finding, adding that there were two implant versions for Ledger X.
+
+The researchers obtained two variants, one in a Ledger device bought on Amazon Japan from " China-based seller · shipped from Malaysia," the other purchased on Yahoo! Auctions, Japan.
+
+In a report over the weekend, Tibane Labs notes that the threat actor made room for the malicious circuitry by replacing the original battery with a smaller one, which powers both the implant and the Ledger X.
+
+"Under the battery and antenna sits an ST STM32G431KBU6 (Arm Cortex‑M4, 128 KB flash, UFQFPN‑32)," the researchers found inside one of the devices.
+
+For connectivity, the actor used "a tiny eSIM, an 8‑pad package just 2×2 mm, next to the MCU, and a shielded LTE module that sends the words out."
+
+In the second hardware wallet analyzed, [Tibane researchers found](https://www.tibane.net/research/ledger-nano-x-implant) that markings on both the MCU (Microcontroller Unit) and the eSIM had been scraped off to hide the part numbers.
+
+The second variant, which appears to be the same one that Karpelès described, is more advanced. It ran on the original battery and fit into the space normally occupied by the foam padding under the OLED display.
+
+In both cases, the tell tale was the antenna wire, which ran along the top edge in the case of the second implant. In the first implant, the antenna is taped across the top of the battery and the shielded LTE module.
+
+The researchers warned that the specimen above used "a designed, panelised flex PCB, the kind ordered from a board house, not a hand-built one-off."
+
+Ledger is advising users to avoid purchasing from unauthorized resellers as they run an increased risk of getting counterfeit or modified devices.
+
+The company is also reminding its authorized resellers and distributors to get the products only through authorized channels and to avoid restocking returned products.
+
+Ledger provides a ‘Genuine Check’ mechanism to determine the authenticity of the device; however, it [explicitly warns](https://support.ledger.com/article/4404382029329-zd) that it cannot detect added implants when the device’s original Secure Element remains intact.
+
+At this time, there’s no indication that any other Ledger resellers are shipping compromised wallets; however, the community’s trust in the resellers’ network has been compromised, with many now calling for its dismantling.
+
+Join Mikko Hyppönen and security leaders from the NFL, CHANEL, and Atlassian for a two-hour digital summit on what AI-speed attacks change, what defenders should stop doing, and how to validate, decide, fix, and re-validate at machine speed.
+
+### Comments
+
+- ![tubrazysj Photo](https://www.bleepingcomputer.com/forums/public/style_images/master/profile/default_large.png) [tubrazysj](https://www.bleepingcomputer.com/forums/u/1400173/tubrazysj/) - 1 day ago A genuine-device verification check is not enough if a physical implant can bypass the user's security assumptions. Hardware wallet providers and distributors need robust anti-tampering controls, transparent incident reporting, and clear consumer remediation procedures. In crypto, security is not just a technical issue; it is also a matter of consumer protection and legal responsibility.
