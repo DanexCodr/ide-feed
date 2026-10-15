@@ -1,65 +1,34 @@
-Ledger has confirmed that some of its devices distributed through Southeast Asian reseller CryptoBilis were compromised with a hardware implant that drained users' cryptocurrency wallets.
+So a good while ago I added a fun curl version of my site, meant for viewing in the terminal. Try running these commands!
 
-The company has been investigating reports of users losing funds from wallets purchased through CryptoBilis, a major Malaysia-based hardware wallet retailer operating across Southeast Asia.
+```
 
-Some researchers have shown the implant in Ledger X since September 16, saying tampered devices were available for nearly half the price of the original hardware.
+curl nytpu.com/gemlog/2026-03-18
+# or
+curl nytpu.com
+```
 
-Ledger wallets are physical devices designed to securely store the private keys that control cryptocurrency assets and authorize transactions.
+(sorry Windows users, not my fault that ANSI escape codes are disabled-by-default in `cmd.exe`. And not my fault that in Powershell you have to use `curl.exe` instead of `curl` because Powershell inexplicably aliases that to `Invoke-WebRequest`.)
 
-On October 9, Ledger said it had launched an investigation into user reports of cryptocurrency losses and asked CryptoBilis to stop selling and shipping Ledger devices.
+I posted about it a bit on the Fediverse, but otherwise didn't elaborate much on it becuase I figured it was fairly self-explanatory. But I've had a handful of people ask me how I did it, so I decided it might actually be worth it to write a post about how I did it (…like seven months late).
 
-[![Ledger](https://www.bleepstatic.com/images/news/u/1220909/2026/October/ledger.png)](https://x.com/Ledger_Support/status/2108551100613714002)
+I should note this idea came from trinkey's (`curl trinkey.com`) and strongsand's (`curl proot.party`) curl sites, I didn't come up with it myself. Even though I did go about it quite a bit differently from them, all credit for the very cool idea goes to them. (UPDATE: unfortunately neither of their curl versions are functional anymore as of 2026-10-14.)
 
-The next day, the company confirmed hardware tampering on at least one device, though it’s still unclear exactly how or when the devices were tampered with.
+First, since it's the more interesting part, actually generating the ANSI-marked-up files to send to the clients. I entirely hand-wrote the [index page](https://git.sr.ht/~nytpu/nytpu.com/tree/master/item/static/curl/index.ansi) and [about page](https://git.sr.ht/~nytpu/nytpu.com/tree/master/item/static/curl/about.ansi).
 
-"Ledger can confirm that one of the impacted users’ devices contained an unauthorized hardware implant. Ledger is reaching out to impacted users as part of the ongoing investigation," Ledger said.
+Note that I believe trinkey and strongsand generate theirs on-the-fly with the [ratatui](https://github.com/ratatui/ratatui) library (or similar), which is probably more convenient; hand-writing it seemed more expedient to me though.
 
-The crypto wallet maker also noted that it was working with authorities to identify the perpetrator and bring them to justice.
+I had the main escape code—`ESC[`, i.e. `\x1b[`—<sup>[1](https://nytpu.com/gemlog/2026-03-18#fn:1)</sup> in a Vim register to easily paste when needed, and then the [Wikipedia page for the main graphics codes](https://en.wikipedia.org/wiki/ANSI_escape_code#Select_Graphic_Rendition_parameters) open to reference the specific escape codes. And, yeah, that's about it. I experimented to decide on consistent styling I liked, and just referenced the Gopher version of my pages when crafting the marked-up curl pages.
 
-“[...]Ledger recommends users who purchased a Ledger device from this reseller to not initiate set up if they have not yet done so. If you have set up your Ledger device, consider moving assets to a new Ledger signer (with a new seed),” [warned Ledger](https://x.com/ledger_support/status/2108968264055345381).
+Now, the notable thing about my version is that I have curl versions of the entirety of my blog, rather than just one or two pages being available. This is entirely due to a convenient coincidence: over four years ago I implemented outputting ANSI-marked-up plaintext in my custom markup language I use for my blog, [Gemroff](https://git.sr.ht/~nytpu/gemroff). Originally it was just to allow convenient previewing of drafts in the terminal while writing; but it was trivial to plug into my static site generator to immediately get Curl versions generated.
 
-Yesterday, Ledger [provided another update](https://x.com/Ledger/status/2109331538072494364), confirming that all user reports of unexpected fund drains were linked to devices sold through CryptoBilis and describing the affected volume as “limited.”
+I did manually write a [wrapper template for blog posts](https://git.sr.ht/~nytpu/nytpu.com/tree/master/item/templates/gemlog-post.ansi), as well as a [template for the index page listing posts](https://git.sr.ht/~nytpu/nytpu.com/tree/master/item/templates/gemlog-index.ansi), but that plus a few extra lines in my static site generator was all that was needed to wire it up.
 
-While the company did not disclose the type of devices compromised in this supply-chain attack, reports online talk about a spy implant in Ledger X devices that blends with the legitimate hardware.
+This is the main thing that makes it hard to say it's easy! since it was only easy for me because I use an entirely custom markup language and static site generator and I happened to make the right design choices years ago—e.g. my SSG also happened to already have support for multiple, modular output formats instead of solely HTML like other SSGs, since I tri-host my site on HTTP, Gemini, and Gopher.
 
-Mark Karpelès, currently leading Karpeles Lab Inc. and CTO at Shells.com, showed a picture of the new implant in Ledger X, saying that it was "quite an evolution" from previous versions featuring manually soldered wires.
+However, offering nothing but a few hand-written pages for fun is a completely acceptable way to set up a site like this anyways, since it's just a neat gimmick and no one's likely to actually use it more than a few minutes of browsing.
 
-The former CEO of Mt. Gox said the implant was concealed behind the screen, but its antenna cable would have indicated that something was wrong.
+Finally, the last step is actually presenting the Curl version of your site to any user agent containing `curl`, which for me was just a [few changes to my Nginx config](https://nytpu.com/gemlog/files/nytpu.com.conf), with other servers it'd presumably be equivalently simple. The main feature I wanted was an override header (`X-Original: true`) so you could still get an unmodified HTTP response like someone casually running Curl likely wanted, and I wanted everything to be served statically still.
 
-According to Karpelès, the malicious hardware captured the device's display output and button presses to identify the seed phrase, then transmitted it to the attacker over an LTE connection using an eSIM.
+And… that's really it! As I said, when I first set it up it seemed fairly self-explanatory to me, but it is very non-orthogonal to what people normally do with either web servers or ANSI escape codes so I can see where people's curiosity/confusion came from. It would be neat to see more sites doing this trick around!
 
-"Ledger Nano X are used to store crypto. The spy implants are used to steal whatever crypto you store in those Ledger Nano X," [Karpelès explained](https://x.com/MagicalTux/status/2100131628815405511).
-
-Although the CEO did not name CryptoBilis as the vendor of the compromised LedgerX, he said the device was not purchased via Ledger's recommended channels but from "a well known platform via a Chinese seller (product shipped from Malaysia)."
-
-Tibane Labs, a cryptocurrency research and development studio, confirmed Karpelès' finding, adding that there were two implant versions for Ledger X.
-
-The researchers obtained two variants, one in a Ledger device bought on Amazon Japan from " China-based seller · shipped from Malaysia," the other purchased on Yahoo! Auctions, Japan.
-
-In a report over the weekend, Tibane Labs notes that the threat actor made room for the malicious circuitry by replacing the original battery with a smaller one, which powers both the implant and the Ledger X.
-
-"Under the battery and antenna sits an ST STM32G431KBU6 (Arm Cortex‑M4, 128 KB flash, UFQFPN‑32)," the researchers found inside one of the devices.
-
-For connectivity, the actor used "a tiny eSIM, an 8‑pad package just 2×2 mm, next to the MCU, and a shielded LTE module that sends the words out."
-
-In the second hardware wallet analyzed, [Tibane researchers found](https://www.tibane.net/research/ledger-nano-x-implant) that markings on both the MCU (Microcontroller Unit) and the eSIM had been scraped off to hide the part numbers.
-
-The second variant, which appears to be the same one that Karpelès described, is more advanced. It ran on the original battery and fit into the space normally occupied by the foam padding under the OLED display.
-
-In both cases, the tell tale was the antenna wire, which ran along the top edge in the case of the second implant. In the first implant, the antenna is taped across the top of the battery and the shielded LTE module.
-
-The researchers warned that the specimen above used "a designed, panelised flex PCB, the kind ordered from a board house, not a hand-built one-off."
-
-Ledger is advising users to avoid purchasing from unauthorized resellers as they run an increased risk of getting counterfeit or modified devices.
-
-The company is also reminding its authorized resellers and distributors to get the products only through authorized channels and to avoid restocking returned products.
-
-Ledger provides a ‘Genuine Check’ mechanism to determine the authenticity of the device; however, it [explicitly warns](https://support.ledger.com/article/4404382029329-zd) that it cannot detect added implants when the device’s original Secure Element remains intact.
-
-At this time, there’s no indication that any other Ledger resellers are shipping compromised wallets; however, the community’s trust in the resellers’ network has been compromised, with many now calling for its dismantling.
-
-Join Mikko Hyppönen and security leaders from the NFL, CHANEL, and Atlassian for a two-hour digital summit on what AI-speed attacks change, what defenders should stop doing, and how to validate, decide, fix, and re-validate at machine speed.
-
-### Comments
-
-- ![tubrazysj Photo](https://www.bleepingcomputer.com/forums/public/style_images/master/profile/default_large.png) [tubrazysj](https://www.bleepingcomputer.com/forums/u/1400173/tubrazysj/) - 1 day ago A genuine-device verification check is not enough if a physical implant can bypass the user's security assumptions. Hardware wallet providers and distributors need robust anti-tampering controls, transparent incident reporting, and clear consumer remediation procedures. In crypto, security is not just a technical issue; it is also a matter of consumer protection and legal responsibility.
+1. EMDASH! AI-GENERATED! acksually I'll have you know that my markup language has had [an explicit markup element for emdashes since November 2022](https://git.sr.ht/~nytpu/gemroff/tree/999d2f7da1757d756b9780c500f233d0b98e7628/item/doc/elements.md?view-source#L49). And believe it nor not: LLMs are trained on shit copied from actual authors, so LLMs wouldn't be using emdashes if they weren't already used in human-written works. And what, am I supposed to avoid having twenty parentheticals a paragraph, to where I feel the need to use emdashes to vary it up? Unthinkable! [↩︎](https://nytpu.com/gemlog/2026-03-18#fnref:1)

@@ -5,5 +5,3 @@ I am very glad that the vision our team had back in 2017-18 was so powerful and 
 But as LLMs continue to assist in designing new systems, they are likely to index heavily on existing designs. Mononoke is [open source](https://github.com/facebook/sapling/tree/main/eden/mononoke) and in every LLM’s training set. If you ask [Opus 5.5](https://claude.ai/share/e6a66ec5-7757-4adb-901f-0e33b1c38536) or [GPT-6 Astra](https://chatgpt.com/share/6ace7be6-68f8-83ea-ad68-0f9d14448318) (thanks [Matthew Fowle](https://bsky.app/profile/jauntywunderkind.bsky.social/post/3mxsettjnoc22)) about prior art, they both immediately point out the similarities to Mononoke.
 
 Giving credit to those that came before us is now easier — and more important — than ever. There is no longer an excuse.
-
-[Discuss on Hacker News](https://news.ycombinator.com/item?id=50094694)

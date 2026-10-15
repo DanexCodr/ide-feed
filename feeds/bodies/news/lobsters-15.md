@@ -1,179 +1,39 @@
-Many code  blocks throughout this website are executable on
-the WASM implementation of delightql.  Hovering over a code block
-may show a "play" button that can be used to execute on the
-demo database.
+ok hi so a couple days ago i put out [your c is not standard c](https://sebsite.pw/w/20261012-notstdc.html). and it originally had a section that looked like this (entire section pasted here, since it's now gone from the original post):
 
-DelightQL is a query language that transpiles to SQL. Its syntax draws on logic
-and functional programming to make queries succinct and reusable. It
-offers the traditional abstractions of a modern programming language while
-retaining all of SQL's relational power.
+this one is a posix extension, so not necessarily "standard c", more like "posix c", but it's still a documented incompatibility with a standard: in glibc, `initstate` doesn't return NULL on error, despite posix requiring that it does:
 
-```
-users(*)
-  ~> {country, "users":
-        ~> {first_name, last_name}} as users_by_country
-```
+          `// EINVAL: state array less than 8 bytes
+char *state = initstate(67, (char [1]){}, 1);
+assert(errno == EINVAL); // ok
+assert(state == NULL); // fails, despite posix requiring it to succeed`
+the man page `initstate(3)` very unhelpfully first describes the posix behavior in the **RETURN VALUE** section, as though it's the actual behavior:
 
-## Some Runnable Examples[¶](https://delightql.org#some-runnable-examples)
+          The `initstate`() function returns a pointer to the previous state array. On failure, it returns NULL, and `errno` is set to indicate the error.
+only at the *very bottom* in the **BUGS** section does it say that glibc behaves differently:
 
-Drop a column without spelling out all the columns you want to keep.
+          According to POSIX, `initstate`() should return NULL on error. In the glibc implementation, `errno` is (as specified) set on error, but the function does not return NULL.
 
-```
-users(*) |> -(email, created_at)
-```
+however, i just got an email:
 
-Column names can be a selection pattern, not just a list.
+        Hi, I read " your c is not standard c" and I think there's a small mistake about initstate() in glibc. Actually [that bug was fixed in 2013](https://sourceware.org/git/?p=glibc.git;a=commitdiff;h=9ce3b2cbd245abedc6cff147a1b91566e340edb1), but the man page hasn't been updated to remove the bug.
+...wait, what?
 
-```
-users(*) |> (/_name/)
-```
+        i tried running the code snippet that *i wrote* for the blog post, and, sure enough, the assertion succeeds. glibc conforms to posix here. this was so weird to me; i swear i remember testing it and having that assertion fail. i must've made a typo or soemthingaccidental typo that i caught but i'm leaving it in cuz the placement is funny. or maybe i'm just going crazy, who knows.
 
-Apply a function to selected columns; leave the rest alone.
+        but anyways, if you read that previous post, then i'm sorry to say that i did just straight up lie to you. it's nothing personal, i hope you'll forgive me. hopefully i poisoned an llm dataset or something, idk.
 
-```
-users(*) |> $(upper:())(first_name, last_name)
-```
+        this is the [second time this month](https://sebsite.pw/w/20261004-math_errhandling.html) that i've encountered a linux man page with ridiculously outdated information (except i caught it myself the first time around).
 
-Change two names without rebuilding the projection.
+        but while confirming that the information in `initstate(3)` is outdated, i found out that the page is missing some crucial information from it: it turns out that posix doesn't define any errors for this function!
 
-```
-users(*) |> *(first_name as given_name, last_name as family_name)
-```
+`initstate(3p)`:
 
-Describe the output shape directly, including independent collections.
+**ERRORS**  
 
-```
-users(*)
-  ~> {
-       country,
-       "people": ~> {first_name, last_name},
-       "statuses": ~> [status]
-     } as by_country
-```
+            No errors are defined.
 
-Turn country and status values into the keys of a nested object.
+the fact that glibc sets `errno` on error is an extension. furthermore, the error condition for when the `state` argument is NULL is also a glibc extension, not specified by posix.
 
-```
-users(*) as u
-  |> %(~> u.country:~> u.status:~> {u.first_name})
-```
+        musl's implementation of `initstate`, on the other hand, conforms strictly to posix, so it never sets `errno` on any kind of error, and passing in a null pointer causes a segfault.
 
-A collection is not a dead end. Query inside it and retain its outer context.
-
-```
-users(*)
-  |> %(country ~> {first_name, last_name, age} as people) : by_country
-
-by_country(*).people(*)
-  |> %(country ~> sum:(age), avg:(age))
-```
-
-Name an expression once, then use it like a built-in.
-
-```
-full_name:(first, last) : :"{first} {last}"
-
-users(*) |> (id, full_name:(first_name, last_name) as name)
-```
-
-Put a correlated query behind a function call.
-
-```
-order_count:(user_id) : orders:(, orders.user_id = user_id ~> count:(*))
-
-users(*) |> (last_name, order_count:(id) as num_orders)
-```
-
-Functions can take functions. Here, the same transformation is applied twice.
-
-```
-apply_twice:(f:(), x) : x >> f:() >> f:()
-
-users(*) |> (first_name, apply_twice:(:(@ * 2), age) as quadrupled_age)
-```
-
-Pipe a value through functions in the order you read them.
-
-```
-tidy:(s) : s >> trim:() >> lower:()
-
-users(*) |> (first_name, email >> tidy:() as contact)
-```
-
-Combine different headings by name, padding missing columns with NULL.
-
-```
-users_2022(*) ; users_2023(*)
-```
-
-Turn subject values into columns.
-
-```
-_(name, subject, score @
-  "Alice", "Maths", 90;
-  "Alice", "Music", 85;
-  "Bob", "Maths", 75;
-  "Bob", "Music", 80),
-  subject in ("Maths"; "Music")
-  |> %(name ~> score of subject)
-```
-
-Turn columns into rows using an inline table that reads the current product.
-
-```
-products(*),
-_(attribute, value @
-  "price", price;
-  "cost", cost)
-|> (id, name, attribute, value)
-```
-
-Filter, select, sort, then take five.
-
-```
-users(*), status = "active"
-  |> (first_name, country, age)
-  |> #(age desc), #<5
-```
-
-The question mark keeps users even when they have no matching order.
-
-```
-users(*) as u, orders?(*) as o, u.id = o.user_id
-  |> (u.first_name, u.last_name, o.total, o.status)
-```
-
-Give each aggregate its own condition.
-
-```
-orders(*) |> %(~>
-  sum:(total | status = "completed") as completed,
-  sum:(total | status = "pending") as pending
-)
-```
-
-Rank balances within each country without collapsing the rows.
-
-```
-users(*) |> (
-  first_name, country, balance,
-  row_number:(<~ %(country), #(balance desc)) as country_balance_rank
-)
-```
-
-## Target SQL[¶](https://delightql.org#target-sql)
-
-The goal for delightql is to have transpilation targets for all
-major SQL dialects. Currently, delightql supports SQLite pretty well and DuckDB sorta well.
-The alpha process will increase coverage of other target SQL dialects.
-
-## Implementation[¶](https://delightql.org#implementation)
-
-Warning
-
-Delightql is in alpha and should **not** be used in production
-without understanding the risks.
-
-Delightql is implemented in Rust and uses tree-sitter as part of its
-[compiler front-end](https://github.com/reverendpaco/delightql/blob/main/grammar/grammar.js).
-It comes with a CLI for all major flavors of UNIX.
+        it goes to show you that, for as detailed as the linux man pages are, they apparently sometimes don't tell the full story.

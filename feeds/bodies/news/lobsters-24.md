@@ -1,116 +1,276 @@
-We at the Lix team are proud to announce our seventh major release, version 2.96 “Bingsu”.
+ZXC is a lossless data compression library written in C, distributed as **libzxc**. It is designed for data that is compressed once and read many times: firmware images, game assets, application bundles, and content delivered to many devices. The encoder spends extra time up front so that decompression runs at several gigabytes per second on ARM and x86. At every compression level ZXC decodes faster than LZ4, and produces output of equal or smaller size.
 
-This release focuses on security, debugger support, quality-of-life improvements, and continues the work towards both the new [Cap’n’Proto RPC](https://capnproto.org/) protocol and Rust support.
+ZXC is free software, released under the [BSD 3-Clause License](https://opensource.org/license/bsd-3-clause). It has no dependencies, and official bindings exist for Rust, Python, Node.js and Go.
 
-> [Bingsu](https://en.wikipedia.org/wiki/Bingsu) is a milk-based Korean shaved ice dessert with sweet toppings that may include chopped fruit, condensed milk, fruit syrup, tteok, and red beans.
+Development happens on [GitHub](https://github.com/hellobertrand/zxc).
 
-Lix is a Nix implementation focused on reliability, predictability, friendliness, developed by a community of people from around the world. We have long term plans to incrementally evolve Nix to work in more places, to make it more reliable and secure, and to update the language and semantics to correct past mistakes and reduce errors, all the while providing an amazing tooling experience.
+**The current release is ZXC 0.15.0**, released on 2026-10-13.
+  See the [changelog](https://libzxc.org/docs/changelog/) for what changed, and [Downloading ZXC](https://libzxc.org/#download) below.
 
-## Upgrading from CppNix or previous Lix versions
+## Specifications
 
-**WARNING**: We do not recommend to use `nix upgrade-nix`, please follow the instructions in [https://lix.systems/install/](https://lix.systems/install/) with the Lix’s upgrade shell script.
+| Parameter | Value | Notes |
+| --- | --- | --- |
+| Compression levels | 1 to 7 | Default 3 |
+| Block size | 4 KB to 2 MB, powers of two | Default 512 KB; 256 KB for streaming |
+| Decompression context | ≈ 512 KB | At the default block size |
+| Compression context | ≈ 1.78 MB | ≈ 1.03 MB with 256 KB blocks |
+| In-place decompression margin | ≈ 1 % of the archive | Use `zxc_decompress_inplace_bound()` |
+| Random access | O(1) per block | Requires a seek table (`-S`) |
+| Integrity | Optional per-block checksum | rapidhash |
+| Dictionaries | External `.zxd` file | Referenced by a 32-bit ID |
+| Threading | Multi-threaded streaming | Thread count detected automatically |
+| Architectures | x86_64, ARM64, ARMv7, ARMv6, RISC-V, POWER, s390x, i386 | Tested in CI |
+| Wire format | Version 9 | [Specification](https://libzxc.org/docs/format/) |
+| Library name | libzxc | pkg-config `libzxc`; CMake `zxc::zxc_lib`; Debian `libzxc-dev` |
+| Language, dependencies | C17, none | Bindings for Rust, Python, Node.js, Go |
+| License | BSD 3-Clause |  |
 
-The upgrade procedure depends on how you installed Lix or CppNix, and is fully described in the [Lix installation guide](https://lix.systems/install/).
+## Why ZXC?
 
-If you are using Lix from nixpkgs on NixOS, you just need to upgrade your nixpkgs once the upgrade pull request has passed through the build farm into your channel; no other action is required.
+LZ4 is symmetric: it compresses about as fast as it decompresses. That suits logs and swap, but not data that is shipped. A firmware image is compressed once on a build server and decompressed on every device that installs it, so time saved during compression helps nobody.
 
-If you want to help us test the next version of Lix, consider running `main` by following the [beta guide](https://wiki.lix.systems/books/lix-contributors/page/lix-beta-guide).
+ZXC moves the work to the encoder. Match selection, optimal parsing and statistics tuning are done once, and the bitstream is laid out for the pipelines and branch predictors of modern processors. The decoder stays short, has few branches, and uses SIMD where it is available.
 
-## Changes
+Typical uses:
 
-Lix 2.96 builds on the work of previous releases to improve the daemon, the protocols spoken with the daemon (both on a single machine and the ones used for remote builds), and brings many much-needed improvements to the debugger infrastructure.
+- Firmware and over-the-air updates. In-place decompression keeps peak memory close to the decompressed size.
+- Game assets and application start-up, where load time and battery use matter.
+- Packaged artefacts and content delivery, where more original data is delivered per byte read from disk or network.
+- Read-heavy storage. Seekable archives can decode any block without reading the blocks before it.
 
-Here’s a short list of the most exciting changes in Lix 2.96. This list is not as exhaustive as the [full release notes](https://docs.lix.systems/manual/lix/stable/release-notes/rl-2.96.html).
+## Features
 
-### REPL and debugger support
+- Seekable archives. An optional seek table gives O(1) random access to any block.
+- In-place decompression. Decode inside a single buffer with about 1 % overhead instead of a second allocation.
+- Trained dictionaries. zxc --train builds a dictionary for small, similar payloads such as JSON documents, log lines or RPC messages.
+- Multi-threaded streaming. The file and stream interfaces split work across processor cores.
+- Hand-written SIMD. SSE2, AVX2 and AVX-512 with run-time selection on x86; NEON on ARMv8 and later.
+- Portable. Tested on x86_64, ARM64, ARMv7, ARMv6, RISC-V, POWER, s390x and i386.
+- Careful interface. Every call takes an explicit output capacity. The library is thread-safe, with reusable contexts for tight loops and static contexts for targets without a heap.
+- Optional checksums. Per-block integrity checks based on rapidhash.
+- Documented format. The wire format (version 9) is specified in full, and public conformance vectors let others write independent decoders.
 
-Thanks to the tireless work of [blokyk](https://git.lix.systems/blokyk) the REPL and debugger are much improved in Lix 2.96. The debugger is now more stable, navigating within the debugger is much easier, and the information printed by the debugger is more readable.
+## Compression levels
 
-[eldritch horrors](https://git.lix.systems/pennae) have also switched the REPL backend from editline to [rustyline](https://github.com/kkawakam/rustyline), finally bringing proper UTF-8 support to the REPL.
+Seven levels trade compression time for size. Decompression stays in the multi-GB/s range at every level. Level 3 is the default.
 
-### News from RPC
+| Level | Name | Suited for | Size % | Decode MB/s | Encode MB/s |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Fastest | Real-time assets, games, UI | 61.76 | 13,513 | 886 |
+| 2 | Fast | Real-time assets, games, UI | 53.86 | 11,320 | 588 |
+| 3 | Default | General use; smaller and faster to decode than LZ4 | 46.65 | 9,707 | 267 |
+| 4 | Balanced | General use, a little denser | 43.43 | 8,790 | 194 |
+| 5 | Compact | Embedded and firmware | 40.83 | 8,118 | 114 |
+| 6 | Density | Archives and read-mostly data; beats LZ4HC on both axes | 36.28 | 6,884 | 14.5 |
+| 7 | Ultra | When size dominates; smaller than zstd -1, decodes about 2× faster | 33.09 | 5,054 | 9.71 |
 
-The experimental RPC protocol is now shipping under the `rpc-sockets` experimental feature. As one may guess this is still *highly experimental* and must be enabled not only with the experimental feature flag in your Lix config, but also requires system setup that is not yet done by the NixOS module. You can find an example configuration in the [NixOS module in the Lix repo](https://git.lix.systems/lix-project/lix/commit/103b91b0c77c662c50070f2b4700ffc0df12cbee#diff-c6352f13d264fb180d5409d66db94d50264ed9dd).
+Size is the compressed size as a percentage of `silesia.tar`. Speeds are single-threaded on Apple M2 with lzbench 2.4.1. Blocks are 512 KB by default; use `-B 256K` for streaming or memory-constrained targets.
 
-In future releases we plan to stabilize the RPC protocol and remove support for the legacy protocols we’ve been using to date to allow further evolution of Lix.
+## Benchmarks
 
-### `ssh://` store URIs are now deprecated
+ZXC is included in the two main open-source compression benchmark suites, [lzbench](https://github.com/inikep/lzbench) and [TurboBench](https://github.com/powturbo/TurboBench), so the figures below can be reproduced with either tool alongside more than 70 other codecs. Benchmarks also run on every commit on x86_64 and ARM64 machines; see the [latest results](https://github.com/hellobertrand/zxc/actions/workflows/benchmark.yml).
 
-To enable further RPC work and resolve some long-standing security inconsistencies we must remove `ssh://` store URIs. Lix 2.96 **deprecates `ssh://` store URIs**, but retains support for them without deprecation warnings. `ssh://` store URI support will be removed in Lix 2.97, `ssh-ng://` URIs will remain supported.
+The decoder's speed is paid for at compression time, and on this axis LZ4 and Zstandard are ahead. Levels 1 and 2 still compress at several hundred MB/s; levels 6 and 7 run at about 10 MB/s, slower than `lz4hc -9`, and are meant for data that is compressed once and read many times.
 
-If you are using `ssh://` store URIs because `ssh-ng://` is missing features you need please get in touch so we can figure something out together. Note that `ssh-ng` has stricter security checks than `ssh` and no longer allows untrusted users to copy unsigned outputs to remote stores, *this is intentional*.
+Raw decode speed leaves out half of the picture. When the decoder is fed from a disk, a network or another core, the compressed bytes are what is scarce, and what matters is how much original data each compressed megabyte yields. Effective throughput combines both: decode speed × 100 / ratio (%). On this measure every ZXC level is ahead of LZ4, on all four processors.
 
-### Breaking changes
+Dividing the clock frequency by the decompression speed gives the cost of each decompressed byte in processor cycles, which compares processors running at different frequencies. ZXC spends less than one cycle per byte at every level.
 
-Once again Lix must break sharp corners to make improvements possible and excise surprising behavior in user code.
+Apple M2, macOS 26, Clang 21, -march=native. Single thread, lzbench 2.4.1, `silesia.tar`. Speeds in MB/s; size as a percentage of the input.
 
-- `flake.nix` validation no longer relies on poorly documented triviality checks. Instead Lix now has only one rule for `flake.nix`: **no function calls are allowed outside of `outputs`.** This means that Lix now accepts `let` blocks and string interpolation in flake `inputs`, among other things. We consider this a breaking change because other Nix implementations may no longer be able to evaluate Flakes that were written using Lix.Many thanks to [piegames](https://git.lix.systems/piegames), [Qyriad](https://git.lix.systems/Qyriad) and [eldritch horrors](https://git.lix.systems/pennae).
-- The `floor` and `ceil` builtins now throw errors if their operation would have resulted in precision loss during the conversion from floating point to integers. Precision loss does not sound dramatic, but with numbers of sufficient magnitude this could result in positive floats being converted to negative integers.Many thanks to [jade](https://git.lix.systems/jade), [NaN-git](https://github.com/NaN-git) and [rootile](https://git.lix.systems/rootile).
-- Many nix3 CLI commands no longer build their arguments. This surprising behavior was commonly seen when `nix store delete` was called with a path that was not present in the store, causing the path to be downloaded just so that it could be deleted.Many thanks to [eldritch horrors](https://git.lix.systems/pennae).
-- Shadowing internal files via Nix search paths is now considered an error. Lix 2.95 already deprecated overriding the `nix` search path entry due to surprising effects that could have, Lix 2.96 now considers this an error if not explicitly configured otherwise.Many thanks to [thubrecht](https://git.lix.systems/tom-hubrecht), [jade](https://git.lix.systems/jade) and [eldritch horrors](https://git.lix.systems/pennae).
+| Codec and level | Compression | Decompression | Size % |
+| --- | --- | --- | --- |
+| zxc -1 | 886 | 13,513 | 61.76 |
+| zxc -2 | 588 | 11,320 | 53.86 |
+| zxc -3 | 267 | 9,707 | 46.65 |
+| zxc -4 | 194 | 8,790 | 43.43 |
+| zxc -5 | 114 | 8,118 | 40.83 |
+| zxc -6 | 14.5 | 6,884 | 36.28 |
+| zxc -7 | 9.71 | 5,054 | 33.09 |
+| lz4 | 814 | 4,774 | 47.60 |
+| lz4 --fast -17 | 1,347 | 5,609 | 62.15 |
+| lz4hc -9 | 48.4 | 4,522 | 36.75 |
+| lzav -1 | 686 | 3,876 | 39.91 |
+| snappy | 661 | 3,258 | 47.85 |
+| zstd --fast --1 | 723 | 2,538 | 41.01 |
+| zstd -1 | 645 | 1,803 | 34.53 |
+| zstd -3 | 375 | 1,680 | 31.20 |
+| zlib -1 | 135 | 378 | 36.45 |
 
-## New features
+Google Axion (Neoverse V2), GCP C4A, GCC 14.4, -march=native. Single thread, lzbench 2.4.1, `silesia.tar`. Speeds in MB/s; size as a percentage of the input.
 
-- Nested arguments can be set with `--arg` and `--argstr`.Previously Lix would turn `--arg foo.bar.baz 1` into the set `{ "foo.bar.baz" = 1; }`, now it turns it into `{ foo.bar.baz = 1; }`. Attribute set merging rules are applied to these sets, making it much easier to use function that expect sets as arguments (such as nixpkgs, which expects a `config` set). The old behavior can be recovered by quoting the name, e.g. `--arg '"foo.bar.baz" 1'`.Many thanks to [ma27](https://git.lix.systems/ma27).
-- Inputs are now only fetched by one process at a time. This can be significant in CI situations where many processes may attempt to download the same input set concurrently. Previously all of them would download the set, now only one of them does and signals the others to wait for it to finish.Many thanks to [lheckemann](https://git.lix.systems/lheckemann).
-- Use [mimalloc](https://github.com/microsoft/mimalloc) for faster evaluation. We’ve seen 5-12% eval time improvements due to thisMany thanks to [getchoo](https://git.lix.systems/getchoo) and [lovesegfault](https://github.com/lovesegfault).
-- `nix doctor` has been extended greatly, including general system information and remote builder configuration in its report. It can now also automatically connect to configured remote builders and check their state as well.Many thanks to [rootile](https://git.lix.systems/rootile) and [raito](https://git.lix.systems/raito).
-- `ssh-ng` store URIs are now considered stable. The long-awaited feature parity between `ssh` and `ssh-ng` URIs has arrived, although only Lix 2.96 and newer will be able to take full advantage of this. Connecting to or from older Lixes or other Nix implementations will not see feature parity and silently fall back to the previous behavior.Many thanks to [eldritch horrors](https://git.lix.systems/pennae).
-- Channel references now support `zst`-compressed tarballs. This can greatly improve unpacking speed when using channels.Many thanks to [raito](https://git.lix.systems/raito) and [eldritch horrors](https://git.lix.systems/pennae).
+| Codec and level | Compression | Decompression | Size % |
+| --- | --- | --- | --- |
+| zxc -1 | 885 | 9,564 | 61.76 |
+| zxc -2 | 593 | 7,895 | 53.86 |
+| zxc -3 | 256 | 6,571 | 46.65 |
+| zxc -4 | 186 | 6,105 | 43.43 |
+| zxc -5 | 109 | 5,683 | 40.83 |
+| zxc -6 | 13.5 | 4,950 | 36.28 |
+| zxc -7 | 8.82 | 3,563 | 33.09 |
+| lz4 | 730 | 4,258 | 47.60 |
+| lz4 --fast -17 | 1,278 | 4,954 | 62.15 |
+| lz4hc -9 | 43.2 | 3,850 | 36.75 |
+| lzav -1 | 576 | 2,949 | 39.91 |
+| snappy | 566 | 2,295 | 47.85 |
+| zstd --fast --1 | 302 | 2,291 | 41.01 |
+| zstd -1 | 523 | 1,642 | 34.53 |
+| zstd -3 | 329 | 1,525 | 31.20 |
+| zlib -1 | 115 | 389 | 36.45 |
 
-### Improvements
+AMD EPYC 9B45 (Zen 5), GCP C4D, GCC 14.4, -march=native. Single thread, lzbench 2.4.1, `silesia.tar`. Speeds in MB/s; size as a percentage of the input.
 
-- The `ssl-cert-file` and `netrc-file` settings now report errors when set to files that don’t exist instead of being silently ignored.Many thanks to [Astreaprtcl](https://git.lix.systems/astreaprtcl).
-- Moving between stack frames in the debugger is now easier using offset instead of absolute numbers. While moving up or down some number of frames previously required remembering the frame number you were on you can now directly supply offsets, using `:st +l` to go from frame `n` to `n+k` and `:st -k` to go from `n` to `n-k`.Many thanks to [blokyk](https://git.lix.systems/blokyk).
-- `addErrorContext` frames are always printed in backtraces now, even without `--show-trace`. This makes explicit report locations, for example in the NixOS module system, much more useful.Many thanks to [blokyk](https://git.lix.systems/blokyk).
+| Codec and level | Compression | Decompression | Size % |
+| --- | --- | --- | --- |
+| zxc -1 | 868 | 11,609 | 61.76 |
+| zxc -2 | 585 | 10,332 | 53.86 |
+| zxc -3 | 253 | 8,335 | 46.65 |
+| zxc -4 | 183 | 7,508 | 43.43 |
+| zxc -5 | 110 | 7,014 | 40.83 |
+| zxc -6 | 15.3 | 6,045 | 36.28 |
+| zxc -7 | 10.2 | 4,724 | 33.09 |
+| lz4 | 766 | 5,052 | 47.60 |
+| lz4 --fast -17 | 1,284 | 5,305 | 62.15 |
+| lz4hc -9 | 45.4 | 4,861 | 36.75 |
+| lzav -1 | 699 | 3,603 | 39.91 |
+| snappy | 564 | 2,420 | 47.89 |
+| zstd --fast --1 | 664 | 2,451 | 41.01 |
+| zstd -1 | 606 | 1,898 | 34.53 |
+| zstd -3 | 369 | 1,733 | 31.20 |
+| zlib -1 | 134 | 392 | 36.45 |
 
-### Fixes
+AMD EPYC 7B13 (Zen 3), GCP C2D, GCC 14.4, -march=native. Single thread, lzbench 2.4.1, `silesia.tar`. Speeds in MB/s; size as a percentage of the input.
 
-- `nix-copy-closure --include-outputs` now actually works.Many thanks to [rkjnsn](https://git.lix.systems/rkjnsn).
-- Hash mismatch diagnostics now work with `structuredAttrs`. This fixes hash mismatch diagnostics with fetchers from modern nixpkgs.Many thanks to [keysmashes](https://github.com/keysmashes).
-- Subdaemons receive overridden settings from their parent daemon rather than using the system-wide configuration. This was broken by the switch to explicitly launched subdaemons in 2.95, making it impossible to configure subdaemons by providing command line arguments to the main daemon.Many thanks to [raito](https://git.lix.systems/raito).
+| Codec and level | Compression | Decompression | Size % |
+| --- | --- | --- | --- |
+| zxc -1 | 724 | 8,155 | 61.76 |
+| zxc -2 | 481 | 6,807 | 53.86 |
+| zxc -3 | 214 | 5,252 | 46.65 |
+| zxc -4 | 157 | 4,952 | 43.43 |
+| zxc -5 | 93.3 | 4,779 | 40.83 |
+| zxc -6 | 11.9 | 4,290 | 36.28 |
+| zxc -7 | 7.97 | 3,188 | 33.09 |
+| lz4 | 638 | 3,883 | 47.60 |
+| lz4 --fast -17 | 1,108 | 4,485 | 62.15 |
+| lz4hc -9 | 37.1 | 3,731 | 36.75 |
+| lzav -1 | 459 | 2,955 | 39.91 |
+| snappy | 507 | 1,837 | 47.89 |
+| zstd --fast --1 | 486 | 1,784 | 41.01 |
+| zstd -1 | 444 | 1,339 | 34.53 |
+| zstd -3 | 232 | 1,178 | 31.20 |
+| zlib -1 | 106 | 358 | 36.45 |
 
-### Miscellanea
+## Downloading ZXC
 
-- `ssh` and `ssh-ng` store URIs no longer honor the `max-connections` parameter. This parameter complicated the code immensely for no benefit to the average user and had many sharp corners when set explicitly.Many thanks to [eldritch horrors](https://git.lix.systems/pennae).
-- The `daemon-trust-override` experimental feature has been removed. It can still be emulated by e.g. setting the `NIX_CONFIG` environment variable appropriately.Many thanks to [eldritch horrors](https://git.lix.systems/pennae).
+Source and binary archives for Linux, macOS and Windows are published on the [releases page](https://github.com/hellobertrand/zxc/releases). Each archive carries SLSA build provenance, which you can check with:
 
-### And so much more
+```
+gh attestation verify zxc-0.15.0-linux-x86_64.tar.gz --repo hellobertrand/zxc
+```
 
-Many more changes have gone into Lix 2.96, most of them internal. We hope to ship a stable RPC-based daemon in one of the upcoming releases, including remote build support using this new protocol.
+ZXC is also packaged by distributions and package managers:
 
-## What is planned for the future?
+```
+sudo apt install zxc libzxc-dev
+```
 
-### Lix 2.96.1
+```
+brew install zxc
+```
 
-We are releasing 2.96 together with security releases on stable branches. A few things we wanted to finish for 2.96 have been delayed somewhat, and we expect to release 2.96.1 with a few more improvements soon:
+```
+vcpkg install zxc
+```
 
-- proper --keep-going support when using --store ssh-ng://..., not just when using ssh-ng remotes as remote builders
-- SHA256 support for Git fetchers for both Flakes and other users
-- better diagnostics on MacOS for garbage collection failures caused by TCC permissions
-- .narinfo cache soundness improvements to enable key rollovers for binary caches
-- allow pass more settings to the daemon and remote builders, e.g. log-lines
+```
+conan install -r conancenter --requires="zxc/[*]" --build=missing
+```
 
-### News from Rust integration
+```
+winget install hellobertrand.zxc
+```
 
-Rust integration has moved along apace, and it is now possible to write significant portions of new features without touching *too much* C++ code. We’ve decided to use [zngur](https://github.com/hkalbasi/zngur/) for interop due to its great flexibility and active maintenance, and we’ve already ported a number of features to Rust like this. The REPL is now backed by Rust, as is remote builder configuration and much of the hash conversion code.
+Which version each distribution currently ships is tracked by [Repology](https://repology.org/project/zxc/versions):
 
-## Want to help Lix? Consider donating to Lix!
+[![Packaging status of ZXC across distributions and package managers, from Repology.](https://repology.org/badge/vertical-allrepos/zxc.svg)](https://repology.org/project/zxc/versions)
 
-Following Lix integration in AFNix, Lix now has [an Open Collective](https://opencollective.com/lix-project) and can receive donations.
+To build from source you need CMake 3.14 or later and a C17 compiler (GCC, Clang or MSVC):
 
-We run infrastructure across x86_64-linux, aarch64-linux, and aarch64-darwin. Some of it is in-kind and sponsored. Current costs are around 100€/month.
+```
+git clone https://github.com/hellobertrand/zxc.git
+cd zxc
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel
+sudo cmake --install build
+```
 
-If you value self-hosting and benefit from Lix, please consider donating. Every contribution helps sustain the project.
+The installation provides CMake (`find_package(zxc)`, target `zxc::zxc_lib`) and pkg-config (`libzxc`) files. Meson users can include ZXC as a subproject; see the [integration guide](https://libzxc.org/docs/install/).
 
-## Credits
+## Quick start
 
-Thanks, as always, to the following groups:
+The `zxc` command reads and writes files or pipes, and can be used as a compressor by `tar`:
 
-- The large community who beta tested the upcoming release by running `main` in production since the 2.95 branch-off. We really appreciate having immediate feedback on our work and the trust of running main alongside us means a lot to us. We know we tested the patience of some of you, we thank you for that.If you want to run Lix main yourself, see [the beta guide](https://wiki.lix.systems/books/lix-contributors/page/lix-beta-guide) for details.
-- Everyone who contributed by filing bugs and giving us feedback on Matrix.
-- All the first time contributors who made their first contributions to a Nix implementation in Lix. We are eternally grateful to everyone who helped us out on the numerous important but tedious issues.
-- All the contributors who have helped us with the backlog of bugs.
-- The CppNix contributors and CppNix team, without whom we would not have this software, and who wrote some of the improvements ported into this release.
+```
+# Compress (level 3 by default), then decompress
+zxc -5 assets.tar assets.tar.zxc
+zxc -d assets.tar.zxc assets.tar
 
-Onwards and upwards for the next release. We look forward to continuing to work together with everyone to build a better foundation for the evolution of Nix.
+# Seekable archive, for random access
+zxc -S big.bin big.bin.zxc
+
+# As a compressor for tar
+tar -I 'zxc -5' -cf data.tar.zxc data/
+
+# Measure speed on your own machine
+zxc -b input_file
+```
+
+From C, the buffer interface compresses and decompresses in one call each:
+
+```
+#include "zxc.h"
+
+uint64_t bound = zxc_compress_bound(src_size);
+zxc_compress_opts_t c = {
+    .level            = ZXC_LEVEL_DEFAULT,
+    .checksum_enabled = 1,
+};
+int64_t csize = zxc_compress(src, src_size, dst, bound, &c);
+
+zxc_decompress_opts_t d = { .checksum_enabled = 1 };
+int64_t n = zxc_decompress(dst, csize, out, out_cap, &d);
+if (n < 0)
+    fprintf(stderr, "zxc: %s\n", zxc_error_name((int)n));
+```
+
+See the [examples](https://libzxc.org/docs/examples/) for the streaming, context, seekable and dictionary interfaces, the [API reference](https://libzxc.org/docs/api/) for every function, and the [manual page](https://libzxc.org/docs/cli/) for all command options.
+
+## Language bindings
+
+The official bindings are maintained in the main repository and released with the library. They are published as `zxc-compress`, because the name `zxc` is taken on some registries.
+
+| Language | Installation | Package |
+| --- | --- | --- |
+| Rust | `cargo add zxc-compress` | [crates.io](https://crates.io/crates/zxc-compress) |
+| Python | `pip install zxc-compress` | [PyPI](https://pypi.org/project/zxc-compress) |
+| Node.js | `npm install zxc-compress` | [npm](https://www.npmjs.com/package/zxc-compress) |
+| Go | `go get github.com/hellobertrand/zxc/wrappers/go` | [source](https://github.com/hellobertrand/zxc/tree/main/wrappers/go) |
+| WebAssembly | build with Emscripten | [source](https://github.com/hellobertrand/zxc/tree/main/wrappers/wasm) |
+
+Bindings maintained by others: [go-zxc](https://github.com/meysam81/go-zxc) (Go), [zxc-nim](https://github.com/openpeeps/zxc-nim) (Nim), and a [Free Pascal port](https://github.com/Xelitan/Free-Pascal-port-of-ZXC-compressor-decompressor).
+
+## Testing
+
+- Fuzzed around the clock by Google OSS-Fuzz, with eight harnesses covering compression, decompression, the block API, in-place decoding, streaming, seekable archives and dictionaries; they reach over 80 % of the library's lines (coverage history).
+- The same harnesses run under ClusterFuzzLite on every pull request.
+- AddressSanitizer, UndefinedBehaviorSanitizer and Valgrind in continuous integration; Cppcheck, the Clang Static Analyzer and CodeQL on every change; continuous security analysis of the code and its dependencies by Snyk.
+- Decoder conformance vectors and byte-exact tests of the encoder output, so that the wire format cannot change by accident.
+- Builds and tests across several operating systems, compilers and eight processor architectures.
+- Pinned CI dependencies, tracked by the OpenSSF Scorecard.
+
+## Getting help and contributing
+
+Questions and ideas are welcome in [GitHub Discussions](https://github.com/hellobertrand/zxc/discussions). Please report bugs on the [issue tracker](https://github.com/hellobertrand/zxc/issues), and security problems privately as described in the [security policy](https://github.com/hellobertrand/zxc/security/policy).
+
+Contributions are welcome; read the [contribution guidelines](https://github.com/hellobertrand/zxc/blob/main/.github/CONTRIBUTING.md) first. You can also support the project through [GitHub Sponsors](https://github.com/sponsors/hellobertrand).
