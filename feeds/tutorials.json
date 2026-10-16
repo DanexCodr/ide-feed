@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-16T16:16:58Z",
+  "updated": "2026-10-16T20:39:07Z",
   "items": [
     {
       "id": "devto-4821943",
@@ -311,18 +311,6 @@
       "url": "https://dev.to/yashksaini/dev-log-24-hardening-the-p2p-stack-from-flaky-tests-to-websocket-fixes-55f",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F99537lhxr01kt8nq46j3.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAQIDBP/EABQBAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhADEAAAAcNJMMCh/8QAGRAAAwADAAAAAAAAAAAAAAAAAAEQERIh/9oACAEBAAEFAhcNhuIxP//EABURAQEAAAAAAAAAAAAAAAAAAAEQ/9oACAEDAQE/ASf/xAAVEQEBAAAAAAAAAAAAAAAAAAABEP/aAAgBAgEBPwFn/8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAGRABAQEBAQEAAAAAAAAAAAAAAQARITFB/9oACAEBAAE/IWSTe7cbgErL8sZ5Gxdm/9oADAMBAAIAAwAAABBf3//EABcRAQEBAQAAAAAAAAAAAAAAAAEAITH/2gAIAQMBAT8QxI9v/8QAFhEAAwAAAAAAAAAAAAAAAAAAARAR/9oACAECAQE/EKK//8QAGxABAAMAAwEAAAAAAAAAAAAAAQARMSFBUWH/2gAIAQEAAT8QBTt/clzStsXJbgjQrINVlV4RF8Ralb2csQOp2Hqf/9k=",
-      "color": "#3B49DF"
-    },
-    {
-      "id": "devto-4817363",
-      "title": "How Our Engineering Team Uses AI, Part II: Meat Proxies",
-      "desc": "By Eyal Bukchin | 7 min read",
-      "tag": "tutorial",
-      "published": "2026-10-08T10:33:43Z",
-      "order": 27,
-      "url": "https://dev.to/metalbear/how-our-engineering-team-uses-ai-part-ii-meat-proxies-148g",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fmetalbear.com%2Fblog%2Fengineering-ai-use-part-2%2Fthumbnail.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAQMAAgT/xAAWAQEBAQAAAAAAAAAAAAAAAAABAAP/2gAMAwEAAhADEAAAAYDXYY/MS//EABoQAAIDAQEAAAAAAAAAAAAAAAECABEyEDH/2gAIAQEAAQUCbUEoAt7XE3//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAXEQEBAQEAAAAAAAAAAAAAAAABABEh/9oACAECAQE/AeyO3//EABcQAQEBAQAAAAAAAAAAAAAAAAEAECH/2gAIAQEABj8CdOTpf//EABsQAQACAgMAAAAAAAAAAAAAAAEAESFxEDGR/9oACAEBAAE/IV6S4Ry9EsJS0gvdw1BkW25//9oADAMBAAIAAwAAABC+f//EABYRAQEBAAAAAAAAAAAAAAAAAAARAf/aAAgBAwEBPxBcj//EABkRAAMAAwAAAAAAAAAAAAAAAAABESExQf/aAAgBAgEBPxBLnQ/Vwf/EABwQAQADAAIDAAAAAAAAAAAAAAEAESFRsTFhcf/aAAgBAQABPxCgPbthaXm9FnNwIjkLnnVa7gA3YKNqmUuEOv2f/9k=",
       "color": "#3B49DF"
     },
     {

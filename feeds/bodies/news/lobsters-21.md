@@ -1,136 +1,152 @@
-A common requirement when handling an effect is to depend on some state outside the computation raising the effects.
-For example an `Increment` effect needs to track the current count.
-Or in testing a handler for `StandardOut` might build up a state consisting of all messages written.
+Folders is a non-textual language, where code is expressed in containment and order alone. The names of the folders are ignored, apart from alphabetical ordering. In other words, they are *pure ordered trees*.
 
-Below is the implementation of a single stateful `Increment` effect.
+![Properties of a folder holding 352,449 folders: 0 bytes](https://danieltemkin.com/Content/Esolangs/Folders/FoldersFree_small.png)
 
-```eyg
-let with_counter = (initial, computation) -> {
-  handle Increment(
-    (_unit, resume) -> {
-      (state) -> {
-        resume(state)(!int_add(state, 1))
-      }
-    },
-    (_) -> { 
-      let value = computation({})
-      let finish = (count) -> { {count, value} }
-      finish
-    }
-  )(initial)
-}
+            Inspired by the Whitespace language, Folders is devoted to the idea of dematerialized code. It began with the question *What is more empty than a file with no visible text?* The empty folder is clutter, an appendage with no purpose. In git, it is ignored entirely (for this reason, it is suggested that Folders programs put .gitignore files in their deepest reaches).
 
-with_counter(0, (_) -> { 
-  let _ = perform Increment({})
-  let _ = perform Increment({})
-  let _ = perform Increment({})
-  "Done"
-})
-```
+            Folders began as a Windows language. In Windows, folders are an even more extreme measure of emptiness: they take up no disk space at all.
+            For proof, create  352,449 folders and get properties on it. In this way, Folders offers not only a dematerialized approach to code but also infinite storage capacity. Keep all your data encoded in folder names and never worry about running out of space again.
 
-Each handle expression applies to a single effect label.
-Handlers can be nested to handle multiple effects but care needs to be taken to manage the same state between multiple handlers.
+For those who use other operating systems, the emulator below gives some of the experience of how Folders manages data and code.
 
-This is part of the design to keep the type system simple, though the restriction might be relaxed in the future.
-If you want more than one effectful operation you have two options.
+The original implementation [can be found on github](https://github.com/rottytooth/Folders).
 
-### A generic stateful effect
+Encoding
+![Encoding folders](https://danieltemkin.com/Content/Esolangs/Folders/family_tree1.svg)
 
-```eyg
-let with_counter = (initial, computation) -> {
-  handle Update(
-    (transform, resume) -> {
-      (state) -> {
-        let state = transform(state)
-        resume(state)(state)
-      }
-    },
-    (_) -> { 
-      let value = computation({})
-      let finish = (count) -> { {count, value} }
-      finish
-    }
-  )(initial)
-}
+            Each command folder has at least one child folder. The number of subfolders in the first
+            folder (alphabetically) indicates the type of command; any arguments are indicated in a
+            second folder; some commands require a third folder. Expressions are the same: the number of folders in the first sub-folder determine what kind of expression it is. The [full Language Spec is below](https://danieltemkin.com/esolangs/folders#language_spec).
 
-let increase = (amount) -> {
-  let _ = perform Update((state) -> { !int_add(state, amount) })
-  {}
-}
+            Temporary data is stored as folders; unlike Folders code, it is the name of the folder that stores the data.
 
-let get = (_) -> {
-  perform Update((state) -> { state })
-}
-with_counter(0, (_) -> { 
-  let _ = increase(3)
-  let value = get({})
-  let _ = perform StandardOut(!int_to_string(value))
-  let _ = increase(2)
-  !int_to_string(value)
-})
-```
+Folders FS
 
-This counter value can be increased and retrieved.
-The functions `get` and `increase` are the public interface to the stateful operation.
-A generic `Update` effect takes a transformation from the current state to the new state.
+            The Folders interpreter does not create temp files; anything not held
+            immediately in memory is stored as a set of temp folders. Unlike Folders code, the name of the folder stores the data itself.
 
-## Shared stateful handlers
+            The prefered I/O of
+            Folders is another set of folders. This means you can encode all your data in
+            folders, bypassing the "material realm" of files entirely and giving you infinite disk space (attempt at your own risk). Folders lang for code, Folders FS for data storage. 
 
-The generic approach is only possible if you control the design of the effects which is not always possible.
-For example we might want to test a library with the `Get` and `Increase` effects.
+![Temp folders from several Folders programs](https://danieltemkin.com/Content/Esolangs/Folders/FoldersRunning.png)
+Temp folders from several Folders programs
 
-In that case effects can be bounced to a new effect which you do control.
+Visualizations
+A Folders program is a *nil-terminated nested list*. Its simplest form is pure containment and order, like this all-array JSON:
 
-```eyg
-let with_state = (initial, f) -> {
-  // Generic State effect owns the shared state.
-  let run = handle State((update, resume, state) -> {
-    let state = update(state)
-    resume(state)(state)
-  }, (_) -> {
-    // These handlers translate operations; they do not hold separate state.
-    let value = handle Increase((amount, resume) -> {
-      let _ = perform State((state) -> { !int_add(state, amount) })
-      resume({})
-    }, (_) -> {
-      handle Get((_, resume) -> {
-        let state = perform State((state) -> { state })
-        resume(state)
-      }, f)
-    })
+[[[[],[]],[],[[]]],[[[],[]],[],[[],[]]],[[[],[]],[],[[],[],[]]],[[[],[]],[],[[],[],[],[]]],[[[],[],[]],[[]],[[[],[],[],[],[]],[],[[[],[],[],[]]]]],[[[],[],[]],[[],[]],[[[],[],[],[],[]],[],[[[],[],[],[[]]]]]],[[[],[],[]],[[],[],[],[]],[[[],[],[],[],[]],[],[[[],[],[],[]]]]],[[[]],[[[],[],[],[],[],[],[],[]],[[],[[],[],[],[]]],[[[],[],[],[],[]],[],[[[],[],[],[[]]],[[[]],[[]],[[]],[]]]]],[[[[],[],[],[]],[[],[[]]]],[[[],[],[],[]],[[[],[],[],[],[]],[[],[],[]],[[[[]],[],[[]],[]]]]],[[[],[],[]],[[],[],[]],[[[]],[[],[[]]],[[],[[],[]]]]],[[[],[],[]],[[]],[[],[[],[]]]],[[[],[],[]],[[],[]],[[],[[],[],[]]]],[[[],[],[]],[[],[],[],[]],[[[]],[[],[[],[],[],[]]],[[[],[],[],[],[]],[],[[[],[],[],[[]]]]]]]]]]
+Fibonacci Program
 
-    let finish = (state) -> { {state, value} }
-    finish
-  })
-  run(initial)
-}
+That is also how the JS emulator saves/reads Folders programs.
+However, other systems of visualization are possible. Folders programs are *content as structure* and can be applied to raw data of any type. Here is a [Truth Machine](https://esolangs.org/wiki/Truth-machine) as a contour map. The thicker lines are containers, and the order of folders is read starting at the upper left (NW corner) and proceeding counter-clockwise.
 
-with_state(0, (_) -> {
-  let before = perform Get({})
-  let _ = perform Increase(2)
-  let middle = perform Get({})
-  let _ = perform Increase(-1)
-  let after = perform Get({})
-  [before, middle, after]
-})
-// {state: 1, value: [0, 2, 1]}
-```
+![Truth Machine](https://danieltemkin.com/Content/Esolangs/Folders/truthmachine1_island.svg)
+Truth Machine
 
-## Returning functions
+![Truth Machine Detail](https://danieltemkin.com/Content/Esolangs/Folders/truthmachine_island_detail.svg)
+Truth Machine (Detail)
 
-Type checking the following will fail with the error `this expression has a recursive type`.
+Other visualizations might be a family tree (with all single parents), a botanical branching structure (like a splitting stalk of wheat), or the paths through a maze.
 
-```eyg
-let main = (_) -> {
-  let f = perform Get({})
-  f("")
-}
-main({})
-```
+![Truth Machine](https://danieltemkin.com/Content/Esolangs/Folders/truthmachine1_maze.svg)
+Truth Machine
 
-Why this fails is not immediately obvious.
-The type of `f` appears in the reply type of the `Get` effect row of the `main` function.
-When `f` is called its effects are unified with the effects in the current function block, i.e. the `main` block.
-This results in a recursive type trying to be constructed.
+![Simple Echo](https://danieltemkin.com/Content/Esolangs/Folders/simpleecho1_maze.svg)
+Simple Echo
 
-It is recommended not to return functions from effects because of this.
+The red dots indicate a threshhold from a container to a single child.
+
+Language Spec
+
+            The language itself is a very simple imperative language with a short list of semantic rules.
+
+            For Commands and Expressions, the number of folders in their first child folder determines their use. Types are used directly.
+
+Commands
+
+                    Command
+
+                    # of Folders
+
+                    Details
+
+                    if
+
+                    0 folders
+
+                    Second sub-folder holds expression, third holds list of commands
+
+                    while
+
+                    1 folder
+
+                    Second sub-folder holds expression, third holds list of commands
+
+                    declare
+
+                    2 folders
+
+                    Second sub-folder holds type, third holds var name (in number of folders)
+
+                    let
+
+                    3 folders
+
+                    Second holds var name (in number of folders), third holds expression
+
+                    print
+
+                    4 folders
+
+                    Second sub-folder holds expression
+
+                    input
+
+                    5 folders
+
+                    Second sub-folder holds var name
+
+Expressions
+
+                    Type
+
+                    # of Folders
+
+                    Details
+
+                    variable
+
+                    0 folders
+
+                    Second sub-folder holds var name
+
+                    add
+
+                    1 folder
+
+                    Second sub-folder holds first expression to add, third holds second expression
+
+                    subtract
+
+                    2 folders
+
+                    Second sub-folder holds first expression to subtract, third holds second expression
+
+                    multiply
+
+                    3 folders
+
+                    Second sub-folder holds first expression to multiply, third holds second expression
+
+                    divide
+
+                    4 folders
+
+                    Second sub-folder holds first expression to divide, third holds second expression
+
+                    literal value
+
+                    5 folders
+
+Second sub-folder holds the type of the value (e.g. two folders for a string, third holds the value)

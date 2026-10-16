@@ -1,15 +1,5 @@
-*Update 2026-10-15: I wrote [a followup](https://sunshowers.io/posts/anthropic-mononoke-2/) to answer questions and concerns.*
+Commenter asdf wonders [where `WIN32_LEAN_AND_MEAN` came from](http://blogs.msdn.com/oldnewthing/pages/407234.aspx#705378).
+ The `WIN32_LEAN_AND_MEAN` symbol was introduced in the Windows 95 time frame as a way to exclude a bunch of Windows header files when you include `windows.h`. You can take a look at your `windows.h` file to see which ones they are.
+ The symbol was added as part of the transition from 16-bit Windows to 32-bit Windows. The 16-bit `windows.h` header file didn’t include all of those header files, and defining `WIN32_LEAN_AND_MEAN` brought you back to the 16-bit Windows philosophy of a minimal set of header files for writing a bare-bones Windows program. This appeased the programmers who liked to micro-manage their header files, and it was a big help because, at the time the symbol was introduced, precompiled header files were not in common use. As I recall, on a 50MHz 80486 with 8MB of memory, switching to `WIN32_LEAN_AND_MEAN` shaved three seconds off the compile time of each C file. When your project consists of 20 C files, that’s a whole minute saved right there.
 
-*Discuss on [Hacker News](https://news.ycombinator.com/item?id=50094694) or [Lobsters](https://lobste.rs/s/plcgps/anthropic_s_scion_is_heavily_inspired_by).*
-
-Here is Anthropic [describing](https://www.anthropic.com/engineering/redesigning-source-control) ([archive link](https://ghostarchive.org/archive/hCFVA)) yesterday how their new version control system, Scion, uses a concept called “derived data” to make operations like blames more efficient:
-
-Here is me, back in 2022, describing in my Oxide candidate materials how the [Mononoke](https://github.com/facebook/sapling/tree/main/eden/mononoke) source control server I helped build uses a concept called “derived data” to make operations like blames more efficient:
-
-I think the level of imitation goes well beyond having similar insights<sup>[1](https://sunshowers.io/posts/anthropic-mononoke/#fn:1)</sup>. The fact that Sapling was only credited for “hard-won lessons”, and that Mononoke was not mentioned at all, borders on plagiarism. The post comes off as Anthropic claiming that Claude designed all this, while the reality is that our (extraordinary) team at Meta came up with many of the insights that Claude dutifully applied almost a decade later. (We looked at plenty of prior art for Mononoke and Sapling too, from Google’s SrcFS to write-ahead logs in databases.)
-
-I am very glad that the vision our team had back in 2017-18 was so powerful and enduring — when you go against the grain, you’re always a bit unsure if what you’re doing is genius or madness, and I think Mononoke’s design has stood the test of time. And, to be clear, I do not have a problem with Anthropic copying Mononoke’s design. (This is part of why we put out open source — to benefit humanity through the spread of good ideas.)
-
-But as LLMs continue to assist in designing new systems, they are likely to index heavily on existing designs. Mononoke is [open source](https://github.com/facebook/sapling/tree/main/eden/mononoke) and in every LLM’s training set. If you ask [Opus 5.5](https://claude.ai/share/e6a66ec5-7757-4adb-901f-0e33b1c38536) or [GPT-6 Astra](https://chatgpt.com/share/6ace7be6-68f8-83ea-ad68-0f9d14448318) (thanks [Matthew Fowle](https://bsky.app/profile/jauntywunderkind.bsky.social/post/3mxsettjnoc22)) about prior art, they both immediately point out the similarities to Mononoke.
-
-Giving credit to those that came before us is now easier — and more important — than ever. There is no longer an excuse.
+Moore’s Law and precompiled headers have conspired to render the `WIN32_LEAN_AND_MEAN` symbol relative useless. It doesn’t really save you much any more. But at one point, it did.

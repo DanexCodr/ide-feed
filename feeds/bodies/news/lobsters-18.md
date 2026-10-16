@@ -1,84 +1,39 @@
-A physically modelled piano synthesizer in C++17. It renders notes and MIDI
-files to stereo WAV and supports live MIDI input on macOS. Sound is synthesized
-from a hammer, string, soundboard and sympathetic-resonance model, with a room
-reverb effect. No piano samples, downloads or third-party libraries are required.
+It’s been two years since [my initial post](https://blogs.gnome.org/adrianvovk/2024/10/25/a-desktop-for-all/https://blogs.gnome.org/adrianvovk/2024/10/25/a-desktop-for-all/) about making GNOME OS an end-user general purpose OS. Today, we’re excited to announce that we’ve hit a major milestone!
 
-Note
+TL;DR: We’re launching a new edition called “GNOME OS Preview”, which is built from the latest stable GNOME release. This means that GNOME OS is no longer *just* a nightly OS for GNOME developers and testers!
 
-It is VERY EARLY days for releasing this code. The piano is fine, but I have a prototyped AU and VST plugin, etc. which are not part of this open release so far.
+## The Road to Stable
 
-You need a C++17 compiler and Make. On macOS, install the Xcode Command Line
-Tools (`xcode-select --install`) if they are not already available, then run:
+Even though GNOME OS has been usable on real hardware for a few years now, its appeal was limited. We’ve only had the Nightly edition, which is constantly rebuilt to ship the latest git commit of every GNOME component (and a few others, like systemd and Flatpak). This form of GNOME OS is extremely useful, since GNOME developers and designers can daily-drive it to test the latest changes. However, it’s not something we’d recommend to non-developers.
 
-```
-make
-./coopiano --help
-```
+Over the past year, we’ve seen a lot of adoption of GNOME OS Nightly amongst GNOME developers, especially following the success of last year’s [Summer of GNOME OS](https://blogs.gnome.org/tbernard/2025/06/01/summer-of-gnome-os/) challenge. This has led to a significant uptick in contributions and initiatives aimed at improving user and developer experience. For instance:
 
-macOS builds link the system CoreMIDI, AudioToolbox, CoreFoundation and CoreAudio
-frameworks. The source also supports offline rendering on other platforms with
-a C++17 compiler and threads; live MIDI/audio is macOS-only. This extraction was
-built and tested on macOS; other platforms have not been verified here.
+- Thanks to Jonas Dreßler’s, Valentin David’s, and Sebastian Wick’s zswap enablement efforts, GNOME OS now handles devices with limited amounts of RAM without OOM stalls. Jonas also found a hack that lets GNOME OS dynamically grow the usable on-disk swap space on-demand, which makes zswap perform significantly better than usual.
+- The recently released Test Center app allows you to install CI builds of Flatpak apps from a merge request, making it super easy to test experimental changes before they are even merged. On GNOME OS Nightly, Test Center can do the same with system components by applying them as a system extension.
+- Jordan Petridis’s new Toolpak project aims to provide a clean solution for distributing and installing command-line applications that developers need in a cross-distro fashion, similarly to how Flatpak and Flathub work for graphical apps.
 
-Compiler settings can be overridden, for example `make CXX=clang++ CXXFLAGS=-O3`.
-Run `make clean` before changing compiler settings. `make clean` removes only the
-executable, preserving any renders and presets.
+Of course, long-term our goal is an OS for the broader public. We’re working on this across a number of different fronts, including:
 
-## Run
+- Enablement for systemd-homed across the stack, allowing for stronger per-user disk encryption and other benefits.
+- Experimental work in the kernel to solve a bunch of limitations we’ve run into with filesystems. Ada Magicat went on a deep dive on her recent All Systems Go talk!
+- Deep integration between systemd-homed and the session’s keyring, to increase security of the session’s lock screen. Dhanuka Warusadura gave a lightning talk at All Systems Go about his work on this.
+- A new feature-complete installer, to replace the current placeholder installer. Julian Sparber also gave a talk about this at All Systems Go, with a live demo!
+- Support for delta updates in systemd-sysupdate, to avoid downloading a full 2 GB image every time.
+- Better integration with the TPM, including a graphical TPM recovery UI. Currently, trying to type a TPM recovery key into Plymouth is rather difficult.
+- Improved support for ARM hardware, including some specific models of phones. Abderrahim Kitouni gave a lightning talk at GUADEC this year about the current installation process.
+- Shipping our pre-installed apps as Flatpaks, and reworking the app release process to unify the build definitions between GNOME OS, the GNOME Nightly Apps Flatpak repo, and Flathub.
+- An STF project focused on Flatpak and Portals, which will enable broader app support on GNOME OS (like VPNs!). You can learn more from the announcement blog post.
 
-```
-# Note, velocity, duration, optional key-hold time (seconds)
-./coopiano A4 0.5 8
-# Writes A4_gp.wav; quote sharp note names, e.g. 'G#3'.
+Some of these areas require lots more work before they’re ready for prime time, and even once they’re ready it’s not clear that it’ll be possible to migrate existing GNOME OS installations to use these new features. At [FOSDEM this year](https://blogs.gnome.org/adrianvovk/2026/02/18/gnome-os-hackfest-fosdem-2026/), we discussed this issue and decided that we won’t declare GNOME OS as “stable” until we can confidently commit to maintaining a clear long-term upgrade path for existing installations.
 
-# Built-in musical demo; writes demo_piano.wav
-./coopiano demo
+However, we also don’t think that all these things need to be in place before GNOME OS can be used by more people than it is today. It’s *not* ready for the masses yet, but it is ready for early adopters that aren’t quite adventerous enough to run a nightly OS.
 
-# Render your own MIDI file; no MIDI files are bundled
-./coopiano performance.mid 1.0 performance.wav
+## Introducing GNOME OS Preview
 
-# Play from connected MIDI sources or the virtual coopiano MIDI destination
-./coopiano live
-# macOS only; Ctrl-C to stop
-```
+GNOME OS Preview is the current GNOME OS Nightly, but without the “nightly” aspect. Instead, it’s built from the latest stable GNOME release (GNOME 51.1, at the time of writing). GNOME OS Preview lives in the same branches on [GitLab](https://gitlab.gnome.org/GNOME/gnome-build-meta) as the stable `org.gnome.Platform` Flatpak runtimes.
 
-Running `./coopiano` without arguments renders A4 at velocity 0.5 for eight
-seconds. Offline commands write 44.1 kHz, 16-bit stereo WAV files; they do not
-play them automatically. On macOS, use `afplay A4_gp.wav` to listen.
-Each offline render is peak-normalized independently.
+GNOME OS Preview is only a few weeks old, so it has only seen limited real-life testing so far. We therefore expect people will uncover some issues initially. That said, Preview is significantly more stable than Nightly, which dozens of people have been daily driving without major issues for over a year. Thus, we’re feeling confident that Preview is going to be reliable enough for daily use by non-developer enthusiasts.
 
-## Presets
+In all likelihood, GNOME OS Preview will be with us for a few years. However, **we are explicitly not promising updates in perpetuity**. If you’re not OK with re-installing your OS in a few years to switch to GNOME OS Stable, this is not for you yet. But if you’ve already been curious about giving GNOME OS a try, this is the moment!
 
-Built-in defaults work without any configuration file. `default.ini` documents
-the available voicing and reverb controls, including their ranges. Copy it,
-edit the copy, then select it explicitly:
-
-```
-cp default.ini my-piano.ini
-./coopiano --preset my-piano.ini live
-./coopiano --preset my-piano.ini audition --output audition.wav
-```
-
-The audition command plays a chord at increasing velocities. Use `--help` for
-its chord, velocity and timing options. Editing `default.ini` alone does not
-change the built-in sound; pass `--preset` and restart playback to load changes.
-
-```
-GP_NO_REVERB=1 ./coopiano A4 0.5 8
-GP_SAVE_SETTINGS=1 ./coopiano --preset my-piano.ini A4 0.5 8
-```
-
-`GP_SAVE_SETTINGS=1` writes a resolved preset beside the WAV as `A4_gp.wav.ini`.
-Environment overrides take precedence over preset settings.
-
-- coopiano.cpp: CLI, MIDI file parser, WAV writer and macOS live host.
-- piano.hpp: header-only synthesis library in namespace piano.
-- instrument.hpp: voice pool, note/pedal scheduling and instrument effects.
-- streaming_soundboard.hpp: streaming soundboard convolution.
-- preset.hpp and reverb.hpp: INI configuration and stereo room effect.
-- piano_host.hpp and piano_resampler.hpp: host-rate adaptation and resampling.
-- live_diagnostics.hpp and live_bench.hpp: support compiled into the macOS host.
-
-The C++ source/header files originate from the development project. Historical
-comments may refer to documentation in that larger project.
-The original test and benchmark collections are not bundled here.
+GNOME OS Preview is available for download on the newly-refreshed [os.gnome.org](https://os.gnome.org)! GNOME OS Nightly is still available from there too. As always, you can reach us on Matrix at [#gnome-os:gnome.org](https://matrix.to/#/#gnome-os:gnome.org) or via the [`gnome-os` tag on Discourse](https://discourse.gnome.org/tag/gnome-os)
