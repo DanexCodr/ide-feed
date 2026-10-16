@@ -1,36 +1,15 @@
-Costa is a small and lightweight application which runs on top of
-            MS-DOS or compatible operating systems. It replaces the DOS-prompt
-            with a clean, user-friendly interface - a so-called GUI (Graphical
-            User Interface). Costa comes packed with a bunch of useful
-            accessories and can be used with or without a mouse.
+*Update 2026-10-15: I wrote [a followup](https://sunshowers.io/posts/anthropic-mononoke-2/) to answer questions and concerns.*
 
-Developed by
-            [Jacob Palm](https://codeberg.org/jacobpalm/), a Danish
-            IT-professional and hobby developer, the first release of Costa came
-            way back in 2004. Over the years - and through several releases -
-            Costa has gradually evolved into what it is today, with new releases
-            still coming out regularly as of 2025.
+*Discuss on [Hacker News](https://news.ycombinator.com/item?id=50094694) or [Lobsters](https://lobste.rs/s/plcgps/anthropic_s_scion_is_heavily_inspired_by).*
 
-Costa is provided free of charge, and the source code is open
-            sourced for anyone who wants to have a look. To see what others
-            think of Costa, have a look at
-            [Costa on the Web](https://costa.jacobpalm.dk/2024/05/09/costa-on-the-web.html)
-            on the blog.
+Here is Anthropic [describing](https://www.anthropic.com/engineering/redesigning-source-control) ([archive link](https://ghostarchive.org/archive/hCFVA)) yesterday how their new version control system, Scion, uses a concept called “derived data” to make operations like blames more efficient:
 
-## Download
+Here is me, back in 2022, describing in my Oxide candidate materials how the [Mononoke](https://github.com/facebook/sapling/tree/main/eden/mononoke) source control server I helped build uses a concept called “derived data” to make operations like blames more efficient:
 
-You can download the latest version of Costa now, free of charge. To
-            get started, simply unzip the downloaded archive and run Costa. Full
-            documentation is included in the download.
+I think the level of imitation goes well beyond having similar insights<sup>[1](https://sunshowers.io/posts/anthropic-mononoke/#fn:1)</sup>. The fact that Sapling was only credited for “hard-won lessons”, and that Mononoke was not mentioned at all, borders on plagiarism. The post comes off as Anthropic claiming that Claude designed all this, while the reality is that our (extraordinary) team at Meta came up with many of the insights that Claude dutifully applied almost a decade later. (We looked at plenty of prior art for Mononoke and Sapling too, from Google’s SrcFS to write-ahead logs in databases.)
 
-Since September 2017, the full source code has been available, and
-            still is. Released for free usage under the MIT license. Visit
-            Codeberg to see the source code, and to pull a copy for your own
-            use.
+I am very glad that the vision our team had back in 2017-18 was so powerful and enduring — when you go against the grain, you’re always a bit unsure if what you’re doing is genius or madness, and I think Mononoke’s design has stood the test of time. And, to be clear, I do not have a problem with Anthropic copying Mononoke’s design. (This is part of why we put out open source — to benefit humanity through the spread of good ideas.)
 
-[Download Costa 1.8.0](https://costa.jacobpalm.dk/downloads/costa180.zip)
-[Get source code](https://codeberg.org/jacobpalm/costa)
+But as LLMs continue to assist in designing new systems, they are likely to index heavily on existing designs. Mononoke is [open source](https://github.com/facebook/sapling/tree/main/eden/mononoke) and in every LLM’s training set. If you ask [Opus 5.5](https://claude.ai/share/e6a66ec5-7757-4adb-901f-0e33b1c38536) or [GPT-6 Astra](https://chatgpt.com/share/6ace7be6-68f8-83ea-ad68-0f9d14448318) (thanks [Matthew Fowle](https://bsky.app/profile/jauntywunderkind.bsky.social/post/3mxsettjnoc22)) about prior art, they both immediately point out the similarities to Mononoke.
 
-Looking for older versions?
-            [Check the archive](https://costa.jacobpalm.dk/archive.html),
-            which also has a complete log of changes in every version.
+Giving credit to those that came before us is now easier — and more important — than ever. There is no longer an excuse.

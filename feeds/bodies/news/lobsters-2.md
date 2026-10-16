@@ -4,7 +4,7 @@ Before C23, I was [taken in](https://www.youtube.com/watch?v=443UNeGrFoM) by *Ho
 
 So here’s three modern C conventions which started to rise naturally from adding `-std=c23` to my zig build:
 
-## 1. Unused? Maybe? (Yes)
+## 1. Unused? Maybe. (Yes)
 
 Our first one is centered around `[[nodiscard]]`. If I draw an app window or panel I require the caller to interrogate the rect of the thing that was just rendered:
 
@@ -17,20 +17,20 @@ Our first one is centered around `[[nodiscard]]`. If I draw an app window or pan
 }
 ```
 
-It’s a business logic bug if my caller doesn’t capture the rectangle for later processing. Therefore `[[nodiscard]]` has been such a godsend for fixing bugs… Except there’s a choice few instances where I will draw something with *no genuine use* for the resulting rect:
+It’s a genuine business logic bug if the caller doesn’t capture the rectangle for later processing. Therefore `[[nodiscard]]` has been such a godsend for fixing bugs… Except there’s a choice few instances where I will draw something with *no real use* for the resulting rect. I’d rather ignore the return value:
 
 ```c
 enum screen_opt popup_options = /* ... */ ;
 draw_screen(popup_options, /* ... */); // ERROR: damn you [[nodiscard]]
 ```
 
-Clang will error out here. I could capture the var and never use it but…
+Clang will error out here. I could maybe capture the var and never use it but…
 
 ```c
 rect_t rect = draw_screen(/* ... */); // ERROR: unused variable (I have `-Werror` enabled)
 ```
 
-Pre-C23 I could solve this through an `UNUSED()` macro:
+Pre-C23 I might solve this through an `UNUSED()` macro:
 
 ```c
 #ifndef UNUSED
@@ -41,13 +41,13 @@ rect_t rect = draw_screen(/* ... */);
 UNUSED(rect); // Silences the compiler, but now I'm sad.
 ```
 
-But now with C23 I’ve deleted the macro in favor of `[[maybe_unused]]`:
+But now with C23 I’ve deleted the macro in favor of the native `[[maybe_unused]]`:
 
 ```c
 [[maybe_unused]] rect_t rect = draw_screen(...); // OK
 ```
 
-Phew I feel better. I’ve also noticed this is happening all over the place: lots of different routines returning different types that are marked with `[[nodiscard]]`. So for those few exceptions why not just go for:
+Phew I feel better. I’ve also noticed this is happening all over the place: lots of different routines returning different types that are marked with `[[nodiscard]]`. So for all the unused cases why not just go for:
 
 ```c
 [[maybe_unused]] auto _ = foo(); // A new pattern emerges
@@ -87,11 +87,11 @@ stamp_t stamp = { .type = STAMP_TYPE_BLA_BLA };
 
 While it does mean we successfully zeroed out `buf` (thanks to [empty initialization](https://en.cppreference.com/c/language/initialization#Empty_initialization)), those union members are just a different beast. It also doesn’t matter if we go with `stamp_t stamp = {0}` instead. My dear reader: I’ve made the costly mistake of assuming `date` would clear to zero!
 
-As I Spongebob-panicked in public Lobsters member [accelbread](https://lobste.rs/~accelbread) offered a sage revelation:
+As I Spongebob-panicked in public, Lobsters member [accelbread](https://lobste.rs/~accelbread) offered a sage revelation:
 
 > accelbread: It used to be that GCC would fully zero the union anyways, and clang would only zero the time_t, though around a year ago they swapped behaviors iirc. Either way, standard only requires the time_t be zeroed and not whole union. GCC has a flag to always zero whole union. Also C23 initialization always inits whole union
 
-Wait WHAT? clang and GCC SWAPPED what now? I won’t investigate further. Everything about this is *dangerous af* unless we hug C23 tightly and never let go:
+Wait WHAT? clang and gcc SWAPPED what now? I won’t investigate further. Everything about this is *dangerous af* unless we hug C23 tightly and never let go:
 
 ```c
 stamp_t stamp = { }; // Fully clears to zero (C23)
