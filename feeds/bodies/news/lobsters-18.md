@@ -1,55 +1,136 @@
-*Institutions are recalculating who controls the technology they rely on. Mozilla has an independent option to offer.*
+A common requirement when handling an effect is to depend on some state outside the computation raising the effects.
+For example an `Increment` effect needs to track the current count.
+Or in testing a handler for `StandardOut` might build up a state consisting of all messages written.
 
-For years, organizations consolidated technology around a small number of providers to make things simpler. Fewer systems. Tighter integrations. More economies of scale. But that consolidation went well beyond technology. It consolidated dependency, too. The resulting risks have been debated, studied, and challenged along the way, but concentration continued. More work, data and critical infrastructure kept moving to the same few providers, while credible alternatives narrowed.  
+Below is the implementation of a single stateful `Increment` effect.
 
-The deeper that dependency runs, the harder and more costly it becomes to change course. When something fails, changes or falls outside an institution’s control, that dependency becomes a risk for CIOs and CISOs to manage.
+```eyg
+let with_counter = (initial, computation) -> {
+  handle Increment(
+    (_unit, resume) -> {
+      (state) -> {
+        resume(state)(!int_add(state, 1))
+      }
+    },
+    (_) -> { 
+      let value = computation({})
+      let finish = (count) -> { {count, value} }
+      finish
+    }
+  )(initial)
+}
 
-Nowhere are these stakes more visible than in Europe. Now institutions are re-assessing. Governments are pushing for greater digital autonomy, while regulated industries face growing pressure to find and manage their dependencies.
+with_counter(0, (_) -> { 
+  let _ = perform Increment({})
+  let _ = perform Increment({})
+  let _ = perform Increment({})
+  "Done"
+})
+```
 
-There’s a name for much of this debate about technological control: “sovereignty.”
+Each handle expression applies to a single effect label.
+Handlers can be nested to handle multiple effects but care needs to be taken to manage the same state between multiple handlers.
 
-What digital sovereignty means in practice varies. Across Europe, governments are investing in the security and resilience of critical IT infrastructure, reducing strategic dependencies and putting technological autonomy higher on national agendas. Different approaches, same underlying concern. Strip away the regional policy definitions and industry distinctions and a pretty practical, universal question emerges: how much technological dependency should we risk?
+This is part of the design to keep the type system simple, though the restriction might be relaxed in the future.
+If you want more than one effectful operation you have two options.
 
-And a very specific, very important layer has been largely missing from that conversation: the browser.
+### A generic stateful effect
 
-## The overlooked layer of modern business
+```eyg
+let with_counter = (initial, computation) -> {
+  handle Update(
+    (transform, resume) -> {
+      (state) -> {
+        let state = transform(state)
+        resume(state)(state)
+      }
+    },
+    (_) -> { 
+      let value = computation({})
+      let finish = (count) -> { {count, value} }
+      finish
+    }
+  )(initial)
+}
 
-The browser. Applications run there. Employees authenticate in it. Sensitive data transits through it. Files are uploaded and downloaded and AI tools are increasingly used through it. That raises the same questions of dependency and control: whose browser technology are you relying on, and who controls the infrastructure used to manage it?
+let increase = (amount) -> {
+  let _ = perform Update((state) -> { !int_add(state, amount) })
+  {}
+}
 
-## Introducing Firefox Enterprise
+let get = (_) -> {
+  perform Update((state) -> { state })
+}
+with_counter(0, (_) -> { 
+  let _ = increase(3)
+  let value = get({})
+  let _ = perform StandardOut(!int_to_string(value))
+  let _ = increase(2)
+  !int_to_string(value)
+})
+```
 
-![](https://blog.mozilla.org/wp-content/blogs.dir/278/files/2026/10/Data-Control-Hero1-2048x1152.png)
+This counter value can be increased and retrieved.
+The functions `get` and `increase` are the public interface to the stateful operation.
+A generic `Update` effect takes a transformation from the current state to the new state.
 
-[Firefox Enterprise](https://www.firefox.com/enterprise/) is built for organizations with strict security, governance, and compliance requirements. It pairs the Firefox browser, built on Mozilla’s independent [Gecko](https://blog.mozilla.org/netpolicy/2026/03/23/competition-innovation-and-the-future-of-the-web/) engine, with a management console organizations can run on their own infrastructure. From that console, IT teams can centrally manage browser policy and access, govern how data moves through the browser and set controls around AI use.
+## Shared stateful handlers
 
-IT and security teams get more control over their data, IT infrastructure and browser environment — helping strengthen technological independence and operational resilience.
+The generic approach is only possible if you control the design of the effects which is not always possible.
+For example we might want to test a library with the `Get` and `Increase` effects.
 
-“If all your options are built with the same technology underneath, ‘choice’ is a lie. So is control,” said Anthony Enzor-DeMeo, CEO of Mozilla. “We built Firefox differently. And we’re bringing its independent architecture to institutions that are ready to rethink their dependencies and risk.”
+In that case effects can be bounced to a new effect which you do control.
 
-## Bringing the browser under control
+```eyg
+let with_state = (initial, f) -> {
+  // Generic State effect owns the shared state.
+  let run = handle State((update, resume, state) -> {
+    let state = update(state)
+    resume(state)(state)
+  }, (_) -> {
+    // These handlers translate operations; they do not hold separate state.
+    let value = handle Increase((amount, resume) -> {
+      let _ = perform State((state) -> { !int_add(state, amount) })
+      resume({})
+    }, (_) -> {
+      handle Get((_, resume) -> {
+        let state = perform State((state) -> { state })
+        resume(state)
+      }, f)
+    })
 
-We’re starting with the browser because we see it as a key, but under-governed, layer. Firefox Enterprise gives institutions more control over the browser and the infrastructure managing it.
+    let finish = (state) -> { {state, value} }
+    finish
+  })
+  run(initial)
+}
 
-And because Firefox runs on Gecko, the only major browser engine developed outside Google and Apple, institutions have another path towards reducing dependence on a single architecture.
+with_state(0, (_) -> {
+  let before = perform Get({})
+  let _ = perform Increase(2)
+  let middle = perform Get({})
+  let _ = perform Increase(-1)
+  let after = perform Get({})
+  [before, middle, after]
+})
+// {state: 1, value: [0, 2, 1]}
+```
 
-Finally, Firefox Enterprise is built to live alongside the systems that IT operations already use. Keep your identity provider. Keep your SIEM. Keep your MDM. Just add a browser whose management infrastructure you operate, so you decide where data lives and have greater visibility into how it moves.
+## Returning functions
 
-For us, supporting the goal of technological sovereignty comes down to four things: More control. More transparency. More choice. More resilience.
+Type checking the following will fail with the error `this expression has a recursive type`.
 
-[Learn more](https://www.firefox.com/enterprise/firefox-enterprise/) about Firefox Enterprise.
+```eyg
+let main = (_) -> {
+  let f = perform Get({})
+  f("")
+}
+main({})
+```
 
-## A big bet on familiar ground
+Why this fails is not immediately obvious.
+The type of `f` appears in the reply type of the `Get` effect row of the `main` function.
+When `f` is called its effects are unified with the effects in the current function block, i.e. the `main` block.
+This results in a recursive type trying to be constructed.
 
-We know this territory. Independence isn’t a new direction for Mozilla. We’ve spent more than 25 years building and securing browser technology that intentionally works outside of the dominant architecture of the day. Firefox is used by roughly 200 million people every month and is already deployed across thousands of organizations.  
-
-That independence has always mattered to the web. Now it has practical value for institutions looking to reduce technological concentration — and dependency — in their own environments.
-
-## This is the beginning
-
-Our ambition is big but simple: make technology independence practical.
-
-That means putting institutions in real control of the infrastructure and data they depend on, without asking them to rebuild or start over. Closing blind spots. Defining where policies, access and data live. Keeping core management within the institution’s environment. And bringing an overlooked layer — the browser — under institutional control.
-
-Firefox Enterprise is unveiling across Europe with an initial sales focus on France, Germany, Austria and Switzerland, with more markets to follow. Thunderbird Enterprise is also in development, extending this customer-controlled approach to email and communications. We’ll have more to share as that work progresses.
-
-If your organization wants greater control over its browser infrastructure, we’d like to [work with you](https://www.firefox.com/enterprise/contact/).
+It is recommended not to return functions from effects because of this.
