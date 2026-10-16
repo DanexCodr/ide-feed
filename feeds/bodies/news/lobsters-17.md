@@ -1,300 +1,186 @@
-Creating a direct connection between *any* two computers (not just from client
-to server) over the internet is notoriously difficult. Many home networks are
-behind NATs which prevent new inbound connections. Sometimes these NATs are from
-the ISP (carrier-grade NATs) which are impossible to work around with port
-forwarding and/or UPnP. While
-[hole punching techniques](https://en.wikipedia.org/wiki/Hole_punching_(networking))
-*can* break through NATs, it's far from guaranteed. Thus, we need something that
-works in the general case: **relays**.
+Decisions, decisions.  
+As I write this, I juggle a handful of nested decisions just to live my life in the next 10 minutes. I am privileged in that the decisions laid out in front of me are ones that support my comfort, each mundane but carrying complex side-effects. It's getting sunny; do I bother to reach into my bag and pull out my hat? If yes, shall I also grab my notebook and draw something? If I'm going to draw something, what should I draw of the infinite possibilities of the beautiful city laid out in front of me?  
+I simultaneously risk sunburn and rob the world of a little doodle, by instead writing this.  
+One of the primary jobs of a computer is to make decisions, and our subject today involves tracing the steps a compiler can take to determine validity of the choices a program wants to handle. Gleam's compiler is a wonderful and vast piece of craftsmanship, and I would like to take us on a mental stroll through one small avenue of Gleam City: its logic regarding case exhaustiveness.
 
-Relays are servers, accessible over the public internet, that act as a proxy
-between two computers that cannot directly connect. In
-[Goblins 0.12](https://spritely.institute/news/spritely-goblins-v0-12-0-released-two-new-netlayers-join-the-ocapn-family-and-more.html)
-we introduced a *federated* relay named "prelay". While OCapN traffic is
-encrypted in transit, the prelay crucially lacks
-[end-to-end encryption (E2EE)](https://en.wikipedia.org/wiki/End-to-end_encryption).
-E2EE secures all the messages so they can only be read by their intended
-recipient, preventing intemediatory parties (like the relay) from tampering with
-or reading them. Due to the lack of E2EE, the relay was named "prelay"
-(pre-relay) to dissuade its use. Thanks to a
-[grant from NLnet](https://nlnet.nlproject/OCapN-federatedrelays/), we're happy
-to announce that the next release of Goblins will include a federated, E2EE
-relay implementation!
-
-Having a relay that we could recommend has become even more of a critical part
-of the OCapN story as we've developed [Hoot](https://spritely.institute/hoot/),
-our Scheme to WebAssembly compiler. The web is a challenging environment in
-which to build peer-to-peer applications. Most of the patterns and available
-APIs are designed around client-server architectures and centralized certificate
-authorities for security. While relays are unsatisfying compared to making
-direct connections, they enable peer-to-peer applications to communicate in
-these hostile environments.
-
-In addition to implementing the E2EE relay for Goblins, our NLnet grant also
-includes writing a specification for the OCapN group so that the relay can be
-broadly supported by other OCapN implementations.
-
-## Design
-
-We wanted OCapN relays to have the following qualities:
-
-1. Stateless: no storage of user data; easy to replace or migrate
-2. Federated: reduces the power any one relay holds over the wider network
-3. End-to-end encrypted: prevents man-in-the-middle and replay attacks; perfect forward secrecy
-
-Our existing "prelay" already has the first two properties.  To get E2EE, we
-chose to build upon the [Noise Protocol](https://noiseprotocol.org/).
-
-Noise is actually a well-established framework of different patterns and
-ciphers. This allows applications to pick the pattern which is most suitable to
-their needs. It's also a protocol family which has widespread use (WireGuard,
-WhatsApp, etc.) and has been scrutinised a great deal. None of us at Spritely
-are cryptographers by training, so using an off-the-shelf protocol also ensures
-we're avoiding any mistakes in protocol design.
-
-So how can we use Noise with OCapN? When connecting to an OCapN peer, there is a
-[Locator](https://github.com/ocapn/ocapn/blob/main/draft-specifications/Locators.md#ocapn-peer)
-which encodes three components about the remote peer:
-
-1. Designator: self-authenticating identity (usually a public key)
-2. Transport: a symbol identifying the kind of netlayer it is (such as onion)
-3. Hints: a hashmap of routing data (such as IP, port, etc.)
-
-Each netlayer decides what goes into these fields, and the union of both the
-designator and transport should uniquely identify the peer. Noise uses two kinds
-of keys:
-
-1. static: a key that doesn't change between sessions
-2. ephemeral: a key that is generated fresh for each session
-
-An important step each netlayer needs to consider is something called *peer
-authentication*, which verifies that a peer is who they say they are. OCapN
-requires that there exists
-[**at most one** connection](https://github.com/ocapn/ocapn/blob/main/draft-specifications/CapTP%20Specification.md#opstart-session)
-between any two peers at a given time. Ensuring there is only ever one
-session between any two peers is essential to allow for object identity
-comparison and preventing unnecessary
-[3rd party handoffs](https://github.com/ocapn/ocapn/blob/main/draft-specifications/CapTP%20Specification.md#third-party-handoffs).
-An OCapN implementation will enforce this by reusing connections or closing new
-inbound connections if one already exists. Without peer authentication, a
-malicious peer could impersonate another peer causing a denial of service to the
-peer whose identity was stolen.
-
-As described above, the designator is a public key, which allows the peer to
-prove their identity by using its private key. Noise has a pattern for this
-known as `XK`, where the initiator knows the key of the responder and will
-verify it. The `X` is referring to the initiator's static key being transmitted
-to the responder. The `K` is referring to the initiator already knowing the
-responder's public key. The public key of a peer is encoded and placed in the
-designator for the initiator to use.
-
-Noise also allows the use of different key generation algorithms, cipher suites,
-and hashes. This is great as we needed to select something which has
-implementations both in commonly available cryptographic libraries and within
-the browser (for Hoot). X25519 keys are well supported in all those situations,
-as are AESGCM cipher suites and SHA256 hashes. These are all available in
-GnuTLS (what we're using on the Guile VM) and in the
-[SubtleCrypto API](https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto)
-(that we're using on the web).
-
-## Guile Noise library
-
-Of course, to use Noise we need an implementation. Noise is popular enough that
-there's quite a few implementations for different languages. Unfortunately,
-Guile is not one of them, so that meant writing our own Noise library.
-
-The [Guile Noise library](https://codeberg.org/spritely/guile-noise) we've
-written doesn't require users to know the intricate workings of Noise, but Noise
-is interesting and so let's take a brief look at how it works and my
-implementation experience. The
-[Noise specification](https://noiseprotocol.org/noise.html) is actually pretty
-approachable and is built around three conceptual objects:
-
-- CipherState: holds a key and a hash; provides encryption, decryption, and rekeying
-- SymmetricState: holds a chaining key and hash output; uses CipherState for encryption, as well as deriving new keys and hashes
-- HandshakeState: holds state for the initial handshake and handles reading and writing of handshake messages
-
-The Noise protocol starts with a handshake. This is turn-based where the
-initiator goes first and writes their handshake message. The receiver then reads
-that message and writes their own. This continues until the handshake is
-complete. After which you only need the `CipherState` which can encrypt and
-decrypt messages (and if desired
-[rekey](https://noiseprotocol.org/noise.html#rekey)).
-
-Interestingly, Noise defines a small intepreter which defines a limited set of
-operations. The handshake patterns are then defined in terms of these
-operations. I won't go through all of them (see the spec if you're interested),
-but the `XK` pattern is defined as:
+In the programming language called [Gleam](https://gleam.run), we are able to specify [case expressions](https://tour.gleam.run/flow-control/case-expressions). Within this subset of the language, the purpose of `compiler-core/src/exhaustiveness.rs` is to determine that every pattern presented in a `case` covers every value that the subject could possibly be, and conversely whether there exists a clause that can't ever be exercised because a previous clause already matches the same situation. What a superb piece of User Experience that this is figured out for us at the time a Gleam program is compiled, instead of an unhandled value crashing our program at the time it runs!
 
 ```
-pre-message <- s
--> e es
-<- e ee
--> s se
+pub fn to_string(is_cool: Bool) -> String {
+  case is_cool {
+    True -> "cool"
+    False -> "uncool"
+  }
+}
 ```
 
-This is a handshake consisting of three messages (and a
-pre-message). Pre-messages are not exchanged as part of the Noise handshake
-itself, they're messages which are expected to have happened out-of-band prior
-to connection. In this case `<- s` means the static key from the responder is
-sent to the initiator. This happens by it being encoded in the OCapN peer
-locator as we discussed above. The arrows show the direction with the left side
-being the initiator and the right being the responder.
+There's the fact of this snippet not compiling if one removes the `False` clause; what's special to me about the logic in `exhaustiveness.rs` is that it will strive to let the user know exactly *what* case is missing, if it can. `"The missing patterns are: False"`, it politely informs me. Providing such a message is no easy feat to achieve, thus exemplifying to me Gleam's commitment to user-friendliness.
 
-I'll just cover the first message, `-> e es`. This message is for the
-initiator to send to the responder as it starts with `->`. The operations are:
+Though typed functional languages started growing like weeds in the 1970s, the theory significant to our file starts (at least for me) in ~1984-5, from papers like [Lennart Augustsson](https://en.wikipedia.org/wiki/Lennart_Augustsson)'s on compilation of pattern matching, titled ["Compiling Pattern Matching"](https://www.cs.tufts.edu/~nr/cs257/archive/lennart-augustsson/patmatch.djvu).
 
-- e: generates an emphemeral key, transmits the public part, and mixes it into an internal hash
-- es: derives a new key (from the ephemeral key and responders static key) and mixes it into its own key
+> Sidenote: if you read the paper maybe you, like me, will wonder whether Mr Augustsson made a typo with "mathing" instead of "matching", since it occurs multiple times. It is quite a "mathy" topic, after all. Surely there's a joke in here somewhere about our brains' pattern matching.
 
-This allows a Noise library to easily support lots of different patterns. Each
-pattern can define it's pre-messages and handshake messages (all of which are
-defined in the spec) and the implementation just needs to go through and perform
-the steps.
+Augustsson delivers a framework that I find to be the foundation of subsequent work: one should group the clauses of a case expression by a leading constructor, then introduce fresh variables for sub-parts, then for those sub-parts, repeat! It's a great, though somewhat dense read. The latter half of the paper goes into detail on methodology of turning the sub-parts into actual [LML](https://foldoc.org/LML) instructions, such as literal jumps (GOTOs?) for default entries in the nested case maze when a sub-part didn't match anything. In other words, each default would force a retry, and that'd happen at runtime until the top-level default (meaning failure) is reached; the nest had been fully recursed.
 
-Once the handshake is complete, the Noise library will create two `CipherState`
-objects. The first is used for encrypting and decrypting the initiator's
-messages, the second for the responder's messages.
+> Sidenote: using one's own variant of ML is a massive flex...
 
-The Guile library implements all 12 of the
-[fundamental interactive patterns](https://noiseprotocol.org/noise.html#interactive-handshake-patterns-fundamental).
-We built this library to work on both Hoot and the Guile VM. It currently uses
-`SubtleCrypto` for Hoot and GnuTLS for the Guile VM, but it's written so users
-of the library can add support for other crypto libraries. Our library comes
-with support for X25519 key generation, AES-GCM ciphers, and SHA256 and
-SHA512 hash functions. Noise not only provides an approachable spec, but also a
-set of
-[test vectors](https://github.com/noiseprotocol/noise_wiki/wiki/Test-vectors) to
-help implementation. These are a set of messages which Noise should exchange for
-a given pattern and keys. Our library has been tested against all the vectors
-for patterns and crypto that we support and the test runner checks them on Hoot
-as well as the Guile VM.
+I feel the ghostly presence of Augustsson's *jump in case sub-parts didn't match with anything*, when observing behavior of our Gleam `Decision::Switch`. In contrast to ancient history, Gleam is compiled, thus the `Switch` default is a node in actual statically-typed data structure (as opposed to runtime rules). They also de-coupled the two jobs that Augustsson's jumps did in one: `Switch` (retrying, keep matching elsewhere in the nested soup) and `Decision::Fail` as a type instead of implicitly happening once we're out of all other options. The wombo-combo is finding a `Fail` *at compile-time* after the tree is built, which is proof that our initial case expression is inexhaustive. Knowing precisely where a `Fail` happens leads us to `missing_patterns.rs`, which reverses back through the tree to find the specific situation that will never match, in order to bubble it up to the user. Such giant-shoulders to stand on, this concept of a (runtime) assertion of finding out which jumps would eventually fail!
 
-## Noise netlayer design
+The name of that specific situation which'll never match is what the kids call a "witness", [Luc Maranget](https://pauillac.inria.fr/~maranget/) (click link for cat jumpscare) calling a "counter-example" in his 2007 paper ["Warnings for pattern matching"](http://moscova.inria.fr/~maranget/papers/warn/warn.pdf). We'll come back to witnesses in a second.
 
-OCapN is a layered protocol consisting of CapTP (Capability Transport Protocol)
-and many *netlayers*. A netlayer sends encoded messages between two peers over a
-particular medium. This allows the higher-level CapTP to be *transport
-agnostic*. For example, the
-[Onion netlayer](https://files.spritely.institute/docs/guile-goblins/latest/Tor-Onion-Services.html)
-provides transport over Tor Onion services. However, netlayers can be defined
-not only in terms of a specific transport protocol, but also in terms of
-*another netlayer*. We call these *meta netlayers*.
+> "Programmers sometimes are quite upset in front of “non-exhaustive match” warnings. An example of a “non-matching value” helps a lot not only in convincing them that they indeed wrote a non-exhaustive match, but also in correcting their code." -- Luc Maranget, 2007
 
-Noise itself isn't designed with a specific transport protocol in mind, and the
-Noise netlayer isn't either. Indeed many netlayers might want to rely on the
-properties of Noise for many different reasons. Even netlayers which provide
-strong encryption, like Tor, may wish to rely on Noise for its bidirectional
-peer authentication properties (Tor authenticates outbound connections to a
-hidden service, but not the reverse).
+From what I can tell when LARPing as some sort of naive functional programming anthropologist, I detect that the 1990s were a functional boom: Augustsson's LML goes on to become part of Haskell [HBC](https://github.com/haskell-implementations/hbc); we got [Clean](https://en.wikipedia.org/wiki/Clean_%28programming_language%29) ('95), [OCaml](https://ocaml.org) ('96), [Erlang](https://www.erlang.org) (open-sourced in '98) to name a few. At the turn of the 21st century it seems to me that we topped-out research on the tree-size aspect of case expressions (that I've barely gone into on purpose), to how ergonomic we can make diagnostics, and how rich we can make our patterns that we match. Leading us to Maranget's paper! The methodology proposed for going about finding the witness is (and I'm sorry for this tangent but it is very interesting):
 
-The Noise netlayer thus composes with any other netlayer. Composing the Noise
-netlayer and prelay netlayer yields an *end-to-end encrypted relay netlayer*!
+1. arrange a matrix of subjects as columns and clauses as rows.
+2. focus on a given column. (I say "given" and not "the first" because we naturally recurse, just setting that up mentally for later.)
+3. do the constructors of the column cover every case that type can be?
+  - if not, we're missing a constructor! Turn to step 4 with the missing constructor (or well, oldtypes like numbers and strings usually have too many constructors to put down, so we'll need an "everything else" clause for those. Imagine a stringy case expression that goes `{ "a" -> "my answer 1", "aa" -> "my answer 2", ..ad nauseam}`).
+  - if so, that's good at least! For each of the constructors, do step 4.
+  - if there's literally nothing in the column, skip the column and back to step 2 for the next column.
+4. punch in a layer on a given constructor, specialize it, enter it. `MyType(r), rest...` to `r, rest...`. We're actually now on a new matrix!
+5. 
+  - if this inner matrix is out of clauses: we've tentatively found a witness, so let's store it and continue. (...with all the other constructors that have to go through step 4).
+  - if this inner matrix has clauses but no columns, then we've completed this!
+  - anything else: back to step 2 with you.
+6. repeat! (Halters put down your pitchforks; every iteration will in fact consume something, the patterns *will* run out.) If we are left with witnesses, voila we have our missing patterns. If we have no witnesses then this case is closed. (Get it?)
 
-How does this work? The Noise netlayer spawns a sort of "bootstrap" object (not
-the same
-[bootstrap](https://github.com/ocapn/ocapn/blob/main/draft-specifications/CapTP%20Specification.md#bootstrap-object)
-if you're familiar with CapTP). The bootstrap object is encoded within the OCapN
-peer locator, and can be *enlivened* to make a live reference when making a new
-outbound connection. Each side spawns an
-[inbox and outbox pair](https://files.spritely.institute/docs/guile-goblins/latest/Inbox.html),
-and the initiating peer delivers their outbox to the bootstrap object. The
-bootstrap object sets up its side of Noise and makes its own inbox-outbox pair
-returning its outbox. Each side is then able to deliver messages to each other
-by sending messages to the remote outbox object. Each side then follows the
-handshake procedure. Once complete, encrypted messages can be exchanged by using
-the Noise encrypt procedure and decrypted when read from the inbox.
+> Sidenote: a freaky term.
 
-Looking at the test code which uses the
-[TCP+TLS netlayer](https://files.spritely.institute/docs/guile-goblins/latest/TCP-_002b-TLS.html),
-layering on Noise encryption is just a few lines of code:
+"Such a joyous carnival ride. How does Gleam go about this matrix?" the reader wonders aloud. First of all okay lollipop-toting spinny-hat-wearing energy, second of all that's the neat part! It doesn't. Instead, Gleam represents clauses as a list of branches, each branch being itself a list of checks literally like `[variable] is [pattern]`, a la [Jules Jacobs' notes](https://julesjacobs.com/notes/patternmatching/patternmatching.pdf) and [Yorick Peterse's implementation](https://github.com/yorickpeterse/pattern-matching-in-rust).
+
+Speaking of tree-building and Maranget, another paper of his is more relevant, as such it is in fact cited (twice!) in today's Gleam code. ["Compiling Pattern Matching to good Decision Trees"](https://www.cs.tufts.edu/~nr/cs257/archive/luc-maranget/jun08.pdf) (Maranget, 2008, a year after the paper just-discussed) deals with, you guessed it, *compiling* trees in such a way as to keep up with the performance of [OCaml's backtracking compiler](http://moscova.inria.fr/~maranget/papers/opt-pat.ps.gz) (which is just the Augustsson nested-jumpy-case-maze?). Backtracking pro: "linear guarantee for code size". Backtracking con: "may scan sub-terms more than once". Maranget shows us the wise ways that we can choose the order in which the clauses are built out into a tree, we can reduce its depth.
+
+Try to favor columns:
+
+- where the first row has a constructor pattern ("pattern" instead of just constructor because I mean not just `True` or `Circle` types but `Ok(x)` and `Ok(False)` etc.)
+- with the least wildcards in the column.
+- with least amount of children on the switch-node we would create.
+- with smallest count of struct fields.
+- where we count the maximum rows that must be tested for this given column in general. Like, if we're gonna have to test it eventually, might as well get it over with.
+- where the given column is needed sooner in the clause-list rather than later.
+- where the given column peters out of being actual constructors later rather than sooner.
+
+As an example of the last column-favoring-method, what we do in practice is, for a given column, look down cell by cell. For each cell, it'll have either a constructor (like a `[]` / `[x, ..rest]`) or that the cell doesn't specifically care (_, r). We'll count down to the first instance of not-caring, and voila, rank columns by their count and order the tree that way!
+
+While Gleam doesn't build the decision-making in the form of a table because it builds whole tree instead (it seems to me that doing the matrix thing would work just fine, but then this way we get diagnostics *and* the base for a JavaScript backend for free), the engine of which test to test next seems to be a combination of two of Maranget's/Jacobs' strategies: choose a variable whose type has fewest constructors (i.e. a list having 2, and an int having infinite), and in case of tie, choose whichever var that more of the remaining checks involve.  
+Choosing wisely will ensure the tree is smaller, since the natural state on something like
 
 ```
-(define a-mycapn
-  (with-vat vat-a
-    ;; Spawn the TCP+TLS netlayer
-    (define tcp-tls-netlayer (spawn ^tcp-tls-netlayer "127.0.0.1"))
-    ;; Spawn the Noise netlayer, passing in the TCP+TLS netlayer
-    (define noise-netlayer (spawn ^noise-netlayer tcp-tls-netlayer))
-    ;; Spawn the MyCapN object (CapTP)
-    (spawn-mycapn noise-netlayer)))
+case a, b {
+  Some(x), 1 -> "one"
+  None, 2    -> "two"
+  _, _       -> "buckle my shoe"
+}
 ```
 
-## The Relay netlayer
+is that our last clause there is going to be copied a bunch times, like so:
 
-So, how does this work with the relay? Well, since we already have an
-non-E2EE relay and now have seen we can compose Noise and get the properties of
-both, we can simply pass in the prelay netlayer to Noise netlayer and get an
-E2EE relay. Of course, we don't want to ask users of the netlayer to do
-this. We'll be replacing the prelay module with a new relay module that is
-always end-to-end encrypted.
+(assuming we split out the tree on `a` first)
 
-While the relay design (in its non-E2EE form) isn't new to Goblins, it's
-worth quickly taking a look at how the relay works. The relay itself is built on
-the idea of a relay client and a relay server. On the relay server there are two
-actors:
+```
+- Some: clause 1, & a copy of clause 3
+- None: clause 2, & a copy of clause 3
+```
 
-1. Controller: allows the client to steer its own relay accepting new inbound connections and making new outbound connections
-2. Endpoint: which is encoded in the OCapN locator and is publicly accessible, a relay server messages this object when establishing a new connection to the peer
+then
 
-This makes the relay *federated*. Two OCapN peers can use different relay
-servers and still communicate using OCapN between the two relay servers. When a
-client wants to make an outbound connection to a peer on another relay server,
-the relay can enliven the endpoint sturdyref (getting a live object) and send a
-message to it.
+```
+- Some:
+  - b is 1: clause 1, copy of clause 3
+  - b is anything: copy of clause 3
+- None:
+  - b is 2: clause 2, copy of clause 3
+  - b is anything: copy of clause 3
+```
 
-The animation above shows the flow between two peers using federation. It starts
-with two actors on two different peers, Alice (on peer A) and Bob (on peer B).
-Alice has a *sturdyref* (an OCapN locator specifying an object) to Bob. Here's
-how the flow works:
+so 4 copies of our "buckle my shoe" clause, even though some are naturally gonna be useless after the fact anyway, such as the case where `a` and `b` are `Some, 1` wherein clause 1 matches, therefore we know for a fact that the copy of clause 3 can't be exercised. The smaller the tree, the easier it is to go through and find a dead end at compile time that serves as proof not just that there's *an* unhandled pattern, but that traversing back up to trunk will yield our particular missing thing.
 
-1. Peer A first sets itself up with the controller by registering an object a-incoming with the controller. This object can be used when establishing new connections.
-2. Alice has a sturdyref to Bob but wants a a live reference to Bob that she can message, she asks her MyCapN to /enliven/ it.
-3. MyCapN creates an adeliver object which faciliates the connection. It then sends a message to the relay controller with the sturdyref and adeliver object and asks the relay to make a new connection.
-4. The controller extracts the endpoint object for Peer B's relay from the sturdyref and enlivens it forming a new connection between the two relays. It also spawns a new rarelay object to facilitate communication between these two peers and hands this back to adeliver.
-5. The controller then sends the rarelay object to the endpoint on B's relay. B's relay then spawns its own analog to the object rbrelay.
-6. Peer B's relay reaches out to the b-incoming object, allowing it to establish a new connection to Peer B. It passes along the rbrelay object.
-7. Peer B's MyCapN object spawns a new bdeliver object which facilitates its connection.
+The most fun I've had reading the `exhaustiveness.rs` is when going through the functionality that I can't find in any papers (note that I'm not exhaustively saying that they're not in any papers, just hedging my own potential skill issue for not being able to find them). Let's look at a couple of such:
 
-This gives the two peers a connection to one another, even though neither share
-a common relay server. The relay is designed to be completely stateless, i.e. it
-doesn't hold on to data, configuration, or anything else.
+```
+case s {
+  "lewis" <> rest -> ...
+}
+```
 
-One of the lessons we've learned since co-authoring ActivityPub is it's crucial
-to reduce the impact of servers on their users. In ActivityPub, each instance (a
-server) stores all the data for its users and performs all the operations their
-behalf. This means the user needs to trust the server a lot, and if the user's
-instance shuts down, or they simply wish to migrate, moving to another server is
-difficult.
+which introduces a whole new class of situations that can happen, because strings can be subsets of other strings! We're used to dealing with one situation being true in a case expression, right? On top of that, we have these [inline guards](https://tour.gleam.run/flow-control/guards), that make the tree construction quite difficult
 
-Learning from those problems, it was critical for us to make sure the server
-was stateless. The relay itself stores no state/data for a user and, aside from
-connecting to another peer, the only behavior it's expected to perform is
-relaying messages. This makes changing relay servers incredibly easy. The user
-simply needs to find another (or setup their own) relay server and include that
-in their sturdy references instead.
+```
+case s {
+ "lewis" <> rest if rest == " likes" -> "lewis likes gleam"
+ "lew" <> rest -> "lew-" <> rest
+ _ -> "idk"
+}
+```
 
-## Future work
+where it's not possible to retrace our steps while traversing this as a tree.
 
-The work isn't done, though. Adding support to Goblins was just one part of the
-NLnet grant. We'll be contributing specifications for the encrypted relay to the
-[OCapN standardization group](https://ocapn.org/) so others can implement
-it. Ridley, who has implemented
-[OCapN in Dart](https://codeberg.org/ridley/DObjects), has already implemented
-their own [Noise library](https://codeberg.org/ridley/dart_noise) in preparation
-for the E2EE relay. As part of the grant work within the OCapN group, we'll also
-be adding support to the [test suite](https://github.com/ocapn/ocapn-test-suite)
-to allow both testing new relay implementations, and testing the rest of OCapN
-over the relay.
+- does s start with "lewis"?
+  - why yes it does
+    - clause 1: guard is true: "lewis likes gleam"
+    - guard is false: *uh oh!*
+  - no it does not
+    - does s start with "lew"?
+      - yes: clause 2
+      - no: clause 3
 
-Another milestone of the grant is to implement a Guix service to make it easy to
-run an instance of the relay. The relay doesn't take many resources to run and
-it has very few dependencies, so it should be easy for others to package for
-their distributions and run on the cheapest VPS or old computers users might
-have around their home. We are looking forward to the deployment of a vast
-network of OCapN relays.
+Notice the "uh oh". We still *must* try the clause 2 because we know that "lew" is a subset of "lewis". "How do we know that?", you ask. What Gleam does is go through, on that same level, and remember the string prefixes it's seen so far so that it can add any given other shorter prefix into the "uh oh" section of every longer one, to allow it to be tested when we're already deep traversing.
 
-## Thanks to our supporters
+- does s start with "lewis"?
+  - why yes it does
+    - clause 1: guard is true: "lewis likes gleam"
+    - guard is false: *copy clause 2 in here!! Now we can check it.*
+  - no it does not
+    - does s start with "lew"?
+      - yes: clause 2
+      - no: clause 3
 
-Your support makes our work possible!  If you like what we do, please
-consider [becoming a Spritely supporter today](https://spritely.institute/donate)!
+For reference in `compiler-core/src/exhaustiveness.rs` please check out the `overlap_candidates` and `descendant_candidates` specifically.  
+When I look in the commit history, I would say that this string-prefix novelty shines through in the ways it's been massaged to its current happy state, and I'll bet money there's more to explore here before it's done-done. If I'm mistaken in that there is in fact a paper that covers matching based on guards & prefixes/subsets, let me know! Doesn't make this functionality any less cool.
+
+Bit array logic: while ["Efficient Manipulation of Binary Data"](https://user.it.uu.se/~kostis/Papers/JFP_06.pdf) dealt with matching on bit arrays with variable segment sizes, Gleam seems to take it some steps further in accordance with the exhaustiveness of other types. The compiler checks if the pattern is impossible, and remembers if a test has already been performed earlier during traversal. It also decides whether or not to bother emitting generated code that massages/unifies JS and BEAM behavior--for example if it detects the possibility that a given bit array length variable *could be negative* (rather, that it can't be sure that it's *not ever* going to be negative), emitting code to just fall through instead of `raise`ing, and similarly that `NaN`/`Infinity` won't actually match a float segment.
+
+Type-narrowing: take this for example
+
+```
+pub fn area(s: Shape) -> Float {
+  let shape = Circle(67.0)
+  case shape {
+    Circle(r) -> 3.14 *. r *. r
+  }
+}
+```
+
+should our compiler complain here due to missing every other shape that a Shape could be? Square, Rhombus, these just a few of the shapes my powerful mind can name. (Applause.)  
+Gleam's compiler remembers the specific instantiation of the Shape named `shape` and knows for a fact that it's only ever a Circle, so is happy with this expression. Not only that, but it would duly let us know that we've added a dead branch if we *did* handle cases such as Square here. This also applies to a situation such as
+
+```
+pub fn describe(s: Shape) -> String {
+  case s {
+    Circle(r) -> {
+      case s {
+        Circle(_) -> "round and awesome"
+      }
+    }
+    Square(side) -> "four sides and boring"
+    // ... for my other shapes
+  }
+}
+```
+
+there won't be a warning that the inner case of `s` doesn't handle a Square situation.  
+Isn't that neat! The compiler seems to thoroughly make use of practical information it learns as it goes.
+
+Printing specific instances in errors: back to that witness, when a dead-end is found in a tree and we traverse all the way back up to find the root. Gleam doesn't just print that path and call it a day, but the compiler knows the distinct namings that I import my functions, so instead of reporting back to me that I'm missing `farm.Unmilkable(_)`,
+
+```
+import farm.{Milkable, Unmilkable}              // it will tell me I'm missing `Unmilkable(_)`
+import farm.{Milkable, Unmilkable as TooSkinny} // I'm missing `TooSkinny(_)`
+import farm as barn                             // `barn.Unmilkable(_)`
+import farm                                     // `farm.Unmilkable(_)`
+```
+
+It seems that the actual mechanism for translating into the exact used state is re-used from the type-printer, you know, over on the live LSP side! It has lots of other logic for quality of life such as comma separation for multi-subject cases, shortening label fields, and the printer not printing internal types from other modules (wait hang on actually that's maybe not "quality" and more just some mysterious security model, but I think it's cool).
+
+I must end it here; it's too beautiful of a day to be staring at a computer. I get up: let's follow that warm and fragrant sea breeze. This has been the ways in which Gleam's case exhaustiveness checker amazes me, in how it implements and supersedes the literature it's born out of, and ensures a level of care for the user that I've rarely seen in code. This is just a drop in the Gleam codebase ocean; I could write about almost every file I've encountered so far. I encourage you to study it well too, dear reader, and hopefully take some of its sauce to heart for your own programs!

@@ -1,136 +1,84 @@
-A common requirement when handling an effect is to depend on some state outside the computation raising the effects.
-For example an `Increment` effect needs to track the current count.
-Or in testing a handler for `StandardOut` might build up a state consisting of all messages written.
+A physically modelled piano synthesizer in C++17. It renders notes and MIDI
+files to stereo WAV and supports live MIDI input on macOS. Sound is synthesized
+from a hammer, string, soundboard and sympathetic-resonance model, with a room
+reverb effect. No piano samples, downloads or third-party libraries are required.
 
-Below is the implementation of a single stateful `Increment` effect.
+Note
 
-```eyg
-let with_counter = (initial, computation) -> {
-  handle Increment(
-    (_unit, resume) -> {
-      (state) -> {
-        resume(state)(!int_add(state, 1))
-      }
-    },
-    (_) -> { 
-      let value = computation({})
-      let finish = (count) -> { {count, value} }
-      finish
-    }
-  )(initial)
-}
+It is VERY EARLY days for releasing this code. The piano is fine, but I have a prototyped AU and VST plugin, etc. which are not part of this open release so far.
 
-with_counter(0, (_) -> { 
-  let _ = perform Increment({})
-  let _ = perform Increment({})
-  let _ = perform Increment({})
-  "Done"
-})
+You need a C++17 compiler and Make. On macOS, install the Xcode Command Line
+Tools (`xcode-select --install`) if they are not already available, then run:
+
+```
+make
+./coopiano --help
 ```
 
-Each handle expression applies to a single effect label.
-Handlers can be nested to handle multiple effects but care needs to be taken to manage the same state between multiple handlers.
+macOS builds link the system CoreMIDI, AudioToolbox, CoreFoundation and CoreAudio
+frameworks. The source also supports offline rendering on other platforms with
+a C++17 compiler and threads; live MIDI/audio is macOS-only. This extraction was
+built and tested on macOS; other platforms have not been verified here.
 
-This is part of the design to keep the type system simple, though the restriction might be relaxed in the future.
-If you want more than one effectful operation you have two options.
+Compiler settings can be overridden, for example `make CXX=clang++ CXXFLAGS=-O3`.
+Run `make clean` before changing compiler settings. `make clean` removes only the
+executable, preserving any renders and presets.
 
-### A generic stateful effect
+## Run
 
-```eyg
-let with_counter = (initial, computation) -> {
-  handle Update(
-    (transform, resume) -> {
-      (state) -> {
-        let state = transform(state)
-        resume(state)(state)
-      }
-    },
-    (_) -> { 
-      let value = computation({})
-      let finish = (count) -> { {count, value} }
-      finish
-    }
-  )(initial)
-}
+```
+# Note, velocity, duration, optional key-hold time (seconds)
+./coopiano A4 0.5 8
+# Writes A4_gp.wav; quote sharp note names, e.g. 'G#3'.
 
-let increase = (amount) -> {
-  let _ = perform Update((state) -> { !int_add(state, amount) })
-  {}
-}
+# Built-in musical demo; writes demo_piano.wav
+./coopiano demo
 
-let get = (_) -> {
-  perform Update((state) -> { state })
-}
-with_counter(0, (_) -> { 
-  let _ = increase(3)
-  let value = get({})
-  let _ = perform StandardOut(!int_to_string(value))
-  let _ = increase(2)
-  !int_to_string(value)
-})
+# Render your own MIDI file; no MIDI files are bundled
+./coopiano performance.mid 1.0 performance.wav
+
+# Play from connected MIDI sources or the virtual coopiano MIDI destination
+./coopiano live
+# macOS only; Ctrl-C to stop
 ```
 
-This counter value can be increased and retrieved.
-The functions `get` and `increase` are the public interface to the stateful operation.
-A generic `Update` effect takes a transformation from the current state to the new state.
+Running `./coopiano` without arguments renders A4 at velocity 0.5 for eight
+seconds. Offline commands write 44.1 kHz, 16-bit stereo WAV files; they do not
+play them automatically. On macOS, use `afplay A4_gp.wav` to listen.
+Each offline render is peak-normalized independently.
 
-## Shared stateful handlers
+## Presets
 
-The generic approach is only possible if you control the design of the effects which is not always possible.
-For example we might want to test a library with the `Get` and `Increase` effects.
+Built-in defaults work without any configuration file. `default.ini` documents
+the available voicing and reverb controls, including their ranges. Copy it,
+edit the copy, then select it explicitly:
 
-In that case effects can be bounced to a new effect which you do control.
-
-```eyg
-let with_state = (initial, f) -> {
-  // Generic State effect owns the shared state.
-  let run = handle State((update, resume, state) -> {
-    let state = update(state)
-    resume(state)(state)
-  }, (_) -> {
-    // These handlers translate operations; they do not hold separate state.
-    let value = handle Increase((amount, resume) -> {
-      let _ = perform State((state) -> { !int_add(state, amount) })
-      resume({})
-    }, (_) -> {
-      handle Get((_, resume) -> {
-        let state = perform State((state) -> { state })
-        resume(state)
-      }, f)
-    })
-
-    let finish = (state) -> { {state, value} }
-    finish
-  })
-  run(initial)
-}
-
-with_state(0, (_) -> {
-  let before = perform Get({})
-  let _ = perform Increase(2)
-  let middle = perform Get({})
-  let _ = perform Increase(-1)
-  let after = perform Get({})
-  [before, middle, after]
-})
-// {state: 1, value: [0, 2, 1]}
+```
+cp default.ini my-piano.ini
+./coopiano --preset my-piano.ini live
+./coopiano --preset my-piano.ini audition --output audition.wav
 ```
 
-## Returning functions
+The audition command plays a chord at increasing velocities. Use `--help` for
+its chord, velocity and timing options. Editing `default.ini` alone does not
+change the built-in sound; pass `--preset` and restart playback to load changes.
 
-Type checking the following will fail with the error `this expression has a recursive type`.
-
-```eyg
-let main = (_) -> {
-  let f = perform Get({})
-  f("")
-}
-main({})
+```
+GP_NO_REVERB=1 ./coopiano A4 0.5 8
+GP_SAVE_SETTINGS=1 ./coopiano --preset my-piano.ini A4 0.5 8
 ```
 
-Why this fails is not immediately obvious.
-The type of `f` appears in the reply type of the `Get` effect row of the `main` function.
-When `f` is called its effects are unified with the effects in the current function block, i.e. the `main` block.
-This results in a recursive type trying to be constructed.
+`GP_SAVE_SETTINGS=1` writes a resolved preset beside the WAV as `A4_gp.wav.ini`.
+Environment overrides take precedence over preset settings.
 
-It is recommended not to return functions from effects because of this.
+- coopiano.cpp: CLI, MIDI file parser, WAV writer and macOS live host.
+- piano.hpp: header-only synthesis library in namespace piano.
+- instrument.hpp: voice pool, note/pedal scheduling and instrument effects.
+- streaming_soundboard.hpp: streaming soundboard convolution.
+- preset.hpp and reverb.hpp: INI configuration and stereo room effect.
+- piano_host.hpp and piano_resampler.hpp: host-rate adaptation and resampling.
+- live_diagnostics.hpp and live_bench.hpp: support compiled into the macOS host.
+
+The C++ source/header files originate from the development project. Historical
+comments may refer to documentation in that larger project.
+The original test and benchmark collections are not bundled here.
