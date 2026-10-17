@@ -1,23 +1,90 @@
-The Rust team has published a new point release of Rust, 1.99.1. Rust is a programming language that is empowering everyone to build reliable and efficient software.
+beginarticle
+Ubuntu 26.10, codenamed "Stonking Stingray", has now arrived. Building
+on the foundations of Ubuntu 26.04 LTS, this release continues to
+advance security, performance, and hardware support while introducing
+new capabilities that look towards the future of Ubuntu. As always, these
+improvements are the result of close collaboration between the Ubuntu
+team, our community, and our partners.A huge thank you to all who
+contributed. Here's a rundown of what's new. 
 
-If you have a previous version of Rust installed via rustup, getting Rust 1.99.1 is as easy as:
+Ubuntu 26.10 brings significant progress for security, and strengthens
+the platform with the full adoption of Rust-based coreutils,
+post-quantum-ready package signing, and expanded TPM-backed full-disk
+encryption support. Enterprise authentication gains deeper integration
+with Microsoft Entra ID, including password and multi-factor
+authentication. Linux kernel 7.3 extends support for the latest hardware,
+alongside new RISC-V desktop images and optimized amd64v3 installation
+images.
 
-```
-rustup update stable
-```
+On the desktop, GNOME 51 brings improvements to responsiveness,
+accessibility, and usability, complemented by more consistent software
+management and greater resilience under memory pressure. Ubuntu 26.10 also
+introduces Myna, an opt-in, locally processed speech-to-text solution that
+marks the first step towards a more natural, context-aware desktop
+experience. With updated developer toolchains and expanded support for
+accelerated AI workloads, Ubuntu 26.10 continues to evolve Ubuntu as a
+secure, capable, and forward-looking open source platform.
 
-If you don't have it already, you can [get `rustup`](https://www.rust-lang.org/install.html) from the appropriate page on our website.
+The newest Edubuntu, Kubuntu, Lubuntu, Ubuntu Budgie, Ubuntu Cinnamon,
+Ubuntu Kylin, Ubuntu MATE, Ubuntu Studio, Ubuntu Unity, and Xubuntu
+are also being released today. For more details on these, read their
+individual release notes under the Official flavors section:
 
-## What's in 1.99.1
+   [https://documentation.ubuntu.com/release-notes/26.10/#official-flavors](https://documentation.ubuntu.com/release-notes/26.10/#official-flavors)
 
-Rust 1.99.1 fixes the following regressions from prior releases:
+Maintenance updates will be provided for 9 months for all flavors
+releasing with 26.10.
 
-- [Missing symbol `wcslen`](https://github.com/rust-lang/rust/issues/163614): Some Rust targets were getting link errors for missing `wcslen`, and that function is now present in Rust's compiler-builtins library as a fallback. The LLVM `loop-idiom-wcslen` pass may introduce calls to `wcslen` as an optimization, and some Rust targets did not have that function readily available in `libc` or elsewhere. The UEFI targets in particular were broken for any project using `std`, as some of these calls were introduced in the precompiled standard library, but the issue was also reproducible for similar user code patterns.
-- [Miscompilation of FFI `bool` return values on x86_64](https://github.com/rust-lang/rust/issues/163911): Rust functions returning `bool` through FFI could leave bits 1-7 of the return register unspecified, causing callers to observe raw values other than `0` or `1`. This return type is now marked for zero-extension again, as required by the ABI.
-- [`rust-lld` failed to load `libLLVM` on macOS](https://github.com/rust-lang/rust/issues/163947): This linker could fail to run if the compiler was invoked without the `rustup` proxy, as there was no direct setting for the appropriate library search path. Now `rust-lld` is built with an `rpath` entry for the directory containing `libLLVM.dylib`.
+To get Ubuntu 26.10
+-------------------
 
-If you'd like to help us out by testing future releases, you might consider using the beta (`rustup default beta`) and nightly (`rustup default nightly`) channels locally and in your CI. Please [report](https://github.com/rust-lang/rust/issues/new/choose) any bugs you might come across!
+To download Ubuntu 26.10, visit:
 
-### Contributors to 1.99.1
+   [https://ubuntu.com/download](https://ubuntu.com/download)
 
-Many people came together to create Rust 1.99.1. We couldn't have done it without all of you. [Thanks!](https://thanks.rust-lang.org/rust/1.99.1/)
+Users of Ubuntu 26.04 will be offered an automatic upgrade to
+26.10 if they have selected to be notified of all releases rather than
+just LTS upgrades. For further information about upgrading, see:
+
+   [https://documentation.ubuntu.com/desktop/en/latest/how-to/upgrade-ubuntu-desktop/](https://documentation.ubuntu.com/desktop/en/latest/how-to/upgrade-ubuntu-desktop/)
+
+As always, upgrades to the latest version of Ubuntu are entirely free
+of charge.
+
+We recommend that all users read the release notes, which document
+caveats, workarounds for known issues, as well as more in-depth notes
+on the release itself. They are available at:
+
+   [https://documentation.ubuntu.com/release-notes/26.10/](https://documentation.ubuntu.com/release-notes/26.10/)
+
+Find out more in the Press Release below:
+
+   [https://ubuntu.com/blog/canonical-releases-ubuntu-26-10-stonking-stingray](https://ubuntu.com/blog/canonical-releases-ubuntu-26-10-stonking-stingray)
+
+If you have a question, or if you think you may have found a bug but
+aren't sure, ask in any of the following places:
+
+   [https://matrix.to/#/#support:ubuntu.com](https://matrix.to/#/#support:ubuntu.com)
+   [https://discourse.ubuntu.com/support](https://discourse.ubuntu.com/support)
+   [https://lists.ubuntu.com/mailman/listinfo/ubuntu-users](https://lists.ubuntu.com/mailman/listinfo/ubuntu-users)
+
+Help shape Ubuntu
+-----------------
+
+If you would like to help shape Ubuntu, look at the list of ways
+you can participate at:
+
+   [https://documentation.ubuntu.com/project/community/contribute/](https://documentation.ubuntu.com/project/community/contribute/)
+
+About Ubuntu
+------------
+
+Ubuntu is a full-featured Linux distribution for desktops, laptops,
+IoT, cloud, and servers, with a fast and easy installation and regular
+releases. A tightly-integrated selection of excellent applications is
+included, and an incredible variety of add-on software is just a few
+clicks away.
+
+Professional services including support are available from Canonical
+and hundreds of other companies around the world. For more information
+about support, visit:

@@ -1,152 +1,29 @@
-Folders is a non-textual language, where code is expressed in containment and order alone. The names of the folders are ignored, apart from alphabetical ordering. In other words, they are *pure ordered trees*.
+decomp.dev was born in 2024 as a way to centralize matching decompilation progress and to help expand a community of talented, like-minded folks.
 
-![Properties of a folder holding 352,449 folders: 0 bytes](https://danieltemkin.com/Content/Esolangs/Folders/FoldersFree_small.png)
+Historically, matching decompilation has been a brutally difficult, time consuming task, on the scale of years for any moderately-sized game with a number of active contributors. As we developed better tooling and shared knowledge around the intricacies of decompilation, the compilers, and the games themselves, progress began to accelerate.
 
-            Inspired by the Whitespace language, Folders is devoted to the idea of dematerialized code. It began with the question *What is more empty than a file with no visible text?* The empty folder is clutter, an appendage with no purpose. In git, it is ignored entirely (for this reason, it is suggested that Folders programs put .gitignore files in their deepest reaches).
+AI's use in decompilation has been experimented with for years, with mixed results. Starting with the release of Opus 4.6 and GPT-5.4 in early 2026, it was clear that the models were being trained on matching decompilation (they appeared to know our specific tools and how to use them without explicit guidance), and could achieve decent results inside of an established, clean codebase with exhaustive documentation. However, those results still required a significant amount of human cleanup and fixes for obvious issues or cheating (code that *technically* compiles to the same machine code, but could not be reasonably passed as what the original developers wrote), and the cost per task was prohibitively expensive relative to the results.
 
-            Folders began as a Windows language. In Windows, folders are an even more extreme measure of emptiness: they take up no disk space at all.
-            For proof, create  352,449 folders and get properties on it. In this way, Folders offers not only a dematerialized approach to code but also infinite storage capacity. Keep all your data encoded in folder names and never worry about running out of space again.
+Recent models (like GPT-6-Astra) shifted things even further: they are significantly better at following complex directions, cross-referencing resources for symbols or debug information, and writing natural code with enough guidance. They are also exceptionally good permuters: they can write small scripts that test many different source code forms and combinations to find a match, even across files and headers to cover aspects like inlined helpers, signature changes, and operation ordering. In addition, their ability to remain coherent and focused across long-horizon tasks allows them to work continuously without going off the rails. Finally, they can achieve these better results faster and cheaper than earlier models could.
 
-For those who use other operating systems, the emulator below gives some of the experience of how Folders manages data and code.
+It is now clear that, with the right guidance, human input, and code reviews, AI can expedite the decompilation process in a significant way. What is also now clear is that the community aspect of decompilation has been broken. Our projects have always been open source to encourage contributions and to benefit the community as a whole. Bad actors have been abusing this in increasingly troublesome ways:
 
-The original implementation [can be found on github](https://github.com/rottytooth/Folders).
+- Forking existing decompilation projects to "finish" them with AI. Every project works differently: some may not want to use AI for legal or ethical reasons, and others may be okay with AI, or use AI themselves, but do not want drive-by contributions from folks who have put no effort into making sure the contributions are good. The bottom line is that these kinds of hostile forks put little to no effort into meaningfully contributing to existing projects, tearing apart our community fabric.
+- Racing to port games, especially utilizing decompilations that they did not contribute to. Yes, now anyone with an AI subscription can manage to create a port or static recompilation that functions at a basic level. Compared to the decompilation process itself, porting is relatively easy, especially with the established tools written by talented humans. While community members put in the effort to decompile a game, opportunists have frequently raced to release a half-baked, barely-functional port from it.
+- Conflating decompilation and ports. For years, decompilation communities attempted to establish that decompilation is primarily for research: we love these games and want to understand how they work, and to uncover the mysteries that the original developers left behind. That's not to say that ports aren't fun too; they're just not the sole reason a decompilation exists. Sloptubers and subreddits like /r/decomps have done immense damage here, freely using "decomp" to mean "PC port".
 
-Encoding
-![Encoding folders](https://danieltemkin.com/Content/Esolangs/Folders/family_tree1.svg)
+decomp.dev was originally designed to gamify decompilation: watching the progress go up was a fun way to stay motivated when every fraction of a percent took real human effort. Today, that same idea has warped decompilation into a hollow numbers game, exacerbated by folks who just want to burn tokens to make number go up or "port game to PC", all else be damned. While the increased attention *has* brought in genuine folks who want to learn and contribute meaningfully, I believe that decomp.dev serving as a public index and leaderboard is now causing more harm than good.
 
-            Each command folder has at least one child folder. The number of subfolders in the first
-            folder (alphabetically) indicates the type of command; any arguments are indicated in a
-            second folder; some commands require a third folder. Expressions are the same: the number of folders in the first sub-folder determine what kind of expression it is. The [full Language Spec is below](https://danieltemkin.com/esolangs/folders#language_spec).
+## What happens now?
 
-            Temporary data is stored as folders; unlike Folders code, it is the name of the folder that stores the data.
+decomp.dev will continue to track existing projects and serve individual project pages and historical data, but the main index and adding new projects are disabled.
 
-Folders FS
+## Can I fork and host my own version of decomp.dev?
 
-            The Folders interpreter does not create temp files; anything not held
-            immediately in memory is stored as a set of temp folders. Unlike Folders code, the name of the folder stores the data itself.
+No. decomp.dev's repository has never had an open source license, and I continue to reserve all rights to the (entirely human written) code. Any replica must not use decomp.dev's code in any form.
 
-            The prefered I/O of
-            Folders is another set of folders. This means you can encode all your data in
-            folders, bypassing the "material realm" of files entirely and giving you infinite disk space (attempt at your own risk). Folders lang for code, Folders FS for data storage. 
+## Why not just forbid AI-assisted projects?
 
-![Temp folders from several Folders programs](https://danieltemkin.com/Content/Esolangs/Folders/FoldersRunning.png)
-Temp folders from several Folders programs
+I have long held the opinion that AI is not the issue by itself, and we now know it can help tremendously when used correctly. "Slop" comes in many forms, is hard to define, and even harder to moderate. As a sole hobbyist, I don't have the energy (or desire) to define what makes a "good" decompilation and enforce that consistently across the hundreds of projects on the site.
 
-Visualizations
-A Folders program is a *nil-terminated nested list*. Its simplest form is pure containment and order, like this all-array JSON:
-
-[[[[],[]],[],[[]]],[[[],[]],[],[[],[]]],[[[],[]],[],[[],[],[]]],[[[],[]],[],[[],[],[],[]]],[[[],[],[]],[[]],[[[],[],[],[],[]],[],[[[],[],[],[]]]]],[[[],[],[]],[[],[]],[[[],[],[],[],[]],[],[[[],[],[],[[]]]]]],[[[],[],[]],[[],[],[],[]],[[[],[],[],[],[]],[],[[[],[],[],[]]]]],[[[]],[[[],[],[],[],[],[],[],[]],[[],[[],[],[],[]]],[[[],[],[],[],[]],[],[[[],[],[],[[]]],[[[]],[[]],[[]],[]]]]],[[[[],[],[],[]],[[],[[]]]],[[[],[],[],[]],[[[],[],[],[],[]],[[],[],[]],[[[[]],[],[[]],[]]]]],[[[],[],[]],[[],[],[]],[[[]],[[],[[]]],[[],[[],[]]]]],[[[],[],[]],[[]],[[],[[],[]]]],[[[],[],[]],[[],[]],[[],[[],[],[]]]],[[[],[],[]],[[],[],[],[]],[[[]],[[],[[],[],[],[]]],[[[],[],[],[],[]],[],[[[],[],[],[[]]]]]]]]]]
-Fibonacci Program
-
-That is also how the JS emulator saves/reads Folders programs.
-However, other systems of visualization are possible. Folders programs are *content as structure* and can be applied to raw data of any type. Here is a [Truth Machine](https://esolangs.org/wiki/Truth-machine) as a contour map. The thicker lines are containers, and the order of folders is read starting at the upper left (NW corner) and proceeding counter-clockwise.
-
-![Truth Machine](https://danieltemkin.com/Content/Esolangs/Folders/truthmachine1_island.svg)
-Truth Machine
-
-![Truth Machine Detail](https://danieltemkin.com/Content/Esolangs/Folders/truthmachine_island_detail.svg)
-Truth Machine (Detail)
-
-Other visualizations might be a family tree (with all single parents), a botanical branching structure (like a splitting stalk of wheat), or the paths through a maze.
-
-![Truth Machine](https://danieltemkin.com/Content/Esolangs/Folders/truthmachine1_maze.svg)
-Truth Machine
-
-![Simple Echo](https://danieltemkin.com/Content/Esolangs/Folders/simpleecho1_maze.svg)
-Simple Echo
-
-The red dots indicate a threshhold from a container to a single child.
-
-Language Spec
-
-            The language itself is a very simple imperative language with a short list of semantic rules.
-
-            For Commands and Expressions, the number of folders in their first child folder determines their use. Types are used directly.
-
-Commands
-
-                    Command
-
-                    # of Folders
-
-                    Details
-
-                    if
-
-                    0 folders
-
-                    Second sub-folder holds expression, third holds list of commands
-
-                    while
-
-                    1 folder
-
-                    Second sub-folder holds expression, third holds list of commands
-
-                    declare
-
-                    2 folders
-
-                    Second sub-folder holds type, third holds var name (in number of folders)
-
-                    let
-
-                    3 folders
-
-                    Second holds var name (in number of folders), third holds expression
-
-                    print
-
-                    4 folders
-
-                    Second sub-folder holds expression
-
-                    input
-
-                    5 folders
-
-                    Second sub-folder holds var name
-
-Expressions
-
-                    Type
-
-                    # of Folders
-
-                    Details
-
-                    variable
-
-                    0 folders
-
-                    Second sub-folder holds var name
-
-                    add
-
-                    1 folder
-
-                    Second sub-folder holds first expression to add, third holds second expression
-
-                    subtract
-
-                    2 folders
-
-                    Second sub-folder holds first expression to subtract, third holds second expression
-
-                    multiply
-
-                    3 folders
-
-                    Second sub-folder holds first expression to multiply, third holds second expression
-
-                    divide
-
-                    4 folders
-
-                    Second sub-folder holds first expression to divide, third holds second expression
-
-                    literal value
-
-                    5 folders
-
-Second sub-folder holds the type of the value (e.g. two folders for a string, third holds the value)
+As this era of decompilation comes to a close, I want to thank everyone who's been involved and contributed to our projects, communities and tools. The people and passion behind these projects have always been what's made them fun and rewarding.

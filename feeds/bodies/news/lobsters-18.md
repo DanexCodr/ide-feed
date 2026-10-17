@@ -1,39 +1,242 @@
-It’s been two years since [my initial post](https://blogs.gnome.org/adrianvovk/2024/10/25/a-desktop-for-all/https://blogs.gnome.org/adrianvovk/2024/10/25/a-desktop-for-all/) about making GNOME OS an end-user general purpose OS. Today, we’re excited to announce that we’ve hit a major milestone!
+When editing code in a modern IDE or editor, developers rely on its refactoring
+features to automate common transformations. Today, we are excited to introduce
+**interactive refactoring** in [gopls](https://go.dev/gopls), powered by a new capability we are
+proposing for the [Language Server Protocol (LSP)](https://microsoft.github.io/language-server-protocol/)
+that brings dynamic, multi-step dialogs directly into your favorite editor.
+Crucially, we designed this capability (in collaboration with the Dart team)
+not just for Go, but as an open standard for all programming languages and
+editor ecosystems. Working support is already available in gopls [v0.24.0](https://go.dev/gopls/release/v0.24.0) and
+the official Go extension for VS Code v0.56.0.
 
-TL;DR: We’re launching a new edition called “GNOME OS Preview”, which is built from the latest stable GNOME release. This means that GNOME OS is no longer *just* a nightly OS for GNOME developers and testers!
+### What is the Language Server Protocol (LSP)?
 
-## The Road to Stable
+The LSP is an open standard that decouples language-specific
+features from specific text editors. As you navigate and edit code, your
+editor (such as VS Code, Neovim, or Emacs) and a language server (like gopls)
+engage in a continuous JSON-RPC exchange to provide features like autocomplete,
+hover documentation, diagnostics, and code actions.
 
-Even though GNOME OS has been usable on real hardware for a few years now, its appeal was limited. We’ve only had the Nightly edition, which is constantly rebuilt to ship the latest git commit of every GNOME component (and a few others, like systemd and Flatpak). This form of GNOME OS is extremely useful, since GNOME developers and designers can daily-drive it to test the latest changes. However, it’s not something we’d recommend to non-developers.
+### Multi-step code transformation
 
-Over the past year, we’ve seen a lot of adoption of GNOME OS Nightly amongst GNOME developers, especially following the success of last year’s [Summer of GNOME OS](https://blogs.gnome.org/tbernard/2025/06/01/summer-of-gnome-os/) challenge. This has led to a significant uptick in contributions and initiatives aimed at improving user and developer experience. For instance:
+Today, almost every code transformation in the LSP is like a function of no
+parameters: you trigger the operation, and the server immediately computes the
+edits. (Renaming a symbol is the sole exception: because it is a function of one
+parameter, the desired new name, it required its own dedicated `PrepareRename`
+RPC in the protocol.)
 
-- Thanks to Jonas Dreßler’s, Valentin David’s, and Sebastian Wick’s zswap enablement efforts, GNOME OS now handles devices with limited amounts of RAM without OOM stalls. Jonas also found a hack that lets GNOME OS dynamically grow the usable on-disk swap space on-demand, which makes zswap perform significantly better than usual.
-- The recently released Test Center app allows you to install CI builds of Flatpak apps from a merge request, making it super easy to test experimental changes before they are even merged. On GNOME OS Nightly, Test Center can do the same with system components by applying them as a system extension.
-- Jordan Petridis’s new Toolpak project aims to provide a clean solution for distributing and installing command-line applications that developers need in a cross-distro fashion, similarly to how Flatpak and Flathub work for graphical apps.
+*"Add struct tags", without questions*
 
-Of course, long-term our goal is an OS for the broader public. We’re working on this across a number of different fronts, including:
+The language server must deduce the user’s intent from context alone, namely
+the cursor position and the enclosing syntax tree. When that context is not
+enough, the server is forced into one of two choices: apply a one-size-fits-all
+default, or refrain from offering the transformation altogether. The limitation
+lies not in gopls’s ability to compute the necessary edits, but in the
+LSP’s lack of a mechanism for language servers to ask the user for input.
 
-- Enablement for systemd-homed across the stack, allowing for stronger per-user disk encryption and other benefits.
-- Experimental work in the kernel to solve a bunch of limitations we’ve run into with filesystems. Ada Magicat went on a deep dive on her recent All Systems Go talk!
-- Deep integration between systemd-homed and the session’s keyring, to increase security of the session’s lock screen. Dhanuka Warusadura gave a lightning talk at All Systems Go about his work on this.
-- A new feature-complete installer, to replace the current placeholder installer. Julian Sparber also gave a talk about this at All Systems Go, with a live demo!
-- Support for delta updates in systemd-sysupdate, to avoid downloading a full 2 GB image every time.
-- Better integration with the TPM, including a graphical TPM recovery UI. Currently, trying to type a TPM recovery key into Plymouth is rather difficult.
-- Improved support for ARM hardware, including some specific models of phones. Abderrahim Kitouni gave a lightning talk at GUADEC this year about the current installation process.
-- Shipping our pre-installed apps as Flatpaks, and reworking the app release process to unify the build definitions between GNOME OS, the GNOME Nightly Apps Flatpak repo, and Flathub.
-- An STF project focused on Flatpak and Portals, which will enable broader app support on GNOME OS (like VPNs!). You can learn more from the announcement blog post.
+For many transformations, this parameterless model works well. But many others
+need additional input from the user: which struct tags to add and in what
+naming convention, which interface to implement, which file to move a
+declaration to. Without a way to ask, gopls could only guess—“Add struct
+tags”, for example, always produced `json` tags in `camelCase`—or not offer the
+refactoring at all. With interactive refactoring, language servers can now
+easily provide new operations with one or more parameters.
 
-Some of these areas require lots more work before they’re ready for prime time, and even once they’re ready it’s not clear that it’ll be possible to migrate existing GNOME OS installations to use these new features. At [FOSDEM this year](https://blogs.gnome.org/adrianvovk/2026/02/18/gnome-os-hackfest-fosdem-2026/), we discussed this issue and decided that we won’t declare GNOME OS as “stable” until we can confidently commit to maintaining a clear long-term upgrade path for existing installations.
+*"Add struct tags", with questions*
 
-However, we also don’t think that all these things need to be in place before GNOME OS can be used by more people than it is today. It’s *not* ready for the masses yet, but it is ready for early adopters that aren’t quite adventerous enough to run a nightly OS.
+While some language extensions have worked around this limitation by embedding
+custom, language-specific dialog logic directly into individual editors, doing
+so leaves behind other editors (such as Neovim and Emacs) that stick strictly
+to the LSP with minimal custom client code. More importantly, editor-specific
+workarounds go against the fundamental purpose of the LSP: to decouple
+language-specific features from editors so that each server improvement benefits
+every client.
 
-## Introducing GNOME OS Preview
+Our [LSP interactive refactoring proposal](https://go.googlesource.com/proposal/+/refs/heads/master/design/76331-lsp-interactive-refactoring.md)
+([microsoft/language-server-protocol#1164](https://github.com/microsoft/language-server-protocol/issues/1164))
+solves this by establishing a standard mechanism for
+language servers to collect user input before computing text edits. For Go
+developers, this unlocks a suite of long-awaited refactorings, including:
 
-GNOME OS Preview is the current GNOME OS Nightly, but without the “nightly” aspect. Instead, it’s built from the latest stable GNOME release (GNOME 51.1, at the time of writing). GNOME OS Preview lives in the same branches on [GitLab](https://gitlab.gnome.org/GNOME/gnome-build-meta) as the stable `org.gnome.Platform` Flatpak runtimes.
+- golang/go#70583: Move Declaration
+- golang/go#38028: Change Signature
+- golang/vscode-go#1547: Implement Interface
+- golang/vscode-go#2002: Modify Struct Tags
 
-GNOME OS Preview is only a few weeks old, so it has only seen limited real-life testing so far. We therefore expect people will uncover some issues initially. That said, Preview is significantly more stable than Nightly, which dozens of people have been daily driving without major issues for over a year. Thus, we’re feeling confident that Preview is going to be reliable enough for daily use by non-developer enthusiasts.
+among many others.
 
-In all likelihood, GNOME OS Preview will be with us for a few years. However, **we are explicitly not promising updates in perpetuity**. If you’re not OK with re-installing your OS in a few years to switch to GNOME OS Stable, this is not for you yet. But if you’ve already been curious about giving GNOME OS a try, this is the moment!
+## Interactive refactorings in action
 
-GNOME OS Preview is available for download on the newly-refreshed [os.gnome.org](https://os.gnome.org)! GNOME OS Nightly is still available from there too. As always, you can reach us on Matrix at [#gnome-os:gnome.org](https://matrix.to/#/#gnome-os:gnome.org) or via the [`gnome-os` tag on Discourse](https://discourse.gnome.org/tag/gnome-os)
+**Adding and removing struct tags (gopls v0.23.0)**
+
+When configuring serialization formats, developers frequently need custom tags
+and casing conventions. Previously, running “Add struct tags” unconditionally
+injected `json` tags using `camelCase` formatting.
+
+With interactive refactoring:
+
+1. Place your cursor on any struct definition and select the “Add struct tags” code action.
+2. An input dialog appears, pre-filled with json, allowing you to customize any combination of tags (such as json,yaml,db).
+3. A second dialog lets you select your desired naming convention (such as camelCase, snake_case, or PascalCase).
+4. Gopls generates and applies the formatted struct tags across your type definition.
+
+*Interactive "Add struct tags" in VS Code*
+
+Here is the before-and-after transformation:
+
+```go
+type UserProfile struct {
+    ID        int64
+    FirstName string
+    LastName  string
+    EmailAddr string
+}
+```
+
+```go
+type UserProfile struct {
+    ID        int64  `json:"id" db:"id"`
+    FirstName string `json:"first_name" db:"first_name"`
+    LastName  string `json:"last_name" db:"last_name"`
+    EmailAddr string `json:"email_addr" db:"email_addr"`
+}
+```
+
+Similarly, **“Remove struct tags”** now asks you for the specific tag keys
+you wish to delete (for example, removing only `db` tags while preserving the `json`
+tag), rather than wiping out all struct tags indiscriminately.
+
+*Interactive "Remove struct tags" in VS Code*
+
+**Implementing interfaces with dynamic symbol search**
+
+When creating a type to satisfy an interface, developers previously had to copy
+the interface declaration and manually turn it into a set of methods on the
+receiver type (or rely on external tools like `impl` by manually typing the
+receiver and qualifying the name of the interface).
+
+Since gopls v0.23.0, with interactive refactoring:
+
+1. Place your cursor on any concrete type and select the “Add methods to X to implement an interface…” code action.
+2. A text entry field appears, inviting you to choose the name of an interface type. It makes dynamic queries to gopls to auto-complete names of types in your workspace and the standard library (for example, maphash.Hasher).
+3. If the selected interface has type parameters, gopls asks for a concrete type argument for each type parameter (such as Foo).
+4. Gopls generates complete method stubs with appropriate receiver names and instantiated method signatures.
+
+*Interactive "Add methods to implement an interface..." in
+     VS Code*
+
+```go
+type Foo struct{}
+
+type MyHasher struct{}
+```
+
+```go
+type Foo struct{}
+
+type MyHasher struct{}
+
+// Equal implements [maphash.Hasher].
+func (m *MyHasher) Equal(x Foo, y Foo) bool {
+    panic("unimplemented")
+}
+
+// Hash implements [maphash.Hasher].
+func (m *MyHasher) Hash(*maphash.Hash, Foo) {
+    panic("unimplemented")
+}
+```
+
+**Moving declarations across files and packages (preview)**
+
+Moving declarations manually by cutting and pasting can easily break references
+and requires tedious import cleanup across multiple files. While scheduled for
+an upcoming gopls release, our working implementation already demonstrates how
+interactive file selection streamlines cross-file and cross-package moves:
+
+1. Place your cursor on any top-level declaration and select the “Move declaration X” code action.
+2. A file picker dialog lets you choose an existing destination .go file or specify a new file path.
+3. Gopls moves the declaration along with its dependent declarations (such as unexported helpers or methods) while leaving unrelated symbols in place, updates references across your workspace, and cleans up imports in both the source and destination files.
+
+*Interactive "Move declaration" in VS Code*
+
+In the example below, we move the type `Foo` from package `from` to package
+`to`. Its method `Print` and the unexported constant `bar`, which only `Foo`
+uses, move along with it, while the unrelated function `Baz` stays behind:
+
+```go
+// from/from.go
+package from
+
+import (
+    "fmt"
+    "strings"
+)
+
+const bar = "bar"
+
+// Doc comment for Foo
+type Foo struct{}
+
+func (f Foo) Print() {
+    fmt.Println(bar)
+}
+
+func Baz() string {
+    return strings.ToUpper("baz")
+}
+```
+
+```go
+// from/from.go
+package from
+
+import "strings"
+
+func Baz() string {
+    return strings.ToUpper("baz")
+}
+
+// to/to.go
+package to
+
+import "fmt"
+
+const bar = "bar"
+
+// Doc comment for Foo
+type Foo struct{}
+
+func (f Foo) Print() {
+    fmt.Println(bar)
+}
+```
+
+**Slaying the dragon (gopls v0.24.0)**
+
+As a demonstration of multi-step interactive dialogs and a self-contained test
+case for client editor implementations, gopls v0.24.0 offers a **“Slay the
+dragon”** code action when you place your cursor on a package-level variable
+named `dragonSlayer` (for example, `var dragonSlayer string`). Happy hunting!
+
+## What’s on the Horizon
+
+Interactive refactoring establishes a foundational capability in gopls,
+opening up several exciting directions on our roadmap:
+
+- Change signature refactoring ([#38028](https://go.dev/issue/38028)): Adding, removing, or reordering function parameters across a workspace requires input that cannot be deduced from syntax alone, such as the new parameter order or the default argument expression to insert at existing call sites. Interactive forms allow gopls to collect these details before rewriting the declaration and all call sites.
+- Interactive conflict resolution: When a code transformation encounters naming collisions, identifier shadowing, or ambiguous references, gopls can ask the user for guidance, such as asking for permission to proceed or offering to rename conflicting symbols on the fly.
+- Interactive commands beyond code edits: Because interactivity is modeled at the LSP command layer, it naturally generalizes to non-edit server operations that require user configuration, such as configuring test or benchmark runs with profiling flags (CPU, memory, tracing).
+
+## Getting Started and Sharing Feedback
+
+Interactive refactoring is available in gopls [v0.24.0](https://go.dev/gopls/release/v0.24.0)
+and `vscode-go` [v0.56.0](https://github.com/golang/vscode-go/releases/tag/v0.56.0)
+(with proof-of-concept client integrations also explored for
+[Neovim](https://github.com/h9jiang/neovim/tree/interactive-refactoring) and
+[Emacs](https://go-review.googlesource.com/c/tools/+/800220)).
+
+We would love to hear your thoughts as we continue
+refining interactive code actions in gopls:
+
+- For general feedback or feature requests, file an issue on the Go issue tracker.
+- To read the full technical specification—including the stateless form protocol design and alternative approaches we explored—or to join the discussion with the broader LSP community, check out the LSP Interactive Code Actions design document and the ongoing conversation in microsoft/language-server-protocol#1164.

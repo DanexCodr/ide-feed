@@ -1,162 +1,233 @@
-This is one of a three-part mini series about how I’m using modern C as of late 2026.
+A tool for managing a wiki stored in a plain text file. 📖
 
-Before C23, I was [taken in](https://www.youtube.com/watch?v=443UNeGrFoM) by *How I Program C* for years and years, and would even feel guilty for choosing C99 instead of `-ansi -pedantic`. But holy crap man I’m done being a doomsday prepper! These days I maintain a large-enough project with enough users where I could stand less foot-shooting. (I’ve also got bills to pay.)
+# Mull 📖
 
-So here’s three modern C conventions which started to rise naturally from adding `-std=c23` to my zig build:
+[![Build status](https://github.com/stepchowfun/mull/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/stepchowfun/mull/actions?query=branch%3Amain)
 
-## 1. Unused? Maybe. (Yes)
+*Mull* is a tool for managing a wiki stored in a plain text file. It has a [Visual Studio Code](https://code.visualstudio.com/) / [Cursor](https://cursor.com/) extension which provides syntax highlighting, hover previews, completions, diagnostics, formatting, refactoring, etc.
 
-Our first convention is centered around `[[nodiscard]]`. If I draw an app window or panel I require the caller to interrogate the rect of the thing that was just rendered:
+[![Welcome to Mull.](https://raw.githubusercontent.com/stepchowfun/mull/main/screenshots/mull.png)](https://raw.githubusercontent.com/stepchowfun/mull/main/screenshots/mull.png)
 
-```c
-[[nodiscard]] rect_t draw_screen(/* ... */) {
-    rect_t screen_r = { };
-    // Draw stuff
-    // ...
-    return screen_r;
-}
+A *wiki* is a text file with a `.mull` extension. It contains *pages* which link to each other, all in the same file. Here's a little wiki with 3 pages:
+
+```
+# Home
+
+My go-to breakfast is [Pancakes] with fresh [Lemons].
+
+# Lemons
+
+Great on [Pancakes].
+
+# Pancakes
+
+- 1 cup of flour
+- 1 cup of milk
+- 1 egg
+- A squeeze of [Lemons]
 ```
 
-It’s a genuine business logic bug if the caller doesn’t capture the rectangle for later processing. Therefore `[[nodiscard]]` has been such a godsend for fixing bugs… Except there’s a choice few instances where I will draw something with *no real use* for the resulting rect. I’d rather ignore the return value:
+Each page starts with a `# Title`, followed by the contents of the page. To link to a page, use square brackets like `[Lemons]`. When you type the opening `[`, autocomplete kicks in to help you find the page you're looking for.
 
-```c
-enum screen_opt popup_options = /* ... */ ;
-draw_screen(popup_options, /* ... */); // ERROR: damn you [[nodiscard]]
+[![Autocomplete.](https://raw.githubusercontent.com/stepchowfun/mull/main/screenshots/completions.png)](https://raw.githubusercontent.com/stepchowfun/mull/main/screenshots/completions.png)
+
+Every wiki starts with a `Home` page. Mull requires that every other page is *reachable* (directly or indirectly) by following links, starting from `Home`. This rule promotes a basic form of organization that doesn't involve any hierarchical structure. Pages serve the roles traditionally filled by files *and* directories.
+
+Mull formats the wiki when you save the file (default), or when you explicitly request it. It chooses the ordering of the pages in the file based on the links between them, so you don't have to think about it. Linking to pages is the only way to organize them.
+
+You can link to files like photos, spreadsheets, or anything else. Mull checks that the linked files actually exist, and you can preview them without leaving the editor.
+
+[![A file preview.](https://raw.githubusercontent.com/stepchowfun/mull/main/screenshots/file_preview.png)](https://raw.githubusercontent.com/stepchowfun/mull/main/screenshots/file_preview.png)
+
+Files go in a directory next to the wiki named after the wiki, with the `.mull` extension replaced with `_files`. For example, if the wiki is `my_wiki.mull`, the files go in `my_wiki_files`. If you have a file called `my_wiki_files/photos/beach.jpg`, you can link it with `[/photos/beach.jpg]`. You can also link to directories like `[/photos/]`.
+
+Autocomplete helps you enter the names of files and directories when linking to them. You can also drag-and-drop (while holding the `Shift` key) or paste files directly into the editor.
+
+Just as every page must be reachable from `Home`, every file in `<wiki>_files` (if it exists) must be linked to from the wiki. A link to a directory implicitly counts as linking to everything inside it. An empty directory needs a link of its own.
+
+A portal is a window into another page. It holds a copy of the page's contents, and Mull keeps them in sync. For example, if you have a page called `Pancakes`, you can open a portal to it from another page like this:
+
+```
+This is my favorite breakfast:
+
+::: [Pancakes] :::
 ```
 
-Clang will error out here. I could maybe capture the var and never use it but…
+When the wiki is formatted (e.g., on save), that line will be expanded into a copy of the page:
 
-```c
-rect_t rect = draw_screen(/* ... */); // ERROR: unused variable (I have `-Werror` enabled)
+```
+This is my favorite breakfast:
+
+::: [Pancakes]
+- 1 cup of flour
+- 1 cup of milk
+- 1 egg
+- A squeeze of [Lemons]
+:::
 ```
 
-Pre-C23 one might solve this through an `UNUSED()` macro:
+You can edit the page or any of its portals, and formatting will propagate your edits to the rest.
 
-```c
-#ifndef UNUSED
-#define UNUSED(x) (void)(x)
-#endif
+Suppose you have a list that you want to keep sorted:
 
-rect_t rect = draw_screen(/* ... */);
-UNUSED(rect); // Silences the compiler, but now I'm sad.
+```
+The contents of my pantry:
+
+- Garlic
+- Kosher salt
+- Miso
+- Olive oil
+- Rice
 ```
 
-But now with C23 we can delete the macro in favor of the native `[[maybe_unused]]`:
+Mull can help with this; you just have to teach it about sorting. Create a file called `<wiki>_files/scripts/sort.sh` with the following contents:
 
-```c
-[[maybe_unused]] rect_t rect = draw_screen(...); // OK
+```
+#!/bin/sh
+sort "$@"
 ```
 
-Phew I feel better. I’ve also noticed this is happening all over the place: lots of different routines returning different types that are marked with `[[nodiscard]]`. So for all the unused cases why not just go for:
+Make it executable with `chmod +x <wiki>_files/scripts/sort.sh`.
 
-```c
-[[maybe_unused]] auto _ = foo(); // A new pattern emerges
+Now you can put the list in a `sort` block:
+
+```
+The contents of my pantry:
+
+::: sort
+- Garlic
+- Kosher salt
+- Miso
+- Olive oil
+- Rice
+:::
 ```
 
-Bonus: For any macro fans out there a fellow indie dev (Zardium) offered an additional improvement. From our chat server:
+Mull will then sort the list automatically whenever the wiki is formatted (e.g., on save). That sorting script accepts arguments, so you can, for example, sort in reverse order with `::: sort -r`.
 
-> Zardium: #define _ [[maybe_unused]] auto CONCAT_MACRO(zz,**COUNTER**)
+Using a script in a block counts as linking to it, so it doesn't need to be linked to from the wiki like other files in `<wiki>_files`. An unused script still needs a link (e.g., `[/scripts/sort.sh]`) somewhere in the wiki.
 
-> Abner: ahh, unique varname. nice one
+To use a special symbol like `[` or `]` literally, put a backslash before it, like `\[`. You can also use backticks to denote verbatim text like ``this``, as in Markdown. Fenced code blocks are supported too, with syntax highlighting for common languages.
 
-> Zardium: you could take the auto out if you don’t want it to look so weird. then it acts exactly like the _ in other languages, where it can be redefined
+```
+# Home
 
-> Abner: Yep totally. Although here I was celebrating my removal of a macro… XD
+I'm learning Python, currently working on a [Dice game].
 
-## 2. More Perfect Unions
+# Dice game
 
-I’ve been cheated and lied to: designated initializers DO NOT clear my struct to zero and I can’t even trust `{0}` anymore. (Talk about a betrayal.) The problem is I’ll often have data types like this contrived timestamp:
+```python
+import random
 
-```c
-typedef struct {
-    Type type;
-    char buf[MAX];
-    union {
-        time_t time;
-        float dt;
-        date_t date;
-    };
-} stamp_t;
+for turn in range(3):
+    roll = random.randint(1, 6)
+    print(f"Roll {turn + 1}: {roll}")
+
+print("Thanks for playing!")
+```
 ```
 
-And if I partially initialize one:
+No escaping is necessary inside page titles or code.
 
-```c
-stamp_t stamp = { .type = STAMP_TYPE_BLA_BLA };
+## Keyboard shortcuts
+
+These common keyboard shortcuts are helpful when navigating and editing a wiki:
+
+| Action | macOS | Windows |
+| --- | --- | --- |
+| Jump to a page from a link | `F12` or `Command + click` | `F12` or `Control + click` |
+| Jump to links to a page (i.e., backlinks) | `Shift + F12` | `Shift + F12` |
+| Jump back to the previously visited page | `Command + [` | `Alt + Left` |
+| Jump forward to the next visited page | `Command + ]` | `Alt + Right` |
+| Jump to the start of the current page | `Command + Up` | `Control + Home` |
+| Jump to the end of the current page | `Command + Down` | `Control + End` |
+| Jump to the next error | `F8` | `F8` |
+| Jump to the previous error | `Shift + F8` | `Shift + F8` |
+| Find a page | `Command + Shift + O` | `Control + Shift + O` |
+| Code actions (e.g., create a missing page) | `Command + .` | `Control + .` |
+| Rename a page | `F2` | `F2` |
+| Format the wiki | `Shift + Option + F` | `Shift + Alt + F` |
+
+Most of these keyboard shortcuts are standard in Visual Studio Code and Cursor, so they may be familiar to you already. You can remap them.
+
+## Usage
+
+Once Mull is [installed](https://github.com/stepchowfun/mull#installation-instructions) for Visual Studio Code or Cursor, you can run it by opening a `.mull` file in the editor.
+
+You can also run Mull from the command line (e.g., in a CI job) as follows:
+
+```
+mull check --path wiki.mull
 ```
 
-While it does mean we successfully zeroed out `buf` (thanks to [empty initialization](https://en.cppreference.com/c/language/initialization#Empty_initialization)), those union members are just a different beast. It also doesn’t matter if we go with `stamp_t stamp = {0}` instead. My dear reader: I’ve made the costly mistake of assuming `date` would clear to zero!
+Here are the supported command-line options:
 
-As I Spongebob-panicked in public, Lobsters member [accelbread](https://lobste.rs/~accelbread) offered a sage revelation:
+```
+Usage: mull [COMMAND]
 
-> accelbread: It used to be that GCC would fully zero the union anyways, and clang would only zero the time_t, though around a year ago they swapped behaviors iirc. Either way, standard only requires the time_t be zeroed and not whole union. GCC has a flag to always zero whole union. Also C23 initialization always inits whole union
+Commands:
+  check            Check that a wiki is valid and formatted, with its scripts run
+  format           Format a wiki, running its scripts (default)
+  page             Print the content of a page in a wiki
+  language-server  Start the language server (editors use this)
+  help             Print this message or the help of the given subcommand(s)
 
-Wait WHAT? clang and gcc SWAPPED what now? I won’t investigate further. Everything about this is *dangerous af* unless we hug C23 tightly and never let go:
-
-```c
-stamp_t stamp = { }; // Fully clears to zero (C23)
-stamp.type = STAMP_TYPE_BLA_BLA;
+Options:
+  -v, --version  Print version
+  -h, --help     Print help
 ```
 
-Accelbread went on to say two more things:
+To use Mull, you must install the binary and optionally the Visual Studio Code / Cursor extension. The binary does all the work and can be used by itself from the command line. The IDE extensions use the binary to provide a rich wiki editing experience.
 
-1. “Note the C23 zero init whole thing is nothing in the brackets, not 0 in brackets; { 0 } does same thing as before C23”
-2. “Also if you control union layout, putting largest member first is safest”
+### Installation on macOS or Linux (AArch64 or x86-64)
 
-Yessir.
+If you're running macOS or Linux (AArch64 or x86-64), you can install Mull with this command:
 
-## 3. Enums In C Were Magic (And I Don’t Like It)
-
-If I want to customize some dialog box I’ll use bit flags:
-
-```c
-enum {
-    OPT_AUTOSCROLL = (1 << 0),
-    OPT_NOCURSOR   = (1 << 1),
-    OPT_CENTERED   = (1 << 2),
-    OPT_NOCLOSE    = (1 << 3),
-    // ...
-};
-
-[[nodiscard]] bool draw_warning(const char* msg, int opt);
+```
+curl https://raw.githubusercontent.com/stepchowfun/mull/main/install.sh -LSfs | sh
 ```
 
-Even if we disagree with this approach lots of relevant libraries or projects do it:
+It first installs the binary, then it installs the extension for Visual Studio Code and/or Cursor.
 
-```c
-_ = draw_warning("you done messed up A-A-RON", OPT_CENTERED | OPT_NOCLOSE);
+The same command can be used again to update to the latest version.
+
+The installation script supports the following optional environment variables:
+
+- VERSION=x.y.z (defaults to the latest version)
+- PREFIX=/path/to/install (defaults to /usr/local/bin)
+
+For example, the following will install the binary into the working directory:
+
+```
+curl https://raw.githubusercontent.com/stepchowfun/mull/main/install.sh -LSfs | PREFIX=. sh
 ```
 
-Of course, erroneous bit shifting will land anyone into trouble and yield comical numbers. Thankfully C enums are a plain `int` underneath so the compiler will warn us if we defined a bad constant inside the enum that won’t fit.
+Note that if you change the installation path, you may also need to change the `mull.executablePath` accordingly in Visual Studio Code or Cursor.
 
-I’m kidding. Sigh. Well, I’m growing fearful of sage revelations but this one comes from [Modern C](https://gustedt.gitlabpages.inria.fr/modern-c/) by Jens Gustedt:
+If you prefer not to use this installation method, you can download the binary from the [latest release](https://github.com/stepchowfun/mull/releases/latest), make it executable (e.g., with `chmod`), and place it in some directory in your [`PATH`](https://en.wikipedia.org/wiki/PATH_(variable)) (e.g., `/usr/local/bin`). You can then follow the instructions [below](https://github.com/stepchowfun/mull#installing-the-visual-studio-code--cursor-extension) to install the Visual Studio Code / Cursor extension.
 
-> Jens: If enumeration constants do not fit into signed int, if possible, the enumeration type is adjusted such that it can store all enumeration constants.
+If you're running Windows (AArch64 or x86-64), download the binary from the [latest release](https://github.com/stepchowfun/mull/releases/latest) and rename it to `mull` (or `mull.exe` if you have file extensions visible). Create a directory called `Mull` in your `%PROGRAMFILES%` directory (e.g., `C:\Program Files\Mull`), and place the renamed binary in there. Then, in the "Advanced" tab of the "System Properties" section of Control Panel, click on "Environment Variables..." and add the full path to the new `Mull` directory to the `PATH` variable under "System variables". Note that the `Program Files` directory might have a different name if Windows is configured for a language other than English.
 
-Noooooo!
+To update an existing installation, simply replace the existing binary.
 
-> Jens: The property that an an enumeration type is adjusted such that it fits all its constants could have surprising effects
+If you have [Cargo](https://doc.rust-lang.org/cargo/), you can install Mull as follows:
 
-*sobs*
-
-> Jens: So, it is preferable to specify the underlying integer type explicitly
-
-THERE IS HOPE?
-
-```c
-enum options : int {
-    OPT_AUTOSCROLL = (1 << 0),
-    OPT_NOCURSOR   = (1 << 1),
-    OPT_CENTERED   = (1 << 2),
-    OPT_NOCLOSE    = (1 << 3),
-    // ...
-};
+```
+cargo install mull
 ```
 
-It compiles! We shoot. We score. We stick with C23.
+You can run that command with `--force` to update an existing installation.
 
-## Epilogue
+### Installing the Visual Studio Code / Cursor extension
 
-In part two of our mini series I’ll discuss three more conventions that I’ve fleshed out thanks to modern C: starting with safer macro usage (forgive me Zig folks.)
+First, make sure you have [Visual Studio Code](https://code.visualstudio.com/) or [Cursor](https://cursor.com/) installed.
 
-*P.S. If you want to shape this discussion [maybe join](https://handmadecities.com/chat) the Handmade Cities server!*
+To install the Mull extension, download the `mull.vsix` file from the [latest release](https://github.com/stepchowfun/mull/releases/latest) and install it via the "Install from VSIX..." option in the `...` menu at the top of the Extensions view of the Primary Side Bar.
+
+Note that the macOS / Linux installation command will install the extension automatically, so you can skip this section if you use that installation method.
+
+To update an existing installation, simply re-install it.
+
+## About
+
+A tool for managing a wiki stored in a plain text file. 📖

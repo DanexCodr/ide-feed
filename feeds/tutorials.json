@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-16T20:39:07Z",
+  "updated": "2026-10-17T03:27:47Z",
   "items": [
     {
       "id": "devto-4821943",
@@ -14,12 +14,36 @@
       "color": "#3B49DF"
     },
     {
+      "id": "devto-4860786",
+      "title": "What Are Your Chances of Surviving Resident Evil Based on Your Tech Job?",
+      "desc": "By xulingfeng | 6 min read",
+      "tag": "tutorial",
+      "published": "2026-10-16T07:27:22Z",
+      "order": 2,
+      "url": "https://dev.to/xulingfeng/what-are-your-chances-of-surviving-resident-evil-based-on-your-tech-job-4b9o",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F179t5kb6wlcokai53ap9.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAgMAAQT/xAAVAQEBAAAAAAAAAAAAAAAAAAAAAf/aAAwDAQACEAMQAAABxkiI5dCf/8QAGBAAAgMAAAAAAAAAAAAAAAAAAAERIEH/2gAIAQEAAQUCyEO3/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFxAAAwEAAAAAAAAAAAAAAAAAACAxMv/aAAgBAQAGPwKmit//xAAbEAEAAgIDAAAAAAAAAAAAAAABABEhMRCB8f/aAAgBAQABPyEqjvD0Qg4b3G93Bl5l54//2gAMAwEAAgADAAAAEH5//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPxA//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPxA//8QAHBABAAICAwEAAAAAAAAAAAAAAQARITFBUXHw/9oACAEBAAE/EDaLDVxzlfPIDoC77R524a3KeB9Isv1Bqt3mKu2f/9k=",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4858196",
+      "title": "Natural Languages Have Design Trade-offs Too: Georgian Is Dynamically Typed, English Is Statically Typed",
+      "desc": "By Giorgi Kobaidze | 10 min read",
+      "tag": "tutorial",
+      "published": "2026-10-15T19:22:46Z",
+      "order": 3,
+      "url": "https://dev.to/georgekobaidze/natural-languages-have-design-trade-offs-too-georgian-is-dynamically-typed-english-is-statically-emi",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fox7963esvydjbsiqboye.jpeg",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAgMBBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHn1xsSmj//xAAaEAACAgMAAAAAAAAAAAAAAAAAARESAjFB/9oACAEBAAEFAkyYLosjeECSO//EABURAQEAAAAAAAAAAAAAAAAAABAR/9oACAEDAQE/AYf/xAAVEQEBAAAAAAAAAAAAAAAAAAAQEf/aAAgBAgEBPwGn/8QAGRAAAgMBAAAAAAAAAAAAAAAAADEBECAh/9oACAEBAAY/AlSFJ3H/xAAZEAEBAQEBAQAAAAAAAAAAAAABABEhQVH/2gAIAQEAAT8hVOKfYYT1ZndpAMbY+XVycEBf/9oADAMBAAIAAwAAABB7/wD/xAAWEQEBAQAAAAAAAAAAAAAAAAARACH/2gAIAQMBAT8QEY3/xAAWEQEBAQAAAAAAAAAAAAAAAAARAAH/2gAIAQIBAT8QU6l//8QAHBABAAMAAgMAAAAAAAAAAAAAAQARITFhQaHB/9oACAEBAAE/EGVuvBDAivs+MAx050iA9cJFkUXTLSqRQEb62AxhfE//2Q==",
+      "color": "#3B49DF"
+    },
+    {
       "id": "devto-4812559",
       "title": "I Write on a 2006 iMac and Code on a $200 Laptop",
       "desc": "By Mika Flowers | 4 min read",
       "tag": "tutorial",
       "published": "2026-10-07T13:27:39Z",
-      "order": 2,
+      "order": 4,
       "url": "https://dev.to/mikachu/i-write-on-a-2006-imac-and-code-on-a-200-laptop-9n4",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fa6s485r66rbdy2316p3r.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAwEBAAAAAAAAAAAAAAAAAAIDAQT/xAAWAQEBAQAAAAAAAAAAAAAAAAAAAgP/2gAMAwEAAhADEAAAAexJmdPsg//EABgQAAMBAQAAAAAAAAAAAAAAAAABERAx/9oACAEBAAEFAlwtxubT/8QAFREBAQAAAAAAAAAAAAAAAAAAEBH/2gAIAQMBAT8Bh//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABcQAAMBAAAAAAAAAAAAAAAAABARMSD/2gAIAQEABj8CEWKP/8QAGRAAAwEBAQAAAAAAAAAAAAAAAAERMUFx/9oACAEBAAE/IcBVOw2bYcG16VzRUJ8P/9oADAMBAAIAAwAAABCNP//EABYRAQEBAAAAAAAAAAAAAAAAAAEAEf/aAAgBAwEBPxATJhf/xAAWEQEBAQAAAAAAAAAAAAAAAAARAAH/2gAIAQIBAT8QSzW//8QAGhABAAMBAQEAAAAAAAAAAAAAAQARITFBYf/aAAgBAQABPxBVtFVWOMAEA5fv2VgfS4DXboX5BAdJ2oMqnL5DltzGf//Z",
@@ -31,34 +55,10 @@
       "desc": "By Anthony Max | 2 min read",
       "tag": "tutorial",
       "published": "2026-10-03T21:53:00Z",
-      "order": 3,
+      "order": 5,
       "url": "https://dev.to/anthonymax/embedcatalog-is-participating-in-hacktoberfest-2026-7f4",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fag5veodb2yihpm364qbx.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAQMCBP/EABYBAQEBAAAAAAAAAAAAAAAAAAABAv/aAAwDAQACEAMQAAAB4aTdTc0P/8QAFhABAQEAAAAAAAAAAAAAAAAAAQAg/9oACAEBAAEFAoCTX//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABgQAAIDAAAAAAAAAAAAAAAAAAABIDEy/9oACAEBAAY/AjSLUv/EABoQAAEFAQAAAAAAAAAAAAAAAAABECExUZH/2gAIAQEAAT8hLAoW/BGL1v/aAAwDAQACAAMAAAAQTL//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/ED//xAAeEAEAAAYDAQAAAAAAAAAAAAABABARIUFRMZGh8P/aAAgBAQABPxCBIlqcK28h6gqYFv5M2HuM9FvhL//Z",
-      "color": "#3B49DF"
-    },
-    {
-      "id": "devto-4858196",
-      "title": "Natural Languages Have Design Trade-offs Too: Georgian Is Dynamically Typed, English Is Statically Typed",
-      "desc": "By Giorgi Kobaidze | 10 min read",
-      "tag": "tutorial",
-      "published": "2026-10-15T19:22:46Z",
-      "order": 4,
-      "url": "https://dev.to/georgekobaidze/natural-languages-have-design-trade-offs-too-georgian-is-dynamically-typed-english-is-statically-emi",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fox7963esvydjbsiqboye.jpeg",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAgMBBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHn1xsSmj//xAAaEAACAgMAAAAAAAAAAAAAAAAAARESAjFB/9oACAEBAAEFAkyYLosjeECSO//EABURAQEAAAAAAAAAAAAAAAAAABAR/9oACAEDAQE/AYf/xAAVEQEBAAAAAAAAAAAAAAAAAAAQEf/aAAgBAgEBPwGn/8QAGRAAAgMBAAAAAAAAAAAAAAAAADEBECAh/9oACAEBAAY/AlSFJ3H/xAAZEAEBAQEBAQAAAAAAAAAAAAABABEhQVH/2gAIAQEAAT8hVOKfYYT1ZndpAMbY+XVycEBf/9oADAMBAAIAAwAAABB7/wD/xAAWEQEBAQAAAAAAAAAAAAAAAAARACH/2gAIAQMBAT8QEY3/xAAWEQEBAQAAAAAAAAAAAAAAAAARAAH/2gAIAQIBAT8QU6l//8QAHBABAAMAAgMAAAAAAAAAAAAAAQARITFhQaHB/9oACAEBAAE/EGVuvBDAivs+MAx050iA9cJFkUXTLSqRQEb62AxhfE//2Q==",
-      "color": "#3B49DF"
-    },
-    {
-      "id": "devto-4860786",
-      "title": "What Are Your Chances of Surviving Resident Evil Based on Your Tech Job?",
-      "desc": "By xulingfeng | 6 min read",
-      "tag": "tutorial",
-      "published": "2026-10-16T07:27:22Z",
-      "order": 5,
-      "url": "https://dev.to/xulingfeng/what-are-your-chances-of-surviving-resident-evil-based-on-your-tech-job-4b9o",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F179t5kb6wlcokai53ap9.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAgMAAQT/xAAVAQEBAAAAAAAAAAAAAAAAAAAAAf/aAAwDAQACEAMQAAABxkiI5dCf/8QAGBAAAgMAAAAAAAAAAAAAAAAAAAERIEH/2gAIAQEAAQUCyEO3/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFxAAAwEAAAAAAAAAAAAAAAAAACAxMv/aAAgBAQAGPwKmit//xAAbEAEAAgIDAAAAAAAAAAAAAAABABEhMRCB8f/aAAgBAQABPyEqjvD0Qg4b3G93Bl5l54//2gAMAwEAAgADAAAAEH5//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPxA//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPxA//8QAHBABAAICAwEAAAAAAAAAAAAAAQARITFBUXHw/9oACAEBAAE/EDaLDVxzlfPIDoC77R524a3KeB9Isv1Bqt3mKu2f/9k=",
       "color": "#3B49DF"
     },
     {
