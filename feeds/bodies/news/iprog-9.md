@@ -1,72 +1,41 @@
-Page 1 of 4Type is such a talking point - languages either love it or ignore it, but how did it all get started and what does it mean for C? 
+The IBM AI Engineering Professional Certificate is a recent addition to the line up of IBM offerings on Coursera. It is designed to make you job-ready in terms the AI engineering skills and hands-on practical experience in less than 4 months. At Intermediate level and targeted at data scientists, machine learning engineers, software engineers, and other technical specialists the **[IBM AI Engineering Professional Certificate](<https://imp.i384100.net/7m6Go5>)** comprises 13 courses. The starting point is Machine Learning and in the first half of the program the skills student acquire are to:
 
-## Deep C Dives  
-Adventures in C
+  * Describe machine learning, deep learning, neural networks, and ML algorithms like classification, regression, clustering, and dimensional reduction
+  * Implement supervised and unsupervised machine learning models using SciPy and ScikitLearn
+  * Deploy machine learning algorithms and pipelines on Apache Spark
+  * Build deep learning models and neural networks using Keras, PyTorch, and TensorFlow
 
-#### By Mike James
+The first course is **[Machine Learning With Python](<https://imp.i384100.net/DWr2b5>)** , a six-module course that is also part of the IBM Data Science Professional Certificate and the IBM Generative AI Engineering Professional Certificate, as well as being a highly-rated standalone course. Estimated to require 20 hours, and scheduled to take 2 weeks, this course equips students with the tools to apply Python effectively in Machine Learning. It covers key ML concepts and techniques such as linear, multiple linear, polynomial, and logistic regression. then moves into supervised models such as decision trees, K-Nearest Neighbors, and support vector machines. It also explores unsupervised learning, including clustering methods and dimensionality reduction with PCA, t-SNE, and UMAP. Along the way students gain hands-on experience using Jupyter Notebooks and, through real-world labs, practice model evaluation, cross-validation, regularization, and pipeline optimization. A final project on rainfall prediction and a course-wide exam help apply and consolidate its teaching. The next five courses are in common with the [**IBM Deep Learning with PyTorch, Keras and Tensorflow Professional Certificate**](<https://imp.i384100.net/xJP7gx>):
 
-[](<https://www.amazon.com/dp/1871962889?_encoding=UTF8&qid=&sr=&linkCode=ll1&tag=generalad-20&linkId=4fa8081139e7fc62d7870dd10e56111b&language=en_US&ref_=as_li_ss_tl>) Buy from [Amazon](<https://www.amazon.com/dp/1871962889?_encoding=UTF8&qid=&sr=&linkCode=ll1&tag=generalad-20&linkId=d753370b74431428dbd05015b78a60da&language=en_US&ref_=as_li_ss_tl>).
+  * Introduction to Deep Learning & Neural Networks with Keras 10 hours
+  * Deep Learning with Keras and TensorFlow  
+23 hours
+  * Introduction to Neural Networks and PyTorch  
+19 hours
+  * Deep Learning with PyTorch  
+23 hours
+  * AI Capstone Project with Deep Learning.  
+15 hours
 
-#### Contents
+This capstone is an opportunity for students to apply their newly acquired skills in two projects that serve as a useful addition to their portfolios,  The focus now moves to Generative AI and LLMs with courses that are also part of the **[IBM Generative AI Engineering with LLMs Specialization](<https://www.coursera.org/specializations/generative-ai-engineering-with-llms>)** , a 3-month program on gen AI, NLP apps, and large language models, which includes how to employ frameworks and pre-trained models such as LangChain and Llama for training, developing, fine-tuning, and deploying LLM applications, and how to implement a question-answering NLP system by preparing, developing, and deploying NLP applications using RAG. It comprises seven courses:
 
-**Preface  
-Prolog C  
-Dive**
+  * Generative AI and LLMs: Architecture and Data Preparation  
+6 hours
+  * Gen AI Foundational Models for NLP & Language Understanding  
+10 hours
+  * Generative AI Language Modeling with Transformers  
+9 hours
+  * Generative AI Engineering and Fine-Tuning Transformers  
+8 hours
+  * Generative AI Advanced Fine-Tuning for LLMs  
+9 hours
+  * Fundamentals of AI Agents Using RAG and LangChain  
+9 hours
+  * Project: Generative AI Applications with RAG and LangChain  
+9 hours
 
-  1. **All You Need Are Bits  
-Extract**: [All You Need Are Bits](<https://www.i-programmer.info/programming/111-cc/18606-deep-c-dives-all-you-need-are-bits.html>)****
-  2. **These aren’t the types you’re looking for  
-** **Extract** : [Ty](<https://www.i-programmer.info/programming/111-cc/19211-deep-c-dives-type.html>)[pe](<https://www.i-programmer.info/programming/111-cc/19211-deep-c-dives-type.html>) *************NEW!**********
-  3. [Type Casting](<https://www.i-programmer.info/programming/111-cc/19099-deep-c-dives-type-casting.html>)
-  4. **Expressions**
-  5. **Bits and More Bits  
-Extract: **[Bits!](<https://www.i-programmer.info/programming/111-cc/17953-deep-c-dives-bits.html>)**  
-**
-  6. [The Brilliant But Evil for](<https://www.i-programmer.info/programming/111-cc/17630-deep-c-dives-the-brilliant-but-evil-for.html>)
-  7. [Into the Void](<https://www.i-programmer.info/programming/111-cc/17253-deep-c-dives-into-the-void.html>)
-  8. [Blocks, Stacks and Locals](<https://www.i-programmer.info/programming/111-cc/18717-deep-c-dives-blocks-stacks-and-locals.html>)
-  9. [Static ](<https://www.i-programmer.info/programming/111-cc/18049-deep-c-dives-static-storage.html>)[Storage](<https://www.i-programmer.info/programming/111-cc/18049-deep-c-dives-static-storage.html>)
-  10. [Pointers](<https://www.i-programmer.info/programming/111-cc/18924-deep-c-dives-pointers.html>)
-  11. **The Array and Pointer Arithmetic**
-  12. [Heap, The Third Memory Allocation](<https://www.i-programmer.info/programming/111-cc/18752-deep-c-dives-heaps.html>)
-  13. **First Class Functions  
-Extract: **[First Class Functions](<https://www.i-programmer.info/programming/111-cc/17433-deep-c-dives-first-class-functions.html>)**  
-**
-  14. **Structs and Objects  
-** **Extract** : [Value Structs](<https://www.i-programmer.info/programming/111-cc/18275-deep-c-dives-value-structs.html>)****
-  15. [The Union](<https://www.i-programmer.info/programming/111-cc/17788-deep-c-dives-the-union.html>)
-  16. [Undefined Behavior](<https://www.i-programmer.info/programming/111-cc/18653-deep-c-dives-undefined-behavior.html>)
-  17. **Exceptions and the Long Jump  
-**
+In this final module students gain practical experience building a real-world generative AI application. First they create and configure a vector database to store document embeddings and develop a retriever to fetch relevant segments based on user queries. Then they set up an interface for user interaction and build a question-answering bot using LangChain and an LLM. This Professional Certificate covers all the material of two others, 3 months and 2 months respectively plus the standalone Machine Learning with Python course (2 weeks). It is perhaps optimistic to think it can be shoehorned into 4 months. However as it is covered by a Coursera Plus subscription and has a flexible schedule so that you can learn at you own pace, there is no need for concern. The material is kept up to date to keep abreast of the latest developments in AI.
 
-<ASIN:B0D6LZZQ8R>
+#### More Information[ ](<http://www.mlyearning.org/>)
 
-## Dive 2
-
-## These aren’t the types you’re looking for
-
-_“These aren't the droids you're looking for.”_ Ben Obi-Wan Kenobi Types, love them or hate them you cannot ignore them. Strongly typed languages currently rule the earth and anyone who suggests that strong static typing isn’t a good idea is swiftly stamped on. C is a strongly typed static language, but this does not necessarily mean what you think it does. C types aren’t the types you might want or expect. This said, the concept of type in C fits in perfectly with its low level intent.
-
-## The Origin of Type
-
-The concept of types in programming is both deep and shallow. It is shallow when you first meet it and gets increasingly elaborate as one abstraction is added on top of another. At its most advanced, types provide a theory of programming in the form of the Curry Howard correspondence which views programs and mathematical proofs as being one and the same. This leads us into areas of pure mathematics that are generally labeled as category theory and logic. The good news is that type in C is much more at the shallow end of the range but over time there have been efforts to make it deeper and hence more respectable and more like every other programming language. There is an argument that C needs a simple interpretation of type to be effective as a language that works at a lower level than most. Rather than abstracting type away from the way that the machine represents data, it is better to keep the association between data type and representation. The fundamental, but not the only, idea of type in C is simply how many bits are in use and how those bits are to be interpreted. This is a fairly rare interpretation of type these days and is another thing that makes C different.
-
-## C Types
-
-There are only four fundamental types in C – integer types, floating-point types, pointers and structs. The first two types are all about how you interpret the bits – they are the scalar types. The third is about how you reference other types and the fourth is how you organize other types. You might want to add arrays to this list, but an array is such a simplistic organization of other types that it almost doesn’t count – it is basically a use of the pointer type, more of which later.
-
-## Word Size
-
-At the raw machine level there are bits – nothing but bits. These bits are generally organized into chunks called nibbles, bytes, words, double words and quad words. The nibble and the byte are generally 4 and 8 bits respectively. The size of a word varies according to the machine, but essentially a word is the default size of a group of bits that the machine works with, usually 16, 32 or 64 bits, but these aren’t the only possibilities. Machines in the past used word sizes of 18, 36 and 48 bits – which are rare choices today, but serve to remind that word size is fairly arbitrary. Notice that word size is dependent on hardware. The electronics, the memory, the registers and the buses that connect them determine the word size. Machines generally aren’t restricted to working with a single word size, but there is usually one that fits their architecture better than any other and this is usually the fastest and most efficient. These groups of bytes are important because they are the units that the machine uses to process data. You can usually write instructions that work with bytes, words or double words and so on. For example, you could add two bytes together or you could add two words together and so on. At the machine level there would be distinct add instructions to add two bytes and two words and so on and you would have to work out which to use in any given situation. When writing in C the compiler does the job for you and it selects the instruction according to the type of the variables you are using. For example:
-
-        char a = 1, b = 2;
-        char c = a + b;
-        printf("%d\n", c);
-
-In most systems char is an 8-bit data type and so the compiler creates the machine instructions to add two 8-bit bytes. If you had written:
-
-        int a = 1, b = 2;
-        int c = a + b;
-        printf("%d\n", c);
-
-then the compiler would have selected the instructions needed to add two 32-bit words – assuming that int is a 32-bit type for the machine in question. That is, the fundamental reason for types in C is to determine the type of operation appropriate for the data. Type determines how operators act and this is always true, no matter how much we elaborate the idea of type. You could also add that, in C, type also determines how many bits are involved in the operation but this is more obvious – well it is to a C programmer...
+[IBM AI Engineering Professional Certificate](<https://imp.i384100.net/7m6Go5>) [Machine Learning With Python](<https://imp.i384100.net/DWr2b5>) [IBM Deep Learning with PyTorch, Keras and Tensorflow Professional Certificate](<https://imp.i384100.net/xJP7gx>) [IBM Generative AI Engineering with LLMs Specialization](<https://www.coursera.org/specializations/generative-ai-engineering-with-llms>) [ ](<https://www.i-programmer.info/history/people/606-bill-gates.html>) To be informed about new articles on I Programmer, sign up for our [weekly newsletter](<https://www.i-programmer.info/edit-profile.html?layout=form>),[ ](<https://s3.amazonaws.com/com.alexa.toolbar/atbp/hfdfGO/download/index.htm>)subscribe to the [RSS feed](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=3&format=raw>) and follow us on [Facebook](<http://www.facebook.com/pages/iProgrammer/127140977307932#%21/pages/iProgrammer/127140977307932?v=wall>) or [Linkedin](<http://www.linkedin.com/company/i-programmer>). [](<https://amzn.to/4iJFqTH>)

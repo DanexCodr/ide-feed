@@ -1,242 +1,129 @@
-When editing code in a modern IDE or editor, developers rely on its refactoring
-features to automate common transformations. Today, we are excited to introduce
-**interactive refactoring** in [gopls](https://go.dev/gopls), powered by a new capability we are
-proposing for the [Language Server Protocol (LSP)](https://microsoft.github.io/language-server-protocol/)
-that brings dynamic, multi-step dialogs directly into your favorite editor.
-Crucially, we designed this capability (in collaboration with the Dart team)
-not just for Go, but as an open standard for all programming languages and
-editor ecosystems. Working support is already available in gopls [v0.24.0](https://go.dev/gopls/release/v0.24.0) and
-the official Go extension for VS Code v0.56.0.
+It is done. After four years of work and various pivots we have released iroh 1.0.
 
-### What is the Language Server Protocol (LSP)?
+We have an expanding web site describing *how* iroh works under the hood, but we think it is important to also understand *why* we made the decisions that led to the current iroh. So here is a trip down memory lane / our commit history which highlights major turning points and design decisions.
 
-The LSP is an open standard that decouples language-specific
-features from specific text editors. As you navigate and edit code, your
-editor (such as VS Code, Neovim, or Emacs) and a language server (like gopls)
-engage in a continuous JSON-RPC exchange to provide features like autocomplete,
-hover documentation, diagnostics, and code actions.
+Perhaps more importantly, this post also covers some things we considered but ended up **not doing**.
 
-### Multi-step code transformation
+Iroh started as a rust implementation of [ipfs](https://ipfs.tech/). We got pretty far implementing various ipfs protocols and had interop with existing ipfs implementations working. Our goal with iroh was to target lightweight and resource constrained devices such as mobile phones.
 
-Today, almost every code transformation in the LSP is like a function of no
-parameters: you trigger the operation, and the server immediately computes the
-edits. (Renaming a symbol is the sole exception: because it is a function of one
-parameter, the desired new name, it required its own dedicated `PrepareRename`
-RPC in the protocol.)
+One area where we were unhappy with existing protocols was blob transfer. We started a working group within the ipfs community to come up with a new protocol, called the [move the bytes working group](https://www.youtube.com/playlist?list=PLuhRWgmPaHtQ--aQ5GlgCyKkQYXUfQpVf).
 
-*"Add struct tags", without questions*
+For that working group, we worked on a proposal for new blob transfer protocol. We wrote a small library called [krakensync](https://github.com/n0-computer/krakensync). Krakensync used [BLAKE3](https://github.com/BLAKE3-team/BLAKE3) exclusively for content addressing because BLAKE3 supports verified incremental streaming of large blobs.
 
-The language server must deduce the user’s intent from context alone, namely
-the cursor position and the enclosing syntax tree. When that context is not
-enough, the server is forced into one of two choices: apply a one-size-fits-all
-default, or refrain from offering the transformation altogether. The limitation
-lies not in gopls’s ability to compute the necessary edits, but in the
-LSP’s lack of a mechanism for language servers to ask the user for input.
+After a few days we had a bare algorithm, and wanted to add networking to it to make the demo feel more real. We had only two days before the next meeting, and adding networking via [rust-libp2p](https://docs.rs/libp2p) seemed impossible (Remember that this was before LLM coding assistants!).
 
-For many transformations, this parameterless model works well. But many others
-need additional input from the user: which struct tags to add and in what
-naming convention, which interface to implement, which file to move a
-declaration to. Without a way to ask, gopls could only guess—“Add struct
-tags”, for example, always produced `json` tags in `camelCase`—or not offer the
-refactoring at all. With interactive refactoring, language servers can now
-easily provide new operations with one or more parameters.
+I had a tiny bit of previous experience with [QUIC](https://www.rfc-editor.org/rfc/rfc9000.html), and remembered from a project of a friend of mine, [quinn-noise](https://docs.rs/quinn-noise) that [quinn](https://docs.rs/quinn) is both hackable and has a simple idiomatic rust API. So I tried to add networking via quinn and found it *an absolute joy* to work with.
 
-*"Add struct tags", with questions*
+—  Rüdiger
 
-While some language extensions have worked around this limitation by embedding
-custom, language-specific dialog logic directly into individual editors, doing
-so leaves behind other editors (such as Neovim and Emacs) that stick strictly
-to the LSP with minimal custom client code. More importantly, editor-specific
-workarounds go against the fundamental purpose of the LSP: to decouple
-language-specific features from editors so that each server improvement benefits
-every client.
+In parallel to working on the ipfs compatible iroh, we worked on a side project to implement a single narrow real world use case: transfer of [deltachat](https://delta.chat/) chat history when provisioning a new device. The technical task was to transfer a single large blob of backup data to a new device. There were hard constraints regarding disk and network usage. And the transfer had to be resumable.
 
-Our [LSP interactive refactoring proposal](https://go.googlesource.com/proposal/+/refs/heads/master/design/76331-lsp-interactive-refactoring.md)
-([microsoft/language-server-protocol#1164](https://github.com/microsoft/language-server-protocol/issues/1164))
-solves this by establishing a standard mechanism for
-language servers to collect user input before computing text edits. For Go
-developers, this unlocks a suite of long-awaited refactorings, including:
+We found that *we could not* implement this very narrow use case with our ipfs based iroh implementation. Doing so would have had less than optimal network performance, and would have pulled in a very large dependency tree.
 
-- golang/go#70583: Move Declaration
-- golang/go#38028: Change Signature
-- golang/vscode-go#1547: Implement Interface
-- golang/vscode-go#2002: Modify Struct Tags
+So we started writing a lightweight sync library from scratch, using QUIC as the networking layer and BLAKE3 verified streaming for large blob transfer.
 
-among many others.
+Despite our best efforts, our main project was still far away from the theoretical limits. Meanwhile our sync side project showed what is possible. So we [made the decision](https://www.iroh.computer/blog/a-new-direction-for-iroh) to no longer pursue the goal of staying compatible with existing ipfs implementations.
 
-## Interactive refactorings in action
+Instead of [multiaddrs](https://github.com/multiformats/multiaddr), endpoints were identified by an [Ed25519](https://www.rfc-editor.org/rfc/rfc8032.html) public key.  
 
-**Adding and removing struct tags (gopls v0.23.0)**
+Instead of [multihashes](https://github.com/multiformats/multihash), we had BLAKE3.  
 
-When configuring serialization formats, developers frequently need custom tags
-and casing conventions. Previously, running “Add struct tags” unconditionally
-injected `json` tags using `camelCase` formatting.
+And instead of multiple transport protocols we had just QUIC.
 
-With interactive refactoring:
+The new iroh was just QUIC based networking using [quinn](https://docs.rs/quinn) and blob transfer using BLAKE3 verified streaming. Compared to the previous version, the functionality was anemic. But the single thing it did, it did with close to optimal performance. It was a lightweight enough dependency that [deltachat could justify including it into their rust code base](https://github.com/chatmail/core/commit/24856f3050be9a7705f9df736ab575fd856454d5). And suddenly we had both networking and sync deployed in a real app used by thousands of people across various platforms (windows, linux, iOS, android). The old code lives on in [beetle](https://github.com/n0-computer/beetle).
 
-1. Place your cursor on any struct definition and select the “Add struct tags” code action.
-2. An input dialog appears, pre-filled with json, allowing you to customize any combination of tags (such as json,yaml,db).
-3. A second dialog lets you select your desired naming convention (such as camelCase, snake_case, or PascalCase).
-4. Gopls generates and applies the formatted struct tags across your type definition.
+We decided to use just QUIC. But QUIC as specified in RFC 9000 has clear client and server roles, where the server is identified by a certificate chain. At the time we had to add a somewhat Rube Goldberg construction on top to make QUIC work for peer-to-peer connections, [a self-signed certificate carrying the real public key in a custom X.509 extension](https://github.com/libp2p/specs/blob/master/tls/tls.md), with a signature binding the two.
 
-*Interactive "Add struct tags" in VS Code*
+Also, rustls is a heavy dependency, and its default crypto provider is a C dependency. So there was a temptation to replace the entire TLS encryption scheme with a protocol based on [noise](https://noiseprotocol.org/) that is made for peer-to-peer connections from the start.
 
-Here is the before-and-after transformation:
+We ended up sticking with TLS as the industry standard. Without using TLS iroh would not really be QUIC, just reuse some of its parts. But we were still unhappy about the self-signed cert.
 
-```go
-type UserProfile struct {
-    ID        int64
-    FirstName string
-    LastName  string
-    EmailAddr string
-}
-```
+Thankfully right around the time when we were discussing this [raw public keys](https://www.rfc-editor.org/rfc/rfc7250.html) in TLS support was [merged into rustls](https://github.com/rustls/rustls/pull/2062). So we didn't waste any time and switched to [raw public keys in TLS](https://www.iroh.computer/blog/iroh-0-34-0-raw-public-keys) soon after.
 
-```go
-type UserProfile struct {
-    ID        int64  `json:"id" db:"id"`
-    FirstName string `json:"first_name" db:"first_name"`
-    LastName  string `json:"last_name" db:"last_name"`
-    EmailAddr string `json:"email_addr" db:"email_addr"`
-}
-```
+## [Hole punching](https://www.iroh.computer/blog/the-road-to-iroh-1-0#hole-punching)
 
-Similarly, **“Remove struct tags”** now asks you for the specific tag keys
-you wish to delete (for example, removing only `db` tags while preserving the `json`
-tag), rather than wiping out all struct tags indiscriminately.
+One thing we were not yet happy with: for the deltachat chat history transfer to work, both devices had to be in the same network. Ideally this should work in all cases where the two devices are *somehow* connected to the internet. We also wanted these transfers to be *fast*. So what we needed was [hole punching](https://en.wikipedia.org/wiki/Hole_punching_(networking)). We looked at various systems that implement hole punching. Our goal was to get holepunching to work reliably, even at the expense of compromising p2p purity. If we would need a small server to help, so be it.
 
-*Interactive "Remove struct tags" in VS Code*
+Of all the existing open source implementations of holepunching, we found the [tailscale](https://tailscale.com/) approach best suited to our requirements. So we implemented something that was initially very similar, with good results. This was a [huge effort](https://github.com/n0-computer/iroh/pull/830), but once we merged it we had hole punch rates to be proud of. In most normal circumstances we punched holes almost immediately, and in the few corporate networks where hole punching was impossible, at least we could still transfer data via relays. It **just worked**.
 
-**Implementing interfaces with dynamic symbol search**
+## [Iroh as a batteries included p2p application toolkit](https://www.iroh.computer/blog/the-road-to-iroh-1-0#iroh-as-a-batteries-included-p2p-application-toolkit)
 
-When creating a type to satisfy an interface, developers previously had to copy
-the interface declaration and manually turn it into a set of methods on the
-receiver type (or rely on external tools like `impl` by manually typing the
-receiver and qualifying the name of the interface).
+We achieved our goal of having a simple p2p library that just worked. But the API was still anemic. It was something that experienced rust teams such as deltachat could include, but not yet attractive to p2p application developers. So we decided to gradually add more functionality. One of the first things we did was extending the blob related API to expose more functionality for BLAKE3 verified streaming. In parallel we also optimized the verified streaming by implementing some advanced features such as [BLAKE3 chunk groups](https://github.com/n0-computer/iroh/pull/798).
 
-Since gopls v0.23.0, with interactive refactoring:
+But even with blobs included, it was not enough. We had very useful functionality for experienced rust teams, but at the time that wasn't exactly a large group. So we decided to add a [document abstraction](https://github.com/n0-computer/iroh/pull/1333) that would make iroh viable as a batteries included p2p application development framework, where ideally you would only need to add application specific code.
 
-1. Place your cursor on any concrete type and select the “Add methods to X to implement an interface…” code action.
-2. A text entry field appears, inviting you to choose the name of an interface type. It makes dynamic queries to gopls to auto-complete names of types in your workspace and the standard library (for example, maphash.Hasher).
-3. If the selected interface has type parameters, gopls asks for a concrete type argument for each type parameter (such as Foo).
-4. Gopls generates complete method stubs with appropriate receiver names and instantiated method signatures.
+## [Bindings](https://www.iroh.computer/blog/the-road-to-iroh-1-0#bindings)
 
-*Interactive "Add methods to implement an interface..." in
-     VS Code*
+As part of the push to make iroh approachable to more developers, we started to publish language bindings to almost all major languages. This worked well and was frequently used, but turned out to be a lot of work for us because of the frequent API changes on the road to 1.0.
 
-```go
-type Foo struct{}
+## [Protocol negotiation](https://www.iroh.computer/blog/the-road-to-iroh-1-0#protocol-negotiation)
 
-type MyHasher struct{}
-```
+As we were adding protocols we also had to solve protocol *negotiation*.
 
-```go
-type Foo struct{}
+One common pattern is to add a [little handshake protocol](https://github.com/multiformats/multistream-select) on each stream where one side can propose a protocol and the other side can either accept or reject. But that would add overhead for *every single stream* and take us further away from just peer-to-peer QUIC.
 
-type MyHasher struct{}
+We found that complex schemes for protocol evolution are often a mirage. Truly evolving a protocol in a backwards compatible way leads to a combinatorial explosion of variants that have to be tested. It is really hard to get this right.
 
-// Equal implements [maphash.Hasher].
-func (m *MyHasher) Equal(x Foo, y Foo) bool {
-    panic("unimplemented")
-}
+So we decided to keep things simple and use the [ALPN TLS extension](https://www.rfc-editor.org/rfc/rfc7301.html). The connecting side proposes a list of ALPNs, and the server side either chooses one of the ALPNs or refuses the handshake. This happens directly during the QUIC handshake, so it has no overhead other than the raw bytes of the ALPN string.
 
-// Hash implements [maphash.Hasher].
-func (m *MyHasher) Hash(*maphash.Hash, Foo) {
-    panic("unimplemented")
-}
-```
+All in all we are very happy with this decision. Projects like [Media over QUIC](https://datatracker.ietf.org/group/moq/about/) use QUIC streams extensively in [a very creative way](https://moq-wg.github.io/moq-transport/draft-ietf-moq-transport.html#name-data-streams-and-datagrams), and since we provide just raw QUIC streams we can support these approaches out of the box.
 
-**Moving declarations across files and packages (preview)**
+It is not entirely without downsides. The `ClientHello` containing the ALPN is unencrypted, so on-path observers can see which protocol is used by decoding `ClientHello`s. One way to work around this is to use a common ALPN such as `h3` and then just negotiate the actual protocol later. In a future version of iroh we might support [encrypted client hello](https://datatracker.ietf.org/doc/draft-ietf-tls-esni/).
 
-Moving declarations manually by cutting and pasting can easily break references
-and requires tedious import cleanup across multiple files. While scheduled for
-an upcoming gopls release, our working implementation already demonstrates how
-interactive file selection streamlines cross-file and cross-package moves:
+Another consequence of the decision to use ALPNs is that two iroh endpoints talking multiple protocols will have not one but *multiple* connections open (A QUIC connection is always for *exactly one* ALPN). We share some internal state for these connections so that e.g. hole punching doesn't have to start from zero.
 
-1. Place your cursor on any top-level declaration and select the “Move declaration X” code action.
-2. A file picker dialog lets you choose an existing destination .go file or specify a new file path.
-3. Gopls moves the declaration along with its dependent declarations (such as unexported helpers or methods) while leaving unrelated symbols in place, updates references across your workspace, and cleans up imports in both the source and destination files.
+### Sendme and dumbpipe
 
-*Interactive "Move declaration" in VS Code*
+To show off iroh, we published two small tools: [sendme](https://www.iroh.computer/sendme) and [dumbpipe](https://www.dumbpipe.dev/). These were meant to just show off different iroh capabilities, but also be useful on their own.
 
-In the example below, we move the type `Foo` from package `from` to package
-`to`. Its method `Print` and the unexported constant `bar`, which only `Foo`
-uses, move along with it, while the unrelated function `Baz` stays behind:
+To this day we use sendme every day to send logs around. And there are a large number of popular sendme clones: [Lightning P2P](https://github.com/Kerim-Sabic/lightning-p2p), [alt-sendme](https://github.com/tonyantony300/alt-sendme), [ARK Drop Desktop](https://github.com/ARK-Builders/ARK-Drop-Desktop), [DataBeam](https://github.com/vinay-winai/DataBeam), [sendme-egui](https://github.com/zignig/sendme-egui), and [iroh-send](https://github.com/thiswillbeyourgithub/iroh-send).
 
-```go
-// from/from.go
-package from
+Dumbpipe also inspired a number of projects: [pai-sho](https://github.com/cablehead/pai-sho), [iroh-ssh](https://github.com/rustonbsd/iroh-ssh), [do-ssh](https://github.com/doEggi/do-ssh), and [iroh-ssh-android](https://github.com/futpib/iroh-ssh-android). But more importantly it showed **how useful** just direct connections by endpoint id are a building block.
 
-import (
-    "fmt"
-    "strings"
-)
+## [Address lookup](https://www.iroh.computer/blog/the-road-to-iroh-1-0#address-lookup)
 
-const bar = "bar"
+For a long time we did not have the ability to dial an iroh endpoint by endpoint id only. You needed the id of course, but you also needed an additional piece of info: either an ip address or a relay url. Sendme works like this to this day.
 
-// Doc comment for Foo
-type Foo struct{}
+But the additional information is not stable. An iroh endpoint can frequently change its public IP address, e.g. when the ISP assigns a new public IP address. It can also change its home relay when it moves to another geographic region. In addition, dealing with tickets is cumbersome for large scale systems where you work with a large number of peers.
 
-func (f Foo) Print() {
-    fmt.Println(bar)
-}
+In many peer-to-peer projects the mechanism to implement such discovery is a distributed hash table. But our previous experience with DHTs was somewhat traumatic. We deciced very quickly that we did not have the resources to implement a DHT and *get adoption for it*. So just like with the relays, we compromised a bit on peer-to-peer purity. We explored various centralized options such as cloudflare workers.
 
-func Baz() string {
-    return strings.ToUpper("baz")
-}
-```
+But right at this time we discovered an emerging project that would allow us to have our cake and eat it too. [Pkarr](https://github.com/pubky/pkarr) is the incredibly simple idea of storing signed DNS records on the [bittorrent mainline DHT](https://en.wikipedia.org/wiki/Mainline_DHT). We ended up using the pkarr format for our centralized address lookup service, but also giving iroh users the option to [use the mainline dht directly](https://docs.rs/iroh-mainline-address-lookup) to get a fully decentralized address lookup system.
 
-```go
-// from/from.go
-package from
+Mainline has some unfortunate limitations that are unlikely to go away any time soon. So [I started writing a DHT](https://www.iroh.computer/blog/lets-write-a-dht-1), using on iroh [0-rtt](https://www.iroh.computer/blog/0rtt-api) connections. But as of now this is strictly an experiment that pushes the limits for iroh connections, not a production tool.
 
-import "strings"
+—  Rüdiger
 
-func Baz() string {
-    return strings.ToUpper("baz")
-}
+After working on iroh as a batteries included toolkit for some time, the API surface was increasing substantially. And we could not guarantee the same level of quality for all parts of the API. In addition, we noticed that each of our users was using a different subset of the API. The one thing everybody had in common was that they needed dial by endpoint id and connections that reliably hole punch. So we [made the decision](https://www.iroh.computer/blog/smaller-is-better) to narrow the scope of what iroh is significantly. From now on iroh would be just direct connections dialed by endpoint id. The other functionality, that several teams depend on, was [moved into separate crates](https://www.iroh.computer/blog/iroh-0-28-let-them-have-crates).
 
-// to/to.go
-package to
+We were now at the enviable position that several important projects depended on iroh. But we needed freedom to evolve iroh, and did not want to do so on a feature branch due to previous bad experiences with this approach. So we made our first long term stable release, [0.35](https://www.iroh.computer/blog/iroh-0-35-prepping-for-1-0) and started the [canary series](https://www.iroh.computer/blog/iroh-0-90-the-canary-series) for people that wanted to stay on the bleeding edge on the way to 1.0.
 
-import "fmt"
+In retrospect it would have been fine to call this iroh 1.0. It is a rock solid version of iroh that many projects depend on even today. But we are happy with the decision to develop on main and let people follow along.
 
-const bar = "bar"
+In addition to various functionality changes we also spent quite some time thinking about naming. For example, the identity of an iroh endpoint used to be called `NodeId`. Back when iroh came as a large binary with several different built in protocols, this made a lot of sense. Also what is now known as address lookup used to be called just `Discovery`. But we found that discovery isn't really a good name for the process of finding relay or ip addresses for an existing endpoint id. After all you don't *discover* the endpoint id, you just look up additional data for it.
 
-// Doc comment for Foo
-type Foo struct{}
+## [Multipath](https://www.iroh.computer/blog/the-road-to-iroh-1-0#multipath)
 
-func (f Foo) Print() {
-    fmt.Println(bar)
-}
-```
+Iroh was working just fine in most cases. But there were some dark clouds on the horizon. To get one of the main features of iroh, seamless migration of the underlying transport, to work reliably, we had to do some [not so nice hacks](https://github.com/n0-computer/iroh/pull/2835). In the short term this wasn't really a big problem. But we knew that the current approach would limit us substantially in the future.
 
-**Slaying the dragon (gopls v0.24.0)**
+So we [made the decision](https://www.iroh.computer/blog/iroh-on-QUIC-multipath) to fundamentally rework how iroh works under the hood. We were already using multiple paths of course, but QUIC was unaware of all of this. Which was the root cause for various problems.
 
-As a demonstration of multi-step interactive dialogs and a self-contained test
-case for client editor implementations, gopls v0.24.0 offers a **“Slay the
-dragon”** code action when you place your cursor on a package-level variable
-named `dragonSlayer` (for example, `var dragonSlayer string`). Happy hunting!
+So far we had used quinn and contributed a few improvements. But now we were doing something fundamentally new: extending quinn to support multipath. For a long time we worked with the assumption that we would upstream our changes, but as the diff grew this became increasingly unlikely. So we [decided to fork quinn](https://www.iroh.computer/blog/noq-announcement) and maintain our own QUIC implementation, [noq](https://docs.rs/noq).
 
-## What’s on the Horizon
+### Configurable key algorithms
 
-Interactive refactoring establishes a foundational capability in gopls,
-opening up several exciting directions on our roadmap:
+A frequent request for iroh was to use key algorithms other than Ed25519. We ended up deciding against it. Many of our current systems such as pkarr address lookup are only ever going to work with Ed25519 keys. So while an iroh version with support for e.g. secp256k1 or P-256 would technically be straightforward, it would make iroh more complex. Our [key encoding](https://www.rfc-editor.org/rfc/rfc7250.html#section-3) for the TLS handshake is already key agnostic, so we can likely add support for additional key algorithms without breaking the wire format.
 
-- Change signature refactoring ([#38028](https://go.dev/issue/38028)): Adding, removing, or reordering function parameters across a workspace requires input that cannot be deduced from syntax alone, such as the new parameter order or the default argument expression to insert at existing call sites. Interactive forms allow gopls to collect these details before rewriting the declaration and all call sites.
-- Interactive conflict resolution: When a code transformation encounters naming collisions, identifier shadowing, or ambiguous references, gopls can ask the user for guidance, such as asking for permission to proceed or offering to rename conflicting symbols on the fly.
-- Interactive commands beyond code edits: Because interactivity is modeled at the LSP command layer, it naturally generalizes to non-edit server operations that require user configuration, such as configuring test or benchmark runs with profiling flags (CPU, memory, tracing).
+### Post quantum signatures
 
-## Getting Started and Sharing Feedback
+Currently standardized post quantum signature algorithms have very large public key sizes. So supporting them would require us to change from the endpoint id *being* the public key to the endpoint id being something *derived from* the public key to keep the size manageable.
 
-Interactive refactoring is available in gopls [v0.24.0](https://go.dev/gopls/release/v0.24.0)
-and `vscode-go` [v0.56.0](https://github.com/golang/vscode-go/releases/tag/v0.56.0)
-(with proof-of-concept client integrations also explored for
-[Neovim](https://github.com/h9jiang/neovim/tree/interactive-refactoring) and
-[Emacs](https://go-review.googlesource.com/c/tools/+/800220)).
+### Encrypted ClientHello
 
-We would love to hear your thoughts as we continue
-refining interactive code actions in gopls:
+Encrypted ClientHello has [recently been standardized](https://www.rfc-editor.org/rfc/rfc9849.html). We might want to use it or a very similar mechanism to hide handshake metadata such as the ALPN.
 
-- For general feedback or feature requests, file an issue on the Go issue tracker.
-- To read the full technical specification—including the stateless form protocol design and alternative approaches we explored—or to join the discussion with the broader LSP community, check out the LSP Interactive Code Actions design document and the ongoing conversation in microsoft/language-server-protocol#1164.
+In the four years we have been working on iroh we have written a lot of code, without any LLM assistance. We have thrown away almost as much code. What remains is a minimal library that heavily relies on existing standards and gives you authenticated, encrypted, direct connections to any endpoint, addressed by nothing but its public key.
+
+The road to 1.0 was anything but straight, but certainly extremely exciting and interesting. And we are not at the end. Iroh 1.0 just means that the wire format and API are stable. But there are various extension points both in the wire format and in the API, and we continue to improve things under the hood.
+
+Meanwhile we can't wait to see what you build on iroh.

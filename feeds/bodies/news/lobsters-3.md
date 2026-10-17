@@ -117,5 +117,3 @@ And I have seen this first hand, a project that defeated me in 2017 was made tri
 9. Raspberry Pi Foundation, *Getting started with Raspberry Pi Pico*, Raspberry Pi Projects, accessed 8 October 2026. [https://projects.raspberrypi.org/en/projects/get-started-pico-w/1](https://projects.raspberrypi.org/en/projects/get-started-pico-w/1) [↩︎](https://kennedn.com/blog/posts/glitching/#fnref:9)
 10. Raspberry Pi Foundation, *RP2040 Datasheet*, accessed 8 October 2026. [https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf](https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf) [↩︎](https://kennedn.com/blog/posts/glitching/#fnref:10)
 11. Superben51, *How to hack (RGH) your Xbox 360*, Instructables, accessed 8 October 2026. [https://www.instructables.com/How-to-hackRHG-your-Xbox-360/](https://www.instructables.com/How-to-hackRHG-your-Xbox-360/) [↩︎](https://kennedn.com/blog/posts/glitching/#fnref:11)
-
-[Discuss on Hacker News](https://news.ycombinator.com/item?id=50070661)

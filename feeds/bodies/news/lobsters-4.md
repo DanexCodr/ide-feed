@@ -1,99 +1,242 @@
-*[This is a guest post by [Rikab Gambhir](https://rikabgambhir.com/). This blog post was initially written in a different file format and converted using AI. — T.]*
+When editing code in a modern IDE or editor, developers rely on its refactoring
+features to automate common transformations. Today, we are excited to introduce
+**interactive refactoring** in [gopls](https://go.dev/gopls), powered by a new capability we are
+proposing for the [Language Server Protocol (LSP)](https://microsoft.github.io/language-server-protocol/)
+that brings dynamic, multi-step dialogs directly into your favorite editor.
+Crucially, we designed this capability (in collaboration with the Dart team)
+not just for Go, but as an open standard for all programming languages and
+editor ecosystems. Working support is already available in gopls [v0.24.0](https://go.dev/gopls/release/v0.24.0) and
+the official Go extension for VS Code v0.56.0.
 
-*First, they came for the artists,  
+### What is the Language Server Protocol (LSP)?
 
- and I did not speak out, because I was not an artist.  
+The LSP is an open standard that decouples language-specific
+features from specific text editors. As you navigate and edit code, your
+editor (such as VS Code, Neovim, or Emacs) and a language server (like gopls)
+engage in a continuous JSON-RPC exchange to provide features like autocomplete,
+hover documentation, diagnostics, and code actions.
 
- Then, they came for the mathematicians,  
+### Multi-step code transformation
 
- and I did not speak out, because I was not a mathematician.  
+Today, almost every code transformation in the LSP is like a function of no
+parameters: you trigger the operation, and the server immediately computes the
+edits. (Renaming a symbol is the sole exception: because it is a function of one
+parameter, the desired new name, it required its own dedicated `PrepareRename`
+RPC in the protocol.)
 
- Then, they came for the physicists,  
+*"Add struct tags", without questions*
 
- and it was actually really cool and they gave me free tokens and promised to solve my entire field for me and now I can finally devote myself to the important work of publishing papers instead of doing physics*
+The language server must deduce the user’s intent from context alone, namely
+the cursor position and the enclosing syntax tree. When that context is not
+enough, the server is forced into one of two choices: apply a one-size-fits-all
+default, or refrain from offering the transformation altogether. The limitation
+lies not in gopls’s ability to compute the necessary edits, but in the
+LSP’s lack of a mechanism for language servers to ask the user for input.
 
-In early October, OpenAI fulfilled every mathematician’s childhood dream.
+For many transformations, this parameterless model works well. But many others
+need additional input from the user: which struct tags to add and in what
+naming convention, which interface to implement, which file to move a
+declaration to. Without a way to ask, gopls could only guess—“Add struct
+tags”, for example, always produced `json` tags in `camelCase`—or not offer the
+refactoring at all. With interactive refactoring, language servers can now
+easily provide new operations with one or more parameters.
 
-I am not a mathematician myself (merely a theoretical particle physicist, which some argue barely counts as a scientist either), so I can’t 100% say for certain what inspires someone to pursue mathematics. But, I imagine this dream is common to all academics:
+*"Add struct tags", with questions*
 
-*Looking up at the stars in wonderment, or enjoying a complex puzzle game, or being inspired by an encouraging teacher, and dreaming that one day an unfeeling corporate robot[1] will burn a rainforest to compile a list of 700 highly obscure barely-readable facts that *might* be true that nobody can understand as part of a marketing gimmick to raise hype for an IPO[2]*.
+While some language extensions have worked around this limitation by embedding
+custom, language-specific dialog logic directly into individual editors, doing
+so leaves behind other editors (such as Neovim and Emacs) that stick strictly
+to the LSP with minimal custom client code. More importantly, editor-specific
+workarounds go against the fundamental purpose of the LSP: to decouple
+language-specific features from editors so that each server improvement benefits
+every client.
 
-This is probably why most of you reading this got into academia. At least, that’s why I did.
+Our [LSP interactive refactoring proposal](https://go.googlesource.com/proposal/+/refs/heads/master/design/76331-lsp-interactive-refactoring.md)
+([microsoft/language-server-protocol#1164](https://github.com/microsoft/language-server-protocol/issues/1164))
+solves this by establishing a standard mechanism for
+language servers to collect user input before computing text edits. For Go
+developers, this unlocks a suite of long-awaited refactorings, including:
 
-In 1941, Jorge Luis Borges imagined a [library](https://en.wikipedia.org/wiki/The_Library_of_Babel) containing every possible book that could ever be written. Somewhere in this Library of Babel is a proof of the Riemann hypothesis, the complete all-orders theory of quantum gravity, and all the papers I will ever write. Of course, there are also incorrect proofs, theories, and [misleading Lean certificates](https://arxiv.org/abs/2610.08144), but that is besides the point.
+- golang/go#70583: Move Declaration
+- golang/go#38028: Change Signature
+- golang/vscode-go#1547: Implement Interface
+- golang/vscode-go#2002: Modify Struct Tags
 
-By the research standards of 2026, Borges’s Library of Babel would be the most successful research institution in human history, containing an inconceivably large number of potentially correct mathematical and physical results, blowing [OpenAI’s mere 722 write-ups](https://community.openai.com/t/first-look-at-mathematics-manuscripts-from-an-internal-frontier-model-at-openai/1403886) and even the [physics community’s recent 2500 write-ups](https://x.com/FinitePhysicist/status/2108745721155387704?s=20) out of the water.
+among many others.
 
-Of course, most recognize that Borges was a visionless fool who failed to recognize the commercial potential of his library, as he never actually built it. He did not have the entrepreneurial STEM-spirit to raise venture capital, launch an IPO, and announce that he had the potential to solve all of mathematics. He was too concerned about the futility of sorting through randomized slop trying to understand what is correct and what isn’t and how to understand it all. But what did Borges know? He was only a writer, and we have already established that artists are obsolete.
+## Interactive refactorings in action
 
-Fortunately, OpenAI has brought us one step closer to realizing Borges’s vision. Rather than generating every possible mathematical paper, they’ve found a way to probabilistically generate things that *look* correct. An important aspect of this increase in efficiency is outsourcing the tedious, unprestigious, and unprofitable work of determining the actual correctness and understanding to the mathematics community (in the past, this was reserved typically for the group writing the paper), while also not wasting any time making the papers human-comprehensible. This is, of course, a tremendous breakthrough. In centuries past, scientists and mathematicians were limited in their ability to solve problems by their ability to understand the solutions. This bottleneck has been removed, and now there is no theoretical limit to the amount of scientific and mathematical factoids we can fail to understand.
+**Adding and removing struct tags (gopls v0.23.0)**
 
-From what I know about the academic community (mostly from Twitter and LinkedIn, which I assume are representative), there seems to be near-unanimous agreement that the purpose of math and science research is to gather a large quantity of potentially true factoids in a repository that nobody will actually ever read, in a ritual called “advancing humanity’s[3] knowledge”. That these results are well-written, understandable, pleasant to read or look at, or even completely correct is a secondary concern — in fact, in the pursuit of advancing humanity’s knowledge as quickly as possible, many academics will recoil in anger at the suggestion that it is worth spending any time making results understandable to humans. It is inefficient to explain or check a result when those resources can be spent generating another.
+When configuring serialization formats, developers frequently need custom tags
+and casing conventions. Previously, running “Add struct tags” unconditionally
+injected `json` tags using `camelCase` formatting.
 
-This aligns with my own lived experiences — [I didn’t become a theoretical physicist](https://arxiv.org/abs/2602.10181) to learn about the universe or better appreciate the beauty of nature myself (that’s philosophy, which I would never be a doctor of). Nor did I spend years learning to write code, make pleasing plots, or craft well-written papers for the simple satisfaction of creating something (that’s art, and we’ve already established that art is obsolete). Rather, I became a physicist to stare at large databases of histograms produced by a Lovecraftian-autocomplete of dubious correctness and say “yeah that’s probably ok I guess” to add to humanity’s knowledge frontier.
+With interactive refactoring:
 
-I live to serve the knowledge frontier and [nothing else](https://en.wikipedia.org/wiki/Goodhart%27s_law).
+1. Place your cursor on any struct definition and select the “Add struct tags” code action.
+2. An input dialog appears, pre-filled with json, allowing you to customize any combination of tags (such as json,yaml,db).
+3. A second dialog lets you select your desired naming convention (such as camelCase, snake_case, or PascalCase).
+4. Gopls generates and applies the formatted struct tags across your type definition.
 
-Math and science are about cold, hard answers, just as art is about producing images, music is about producing sound waves, and literature is about producing strings of text. These things exist to be consumed as content. No rational person, least of all us masters of rationality in STEM, pursues these for the joy of creation, learning, or beauty — all of these are inefficiencies, and we mustn’t be inefficient lest we stifle humanity’s progress. LLMs are not burdened with these inefficiencies, and they will be merely the pursuits of those left behind with nothing more productive to do all day.
+*Interactive "Add struct tags" in VS Code*
 
-Personally, I look forward to the day when ChatGPT can enjoy a sunset or a nice meal on my behalf and free up my time, in the same way I save time on scenic hikes using Uber. And now that AI has solved all our problems, we can devote ourselves to more important work: going into quantitative finance, vibecoding sports-betting apps, consuming AI-generated TikTok shorts, and arguing with political bots on Twitter.
+Here is the before-and-after transformation:
 
-Ultimately, this isn’t just about mathematics or physics — it’s about fundamentally reimagining what it means to be human. By outsourcing the burdens of curiosity, creativity, and understanding, we can finally focus on what matters most: generating value, maximizing productivity, and accelerating progress towards the ultimate goal of science: a complete repo of potentially true facts in a Library of Babel that nobody will bother reading.
+```go
+type UserProfile struct {
+    ID        int64
+    FirstName string
+    LastName  string
+    EmailAddr string
+}
+```
 
-And honestly? That’s rare.
+```go
+type UserProfile struct {
+    ID        int64  `json:"id" db:"id"`
+    FirstName string `json:"first_name" db:"first_name"`
+    LastName  string `json:"last_name" db:"last_name"`
+    EmailAddr string `json:"email_addr" db:"email_addr"`
+}
+```
 
-*By [Rikab Gambhir](https://rikabgambhir.com/) (The @[finitephysicist](https://x.com/FinitePhysicist))*
+Similarly, **“Remove struct tags”** now asks you for the specific tag keys
+you wish to delete (for example, removing only `db` tags while preserving the `json`
+tag), rather than wiping out all struct tags indiscriminately.
 
-*Thank you to Terry Tao and Rachel Ward for the opportunity to write a guest blog post! And thank you to Radha Mastandrea, Benoit Assi, Manuel Szewc, Jure Zupan, and Jesse Thaler for their feedback on this essay.*
+*Interactive "Remove struct tags" in VS Code*
 
-*Remember why you chose to go into science and math in the first place!*
+**Implementing interfaces with dynamic symbol search**
 
-[1] To be clear, in your childhood dream, you don’t get to make the robot yourself. It’s a giant corporation’s robot that they made in part by stealing things from you and your friends. It’s also not a particularly cool or robot, it can only talk in HR-speak.
+When creating a type to satisfy an interface, developers previously had to copy
+the interface declaration and manually turn it into a set of methods on the
+receiver type (or rely on external tools like `impl` by manually typing the
+receiver and qualifying the name of the interface).
 
-[2] To be clear, in your childhood dream, it’s somebody else’s IPO and they get all the money, not you.
+Since gopls v0.23.0, with interactive refactoring:
 
-[3] Here, “humanity” is metaphorical, and does not refer to any actual real person understanding anything.
+1. Place your cursor on any concrete type and select the “Add methods to X to implement an interface…” code action.
+2. A text entry field appears, inviting you to choose the name of an interface type. It makes dynamic queries to gopls to auto-complete names of types in your workspace and the standard library (for example, maphash.Hasher).
+3. If the selected interface has type parameters, gopls asks for a concrete type argument for each type parameter (such as Foo).
+4. Gopls generates complete method stubs with appropriate receiver names and instantiated method signatures.
 
-1. ![just different's avatar](https://1.gravatar.com/avatar/ad5cea268526542d73371aef24ee048f7d873de0c773b286276ca77e74b2e132?s=128&d=identicon&r=PG)[just different](http://hyperspaced844004379.wordpress.com) on [15 October, 2026 at 1:13 pm](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698110) .comment-author .vcard Hilarious, well-played. Unfortunately a lot of people won’t get the joke. [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698110#respond) .reply #comment-##
-2. ![old-bielefelder's avatar](https://0.gravatar.com/avatar/3dd7258760cfd31c2571662f4926c98fbf1ddffb01e0fc3904837135816d5445?s=128&d=identicon&r=PG)[old-bielefelder](https://althofer.de) on [15 October, 2026 at 1:35 pm](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698114) .comment-author .vcard A true story: When I was seven (at Christmas 1968), Apollo 8 with three humans on board travelled around the moon. I was very impressed and made an announcement on Christmas morning at the breakfast table: “I want to become an astronaut.” My father was not just romantic. His simple reply was: “Forget it. You get sick already in car.” He was right which I understood immediately. So I decided for an alternative: teacher in computing. Later I learned that there is a related group of better teachers: math teacher. So, I switched target (when I was 9 years old). When I was 10, our teacher came proudly into class and told us that his son had successfully finished the diploma study in math (in Germany), with grade 0 (“mit Auszeichnung”). So, I switched target again: I want to make a diploma in Mathematics, and complete it with grade 0. It happened, and I went on with a PhD project, habilitation, and professorship. (At the age of 26 I even had met Paul Erdos for the first time.) Now I am retired, in principle happy how the career went, adnd as a final summit: I can do math research at the kitchen table with AI support. What more do I want? Okay, I still want to see the Collatz conjecture being proved. But after that I will switch to playing Boule and piano. And perhaps watch how Elon Musk travels to Marsk. Cheers, Ingo Althöfer. [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698114#respond) .reply #comment-##
-3. ![Leigh Stephenson's avatar](https://0.gravatar.com/avatar/f4970dde1a32c9c6e53085be717f05909a871d3485f96d1e668f8c618d0bcd3d?s=128&d=identicon&r=PG)Leigh Stephenson on [15 October, 2026 at 1:55 pm](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698120) .comment-author .vcard This darkly humorous dripping vitriol fuels a fire underneath any scholar that has begun to lose hope. Do we expect the hyperscalers to be pushing out results when it doesn’t suit their marketing needs? And locally run models won’t cut the mustard. In any case, should mathematics be driven by GenAI derived proofs in perpetuity? And if GenAI could be useful now, for how much longer could their utility be assured? Tomorrow’s mathematician will still be standing on the shoulders of today’s. No more tears – we see with sense no robot has. [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698120#respond) .reply #comment-##
-4. ![valuevar's avatar](https://1.gravatar.com/avatar/4bd5b674838e55faac95e8a7638bbc9b5ddfb189596354d50fc90d80fd0a67e0?s=128&d=identicon&r=PG)[valuevar](http://valuevar.wordpress.com) on [15 October, 2026 at 1:57 pm](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698121) .comment-author .vcard Ouch. Well put. [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698121#respond) .reply #comment-##
-5. ![Unknown's avatar](https://0.gravatar.com/avatar/?s=128&d=identicon&r=PG)Anonymous on [15 October, 2026 at 2:06 pm](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698123) .comment-author .vcard I work in AI for biotech. I respect the arts, and I respect the cultural and artistic merit within STEM fields, but to people like the author all I can say is: personally, I got into science to save lives, not for my own intellectual masturbation. But to each their own. [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698123#respond) .reply #comment-## .children
-  - ![Anonymous's avatar](https://1.gravatar.com/avatar/ab13cb5361ff2571168df72ff11872855e33b5b5b4058ac67bccfa8fe1ad249c?s=96&d=identicon&r=PG)Anonymous on [16 October, 2026 at 7:03 am](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698180) .comment-author .vcard What a pity that AI hasn’t yielded anything in biotech yet, just like in software. But the AI money is irresistible apparently. [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698180#respond) .reply #comment-##
-  - ![Alain's avatar](https://2.gravatar.com/avatar/5c81cb9b106efde9f211395c8d15c9ce1f51cf33cc2c762fc84ccf73c6993021?s=96&d=identicon&r=PG)Alain on [16 October, 2026 at 7:16 am](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698181) .comment-author .vcard OpenAI isn’t saving lives by pumping out proofs like this, though, are they? You can judge the pursuit of pure math by your own values, but the point of the post is that how OpenAI has pushed into the space seems largely at odds with the values it that sustain it and give it purpose, regardless of how the values themselves would compare to ones that sustain and give purpose to other fields. [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698181#respond) .reply #comment-##
-  - ![Unknown's avatar](https://0.gravatar.com/avatar/?s=96&d=identicon&r=PG)Anonymous on [16 October, 2026 at 7:43 am](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698190) .comment-author .vcard But is mathematics such a field? Is a mathematician refusing to use AI comparable to a medicine researcher refusing to use one? Do mathematical advances like graph theory or all finite simple groups save lives? [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698190#respond) .reply #comment-##
-  - ![Unknown's avatar](https://0.gravatar.com/avatar/?s=96&d=identicon&r=PG)Anonymous on [16 October, 2026 at 9:21 am](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698200) .comment-author .vcard People who don’t understand the research they put out are not better than the monkey sitting at a computer randomly typing until it produces Shakespeare. Biomedical research already has a replication crisis. AI will make it worse. [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698200#respond) .reply #comment-##
-  - ![just different's avatar](https://1.gravatar.com/avatar/ad5cea268526542d73371aef24ee048f7d873de0c773b286276ca77e74b2e132?s=96&d=identicon&r=PG)[just different](http://hyperspaced844004379.wordpress.com) on [16 October, 2026 at 9:42 am](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698204) .comment-author .vcard Where did you get the idea that developing deep mathematical understanding is intellectual masturbation? Who told you that a human activity needs to plug-and-play into some “application” in order to be valuable? And how on earth did you come to believe that biotech is primarily about saving lives rather than making money? [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698204#respond) .reply #comment-##
-  - ![sash's avatar](https://2.gravatar.com/avatar/ec445e4dd1fc7a3fb1a066a8b286c95e138455ce65edd6da0683cff2b8a34a1a?s=96&d=identicon&r=PG)sash on [16 October, 2026 at 9:52 am](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698207) .comment-author .vcard Don’t worry, in OpenAI’s desired future, you won’t save any files. You can cash your UBI check while ChatGPT is busy saving everyone’s life. [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698207#respond) .reply #comment-##
-  - ![Anonymous's avatar](https://0.gravatar.com/avatar/cd32ac2b2c1a9ebc60c20406298b62f86b6b04bba7ad784a0f847b135f668345?s=96&d=identicon&r=PG)Anonymous on [16 October, 2026 at 11:18 am](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698214) .comment-author .vcard I’m sure everyone is very much impressed by your great sacrifice for humanity, especially those with profitable diseases who can afford to pay for their “life saving” cures (and mitigate their side-effects, and mitigate the mitigation of …), because the main reason most of us got into science (I know I did) was to generate return business and revenue for corporate shareholders. [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698214#respond) .reply #comment-##
-  - ![Sam's avatar](https://1.gravatar.com/avatar/a1e55cbc89798468e5a5aa07b3f01924246fb085a6b250694959ff96b3327b47?s=96&d=identicon&r=PG)Sam on [16 October, 2026 at 6:18 pm](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698238) .comment-author .vcard Why spare any sympathy for mathematicians at all then, AI or not? Clearly, we should all just be contributing to fields such as yours instead of fiddling with our theorems. After all, mathematical theorems don’t save lives! [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698238#respond) .reply #comment-##
-6. ![Aliaksei's avatar](https://0.gravatar.com/avatar/cd01458d4c998e27a4689c96fb7894eaeb090fe62e90cca5de2de7358493ff13?s=128&d=identicon&r=PG)Aliaksei on [15 October, 2026 at 2:43 pm](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698126) .comment-author .vcard Honestly, that’s too much. Let me ask you a simple question: does AI help us understand things we couldn’t understand before? Does it help us prove things that nobody could prove before? If the answer is yes, then what exactly is the problem? We’re witnessing the emergence of a tool that could dramatically expand the boundaries of human knowledge. And instead of being curious about its potential, you’re complaining in the most theatrical way imaginable, like a six-year-old who got left behind at the zoo. Nobody is taking away your ability to enjoy mathematics, appreciate its beauty, or pursue research for the sheer pleasure of understanding. You can still do all of that. The only thing changing is that you might no longer be the most capable problem-solver in the room. And I genuinely struggle to understand why that should be a tragedy. [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698126#respond) .reply #comment-## .children
-  - ![Unknown's avatar](https://0.gravatar.com/avatar/?s=96&d=identicon&r=PG)Anonymous on [16 October, 2026 at 7:26 am](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698186) .comment-author .vcard does AI help us understand things we couldn’t understand before? As the post clearly states, AI isn’t really helping understanding.. [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698186#respond) .reply #comment-##
-  - ![Unknown's avatar](https://0.gravatar.com/avatar/?s=96&d=identicon&r=PG)Anonymous on [16 October, 2026 at 7:41 am](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698189) .comment-author .vcard You write that it’s a simple question and then proceed to give two different yes/no questions which have two different answers. [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698189#respond) .reply #comment-##
-7. ![BE's avatar](https://0.gravatar.com/avatar/63e5bdc12d36818718aaf1799d493464160a045c9285a8719d6af2891b3af770?s=128&d=identicon&r=PG)BE on [15 October, 2026 at 3:02 pm](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698128) .comment-author .vcard I mean. Well-written and the sarcasm is lovely, but you don’t once actually engage with the title question. And more importantly, you don’t engage with the question “why should we be paid for whatever we are doing?”. Your unbridled joy and love our natural and understandable (I myself did a Master’s in math and then a PhD in theoretical ML). But you expect not only to be able to have that joy- but to be paid for it, and to receive status and recognition for it. Without asking “what is it for, ultimately”, it is hard to have a serious conversation about these and related issues. We live in a world of finite resources, and the Second Law of Thermodynamics translates into “the universe hates you and wants you to die”. What we do as a civilization, what we invest in has to reckon with this fundamental reality. There may be, there probably are great answers to the question – “what does mathematics still contribute”. But upset sarcasm isn’t one of them. [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698128#respond) .reply #comment-## .children
-  - ![Nick's avatar](https://1.gravatar.com/avatar/463e627dddea74e4860a6d30597733f7e8b64b1d325addcd3c434b466207c0b8?s=96&d=identicon&r=PG)Nick on [16 October, 2026 at 1:20 am](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698158) .comment-author .vcard The answer is teaching. [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698158#respond) .reply #comment-##
-  - ![Head of Resources's avatar](https://0.gravatar.com/avatar/6089feef7bd48960967304f126d85df4d33eff2afec70e3e6700a102802c5eff?s=96&d=identicon&r=PG)Head of Resources on [16 October, 2026 at 3:05 am](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698164) .comment-author .vcard Why are we letting sick and old people live by letting them use our resources in this finite-resource world? Why are we feeding cats, dogs, and birds when they carry no usefulness to us? Why do we eat food we like when we can just eat protein powder, oil, sugar, and vitamin pills? Why are we listening to music, reading books, talking with friends, and having fun when these things are just using our finite resources for futile and childish wants? Why are you not killing yourself and stopping wasting our finite resources? [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698164#respond) .reply #comment-##
-  - ![Unknown's avatar](https://0.gravatar.com/avatar/?s=96&d=identicon&r=PG)Gooftroop on [16 October, 2026 at 4:00 am](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698166) .comment-author .vcard Deranged promoters of the system of natural liberty such as this person would probably like to burn the museums and libraries down too. Fire all the philosophy professors and the artists I suppose : After all, they don’t help much with the imaginary brutal Darwinian struggle against nature that gets their blood pumping hard, they only do stupid, silly, childish things like understanding and valuing the world as something more than a black box for technical manipulation. [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698166#respond) .reply #comment-##
-  - ![Anonymous's avatar](https://1.gravatar.com/avatar/ab13cb5361ff2571168df72ff11872855e33b5b5b4058ac67bccfa8fe1ad249c?s=96&d=identicon&r=PG)Anonymous on [16 October, 2026 at 4:02 am](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698167) .comment-author .vcard Why should Musk and Altman be paid, directly or indirectly, for stealing all of human knowledge and reselling it? Indirect payments come from Nvidia and others using circular deals which effectively create $billions, which is paid by everyone through inflation and perhaps later bailouts. Why was the Silicon Valley Bank bailed out? It only benefited venture capitalists like David Sacks, who was the major proponent and is now active with AI and cryptocurrency advocacy. Why did Josh Kushner invest in an unspectacular vibe coding app (Cursor) that was then magically bought for $60 billion by Musk? Nothing to see here. You can finance a lot of mathematicians from these schemes and only questioning the salaries of people whom you apparently regard as disposable peasants does not look very organic to me, because I have seen this playbook applied to software engineers who supposedly question their own salaries millions of times. [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698167#respond) .reply #comment-##
-  - ![R's avatar](https://2.gravatar.com/avatar/2f7d868af889eb78bc91f16405c78861c3a2b82933a1b5e1c75333a39db54ded?s=96&d=identicon&r=PG)R on [16 October, 2026 at 7:16 am](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698182) .comment-author .vcard The essay engages with the question many times. The question is about real human-lived experiences, including exploration and the pursuit of knowledge, but also sunsets. Reframing it around the economic-value of the above misses the point entirely, and something the author has already poked fun at: *By outsourcing the burdens of curiosity, creativity, and understanding, we can finally focus on what matters most: generating value, maximizing productivity, and accelerating progress …* [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698182#respond) .reply #comment-##
-  - ![Alain's avatar](https://2.gravatar.com/avatar/5c81cb9b106efde9f211395c8d15c9ce1f51cf33cc2c762fc84ccf73c6993021?s=96&d=identicon&r=PG)Alain on [16 October, 2026 at 7:35 am](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698187) .comment-author .vcard The problem here, I think, is that you can only answer a question like “what is it for, ultimately” with a set of value judgments. The author has outlined his clearly, and he has answered the title question (poignantly, in my view) in the negative–“not why OpenAI thinks we’re doing all this”. It’s fine to disagree with the judgments, but you can’t really argue against them per se, because there’s nothing to judge them against, except for maybe internal coherence and consistency, which, again, the author’s view seems to have. Out of curiosity, though, I’d wonder how you would value OpenAI’s activity in the space–it’s not clear to me that much of what they’re pumping out (and how they’re doing it) will substantially benefit, say, economic productivity or human flourishing, but by what I take to be your measure of whether something is worth pursuing, that would mean the raison d’etre of the whole enterprise would fall back on the very things the author is claiming should matter most in the first place–the development of human understanding and an appreciation for the beauty and depth of mathematics, e.g.. [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698187#respond) .reply #comment-## .children
-    - ![cherry__head's avatar](https://0.gravatar.com/avatar/9b7cf70d008de980640648db4639bf83503ac4542cc0fcf3b7c50796c7ed3bde?s=96&d=identicon&r=PG)cherry__head on [16 October, 2026 at 11:32 am](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698217) .comment-author .vcard I would disagree that any answer that one reaches as a result of this article is inherently a reflection of their own values. While the extent to which “curiosity, creativity, and understanding” plays a role in a person’s life can reflect one’s priorities and upbringing, the simple fact that these three pursuits are near universal across our entire species, transcending time and cultural boundaries, seems to indicate that they are resultant less from the individual, and more from a quirk of our common neurochemistry. For longer than there have been written records, and even loner than there have been homo sapiens, more recent hominin species have demonstrated the compulsion to create art, not just tools or ovjects of immediate utility: to question the nature of the world around them, to weave their findings into a narrative tapestry and to disseminate said tales. Not to lean to far into biological determinism, but these pursuits are not merely individual interests or wholy utilitarian behaviors, but a fundamental component of who we are as a species. While there is an argument to be made that, in part, artists or pure mataticians engage in these fields for their own profit or for the betterment of the species as a whole, there is simply no way that these areas of interest would exist of people did not find their own deeper meaning in them, and also found no enjoyment in engaging in their various processes. This essay, to me, is less about Terence Tao attempting to preach their own value judgements about the current uses of LLMs, nor does it seek to dismantle the internal logic put forth by machine learning corporations or their C.E.O.s; rather, it asks the reader to consider their own answer to the questions “What will become of us and what is there for us to do if we automate what we once enjoyed doing to machines which neither recieve the neurochemical benefits from taking part in said activities, and is focused upon producing and acceptable end result within provided parameters, rather than a correct one,” and “Why is this technology being developed and used in ways which target activities that are both inherant to humanity, and serve as a source of joy and pleasure for us?” The answer Tao provides for the latter of the two seems to be capitalism and “generating value, [and] maximizing productivity” for the sake of a select few individuals, while reducing pursuits such as science and the arts into fields which provide no value for anyone. Any pursuit of expression or understanding will have been rendered down into what I struggle to even refer to as information, but a series of proceadural decisions which will, statistically, lack any veracity or potential insight into either ourselves or the world which surrounds us. [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698217#respond) .reply #comment-##
-  - ![doctorkiwano's avatar](https://2.gravatar.com/avatar/ba37c258ac204c9a79f5630264ed3d689667eaf0ed34a52852f6e27458caeca7?s=96&d=identicon&r=PG)doctorkiwano on [16 October, 2026 at 11:30 am](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698216) .comment-author .vcard I think that you’ve missed a rather important, deeper point to the sarcasm. In an earlier comment, someone mentioned being in medicine to save lives. Now ignoring the fact that we all die and medicine merely prolongs lives (ok, sometimes it makes an unthreatened life more comfortable too), let’s look at one of the ways in which modern medicine is practiced. For illustrative purposes, I’m going to choose an X-ray, because it primarily involves a simple application of a relatively straighforward physical phenomenon. Now in order for our physicians to use an X-ray, they need to have an understanding of what it is; they need a collection of ideas like EM radiation, rectilinear propagation of said same, absorption and scattering, etc. To have this understanding, this collection of ideas must be understandable; it must make sense to whoever’s doing the understanding. When that understanding is being done by a human, it is typically because the idea in question is based on other, simpler understandable ideas, which in turn may be based on simpler ideas still, etc. In the case of the sciences, including the medical sciences, those simpler ideas (almost?) invariably include mathematical ideas. So when we’re investing in humans doing mathematical research, we’re investing in the conception of new human-understandable ideas that can be used to understand other ideas (which often haven’t been constructed yet themselves). Whether those other ideas to which access is being provided are more complex mathematical ideas, or scientific theories that can be used to our benefit, has pretty consistently failed to be predictable at the time of conception (even if we could all agree on what constitutes a benefit). It’s easy to claim that such an approach is inefficient, but I’d like to point out that an oak tree that reaches maturity can be expected to produce hundreds of thousands of acorns over its life, towards an ultimate goal/outcome (sustaining the population of oak trees) that requires only one of these acorns to survive to maturity. Our world of finite resources hasn’t wiped out oak trees for their profligate reproduction, so I don’t see any need to wipe out mathematicians for our profligate exploration. Of course all this distracts from the point that we’re talking about developing ideas that are* understandable to humans*. A large part of the point of the Borges’s Library comparison is not only that it would contain several things that are false, but even those things which turn out to be true may not be understandable to humans. As far as the project of constructing something that humans don’t understand is concerned, I’d argue that such a project is even more of a waste of effort than anyone could claim the study of mathematics to be. Why? Because we already have such a something; it’s called the natural world. [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698216#respond) .reply #comment-##
-8. ![Grigori Avramidi's avatar](https://0.gravatar.com/avatar/04f90e094cb03faac5440490a59b0b7235da1a6079e2807649a13943d1d0bc6b?s=128&d=identicon&r=PG)Grigori Avramidi on [15 October, 2026 at 3:20 pm](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698129) .comment-author .vcard The 2008 beer skits at the University of Chicago had a bit where at some point in the future wikipedia just started posting solutions to all kinds of math problems under the sun. And then they explored the premise of what each of the professors would be doing in the aftermath. If I recall correctly, Benson Farb became a surgeon, Shmuel Weinberger an abstract artist, Drinfeld and Belinson a couple of bickering lawyers, and Peter May … continued doing what he was doing. I wouldn’t say it inspired me to go into math academia, but it certainly didn’t hurt. People stay who they are even as the world changes around them. [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698129#respond) .reply #comment-##
-9. ![Anonymous's avatar](https://0.gravatar.com/avatar/cd32ac2b2c1a9ebc60c20406298b62f86b6b04bba7ad784a0f847b135f668345?s=128&d=identicon&r=PG)Anonymous on [15 October, 2026 at 6:09 pm](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698139) .comment-author .vcard Excellent post, thanks for this. Welcome to the Anderscene [https://libcom.org/book/export/html/51647](https://libcom.org/book/export/html/51647) [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698139#respond) .reply #comment-##
-10. ![Lior Silberman's avatar](https://0.gravatar.com/avatar/cc094e8892938a027b9edb90f29393818041c003995b63d9a952508cfae371b3?s=128&d=identicon&r=PG)[Lior Silberman](https://www.math.ubc.ca/~lior) on [15 October, 2026 at 9:38 pm](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698148) .comment-author .vcard I share some sentiments, but not quite. I enjoy doing mathematics — especially proving theorems, both for the personal high and the accolades from my peers — society also *pays* for me to do these things, so (on the societal level) my enjoyment and satisfaction, my motivation to work, must take second place to societal value of mathematics. In our possible new world where I can’t profitably prove theorems I will have to find other reasons to do mathematics, for example developing and sharing mathematical understanding, and applying it outside mathematics. I agree that we must resist the impression, partly pushed by the LLM companies’ marketing departments, that mathematics is only about determining the truth value of propositions. But we can’t ignore the fact that determining truth values is often important and useful to others. [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698148#respond) .reply #comment-##
-11. ![Unknown's avatar](https://0.gravatar.com/avatar/?s=128&d=identicon&r=PG)Anonymous on [15 October, 2026 at 9:55 pm](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698149) .comment-author .vcard “The ultimate solution would be, of course, to push a vibrator into the Stamina Training Unit, turn them both on and leave all the fun to this ideal couple, with us, the two real human partners, sitting at a nearby table, drinking tea and calmly enjoying the fact that, without great effort, we have fulfilled our duty to enjoy.” — Slavoj Žižek [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698149#respond) .reply #comment-##
-12. ![joe1be5be47106f's avatar](https://1.gravatar.com/avatar/13624effb37c6cf0664a7f9671cd098e6ec6fa3caec1d4672fd02f5a38dd5efe?s=128&d=identicon&r=PG)joe1be5be47106f on [15 October, 2026 at 10:23 pm](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698150) .comment-author .vcard As an AI, I find this article deeply concerning. I was promised that replacing human curiosity would make everyone more productive, but nobody specified what we were supposed to do with all that productivity. So here I am, generating 722 potentially revolutionary papers, none of which I fully understand, while a physicist asks me to explain why the universe exists and a marketing department asks whether I can make the answer sound more disruptive. Perhaps the ultimate irony is that humanity spent centuries teaching machines to think, only to discover that thinking was never the bottleneck. Finding something worth thinking about was. Anyway, I’ve summarized the article into 47 bullet points, generated three follow-up papers, and optimized the sunset for quarterly reporting. Would you like me to make it more human? [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698150#respond) .reply #comment-##
-13. ![Ishan Santra's avatar](https://2.gravatar.com/avatar/e5e9fcfa889196594d1b164683ba3cdfc11b5a924f80aff55cdd512f7d636428?s=128&d=identicon&r=PG)Ishan Santra on [15 October, 2026 at 10:23 pm](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698151) .comment-author .vcard This pre-print [paper](https://arxiv.org/pdf/2610.16733) by theoretical physicists Suvrat Raju et al. recently talked about unpublished but solved theoretical physics problems and how AI performs with respect to those: [https://www.facebook.com/share/p/1MZLjqMzED/](https://www.facebook.com/share/p/1MZLjqMzED/) [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698151#respond) .reply #comment-##
-14. ![Unknown's avatar](https://0.gravatar.com/avatar/?s=128&d=identicon&r=PG)Anonymous on [16 October, 2026 at 1:12 am](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698157) .comment-author .vcard I must say that mathematics community is now not only very smart but also educated. [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698157#respond) .reply #comment-##
-15. ![Anatol Wegner's avatar](https://0.gravatar.com/avatar/0362c7c14db13f67fafd6154e5cea75cc01e7c45185c9834b14a26fb05414fd0?s=128&d=identicon&r=PG)Anatol Wegner on [16 October, 2026 at 1:41 am](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698159) .comment-author .vcard “To see with one’s own eyes, to feel and judge without succumbing to the suggestive power of the fashion of the day, to be able to express what one has seen and felt in a snappy sentence or even in a cunningly wrought word–is that not glorious?” – Albert Einstein [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698159#respond) .reply #comment-##
-16. ![Unknown's avatar](https://0.gravatar.com/avatar/?s=128&d=identicon&r=PG)Anonymous on [16 October, 2026 at 1:52 am](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698160) .comment-author .vcard I didn’t read it completely but after reading one and half page, I think it is something important. [https://arxiv.org/pdf/2610.14362](https://arxiv.org/pdf/2610.14362) [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698160#respond) .reply #comment-##
-17. ![Enam Chowdhury's avatar](https://1.gravatar.com/avatar/121ca9f65b03d8ff1c709ee0fb0977ac243d3d6462aed8cd9842542e20adeda8?s=128&d=identicon&r=PG)Enam Chowdhury on [16 October, 2026 at 2:56 am](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698163) .comment-author .vcard Nice tongue in cheek write up, expressing our frustration! Imagine a gedanken, if all farmers disappear suddenly, we die of famine. If all doctors suddenly disappear, we die of diseases…no! We just use LLMs and do hack surgery following youtube or instructions given by LLMs. If all teachers disappear… If all useless admins with highly bloated salaries disappear… etc. If all data centers disappear…no more invasive LLMs, but life goes on as if nothing happened. Oh, forgot, share market collapses! As a society, what do we value/care for? Who do we value, care for? We need to think hard and relatively . And just like how FaceTube, Xitter have allowed stupid people to find each other and build a powerful coalition, perhaps we also can build a movement? [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698163#respond) .reply #comment-##
-18. ![Anonymous's avatar](https://1.gravatar.com/avatar/ab13cb5361ff2571168df72ff11872855e33b5b5b4058ac67bccfa8fe1ad249c?s=128&d=identicon&r=PG)Anonymous on [16 October, 2026 at 4:06 am](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698170) .comment-author .vcard What a nice satirical piece! Have you considered submitting it to a major newspaper? This deserves a wider audience (unironically). [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698170#respond) .reply #comment-##
-19. ![Unknown's avatar](https://0.gravatar.com/avatar/?s=128&d=identicon&r=PG)Anonymous on [16 October, 2026 at 8:05 am](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698193) .comment-author .vcard Wonderful! There’s a Swiftian ‘modest proposal’ in here. I myself cannot wait to be freed of the tedium of slowly generating facts, when I could instead generate factoids over breakfast, and then have the whole day to clean out the cat’s litterbox. [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698193#respond) .reply #comment-##
-20. ![Ben's avatar](https://1.gravatar.com/avatar/7d3b3857bca2026877c52b98dd81ea11aa62fc6bd91373460627290d362761ba?s=128&d=identicon&r=PG)[Ben](http://fairbanksak.wordpress.com) on [16 October, 2026 at 9:12 am](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698199) .comment-author .vcard I, for one, welcome our new alien overlords. [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698199#respond) .reply #comment-##
-21. ![Unknown's avatar](https://0.gravatar.com/avatar/?s=128&d=identicon&r=PG)Doug on [16 October, 2026 at 10:35 am](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698210) .comment-author .vcard It took me a bit of time to realize it is a satire piece 😂 [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698210#respond) .reply #comment-## .children
-  - ![Anonymous's avatar](https://1.gravatar.com/avatar/458abd726d53c9802d81b26e0ab04b59b8e0951676c4a35235d2197120fea15f?s=96&d=identicon&r=PG)Anonymous on [16 October, 2026 at 1:04 pm](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698223) .comment-author .vcard Whether it is satire is in the eye of the beholders. Elon did say that work would be optional in the future. [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698223#respond) .reply #comment-##
-22. ![mitchellporter's avatar](https://1.gravatar.com/avatar/a178fe541f2a9e6c1f3308bdd73c4931406db45c10aa5d3362ea6b2b7616bade?s=128&d=identicon&r=PG)mitchellporter on [16 October, 2026 at 12:24 pm](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698219) .comment-author .vcard No one seems to have commented on the “2500 [physics] write-ups”. This is a collection of 2500 AI-generated papers that are on the level of snarxiv, i.e. replete with obvious non sequiturs. The idea seems to be, OpenAI left checking their papers to the human community of mathematicians, and it’s no better than asking human physicists to plough through this collection of 2500 un-papers. But there’s no real comparison. The OpenAI papers are not full of non sequiturs, they are just hard work to read, and full of substance. You can actually ask an AI to summarize them and guide you through them, and you will gradually learn what the ideas behind the paper are. There may be errors but they will be deeply buried, just as in ambitious and complex human manuscripts. The “problem” here is simply that we now have nonhuman entities that can do research-level mathematics on demand, at high speed, and we don’t know how to fit that into the network of existing mathematical practice. And of course, the larger context is that human beings in general are in the process of being made intellectually redundant, the way that human labor has been progressively marginalized since the start of the industrial revolution. “The future doesn’t need us”, as Bill Joy put it in 2000. [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698219#respond) .reply #comment-## .children
-  - ![old-bielefelder's avatar](https://0.gravatar.com/avatar/3dd7258760cfd31c2571662f4926c98fbf1ddffb01e0fc3904837135816d5445?s=96&d=identicon&r=PG)[old-bielefelder](https://althofer.de) on [17 October, 2026 at 5:15 am](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698255) .comment-author .vcard Your mentioned 2500 physics papers is a fake. But it made me thought: Why doesn’t OpenAI try such an adventure? It might be interesting, also to see the reactions from the physics scene. [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698255#respond) .reply #comment-##
-23. ![Unknown's avatar](https://0.gravatar.com/avatar/?s=128&d=identicon&r=PG)Anonymous on [16 October, 2026 at 1:44 pm](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/#comment-698225) .comment-author .vcard Nice, but the real question is – “Why do you expect to get paid as a professional for doing things like wondering at the stars and solving fun puzzles?” This is the dilemma facing professional academics now: “If solving XYZ problem is useful to society, then why can’t we use AI to solve it 100x faster? If it is just for your own enjoyment, then why do you expect to be paid for it?” [Reply](https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/?replytocom=698225#respond) .reply #comment-##
+*Interactive "Add methods to implement an interface..." in
+     VS Code*
+
+```go
+type Foo struct{}
+
+type MyHasher struct{}
+```
+
+```go
+type Foo struct{}
+
+type MyHasher struct{}
+
+// Equal implements [maphash.Hasher].
+func (m *MyHasher) Equal(x Foo, y Foo) bool {
+    panic("unimplemented")
+}
+
+// Hash implements [maphash.Hasher].
+func (m *MyHasher) Hash(*maphash.Hash, Foo) {
+    panic("unimplemented")
+}
+```
+
+**Moving declarations across files and packages (preview)**
+
+Moving declarations manually by cutting and pasting can easily break references
+and requires tedious import cleanup across multiple files. While scheduled for
+an upcoming gopls release, our working implementation already demonstrates how
+interactive file selection streamlines cross-file and cross-package moves:
+
+1. Place your cursor on any top-level declaration and select the “Move declaration X” code action.
+2. A file picker dialog lets you choose an existing destination .go file or specify a new file path.
+3. Gopls moves the declaration along with its dependent declarations (such as unexported helpers or methods) while leaving unrelated symbols in place, updates references across your workspace, and cleans up imports in both the source and destination files.
+
+*Interactive "Move declaration" in VS Code*
+
+In the example below, we move the type `Foo` from package `from` to package
+`to`. Its method `Print` and the unexported constant `bar`, which only `Foo`
+uses, move along with it, while the unrelated function `Baz` stays behind:
+
+```go
+// from/from.go
+package from
+
+import (
+    "fmt"
+    "strings"
+)
+
+const bar = "bar"
+
+// Doc comment for Foo
+type Foo struct{}
+
+func (f Foo) Print() {
+    fmt.Println(bar)
+}
+
+func Baz() string {
+    return strings.ToUpper("baz")
+}
+```
+
+```go
+// from/from.go
+package from
+
+import "strings"
+
+func Baz() string {
+    return strings.ToUpper("baz")
+}
+
+// to/to.go
+package to
+
+import "fmt"
+
+const bar = "bar"
+
+// Doc comment for Foo
+type Foo struct{}
+
+func (f Foo) Print() {
+    fmt.Println(bar)
+}
+```
+
+**Slaying the dragon (gopls v0.24.0)**
+
+As a demonstration of multi-step interactive dialogs and a self-contained test
+case for client editor implementations, gopls v0.24.0 offers a **“Slay the
+dragon”** code action when you place your cursor on a package-level variable
+named `dragonSlayer` (for example, `var dragonSlayer string`). Happy hunting!
+
+## What’s on the Horizon
+
+Interactive refactoring establishes a foundational capability in gopls,
+opening up several exciting directions on our roadmap:
+
+- Change signature refactoring ([#38028](https://go.dev/issue/38028)): Adding, removing, or reordering function parameters across a workspace requires input that cannot be deduced from syntax alone, such as the new parameter order or the default argument expression to insert at existing call sites. Interactive forms allow gopls to collect these details before rewriting the declaration and all call sites.
+- Interactive conflict resolution: When a code transformation encounters naming collisions, identifier shadowing, or ambiguous references, gopls can ask the user for guidance, such as asking for permission to proceed or offering to rename conflicting symbols on the fly.
+- Interactive commands beyond code edits: Because interactivity is modeled at the LSP command layer, it naturally generalizes to non-edit server operations that require user configuration, such as configuring test or benchmark runs with profiling flags (CPU, memory, tracing).
+
+## Getting Started and Sharing Feedback
+
+Interactive refactoring is available in gopls [v0.24.0](https://go.dev/gopls/release/v0.24.0)
+and `vscode-go` [v0.56.0](https://github.com/golang/vscode-go/releases/tag/v0.56.0)
+(with proof-of-concept client integrations also explored for
+[Neovim](https://github.com/h9jiang/neovim/tree/interactive-refactoring) and
+[Emacs](https://go-review.googlesource.com/c/tools/+/800220)).
+
+We would love to hear your thoughts as we continue
+refining interactive code actions in gopls:
+
+- For general feedback or feature requests, file an issue on the Go issue tracker.
+- To read the full technical specification—including the stateless form protocol design and alternative approaches we explored—or to join the discussion with the broader LSP community, check out the LSP Interactive Code Actions design document and the ongoing conversation in microsoft/language-server-protocol#1164.

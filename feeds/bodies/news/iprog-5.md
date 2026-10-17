@@ -1,71 +1,9 @@
-pg-java is a modern pre-release PostgreSQL database driver specifically designed for Java 21+ and the JVM. Developed primarily by AI with strict human architectural oversight, the project prioritizes PostgreSQL wire protocol efficiency and virtual thread friendly blocking I/O over legacy JDBC constraints. As such, the development of the driver was guided by several core design goals aimed at addressing the structural limitations of older drivers:
-
-  * **PostgreSQL first native API** : The driver is designed directly around PostgreSQL’s native wire protocol and feature set rather than lowest common denominator database constraints. Its native API directly exposes PostgreSQL idioms (such as $1 positional parameters and 1-based column indexing) without relying on java.sql abstractions.
-  * **JDBC as a layer, not a foundation** : Full JDBC compliance is supported via a java.sql.* layer that sits on top of the native API rather than serving as its core foundation. This ensures that historical JDBC limitations and assumptions do not dictate or corrupt the execution core. A full java.sql.* implementation module (postgresql-client-jdbc) provides standard Connection, PreparedStatement, ResultSet, DataSource and XADataSource support built directly on top of the native engine.
-  * **Modern java & virtual thread friendliness**: Built for Java 21+, the driver employs straightforward, blocking style code designed specifically not to pin carrier threads (e.g., using ReentrantLock instead of synchronized monitors around I/O). This allows applications to scale to thousands of concurrent connections using virtual threads without requiring asynchronous frameworks or event loops.
-  * **Pull-first streaming by default** : The fundamental query primitive is a pull cursor (PgResultStream) that reads row by row off the wire and never buffers the entire result set in memory. Memory overhead is bounded by individual row size rather than result set size, and collection helpers (forEach, map, collect) are adapters layered over this streaming cursor.
-  * **Full Postgresql feature set with external lifecycle primitives** : Over time, the driver aims to support the full range of PostgreSQL capabilities (including extended protocol features, COPY, LISTEN/NOTIFY, SCRAM authentication with channel binding and pipelining). Rather than embedding its own connection pool, it provides the essential connection lifecycle primitives needed by external poolers and the JDBC DataSource.
-
-Reading behind the lines, what does the driver offer to developers? The pg-java driver provides a modern, PostgreSQL specific feature set for JVM developers across multiple core areas. What is really powerful is the high performance batching & execution modes. The driver automatically rewrites bulk INSERT statements into an INSERT INTO ... SELECT * FROM unnest(?::type1[], ?::type2[]) form. This keeps the SQL text constant regardless of batch size, uses only one array parameter per column (bypassing PostgreSQL's 65,535 scalar parameter cap without chunking), reuses prepared statement plans and executes in a single round trip. Batch mode continued, there's also Multi Row VALUES batch rewrites. That is, it supports multi row VALUES (?,?), (?,?) batch rewrites chunked at power of two sizes under a single Sync section (rewriteBatchUsingMultipleValues) to reproduce pgjdbc's exact reWriteBatchedInserts behavior and plan cache profile. Other welcome features are
-
-  * Native pipelining API: Lets developers queue multiple arbitrary SQL queries across a single network write window and execute them under explicit sync() error boundaries, cutting network round trip overhead.
-  * GraalVM Native image support: Ships with pre-configured GraalVM native image metadata (reflect-config.json, proxy-config.json, resource-config.json) for ahead of time compilation into native binaries.
-  * Java record & Enum support: Supports mapping PostgreSQL composite row types directly into Java 21 records and custom database enums into Java enum constants.
-  * JSON / JSONB binding: Includes a pgjson wrapper type to carry and bind JSON parameters with proper OID typing, avoiding lossy string parameter typing or mandatory SQL typecasts.
-
-Great! How do you install it? Because pg-java is currently in pre-release and not yet published to Maven Central, you install it by cloning the repository and building it locally using Apache Maven. By way of requirments you need:
-
-  * Java: JDK 21 or newer.
-  * Build Tool: Apache Maven (a Maven Wrapper ./mvnw is included in the project, so installing Maven separately is optional).
-  * Docker (optional): Only required if you want to run the full integration test suite against real PostgreSQL and PgBouncer containers.
-
-Run the following commands in your terminal to build the driver and install the artifacts into your local Maven repository (~/.m2/repository):
-
-    git clone <https://github.com/pgjdbc/pg-java.git>  
-    cd pg-java  
-    ./mvnw clean install
-
-If you have Docker running and want to run integration tests against real database instances:
-
-    ./mvnw verify -Pintegration-tests
-
-Once built locally, you can declare dependencies in your application's pom.xml using the org.postgresql groupId For the PostgreSQL-Native API:
-
-    <dependency>  
-    <groupId>org.postgresql</groupId>  
-    <artifactId>postgresql-client</artifactId>  
-    <version>0.1.0-SNAPSHOT</version>  
-    </dependency>
-
-For standard JDBC support (jdbc:pg://):
-
-    <dependency>  
-    <groupId>org.postgresql</groupId>  
-    <artifactId>postgresql-client-jdbc</artifactId>  
-    <version>0.1.0-SNAPSHOT</version>  
-    </dependency>
-
-For legacy pgjdbc migration / drop-in compatibility:
-
-    <dependency>  
-    <groupId>org.postgresql</groupId>  
-    <artifactId>postgresql-client-pgjdbc-compat</artifactId>  
-    <version>0.1.0-SNAPSHOT</version>  
-    </dependency>
-
-To verify the installation in your Java application, connect using the canonical jdbc:pg:// URL scheme:
-
-    String url = "jdbc:pg://localhost:5432/appdb?user=app&sslmode=verify-full";  
-    try (Connection connection = DriverManager.getConnection(url, "app", password)) {  
-    System.out.println("Connected successfully!");  
-    }
-
-Ultimately, pg-java is a welcome newcomer providing a modern, PostgreSQL native JVM client optimized for Java 21+ virtual threads, delivering lower memory overhead through pull-first streaming, faster bulk operations via array-parameter rewrites, and native protocol pipelining without the performance limitations of legacy JDBC.
+The Mojo programming language has reached version 1.0 and has now been made fully open source. The source code for the Mojo compiler, tooling, and everything else you need to build the language are now available in the modular GitHub repository. Mojo is a language developed by Chris Lattner and his AI-focused company Modular. Lattner has impressive credentials, having created LLVM, Clang, and Swift. Mojo was designed to provide a solution to the problem that developers prototype AI models in easy-to-use Python but are forced to rewrite performance-critical code in C++ or CUDA to run efficiently on hardware. The Mojo team say it overcomes this by offering a single language that scales from high-level application code down to low-level hardware programming.  Mojo's syntax is essentially Python, and it can import and run existing Python libraries like NumPy and Matplotlib directly within Mojo code. However, because it compiles directly to machine-native code and makes use of advanced compiler infrastructure like MLIR (Multi-Level Intermediate Representation), Mojo can run thousands of times faster than standard Python. MLIR is a widely used open-source compiler framework for building domain-specific compilers. The Mojo team describes MLIR core as a flexible "compiler construction toolkit," providing the building blocks needed to create powerful custom compilers. Mojo also lets you write GPU and NPU kernels in the same language used for ordinary programming, so eliminating the need for separate domain-specific languages (like CUDA).  Mojo 1.0 is described as being more consistent, predictable, and approachable than previous versions. Where Mojo offered multiple ways to express the same idea, these have been converged on one. Variables are now consistently declared with var, closures have been unified, and there is a single Pointer type.  Beyond this foundational work, Mojo 1.0 also includes several new features and improvements. It now supports Python-style “lambda” syntax for inline closures, so allowing stateless closures to lift to top-level functions and pass as callbacks to C. The Mojo LSP server has also received work to make it more stable and reliable, greatly improving your everyday experience with VS Code and other editors. Mojo has a collection of AI Skills that cover new project creation, GPU programming, and porting from other languages. The skills follow the Agent Skills Standard, and are designed for working with the Modular Platform, including MAX and Mojo. Because they follow the Agent Skills Standard, any AI coding agent can use them to write Mojo, or to import, serve, and measure models on MAX. Other improvements mean Mojo now diagnoses memory safety problems involving reference invalidation, such as noticing when List.append invalidates a reference into the list; and “where” clauses are more consistently used across the standard library, and allow a descriptive message to make the failure reason clearer.  Mojo 1.0 is available now on GitHub. 
 
 #### More Information
 
-[Introducing pg-java](<https://launchbylunch.com/posts/2026/Jul/29/introducing-pg-java/>) [pg-java on Github](<https://github.com/pgjdbc/pg-java>)
+[Mojo On GitHub](<https://github.com/modular/modular>)
 
 #### Related Articles
 
-[Polygres: Advanced Search On PostgreSQL](<https://www.i-programmer.info/news/84-database/19138-polygres-advanced-search-on-postgresql.html>) __ To be informed about new articles on I Programmer, sign up for our [weekly newsletter](<https://www.i-programmer.info/edit-profile.html?layout=form>),[ ](<https://s3.amazonaws.com/com.alexa.toolbar/atbp/hfdfGO/download/index.htm>)subscribe to the [RSS feed](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=3&format=raw>) and follow us on [Facebook](<http://www.facebook.com/pages/iProgrammer/127140977307932#%21/pages/iProgrammer/127140977307932?v=wall>) or [Linkedin](<http://www.linkedin.com/company/i-programmer>). [](<https://amzn.to/4iJFqTH>)
+[Mojo - Python Superset For Go-Faster Hardware](<https://www.i-programmer.info/i-programmer.info/news/98-languages/17529-mojo.html>) To be informed about new articles on I Programmer, sign up for our [weekly newsletter](<https://www.i-programmer.info/edit-profile.html?layout=form>),[ ](<https://s3.amazonaws.com/com.alexa.toolbar/atbp/hfdfGO/download/index.htm>)subscribe to the [RSS feed](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=3&format=raw>) and follow us on [Facebook](<http://www.facebook.com/pages/iProgrammer/127140977307932#%21/pages/iProgrammer/127140977307932?v=wall>) or [Linkedin](<http://www.linkedin.com/company/i-programmer>). [](<https://amzn.to/4iJFqTH>)
