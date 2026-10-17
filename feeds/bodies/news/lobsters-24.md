@@ -1,26 +1,23 @@
-**recognizing** that
-industrial users and the synchronization needs of national critical infrastructures, for example transportation, energy distribution, telecommunication, and space projects require UTC to be continuous without any future adjustment, 
-for some applications it is necessary to fix a maximum value for the difference |UT1-UTC| to appropriately design the software underlying operational systems, 
-in many countries there are differences of more than one hour between local apparent solar time and civil time due to the choice of time zone, and changes of an hour are regularly introduced when daylight-saving time is used, 
-**further recognizing** that
-users of UT1 can find information on the value of the difference UT1-UTC in the Global Navigation Satellite Services (GNSS) navigation messages, and internet services provided by the International Earth Rotation and Reference Systems Service (IERS), National Metrology Institutes (NMIs), and other services, 
-the International Telecommunication Union Radiocommunication Sector (ITU-R), through its Working Party 7A, is studying possible updates of the code for the transmission of the difference UT1-UTC by radio stations and Resolution 655 (REV.WRC-23) resolved to “establish a transition period for implementation and allow for the possibility to disseminate the increased difference between UT1 and UTC via radiocommunication system until 2035, but no later than 2040, in cases where existing equipment cannot be replaced earlier”, 
-**noting** that
-a workshop organized by the Consultative Committee for Time and Frequency (CCTF) and IERS in March 2025, which included experts on Earth rotation, estimated that the probability of a negative leap second will increase rapidly in the near future, reaching a 30 % probability by 2035, 
-a negative leap second has not previously been applied, and it is considered to pose a high risk of causing anomalies and disruption to critical infrastructures that are largely unprepared, and the preparation would create, for the industries that rely on time synchronization, a need for financial investment, whose amount is estimated to be similar to their preparations for the millennium bug, 
-the growing influence of IoT (Internet of Things) technologies, dispersed multi-sensor systems, smart grids, and virtual services for contemporary society, creates an increasing risk of malfunction in operation of systems and services with the insertion of any leap second, especially with a negative one, 
-the use of different mitigation methods for leap second introductions by global service providers in their server systems, in order to avoid time steps, leads to inconsistency in timing between different systems and in the disseminated time and frequency, which do not conform to the SI unit, 
-international organizations including the International Telecommunication Union Telecommunication Standardization Sector (ITU-T), the International Union of Radio Science (URSI), international working groups such as the Institute of Electrical and Electronics Engineers (IEEE) 1588, and individual industry representatives have provided formal statements to the BIPM on the need to bring forward the implementation of UTC as a continuous time scale to avoid the risk of the insertion of a negative leap second, 
-the additional risk of a delay in updating UTC could cause some user organizations to change their reference time scales to, for example, a GNSS time instead of UTC, seriously compromising the concept of international standardization in metrology, 
-**welcoming** 
-the excellent collaboration between the BIPM and the ITU-R and the endorsement of CGPM Resolution 4 (2022) at the World Radiocommunication Conference by Resolution 655 (REV.WRC 2023), 
-the support and engagement of the IERS to take all necessary measures to change its operational provision for, and its announcement of, leap seconds according to the CGPM resolutions, 
-**decides** that 
-continuous UTC will become effective on 20 May 2027, 
-the maximum value for the difference |UT1-UTC| will be 3 600 seconds (1 hour), ensuring the long term continuity for UTC for several centuries, 
-**requests** the BIPM 
-to continue to collaborate with the International Telecommunication Union (ITU), International Astronomical Union (IAU), International Union of Geodesy and Geophysics (IUGG), IERS, and other organizations that may be impacted by this decision in order to
-inform users and support the application of this decision, 
-continue to monitor the value of UT1-UTC,  its estimated evolution and modelling as determined by the IERS, 
-inform the CIPM regularly on the evolution of the value of UT1-UTC,  
-and to continue to work with the Regional Metrology Organizations, the NMIs, and users to promote the understanding of the importance of a continuous UTC and its prompt and efficient provision to the users.
+The Rust team has published a new point release of Rust, 1.99.1. Rust is a programming language that is empowering everyone to build reliable and efficient software.
+
+If you have a previous version of Rust installed via rustup, getting Rust 1.99.1 is as easy as:
+
+```
+rustup update stable
+```
+
+If you don't have it already, you can [get `rustup`](https://www.rust-lang.org/install.html) from the appropriate page on our website.
+
+## What's in 1.99.1
+
+Rust 1.99.1 fixes the following regressions from prior releases:
+
+- [Missing symbol `wcslen`](https://github.com/rust-lang/rust/issues/163614): Some Rust targets were getting link errors for missing `wcslen`, and that function is now present in Rust's compiler-builtins library as a fallback. The LLVM `loop-idiom-wcslen` pass may introduce calls to `wcslen` as an optimization, and some Rust targets did not have that function readily available in `libc` or elsewhere. The UEFI targets in particular were broken for any project using `std`, as some of these calls were introduced in the precompiled standard library, but the issue was also reproducible for similar user code patterns.
+- [Miscompilation of FFI `bool` return values on x86_64](https://github.com/rust-lang/rust/issues/163911): Rust functions returning `bool` through FFI could leave bits 1-7 of the return register unspecified, causing callers to observe raw values other than `0` or `1`. This return type is now marked for zero-extension again, as required by the ABI.
+- [`rust-lld` failed to load `libLLVM` on macOS](https://github.com/rust-lang/rust/issues/163947): This linker could fail to run if the compiler was invoked without the `rustup` proxy, as there was no direct setting for the appropriate library search path. Now `rust-lld` is built with an `rpath` entry for the directory containing `libLLVM.dylib`.
+
+If you'd like to help us out by testing future releases, you might consider using the beta (`rustup default beta`) and nightly (`rustup default nightly`) channels locally and in your CI. Please [report](https://github.com/rust-lang/rust/issues/new/choose) any bugs you might come across!
+
+### Contributors to 1.99.1
+
+Many people came together to create Rust 1.99.1. We couldn't have done it without all of you. [Thanks!](https://thanks.rust-lang.org/rust/1.99.1/)

@@ -1,233 +1,37 @@
-A tool for managing a wiki stored in a plain text file. 📖
+Calif frequently publishes our offensive research and work, but we otherwise don't draw much attention to the defensive work we do — assisting open source projects with remediation, patch generation, cryptographic improvements, and internal engineering projects we carry out for our clients.
 
-# Mull 📖
+Earlier this year, we reported some vulnerabilities, often along with suggested patches to OpenBSD. One traced back roughly [37 years to the original BSD sources](https://github.com/weiss/original-bsd/blame/master/sys/sys/shm.h#L28-L33), where a shared memory attachment counter was defined as a signed 16-bit short. Repeatedly forking a process with shared memory attachment records could push that counter past its maximum value of 32,767, causing it to wrap to a negative value. This integer overflow could lead to a use-after-free via a race condition; combined with a separate out-of-bounds write in the kernel, it allowed local privilege escalation to root. The issues were addressed in [errata 026](https://ftp.openbsd.org/pub/OpenBSD/patches/7.9/common/026_sysvipc.patch.sig) and [018](https://ftp.openbsd.org/pub/OpenBSD/patches/7.9/common/018_shmat.patch.sig), respectively.
 
-[![Build status](https://github.com/stepchowfun/mull/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/stepchowfun/mull/actions?query=branch%3Amain)
+## The exploit
 
-*Mull* is a tool for managing a wiki stored in a plain text file. It has a [Visual Studio Code](https://code.visualstudio.com/) / [Cursor](https://cursor.com/) extension which provides syntax highlighting, hover previews, completions, diagnostics, formatting, refactoring, etc.
+We managed to get local root in OpenBSD with [`KARL`](https://isopenbsdsecu.re/mitigations/karl/) / [`SMAP`](https://en.wikipedia.org/wiki/Supervisor_Mode_Access_Prevention) / [`SMEP`](https://edc.intel.com/content/www/us/en/design/products/platforms/processor-and-core-i3-n-series-datasheet-volume-1-of-2/001/intel-supervisor-mode-execution-protection-smep/) enabled without the use of an information disclosure vulnerability via the following path:
 
-[![Welcome to Mull.](https://raw.githubusercontent.com/stepchowfun/mull/main/screenshots/mull.png)](https://raw.githubusercontent.com/stepchowfun/mull/main/screenshots/mull.png)
+- Map 127 SysV shared memory segments, unmap them via munmap(), and fork 259 processes to wrap the shared memory attach count to -32,643. Perform heap grooming and layout, using metrics from sysctl(`KERN_MALLOCSTATS)` (such as `kb_total` and `kb_totalfree`) to track allocations and determine when new pages are allocated. Win the race condition using `IPC_RMID` in one process while attaching a new size-confused shared memory segment in a helper process. Align IP socket allocations and set `IP_MULTICAST_TTL` to a non-default value of 2 to allocate a persistent 16-byte [`struct ip_moptions`](https://github.com/openbsd/src/blob/1b90eb3a568a1476ae3aba0f237490961fc422a0/sys/netinet/ip_var.h#L164-L170). Its final word packs two 16-bit counters: `imo + 12 = imo_num_memberships | imo_max_memberships << 16`. Trigger the conditional `-1` out-of-bounds write to overwrite both the number of memberships and maximum memberships fields. `close()` the socket to traverse the group members, triggering [atomic decrements](https://github.com/openbsd/src/blob/1b90eb3a568a1476ae3aba0f237490961fc422a0/sys/netinet/in.c#L945-L984) that modify the PTE self-referential mapping twice, switching it from user to supervisor accessible mapping, and achieving kernel code execution by overwriting a predictable kernel pointer. Clean up shared memory accounting and restore the overwritten kernel pointer to obtain a root shell.
 
-A *wiki* is a text file with a `.mull` extension. It contains *pages* which link to each other, all in the same file. Here's a little wiki with 3 pages:
+That's the [short of the matter](https://github.com/openbsd/src/blob/1b90eb3a568a1476ae3aba0f237490961fc422a0/sys/sys/shm.h#L92-L99), the longer version is [more interesting](https://github.com/califio/publications/tree/main/MADBugs/openbsd/big-fish.c), including the history of the vulnerability, as a short `shm_nattch` can be traced back [~37 years ago](https://github.com/weiss/original-bsd/blame/master/sys/sys/shm.h#L28-L33), in the original BSD sources.
 
-```
-# Home
+Taking a step back, this vulnerability ended up getting code execution via a `write what where` primitive, where the `write` was caused by a [`TAILQ_REMOVE`](https://github.com/openbsd/src/blob/master/sys/sys/queue.h), the `what` was our userland memory mapping that was made supervisor mode accessible to bypass `SMAP`/`SMEP`, and the `where` was a predictable kernel pointer location.
 
-My go-to breakfast is [Pancakes] with fresh [Lemons].
+## Exploit mitigation
 
-# Lemons
+While OpenBSD's KARL relinks the kernel binary to randomize both function and data addresses, the kernel's memory allocators remain deterministic. Both the [boot-time allocator](https://github.com/openbsd/src/blob/1b90eb3a568a1476ae3aba0f237490961fc422a0/sys/uvm/uvm_addr.c#L701-L734) and the [best-fit allocator](https://github.com/openbsd/src/blob/1b90eb3a568a1476ae3aba0f237490961fc422a0/sys/uvm/uvm_init.c#L179-L190) lack base address randomization. Consequently, early boot allocations consistently land at predictable locations across boots on the same hardware. When these predictable structure allocations contain function pointers, they become ideal targets for exploitation. For instance, the exploit reliably targets the `lo0` and `enc0` `ioctl` handlers, overwriting one to gain control flow and using the other to restore the overwritten pointer.
 
-Great on [Pancakes].
+Aside from the aforementioned errata fixes, there's several other approaches that can be taken to either eliminate or reduce the likelihood of those avenues being used again.
 
-# Pancakes
+Firstly, we can implement safe-unlinking, a technique that checks doubly linked list invariants before performing the unlink memory writes. If the invariants are violated, then a suitable `abort()` or `panic()` is called, depending on if user mode or kernel mode, preventing memory corruption from occurring. An example implementation is [here](https://github.com/CalANDif/openbsd-src/commit/dc16d6afe2d897c5e2be8227f737c0d2ebdbfc86). [FreeBSD](https://github.com/freebsd/freebsd-src/blob/main/sys/sys/queue.h) and [NetBSD](https://github.com/NetBSD/src/blob/trunk/sys/sys/queue.h) have an implementation of safe-unlinking in their `sys/queue.h` implementation.
 
-- 1 cup of flour
-- 1 cup of milk
-- 1 egg
-- A squeeze of [Lemons]
-```
+Secondly, we can randomize the self-referential PTE map allocation address so that the targeted atomic decrement locations would not be possible. This is done by using a random byte (`.openbsd.randomdata`) and selecting a [PML4](https://wiki.osdev.org/X86_Page_Tables) slot (`320 + (random_byte & 127)`) at boot time, and installing the recursive entry at that location. The `PTE_BASE` definition becomes a runtime expression, yielding bases from `0xffffa00000000000` through `0xffffdf8000000000` at 512-GiB intervals. An example implementation is [here](https://github.com/CalANDif/openbsd-src/commit/89db398d53e6698a80eaf72f32d1a3e544d2e95f). In case randomization is not suitable, other options might suffice, such as marking the PTE as read-only, and changing CR0.WP during modification.
 
-Each page starts with a `# Title`, followed by the contents of the page. To link to a page, use square brackets like `[Lemons]`. When you type the opening `[`, autocomplete kicks in to help you find the page you're looking for.
+Thirdly, the kernel allocator can be made non-deterministic using two approaches; by [randomizing the base address](https://github.com/CalANDif/openbsd-src/commit/94c29e3432ad016ce34004d52594382a166ee707) where memory allocations occur at boot time, and additionally [randomizing the allocation order at run time](https://github.com/CalANDif/openbsd-src/commit/dd6cd7b9655b1a7fdfabfa97f82ead646e15333a). The base address randomization is effectively free as the gap it creates can still be used later on; while runtime randomization does incur some overhead during allocation - it may be possible that more in-depth allocator changes could alleviate this impact. Either approach would be sufficient to break the predictable pointer location without additional vulnerabilities, be it software or hardware.
 
-[![Autocomplete.](https://raw.githubusercontent.com/stepchowfun/mull/main/screenshots/completions.png)](https://raw.githubusercontent.com/stepchowfun/mull/main/screenshots/completions.png)
+Furthermore, there are existing and upcoming compiler features that can be used to mitigate against entire vulnerabilities, from [array bounds sanitizer](https://clang.llvm.org/docs/UndefinedBehaviorSanitizer.html) (a subset of Undefined Behaviour sanitizer) which can eliminate out of bounds fixed size array accesses. Calif has [suggested to FreeBSD](https://github.com/freebsd/freebsd-src/pull/2404) that the array bounds sanitizer may make a useful exploit mitigation that can be enabled in release builds, along with privately reporting 21 issues that the array bounds sanitizer would have caught; some with local privilege escalation security impact. An upcoming compiler feature that can be used to help mitigate against heap issues is [Alloc Tokens](https://clang.llvm.org/docs/AllocToken.html), which can be used to isolate pointer containing allocations from non-pointer allocations. This isolation can make overflows from the non-pointer containing allocation much more difficult to exploit by preventing pointer access, along with making vulnerability classes like Use-after-Free unable to use the opposite type of allocation as the replacement memory allocation.
 
-Every wiki starts with a `Home` page. Mull requires that every other page is *reachable* (directly or indirectly) by following links, starting from `Home`. This rule promotes a basic form of organization that doesn't involve any hierarchical structure. Pages serve the roles traditionally filled by files *and* directories.
+Since its inception, OpenBSD has consistently championed proactive security through source code auditing, the replacement of insecure APIs, advanced password hashing, cryptography, privilege separation, sandboxing, along with memory safety via [`ASLR`](https://en.wikipedia.org/wiki/Address_space_layout_randomization) and [`W^X`](https://en.wikipedia.org/wiki/W%5EX); frequently setting the standard for system and network hardening.
 
-Mull formats the wiki when you save the file (default), or when you explicitly request it. It chooses the ordering of the pages in the file based on the links between them, so you don't have to think about it. Linking to pages is the only way to organize them.
+By proactively hardening, and adapting new and existing mitigation options, we can often systematically neutralize entire classes of exploitation primitives; or at the very least, increase the attacker's cost (i.e. additional time investment, additional vulnerabilities needed to exploit an issue, find alternative avenues, etc). Investing in defensive improvements before vulnerabilities are actively targeted raises the bar for attackers, helping ensure robust protection and long-term resilience. In the age of AI-assisted vulnerability discovery, mitigating against entire vulnerability classes, combined with increasing attack complexity only becomes more critical.
 
-You can link to files like photos, spreadsheets, or anything else. Mull checks that the linked files actually exist, and you can preview them without leaving the editor.
+About Calif
 
-[![A file preview.](https://raw.githubusercontent.com/stepchowfun/mull/main/screenshots/file_preview.png)](https://raw.githubusercontent.com/stepchowfun/mull/main/screenshots/file_preview.png)
-
-Files go in a directory next to the wiki named after the wiki, with the `.mull` extension replaced with `_files`. For example, if the wiki is `my_wiki.mull`, the files go in `my_wiki_files`. If you have a file called `my_wiki_files/photos/beach.jpg`, you can link it with `[/photos/beach.jpg]`. You can also link to directories like `[/photos/]`.
-
-Autocomplete helps you enter the names of files and directories when linking to them. You can also drag-and-drop (while holding the `Shift` key) or paste files directly into the editor.
-
-Just as every page must be reachable from `Home`, every file in `<wiki>_files` (if it exists) must be linked to from the wiki. A link to a directory implicitly counts as linking to everything inside it. An empty directory needs a link of its own.
-
-A portal is a window into another page. It holds a copy of the page's contents, and Mull keeps them in sync. For example, if you have a page called `Pancakes`, you can open a portal to it from another page like this:
-
-```
-This is my favorite breakfast:
-
-::: [Pancakes] :::
-```
-
-When the wiki is formatted (e.g., on save), that line will be expanded into a copy of the page:
-
-```
-This is my favorite breakfast:
-
-::: [Pancakes]
-- 1 cup of flour
-- 1 cup of milk
-- 1 egg
-- A squeeze of [Lemons]
-:::
-```
-
-You can edit the page or any of its portals, and formatting will propagate your edits to the rest.
-
-Suppose you have a list that you want to keep sorted:
-
-```
-The contents of my pantry:
-
-- Garlic
-- Kosher salt
-- Miso
-- Olive oil
-- Rice
-```
-
-Mull can help with this; you just have to teach it about sorting. Create a file called `<wiki>_files/scripts/sort.sh` with the following contents:
-
-```
-#!/bin/sh
-sort "$@"
-```
-
-Make it executable with `chmod +x <wiki>_files/scripts/sort.sh`.
-
-Now you can put the list in a `sort` block:
-
-```
-The contents of my pantry:
-
-::: sort
-- Garlic
-- Kosher salt
-- Miso
-- Olive oil
-- Rice
-:::
-```
-
-Mull will then sort the list automatically whenever the wiki is formatted (e.g., on save). That sorting script accepts arguments, so you can, for example, sort in reverse order with `::: sort -r`.
-
-Using a script in a block counts as linking to it, so it doesn't need to be linked to from the wiki like other files in `<wiki>_files`. An unused script still needs a link (e.g., `[/scripts/sort.sh]`) somewhere in the wiki.
-
-To use a special symbol like `[` or `]` literally, put a backslash before it, like `\[`. You can also use backticks to denote verbatim text like ``this``, as in Markdown. Fenced code blocks are supported too, with syntax highlighting for common languages.
-
-```
-# Home
-
-I'm learning Python, currently working on a [Dice game].
-
-# Dice game
-
-```python
-import random
-
-for turn in range(3):
-    roll = random.randint(1, 6)
-    print(f"Roll {turn + 1}: {roll}")
-
-print("Thanks for playing!")
-```
-```
-
-No escaping is necessary inside page titles or code.
-
-## Keyboard shortcuts
-
-These common keyboard shortcuts are helpful when navigating and editing a wiki:
-
-| Action | macOS | Windows |
-| --- | --- | --- |
-| Jump to a page from a link | `F12` or `Command + click` | `F12` or `Control + click` |
-| Jump to links to a page (i.e., backlinks) | `Shift + F12` | `Shift + F12` |
-| Jump back to the previously visited page | `Command + [` | `Alt + Left` |
-| Jump forward to the next visited page | `Command + ]` | `Alt + Right` |
-| Jump to the start of the current page | `Command + Up` | `Control + Home` |
-| Jump to the end of the current page | `Command + Down` | `Control + End` |
-| Jump to the next error | `F8` | `F8` |
-| Jump to the previous error | `Shift + F8` | `Shift + F8` |
-| Find a page | `Command + Shift + O` | `Control + Shift + O` |
-| Code actions (e.g., create a missing page) | `Command + .` | `Control + .` |
-| Rename a page | `F2` | `F2` |
-| Format the wiki | `Shift + Option + F` | `Shift + Alt + F` |
-
-Most of these keyboard shortcuts are standard in Visual Studio Code and Cursor, so they may be familiar to you already. You can remap them.
-
-## Usage
-
-Once Mull is [installed](https://github.com/stepchowfun/mull#installation-instructions) for Visual Studio Code or Cursor, you can run it by opening a `.mull` file in the editor.
-
-You can also run Mull from the command line (e.g., in a CI job) as follows:
-
-```
-mull check --path wiki.mull
-```
-
-Here are the supported command-line options:
-
-```
-Usage: mull [COMMAND]
-
-Commands:
-  check            Check that a wiki is valid and formatted, with its scripts run
-  format           Format a wiki, running its scripts (default)
-  page             Print the content of a page in a wiki
-  language-server  Start the language server (editors use this)
-  help             Print this message or the help of the given subcommand(s)
-
-Options:
-  -v, --version  Print version
-  -h, --help     Print help
-```
-
-To use Mull, you must install the binary and optionally the Visual Studio Code / Cursor extension. The binary does all the work and can be used by itself from the command line. The IDE extensions use the binary to provide a rich wiki editing experience.
-
-### Installation on macOS or Linux (AArch64 or x86-64)
-
-If you're running macOS or Linux (AArch64 or x86-64), you can install Mull with this command:
-
-```
-curl https://raw.githubusercontent.com/stepchowfun/mull/main/install.sh -LSfs | sh
-```
-
-It first installs the binary, then it installs the extension for Visual Studio Code and/or Cursor.
-
-The same command can be used again to update to the latest version.
-
-The installation script supports the following optional environment variables:
-
-- VERSION=x.y.z (defaults to the latest version)
-- PREFIX=/path/to/install (defaults to /usr/local/bin)
-
-For example, the following will install the binary into the working directory:
-
-```
-curl https://raw.githubusercontent.com/stepchowfun/mull/main/install.sh -LSfs | PREFIX=. sh
-```
-
-Note that if you change the installation path, you may also need to change the `mull.executablePath` accordingly in Visual Studio Code or Cursor.
-
-If you prefer not to use this installation method, you can download the binary from the [latest release](https://github.com/stepchowfun/mull/releases/latest), make it executable (e.g., with `chmod`), and place it in some directory in your [`PATH`](https://en.wikipedia.org/wiki/PATH_(variable)) (e.g., `/usr/local/bin`). You can then follow the instructions [below](https://github.com/stepchowfun/mull#installing-the-visual-studio-code--cursor-extension) to install the Visual Studio Code / Cursor extension.
-
-If you're running Windows (AArch64 or x86-64), download the binary from the [latest release](https://github.com/stepchowfun/mull/releases/latest) and rename it to `mull` (or `mull.exe` if you have file extensions visible). Create a directory called `Mull` in your `%PROGRAMFILES%` directory (e.g., `C:\Program Files\Mull`), and place the renamed binary in there. Then, in the "Advanced" tab of the "System Properties" section of Control Panel, click on "Environment Variables..." and add the full path to the new `Mull` directory to the `PATH` variable under "System variables". Note that the `Program Files` directory might have a different name if Windows is configured for a language other than English.
-
-To update an existing installation, simply replace the existing binary.
-
-If you have [Cargo](https://doc.rust-lang.org/cargo/), you can install Mull as follows:
-
-```
-cargo install mull
-```
-
-You can run that command with `--force` to update an existing installation.
-
-### Installing the Visual Studio Code / Cursor extension
-
-First, make sure you have [Visual Studio Code](https://code.visualstudio.com/) or [Cursor](https://cursor.com/) installed.
-
-To install the Mull extension, download the `mull.vsix` file from the [latest release](https://github.com/stepchowfun/mull/releases/latest) and install it via the "Install from VSIX..." option in the `...` menu at the top of the Extensions view of the Primary Side Bar.
-
-Note that the macOS / Linux installation command will install the extension automatically, so you can skip this section if you use that installation method.
-
-To update an existing installation, simply re-install it.
-
-## About
-
-A tool for managing a wiki stored in a plain text file. 📖
+We push offensive security research to its limits, understand
+                  what is becoming possible with AI, and use those insights to help
+                  our customers defend themselves.

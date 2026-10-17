@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-17T03:27:47Z",
+  "updated": "2026-10-17T10:19:30Z",
   "items": [
     {
       "id": "devto-4821943",
@@ -194,12 +194,24 @@
       "color": "#3B49DF"
     },
     {
+      "id": "devto-4859158",
+      "title": "What I Actually Learn When I Build With AI",
+      "desc": "By Jessica Doering | 7 min read",
+      "tag": "tutorial",
+      "published": "2026-10-16T01:06:09Z",
+      "order": 17,
+      "url": "https://dev.to/sizzlebop/what-i-actually-learn-when-i-build-with-ai-1074",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F2atagf3xnyj2fwx6qtho.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAAIBAwT/xAAVAQEBAAAAAAAAAAAAAAAAAAAAAf/aAAwDAQACEAMQAAAByCizY6r/AP/EABsQAAMBAAMBAAAAAAAAAAAAAAECEQASITJB/9oACAEBAAEFAuXSyfVmAu8lVDZxD//EABURAQEAAAAAAAAAAAAAAAAAAAAR/9oACAEDAQE/AUf/xAAVEQEBAAAAAAAAAAAAAAAAAAAAEf/aAAgBAgEBPwFX/8QAFhABAQEAAAAAAAAAAAAAAAAAECFB/9oACAEBAAY/Amun/8QAHRABAAICAgMAAAAAAAAAAAAAAQARITFBYVGBkf/aAAgBAQABPyFshXEQtt7jblMq/EwDzKo7gmx7mqeJ/9oADAMBAAIAAwAAABAEz//EABcRAQADAAAAAAAAAAAAAAAAAAABESH/2gAIAQMBAT8QRTX/xAAXEQADAQAAAAAAAAAAAAAAAAAAAREh/9oACAECAQE/EGPEP//EABwQAQEAAgMBAQAAAAAAAAAAAAERADEhQWFRgf/aAAgBAQABPxBEsCDu3KMfYWsewtqeZwKTrBpGd/zOQFfDJl3Q7eWWBG7Of//Z",
+      "color": "#3B49DF"
+    },
+    {
       "id": "devto-4845471",
       "title": "I argued with AI until it apologized for calling my course \"AI Slop\"",
       "desc": "By EffessDev | 3 min read",
       "tag": "tutorial",
       "published": "2026-10-14T11:31:46Z",
-      "order": 17,
+      "order": 18,
       "url": "https://dev.to/effessdev/i-argued-with-ai-until-it-apologized-for-calling-my-course-ai-slop-350d",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fsv9mqip5csydm4a6snax.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAwEAAv/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAENKvRKdf/EABoQAAICAwAAAAAAAAAAAAAAAAABAhARMUH/2gAIAQEAAQUC4qZgWhyP/8QAFREBAQAAAAAAAAAAAAAAAAAAARD/2gAIAQMBAT8BZ//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABYQAAMAAAAAAAAAAAAAAAAAAAAgMf/aAAgBAQAGPwJ4f//EABsQAAICAwEAAAAAAAAAAAAAAAABESEQQVFh/9oACAEBAAE/IWw/sI0LwpNlAlUvE//aAAwDAQACAAMAAAAQ3K//xAAWEQEBAQAAAAAAAAAAAAAAAAABABH/2gAIAQMBAT8QekJl/8QAFxEAAwEAAAAAAAAAAAAAAAAAAAEhEf/aAAgBAgEBPxDaNw//xAAbEAEBAQEBAQEBAAAAAAAAAAABEQAhMWFBUf/aAAgBAQABPxAOUVmjB4P5qJsGWT3I9/BmnRPN0e8+4FUZiVCL93//2Q==",
@@ -211,7 +223,7 @@
       "desc": "By Debashish Ghosal | 6 min read",
       "tag": "tutorial",
       "published": "2026-10-12T05:46:00Z",
-      "order": 18,
+      "order": 19,
       "url": "https://dev.to/debashish_ghosal/one-rm-f-silently-disabled-my-crash-detection-4khl",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Frbltpi5u7jl4xusaf8ir.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwEA/8QAFgEBAQEAAAAAAAAAAAAAAAAAAQAD/9oADAMBAAIQAxAAAAEsd0Ug2P/EABgQAAMBAQAAAAAAAAAAAAAAAAAQEQEh/9oACAEBAAEFAsXFSlKf/8QAFREBAQAAAAAAAAAAAAAAAAAAABH/2gAIAQMBAT8BV//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABQQAQAAAAAAAAAAAAAAAAAAADD/2gAIAQEABj8CD//EABoQAQEBAAMBAAAAAAAAAAAAAAEAESFBUWH/2gAIAQEAAT8hw93Dr5Bj7IQ8h5a2Xf/aAAwDAQACAAMAAAAQBt//xAAYEQEBAAMAAAAAAAAAAAAAAAABABFBUf/aAAgBAwEBPxAR1Ycv/8QAFREBAQAAAAAAAAAAAAAAAAAAABH/2gAIAQIBAT8Qqv/EABwQAAIDAAMBAAAAAAAAAAAAAAERACExQXGRgf/aAAgBAQABPxAbB9CAWgA0YyZ7OLaLy42DjK+PYbDXUMJzyf/Z",
@@ -223,22 +235,10 @@
       "desc": "By Randal L. Schwartz | 16 min read",
       "tag": "tutorial",
       "published": "2026-10-03T18:27:12Z",
-      "order": 19,
+      "order": 20,
       "url": "https://dev.to/gde/nudging-with-questions-why-telling-your-ai-what-to-fix-triggers-an-apology-death-spiral-and-how-5gm4",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fq4n1nl9uebtqthv7tj99.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAQIDBP/EABYBAQEBAAAAAAAAAAAAAAAAAAEAAv/aAAwDAQACEAMQAAABAz2dUyl//8QAGxAAAgIDAQAAAAAAAAAAAAAAAQIAEQMSISL/2gAIAQEAAQUCPFBlQzIfO1Kx4GNf/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAGRAAAQUAAAAAAAAAAAAAAAAAAQAQESAh/9oACAEBAAY/ApWmgD//xAAcEAACAgIDAAAAAAAAAAAAAAAAAREhEDFBUZH/2gAIAQEAAT8h2iF34FlItaga79kuEe8aNs//2gAMAwEAAgADAAAAELZ//8QAFhEAAwAAAAAAAAAAAAAAAAAAAAER/9oACAEDAQE/EIiI/8QAFhEBAQEAAAAAAAAAAAAAAAAAAQAR/9oACAECAQE/EHYb/8QAHBAAAgIDAQEAAAAAAAAAAAAAAREAITFBYVFx/9oACAEBAAE/EMhIcuLEC7ADAlUCC7zCLqr7ELwMATSX1eIZaCKA4oT5Nmf/2Q==",
-      "color": "#3B49DF"
-    },
-    {
-      "id": "devto-4840194",
-      "title": "Solodesk-Ai",
-      "desc": "By Shaurya Tiwari | 4 min read",
-      "tag": "tutorial",
-      "published": "2026-10-12T20:49:24Z",
-      "order": 20,
-      "url": "https://dev.to/dr5t/solodesk-ai-lpe",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fy11o4ykev6b1y23stmfi.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAABAED/8QAFgEBAQEAAAAAAAAAAAAAAAAAAgAB/9oADAMBAAIQAxAAAAESzpYhEY7f/8QAGBABAAMBAAAAAAAAAAAAAAAAAAECEDH/2gAIAQEAAQUCUX4hG//EABURAQEAAAAAAAAAAAAAAAAAAAAR/9oACAEDAQE/AVf/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAWEAADAAAAAAAAAAAAAAAAAAAAIFH/2gAIAQEABj8CI/8A/8QAGxAAAwACAwAAAAAAAAAAAAAAAAERITEQQYH/2gAIAQEAAT8hWxHN+iXXY+DqPBcDyf/aAAwDAQACAAMAAAAQ3J//xAAWEQEBAQAAAAAAAAAAAAAAAAAAETH/2gAIAQMBAT8QrT//xAAXEQADAQAAAAAAAAAAAAAAAAAAAREx/9oACAECAQE/ELEaj//EABsQAQACAwEBAAAAAAAAAAAAAAEAESExQVFx/9oACAEBAAE/EM/UJmFx6gqm9EMzeKkAr5DA3a3eoizTm+x9Az//2Q==",
       "color": "#3B49DF"
     },
     {
@@ -254,12 +254,24 @@
       "color": "#3B49DF"
     },
     {
+      "id": "devto-4840194",
+      "title": "Solodesk-Ai",
+      "desc": "By Shaurya Tiwari | 4 min read",
+      "tag": "tutorial",
+      "published": "2026-10-12T20:49:24Z",
+      "order": 22,
+      "url": "https://dev.to/dr5t/solodesk-ai-lpe",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fy11o4ykev6b1y23stmfi.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAABAED/8QAFgEBAQEAAAAAAAAAAAAAAAAAAgAB/9oADAMBAAIQAxAAAAESzpYhEY7f/8QAGBABAAMBAAAAAAAAAAAAAAAAAAECEDH/2gAIAQEAAQUCUX4hG//EABURAQEAAAAAAAAAAAAAAAAAAAAR/9oACAEDAQE/AVf/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAWEAADAAAAAAAAAAAAAAAAAAAAIFH/2gAIAQEABj8CI/8A/8QAGxAAAwACAwAAAAAAAAAAAAAAAAERITEQQYH/2gAIAQEAAT8hWxHN+iXXY+DqPBcDyf/aAAwDAQACAAMAAAAQ3J//xAAWEQEBAQAAAAAAAAAAAAAAAAAAETH/2gAIAQMBAT8QrT//xAAXEQADAQAAAAAAAAAAAAAAAAAAAREx/9oACAECAQE/ELEaj//EABsQAQACAwEBAAAAAAAAAAAAAAEAESExQVFx/9oACAEBAAE/EM/UJmFx6gqm9EMzeKkAr5DA3a3eoizTm+x9Az//2Q==",
+      "color": "#3B49DF"
+    },
+    {
       "id": "devto-4833419",
       "title": "I was chasing the job market. One comment on DEV.to made me rethink everything",
       "desc": "By EffessDev | 3 min read",
       "tag": "tutorial",
       "published": "2026-10-12T14:44:25Z",
-      "order": 22,
+      "order": 23,
       "url": "https://dev.to/effessdev/i-was-chasing-the-job-market-one-comment-on-devto-made-me-rethink-everything-4h20",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fcphbk52yjayt0h7tak46.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwIE/8QAFgEBAQEAAAAAAAAAAAAAAAAAAAEC/9oADAMBAAIQAxAAAAEGFNy86Qf/xAAXEAEBAQEAAAAAAAAAAAAAAAABABEh/9oACAEBAAEFAgsAkty3o27f/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFREBAQAAAAAAAAAAAAAAAAAAABH/2gAIAQIBAT8Bqv/EABgQAAMBAQAAAAAAAAAAAAAAAAAQETEB/9oACAEBAAY/AtKtUIdP/8QAGhAAAwADAQAAAAAAAAAAAAAAAAERITFRQf/aAAgBAQABPyHshY5JVVEmX8GCxDZJvdjaODR//9oADAMBAAIAAwAAABAd7//EABgRAAMBAQAAAAAAAAAAAAAAAAABESEx/9oACAEDAQE/EJOi1w//xAAXEQADAQAAAAAAAAAAAAAAAAAAAREh/9oACAECAQE/EKWDg//EABsQAQEBAQEAAwAAAAAAAAAAAAERACFhMUFx/9oACAEBAAE/EBE6P3AE2LDuQJCXEmcPdZDoUhM9mJrx+stlgKHkyikX5ct3/9k=",
@@ -271,7 +283,7 @@
       "desc": "By Randal L. Schwartz | 15 min read",
       "tag": "tutorial",
       "published": "2026-10-10T01:15:07Z",
-      "order": 23,
+      "order": 24,
       "url": "https://dev.to/gde/surviving-the-200k-token-lobotomy-how-unix-initd-and-memento-made-my-ai-coding-agent-immune-to-2f74",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fg7swfw5prf9o7zrcrnkn.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAQMCBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHnoNrKuT//xAAZEAEAAgMAAAAAAAAAAAAAAAABABAREkH/2gAIAQEAAQUCmkwFcW//xAAVEQEBAAAAAAAAAAAAAAAAAAAAEf/aAAgBAwEBPwGI/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAGBAAAgMAAAAAAAAAAAAAAAAAABARIFH/2gAIAQEABj8CW1g//8QAGRABAAMBAQAAAAAAAAAAAAAAAQARITGB/9oACAEBAAE/ITTjLVp6yk5aJRxhmORnrcF7c104T//aAAwDAQACAAMAAAAQpH//xAAVEQEBAAAAAAAAAAAAAAAAAAAAEf/aAAgBAwEBPxC1v//EABURAQEAAAAAAAAAAAAAAAAAAAAR/9oACAECAQE/EKr/xAAbEAEAAgMBAQAAAAAAAAAAAAABABEhMUGBUf/aAAgBAQABPxAZFD689lCAOiVAgtMjqmagR6G/YmhItkor1ncPhklauNNhDBP/2Q==",
@@ -283,22 +295,10 @@
       "desc": "By Sergei Parfenov | 4 min read",
       "tag": "tutorial",
       "published": "2026-10-07T16:52:57Z",
-      "order": 24,
+      "order": 25,
       "url": "https://dev.to/p0rt/what-agent-builders-can-borrow-from-openais-math-research-53mn",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto/https%3A%2F%2Fsergei-parfenov.com%2Fassets%2Fcovers%2Fopenai-math-symptomato.webp",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwQB/8QAFQEBAQAAAAAAAAAAAAAAAAAAAQL/2gAMAwEAAhADEAAAAZlBqKA0yv/EABgQAAMBAQAAAAAAAAAAAAAAAAABAhEh/9oACAEBAAEFAiZKjlTgnhN8qmaz/8QAFREBAQAAAAAAAAAAAAAAAAAAAAL/2gAIAQMBAT8BQ//EABURAQEAAAAAAAAAAAAAAAAAAAAB/9oACAECAQE/AVf/xAAaEAABBQEAAAAAAAAAAAAAAAAxAAECEBEg/9oACAEBAAY/Asi6PAv/xAAbEAADAAMBAQAAAAAAAAAAAAAAAREhMVFBkf/aAAgBAQABPyF5dM4K00Yj5EZSsa+Bq1XpNfYWe9I//9oADAMBAAIAAwAAABDYT//EABcRAAMBAAAAAAAAAAAAAAAAAAABESH/2gAIAQMBAT8QmE1n/8QAFxEBAQEBAAAAAAAAAAAAAAAAAQARMf/aAAgBAgEBPxA7By//xAAdEAEAAgMBAAMAAAAAAAAAAAABABEhQVExYaHR/9oACAEBAAE/ECGTojB2BrdWj34sgyiUJq/K5EywnHIjpbaDslSvWGma5EJN5fuKCIbR3r9n/9k=",
-      "color": "#3B49DF"
-    },
-    {
-      "id": "devto-4800180",
-      "title": "Does Your Favorite AI Tool's Cache Hit Mean Your Project's Uniqueness Miss?",
-      "desc": "By Fayaz | 4 min read",
-      "tag": "tutorial",
-      "published": "2026-10-05T07:53:32Z",
-      "order": 25,
-      "url": "https://dev.to/fm/does-your-favorite-ai-toolss-cache-hit-mean-your-projects-uniqueness-miss-dk3",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Frznvzqwg10cjgb3qx4pf.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwIE/8QAFQEBAQAAAAAAAAAAAAAAAAAAAgH/2gAMAwEAAhADEAAAAc7EtKQQsf/EABkQAQEBAQEBAAAAAAAAAAAAAAECAyESEf/aAAgBAQABBQKMvROXA5YgvT75dKCtKo//xAAYEQADAQEAAAAAAAAAAAAAAAAAAQIRMf/aAAgBAwEBPwGsXRTJ/8QAGBEAAgMAAAAAAAAAAAAAAAAAAAERIjH/2gAIAQIBAT8BlvCx/8QAGRAAAwADAAAAAAAAAAAAAAAAAAERECFR/9oACAEBAAY/ArmnDTIRs//EABwQAAICAwEBAAAAAAAAAAAAAAABESExQWFxof/aAAgBAQABPyFibxPwZBy74P0sc9EYCpxjqsqWYIAdGCDw/9oADAMBAAIAAwAAABAvf//EABYRAQEBAAAAAAAAAAAAAAAAAAEAIf/aAAgBAwEBPxAnVaF//8QAFxEBAQEBAAAAAAAAAAAAAAAAAQARQf/aAAgBAgEBPxAXd6b/xAAeEAEBAAICAgMAAAAAAAAAAAABEQAhMVFBkWGB4f/aAAgBAQABPxB+Qo0fZxUsgQib/MXZqohxRmb7068d+8e6g6EAyqB0gZ8C5oTicF946EtqAM//2Q==",
       "color": "#3B49DF"
     },
     {

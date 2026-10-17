@@ -1,162 +1,51 @@
-This is one of a three-part mini series about how I’m using modern C as of late 2026.
+I'll be radically honest here - I never really got the idea of "Test Driven Development". I'm much more of a "telnet into production and damn the consequences" kind of guy. Look, it's much more fun and my cardiologist recommends severe shocks every now and again.
 
-Before C23, I was [taken in](https://www.youtube.com/watch?v=443UNeGrFoM) by *How I Program C* for years and years, and would even feel guilty for choosing C99 instead of `-ansi -pedantic`. But holy crap man I’m done being a doomsday prepper! These days I maintain a large-enough project with enough users where I could stand less foot-shooting. (I’ve also got bills to pay.)
+The essence of unit testing is pretty simple:
 
-So here’s three modern C conventions which started to rise naturally from adding `-std=c23` to my zig build:
+1. Feed a function some data
+2. See how it responds
 
-## 1. Unused? Maybe. (Yes)
+Send it good data and if it returns "true" the test passes. Send it bad data and make sure it returns false. Easy peasy lemon squeezy.
 
-Our first convention is centered around `[[nodiscard]]`. If I draw an app window or panel I require the caller to interrogate the rect of the thing that was just rendered:
+As part of my [NLnet funded work on ActivityBot](https://shkspr.mobi/blog/2026/08/activitybot-is-the-recipient-of-an-nlnet-grant/), I'm writing some proper tests for my bot framework. I am hopeful that some of them will be useful to other projects doing similar things.
 
-```c
-[[nodiscard]] rect_t draw_screen(/* ... */) {
-    rect_t screen_r = { };
-    // Draw stuff
-    // ...
-    return screen_r;
-}
-```
+There are four major classes of tests - here are the problems I've found while writing them.
 
-It’s a genuine business logic bug if the caller doesn’t capture the rectangle for later processing. Therefore `[[nodiscard]]` has been such a godsend for fixing bugs… Except there’s a choice few instances where I will draw something with *no real use* for the resulting rect. I’d rather ignore the return value:
+A basic test might be how to validate that an ActivityPub username is valid. Typically it would be something like `@edent@mastodon.social` - what assumptions do we make with that? It starts with an `@` and has another `@` somewhere in it, dividing into two parts, the user and the server.  The server has to be a valid domain name - but that can include non-ASCII Internationalised Domain Names and Emoji domains.
 
-```c
-enum screen_opt popup_options = /* ... */ ;
-draw_screen(popup_options, /* ... */); // ERROR: damn you [[nodiscard]]
-```
+What about the user part? Is it just A-Z and 0-9? Can it have dots? What about apostrophes like an email address?
 
-Clang will error out here. I could maybe capture the var and never use it but…
+Basically, how easy is it find the specifications for all the various component parts of ActivityPub? Not very!
 
-```c
-rect_t rect = draw_screen(/* ... */); // ERROR: unused variable (I have `-Werror` enabled)
-```
+What does a [WebFinger response](https://www.rfc-editor.org/info/rfc7033/) look like? Which parts are mandatory and what values can they contain?
 
-Pre-C23 one might solve this through an `UNUSED()` macro:
+With any message that your project generates, how can you be sure that other ActivityPub servers will understand it?
 
-```c
-#ifndef UNUSED
-#define UNUSED(x) (void)(x)
-#endif
+Similarly, when we receive a follow message from an external server, what should it look like?
 
-rect_t rect = draw_screen(/* ... */);
-UNUSED(rect); // Silences the compiler, but now I'm sad.
-```
+There are some [JSON Schemas](https://github.com/steve-bate/fediverse-jsonschema) which can be used to validate some type of messages.
 
-But now with C23 we can delete the macro in favor of the native `[[maybe_unused]]`:
+But, again, there are *many* scattered specifications.
 
-```c
-[[maybe_unused]] rect_t rect = draw_screen(...); // OK
-```
+As I've written about before, [HTTP Signatures are difficult](https://shkspr.mobi/blog/2026/09/a-reasonably-practical-guide-to-validating-rfc-9421-http-signatures-for-activitypub-in-php/). There are two main problems. The first is verifying signatures.
 
-Phew I feel better. I’ve also noticed this is happening all over the place: lots of different routines returning different types that are marked with `[[nodiscard]]`. So for all the unused cases why not just go for:
+In order to do that, you need to gather a bunch of signatures and then find a way to replay them into the test. So I'm in the process of saving signatures which I can then share with others.
 
-```c
-[[maybe_unused]] auto _ = foo(); // A new pattern emerges
-```
+The second problem is *generating* signatures.  Sure, you can run tests on the signatures - but there's only one *real* way to test whether they're acceptable…
 
-Bonus: For any macro fans out there a fellow indie dev (Zardium) offered an additional improvement. From our chat server:
+Passing tests means nothing if you can't communicate with others and they can't communicate with you.
 
-> Zardium: #define _ [[maybe_unused]] auto CONCAT_MACRO(zz,**COUNTER**)
+Some tests are easier than others. Sending a signed request should be easy and repeatable. But receiving messages isn't easily automated. It requires being able to control an external server and asking that to send messages.
 
-> Abner: ahh, unique varname. nice one
+With the [Mastodon API](https://docs.joinmastodon.org/client/intro/) it is possible to make requests which will interact with your server - but only if it is a *public* server.
 
-> Zardium: you could take the auto out if you don’t want it to look so weird. then it acts exactly like the _ in other languages, where it can be redefined
+I'm putting [all my tests online](https://gitlab.com/edent/activity-bot/-/tree/main/tests?ref_type=heads). I'm also sharing a [collection of messages and signatures](https://gitlab.com/edent/activity-bot/-/tree/main/tests/headers?ref_type=heads) which you can use in your tests.
 
-> Abner: Yep totally. Although here I was celebrating my removal of a macro… XD
+I'd love to know if you find them useful.
 
-## 2. More Perfect Unions
+## 3 thoughts on “Some quick thoughts on Unit Testing ActivityPub”
 
-I’ve been cheated and lied to: designated initializers DO NOT clear my struct to zero and I can’t even trust `{0}` anymore. (Talk about a betrayal.) The problem is I’ll often have data types like this contrived timestamp:
-
-```c
-typedef struct {
-    Type type;
-    char buf[MAX];
-    union {
-        time_t time;
-        float dt;
-        date_t date;
-    };
-} stamp_t;
-```
-
-And if I partially initialize one:
-
-```c
-stamp_t stamp = { .type = STAMP_TYPE_BLA_BLA };
-```
-
-While it does mean we successfully zeroed out `buf` (thanks to [empty initialization](https://en.cppreference.com/c/language/initialization#Empty_initialization)), those union members are just a different beast. It also doesn’t matter if we go with `stamp_t stamp = {0}` instead. My dear reader: I’ve made the costly mistake of assuming `date` would clear to zero!
-
-As I Spongebob-panicked in public, Lobsters member [accelbread](https://lobste.rs/~accelbread) offered a sage revelation:
-
-> accelbread: It used to be that GCC would fully zero the union anyways, and clang would only zero the time_t, though around a year ago they swapped behaviors iirc. Either way, standard only requires the time_t be zeroed and not whole union. GCC has a flag to always zero whole union. Also C23 initialization always inits whole union
-
-Wait WHAT? clang and gcc SWAPPED what now? I won’t investigate further. Everything about this is *dangerous af* unless we hug C23 tightly and never let go:
-
-```c
-stamp_t stamp = { }; // Fully clears to zero (C23)
-stamp.type = STAMP_TYPE_BLA_BLA;
-```
-
-Accelbread went on to say two more things:
-
-1. “Note the C23 zero init whole thing is nothing in the brackets, not 0 in brackets; { 0 } does same thing as before C23”
-2. “Also if you control union layout, putting largest member first is safest”
-
-Yessir.
-
-## 3. Enums In C Were Magic (And I Don’t Like It)
-
-If I want to customize some dialog box I’ll use bit flags:
-
-```c
-enum {
-    OPT_AUTOSCROLL = (1 << 0),
-    OPT_NOCURSOR   = (1 << 1),
-    OPT_CENTERED   = (1 << 2),
-    OPT_NOCLOSE    = (1 << 3),
-    // ...
-};
-
-[[nodiscard]] bool draw_warning(const char* msg, int opt);
-```
-
-Even if we disagree with this approach lots of relevant libraries or projects do it:
-
-```c
-_ = draw_warning("you done messed up A-A-RON", OPT_CENTERED | OPT_NOCLOSE);
-```
-
-Of course, erroneous bit shifting will land anyone into trouble and yield comical numbers. Thankfully C enums are a plain `int` underneath so the compiler will warn us if we defined a bad constant inside the enum that won’t fit.
-
-I’m kidding. Sigh. Well, I’m growing fearful of sage revelations but this one comes from [Modern C](https://gustedt.gitlabpages.inria.fr/modern-c/) by Jens Gustedt:
-
-> Jens: If enumeration constants do not fit into signed int, if possible, the enumeration type is adjusted such that it can store all enumeration constants.
-
-Noooooo!
-
-> Jens: The property that an an enumeration type is adjusted such that it fits all its constants could have surprising effects
-
-*sobs*
-
-> Jens: So, it is preferable to specify the underlying integer type explicitly
-
-THERE IS HOPE?
-
-```c
-enum options : int {
-    OPT_AUTOSCROLL = (1 << 0),
-    OPT_NOCURSOR   = (1 << 1),
-    OPT_CENTERED   = (1 << 2),
-    OPT_NOCLOSE    = (1 << 3),
-    // ...
-};
-```
-
-It compiles! We shoot. We score. We stick with C23.
-
-## Epilogue
-
-In part two of our mini series I’ll discuss three more conventions that I’ve fleshed out thanks to modern C: starting with safer macro usage (forgive me Zig folks.)
-
-*P.S. If you want to shape this discussion [maybe join](https://handmadecities.com/chat) the Handmade Cities server!*
+1. ![](https://shkspr.mobi/blog/wp-content/uploads/webmention/avatars/bsky.app/f0efd35978092e16db6d49e9873e0d33.jpg?d=initials&name=gabboman+the+wafrn+dev) ![](https://shkspr.mobi/favicons/?domain=bsky.app) [gabboman the wafrn dev](https://bsky.app/profile/gabboman.xyz/post/3mxjhibd3oc2t) Sometimes the only logical thing I was able to make is just connect my dev laptop with a reverse proxy and a debugger [Reply](https://shkspr.mobi/blog/2026/10/some-thoughts-on-unit-testing-activitypub/?replytocom=479008#respond) | [Reply to original comment on bsky.app](https://bsky.app/profile/gabboman.xyz/post/3mxjhibd3oc2t) [2026-10-10 13:11](https://shkspr.mobi/blog/2026/10/some-thoughts-on-unit-testing-activitypub/#comment-479008)
+2. ![](https://shkspr.mobi/blog/wp-content/uploads/webmention/avatars/social.chrisco.me/05726dc39aa49957c2a30e13b4ccc183.jpg?d=initials&name=michael) ![](https://shkspr.mobi/favicons/?domain=social.chrisco.me) [michael](https://social.chrisco.me/@michael/statuses/01M4M9VFG2BHNQ616AN34Y5JTK) [@Edent](https://mastodon.social/@Edent) Ive heard the term scaffold development locally. Its when you create the thing as small as possible and then create "good" tests around the thing you created. It works out if you dont get too crazy with it. I like having more selenium tests than unit tests myself because functionality can at least be checked out...but I recognize I dont make like medical devices or anything that might hurt someone if it doesnt work. They will just get annoyed at a red bod on the screen haha. [Reply](https://shkspr.mobi/blog/2026/10/some-thoughts-on-unit-testing-activitypub/?replytocom=479025#respond) | [Reply to original comment on social.chrisco.me](https://social.chrisco.me/@michael/statuses/01M4M9VFG2BHNQ616AN34Y5JTK) [2026-10-11 02:39](https://shkspr.mobi/blog/2026/10/some-thoughts-on-unit-testing-activitypub/#comment-479025)
+3. ![](https://shkspr.mobi/blog/wp-content/uploads/webmention/avatars/m.mtlynch.io/b72f0662c618af93aec20981299576d8.jpg?d=initials&name=Michael+Lynch) ![](https://shkspr.mobi/favicons/?domain=m.mtlynch.io) [Michael Lynch](https://m.mtlynch.io/@michael/117428770754736085) [@Edent](https://mastodon.social/@Edent) Two suggestions. (1) Setting up GitLab CI (or any CI) makes the tests drastically more valuable because you (and contributors) know for sure that tests succeed. (2) Inlining the JSON files makes the tests easier to read. They're small enough that it's not much clutter, and tests are hard to understand when the reader has to jump back and forth between files. [Reply](https://shkspr.mobi/blog/2026/10/some-thoughts-on-unit-testing-activitypub/?replytocom=479158#respond) | [Reply to original comment on m.mtlynch.io](https://m.mtlynch.io/@michael/117428770754736085) [2026-10-12 17:00](https://shkspr.mobi/blog/2026/10/some-thoughts-on-unit-testing-activitypub/#comment-479158)
+4. [More comments on Mastodon](https://mastodon.social/@Edent/117416401539960330).

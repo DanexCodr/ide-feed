@@ -1,147 +1,34 @@
-Forgejo [version 17.0](https://forgejo.org/download/) was released on 15 October 2026. Forgejo is a lightweight, community-developed, self-hosted platform for code collaboration.
+STAC recently performed STAC-M3™ benchmark audits on a stack featuring the L tick database 1.0 from L Labs PBC running on a single Oxide OxVM cloud virtual machine with 128 vCPUs and 1.25 TiB of RAM, with 5 x 3.44 TB Oxide Local NVMe disks.
 
-This article contains a selection of the changes that were introduced. A complete list of changes is available [in the release notes](https://codeberg.org/forgejo/forgejo/src/branch/forgejo/release-notes-published/17.0.0.md).
+STAC-M3 is the industry standard enterprise tick-analytics benchmark for database and hardware stacks that manage large time series of market data. It provides a vendor-neutral framework for evaluating the performance, efficiency, and scalability of time-series databases used in financial analytics and backtesting.
 
-A [dedicated test instance](https://v17.next.forgejo.org/) is available to try it out. Before upgrading, it is *strongly recommended* to make a full backup as explained in the [upgrade guide](https://forgejo.org/docs/v17.0/admin/upgrade/) and carefully read *all breaking changes* from the [release notes](https://codeberg.org/forgejo/forgejo/src/branch/forgejo/release-notes-published/17.0.0.md).
-If in doubt, do not hesitate to ask for help [in the chat room](https://matrix.to/#/#forgejo-chat:matrix.org).
+This report covers the baseline suite (Antuco), for performance under fixed conditions. Results for the Shasta suite are available [here](https://docs.stacresearch.com/M3-20261005s).
 
-## Breaking changes
+In these latest tests, the combination of the L tick database and the Oxide OxVM cloud virtual machine achieved the following:
 
-In rendered documents, absolute links to resources inside a repository are now resolved with respect to the root of the repository. <sup>[!12939](https://codeberg.org/forgejo/forgejo/pulls/12939)</sup>  
+- This solution achieved the highest storage efficiency (STAC-M3.v1.1.STORAGE.EFF) of any published STAC-M3 Antuco result, 364%
+  - 1.86x the efficiency of the previous best result (SHK211203)
+- This solution outperformed all publicly disclosed results for STAC-M3.β1.1T.YRHIBID-2.TIME
+  - 1.81x faster than the previous best result (KDB211210)
+- Compared to SUTs using the q language, this solution achieved the fastest mean-response STAC-M3.β1.1T.NBBO.TIME
+  - 1.58x faster than the previous best result (KDB230707)
+- Was faster in 11 of 17 mean-response time benchmarks than all other publicly disclosed results using a cloud-based deployment architecture
+- Outperformed a similar SUT using the q language, NAND flash storage / NVMe SSD, and the same file system (KDB250929) in 9 of 17 mean-response time benchmarks, including:
+  - 8.4x speed for STAC-M3.β1.10T.THEOPL.TIME
+  - Over 1.7x speedup in STAC-M3.β1.1T.STATS-UI.TIME
 
-This is a breaking change from the previous behaviour when these links were rendered using the root of the instance. Absolute links in issue and pull request descriptions and comments remain rendered with respect to the instance’s root. <sup>[!13993](https://codeberg.org/forgejo/forgejo/pulls/13993)</sup>
+The Stack Under Test included:
 
-This change increases the compatibility with other Git forges and thus, makes migrations to Forgejo even easier.
+- Database
+  - L tick database 1.0 from L Labs PBC
+- Database node
+  - 1 x Oxide OxVM cloud virtual machine, with:
+  - 1 x 128 vCPU Oxide Virtual Turin-like Processor
+  - 1,280 GiB VM memory (1,259 GiB visible to the OS)
+  - 5 x 3.44 TB (3,200 GiB) Oxide virtual NVMe disks
+- Operating system
+  - Ubuntu 24.04.4 LTS
 
-Action run webhook events are replaced by the more capable and less problematic workflow run events. <sup>[!14351](https://codeberg.org/forgejo/forgejo/pulls/14351)</sup> The action run events have been deprecated for removal in a future Forgejo version. Unfortunately, it is not possible to migrate existing webhooks to the new events automatically because some headers (`X-*-Event`, `X-*-Event-Type`) and the `action` key have changed, which might break existing receivers. Furthermore, completion notifications are only emitted after all jobs of a run have terminated. <sup>[!12598](https://codeberg.org/forgejo/forgejo/pulls/12598)</sup>
+The report provides detailed performance metrics, methodology, and visualizations for the Antuco suite.
 
-Please inspect existing webhooks and manually migrate them to the workflow run events after verifying that the webhook receivers can process them without issues.
-
-For repositories that contain a [`FUNDING.yml`](https://forgejo.org/docs/v17.0/user/repository/funding/) file, Forgejo shows a new “Donate” button which presents a list of donation options when clicked.
-
-Additionally, for users and organizations that have such file in their `.profile` repository, a similar button appears on their profile pages.
-
-This feature currently exists only in the web interface, but we are considering to implement an API surface for it. If you have a use cases for such API feature, please help shape it by sharing your feedback in [the dedicated issue](https://codeberg.org/forgejo/forgejo/issues/14075).
-
-![When applicable, a new "Donate" button appears in the repository's button banner, between the existing RSS and Watch buttons. The new button features a pink heart icon.](https://forgejo.org/_astro/2026-10-funding-yml.2cSfMSPe_ZwIxlL.webp)
-
-### Auto-completion for issues and pull requests
-
-When authoring an issue, pull request, or comment, Forgejo will offer auto-completion for issues and pull requests. <sup>[!8088](https://codeberg.org/forgejo/forgejo/pulls/8088)</sup> To activate the auto-completion, type `#` for issues or pull requests, or `!` for pull requests only. To refine the suggestions, either continue with a search term or an issue or pull request number.
-
-![An example auto-completion drop-down, showing suggested issues and pull requests after # is typed in a comment field](https://forgejo.org/_astro/2026-10-issue-pr-autocompletion.BRc5wkLd_Z1zWRP4.webp)
-
-Forgejo’s [Git LFS](https://git-lfs.com) support is being overhauled. While most changes are under the hood, a string of smaller improvements are visible to users. Those include navigation and overview improvements in the LFS settings, new views to discover the commits that refer to a given LFS file, and better handling of pointers.
-
-![Web UI-based list of all LFS files associated with a Forgejo repository. On the left side, there is a "Settings" sidebar; the "LFS" section is expanded and shows the options "Overview", "Locks" and "Pointer files". Next to the sidebar, there is a table with 4 table rows; one for each LFS file present. Each row contains the OID of the LFS file, its size, when it was last updated, as well as two buttons: "Find commits" and a "Delete" button.](https://forgejo.org/_astro/2026-10-lfs-overview.BHGKqn-z_Z21Mh8r.webp)
-
-Forgejo can be configured so that when adding a user to an organization, they are not added to the organization instantly but instead receive an invitation that can be accepted or declined. This behavior can be enabled by setting `[service].ADD_MEMBERS_BY_INVITATIONS = true` in Forgejo’s `app.ini`.
-
-Authentication providers are still able to add users to organizations with no action on their part.
-
-The invitations are visible on the organization profile and are sent out by email. By default they expire after 14 days.
-
-Work is ongoing to make those invitations visible in the in-app notifications.
-
-![Page of organization displaying a banner with text: "You are invited to join team Owners in this organization."](https://forgejo.org/_astro/2026-10-org-invite.CXPATz7d_64fsY.webp)
-
-A user can now be added or invited to multiple teams in one go, without going through each needed team individually. <sup>[!11848](https://codeberg.org/forgejo/forgejo/pulls/11848)</sup>
-
-![Modal dialog with options to search for a user to add and checkboxes with corresponding teams to add a user to](https://forgejo.org/_astro/2026-10-org-add-dialog.ruxIzoxk_ZDsts1.webp)
-
-Markdown contents of comments can now be easily copied via the ellipsis menu. <sup>[!13083](https://codeberg.org/forgejo/forgejo/pulls/13083)</sup>
-
-![Comment ellipsis menu with highlighted option: Copy comment Markdown](https://forgejo.org/_astro/2026-10-copy-md.B99e4OW5_1QL1nF.webp)
-
-The Forgejo HTTP API received multiple enhancements related to Forgejo Actions:
-
-- Entire workflow runs and individual jobs can now be rerun by sending requests to /repos/{owner}/{repo}/actions/runs/{run_id}/rerun and /repos/{owner}/{repo}/actions/jobs/{job_id}/rerun respectively. [!13924](https://codeberg.org/forgejo/forgejo/pulls/13924) The workflow runs or jobs must have completed. Otherwise, they cannot be rerun. However, individual completed jobs can be rerun while the workflow run is still being executed.
-- The HTTP endpoints for obtaining job logs gained substring filters [!12821](https://codeberg.org/forgejo/forgejo/pulls/12821) and the ability to only return the logs of a particular step with /jobs/{job_id}/logs?step=N. [!12799](https://codeberg.org/forgejo/forgejo/pulls/12799) In addition to plain text, the logs can be requested as NDJSON with ?format=ndjson. [!12820](https://codeberg.org/forgejo/forgejo/pulls/12820)
-- /repos/{owner}/{repo}/actions/jobs/{job_id} enables users to get the details of a particular job. [!12799](https://codeberg.org/forgejo/forgejo/pulls/12799)
-
-Forgejo now displays job summaries generated by Forgejo Runner 13.2 or newer. <sup>[!14076](https://codeberg.org/forgejo/forgejo/pulls/14076)</sup>
-
-Job summaries are Markdown documents that belong to a particular Forgejo Actions job. They are displayed above the logs. All Markdown features supported by Forgejo can be used — including tables, [Mermaid](https://mermaid.ai/open-source/intro/syntax-reference.html) diagrams, and formulas written in [KaTeX](https://katex.org/).
-
-![A summary of an example job showing TUnit test results and a Mermaid diagram](https://forgejo.org/_astro/actions-step-summary.BSNwEhUM_ZwxP1i.webp)
-
-Job summaries are assembled from one or more Markdown fragments that are written by a step to the file `$FORGEJO_STEP_SUMMARY`. `$GITHUB_STEP_SUMMARY` is supported, too, for compatibility with existing actions and easing the transition from GitHub.
-
-Maintainers and pull-requests creators can now directly push to the [AGit](https://forgejo.org/docs/latest/user/git-cli/agit-support/) refs:
-
-```
-# Pull Request Creator
-git checkout -b local-branch
-git push origin HEAD:refs/for/main/agit-topic
-
-# Maintainer/Reviewer can pull the code to a local branch
-git fetch origin refs/pull/3/head:local-branch
-git switch local-branch
-
-# Maintainers and Pull Request creator need some further git config
-git config push.default upstream
-git config branch.local-branch.merge refs/pull/3/head
-git config branch.local-branch.remote origin
-
-# NEW: Maintainer and Pull Request creator can now (force) push and pull to this ref
-git push
-git pull
-```
-
-More events have been added to Forgejo’s webhooks. Webhooks can now be triggered when the status of a Forgejo Actions workflow job changes. <sup>[!14334](https://codeberg.org/forgejo/forgejo/pulls/14334)</sup> As usual, it is possible to receive notifications in various chat applications like Discord or Matrix. Alternatively, Forgejo is able to notify a remote server using an HTTP request. Users have the possibility to select which statuses, like “waiting” or “cancelled,” they want to receive notifications for.
-
-While prior versions of Forgejo could already trigger notifications for “action runs,” that capability was limited to completion events. It has been enhanced to match the capabilities of workflow job events. <sup>[!14351](https://codeberg.org/forgejo/forgejo/pulls/14351)</sup> Users can now select which statuses they want to receive notifications for. The old “action runs” events have been deprecated and will be removed in a future Forgejo version.
-
-Forgejo can now migrate repositories from Bitbucket Data center (formerly Bitbucket Server). Pull requests, reviews, comments (including multi-line comments), threads and replies can also be imported during the process. <sup>[!13288](https://codeberg.org/forgejo/forgejo/pulls/13288)</sup>
-Authentication uses an HTTP access token, and “HTTPS SCM Hosting” must be enabled on Bitbucket as Forgejo migrations clone over HTTPS.
-
-![Migration page showing all the platforms repositories can be migrated from, which now includes a "BitbucketDC" entry](https://forgejo.org/_astro/2026-10-bitbucket-data-center.OTqq5qJB_1qpLOK.webp)
-
-When migrating repositories from Gogs, Gitlab, Gitea, or Forgejo, the repository avatar images are now migrated, too. <sup>[!12921](https://codeberg.org/forgejo/forgejo/pulls/12921)</sup>
-
-A new guide on [how to backup and restore](https://forgejo.org/docs/latest/admin/setup/backup/) a Forgejo instance has been added to Forgejo’s documentation. In particular, it points out the most important secrets that need to be backed up for proper instance restoration.
-
-Based on [the release schedule](https://forgejo.org/docs/v17.0/admin/release-schedule/), major releases are published every three months. Patch releases are published more frequently, depending on the severity of the bug or security fixes they contain. Forgejo v17.0 is a non-LTS release. It will be supported until **28 January 2027**.
-
-| **Version** | **Release date** | **End Of Life** |
-| --- | --- | --- |
-| 15.0 (LTS) | 16 April 2026 | 15 July 2027 |
-| 16.0 | 16 July 2026 | 29 October 2026 |
-| 17.0 | 15 October 2026 | **28 January 2027** |
-| 18.0 | 14 January 2027 | 29 April 2027 |
-| 19.0 (LTS) | 15 April 2027 | 13 July 2028 |
-
-Releases are built daily from the latest changes found in the [v17.0/forgejo](https://codeberg.org/forgejo/forgejo/src/branch/v17.0/forgejo) development branch. They are deployed to the [https://v17.next.forgejo.org](https://v17.next.forgejo.org) instance for manual verification in case a bug fix is of particular interest ahead of the next patch release. It can also be installed locally with:
-
-Their names are staying the same, but they are replaced by new builds every day.
-
-See the [download page](https://forgejo.org/download/) for instructions on how to install Forgejo.
-
-### Upgrading
-
-Carefully read the [breaking changes](https://codeberg.org/forgejo/forgejo/src/branch/forgejo/release-notes-published/17.0.0.md)
-section of the release notes.
-
-The actual upgrade process is as simple as replacing the binary or container image
-with the corresponding [Forgejo binary](https://codeberg.org/forgejo/forgejo/releases/tag/v17.0.0)
-or [container image](https://codeberg.org/forgejo/-/packages/container/forgejo/17.0.0).
-If you’re using the container images, you can use the
-[`17.0` tag](https://codeberg.org/forgejo/-/packages/container/forgejo/17.0)
-to stay up to date with the latest `17.0.Y` patch release automatically.
-
-Make sure to check the [Forgejo upgrade documentation](https://forgejo.org/docs/v17.0/admin/upgrade)
-for recommendations on how to properly back up your instance before the upgrade.
-
-If you have any feedback or suggestions for Forgejo, do not hold back; it is also your project.
-Open an issue in [the issue tracker](https://codeberg.org/forgejo/forgejo/issues)
-for feature requests or bug reports, reach out [on the Fediverse](https://floss.social/@forgejo),
-or drop into [the Matrix space](https://matrix.to/#/#forgejo:matrix.org)
-([main chat room](https://matrix.to/#/#forgejo-chat:matrix.org)) and say hi!
-
-### Donate
-
-Forgejo is proud to be [funded transparently](https://codeberg.org/forgejo/sustainability/). Additionally, it accepts donations [through Liberapay](https://liberapay.com/forgejo). It is also possible to [donate to Codeberg e.V.](https://docs.codeberg.org/improving-codeberg/donate/) in case the Liberapay option does not work out for you, and part of the funding is used to [compensate for work on Forgejo](https://codeberg.org/forgejo/sustainability/#forgejo-resources-per-year).
-
-However, the Liberapay team allows for money to go directly to developers without a round-trip to Codeberg. Additionally, Liberapay allows for a steady and reliable funding stream next to other options, a crucial aspect for the project. The distribution of funds through Liberapay is [transparently controlled using the decision-making process](https://codeberg.org/forgejo/governance/src/branch/main/TEAMS.md#liberapay-team-members), and Forgejo contributors are encouraged to consider applying to benefit from this funding opportunity.
-
-Thank you for using Forgejo and considering a donation, if your financial situation allows.
+The full benchmark report is available for download below. Insights Subscribers can also access detailed system configurations and the code used in this project to reproduce the results in their own environments. To learn more about subscription options, please [contact us](https://docs.stacresearch.com/cdn-cgi/l/email-protection#f0999e969fb0a3a4b1b38295839591829398de939f9d).
