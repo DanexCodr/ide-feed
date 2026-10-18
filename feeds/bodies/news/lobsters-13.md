@@ -1,85 +1,97 @@
-There are some things I do on a regular basis, and of course I try to automate as much as possible so that I don’t need to remember them. One of these things is a weekly review. A part of my weekly review is checking how much time I’d spent on various things during the past week. Of course, I use Org-mode [clock tables](https://www.gnu.org/software/emacs/manual/html_node/org/The-clock-table.html) for that. I have this piece of Elisp
+A few days ago I wrote about reporting a bug to Google Disability Support. It's a bug that kills touch exploration for every screen reader on Android until you reboot the phone. In return I was asked to turn TalkBack off and on again, clear the cache of an app I don't use, and reboot, which is the one thing I'd already told them was the only workaround. If you haven't read that one, [Have You Tried Turning TalkBack Off and On Again?](https://fireborn.mataroa.blog/blog/have-you-tried-turning-talkback-off-and-on-again/) has the whole story, and this post won't make much sense without it.
 
-```
-(org-dblock-update '(4))
-```
+There's been more since. I'm going to go through it, because the ending is better than anything I could have made up. But I can tell you how I feel about it in four words, so I'll get them out of the way now.
 
-which updates all clock tables in the current buffer, and I run it in the Org file before I start my review.
+Quite simply, fuck you.
 
-However, this takes some time (slightly less than a minute, but still). My usual procedure is that I evaluate that form some time after I get up on Sundays (I do my review on Sunday morning), then I go to the bathroom or something, and when I’m back, my clock tables are updated.
+## Where we left it
 
-I thought that it would be cool if Emacs did it itself when I open my laptop on Sunday morning. Emacs has the concept of [idle timers](https://www.gnu.org/software/emacs/manual/html_node/elisp/Idle-Timers.html) which run after it is “idle” for some time (meaning the user didn’t do anything). My idea is that if Emacs is idle for, say, a minute, it’s probable that I am away from keyboard, so I may not come back within another minute. It is then relatively safe to run something which could take a bit longer.
+When I published the first post, I'd answered every question Google's support team asked. I'd done every troubleshooting step they gave me, including the ones that couldn't possibly work, and reported the results. They'd said that once I'd done that, the case could be forwarded to their internal team for further review. So I did it, and I waited to be forwarded.
 
-Of course, I definitely do not want Emacs to update my clock tables every time I don’t do anything in it for one (or even ten) minutes – that would be wasteful and potentially annoying. I only want to do this on Sundays, and only once per Sunday.
+I didn't only wait. The bug happened again the next morning, and this time I was ready for it. I took a full bug report while the phone was stuck. I captured every log buffer, before and after. I worked out exactly why the fake finger gets left on the screen: TouchExplorer gets itself into a dragging state with no valid pointer, tries to build an up event with no pointers in it, MotionEvent throws, the exception gets swallowed, and the up event that would have lifted the finger is never sent. I worked out why nothing short of a reboot clears it: the input dispatcher keeps the record of injected pointers in a verifier that is only ever thrown away when a display is removed, so turning accessibility off, turning every accessibility service off, even tearing down the whole input filter does nothing. I proved that on the phone. I found a way to clear it from the shell with a single cancel event, and a way for a screen reader to clear it with no special permissions at all. And then I wrote fixes, one patch for the accessibility code in frameworks/base and one for the input dispatcher in frameworks/native, and sent a summary of all of it back to the case, along with a request, again, for some way to get the files to an engineer, because their form still wouldn't take anything that wasn't a screenshot.
 
-This means that I need my idle timer to be set up only on Sunday mornings. This means that I need a [regular timer](https://www.gnu.org/software/emacs/manual/html_node/elisp/Timers.html) to set up an idle timer.
+That's a root cause, a recovery method, two patches and a reproduction you can trigger on demand, all done for free, on my own time, on a phone I could only half use.
 
-Now, I can just set up a repeating timer with a period of one week, aimed at, say, 3am on Sundays. I don’t turn my laptop off (usually), just put it to sleep, so Emacs is basically open all the time. This means that my “regular” timer would run as soon as I open my laptop, say on Sunday at about 5:30am (which is when I usually sit down to my weekly review). This would break if I actually *turned my laptop off* on Saturday evening and turned it back on on Sunday, since the timer set up for 3am would be skipped. If I were worried about such a case, I could add a check in `init.el` to make sure that the idle timer is set up when I turn my laptop on on Sunday morning. (In fact, I could even update the clock tables *in my `init.el`* – since I start Emacs once every few days at most, I don’t really care about longer startup times.) I don’t expect to turn my laptop off on Saturday evening, though, so let’s concentrate on the initial idea of an idle timer.
+## The second agent
 
-Note that I don’t need to write any code to find when 3am next Sunday falls – Emacs can already do that using the excellent `org-read-date` function: `(org-read-date t t "Sun 3:00")`. Of course, in order to be able to do that, I need to `(require 'org)` first.
+The next reply came from a different agent, stepping in for the first. And I'll be fair here, because I want to be: it was the best reply I'd had. It read like someone had actually read what I'd sent. It summarised the problem correctly, in proper terms: TouchExplorer failing to release injected pointers after an invalid dragging pointer state, with InputDispatcher rejecting the hover events that follow. It said it recognised the impact on screen reader users. It said it didn't want to give me an unverified technical answer to my three questions, and that they needed the team responsible for those framework components. It said, finally, that it understood the troubleshooting steps had been exhausted.
 
-```
-(require 'org)
+What it couldn't say was whether anyone on an engineering team would look at any of it. It didn't have an upload link, or an engineering contact. It told me to hang on to my files in case a way to send them ever turned up in the case. It was polite, honest about what it didn't know, and it went nowhere.
 
-(defun mbork/update-clock-tables-for-weekly-review ()
-  "Update clock tables for the weekly review."
-  (message "Updating clock tables in personal.org...")
-  (let ((inhibit-message t))
-    (with-current-buffer "personal.org"
-      (org-dblock-update '(4))))
-  (message "Updating clock tables in personal.org...done"))
+So I stopped waiting, and filed the bug myself.
 
-(defun mbork/set-up-clock-tables-update ()
-  "Set up updating clock tables with an idle timer."
-  (run-with-idle-timer
-   60 nil
-   #'mbork/update-clock-tables-for-weekly-review))
+## 102 minutes
 
-(run-at-time
- (org-read-date t t "Sun 3:00")
- (* 60 60 24 7)
- #'mbork/set-up-clock-tables-update)
-```
+Android has a public issue tracker. Anyone can file on it, and it has an Android Accessibility component. I wrote up everything: device and build, the natural trigger and a reliable reproduction from the shell, what happens in the logs during the trigger, why only a reboot recovers, the on-device test results, the workaround a screen reader can use, and both patches, with the reproduction helper attached. I filed it at 08:17 on a Friday morning, and sent the link to the support case so they could attach it and pass it on.
 
-As is often the case, after writing this code I learned that it doesn’t work as I expected. The problem is simple. When `mbork/set-up-clock-tables-update` is run after I open my laptop, the time it was asleep is also counted as idle time, so the clock tables are updated *as soon as I open my laptop* – definitely not what I want.
+At 09:59 it was assigned to a Google engineer, with a comment saying it had been passed to the development team.
 
-At first I thought that I could attach `mbork/set-up-clock-tables-update` to `post-command-hook` in my `run-with-timer` invocation, and make that function remove itself from that hook. It is definitely not an elegant way, but at least it could work. However, it dawned on me that there might be a better way. If only I could find a way to *reset* the idle timer (without the user doing anything), I could add such a reset to `mbork/set-up-clock-tables-update`. I couldn’t find anything about resetting the idle timer in the Elisp manual, and grepping the sources didn’t give any obvious hints. I asked an LLM how to do that, and it suggested `(setq unread-command-events '(t))` – however, it was not able to explain why I should use `(t)`. I tried reading [the docs](https://www.gnu.org/software/emacs/manual/html_node/elisp/Event-Input-Misc.html), and it seemed to me that the `(t)` was a typical hallucination. (I also asked another LLM, and the answer was a hilarious back-and-forth of “do it this way… no, wait, that doesn’t exist, this way is the right one… no, it doesn’t exist, either”, ended by a suggestion of using `(discard-input)`. After some experiments, I arrived at something that seemed better to me, that is, `(setq unread-command-events nil)`.
+That's an hour and forty-two minutes. Disability Support had had the case for four days by then, and in four days it hadn't got as far as an engineer. The tracker did it before I'd finished my second coffee.
 
-I ended up [asking on the Emacs mailing list](https://lists.gnu.org/archive/html/help-gnu-emacs/2026-02/msg00156.html), and after a [false start due to my poor wording](https://lists.gnu.org/archive/html/help-gnu-emacs/2026-03/msg00000.html) of the question, I’ve received a few very interesting answers. (Protip: if you want to ask a question on one of the GNU mailing lists, and you expect a need to link to the ensuing thread, don’t ask near the end of a month, since apparently there is no way to have a single link to a thread spanning more than one month.) First of all, Eli Zaretskii told me that the `(setq unread-command-events nil)` is rather fragile. I didn’t understand why, but it’s Eli, so it’s safe to assume that he does know what he’s talking about. The solution he suggested was very clever – a bit tricky but clearly robust. His idea was to set up a “normal” timer which would then set up an idle timer for 60 seconds. This means that when I wake up my laptop on Sunday morning, this is what will happen. The “Sunday 3:00am” timer will fire and set up another timer. That timer will fire in 60 seconds and set up yet another timer, set up to fire after 60 seconds of idleness. So, if I just open my laptop and do nothing else, the idle time from the whole night will accumulate (so to speak) and the idle timer will run as soon as it is set up, that is, a minute after the laptop was opened. On the other hand, if I do anything in Emacs during that 60 seconds after opening my laptop, my action will reset the idle time, and the idle timer will properly wait until 60 seconds of idleness. Phew! I admit that stacking three timers *is* a bit convoluted (as you can see from my slightly awkward attempts to explain the whole idea in English), but I can see no reason for this contraption to fail. So, let’s get coding!
+It's still moving. At the time of writing it's marked as assigned, severity S2, priority P2. It's on five hotlists. 114 people have given it a +1, and one of them commented that this is something that has "continued to plague users", and that it's been reported on forums like Blind Android Users. So it isn't just my phone and it isn't just me. Blind people have been hitting this for a long time, rebooting their phones, and getting nowhere, because the route Google gives them goes nowhere.
 
-```
-(require 'org)
+## Outside our scope
 
-(defun mbork/update-clock-tables-for-weekly-review ()
-  "Update clock tables for the weekly review."
-  (message "Updating clock tables in personal.org...")
-  (let ((inhibit-message t))
-    (with-current-buffer "personal.org"
-      (org-dblock-update '(4))))
-  (message "Updating clock tables in personal.org...done"))
+Then, late on Saturday night, Disability Support replied for the last time.
 
-(defun mbork/set-up-clock-tables-update-after-60-seconds-idleness ()
-  "Set up an idle timer to update clock tables."
-  (run-with-idle-timer
-   60 nil
-   #'mbork/update-clock-tables-for-weekly-review))
+They'd reviewed my case with their internal team, it said, and the team had clarified that Google Disability Support "primarily assists with troubleshooting existing accessibility features and assistive technologies within Google products, including unexpected behavior or broken functionality."
 
-(defun mbork/set-up-clock-tables-update-in-60-seconds ()
-  "In 60 seconds, set up an idle timer to update clock tables."
-  (run-with-timer
-   60 nil
-   #'mbork/set-up-clock-tables-update-after-60-seconds-idleness))
+Read that sentence again, because it's a perfect description of what I reported. Touch exploration is an existing accessibility feature. It's built into Android, which is a Google product. TalkBack, which it breaks along with every other screen reader, is a Google product. Touch exploration stopping system-wide until you reboot is, by any definition anyone could come up with, broken functionality. I didn't just fall within their scope. I was the textbook example of it.
 
-(run-at-time
- (- (org-read-date t t "Sun 3:00")
-    (float-time))
- (* 60 60 24 7)
- #'mbork/set-up-clock-tables-update-in-60-seconds)
-```
+But the very next paragraph explained that "technical development, custom accessibility service coding, and custom Android framework patches fall outside the scope of our support," so they couldn't review the patches or confirm any of the framework fixes I'd proposed.
 
-And from now on, every Sunday on 3am (in reality, as soon as I open my laptop) Emacs will update the clock tables *when I leave it for a minute or more*. This way, I can open my laptop on Sunday morning, do things like [capture my weight](https://mbork.pl/2023-05-13_Dieting_with_Org_mode), then go to the bathroom – and assuming I spend at least about two minutes there, come back to updated clock tables. Yay for automation!
+I never asked Disability Support to review a patch. I asked them, four times now, to pass a bug report to the people who own the code, and to give me a way to send them the logs. The patches were offered to an engineering team, because that's what you do with a fix: you hand it to the people who can use it. "Custom accessibility service coding" means Backtalk, I assume, which has nothing to do with the bug, as I'd said in the first message, and the second, and the third. The bug happens with TalkBack. Google's TalkBack, running on Google's Android, using Google's touch exploration.
 
-One final remark is that one of the answers on the mailing list prompted me to update my Emacs. It turned out that after I blogged about some [cool new things on the master branch](https://mbork.pl/2025-12-08_Some_new_additions_to_Emacs) last December, some *new* cool things landed! One of them is a new built-in package called [system-sleep](https://cgit.git.savannah.gnu.org/cgit/emacs.git/tree/lisp/system-sleep.el?h=master). One of its features is that it allows to attach Elisp functions to `pre-sleep` and `post-wake` events. Note that the `pre-sleep` event is potentially fragile because of reasons outside Emacs – this is what the manual says:  
-*Handling ‘pre-sleep’ events should be done as fast as possible and avoid user prompting. Systems often grant a very short pre-sleep processing interval, typically ranging between 2 and 5 seconds. The system may sleep even if your processing is not complete, so be sure you do as little as possible. For example, your function could close active connections or serial ports.*
+So the more work I did, the further outside their scope the case became. Report a bug with logs, and you're told to clear a cache. Show that the cache had nothing to do with it, and you're told you need to do the troubleshooting first. Do the troubleshooting, find the cause, and write the fix, and you're told that fixes aren't their department. At no point in that loop was there a step where the report went to an engineer, and there was never going to be one. I just kept looking for it.
 
-I don’t think these will be useful in my case – checking if it’s Sunday morning *and* whether the clock tables were updated today or not every time I open my laptop is certainly possible but even more complex than what I have above. Still, it’s good to know that `system-sleep` exists, since it might come in handy some day. As you can see, contrary to some opinions, Emacs is far from dead and new useful things are being implemented all the time!
+Then the reply sent me some links. The Android Developers accessibility guide, which is documentation for people making their apps work with screen readers, and is about as relevant to a bug in the input dispatcher as a recipe book. A page of additional accessibility resources. And the Android Accessibility Help Community, where, it said, I could "share your findings, discuss touch exploration behavior, and connect with other accessibility developers." That's a forum. It's other users, answering each other's questions for free, which is exactly what has been happening with this bug for years, and exactly why it's still there.
+
+Nowhere in the email was the issue tracker mentioned. I'd sent them the link in my last message. By the time they wrote this, it had been with an engineer for a day and a half. Whoever reviewed my case either didn't see the link, or saw it and decided that the right thing to tell a blind developer whose bug was already assigned to a Google engineer was to go and post about it on a help forum.
+
+And then it closed with the line that, in the end, says it all: "If you encounter specific broken functionality involving Google's accessibility features or would like to suggest an enhancement to improve accessibility, please feel free to contact us again."
+
+I did. That's what this whole thing was.
+
+## What this tells you
+
+I said in the first post that I didn't blame the agents, and I still don't. The second one was genuinely decent, and I'd guess the final email wasn't really theirs at all: it reads like the internal team's verdict, passed down for someone on the front line to sign. These are people working inside a system, and the system decides what they're allowed to do.
+
+So here's what that system is for, now that I've seen it all the way through.
+
+Google Disability Support is a help desk for using Google's accessibility features. If you can't find a setting, it'll find it for you. If TalkBack is talking too fast, it'll tell you where to slow it down. It may well be good at that, and that's worth something. But it isn't a route for reporting accessibility bugs to Google, and it can't be, because nothing in it leads to anyone who can fix one. When a blind person tells it that something is broken, it can tell them how to turn things off and on again, and once that's run out, it can tell them it's out of scope. Then it sends them to a forum.
+
+What it doesn't do is the one thing a support channel exists for: take a report of something broken and put it in front of the people who can fix it.
+
+## Now imagine it wasn't me
+
+It's tempting to read all this as a story with a happy ending. The bug got to an engineer in the end, and I got there by going round Disability Support entirely. So the lesson is to file on the issue tracker, isn't it? Next time, skip the help desk.
+
+No. Fucking no.
+
+Think about who actually hits this bug. Not a developer with adb and a laptop and a working knowledge of the input pipeline. A blind person, maybe new to Android, maybe older, maybe someone whose phone is the main way they read their post and talk to their family and get a taxi, who one day can't find anything on the screen by touch. They don't know what TouchExplorer is. They've never heard of the input dispatcher. They don't know there's a fake finger stuck on their screen, and they have no way to find out, because every tool that would tell them needs a computer, a cable, developer options and a command line.
+
+So they do what Google tells them to do. They contact Disability Support, and they say: "My phone stopped reading things when I touch the screen. Swiping still works. Restarting fixes it but it keeps happening."
+
+That's a perfectly good bug report. It's the symptom, the workaround and the fact that it recurs. It's exactly what any user anywhere should be expected to give, and it's honestly more than most people manage.
+
+And we now know exactly what happens to it. They get nine questions. They get told to turn TalkBack off and on again, with a warning to have a sighted person nearby. They get told to update Android Accessibility Suite and clear its cache, and they do it, carefully, step by step, because they trust that the people telling them know what they're doing. They reboot, and it works, and they report back that it works, and the case is closed as resolved. A week later it happens again, and they start over. Or they don't, because they've learned that it's pointless, and they just reboot their phone a couple of times a day for the rest of its life, assuming that's what using Android blind is like.
+
+And if they don't take the reboot as an answer, if they push, the best they can hope for is the email I got. Out of scope. Go and read the developer documentation. Ask on the forum.
+
+Should that person be expected to find the Android issue tracker? Make an account, find the right component out of hundreds, and write a report that an engineer will take seriously, with a device fingerprint and a reproduction? With logs they have no way to capture? Of course not. That's not a reasonable thing to ask of a user, and asking it of a disabled user, through the support channel that exists specifically for disabled users, is obscene. Nobody expects a sighted person whose phone screen stops responding to go and file a bug on a developer tracker. They expect Google, or Samsung, or the shop they bought it from, to deal with it. Turning that work over to the people who are least able to do it, and calling it out of scope when they come asking, is the whole problem in one sentence.
+
+That's what makes it worse than my experience. I had the skills to route round the system, and it still took four days, a blog post, a root cause analysis and two patches. Everyone else just has the system. And the system's answer to "touch exploration is broken" is, in the end, that touch exploration being broken isn't its problem.
+
+So no, the answer isn't "file on the tracker". The answer is that Disability Support should be the thing that files on the tracker. It's Google. It has the same access to the same internal bug systems as every other part of the company. When a disabled user reports that a Google accessibility feature is broken, somebody in that team should write it up, with whatever the user could tell them, file it with the team that owns the feature, and tell the user it's been filed. That's the job. That's what "escalation" is supposed to mean. If the team doesn't have the training, the tools, or the authority to do it, that isn't a reason to tell users it's out of scope. It's a reason to fix the team.
+
+Google points disabled people at Disability Support. It's the channel on the help pages, the human, specialist, accessible route, the place to go when something doesn't work for you. And when one of us arrives with something that doesn't work for any of us, it has no idea what to do with it. Not because the people are bad at their jobs, but because the job, as Google has defined it, stops just short of where it would be any use.
+
+## If you've hit this bug
+
+If you're a blind Android user and touch exploration has died on you while swipes and taps kept working, that's this bug, and it's not your fault, and it's not your screen reader. Rebooting clears it for now.
+
+This one, at least, is filed: [TouchExplorer leaves injected pointers down; InputDispatcher then rejects all touch exploration events until reboot](https://issuetracker.google.com/issues/574059457). If you have a Google account and want to, sign in and give it a +1. If you can add something, such as a device that isn't a Samsung, a Pixel especially, an Android version, or what you were doing when it happened, add a comment. You shouldn't have to do that either. But it's the one place this report has actually reached a person who can fix it, and the more people say it hits them, the higher it goes.
+
+And if you've hit any other accessibility bug and you've been told it's out of scope, you weren't wrong to report it, and you weren't asking for the wrong thing. You were asking the right people to do their job.
+
+Quite simply, fuck you, Google. Fix the bug, and then fix the route, so the next blind person who finds one doesn't have to do your engineers' job to be heard.

@@ -1,13 +1,25 @@
 {
-  "updated": "2026-10-18T15:33:49Z",
+  "updated": "2026-10-18T20:16:33Z",
   "items": [
+    {
+      "id": "devto-4858196",
+      "title": "Natural Languages Have Design Trade-offs Too: Georgian Is Dynamically Typed, English Is Statically Typed",
+      "desc": "By Giorgi Kobaidze | 10 min read",
+      "tag": "tutorial",
+      "published": "2026-10-15T19:22:46Z",
+      "order": 1,
+      "url": "https://dev.to/georgekobaidze/natural-languages-have-design-trade-offs-too-georgian-is-dynamically-typed-english-is-statically-emi",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fox7963esvydjbsiqboye.jpeg",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAgMBBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHn1xsSmj//xAAaEAACAgMAAAAAAAAAAAAAAAAAARESAjFB/9oACAEBAAEFAkyYLosjeECSO//EABURAQEAAAAAAAAAAAAAAAAAABAR/9oACAEDAQE/AYf/xAAVEQEBAAAAAAAAAAAAAAAAAAAQEf/aAAgBAgEBPwGn/8QAGRAAAgMBAAAAAAAAAAAAAAAAADEBECAh/9oACAEBAAY/AlSFJ3H/xAAZEAEBAQEBAQAAAAAAAAAAAAABABEhQVH/2gAIAQEAAT8hVOKfYYT1ZndpAMbY+XVycEBf/9oADAMBAAIAAwAAABB7/wD/xAAWEQEBAQAAAAAAAAAAAAAAAAARACH/2gAIAQMBAT8QEY3/xAAWEQEBAQAAAAAAAAAAAAAAAAARAAH/2gAIAQIBAT8QU6l//8QAHBABAAMAAgMAAAAAAAAAAAAAAQARITFhQaHB/9oACAEBAAE/EGVuvBDAivs+MAx050iA9cJFkUXTLSqRQEb62AxhfE//2Q==",
+      "color": "#3B49DF"
+    },
     {
       "id": "devto-4821943",
       "title": "AI Got Better While I Was Away. Software Didn't.",
       "desc": "By NorthernDev | 4 min read",
       "tag": "tutorial",
       "published": "2026-10-09T07:48:11Z",
-      "order": 1,
+      "order": 2,
       "url": "https://dev.to/the_nortern_dev/ai-got-better-while-i-was-away-software-didnt-4b2b",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F2hev0q7dznyfw5y4tr2l.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAQMCBP/EABQBAQAAAAAAAAAAAAAAAAAAAAL/2gAMAwEAAhADEAAAAZvPlG8kL//EABsQAAEFAQEAAAAAAAAAAAAAAAEAAhAREiEi/9oACAEBAAEFAuKtBwzF+NlBxMf/xAAVEQEBAAAAAAAAAAAAAAAAAAAQEf/aAAgBAwEBPwGH/8QAFREBAQAAAAAAAAAAAAAAAAAAEBL/2gAIAQIBAT8Bo//EABcQAAMBAAAAAAAAAAAAAAAAAAAQMSD/2gAIAQEABj8CLiv/xAAcEAEAAgMAAwAAAAAAAAAAAAABABEhMUEQgdH/2gAIAQEAAT8hFF37eSpPx4W0g877qGXKBZZdmp//2gAMAwEAAgADAAAAEOef/8QAFREBAQAAAAAAAAAAAAAAAAAAAAH/2gAIAQMBAT8QZH//xAAVEQEBAAAAAAAAAAAAAAAAAAAAAf/aAAgBAgEBPxAtf//EAB0QAQACAgMBAQAAAAAAAAAAAAEAESExQVFhgaH/2gAIAQEAAT8Qpa3hZ6mNDe7OHUVdg2Y/JSYc6vUqmkKtqsgVFG64z5ET8agUXK63jc//2Q==",
@@ -19,22 +31,10 @@
       "desc": "By xulingfeng | 6 min read",
       "tag": "tutorial",
       "published": "2026-10-16T07:27:22Z",
-      "order": 2,
+      "order": 3,
       "url": "https://dev.to/xulingfeng/what-are-your-chances-of-surviving-resident-evil-based-on-your-tech-job-4b9o",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F179t5kb6wlcokai53ap9.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAgMAAQT/xAAVAQEBAAAAAAAAAAAAAAAAAAAAAf/aAAwDAQACEAMQAAABxkiI5dCf/8QAGBAAAgMAAAAAAAAAAAAAAAAAAAERIEH/2gAIAQEAAQUCyEO3/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFxAAAwEAAAAAAAAAAAAAAAAAACAxMv/aAAgBAQAGPwKmit//xAAbEAEAAgIDAAAAAAAAAAAAAAABABEhMRCB8f/aAAgBAQABPyEqjvD0Qg4b3G93Bl5l54//2gAMAwEAAgADAAAAEH5//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPxA//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPxA//8QAHBABAAICAwEAAAAAAAAAAAAAAQARITFBUXHw/9oACAEBAAE/EDaLDVxzlfPIDoC77R524a3KeB9Isv1Bqt3mKu2f/9k=",
-      "color": "#3B49DF"
-    },
-    {
-      "id": "devto-4858196",
-      "title": "Natural Languages Have Design Trade-offs Too: Georgian Is Dynamically Typed, English Is Statically Typed",
-      "desc": "By Giorgi Kobaidze | 10 min read",
-      "tag": "tutorial",
-      "published": "2026-10-15T19:22:46Z",
-      "order": 3,
-      "url": "https://dev.to/georgekobaidze/natural-languages-have-design-trade-offs-too-georgian-is-dynamically-typed-english-is-statically-emi",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fox7963esvydjbsiqboye.jpeg",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAgMBBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHn1xsSmj//xAAaEAACAgMAAAAAAAAAAAAAAAAAARESAjFB/9oACAEBAAEFAkyYLosjeECSO//EABURAQEAAAAAAAAAAAAAAAAAABAR/9oACAEDAQE/AYf/xAAVEQEBAAAAAAAAAAAAAAAAAAAQEf/aAAgBAgEBPwGn/8QAGRAAAgMBAAAAAAAAAAAAAAAAADEBECAh/9oACAEBAAY/AlSFJ3H/xAAZEAEBAQEBAQAAAAAAAAAAAAABABEhQVH/2gAIAQEAAT8hVOKfYYT1ZndpAMbY+XVycEBf/9oADAMBAAIAAwAAABB7/wD/xAAWEQEBAQAAAAAAAAAAAAAAAAARACH/2gAIAQMBAT8QEY3/xAAWEQEBAQAAAAAAAAAAAAAAAAARAAH/2gAIAQIBAT8QU6l//8QAHBABAAMAAgMAAAAAAAAAAAAAAQARITFhQaHB/9oACAEBAAE/EGVuvBDAivs+MAx050iA9cJFkUXTLSqRQEb62AxhfE//2Q==",
       "color": "#3B49DF"
     },
     {
@@ -158,27 +158,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4809038",
-      "title": "Curiosity Over Comfort",
-      "desc": "By Marceli Pawliński | 4 min read",
-      "tag": "tutorial",
-      "published": "2026-10-06T21:47:16Z",
-      "order": 14,
-      "url": "https://dev.to/marceli/curiosity-over-comfort-5cki",
-      "image": "https://media2.dev.to/dynamic/image/width=1200,height=627,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fywr6b45wz5youd97xwx7.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAARACADASIAAhEBAxEB/8QAGAAAAwEBAAAAAAAAAAAAAAAAAAECAwT/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAHsVsmtIKYAgP/EABsQAAICAwEAAAAAAAAAAAAAAAECABEQEiAi/9oACAEBAAEFAiqylgVZosNFgAMX64//xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAEDAQE/AR//xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAECAQE/AR//xAAdEAABBAIDAAAAAAAAAAAAAAAAAREzoRAxIDKR/9oACAEBAAY/Ao6I6I6OqeGlNYZuP//EAB8QAAIBAwUBAAAAAAAAAAAAAAERABAxgSAhQWFx8P/aAAgBAQABPyEApDhPiEIuA9CjgIBN3xDmyZo1wk3p/9oADAMBAAIAAwAAABDQSBz/xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAEDAQE/EB//xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAECAQE/EB//xAAeEAEAAgIBBQAAAAAAAAAAAAABABEhYTEQIFHB8f/aAAgBAQABPxCjPDSA14mMXB9KM5g+YlYEBo0tcy1vhV5e+iQuLRNdv//Z",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4859158",
       "title": "What I Actually Learn When I Build With AI",
       "desc": "By Jessica Doering | 7 min read",
       "tag": "tutorial",
       "published": "2026-10-16T01:06:09Z",
-      "order": 15,
+      "order": 14,
       "url": "https://dev.to/sizzlebop/what-i-actually-learn-when-i-build-with-ai-1074",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F2atagf3xnyj2fwx6qtho.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAAIBAwT/xAAVAQEBAAAAAAAAAAAAAAAAAAAAAf/aAAwDAQACEAMQAAAByCizY6r/AP/EABsQAAMBAAMBAAAAAAAAAAAAAAECEQASITJB/9oACAEBAAEFAuXSyfVmAu8lVDZxD//EABURAQEAAAAAAAAAAAAAAAAAAAAR/9oACAEDAQE/AUf/xAAVEQEBAAAAAAAAAAAAAAAAAAAAEf/aAAgBAgEBPwFX/8QAFhABAQEAAAAAAAAAAAAAAAAAECFB/9oACAEBAAY/Amun/8QAHRABAAICAgMAAAAAAAAAAAAAAQARITFBYVGBkf/aAAgBAQABPyFshXEQtt7jblMq/EwDzKo7gmx7mqeJ/9oADAMBAAIAAwAAABAEz//EABcRAQADAAAAAAAAAAAAAAAAAAABESH/2gAIAQMBAT8QRTX/xAAXEQADAQAAAAAAAAAAAAAAAAAAAREh/9oACAECAQE/EGPEP//EABwQAQEAAgMBAQAAAAAAAAAAAAERADEhQWFRgf/aAAgBAQABPxBEsCDu3KMfYWsewtqeZwKTrBpGd/zOQFfDJl3Q7eWWBG7Of//Z",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4809038",
+      "title": "Curiosity Over Comfort",
+      "desc": "By Marceli Pawliński | 4 min read",
+      "tag": "tutorial",
+      "published": "2026-10-06T21:47:16Z",
+      "order": 15,
+      "url": "https://dev.to/marceli/curiosity-over-comfort-5cki",
+      "image": "https://media2.dev.to/dynamic/image/width=1200,height=627,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fywr6b45wz5youd97xwx7.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAARACADASIAAhEBAxEB/8QAGAAAAwEBAAAAAAAAAAAAAAAAAAECAwT/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAHsVsmtIKYAgP/EABsQAAICAwEAAAAAAAAAAAAAAAECABEQEiAi/9oACAEBAAEFAiqylgVZosNFgAMX64//xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAEDAQE/AR//xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAECAQE/AR//xAAdEAABBAIDAAAAAAAAAAAAAAAAAREzoRAxIDKR/9oACAEBAAY/Ao6I6I6OqeGlNYZuP//EAB8QAAIBAwUBAAAAAAAAAAAAAAERABAxgSAhQWFx8P/aAAgBAQABPyEApDhPiEIuA9CjgIBN3xDmyZo1wk3p/9oADAMBAAIAAwAAABDQSBz/xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAEDAQE/EB//xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAECAQE/EB//xAAeEAEAAgIBBQAAAAAAAAAAAAABABEhYTEQIFHB8f/aAAgBAQABPxCjPDSA14mMXB9KM5g+YlYEBo0tcy1vhV5e+iQuLRNdv//Z",
       "color": "#3B49DF"
     },
     {
@@ -290,27 +290,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4812044",
-      "title": "I Turned 149k Messy Images into an Offline Recognition System",
-      "desc": "By Michellebuchiokonicha | 13 min read",
-      "tag": "tutorial",
-      "published": "2026-10-08T06:31:39Z",
-      "order": 25,
-      "url": "https://dev.to/michellebuchiokonicha/i-turned-149k-messy-images-into-an-offline-recognition-system-3cp3",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F1mh3tg2u6x2dj6vgt8b3.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAAEDAv/EABYBAQEBAAAAAAAAAAAAAAAAAAEAAv/aAAwDAQACEAMQAAABwnLJZEp//8QAGhAAAgIDAAAAAAAAAAAAAAAAAREAIQISMf/aAAgBAQABBQJwGqeZGscKfT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAWEQEBAQAAAAAAAAAAAAAAAAAAATH/2gAIAQIBAT8BlY//xAAXEAEAAwAAAAAAAAAAAAAAAAAQITFB/9oACAEBAAY/AmGsP//EABoQAAMBAQEBAAAAAAAAAAAAAAABESFBMVH/2gAIAQEAAT8hqdEtNXgvl6W02sUiwfc2DIK6RLh//9oADAMBAAIAAwAAABAe/wD/xAAXEQEBAQEAAAAAAAAAAAAAAAABABEh/9oACAEDAQE/EDpBt//EABcRAAMBAAAAAAAAAAAAAAAAAAARIQH/2gAIAQIBAT8QojVR/8QAHBABAQEBAAIDAAAAAAAAAAAAAREAIUFRMXGB/9oACAEBAAE/EFakPbdDjACNo+tBQPFfDkmEIHm4pkvNcY/Jf3XgGhi8vvS30g3/2Q==",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4817363",
       "title": "How Our Engineering Team Uses AI, Part II: Meat Proxies",
       "desc": "By Eyal Bukchin | 7 min read",
       "tag": "tutorial",
       "published": "2026-10-08T10:33:43Z",
-      "order": 26,
+      "order": 25,
       "url": "https://dev.to/metalbear/how-our-engineering-team-uses-ai-part-ii-meat-proxies-148g",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fmetalbear.com%2Fblog%2Fengineering-ai-use-part-2%2Fthumbnail.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAQMAAgT/xAAWAQEBAQAAAAAAAAAAAAAAAAABAAP/2gAMAwEAAhADEAAAAYDXYY/MS//EABoQAAIDAQEAAAAAAAAAAAAAAAECABEyEDH/2gAIAQEAAQUCbUEoAt7XE3//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAXEQEBAQEAAAAAAAAAAAAAAAABABEh/9oACAECAQE/AeyO3//EABcQAQEBAQAAAAAAAAAAAAAAAAEAECH/2gAIAQEABj8CdOTpf//EABsQAQACAgMAAAAAAAAAAAAAAAEAESFxEDGR/9oACAEBAAE/IV6S4Ry9EsJS0gvdw1BkW25//9oADAMBAAIAAwAAABC+f//EABYRAQEBAAAAAAAAAAAAAAAAAAARAf/aAAgBAwEBPxBcj//EABkRAAMAAwAAAAAAAAAAAAAAAAABESExQf/aAAgBAgEBPxBLnQ/Vwf/EABwQAQADAAIDAAAAAAAAAAAAAAEAESFRsTFhcf/aAAgBAQABPxCgPbthaXm9FnNwIjkLnnVa7gA3YKNqmUuEOv2f/9k=",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4812044",
+      "title": "I Turned 149k Messy Images into an Offline Recognition System",
+      "desc": "By Michellebuchiokonicha | 13 min read",
+      "tag": "tutorial",
+      "published": "2026-10-08T06:31:39Z",
+      "order": 26,
+      "url": "https://dev.to/michellebuchiokonicha/i-turned-149k-messy-images-into-an-offline-recognition-system-3cp3",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F1mh3tg2u6x2dj6vgt8b3.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAAEDAv/EABYBAQEBAAAAAAAAAAAAAAAAAAEAAv/aAAwDAQACEAMQAAABwnLJZEp//8QAGhAAAgIDAAAAAAAAAAAAAAAAAREAIQISMf/aAAgBAQABBQJwGqeZGscKfT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAWEQEBAQAAAAAAAAAAAAAAAAAAATH/2gAIAQIBAT8BlY//xAAXEAEAAwAAAAAAAAAAAAAAAAAQITFB/9oACAEBAAY/AmGsP//EABoQAAMBAQEBAAAAAAAAAAAAAAABESFBMVH/2gAIAQEAAT8hqdEtNXgvl6W02sUiwfc2DIK6RLh//9oADAMBAAIAAwAAABAe/wD/xAAXEQEBAQEAAAAAAAAAAAAAAAABABEh/9oACAEDAQE/EDpBt//EABcRAAMBAAAAAAAAAAAAAAAAAAARIQH/2gAIAQIBAT8QojVR/8QAHBABAQEBAAIDAAAAAAAAAAAAAREAIUFRMXGB/9oACAEBAAE/EFakPbdDjACNo+tBQPFfDkmEIHm4pkvNcY/Jf3XgGhi8vvS30g3/2Q==",
       "color": "#3B49DF"
     },
     {

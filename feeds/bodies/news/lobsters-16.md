@@ -1,242 +1,170 @@
-When editing code in a modern IDE or editor, developers rely on its refactoring
-features to automate common transformations. Today, we are excited to introduce
-**interactive refactoring** in [gopls](https://go.dev/gopls), powered by a new capability we are
-proposing for the [Language Server Protocol (LSP)](https://microsoft.github.io/language-server-protocol/)
-that brings dynamic, multi-step dialogs directly into your favorite editor.
-Crucially, we designed this capability (in collaboration with the Dart team)
-not just for Go, but as an open standard for all programming languages and
-editor ecosystems. Working support is already available in gopls [v0.24.0](https://go.dev/gopls/release/v0.24.0) and
-the official Go extension for VS Code v0.56.0.
+I recently acquired a lightly-used HP Envy 17" laptop, model DA0013dx, and of course wanted to run
+[OpenBSD](https://openbsd.org/) on it.
+It came with Windows 11 on an internal NVME drive.
+Booting OpenBSD from a USB device failed fast: it hung.
+To get there, first of course I had to disable "secure boot" in the BIOS.
+Then, the boot process hung part way through the device probe section of the boot process.
+Familiar to BSD users since 1979, probing is where the OS tries every device it knows about and,
+if the device responds appropriately, marks it active and prints a short message on the console.
+Other OSes go through the same process, but the three mainstream OSes simply choose to hide it under a GUI.
+Both Linux and macOS have a Unix-derived `dmesg` command which prints the messages that are hidden at boot.
+On Windows, you have to into System Settings or some such to get hardware information.
 
-### What is the Language Server Protocol (LSP)?
+So. On the HP Envy in question, the device probing stops after the iwx(4) (Intel AX211 WiFi) probe.
+This implies that some device after the IWX in the probe sequence does something bad when trying its device.
+How do we find out which device is at fault?
 
-The LSP is an open standard that decouples language-specific
-features from specific text editors. As you navigate and edit code, your
-editor (such as VS Code, Neovim, or Emacs) and a language server (like gopls)
-engage in a continuous JSON-RPC exchange to provide features like autocomplete,
-hover documentation, diagnostics, and code actions.
+## Getting Past Device Probe Hangs
 
-### Multi-step code transformation
+In the simplest case, you would use ddb(4) on a debug kernel:
 
-Today, almost every code transformation in the LSP is like a function of no
-parameters: you trigger the operation, and the server immediately computes the
-edits. (Renaming a symbol is the sole exception: because it is a function of one
-parameter, the desired new name, it required its own dedicated `PrepareRename`
-RPC in the protocol.)
+- `boot -c bsd.gdb` This file is created as part of kernel building, so you may have to build your own kernel to get this.
+- At config prompt, enter `ddb` to enter kernel debugger
+- `write autoconf_verbose 1`
+- `continue` # back to config
+- `quit` # resume booting
 
-*"Add struct tags", without questions*
+This produces a massive stream of output, so fast that a normal video recorder at 24FPS will show
+overlapping text that’s hard to read.
+I did try several different kernels, and eventually got one to panic instead of hanging with no output.
+With a bit of decrypting of a blurry video, I was able to read
+the panic as `panic: cpu at apic id 0 already attached.`
+A bit of cogitation led me to suspect a defective ACPI/AML implementation.
+And that led me to the next giant leap: update the BIOS!
+Sure enough, the machine was running a BIOS from 2024, the year the machine was first released.
+First releases these days often being really beta releases, I went looking for an update.
+A 2026 version was available, with numerous corrections, including the one that mattered.
+Since I hadn’t been able to clobber the Windows load, updating the BIOS was no problem,
+and the process ran smoothly.
+Then, booting off an external drive over USB booted into OpenBSD with no problem!
 
-The language server must deduce the user’s intent from context alone, namely
-the cursor position and the enclosing syntax tree. When that context is not
-enough, the server is forced into one of two choices: apply a one-size-fits-all
-default, or refrain from offering the transformation altogether. The limitation
-lies not in gopls’s ability to compute the necessary edits, but in the
-LSP’s lack of a mechanism for language servers to ask the user for input.
+The next step was to swap the NVME drives: take the OpenBSD 4TB from my older laptop and install it here,
+keeping the Windows-loaded 1TB aside in case of future BIOS updates.
+And yes, I remain paranoid enough to *remove the OpenBSD NVME when running MS-Windows*.
+Better safe than sorry.
 
-For many transformations, this parameterless model works well. But many others
-need additional input from the user: which struct tags to add and in what
-naming convention, which interface to implement, which file to move a
-declaration to. Without a way to ask, gopls could only guess—“Add struct
-tags”, for example, always produced `json` tags in `camelCase`—or not offer the
-refactoring at all. With interactive refactoring, language servers can now
-easily provide new operations with one or more parameters.
+Here we run into two areas that differ from the Framework laptop this is replacing, and make little annoyances for servicing.
+First, the screws holding the bottom of the HP’s case are not captive,
+so you can lose them if not careful (I was, and didn’t).
+Second, the screws holding the bottom of the case carry Torx heads, while the screws holding the
+NVME itself use Philips (+) head. How hard would it have been for HP to make all the service screws
+have the same head? Framework did this some years ago.
+So maybe that’s a third: big companies should overcome their arrogance and look at what the
+new kids on the block are doing.
 
-*"Add struct tags", with questions*
+After the first set of screws was removed, there came a mighty struggle to get the case bottom off.
+It’s held in on all four sides with press-fit couplers all along each edge, so you have to pry like mad to remove it.
+The base is plastic, btw, so it flexes, but it’s still annoying.
+I guess you have to do that when making inexpensive plastic parts on an expensive laptop(?).
 
-While some language extensions have worked around this limitation by embedding
-custom, language-specific dialog logic directly into individual editors, doing
-so leaves behind other editors (such as Neovim and Emacs) that stick strictly
-to the LSP with minimal custom client code. More importantly, editor-specific
-workarounds go against the fundamental purpose of the LSP: to decouple
-language-specific features from editors so that each server improvement benefits
-every client.
+![hp envy17 insides](https://darwinsys.com/blog/images/hp-envy17-insides.jpg)
 
-Our [LSP interactive refactoring proposal](https://go.googlesource.com/proposal/+/refs/heads/master/design/76331-lsp-interactive-refactoring.md)
-([microsoft/language-server-protocol#1164](https://github.com/microsoft/language-server-protocol/issues/1164))
-solves this by establishing a standard mechanism for
-language servers to collect user input before computing text edits. For Go
-developers, this unlocks a suite of long-awaited refactorings, including:
+Finally, I got to swap in the OpenBSD NVME. Powered it up. Nothing! Just a moment of silence.
+Oh shite! I thought. Have I busted something inside!?
+Well, not so fast. Several minutes of doom-and-gloom later,
+I was starting to get the external OpenBSD drive ready again, when I got a BIOS screen about the CMOS
+being corrupt, is it OK to recompute? Of course it disappeared before I could read it all.
+Rebooting again, I let it get back to this popup, accepted it, and, *mirabile dictu*,
+the machine booted up completely.
+Seems these machines often get upset when you change memory or hard drive,
+and take some time and/or an OK click to settle down.
 
-- golang/go#70583: Move Declaration
-- golang/go#38028: Change Signature
-- golang/vscode-go#1547: Implement Interface
-- golang/vscode-go#2002: Modify Struct Tags
+So, I now have the machine running -current with all my files from the older laptop.
+Tada!
 
-among many others.
+## About the Laptop
 
-## Interactive refactorings in action
+I’ve never had a 17" laptop before, so its size and weight are, well, different.
+My lightweight laptop backpack, which fits my [Framework 13](https://frame.work), simply won’t zip up around it!
+A larger backpack does, thankfully.
 
-**Adding and removing struct tags (gopls v0.23.0)**
+Reminder: we have two measures for any laptop, the screen diagonal and the actual physical width.
+Bigger laptops cluster around 17" diagonal, but most have a base "only" 15" or 15.6" wide.
+The former measure is used in advertising, e.g., "HP Envy-17", while the latter is used in sizing
+a backpack or carrying sleeve.
 
-When configuring serialization formats, developers frequently need custom tags
-and casing conventions. Previously, running “Add struct tags” unconditionally
-injected `json` tags using `camelCase` formatting.
+The HP originally shipped with a 65W power supply (there’s a model with an extra graphics card that ships with 100W).
+So of course it runs with the 65W power supply from my Framework 13, but every so often (when running Windows)
+there was a notice that HP recommends using an HP power supply.
 
-With interactive refactoring:
+Note that there is a range of variations of the Envy 17, denoted by a string of characters and digits.
+Some of the detail listed here is specific to the DA0013dx model which I have.
+I got my Envy used, and it didn’t come with the official power supply, nor with the USB dock
+that expands on its fixed set of ports (three USB-A, 2 USB-C/DP (one for power in), one HDMI,
+and a 1/8" headphone jack).
+Again, my Framework has a series of interchangeable ports, of which any 4 can be in use at ome time on the 13,
+or more on Framework’s larger laptops; this is great if you need a particular cable on the left or the right).
 
-1. Place your cursor on any struct definition and select the “Add struct tags” code action.
-2. An input dialog appears, pre-filled with json, allowing you to customize any combination of tags (such as json,yaml,db).
-3. A second dialog lets you select your desired naming convention (such as camelCase, snake_case, or PascalCase).
-4. Gopls generates and applies the formatted struct tags across your type definition.
+The screen is bright and beautiful, and works "out of the box" with OpenBSD’s X Windows system.
+This Envy model has a 1920x1024 display and can drive an external HDMI monitor to 4K via the HDMI port,
+or a DisplayPort monitor on one of the USB-C ports.
+The 1920x1024 is the 19:6 ratio that used on many monitors these days, but due to the
+different sizes and resolutions, it takes quite some fiddling to update my XFCE4 layout just the way I wanted it.
+Unlike many lesser laptops, this features a touchscreen, which does work with OpenBSD’s ism(4)
+(trackpad and touchscreen) driver, with one important exception noted below.
 
-*Interactive "Add struct tags" in VS Code*
+Here’s a screenshot of my XFCE4 setup.
 
-Here is the before-and-after transformation:
+| ![xfce4 framework](https://darwinsys.com/blog/images/xfce4-framework.jpg) | ![xfce4 hp envy](https://darwinsys.com/blog/images/xfce4-hp-envy.png) |
+| --- | --- |
+| Framework (a while ago) | HP Envy-17 |
 
-```go
-type UserProfile struct {
-    ID        int64
-    FirstName string
-    LastName  string
-    EmailAddr string
-}
-```
+The CPU is a
+[Intel® Core™ Ultra 7 155H, 4484.32 MHz](https://www.intel.com/content/www/us/en/products/sku/236847/intel-core-ultra-7-processor-155h-24m-cache-up-to-4-80-ghz/specifications.html).
+We’ll just call it 4.5GHz, the maximum speed. This is a "Meteor Lake" CPU, with several types of cores
+(6 Performance cores each with two threads,
+8 Efficient cores, and
+2 Low Power Efficient cores, for a total of 22 threads; shows as 22 CPUs in dmesg).
+The Envy-17 is also available with the less expensive 120U CPU version.
 
-```go
-type UserProfile struct {
-    ID        int64  `json:"id" db:"id"`
-    FirstName string `json:"first_name" db:"first_name"`
-    LastName  string `json:"last_name" db:"last_name"`
-    EmailAddr string `json:"email_addr" db:"email_addr"`
-}
-```
+This model ships with 16GB RAM but is available from HP configured with 32G.
+It’s DDR-5 SODIMM memory, so you can in theory upgrade as much as you can afford.
+Similarly, the Envy-17 is available configured with a 1 or 2 TB SSD;
+I moved my 4GB NVME SSD from the Framework into the HP Envy, and it works fine.
+My Framework may someday be reborn by installing a newer motherboard with more CPU power than the Envy I have
+([https://Frame.work](https://Frame.work), as per their promise and their culture, continues to bring out upgrades for all their models).
 
-Similarly, **“Remove struct tags”** now asks you for the specific tag keys
-you wish to delete (for example, removing only `db` tags while preserving the `json`
-tag), rather than wiping out all struct tags indiscriminately.
+## Minor nits:
 
-*Interactive "Remove struct tags" in VS Code*
+The lid hinge is very stiff.
 
-**Implementing interfaces with dynamic symbol search**
+The keyboard seems a little off in terms of the row positions, but I guess that’s just down to whatever keyboard you’re used to.
+And the fact that it’s wider than most.
 
-When creating a type to satisfy an interface, developers previously had to copy
-the interface declaration and manually turn it into a set of methods on the
-receiver type (or rely on external tools like `impl` by manually typing the
-receiver and qualifying the name of the interface).
+The official Intel stickers beside the touchpad are about the size of SD cards and I keep wanting to brush them off.
+Guess I’ll scrape them off when it gets too annoying.
 
-Since gopls v0.23.0, with interactive refactoring:
+There is an error in HP’s "AML",the ACPI Machine Language which tells the OS about the details of the hardware.
+THis results in the error: `# AML PARSE ERROR (0x944): Undefined name: \_SB_.PC00.LPCB.MXTP`.
+This is a failed attempt at providing the MaXimum TemPerature that the CPU can run it without damage.
+In this case, `acpitz` driver doesn’t know the max temp.
+I just set temp:high=90C in `/etc/sensorsd.conf`, a bit more conservative than the 100C that some laptops provide.
 
-1. Place your cursor on any concrete type and select the “Add methods to X to implement an interface…” code action.
-2. A text entry field appears, inviting you to choose the name of an interface type. It makes dynamic queries to gopls to auto-complete names of types in your workspace and the standard library (for example, maphash.Hasher).
-3. If the selected interface has type parameters, gopls asks for a concrete type argument for each type parameter (such as Foo).
-4. Gopls generates complete method stubs with appropriate receiver names and instantiated method signatures.
+## All that remains
 
-*Interactive "Add methods to implement an interface..." in
-     VS Code*
+There remain some minor issues to work out.
 
-```go
-type Foo struct{}
+- The AML problem mentioned above means that the ACPI doesn’t know the maximum temperature, so maybe the CPU will catch fire if I ask too much of it at a time. This is a likely "won’t fix".
+- There’s a DRM warning message at boot time, due to "a call to a driver we don’t have" (jsg@). There were previously several other errors, but most were fixed in a recent (pre-8.0) commit.
+- The driver for the Intel Wifi (AX210) gives a seemingly-harmless error at bootup:
+- When there are two monitors, the touch screen behaves like x = k*x (k is 2 if they’re both the same width, otherwise YMMV). This seems to be a fundamental issue with X. Most of these should get resolved shortly. iwx0: timeout waiting for master
+- sndio isn’t talking to the built-in speaker via audio device(s) properly; it works with usb headphones. I don’t care, because I don’t like annoying the people around me with sudden blasts of noise when some advertisement pops up.
+- When there are two monitors, the mouse works correctly but the touch screen behaves like x = k*x (k is 2 if they’re both the same width, otherwise YMMV). This seesms to be a fundamental issue with X.
 
-type MyHasher struct{}
-```
+Most of these should get resolved eventually.
 
-```go
-type Foo struct{}
+## Lessons learned:
 
-type MyHasher struct{}
+- Carry many different screwdrivers.
+- When in doubt, update your PC’s BIOS.
+- Big computer companies: look around more.
 
-// Equal implements [maphash.Hasher].
-func (m *MyHasher) Equal(x Foo, y Foo) bool {
-    panic("unimplemented")
-}
+## Last words
 
-// Hash implements [maphash.Hasher].
-func (m *MyHasher) Hash(*maphash.Hash, Foo) {
-    panic("unimplemented")
-}
-```
+If you want a modern laptop with a 16:9 touchscreen display to run OpenBSD, the HP Envy is not a bad choice.
 
-**Moving declarations across files and packages (preview)**
-
-Moving declarations manually by cutting and pasting can easily break references
-and requires tedious import cleanup across multiple files. While scheduled for
-an upcoming gopls release, our working implementation already demonstrates how
-interactive file selection streamlines cross-file and cross-package moves:
-
-1. Place your cursor on any top-level declaration and select the “Move declaration X” code action.
-2. A file picker dialog lets you choose an existing destination .go file or specify a new file path.
-3. Gopls moves the declaration along with its dependent declarations (such as unexported helpers or methods) while leaving unrelated symbols in place, updates references across your workspace, and cleans up imports in both the source and destination files.
-
-*Interactive "Move declaration" in VS Code*
-
-In the example below, we move the type `Foo` from package `from` to package
-`to`. Its method `Print` and the unexported constant `bar`, which only `Foo`
-uses, move along with it, while the unrelated function `Baz` stays behind:
-
-```go
-// from/from.go
-package from
-
-import (
-    "fmt"
-    "strings"
-)
-
-const bar = "bar"
-
-// Doc comment for Foo
-type Foo struct{}
-
-func (f Foo) Print() {
-    fmt.Println(bar)
-}
-
-func Baz() string {
-    return strings.ToUpper("baz")
-}
-```
-
-```go
-// from/from.go
-package from
-
-import "strings"
-
-func Baz() string {
-    return strings.ToUpper("baz")
-}
-
-// to/to.go
-package to
-
-import "fmt"
-
-const bar = "bar"
-
-// Doc comment for Foo
-type Foo struct{}
-
-func (f Foo) Print() {
-    fmt.Println(bar)
-}
-```
-
-**Slaying the dragon (gopls v0.24.0)**
-
-As a demonstration of multi-step interactive dialogs and a self-contained test
-case for client editor implementations, gopls v0.24.0 offers a **“Slay the
-dragon”** code action when you place your cursor on a package-level variable
-named `dragonSlayer` (for example, `var dragonSlayer string`). Happy hunting!
-
-## What’s on the Horizon
-
-Interactive refactoring establishes a foundational capability in gopls,
-opening up several exciting directions on our roadmap:
-
-- Change signature refactoring ([#38028](https://go.dev/issue/38028)): Adding, removing, or reordering function parameters across a workspace requires input that cannot be deduced from syntax alone, such as the new parameter order or the default argument expression to insert at existing call sites. Interactive forms allow gopls to collect these details before rewriting the declaration and all call sites.
-- Interactive conflict resolution: When a code transformation encounters naming collisions, identifier shadowing, or ambiguous references, gopls can ask the user for guidance, such as asking for permission to proceed or offering to rename conflicting symbols on the fly.
-- Interactive commands beyond code edits: Because interactivity is modeled at the LSP command layer, it naturally generalizes to non-edit server operations that require user configuration, such as configuring test or benchmark runs with profiling flags (CPU, memory, tracing).
-
-## Getting Started and Sharing Feedback
-
-Interactive refactoring is available in gopls [v0.24.0](https://go.dev/gopls/release/v0.24.0)
-and `vscode-go` [v0.56.0](https://github.com/golang/vscode-go/releases/tag/v0.56.0)
-(with proof-of-concept client integrations also explored for
-[Neovim](https://github.com/h9jiang/neovim/tree/interactive-refactoring) and
-[Emacs](https://go-review.googlesource.com/c/tools/+/800220)).
-
-We would love to hear your thoughts as we continue
-refining interactive code actions in gopls:
-
-- For general feedback or feature requests, file an issue on the Go issue tracker.
-- To read the full technical specification—including the stateless form protocol design and alternative approaches we explored—or to join the discussion with the broader LSP community, check out the LSP Interactive Code Actions design document and the ongoing conversation in microsoft/language-server-protocol#1164.
+I recently acquired a lightly-used HP Envy 17" laptop, model DA0013dx, and of course wanted to run
+[OpenBSD](https://openbsd.org/) on it.
+It came with Windows 11 on an internal NVME drive.
+Booting OpenBSD from a USB device failed fast: it hung.
+To get there, first of course I had to disable "secure boot" in …

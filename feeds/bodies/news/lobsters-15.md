@@ -1,89 +1,159 @@
-‘AI’ is not a neutral tool. It is a tool of a society that has given up. By its developers’ own admission, ‘AI’ is meant to enable control of population that subverts, and overpowers, all existing political apparatuses, and which, by design, is meant to substitute people’s capacity to make their judgements. If anyone is deluded in their misplaced optimism, it’s the ‘AI’ users and promoters who think they can plug themselves into this massive thing and use it to their advantage, *without being dominated by it*, not us who recognise that ‘AI’ can (and must) be abolished. If we muster *just a fraction* of the faith that ‘AI’ boosters allocate to ‘AI’, and put this faith into a revolutionary project instead, that would be enough to change the world. We just need to convincingly argue for such a (re)allocation.
+Leonardo da Vinci’s Mona Lisa is one of the most famous paintings of all time. And there has always been a discussion around her enigmatic smile. He used a trademark Renaissance technique called *sfumato,* which involves many thin layers of glaze mixed with subtle pigments. The striking result is that when you look directly at Mona Lisa’s smile, it seems to disappear. But when you look at the background your peripherals see a smiling face.
 
-In short, working towards ‘AI’ abolition is working towards liberation. But what exactly do we mean by that?
+One could spend decades studying the works of these masters from various perspectives, but if we want to hone in on the disappearing nature of that smile, mathematics can provide valuable insights. Indeed, though he may not have known the relationship between his work and da Vinci’s, hundreds of years later Salvador Dali did the artist’s equivalent of mathematically isolating the problem with his painting, “Gala Contemplating the Mediterranean Sea.”
 
-## Abolition means working towards a liberatory alternative.
+Here you see a woman in the foreground, but step back quite far from the picture and there is a (more or less) clear image of Abraham Lincoln. Here the question of gaze is the blaring focus of the work. Now of course Dali and da Vinci weren’t scribbling down equations and computing integrals; their artistic expression was much less well-defined. But we the artistically challenged have tools of our own: mathematics, science, and programming.
 
-Abolition as a political project is most famously associated with the abolition of slavery. The political project of abolition identifies an **oppressive institution** that it wants to eradicate (in this example, slavery); and importantly, also, the project of abolition suggests a **positive worldview** (in this example, a vision of the future where humans treat each other equally and do not dehumanize and enslave each other). Taking an abolitionist perspective is *not* (or at least not primarily) being *against* an oppressive institution; taking an abolitionist perspective is being *in favour of a liberatory alternative* to an oppressive institution.
+In 2006 Aude Oliva, Antonio Torralba, and Philippe. G. Schyns used those tools to merge the distance of Dali and the faded smiles of da Vinci into one cohesive idea. In [their 2006 paper](http://web.archive.org/web/20191231032911/http://cvcl.mit.edu:80/publications/OlivaTorralb_Hybrid_Siggraph06.pdf) they presented the notion of a “hybrid image,” presented below.
 
-Other abolitionist projects follow this logic, too: prison abolition works towards restorative justice *as an alternative* to the carceral system; police abolition works towards nonviolent public safety *as an alternative to* the police (and/or policing) state; family abolition words towards community care *as an alternative* to normatively imposed heteropatriarchal nuclear family structures.
+![](https://www.jeremykun.com/img/2014/monalisas1.png)
 
-As AI abolitionists, we place ourselves in the context of other liberatory struggles against oppressive institutions and in favor of humane alternatives. AI abolition works towards *a revolution from the left* as an alternative to *global technofascism*.
+*The Mona Lisas of Science*
 
-Many proponents of the abolitionist movements mentioned above – abolition of slavery, prisons, police, and family – come to the conclusion that their abolitionist project is not possible within a capitalist system. The same is true for AI abolition. We believe that the abolition of AI is only possible if it goes hand in hand with the abolition of capitalism.
+If you look closely, you’ll see three women, each of which looks the teensiest bit strange, like they might be trying to suppress a smile, but none of them are smiling. Blur your eyes or step back a few meters, and they clearly look happy. The effect is quite dramatic. At the risk of being overly dramatic, these three women are literally modern day versions of Mona Lisa, the “Mona Lisas of Science,” if you will.
 
-At this point in the text, since, as the famous saying goes, “it is easier to imagine the end of the world than the end of capitalism” (*Frederic Jameson*), it is worth reminding ourselves that not only are alternatives *imaginable*; they are also *feasible* and *realistic*, as for the most of human history — for the absolutely longest time of our human existence on earth — we humans lived without slavery; lived without prisons; lived without police; lived in communities without cisheteropatriarchal norms; and lived without AI.
+Another, perhaps more famous version of their technique, since it was more widely publicized, is their “Marilyn Einstein,” which up close is Albert Einstein and from far away is Marilyn Monroe.
 
-## While we argue about what “AI” really means, real harm is being done.
+![](https://www.jeremykun.com/img/2014/marilyn-einstein.png)
 
-Whole books and articles have been written, and will be written, about “what exactly” AI is. While these discussions are interesting, they are also beyond the point for our abolitionist purpose here; arguing about competing definitions of AI is distracting our eyes from the actual prize: *an urgently needed revolution from the left*. The good news is that we do not need to go through all of the small print in order to start working towards that *positive worldview*. This is also reflective of reality: since “AI” means different things to different people, you are invited to join the struggle — no matter if you are fighting against…
+*Marilyn Einstein*
 
-- AI as a set of technologies;
-- AI as marketing term rooted in eugenics;
-- AI as a product with for-profit promises that are failing to materialize;
-- AI as a misconception of what computers can do;
-- AI as a cultural practice of outsourcing our thinking;
-- AI as floating signifier;
-- AI as a political argument for the extraction and appropriation of vast material resources;
-- and the list continues.
+This one gets to the heart of the question of what the eye sees at close range versus long range. And it turns out that you can address this question (and create brilliant works of art like the ones above) with some basic Fourier analysis.
 
-What all of these definitions of AI have in common is that **enormous harm is being done *in the name of* “AI”**.
+## Intuitive Fourier analysis (and references)
 
-*[here could be inserted the typical laundry list of: the planet, the data privacy, the enshittification, the resources, the acceleration of work, the inhumane working conditions for data labellers, the damage to education, the detrimental psychological effects on people, the gigantic natural resources consumed, the gigantic dual use notjustpotentialbutactualuse see warfare in Gaza and elsewhere, the makingpeopledependentonithencelessawareof the issues, etc.]*
+The basic idea of Fourier analysis is the idea that smooth functions are hard to understand, and realization of how great it would be if we could decompose them into simpler pieces. Decomposing complex things into simpler parts is one of the main tools in all of mathematics, and Fourier analysis is one of the clearest examples of its application.
 
-Of course, technology is never neutral. And we do not buy into singularity narratives into “AI” bringing human beings closer to God, or the Devil, or both. So, what makes AI *not* just “yet another technology, and why don’t you go abolish the telephone and the printer if you hate technology so much?”, is **the enormous scale at which the term is being used to do harm in the name of some diffuse technooptimist future**. The harm done in the name of AI is much, much, much larger than any of the supposed benefits brought about by AI. And do not fool yourself at this point (just like we do not want to fool you): it is not enough to try to figure out how to “mitigate the harms while exploiting the benefits”. We can see that all of the harms done in the name of AI are integral part of AI; and are integral parts of capitalism. As such, there is no ethical AI, and never will be; and there is no AI abolition under capitalism.
+In particular, the things we care about are functions $ f(x)$ with specific properties I won’t detail here like “smoothness” and “finiteness.” And the building blocks are the complex exponential functions
 
-## You can take action, now.
+where $ k$ can be any integer. If you have done some linear algebra (and ignore this if you haven’t), then I can summarize the idea succinctly by saying the complex exponentials form an orthonormal basis for the vector space of square-integrable functions.
 
-It is easy to feel overwhelmed by the magnitude of the issues. Feeling overwhelmed, however, is not the same as being paralyzed. Even when you feel overwhelmed, you still have the agency to act. We collected here a list of actions you can take, from the smallest to the most involved, sorted more or less by magnitude of efforts needed.
+Back in colloquial language, what the Fourier theorem says is that *any* function of the kind we care about can be broken down into (perhaps infinitely many) pieces of this form called *Fourier coefficients* (I’m abusing the word “coefficient” here). The way it’s breaking down is also pleasingly simple: it’s a linear combination. Informally that means you’re just adding up all the complex exponentials with specific weights for each one. Mathematically, the conversion from the function to its Fourier coefficients is called the *Fourier transform,* and the set of all Fourier coefficients together is called the *Fourier spectrum*. So if you want to learn about your function $ f$, or more importantly *modify* it in some way, you can inspect and modify its spectrum instead. The reason this is useful is that Fourier coefficients have very natural interpretations in sound and images, as we’ll see for the latter.
 
-### Tips to improve your wellbeing
+We wrote $ f(x)$ and the complex exponential as a function of *one* real variable, but you can do the same thing for two variables (or a hundred!). And, if you’re willing to do some abusing and ignore the complexness of complex numbers, then you can visualize “complex exponentials in two variables” as images of stripes whose orientation and thickness correspond to two parameters (i.e., the $ k$ in the offset equation becomes two coefficients). The video below shows how such complex exponentials can be used to build up an image of striking detail. The left frame shows which complex exponential is currently being added, and the right frame shows the layers all put together. I think the result is quite beautiful.
 
-You can abolish AI in your own life. Starting today.
+This just goes to show how powerful da Vinci’s idea of fine layering is: it’s as powerful as possible because it can create *any image!*
 
-- Most importantly: find your people. And support each other. None of this can be carried by one single individual; we all need community to support and sustain us.
-- Stay with the trouble: In a dehumanizing world, embrace the human experience.
-- Ask yourself, not “AI”.
-- Ask other people, not “AI”.
-- Find out more about the topic: learn & disseminate knowledge about the narratives that make AI seem “inevitable” or “unavoidable” even as these same narratives serve to perpetuate oppression, slavery, de-skilling, authoritarianism and ecological breakdown on a planetary scale.
-- Find analogue activities to replace your volunteering your time feeding the BigDumbRobot (aka, do more of what you actually enjoy, instead of scrolling through Instagram or conversing with ChatGPT)
-- Re-skill and up-skill yourself by phasing out tech crutches (like on-the-road access to your emails, 24/7 online availability for communication, GPS navigation) by working on your planning, organizing, navigation and community-building skills
-- Find like-minded people, gather in real life, and organize together
-- Stand up and speak up: instead of being part of the discursive normalization, be part of the critical voices who ask foundational questions
-- Stretching exercise: “reach up and out”. Reach up to the people you can reach that are the highest up in the decision making hierarchy at your workplace, in your community. And reach out to the people that are not (yet) part of your social environment: talk to acquaintances, strangers, the media.
-- Organize demonstrations and strikes (see Pull the Plug in the UK)
-- Organize conferences (see Cables of Resistance in Germany)
-- Start building resources for a difficult future (community and survival skills)
-- Direct action: start blocking and dismantling instruments of oppression
+Now for digital images like the one above, everything is finite. So rather than have an infinitely precise function and a corresponding infinite set of Fourier coefficients, you get a finite list of sampled values (pixels) and a corresponding grid of Fourier coefficients. But the important and beautiful theorem is, and I want to emphasize how groundbreakingly important this is:
 
-### “AI” is human cultural practice.
+If you give me an image (or any function!) I can *compute* the decomposition very efficiently.
 
-When we ask to abolish AI, we are not asking to abolish numbers. *The models that be* may peacefully continue to exist in hypergeometric space, as they have for time eternal, independently of our human dis/usage of them.
+And the same theorem lets you go the other way: if you give me the decomposition, I can compute the original function’s samples quite easily. The algorithm to do this is called the Fast Fourier transform, and if *any* piece of mathematics or computer science has a legitimate claim to changing the world, it’s the Fast Fourier transform. It’s hard to [pinpoint specific applications](http://dsp.stackexchange.com/questions/69/why-is-the-fourier-transform-so-important), because the transform is so ubiquitous across science and engineering, but we definitely would not have cell phones, satellites, internet, or electronics anywhere near as small as we do without the Fourier transform and the ability to compute it quickly.
 
-When we ask to abolish AI, we ask to abolish what has become (from a 2026 standpoint), over the last few years, a prevalent cultural practice whose most salient feat is its overwhelming uncritical adoption (which, as we explain below, is not a fluke, but willfully engineered into AI systems).
+Constructing hybrid images is one particularly nice example of manipulating the Fourier spectrum of two images, and then combining them back into a single image. That’s what we’ll do now.
 
-### “AI” is the cultural practice of outsourcing our thinking.
+As a side note, by the nature of brevity, the discussion above is a big disservice to the mathematics involved. I summarized and abused in ways that mathematicians would object to. If you want to see a much better treatment of the material, this blog has a long series of posts developing Fourier transforms and their discrete analogues from scratch. See our four [primers](https://www.jeremykun.com/primers/), which lead into the main content posts where we [implement the Fast Fourier transform](https://www.jeremykun.com/2012/07/18/the-fast-fourier-transform/) in Python and use it to [apply digital watermarks to an image](https://www.jeremykun.com/2013/12/30/the-two-dimensional-fourier-transform-and-digital-watermarking/). Note that in those posts, as in this one, all of the materials and code used are posted on [this blog’s Github page](https://github.com/j2kun/).
 
-What people that praise “AI” for its possibilities “for the benefit of humanity” (solving the climate crisis, eradicating racism, curing cancer, and render the working class superfluous through automation) miss out on is a simple reality check of scales and proportions. All of the enticing future promises so far have largely failed to materialize — quite on the contrary, “AI” is often driving the opposite of what the salvation promise is claiming, i.e., fueling the climate crisis, exacerbating racialized violence, facilitating the mental and physical suffering and death of billions, and trapping enormous segments of the population in increasingly meaningless and agencyless work. And at the same time (here the scale comes in!), if we weigh every single human’s participation in the BigDumbRobotInc. equally, the overwhelming majority of us humans nowadays is using “AI” for one single purpose: to outsource our thinking.
+## High and low frequencies
 
-### You can abolish AI in your own life. Starting today.
+For images, interpreting ranges of Fourier coefficients is easy to do. You can imagine the coefficients lying on a grid in the plane like so:
 
-You may feel disempowered to act “against” anything as big as the BigDumbRobot (as cultural practice). Speaking of AI abolition can feel liberating — but also daunting. You can, however, start today to abolish AI in your own life, and then let the waves ripple outwards towards the lives of other people. Here is an incomplete list of feasible steps to take, sorted more or less by magnitude of efforts needed.
+Each dot in this grid corresponds to how “intense” the Fourier coefficient is. That is, it’s the magnitude of the (complex) coefficient of the corresponding complex exponential. Now the points that are closer to the origin correspond informally to the broad, smooth changes in the image. These are called “low frequency” coefficients. And points that are further away correspond to sharp changes and edges, and are likewise called “high frequency” components. So the if you wanted to “hybridize” two images, you’d pick ones with complementary intensities in these regions. That’s why Einstein (with all his wiry hair and wrinkles) and Monroe (with smooth features) are such good candidates. That’s also why, when we layered the Fourier components one by one in the video from earlier, we see the fuzzy shapes emerge before the fine details.
 
-- Stay with the trouble. In a dehumanizing world, embrace the human experience.
-- ask yourself, not “AI”.
-- ask people, not “AI”.
-- read more about the topic (insert some resources here); learn & disseminate knowledge
-- find analogue activities to replace your volunteering your time feeding the BigDumbRobot (aka, do more of what you actually enjoy, instead of scrolling through instagram)
-- re-skill and upskill yourself by phasing out tech crutches (like on-the-road access to your emails, 24/7 online availability for communication, GPS navigation) by working on your planning, organizing, navigation etc. skills
-- find like-minded people, gather in real life, and organize together
-- stand up and speak up: instead of being part of the discursive normalization, be part of the critical voices who ask foundational questions
-- stretching exercise: reach up and out. Reach up to the people you can reach that are the highest up in the decision making hiearchy at your workplace, in your community. And reach out to the people that are not (yet) part of your social environment: talk to acquaintances, strangers, the media.
-- organize demonstrations (see Pull the Plug in the UK)
-- organize conferences (see Cables of Resistance in Germany)
-- start building resources for a difficult future (community and survival skills)
-- direct action
-- sabotage
-- strike
+Moreover, we can “extract” the high frequency Fourier components by simply removing the low frequency ones. It’s a bit more complicated than that, since you want the transition from “something” to “nothing” to be smooth in sone sense. A proper discussion of this would go into sampling and the Nyquist frequency, but that’s beyond the scope of this post. Rather, we’ll just define a family of “filtering functions” without motivation and observe that they work well.
 
-Refuse to accept that comfort is the ultimate goal.
+**Definition:** The *Gaussian filter function* with variance $ \sigma$ and center $ (a, b)$ is the function
+
+It looks like this
+
+In particular, at zero the function is 1 and it gradually drops to zero as you get farther away. The parameter $ \sigma$ controls the rate at which it vanishes, and in the picture above the center is set to $ (0,0)$.
+
+Now what we’ll do is take our image, compute its spectrum, and multiply coordinatewise with a certain Gaussian function. If we’re trying to get rid of high-frequency components (called a “low-pass filter” because it lets the low frequencies through), we can just multiply the Fourier coefficients directly by the filter values $ g(x,y)$, and if we’re doing a “high-pass filter” we multiply by $ 1 – g(x,y)$.
+
+Before we get to the code, here’s an example of a low-pass filter. First, take this image of Marilyn Monroe
+
+![](https://www.jeremykun.com/img/2014/marilyn1.png)
+
+*Marilyn Monroe*
+
+Now compute its Fourier transform
+
+![](https://www.jeremykun.com/img/2014/dft.png)
+
+*Marilyn's DFT*
+
+Apply the low-pass filter
+
+![](https://www.jeremykun.com/img/2014/filtered-dft1.png)
+
+*Marilyn's Filtered DFT*
+
+And reverse the Fourier transform to get an image
+
+![](https://www.jeremykun.com/img/2014/low-passed-marilyn1.png)
+
+*Low-passed Marilyn*
+
+In fact, this is a common operation in programs like photoshop for blurring an image (it’s called a *Gaussian blur* for obvious reasons). Here’s the python code to do this. You can [download it](https://github.com/j2kun/hybrid-images) along with all of the other resources used in making this post on [this blog’s Github page](https://github.com/j2kun/).
+
+```python
+import numpy
+from numpy.fft import fft2, ifft2, fftshift, ifftshift
+from scipy import misc
+from scipy import ndimage
+import math
+
+def makeGaussianFilter(numRows, numCols, sigma, highPass=True):
+   centerI = int(numRows/2) + 1 if numRows % 2 == 1 else int(numRows/2)
+   centerJ = int(numCols/2) + 1 if numCols % 2 == 1 else int(numCols/2)
+
+   def gaussian(i,j):
+      coefficient = math.exp(-1.0 * ((i - centerI)**2 + (j - centerJ)**2) / (2 * sigma**2))
+      return 1 - coefficient if highPass else coefficient
+
+   return numpy.array([[gaussian(i,j) for j in range(numCols)] for i in range(numRows)])
+
+def filterDFT(imageMatrix, filterMatrix):
+   shiftedDFT = fftshift(fft2(imageMatrix))
+   filteredDFT = shiftedDFT * filterMatrix
+   return ifft2(ifftshift(filteredDFT))
+
+def lowPass(imageMatrix, sigma):
+   n,m = imageMatrix.shape
+   return filterDFT(imageMatrix, makeGaussianFilter(n, m, sigma, highPass=False))
+
+def highPass(imageMatrix, sigma):
+   n,m = imageMatrix.shape
+   return filterDFT(imageMatrix, makeGaussianFilter(n, m, sigma, highPass=True))
+
+if __name__ == "__main__":
+   marilyn = ndimage.imread("marilyn.png", flatten=True)
+   lowPassedMarilyn = lowPass(marilyn, 20)
+   misc.imsave("low-passed-marilyn.png", numpy.real(lowPassedMarilyn))
+```
+
+The first function samples the values from a Gaussian function with the specified parameters, discretizing the function and storing the values in a matrix. Then the `filterDFT` function applies the filter by doing coordinatewise multiplication (note these are all numpy arrays). We can do the same thing with a high-pass filter, producing the edgy image below
+
+![](https://www.jeremykun.com/img/2014/high-passed-marilyn1.png)
+
+*High-passed Marilyn*
+
+And if we compute the average of these two images, we basically get back to the original.
+
+![](https://www.jeremykun.com/img/2014/sum-of-marilyns1.png)
+
+*Sum of two Marilyns*
+
+So the only difference between this and a hybrid image is that you take the low-passed part of one image and the high-passed part of another. Then the art is in balancing the parameters so as to make the averaged image look right. Indeed, with the following picture of Einstein and the above shot of Monroe, we can get a pretty good recreation of the Oliva-Torralba-Schyns piece. I think with more tinkering it could be even better (I did barely any centering/aligning/resizing to the original images).
+
+And here’s the code for it
+
+```python
+def hybridImage(highFreqImg, lowFreqImg, sigmaHigh, sigmaLow):
+   highPassed = highPass(highFreqImg, sigmaHigh)
+   lowPassed = lowPass(lowFreqImg, sigmaLow)
+
+   return highPassed + lowPassed
+```
+
+Interestingly enough, doing it in reverse doesn’t give quite as pleasing results, but it still technically works. So there’s something particularly important that the high-passed image does have a lot of high-frequency components, and vice versa for the low pass.
+
+You can see some of the other hybrid images Oliva et al constructed over at their [web gallery](https://web.archive.org/web/20180311064128/http://cvcl.mit.edu/hybrid_gallery/gallery.html).
+
+## Next Steps
+
+How can we take this idea further? There are a few avenues I can think of. The most obvious one would be to see how this extends to video. Could one come up with generic parameters so that when two videos are hybridized (frame by frame, using this technique) it is only easy to see one at close distance? Or else, could we apply a three-dimensional transform to a video and modify that in some principled way? I think one would not likely find anything astounding, but who knows?
+
+Second would be to look at the [many other transforms](http://en.wikipedia.org/wiki/List_of_transforms) we have at our disposal. How does manipulating the spectra of these transforms affect the original image, and can you make images that are hybridized in senses other than this one?
+
+And finally, can we bring this idea down in dimension to work with one-dimensional signals? In particular, can we hybridize music? It could usher in a new generation of mashup songs that sound different depending on whether you wear earmuffs 🙂

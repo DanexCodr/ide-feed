@@ -1,13 +1,5 @@
-# Build **predictable**, **concurrent**, **time-sensitive**, and **distributed** systems.
+Following up on the previous update ([Build System Improvements, Centralized Overview, etc.](https://gist.github.com/rcalixte/0afb119cbcc130c21063839f65b53ab7)), QML is now available.
 
-### Deterministic Concurrency
+For those unfamiliar, this introduces a more declarative paradigm that leverages the existing breadth of each library. Importantly, this additional paradigm can coexist in a single application so developers still have full control. One of the areas that this enhances is development for portable devices such as the Steam Deck.
 
-Lingua Franca offers a straightforward way to write deterministic multi-threaded and distributed applications, eliminating concerns about thread management, synchronization, and race conditions.
-
-### Built-in Timing Semantics
-
-Timing is embedded within Lingua Franca's core, empowering developers to handle time-sensitive tasks with precision and without the complex timing logic typically required in concurrent programming.
-
-### Simplified Distribution
-
-Lingua Franca enables seamless transition from single to distributed system architectures with minimal modifications, abstracting away the complexities of distributed systems programming.
+Speaking more to the development experience, as the examples demonstrate, much of the expected functionality for QML is available. In addition to leveraging the bindings for private Qt classes, some advanced metaprogramming can also be had. For typical usage, if simpler options exist, those are encouraged. Some portions of the API can be very low level. Over time, more common operations can probably be augmented by helper functions if enough need emerges. The centralized overview for each project's examples can be used if only a quick glance is desired.
