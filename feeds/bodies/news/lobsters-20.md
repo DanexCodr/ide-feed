@@ -1,235 +1,39 @@
-A tool for managing a wiki stored in a plain text file. 📖
+It’s been two years since [my initial post](https://blogs.gnome.org/adrianvovk/2024/10/25/a-desktop-for-all/https://blogs.gnome.org/adrianvovk/2024/10/25/a-desktop-for-all/) about making GNOME OS an end-user general purpose OS. Today, we’re excited to announce that we’ve hit a major milestone!
 
-# Mull 📖
+TL;DR: We’re launching a new edition called “GNOME OS Preview”, which is built from the latest stable GNOME release. This means that GNOME OS is no longer *just* a nightly OS for GNOME developers and testers!
 
-[![Build status](https://github.com/stepchowfun/mull/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/stepchowfun/mull/actions?query=branch%3Amain)
+## The Road to Stable
 
-*Mull* is a tool for managing a wiki stored in a plain text file. It has a [Visual Studio Code](https://code.visualstudio.com/) / [Cursor](https://cursor.com/) extension which provides syntax highlighting, hover previews, completions, diagnostics, formatting, refactoring, etc.
+Even though GNOME OS has been usable on real hardware for a few years now, its appeal was limited. We’ve only had the Nightly edition, which is constantly rebuilt to ship the latest git commit of every GNOME component (and a few others, like systemd and Flatpak). This form of GNOME OS is extremely useful, since GNOME developers and designers can daily-drive it to test the latest changes. However, it’s not something we’d recommend to non-developers.
 
-[![Welcome to Mull.](https://raw.githubusercontent.com/stepchowfun/mull/main/screenshots/mull.png)](https://raw.githubusercontent.com/stepchowfun/mull/main/screenshots/mull.png)
+Over the past year, we’ve seen a lot of adoption of GNOME OS Nightly amongst GNOME developers, especially following the success of last year’s [Summer of GNOME OS](https://blogs.gnome.org/tbernard/2025/06/01/summer-of-gnome-os/) challenge. This has led to a significant uptick in contributions and initiatives aimed at improving user and developer experience. For instance:
 
-A *wiki* is a text file with a `.mull` extension. It contains *pages* which link to each other, all in the same file. Here's a little wiki with 3 pages:
+- Thanks to Jonas Dreßler’s, Valentin David’s, and Sebastian Wick’s zswap enablement efforts, GNOME OS now handles devices with limited amounts of RAM without OOM stalls. Jonas also found a hack that lets GNOME OS dynamically grow the usable on-disk swap space on-demand, which makes zswap perform significantly better than usual.
+- The recently released Test Center app allows you to install CI builds of Flatpak apps from a merge request, making it super easy to test experimental changes before they are even merged. On GNOME OS Nightly, Test Center can do the same with system components by applying them as a system extension.
+- Jordan Petridis’s new Toolpak project aims to provide a clean solution for distributing and installing command-line applications that developers need in a cross-distro fashion, similarly to how Flatpak and Flathub work for graphical apps.
 
-```
-# Home
+Of course, long-term our goal is an OS for the broader public. We’re working on this across a number of different fronts, including:
 
-My go-to breakfast is [Pancakes] with fresh [Lemons].
+- Enablement for systemd-homed across the stack, allowing for stronger per-user disk encryption and other benefits.
+- Experimental work in the kernel to solve a bunch of limitations we’ve run into with filesystems. Ada Magicat went on a deep dive on her recent All Systems Go talk!
+- Deep integration between systemd-homed and the session’s keyring, to increase security of the session’s lock screen. Dhanuka Warusadura gave a lightning talk at All Systems Go about his work on this.
+- A new feature-complete installer, to replace the current placeholder installer. Julian Sparber also gave a talk about this at All Systems Go, with a live demo!
+- Support for delta updates in systemd-sysupdate, to avoid downloading a full 2 GB image every time.
+- Better integration with the TPM, including a graphical TPM recovery UI. Currently, trying to type a TPM recovery key into Plymouth is rather difficult.
+- Improved support for ARM hardware, including some specific models of phones. Abderrahim Kitouni gave a lightning talk at GUADEC this year about the current installation process.
+- Shipping our pre-installed apps as Flatpaks, and reworking the app release process to unify the build definitions between GNOME OS, the GNOME Nightly Apps Flatpak repo, and Flathub.
+- An STF project focused on Flatpak and Portals, which will enable broader app support on GNOME OS (like VPNs!). You can learn more from the announcement blog post.
 
-# Lemons
+Some of these areas require lots more work before they’re ready for prime time, and even once they’re ready it’s not clear that it’ll be possible to migrate existing GNOME OS installations to use these new features. At [FOSDEM this year](https://blogs.gnome.org/adrianvovk/2026/02/18/gnome-os-hackfest-fosdem-2026/), we discussed this issue and decided that we won’t declare GNOME OS as “stable” until we can confidently commit to maintaining a clear long-term upgrade path for existing installations.
 
-Great on [Pancakes].
+However, we also don’t think that all these things need to be in place before GNOME OS can be used by more people than it is today. It’s *not* ready for the masses yet, but it is ready for early adopters that aren’t quite adventerous enough to run a nightly OS.
 
-# Pancakes
+## Introducing GNOME OS Preview
 
-- 1 cup of flour
-- 1 cup of milk
-- 1 egg
-- A squeeze of [Lemons]
-```
+GNOME OS Preview is the current GNOME OS Nightly, but without the “nightly” aspect. Instead, it’s built from the latest stable GNOME release (GNOME 51.1, at the time of writing). GNOME OS Preview lives in the same branches on [GitLab](https://gitlab.gnome.org/GNOME/gnome-build-meta) as the stable `org.gnome.Platform` Flatpak runtimes.
 
-Each page starts with a `# Title`, followed by the contents of the page. To link to a page, use square brackets like `[Lemons]`. When you type the opening `[`, autocomplete kicks in to help you find the page you're looking for.
+GNOME OS Preview is only a few weeks old, so it has only seen limited real-life testing so far. We therefore expect people will uncover some issues initially. That said, Preview is significantly more stable than Nightly, which dozens of people have been daily driving without major issues for over a year. Thus, we’re feeling confident that Preview is going to be reliable enough for daily use by non-developer enthusiasts.
 
-[![Autocomplete.](https://raw.githubusercontent.com/stepchowfun/mull/main/screenshots/completions.png)](https://raw.githubusercontent.com/stepchowfun/mull/main/screenshots/completions.png)
+In all likelihood, GNOME OS Preview will be with us for a few years. However, **we are explicitly not promising updates in perpetuity**. If you’re not OK with re-installing your OS in a few years to switch to GNOME OS Stable, this is not for you yet. But if you’ve already been curious about giving GNOME OS a try, this is the moment!
 
-Every wiki starts with a `Home` page. Mull requires that every other page is *reachable* (directly or indirectly) by following links, starting from `Home`. This rule promotes a basic form of organization that doesn't involve any hierarchical structure. Pages serve the roles traditionally filled by files *and* directories.
-
-Mull formats the wiki when you save the file (default), or when you explicitly request it. It chooses the ordering of the pages in the file based on the links between them, so you don't have to think about it. Linking to pages is the only way to organize them.
-
-You can link to files like photos, spreadsheets, or anything else. Mull checks that the linked files actually exist, and you can preview them without leaving the editor.
-
-[![A file preview.](https://raw.githubusercontent.com/stepchowfun/mull/main/screenshots/file_preview.png)](https://raw.githubusercontent.com/stepchowfun/mull/main/screenshots/file_preview.png)
-
-Files go in a directory next to the wiki named after the wiki, with the `.mull` extension replaced with `_files`. For example, if the wiki is `my_wiki.mull`, the files go in `my_wiki_files`. If you have a file called `my_wiki_files/photos/beach.jpg`, you can link it with `[/photos/beach.jpg]`. You can also link to directories like `[/photos/]`.
-
-Autocomplete helps you enter the names of files and directories when linking to them. You can also drag-and-drop (while holding the `Shift` key) or paste files directly into the editor.
-
-Just as every page must be reachable from `Home`, every file in `<wiki>_files` (if it exists) must be linked to from the wiki. A link to a directory implicitly counts as linking to everything inside it. An empty directory needs a link of its own.
-
-A portal is a window into another page. It holds a copy of the page's contents, and Mull keeps them in sync. For example, if you have a page called `Pancakes`, you can open a portal to it from another page like this:
-
-```
-This is my favorite breakfast:
-
-::: [Pancakes] :::
-```
-
-When the wiki is formatted (e.g., on save), that line will be expanded into a copy of the page:
-
-```
-This is my favorite breakfast:
-
-::: [Pancakes]
-- 1 cup of flour
-- 1 cup of milk
-- 1 egg
-- A squeeze of [Lemons]
-:::
-```
-
-You can edit the page or any of its portals, and formatting will propagate your edits to the rest.
-
-Suppose you have a list that you want to keep sorted:
-
-```
-The contents of my pantry:
-
-- Garlic
-- Kosher salt
-- Miso
-- Olive oil
-- Rice
-```
-
-Mull can help with this; you just have to teach it about sorting. Create a file called `<wiki>_files/scripts/sort.sh` with the following contents:
-
-```
-#!/bin/sh
-sort "$@"
-```
-
-Make it executable with `chmod +x <wiki>_files/scripts/sort.sh`.
-
-Now you can put the list in a `sort` block:
-
-```
-The contents of my pantry:
-
-::: sort
-- Garlic
-- Kosher salt
-- Miso
-- Olive oil
-- Rice
-:::
-```
-
-Mull will then sort the list automatically whenever the wiki is formatted (e.g., on save). That sorting script accepts arguments, so you can, for example, sort in reverse order with `::: sort -r`.
-
-Using a script in a block counts as linking to it, so it doesn't need to be linked to from the wiki like other files in `<wiki>_files`. An unused script still needs a link (e.g., `[/scripts/sort.sh]`) somewhere in the wiki.
-
-To use a special symbol like `[` or `]` literally, put a backslash before it, like `\[`. You can also use backticks to denote verbatim text like ``this``, as in Markdown. Fenced code blocks are supported too, with syntax highlighting for common languages.
-
-```
-# Home
-
-I'm learning Python, currently working on a [Dice game].
-
-# Dice game
-
-```python
-import random
-
-for turn in range(3):
-    roll = random.randint(1, 6)
-    print(f"Roll {turn + 1}: {roll}")
-
-print("Thanks for playing!")
-```
-```
-
-No escaping is necessary inside page titles or code.
-
-## Keyboard shortcuts
-
-These common keyboard shortcuts are helpful when navigating and editing a wiki:
-
-| Action | macOS | Windows |
-| --- | --- | --- |
-| Jump to a page from a link | `F12` or `Command + click` | `F12` or `Control + click` |
-| Jump to links to a page (i.e., backlinks) | `Shift + F12` | `Shift + F12` |
-| Jump back to the previously visited page | `Command + [` | `Alt + Left` |
-| Jump forward to the next visited page | `Command + ]` | `Alt + Right` |
-| Jump to the start of the current page | `Command + Up` | `Control + Home` |
-| Jump to the end of the current page | `Command + Down` | `Control + End` |
-| Jump to the next error | `F8` | `F8` |
-| Jump to the previous error | `Shift + F8` | `Shift + F8` |
-| Find a page | `Command + Shift + O` | `Control + Shift + O` |
-| Code actions (e.g., create a missing page) | `Command + .` | `Control + .` |
-| Rename a page | `F2` | `F2` |
-| Format the wiki | `Shift + Option + F` | `Shift + Alt + F` |
-
-Most of these keyboard shortcuts are standard in Visual Studio Code and Cursor, so they may be familiar to you already. You can remap them.
-
-## Usage
-
-Once Mull is [installed](https://github.com/stepchowfun/mull#installation-instructions) for Visual Studio Code or Cursor, you can run it by opening a `.mull` file in the editor.
-
-You can also run Mull from the command line (e.g., in a CI job) as follows:
-
-```
-mull check --path wiki.mull
-```
-
-Here are the supported command-line options:
-
-```
-Usage: mull [COMMAND]
-
-Commands:
-  check            Check that a wiki is valid and formatted, with its scripts run
-  format           Format a wiki, running its scripts (default)
-  page             Print the content of a page in a wiki
-  language-server  Start the language server (editors use this)
-  help             Print this message or the help of the given subcommand(s)
-
-Options:
-  -v, --version  Print version
-  -h, --help     Print help
-```
-
-To use Mull, you must install the binary and optionally the Visual Studio Code / Cursor extension. The binary does all the work and can be used by itself from the command line. The IDE extensions use the binary to provide a rich wiki editing experience.
-
-### Installation on macOS or Linux (AArch64 or x86-64)
-
-If you're running macOS or Linux (AArch64 or x86-64), you can install Mull with this command:
-
-```
-curl https://raw.githubusercontent.com/stepchowfun/mull/main/install.sh -LSfs | sh
-```
-
-It first installs the binary, then it installs the extension for Visual Studio Code and/or Cursor.
-
-The same command can be used again to update to the latest version.
-
-The installation script supports the following optional environment variables:
-
-- VERSION=x.y.z (defaults to the latest version)
-- PREFIX=/path/to/install (defaults to /usr/local/bin)
-
-For example, the following will install the binary into the working directory:
-
-```
-curl https://raw.githubusercontent.com/stepchowfun/mull/main/install.sh -LSfs | PREFIX=. sh
-```
-
-Note that if you change the installation path, you may also need to change the `mull.executablePath` accordingly in Visual Studio Code or Cursor.
-
-If you prefer not to use this installation method, you can download the binary from the [latest release](https://github.com/stepchowfun/mull/releases/latest), make it executable (e.g., with `chmod`), and place it in some directory in your [`PATH`](https://en.wikipedia.org/wiki/PATH_(variable)) (e.g., `/usr/local/bin`). You can then follow the instructions [below](https://github.com/stepchowfun/mull#installing-the-visual-studio-code--cursor-extension) to install the Visual Studio Code / Cursor extension.
-
-If you're running Windows (AArch64 or x86-64), download the binary from the [latest release](https://github.com/stepchowfun/mull/releases/latest) and rename it to `mull` (or `mull.exe` if you have file extensions visible). Create a directory called `Mull` in your `%PROGRAMFILES%` directory (e.g., `C:\Program Files\Mull`), and place the renamed binary in there. Then, in the "Advanced" tab of the "System Properties" section of Control Panel, click on "Environment Variables..." and add the full path to the new `Mull` directory to the `PATH` variable under "System variables". Note that the `Program Files` directory might have a different name if Windows is configured for a language other than English.
-
-To update an existing installation, simply replace the existing binary.
-
-If you have [Cargo](https://doc.rust-lang.org/cargo/), you can install Mull as follows:
-
-```
-cargo install mull
-```
-
-You can run that command with `--force` to update an existing installation.
-
-### Installing the Visual Studio Code / Cursor extension
-
-First, make sure you have [Visual Studio Code](https://code.visualstudio.com/) or [Cursor](https://cursor.com/) installed.
-
-To install the Mull extension, download the `mull.vsix` file from the [latest release](https://github.com/stepchowfun/mull/releases/latest) and install it via the "Install from VSIX..." option in the `...` menu at the top of the Extensions view of the Primary Side Bar.
-
-[![Installation.](https://raw.githubusercontent.com/stepchowfun/mull/main/screenshots/installation.png)](https://raw.githubusercontent.com/stepchowfun/mull/main/screenshots/installation.png)
-
-Note that the macOS / Linux installation command will install the extension automatically, so you can skip this section if you use that installation method.
-
-To update an existing installation, simply re-install it.
-
-## About
-
-A tool for managing a wiki stored in a plain text file. 📖
+GNOME OS Preview is available for download on the newly-refreshed [os.gnome.org](https://os.gnome.org)! GNOME OS Nightly is still available from there too. As always, you can reach us on Matrix at [#gnome-os:gnome.org](https://matrix.to/#/#gnome-os:gnome.org) or via the [`gnome-os` tag on Discourse](https://discourse.gnome.org/tag/gnome-os)

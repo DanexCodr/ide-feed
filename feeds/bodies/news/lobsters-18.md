@@ -1,37 +1,129 @@
-Calif frequently publishes our offensive research and work, but we otherwise don't draw much attention to the defensive work we do — assisting open source projects with remediation, patch generation, cryptographic improvements, and internal engineering projects we carry out for our clients.
+It is done. After four years of work and various pivots we have released iroh 1.0.
 
-Earlier this year, we reported some vulnerabilities, often along with suggested patches to OpenBSD. One traced back roughly [37 years to the original BSD sources](https://github.com/weiss/original-bsd/blame/master/sys/sys/shm.h#L28-L33), where a shared memory attachment counter was defined as a signed 16-bit short. Repeatedly forking a process with shared memory attachment records could push that counter past its maximum value of 32,767, causing it to wrap to a negative value. This integer overflow could lead to a use-after-free via a race condition; combined with a separate out-of-bounds write in the kernel, it allowed local privilege escalation to root. The issues were addressed in [errata 026](https://ftp.openbsd.org/pub/OpenBSD/patches/7.9/common/026_sysvipc.patch.sig) and [018](https://ftp.openbsd.org/pub/OpenBSD/patches/7.9/common/018_shmat.patch.sig), respectively.
+We have an expanding web site describing *how* iroh works under the hood, but we think it is important to also understand *why* we made the decisions that led to the current iroh. So here is a trip down memory lane / our commit history which highlights major turning points and design decisions.
 
-## The exploit
+Perhaps more importantly, this post also covers some things we considered but ended up **not doing**.
 
-We managed to get local root in OpenBSD with [`KARL`](https://isopenbsdsecu.re/mitigations/karl/) / [`SMAP`](https://en.wikipedia.org/wiki/Supervisor_Mode_Access_Prevention) / [`SMEP`](https://edc.intel.com/content/www/us/en/design/products/platforms/processor-and-core-i3-n-series-datasheet-volume-1-of-2/001/intel-supervisor-mode-execution-protection-smep/) enabled without the use of an information disclosure vulnerability via the following path:
+Iroh started as a rust implementation of [ipfs](https://ipfs.tech/). We got pretty far implementing various ipfs protocols and had interop with existing ipfs implementations working. Our goal with iroh was to target lightweight and resource constrained devices such as mobile phones.
 
-- Map 127 SysV shared memory segments, unmap them via munmap(), and fork 259 processes to wrap the shared memory attach count to -32,643. Perform heap grooming and layout, using metrics from sysctl(`KERN_MALLOCSTATS)` (such as `kb_total` and `kb_totalfree`) to track allocations and determine when new pages are allocated. Win the race condition using `IPC_RMID` in one process while attaching a new size-confused shared memory segment in a helper process. Align IP socket allocations and set `IP_MULTICAST_TTL` to a non-default value of 2 to allocate a persistent 16-byte [`struct ip_moptions`](https://github.com/openbsd/src/blob/1b90eb3a568a1476ae3aba0f237490961fc422a0/sys/netinet/ip_var.h#L164-L170). Its final word packs two 16-bit counters: `imo + 12 = imo_num_memberships | imo_max_memberships << 16`. Trigger the conditional `-1` out-of-bounds write to overwrite both the number of memberships and maximum memberships fields. `close()` the socket to traverse the group members, triggering [atomic decrements](https://github.com/openbsd/src/blob/1b90eb3a568a1476ae3aba0f237490961fc422a0/sys/netinet/in.c#L945-L984) that modify the PTE self-referential mapping twice, switching it from user to supervisor accessible mapping, and achieving kernel code execution by overwriting a predictable kernel pointer. Clean up shared memory accounting and restore the overwritten kernel pointer to obtain a root shell.
+One area where we were unhappy with existing protocols was blob transfer. We started a working group within the ipfs community to come up with a new protocol, called the [move the bytes working group](https://www.youtube.com/playlist?list=PLuhRWgmPaHtQ--aQ5GlgCyKkQYXUfQpVf).
 
-That's the [short of the matter](https://github.com/openbsd/src/blob/1b90eb3a568a1476ae3aba0f237490961fc422a0/sys/sys/shm.h#L92-L99), the longer version is [more interesting](https://github.com/califio/publications/tree/main/MADBugs/openbsd/big-fish.c), including the history of the vulnerability, as a short `shm_nattch` can be traced back [~37 years ago](https://github.com/weiss/original-bsd/blame/master/sys/sys/shm.h#L28-L33), in the original BSD sources.
+For that working group, we worked on a proposal for new blob transfer protocol. We wrote a small library called [krakensync](https://github.com/n0-computer/krakensync). Krakensync used [BLAKE3](https://github.com/BLAKE3-team/BLAKE3) exclusively for content addressing because BLAKE3 supports verified incremental streaming of large blobs.
 
-Taking a step back, this vulnerability ended up getting code execution via a `write what where` primitive, where the `write` was caused by a [`TAILQ_REMOVE`](https://github.com/openbsd/src/blob/master/sys/sys/queue.h), the `what` was our userland memory mapping that was made supervisor mode accessible to bypass `SMAP`/`SMEP`, and the `where` was a predictable kernel pointer location.
+After a few days we had a bare algorithm, and wanted to add networking to it to make the demo feel more real. We had only two days before the next meeting, and adding networking via [rust-libp2p](https://docs.rs/libp2p) seemed impossible (Remember that this was before LLM coding assistants!).
 
-## Exploit mitigation
+I had a tiny bit of previous experience with [QUIC](https://www.rfc-editor.org/rfc/rfc9000.html), and remembered from a project of a friend of mine, [quinn-noise](https://docs.rs/quinn-noise) that [quinn](https://docs.rs/quinn) is both hackable and has a simple idiomatic rust API. So I tried to add networking via quinn and found it *an absolute joy* to work with.
 
-While OpenBSD's KARL relinks the kernel binary to randomize both function and data addresses, the kernel's memory allocators remain deterministic. Both the [boot-time allocator](https://github.com/openbsd/src/blob/1b90eb3a568a1476ae3aba0f237490961fc422a0/sys/uvm/uvm_addr.c#L701-L734) and the [best-fit allocator](https://github.com/openbsd/src/blob/1b90eb3a568a1476ae3aba0f237490961fc422a0/sys/uvm/uvm_init.c#L179-L190) lack base address randomization. Consequently, early boot allocations consistently land at predictable locations across boots on the same hardware. When these predictable structure allocations contain function pointers, they become ideal targets for exploitation. For instance, the exploit reliably targets the `lo0` and `enc0` `ioctl` handlers, overwriting one to gain control flow and using the other to restore the overwritten pointer.
+—  Rüdiger
 
-Aside from the aforementioned errata fixes, there's several other approaches that can be taken to either eliminate or reduce the likelihood of those avenues being used again.
+In parallel to working on the ipfs compatible iroh, we worked on a side project to implement a single narrow real world use case: transfer of [deltachat](https://delta.chat/) chat history when provisioning a new device. The technical task was to transfer a single large blob of backup data to a new device. There were hard constraints regarding disk and network usage. And the transfer had to be resumable.
 
-Firstly, we can implement safe-unlinking, a technique that checks doubly linked list invariants before performing the unlink memory writes. If the invariants are violated, then a suitable `abort()` or `panic()` is called, depending on if user mode or kernel mode, preventing memory corruption from occurring. An example implementation is [here](https://github.com/CalANDif/openbsd-src/commit/dc16d6afe2d897c5e2be8227f737c0d2ebdbfc86). [FreeBSD](https://github.com/freebsd/freebsd-src/blob/main/sys/sys/queue.h) and [NetBSD](https://github.com/NetBSD/src/blob/trunk/sys/sys/queue.h) have an implementation of safe-unlinking in their `sys/queue.h` implementation.
+We found that *we could not* implement this very narrow use case with our ipfs based iroh implementation. Doing so would have had less than optimal network performance, and would have pulled in a very large dependency tree.
 
-Secondly, we can randomize the self-referential PTE map allocation address so that the targeted atomic decrement locations would not be possible. This is done by using a random byte (`.openbsd.randomdata`) and selecting a [PML4](https://wiki.osdev.org/X86_Page_Tables) slot (`320 + (random_byte & 127)`) at boot time, and installing the recursive entry at that location. The `PTE_BASE` definition becomes a runtime expression, yielding bases from `0xffffa00000000000` through `0xffffdf8000000000` at 512-GiB intervals. An example implementation is [here](https://github.com/CalANDif/openbsd-src/commit/89db398d53e6698a80eaf72f32d1a3e544d2e95f). In case randomization is not suitable, other options might suffice, such as marking the PTE as read-only, and changing CR0.WP during modification.
+So we started writing a lightweight sync library from scratch, using QUIC as the networking layer and BLAKE3 verified streaming for large blob transfer.
 
-Thirdly, the kernel allocator can be made non-deterministic using two approaches; by [randomizing the base address](https://github.com/CalANDif/openbsd-src/commit/94c29e3432ad016ce34004d52594382a166ee707) where memory allocations occur at boot time, and additionally [randomizing the allocation order at run time](https://github.com/CalANDif/openbsd-src/commit/dd6cd7b9655b1a7fdfabfa97f82ead646e15333a). The base address randomization is effectively free as the gap it creates can still be used later on; while runtime randomization does incur some overhead during allocation - it may be possible that more in-depth allocator changes could alleviate this impact. Either approach would be sufficient to break the predictable pointer location without additional vulnerabilities, be it software or hardware.
+Despite our best efforts, our main project was still far away from the theoretical limits. Meanwhile our sync side project showed what is possible. So we [made the decision](https://www.iroh.computer/blog/a-new-direction-for-iroh) to no longer pursue the goal of staying compatible with existing ipfs implementations.
 
-Furthermore, there are existing and upcoming compiler features that can be used to mitigate against entire vulnerabilities, from [array bounds sanitizer](https://clang.llvm.org/docs/UndefinedBehaviorSanitizer.html) (a subset of Undefined Behaviour sanitizer) which can eliminate out of bounds fixed size array accesses. Calif has [suggested to FreeBSD](https://github.com/freebsd/freebsd-src/pull/2404) that the array bounds sanitizer may make a useful exploit mitigation that can be enabled in release builds, along with privately reporting 21 issues that the array bounds sanitizer would have caught; some with local privilege escalation security impact. An upcoming compiler feature that can be used to help mitigate against heap issues is [Alloc Tokens](https://clang.llvm.org/docs/AllocToken.html), which can be used to isolate pointer containing allocations from non-pointer allocations. This isolation can make overflows from the non-pointer containing allocation much more difficult to exploit by preventing pointer access, along with making vulnerability classes like Use-after-Free unable to use the opposite type of allocation as the replacement memory allocation.
+Instead of [multiaddrs](https://github.com/multiformats/multiaddr), endpoints were identified by an [Ed25519](https://www.rfc-editor.org/rfc/rfc8032.html) public key.  
 
-Since its inception, OpenBSD has consistently championed proactive security through source code auditing, the replacement of insecure APIs, advanced password hashing, cryptography, privilege separation, sandboxing, along with memory safety via [`ASLR`](https://en.wikipedia.org/wiki/Address_space_layout_randomization) and [`W^X`](https://en.wikipedia.org/wiki/W%5EX); frequently setting the standard for system and network hardening.
+Instead of [multihashes](https://github.com/multiformats/multihash), we had BLAKE3.  
 
-By proactively hardening, and adapting new and existing mitigation options, we can often systematically neutralize entire classes of exploitation primitives; or at the very least, increase the attacker's cost (i.e. additional time investment, additional vulnerabilities needed to exploit an issue, find alternative avenues, etc). Investing in defensive improvements before vulnerabilities are actively targeted raises the bar for attackers, helping ensure robust protection and long-term resilience. In the age of AI-assisted vulnerability discovery, mitigating against entire vulnerability classes, combined with increasing attack complexity only becomes more critical.
+And instead of multiple transport protocols we had just QUIC.
 
-About Calif
+The new iroh was just QUIC based networking using [quinn](https://docs.rs/quinn) and blob transfer using BLAKE3 verified streaming. Compared to the previous version, the functionality was anemic. But the single thing it did, it did with close to optimal performance. It was a lightweight enough dependency that [deltachat could justify including it into their rust code base](https://github.com/chatmail/core/commit/24856f3050be9a7705f9df736ab575fd856454d5). And suddenly we had both networking and sync deployed in a real app used by thousands of people across various platforms (windows, linux, iOS, android). The old code lives on in [beetle](https://github.com/n0-computer/beetle).
 
-We push offensive security research to its limits, understand
-                  what is becoming possible with AI, and use those insights to help
-                  our customers defend themselves.
+We decided to use just QUIC. But QUIC as specified in RFC 9000 has clear client and server roles, where the server is identified by a certificate chain. At the time we had to add a somewhat Rube Goldberg construction on top to make QUIC work for peer-to-peer connections, [a self-signed certificate carrying the real public key in a custom X.509 extension](https://github.com/libp2p/specs/blob/master/tls/tls.md), with a signature binding the two.
+
+Also, rustls is a heavy dependency, and its default crypto provider is a C dependency. So there was a temptation to replace the entire TLS encryption scheme with a protocol based on [noise](https://noiseprotocol.org/) that is made for peer-to-peer connections from the start.
+
+We ended up sticking with TLS as the industry standard. Without using TLS iroh would not really be QUIC, just reuse some of its parts. But we were still unhappy about the self-signed cert.
+
+Thankfully right around the time when we were discussing this [raw public keys](https://www.rfc-editor.org/rfc/rfc7250.html) in TLS support was [merged into rustls](https://github.com/rustls/rustls/pull/2062). So we didn't waste any time and switched to [raw public keys in TLS](https://www.iroh.computer/blog/iroh-0-34-0-raw-public-keys) soon after.
+
+## [Hole punching](https://www.iroh.computer/blog/the-road-to-iroh-1-0#hole-punching)
+
+One thing we were not yet happy with: for the deltachat chat history transfer to work, both devices had to be in the same network. Ideally this should work in all cases where the two devices are *somehow* connected to the internet. We also wanted these transfers to be *fast*. So what we needed was [hole punching](https://en.wikipedia.org/wiki/Hole_punching_(networking)). We looked at various systems that implement hole punching. Our goal was to get holepunching to work reliably, even at the expense of compromising p2p purity. If we would need a small server to help, so be it.
+
+Of all the existing open source implementations of holepunching, we found the [tailscale](https://tailscale.com/) approach best suited to our requirements. So we implemented something that was initially very similar, with good results. This was a [huge effort](https://github.com/n0-computer/iroh/pull/830), but once we merged it we had hole punch rates to be proud of. In most normal circumstances we punched holes almost immediately, and in the few corporate networks where hole punching was impossible, at least we could still transfer data via relays. It **just worked**.
+
+## [Iroh as a batteries included p2p application toolkit](https://www.iroh.computer/blog/the-road-to-iroh-1-0#iroh-as-a-batteries-included-p2p-application-toolkit)
+
+We achieved our goal of having a simple p2p library that just worked. But the API was still anemic. It was something that experienced rust teams such as deltachat could include, but not yet attractive to p2p application developers. So we decided to gradually add more functionality. One of the first things we did was extending the blob related API to expose more functionality for BLAKE3 verified streaming. In parallel we also optimized the verified streaming by implementing some advanced features such as [BLAKE3 chunk groups](https://github.com/n0-computer/iroh/pull/798).
+
+But even with blobs included, it was not enough. We had very useful functionality for experienced rust teams, but at the time that wasn't exactly a large group. So we decided to add a [document abstraction](https://github.com/n0-computer/iroh/pull/1333) that would make iroh viable as a batteries included p2p application development framework, where ideally you would only need to add application specific code.
+
+## [Bindings](https://www.iroh.computer/blog/the-road-to-iroh-1-0#bindings)
+
+As part of the push to make iroh approachable to more developers, we started to publish language bindings to almost all major languages. This worked well and was frequently used, but turned out to be a lot of work for us because of the frequent API changes on the road to 1.0.
+
+## [Protocol negotiation](https://www.iroh.computer/blog/the-road-to-iroh-1-0#protocol-negotiation)
+
+As we were adding protocols we also had to solve protocol *negotiation*.
+
+One common pattern is to add a [little handshake protocol](https://github.com/multiformats/multistream-select) on each stream where one side can propose a protocol and the other side can either accept or reject. But that would add overhead for *every single stream* and take us further away from just peer-to-peer QUIC.
+
+We found that complex schemes for protocol evolution are often a mirage. Truly evolving a protocol in a backwards compatible way leads to a combinatorial explosion of variants that have to be tested. It is really hard to get this right.
+
+So we decided to keep things simple and use the [ALPN TLS extension](https://www.rfc-editor.org/rfc/rfc7301.html). The connecting side proposes a list of ALPNs, and the server side either chooses one of the ALPNs or refuses the handshake. This happens directly during the QUIC handshake, so it has no overhead other than the raw bytes of the ALPN string.
+
+All in all we are very happy with this decision. Projects like [Media over QUIC](https://datatracker.ietf.org/group/moq/about/) use QUIC streams extensively in [a very creative way](https://moq-wg.github.io/moq-transport/draft-ietf-moq-transport.html#name-data-streams-and-datagrams), and since we provide just raw QUIC streams we can support these approaches out of the box.
+
+It is not entirely without downsides. The `ClientHello` containing the ALPN is unencrypted, so on-path observers can see which protocol is used by decoding `ClientHello`s. One way to work around this is to use a common ALPN such as `h3` and then just negotiate the actual protocol later. In a future version of iroh we might support [encrypted client hello](https://datatracker.ietf.org/doc/draft-ietf-tls-esni/).
+
+Another consequence of the decision to use ALPNs is that two iroh endpoints talking multiple protocols will have not one but *multiple* connections open (A QUIC connection is always for *exactly one* ALPN). We share some internal state for these connections so that e.g. hole punching doesn't have to start from zero.
+
+### Sendme and dumbpipe
+
+To show off iroh, we published two small tools: [sendme](https://www.iroh.computer/sendme) and [dumbpipe](https://www.dumbpipe.dev/). These were meant to just show off different iroh capabilities, but also be useful on their own.
+
+To this day we use sendme every day to send logs around. And there are a large number of popular sendme clones: [Lightning P2P](https://github.com/Kerim-Sabic/lightning-p2p), [alt-sendme](https://github.com/tonyantony300/alt-sendme), [ARK Drop Desktop](https://github.com/ARK-Builders/ARK-Drop-Desktop), [DataBeam](https://github.com/vinay-winai/DataBeam), [sendme-egui](https://github.com/zignig/sendme-egui), and [iroh-send](https://github.com/thiswillbeyourgithub/iroh-send).
+
+Dumbpipe also inspired a number of projects: [pai-sho](https://github.com/cablehead/pai-sho), [iroh-ssh](https://github.com/rustonbsd/iroh-ssh), [do-ssh](https://github.com/doEggi/do-ssh), and [iroh-ssh-android](https://github.com/futpib/iroh-ssh-android). But more importantly it showed **how useful** just direct connections by endpoint id are a building block.
+
+## [Address lookup](https://www.iroh.computer/blog/the-road-to-iroh-1-0#address-lookup)
+
+For a long time we did not have the ability to dial an iroh endpoint by endpoint id only. You needed the id of course, but you also needed an additional piece of info: either an ip address or a relay url. Sendme works like this to this day.
+
+But the additional information is not stable. An iroh endpoint can frequently change its public IP address, e.g. when the ISP assigns a new public IP address. It can also change its home relay when it moves to another geographic region. In addition, dealing with tickets is cumbersome for large scale systems where you work with a large number of peers.
+
+In many peer-to-peer projects the mechanism to implement such discovery is a distributed hash table. But our previous experience with DHTs was somewhat traumatic. We deciced very quickly that we did not have the resources to implement a DHT and *get adoption for it*. So just like with the relays, we compromised a bit on peer-to-peer purity. We explored various centralized options such as cloudflare workers.
+
+But right at this time we discovered an emerging project that would allow us to have our cake and eat it too. [Pkarr](https://github.com/pubky/pkarr) is the incredibly simple idea of storing signed DNS records on the [bittorrent mainline DHT](https://en.wikipedia.org/wiki/Mainline_DHT). We ended up using the pkarr format for our centralized address lookup service, but also giving iroh users the option to [use the mainline dht directly](https://docs.rs/iroh-mainline-address-lookup) to get a fully decentralized address lookup system.
+
+Mainline has some unfortunate limitations that are unlikely to go away any time soon. So [I started writing a DHT](https://www.iroh.computer/blog/lets-write-a-dht-1), using on iroh [0-rtt](https://www.iroh.computer/blog/0rtt-api) connections. But as of now this is strictly an experiment that pushes the limits for iroh connections, not a production tool.
+
+—  Rüdiger
+
+After working on iroh as a batteries included toolkit for some time, the API surface was increasing substantially. And we could not guarantee the same level of quality for all parts of the API. In addition, we noticed that each of our users was using a different subset of the API. The one thing everybody had in common was that they needed dial by endpoint id and connections that reliably hole punch. So we [made the decision](https://www.iroh.computer/blog/smaller-is-better) to narrow the scope of what iroh is significantly. From now on iroh would be just direct connections dialed by endpoint id. The other functionality, that several teams depend on, was [moved into separate crates](https://www.iroh.computer/blog/iroh-0-28-let-them-have-crates).
+
+We were now at the enviable position that several important projects depended on iroh. But we needed freedom to evolve iroh, and did not want to do so on a feature branch due to previous bad experiences with this approach. So we made our first long term stable release, [0.35](https://www.iroh.computer/blog/iroh-0-35-prepping-for-1-0) and started the [canary series](https://www.iroh.computer/blog/iroh-0-90-the-canary-series) for people that wanted to stay on the bleeding edge on the way to 1.0.
+
+In retrospect it would have been fine to call this iroh 1.0. It is a rock solid version of iroh that many projects depend on even today. But we are happy with the decision to develop on main and let people follow along.
+
+In addition to various functionality changes we also spent quite some time thinking about naming. For example, the identity of an iroh endpoint used to be called `NodeId`. Back when iroh came as a large binary with several different built in protocols, this made a lot of sense. Also what is now known as address lookup used to be called just `Discovery`. But we found that discovery isn't really a good name for the process of finding relay or ip addresses for an existing endpoint id. After all you don't *discover* the endpoint id, you just look up additional data for it.
+
+## [Multipath](https://www.iroh.computer/blog/the-road-to-iroh-1-0#multipath)
+
+Iroh was working just fine in most cases. But there were some dark clouds on the horizon. To get one of the main features of iroh, seamless migration of the underlying transport, to work reliably, we had to do some [not so nice hacks](https://github.com/n0-computer/iroh/pull/2835). In the short term this wasn't really a big problem. But we knew that the current approach would limit us substantially in the future.
+
+So we [made the decision](https://www.iroh.computer/blog/iroh-on-QUIC-multipath) to fundamentally rework how iroh works under the hood. We were already using multiple paths of course, but QUIC was unaware of all of this. Which was the root cause for various problems.
+
+So far we had used quinn and contributed a few improvements. But now we were doing something fundamentally new: extending quinn to support multipath. For a long time we worked with the assumption that we would upstream our changes, but as the diff grew this became increasingly unlikely. So we [decided to fork quinn](https://www.iroh.computer/blog/noq-announcement) and maintain our own QUIC implementation, [noq](https://docs.rs/noq).
+
+### Configurable key algorithms
+
+A frequent request for iroh was to use key algorithms other than Ed25519. We ended up deciding against it. Many of our current systems such as pkarr address lookup are only ever going to work with Ed25519 keys. So while an iroh version with support for e.g. secp256k1 or P-256 would technically be straightforward, it would make iroh more complex. Our [key encoding](https://www.rfc-editor.org/rfc/rfc7250.html#section-3) for the TLS handshake is already key agnostic, so we can likely add support for additional key algorithms without breaking the wire format.
+
+### Post quantum signatures
+
+Currently standardized post quantum signature algorithms have very large public key sizes. So supporting them would require us to change from the endpoint id *being* the public key to the endpoint id being something *derived from* the public key to keep the size manageable.
+
+### Encrypted ClientHello
+
+Encrypted ClientHello has [recently been standardized](https://www.rfc-editor.org/rfc/rfc9849.html). We might want to use it or a very similar mechanism to hide handshake metadata such as the ALPN.
+
+In the four years we have been working on iroh we have written a lot of code, without any LLM assistance. We have thrown away almost as much code. What remains is a minimal library that heavily relies on existing standards and gives you authenticated, encrypted, direct connections to any endpoint, addressed by nothing but its public key.
+
+The road to 1.0 was anything but straight, but certainly extremely exciting and interesting. And we are not at the end. Iroh 1.0 just means that the wire format and API are stable. But there are various extension points both in the wire format and in the API, and we continue to improve things under the hood.
+
+Meanwhile we can't wait to see what you build on iroh.

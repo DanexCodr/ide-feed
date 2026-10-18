@@ -1,304 +1,119 @@
-*How a $1 million sandbox challenge led us to a vulnerability in Linux networking, repeatable host-memory disclosure, and ultimately a full guest-to-host escape.*
+I purchased a Matrix CoolRunner Rev D back in 2017. This little chip is called a glitcher and it’s a type of modchip. Its sole purpose, the reason it was designed, is to deliver a short pulse of energy (~ 100 nanoseconds) to an Xbox 360 Console.
 
-## Part 00: Intro
+![](https://kennedn.com/blog/posts/glitching/coolrunner_in_xbox.webp)
 
-On August 18, 2026, Vercel announced a [$1 million challenge](https://vercel.com/blog/one-million-dollar-hacker-challenge-for-vercel-sandbox) inviting researchers to break the isolation boundary of its Sandbox product (total prize pool). The announcement came just weeks after OpenAI had [disclosed a remarkable security incident](https://openai.com/index/hugging-face-model-evaluation-security-incident/): AI agents running inside restricted evaluation environments had found ways around their network isolation, compromised internal infrastructure, and eventually breached systems at Hugging Face. The agents weren't supposed to have internet access in the first place.
+You might ask yourself, “What’s the point in that?”. The answer is quite interesting.
 
-But there was an important distinction. **Escaping a sandbox's network restrictions is one thing. Escaping the virtual machine itself and reaching the host is another.** Vercel's challenge explicitly invited researchers to attempt both. We were interested in the latter. (Although we ended up finding vulnerabilities that also allow the former - more on those findings in a later post)
+# Microsoft are good at security
 
-The question was simple: **how much could an untrusted guest influence the host kernel without ever exploiting KVM itself?** We took the challenge, put our research infrastructure to work, and within three days discovered a primitive buried in Linux networking that allowed guest-controlled checksum metadata to rewrite an IPv4 header *after the kernel had already validated it*.
+It boils down to the simple fact that Microsoft learned from the mistakes of their previous console (the original Xbox) and designed security well on their successor.
 
-What initially looked like a 32-byte host-memory disclosure would eventually become a full guest-to-host escape in our own KVM and many many other Hypervisor environments. And the beautiful part about it was that the vulnerability wasn't even in the hypervisor, it was in the Linux networking stack.
+So well in fact, that it was deemed essentially unhackable by conventional approaches:
 
-[Vercel later described it as the program's most important report](https://vercel.com/blog/findings-from-the-1-million-dollar-vercel-sandbox-challenge#the-kernel-zero-day), and its final tally recorded just one Critical finding. That Critical was what is now pwnescape. Together with a separate network-escape report, we had accomplished both network and host escape goals. Its important to emphasize Vercel's sandbox was already hardened beyond normal industry standards and had no misconfigurations we could spot. Although the vulnerability originated in the Linux kernel and wasn't a Vercel-specific flaw or misconfiguration, Vercel deserves tremendous credit for how they handled it. They moved quickly to protect their customers, launched their own independent research, identified and notified other affected hypervisor and sandbox providers, and worked closely with us to coordinate disclosure and fixes across the industry. Their efforts helped protect not just Vercel's customers, but the wider ecosystem.
+> tmbinc said it himself, software based approaches of running unsigned code on the 360 mostly don’t work, it was designed to be secure from a software point of view. <sup>[1](https://kennedn.com/blog/posts/glitching/#fn:1)</sup>
 
-This is the story of CVE-2026-99999, a Critical rated Linux kernel vulnerability leading to KVM escape.
+The entry point for the system, dubbed 1BL, is physically baked into the silicon of the Xbox 360’s CPU <sup>[2](https://kennedn.com/blog/posts/glitching/#fn:2)</sup>. The job of 1BL is to load the next phase of the bootloader, called CB from flash storage, and verify that it was signed by Microsoft.
 
-## Research
+So without Microsoft’s signing keys, there was no real way to hijack control of the system during the boot process. And it only becomes harder as the console boots up through its different phases. Additional security features are turned on as it cascades up the boot chain. And they would all need individually circumvented to get any code running on the console that Microsoft haven’t been over with a fine toothed comb.
 
-We used Omega-Pwn, pwn.ai's experimental research harness combining our custom security architecture and automation with elements of [OmegaClaw](https://github.com/asi-alliance/OmegaClaw-Core), developed by researchers at SingularityNET and BGI Labs for this ambitious project. Compared to traditional LLM harnesses, it enabled longer research horizons, persistent campaign state, parallel collaborative investigations, and the accumulation of hypotheses, failed experiments, and evidence across complex research sessions.
+So if the door to the castle is locked, and the guards, who are wise to equine ploys, are checking ID at the door, how does one get in? Well you don’t use a key. You inform the guard that his shoelaces are untied and hit him over the head with a club.
 
-Humans led the research, framing the hard questions, engineering workflows, and directing investigations. **GPT-5.6 Sol** served as the primary reasoning engine for source-level analysis, exploring attack paths, and challenging assumptions. Omega-Pwn bridged human intuition and contextual insight with the analytical capabilities of advanced LLMs.
+# Finding the weak link
 
-**As far as we know, PwnEscape exposes an entirely new class of attacks in Linux networking: untrusted checksum metadata can rewrite security-sensitive packet fields after the kernel has already validated and acted on them, undermining assumptions across the networking stack far beyond the original VM escape.**
+The point is that if the lock itself is secure, and the procedures surrounding entry are sound, sometimes the weakest link becomes something more fundamental. In our metaphor this is a person, but in the case of the Xbox 360, it is the fact that computation relies on stable energy conditions to behave in a predictable manner.
 
-## Part 01: A deferred checksum and a mutable IPv4 header
+And this is the idea that fault injection subverts. In the case of the Xbox 360, researchers found that by very quickly toggling a reset signal on the CPU (`CPU_RESET`), a signal that is usually supposed to reinitialise the CPU, something far more interesting happened. Instead of resetting, the CPU executed the current instruction incorrectly.
 
-The accepted Linux fix is upstream as [`6785011f8b16`](https://github.com/torvalds/linux/commit/6785011f8b16abf40b1e9d8b2e332232b3e68822), **`ipv4: validate checksum_start before completing checksum`**.
+![](https://kennedn.com/blog/posts/glitching/fault_injection.webp)
 
-This is the first installment of **PwnEscape**. We are going to spend most of it inside `sk_buff`, checksum metadata, and IPv4 fragmentation, because that is where the actual failure happened.
+Graph demonstrating glitching as voltage over time <sup>[3](https://kennedn.com/blog/posts/glitching/#fn:3)</sup>.
 
-*Figure 1. The vulnerable component is the host networking stack. “KVM escape” describes the guest/host security boundary crossed in our isolated proof, not the source file that contained the bug.*
+This gave the researchers a very useful primitive. They found that an instruction integral to the signature verification process, the `mr` (move register) instruction, could be glitched into ignoring a value it was about to move and instead move a 0 into its destination register <sup>[4](https://kennedn.com/blog/posts/glitching/#fn:4)</sup>.
 
-## 01A / We went looking beyond the hypervisor
+So by simply knowing when, and toggling the lights on and off, they gained arbitrary code execution.
 
-Our [previous kvmCTF research](https://pwn.ai/blog/kvmescape) was about KVM's shadow-MMU behavior: an intricate interaction among mappings, reverse maps, and memory lifetime. This campaign began with a broader hypothesis. The security of a sandbox depends on much more than its hypervisor. A guest interacts with an entire host operating system, including device emulation, virtual networking, packet filters, memory allocators, and the APIs that glue those pieces together.
+# The future is glitching
 
-For pwn, that suggested an efficient research strategy: map the reachable boundary, search for places where untrusted state gets promoted to trusted state, and challenge the assumptions at **every later consumer**, not just at the initial parser. We used GPT5-6-Sol-assisted source inspection with human set the scope and decide what actually constitutes evidence. The particularly interesting question at this time was:
+It is astounding to me that this kind of esoteric side channel exists at all. But I think the larger point is that it’s becoming more common.
 
-> **Can an asynchronous or deferred operation modify packet bytes after the kernel has already made security-relevant decisions about those same bytes?**
+The sort of trust chains that made the Xbox 360 hard to hack 10 years ago have now become commonplace in the world of computing hardware. Microsoft themselves began enforcing hardware backed secure boot for their Operating Systems back in 2021<sup>[5](https://kennedn.com/blog/posts/glitching/#fn:5)</sup>.
 
-Linux checksum offload offered exactly that possibility.
+More recently in 2024, the security features of an ESP32 v3 (secure boot and flash encryption) were bypassed using a fault injection attack <sup>[6](https://kennedn.com/blog/posts/glitching/#fn:6)</sup>.
 
-## 02 / `CHECKSUM_PARTIAL` is a promise to write later
+And there are recent examples specifically leveraging the Raspberry Pi Pico Microcontroller to perform similar fault injection attacks
 
-Linux does not always compute transport checksums immediately. Instead, it can carry a packet in a state where the checksum still needs to be completed. The relevant `sk_buff` bookkeeping includes:
+![](https://kennedn.com/blog/posts/glitching/apple_airtag.webp)
 
-```text
-skb->ip_summed     CHECKSUM_PARTIAL  (checksum still pending)
-skb->csum_start    location where checksum accumulation begins
-skb->csum_offset   offset from that location to the output field
+Apple AirTag’s firmware was dumped in 2021 by stacksmashing using a Raspberry Pi Pico and fault injection <sup>[7](https://kennedn.com/blog/posts/glitching/#fn:7)</sup>.
 
-             write location = csum_start + csum_offset
-```
+![](https://kennedn.com/blog/posts/glitching/picofly.webp)
 
-This is normal, documented functionality. On the transmit side, a network device or the software helper `skb_checksum_help()` can calculate the checksum and store the result at the designated field. In well-formed TCP/UDP traffic, that field belongs to the transport checksum. In the ordinary kernel path, the metadata is supposed to describe the packet that actually exists. See the [kernel checksum-offload documentation](https://docs.kernel.org/networking/checksum-offloads.html).
+The PicoFly modchip, released in 2023 for the Nintendo Switch, uses fault injection to defeat secure boot on the console <sup>[8](https://kennedn.com/blog/posts/glitching/#fn:8)</sup>.
 
-The critical point is that these values are **not just descriptive metadata**. They authorize a subsequent write into packet memory. If less-trusted software can influence them, their validity must survive every operation between admission and completion.
+To me, this suggests that fault injection has become a more attractive attack vector in recent years due to a security ecosystem that has hardened over time. But I think it has in turn also become more accessible than ever, with the advent of cheap and accurate microcontrollers such as the Pi Pico.
 
-An `sk_buff` also has multiple notions of where packet data begins:
+# A love letter to the Pico
 
-```text
-skb->head              beginning of the underlying head allocation
-skb->data              current data pointer (can advance as headers are pulled)
-skb->network_header    position of the network header
-skb->csum_start        stored checksum-start position
-skb_headlen(skb)       amount of packet data currently held linearly
-```
+![](https://kennedn.com/blog/posts/glitching/pico.webp)
 
-The distinction between the **frame-relative view** and the **network-header-relative view** is important. A packet can arrive with Ethernet and additional link-layer headers still in its linear data. Later, those headers are removed or skipped for L3 processing. Merely checking that a checksum start falls far enough into the original frame is not the same as proving that it follows the IPv4 header after normalization.
+The Raspberry Pi Pico microcontroller, released in 2021 for £5 by the Raspberry Pi Foundation <sup>[9](https://kennedn.com/blog/posts/glitching/#fn:9)</sup>.
 
-*Figure 2. The accepted packet's link-layer context is not the final IPv4 context. The issue is a mismatch of stored metadata and the current network-header boundary, not that the physical allocation magically moves. Our original reports cover the exact packet geometry; this figure focuses on the broken invariant.*
+The Pico itself is versatile because it allows for very precise timing via its PIO blocks. These specialised blocks come with enough primitives to implement many standard protocols and have an effective timing resolution of ~7.5 nanoseconds due to the 133 MHz clock <sup>[10](https://kennedn.com/blog/posts/glitching/#fn:10)</sup>:
 
-### The input-side comparison was not enough
+$$\frac{1}{133\text{ MHz}} \approx 7.52\text{ns}$$
 
-The first public patch series makes the entry-path defect especially clear. In `__virtio_net_hdr_to_skb()`, the historical minimum-header check used `skb_transport_offset(skb)`, an offset relative to the current `skb->data` view. That protects against a checksum start that is trivially too early in that view. It does **not** by itself establish how far the start is from the network header when the packet contains additional link-layer structure.
+I have seen this versatility myself first hand when I finally dusted off the Matrix CoolRunner in 2026 and decided to take another crack at modchipping my Xbox 360.
 
-The original reported hardening therefore proposed an additional **network-relative** comparison:
+Back in 2017, when I bought the thing, it was quite expensive to modchip an Xbox 360. You needed a number of tools and skills to successfully mod one:
 
-```c
-/* Conceptual comparison, adapted from our public patch series */
-transport_offset >= minimum_network_header_length
-transport_offset - network_offset >= minimum_network_header_length
-```
+- A glitching chip
+- Solder and an iron
+- A NAND programmer
+- A JTAG programmer
 
-Those two inequalities are not interchangeable. The distinction is the essence of the L2/L3 coordinate mismatch. The patch review grew beyond this first formulation because nested headers, IP options, IPv6, and differing ingress callers require more careful validation than a single optimistic fixed offset. [Our original input-side patch](https://lists.openwall.net/netdev/2026/09/20/13) and [Willem de Bruijn's later proposed broader input validation](https://lists.openwall.net/netdev/2026/10/07/283) provide the source-level history.
+I tried to save some money by building my own NAND / JTAG programmer using the printer port (LPT port) on a very old PC that I had in reserve for the specific purpose. If I had ever got this working it would have taken over 30 minutes to dump the NAND. I do not recall the reason but I did not manage to pull this off in 2017 and the project was shelved.
 
-For the eventual IPv4 consumer, the accepted guard expresses a particularly useful invariant. With `N = skb->network_header`, `H = ip_hdrlen(skb)`, `C = skb->csum_start`, and nonnegative checksum offset `O`, the eventual output location is `W = C + O`. Requiring **`C >= N + H`** before completion implies **`W >= N + H`**. The guard therefore prevents this completion from writing *into the IPv4 header*. It does **not** prove that `W` is the correct field within TCP or UDP; that is a separate protocol-validity question.
+![](https://kennedn.com/blog/posts/glitching/LPT_port.webp)
 
-This is the first trust failure: **checksum metadata from a less-trusted origin crossed into host packet processing without being constrained against the header that later code would actually use.**
+LPT NAND dumper wiring diagram <sup>[11](https://kennedn.com/blog/posts/glitching/#fn:11)</sup>.
 
-## 03 / The header was checked. Then the header changed.
+Reattempting this same procedure in 2026 was a breeze by comparison. I was able to flash [PicoFlasher](https://github.com/X360Tools/PicoFlasher)
+ onto a Pi Pico and solder it to the correct pads on my Xbox 360. The dump operation then only took a handful of seconds to run.
 
-The most interesting part is the order of operations.
+![](https://kennedn.com/blog/posts/glitching/nand_dump_console.webp)
 
-Host ingress sees and parses an IPv4 packet with an ordinary header. Fragment processing and routing can operate on that state. Later, output fragmentation reaches the pending checksum. In the historical code, `ip_do_fragment()` completed the checksum before obtaining the IPv4 header pointer and using the header length. The pre-fix ordering in [`net/ipv4/ip_output.c`](https://github.com/torvalds/linux/commit/6785011f8b16abf40b1e9d8b2e332232b3e68822) was effectively:
+Raspberry Pi Pico wired to the NAND interface header on the Xbox 360.
 
-```c
-/* Historical ordering, abbreviated for explanation */
-if (skb->ip_summed == CHECKSUM_PARTIAL)
-    skb_checksum_help(skb);    /* deferred write */
+Similarly I flashed [Pico-dirtyJTAG](https://github.com/phdussud/pico-dirtyJtag)
+ onto a Pi Pico and was able to program the CoolRunner’s timing files using [Octal450’s Timing Files](https://github.com/Octal450/Timing-Files/releases)
+ and installing the [`urjtag`](https://git.code.sf.net/p/urjtag/git)
+ project from source.
 
-iph = ip_hdr(skb);
-/* Fragmentation later derives hlen from iph->ihl. */
-```
+![](https://kennedn.com/blog/posts/glitching/coolrunner_programming_closeup.webp)
 
-`skb_checksum_help()` is not inherently unsafe. It becomes unsafe here because malformed metadata allows its write to overlap bytes that were **already parsed as an IPv4 header**.
+Raspberry Pi Pico wired to Matrix CoolRunner JTAG interface.
 
-The header field that gives the leak its shape is IPv4 `ihl`, a 4-bit count of 32-bit words. The first byte of a normal IPv4 packet contains version and IHL. In our controlled research geometry, it could change from `0x45` (IPv4, five words = 20 bytes) to `0x4f` (IPv4, fifteen words = 60 bytes), without changing the version nibble.
+# Summary
 
-*Figure 3. A two-byte header mutation can leave the packet looking like IPv4 while dramatically changing the header-length interpretation. `0x4500` and `0x4f00` are the before/after first words observed in the research case.*
+So, even the most carefully crafted tower can collapse under the weight of its own fundamental assumptions. Like many aspects of computer security, fault injection has become a game of cat and mouse, with increasingly sophisticated defences being met by new tools and methods of circumventing them.
 
-**Static IHL readout**
+But I think we have now reached a point where DIY tooling has really begun to shine, making light work of challenges that, just a decade ago, required expensive, specialised equipment.
 
-| Packet view | First byte | IHL | Interpreted IPv4 header length |
-| --- | --- | --- | --- |
-| Parsed state | `0x45` | 5 words | 20 bytes |
-| After deferred write | `0x4f` | 15 words | 60 bytes |
-
-The IPv4 version nibble remains `4`; only the four-bit header-length interpretation changes.
-
-The earlier stages had not endorsed a 60-byte header. They had made decisions on a 20-byte header. But the later consumer read an updated field as though it were authoritative.
-
-This is a **time-of-check/time-of-use problem in the semantic sense**, but not the usual race between threads. The execution can be fully deterministic. The “time” separating validation and use is the sequence of legitimate networking operations, with an attacker-influenced deferred write in between.
-
-### A simplified control-flow trace
-
-```text
-LESS-TRUSTED INPUT                         HOST NETWORK STACK
-──────────────────────                    ─────────────────────────────────────
-packet + partial-checksum metadata ─────► offload metadata installed in skb
-                                          │
-                                          ▼
-                                    link-layer processing / L3 normalization
-                                          │
-                                          ▼
-                                    IPv4 parse, reassembly, policy, routing
-                                    header trusted as IHL=5 (20 bytes)
-                                          │
-                                          ▼
-                                    output fragmentation
-                                          │
-                                          ▼
-                                    skb_checksum_help()
-                                    pending write can alter parsed header
-                                          │
-                                          ▼
-                                    ip_do_fragment() consumes late IHL
-                                    header now claims 60 bytes
-                                          │
-                                          ▼
-                                    header copy exceeds logical linear data
-                                          │
-                                          ▼
-                                    emitted IPv4 options include host bytes
-```
-
-*This is an example of vulnerability-oriented path diagram, not a claim that every network configuration takes precisely these exact hooks, although we have found numerous other methods to invoke these vulnerable paths.*
-
-## 04 / Where the 32 bytes actually came from
-
-This part is easy to explain poorly. Linux packet buffers need not contain all packet bytes as one contiguous linear object. An `sk_buff` has a **linear head** plus possible non-linear fragment data. After the relevant reassembly, the research case's **logical linear data length** was just:
-
-```text
-20 bytes     original IPv4 header
- 8 bytes     payload available in the first fragment
-────────
-28 bytes     skb logical linear head
-```
-
-The late checksum operation made the fragmenter believe that the IPv4 header was **60 bytes** long. That means it treated the next 40 bytes after the original 20-byte header as IPv4 options. Eight of those bytes were genuinely inside the linear head, though they had been payload. The **next 32 bytes were not part of the packet's logical linear data**.
-
-*Figure 4. `skb_headlen(skb) = 28` while the later copy length is 60. The discrepancy is 32 bytes. This is a logical skb-data out-of-bounds read; it need not cross the boundary of the physical allocation or an individual slab object.*
-
-That final distinction is important. “Out of bounds” here refers to the `sk_buff`'s **valid logical linear packet data**, not necessarily to an access beyond the entire allocator object. The host may have physically mapped allocation tailroom past `skb_headlen()`. Reading those bytes and incorporating them into an outgoing network header still crosses a confidentiality boundary. They are host memory, not bytes the sender provided as part of the logical packet.
-
-The IPv4 fragmenter can then generate outgoing fragments using the mutated header shape. The resulting transmitted packet exposes those bytes as apparent IP options. The problem has moved from an internal host state into an externally observable artifact.
-
-That is the difference between the statements *“this might read past a buffer”* and *“the host emitted data outside the sender's logical packet.”*
-
-### Why the proof needed controls
-
-We did not want to confuse an interesting hex dump with a host leak. The evidence design separated an identity case, where the packet's original header length remained unchanged, from the active case, where a later operation changed its interpretation. It checked whether the final transmitted packet was structurally valid, whether nonzero bytes appeared past the known logical data, and whether those bytes differed from the sender's controlled guard data.
-
-The tests also used an independent application-level receipt alongside raw packet observation. Those two signals helped distinguish a genuine host-side rewrite and transmission from a packet-construction or packet-capture artifact.
-
-The first bounded disclosure reproduced **32 bytes per active case**. We treated the contents as sensitive and did not need to preserve unrelated raw host memory to demonstrate the boundary crossing.
-
-We separately confirmed a host-availability failure on **disposable, researcher-owned Linux 6.12 and 7.x. hosts**.
-
-## 05 / Why this was an escape primitive, not just a leak
-
-A repeatable, attacker-controlled host-memory disclosure is already serious in a multi-tenant environment. It exposes information from a trust domain the guest is supposed to be unable to observe. It also changes the exploit-research problem: a working read primitive can help resolve uncertainty about host memory state and make additional memory-manipulation hypotheses testable.
-
-In our **owned KVM fixture**, the research advanced beyond read-only disclosure. Using host-memory observations and carefully controlled allocation behavior, we demonstrated **selected 64-byte host-kernel writes**. We used the resulting capability in a bounded lab chain to execute a host-root helper and return a host-generated marker to the guest. Four separate true-cold boots completed that chain.
-
-That is why we use the phrase **guest-to-host escape** for the isolated proof. It is not an inference from an out-of-bounds read, and it is not a claim of root command execution in any vendor's production environment.
-
-*Figure 5. Each rung is a different evidence claim. Source review alone does not prove a leak; a leak alone does not prove a write; a lab execution result does not become a production-execution claim.*
-
-The allocator-sensitive write chain, object-lifetime controls, and other hypervisor-specific adaptation are large enough to require a separate article. Although we suspect the security industry will use this post to figure out the other affected hypervisors and we expect exploits in weaker configurations to arrive in weeks, and exploits working in default hypervisor configurations to arrive in under a month. **Part 2 of pwnescape will deal with what it took to move from the primitive to host control**, rather than pretending that a 32-byte disclosure trivially becomes code execution, if the security community doesn't beat us to it.
-
-## 06 / The broader failure mode: deferred-metadata trust inversion
-
-What makes this research interesting beyond the particular kernel patch is the combination of **three different trust transitions**:
-
-1. Origin trust: a less-trusted guest or process describes an operation the host will later perform.
-2. Interpretation trust: the packet changes representation as link-layer headers are processed, and the kernel parses fields under a particular layout.
-3. Temporal trust: a deferred operation changes that already-parsed state before another kernel consumer uses it.
-
-For our own research discussions, we call this pattern **deferred-metadata trust inversion**. That is a descriptive name for the mechanism. Its building blocks are known, and lots of the fundamentals the exploit abuses are publicly documented; the new and consequential result here is a concrete host-boundary exploit chain through these Linux networking interactions.
-
-The recurring anti-pattern looks like this:
-
-```text
-untrusted metadata enters
-          │
-          ▼
-validated against an early representation
-          │
-          ▼
-packet is normalized, parsed, authorized
-          │
-          ▼
-metadata-driven operation runs later
-          │
-          ▼
-security-relevant bytes change
-          │
-          ▼
-later consumer trusts the changed interpretation
-          │
-          ▼
-memory-safety or policy-boundary failure
-```
-
-The corresponding audit question is not merely *“did we validate the checksum offsets?”* It is: **“after every transformation, can a deferred writer still target bytes whose semantic meaning has already been trusted?”**
-
-The distinction matters for defenses too. A narrow check that prevents IPv4-header overwrites can stop the memory-safety path demonstrated here without proving that every protocol-specific checksum destination is correct. During upstream review, researchers also raised distinct concerns about later mutation of transport fields after policy checks. Those are related consistency risks, but **they should not be folded into the proven 32-byte disclosure or claimed as fully addressed by the IPv4 fix**.
-
-The lesson generalizes as an audit technique for deferred work and mutable metadata. It is **not evidence by itself that unrelated protocols, operating systems, or products are vulnerable**.
-
-## 07 / What Linux actually changed
-
-The story of the fix(es) is worth telling because the shape of the remediation changed during review.
-
-Our initial candidate series addressed two different points in the path: admission of virtio checksum metadata and the IPv4 fragmentation consumer. The public [September patch series](https://lists.openwall.net/netdev/2026/09/20/11) explains that rationale and includes the reviewer discussion. Subsequent review identified more checksum-completion consumers and debated the risk of a broad check in a central helper versus targeted checks at multiple sinks.
-
-Michael S. Tsirkin's accepted upstream patch took the latter approach: a small IPv4-specific guard placed **before** checksum completion in each of five affected consumers. The helper was added in `include/net/ip.h`:
-
-For a normal nonnegative `csum_offset`, that ensures the eventual checksum output location cannot fall inside the IPv4 header. The check does not try to certify that the target is a valid TCP or UDP checksum field; it makes the narrower claim needed to protect the already-trusted **IPv4 network header**.
-
-The accepted commit, [`6785011f8b16`](https://github.com/torvalds/linux/commit/6785011f8b16abf40b1e9d8b2e332232b3e68822), adds the guard to these consumer paths:
-
-*Figure 6. One shared `ip_check_csum_start()` helper, five protected checksum-completion sites. The shared helper is in the sixth modified file. The patch is expressly described as defense in depth.*
-
-The critical new ordering at each relevant site is **validate the checksum start first, then complete the checksum**. In `ip_do_fragment()`, the simplified post-fix sequence is:
-
-```c
-if (skb->ip_summed == CHECKSUM_PARTIAL) {
-    err = ip_check_csum_start(skb);
-    if (!err)
-        err = skb_checksum_help(skb);
-    if (err)
-        goto fail;
-}
-```
-
-One detail is especially important if you are backporting or reviewing related work: this commit is **not a complete redesign of the virtio checksum API**. The accepted commit message explicitly calls it a defense-in-depth measure and says broader ingress validation requires further work. The original discussion also considered TUN/AF_PACKET scenarios without a VM.
-
-Michael reproduced the original issue during private review. Willem de Bruijn and other networking reviewers evaluated the accepted approach, including the cost of changing widely used checksum paths.
-
-The patch was applied to `net.git` on October 8, 2026, and subsequently merged into the mainline Linus's tree Oct 14th, 2026. Stable backports and official CVE publication should be checked against the live kernel records at publication time;
-
-## 08 / Research notes: three days to the primitive, weeks to the fix
-
-| Date, 2026 | Research milestone |
-| --- | --- |
-| **Aug 18** | Vercel publishes the $1 million Sandbox research challenge. |
-| **Aug 20** | We submit the initial bounded host-memory disclosure report. |
-| **Sep 4** | We report the host-kernel root cause privately to the kernel security contact and networking maintainers, with candidate patches. |
-| **Sep 7** | Michael S. Tsirkin replies that he reproduced the issue and acknowledges the candidate patches. |
-| **Sep 19–22** | Public netdev submissions and revisions expand review of the network-header invariant and related paths. |
-| **Oct 7–8** | The revised upstream guard is posted and accepted into `net.git`. |
-| **Oct 13–14** | Stable review and CVE coordination continue. |
-
-We made deliberate evidence distinctions throughout: a suspected bug versus a demonstrated disclosure, a disclosure versus a host write, an owned-host root marker versus a provider-production result, and a code review versus an accepted upstream patch. Those are not bureaucratic labels. They are how you keep ambitious vulnerability research falsifiable.
-
-That is also the point of the AI systems around the models. The research loop is much closer to is *model or researcher proposes an invariant violation → build a bounded test → check controls and falsification cases → preserve evidence → iterate with expert researcher → ask independent reviewers to attack the conclusion → implement and retest an exploit*. We use that loop to search a larger space without lowering the proof standard for under 700$ of API tokens.
-
-We are keeping Part 1 focused on the public kernel fix and our owned-host evidence. We are also keeping the provider-specific coordination and private production telemetry separate until their disclosure status is explicitly cleared.
-
-## 09 / Why this matters to people building sandboxes
-
-The popular mental model is that VM isolation lives in the virtual-machine monitor. Much of it does. But an attacker-controlled workload does not interact only with `arch/x86/kvm/`. It interacts with a host OS full of optimized, highly composable interfaces. Some of those interfaces are performance contracts.
-
-If the metadata crosses a trust boundary, every deferred consumer has to inherit the right invariants. And if the packet can be transformed after those invariants are checked, the invariants have to remain true in the new representation.
-
-That is why a bug that looks, at first, like a malformed checksum hint can become a memory disclosure and a guest-to-host escape primitive. **The problem was not how difficult IPv4 is to parse. It was that different parts of Linux were allowed to trust different versions of the same packet.**
-
-### Special Thanks
-
-A huge thank you to Michael S. Tsirkin of Red Hat, Willem de Bruijn and Eric Dumazet of Google, David Ahern of NVIDIA, Jakub Kicinski of Meta, Chris Arges of Cloudflare, Greg Kroah-Hartman of Linux Foundation, and the wider Linux kernel community for their technical guidance, collaboration, and efforts to get this vulnerability fixed upstream.
-
-We're equally grateful to Guillermo Rauch, Malte Ubl, Andy Riancho, Andrey Sibirev and the entire Vercel team for their exceptional collaboration and commitment to protecting the wider industry. Special thanks also to Eric Daniels (Modal) and everyone else who contributed, reviewed, reproduced, or helped along the way. This research wouldn't have been the same without you.
+And I have seen this first hand, a project that defeated me in 2017 was made trivial in 2026 by a £5 microcontroller.
+
+> Funnily enough, a software-only exploit for the Xbox 360 dropped just [last week](https://github.com/grimdoomer/Xbox360PeerPressure/wiki/Installation)
+> , rendering my years of effort somewhat moot. Nevertheless, it was a fascinating deep dive into the inner workings of the console and the security mechanisms designed to protect it.
+
+# References
+
+1. GliGli and Tiros, *Reset Glitch Hack*, accessed 7 October 2026. [https://github.com/gligli/tools/blob/master/reset_glitch_hack/reset_glitch_hack.txt](https://github.com/gligli/tools/blob/master/reset_glitch_hack/reset_glitch_hack.txt) [↩︎](https://kennedn.com/blog/posts/glitching/#fnref:1)
+2. Free60Project, *Boot_Process*, Free60, accessed 7 October 2026. [https://free60.org/System-Software/Boot_Process/](https://free60.org/System-Software/Boot_Process/) [↩︎](https://kennedn.com/blog/posts/glitching/#fnref:2)
+3. Fault Injection Library, *Overview – Voltage Glitching*, accessed 8 October 2026. [https://fault-injection-library.readthedocs.io/en/latest/overview/](https://fault-injection-library.readthedocs.io/en/latest/overview/) [↩︎](https://kennedn.com/blog/posts/glitching/#fnref:3)
+4. Rodrigo Copetti, *Xbox 360 Architecture – The Glitcher*, A Practical Analysis, accessed 8 October 2026. [https://www.copetti.org/writings/consoles/xbox-360/#tab-13-1-the-glitcher](https://www.copetti.org/writings/consoles/xbox-360/#tab-13-1-the-glitcher) [↩︎](https://kennedn.com/blog/posts/glitching/#fnref:4)
+5. Tom Warren, *Microsoft’s Windows 11 will require TPM chips for security*, The Verge, 25 June 2021, accessed 8 October 2026. [https://www.theverge.com/2021/6/25/22550376/microsoft-windows-11-tpm-chips-requirement-security](https://www.theverge.com/2021/6/25/22550376/microsoft-windows-11-tpm-chips-requirement-security) [↩︎](https://kennedn.com/blog/posts/glitching/#fnref:5)
+6. Delvaux et al., *Fault Injection Attacks on the ESP32*, USENIX WOOT 2024, accessed 8 October 2026. [https://www.usenix.org/conference/woot24/presentation/delvaux](https://www.usenix.org/conference/woot24/presentation/delvaux) [↩︎](https://kennedn.com/blog/posts/glitching/#fnref:6)
+7. stacksmashing, *Hacking Apple AirTags*, YouTube, 2021, accessed 8 October 2026. [https://www.youtube.com/watch?v=_E0PWQvW-14](https://www.youtube.com/watch?v=_E0PWQvW-14) [↩︎](https://kennedn.com/blog/posts/glitching/#fnref:7)
+8. Ansem-SoD, *Picofly*, GitHub, 2023, accessed 8 October 2026. [https://github.com/Ansem-SoD/Picofly](https://github.com/Ansem-SoD/Picofly) [↩︎](https://kennedn.com/blog/posts/glitching/#fnref:8)
+9. Raspberry Pi Foundation, *Getting started with Raspberry Pi Pico*, Raspberry Pi Projects, accessed 8 October 2026. [https://projects.raspberrypi.org/en/projects/get-started-pico-w/1](https://projects.raspberrypi.org/en/projects/get-started-pico-w/1) [↩︎](https://kennedn.com/blog/posts/glitching/#fnref:9)
+10. Raspberry Pi Foundation, *RP2040 Datasheet*, accessed 8 October 2026. [https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf](https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf) [↩︎](https://kennedn.com/blog/posts/glitching/#fnref:10)
+11. Superben51, *How to hack (RGH) your Xbox 360*, Instructables, accessed 8 October 2026. [https://www.instructables.com/How-to-hackRHG-your-Xbox-360/](https://www.instructables.com/How-to-hackRHG-your-Xbox-360/) [↩︎](https://kennedn.com/blog/posts/glitching/#fnref:11)

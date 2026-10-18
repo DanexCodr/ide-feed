@@ -1,129 +1,71 @@
-It is done. After four years of work and various pivots we have released iroh 1.0.
+We now know how the seeds of the NIST elliptic curves were generated: they’re not the hash of some saucy sentence, but the output of [drand48](https://man.archlinux.org/man/drand48.3.en) seeded with the time, which was indeed in 1997–98.
 
-We have an expanding web site describing *how* iroh works under the hood, but we think it is important to also understand *why* we made the decisions that led to the current iroh. So here is a trip down memory lane / our commit history which highlights major turning points and design decisions.
+John Wood, Henry de Valence, Ava Howell, Zack Voase, Lucy Sweet, Amir Omidi, Paul Crowley, Iain McGinniss, Nicholas Carlini, and Steve Weis from Anthropic [solved the riddle](https://www.anthropic.com/research/ecdsa-curve-origins) and on October 15th, 2026, at 01:07:51 UTC, claimed [the full bounty I announced three years ago](https://words.filippo.io/seeds-bounty/). They chose to donate the prize to [ISRG](https://isrg.org/), the non-profit that operates Let’s Encrypt, tripling its value to $36,864 (36 Ki$). Thank you to Amir Omidi, Chris Palmer, Colm MacCárthaigh, David Adrian, David Anderson, Jeff Hodges, Matt Green, Matthew McPherrin, Paul Kehrer, Ryan Sleevi, and Soatok for contributing to the bounty.
 
-Perhaps more importantly, this post also covers some things we considered but ended up **not doing**.
+This helps fill out a page of cryptographic history, and reinforces our confidence in these critical cryptographic primitives.
 
-Iroh started as a rust implementation of [ipfs](https://ipfs.tech/). We got pretty far implementing various ipfs protocols and had interop with existing ipfs implementations working. Our goal with iroh was to target lightweight and resource constrained devices such as mobile phones.
+The NIST elliptic curves (P-192, P-224, P-256, P-384, and P-521) were published by NIST in FIPS 186-2 in 2000. They were generated at random according to ANSI X9.62 by taking an arbitrary seed, hashing it with SHA-1, and using the output to derive some of the parameters. Until this week, we had no idea how those arbitrary seeds were picked.
 
-One area where we were unhappy with existing protocols was blob transfer. We started a working group within the ipfs community to come up with a new protocol, called the [move the bytes working group](https://www.youtube.com/playlist?list=PLuhRWgmPaHtQ--aQ5GlgCyKkQYXUfQpVf).
+The lore was that Dr. Jerry Solinas, who passed away in early 2023, generated them in 1997 by hashing some English sentences that he later forgot. You can read more in [this article by Steve Weis](https://saweis.net/posts/nist-curve-seed-origins.html) or in [the original bounty announcement](https://words.filippo.io/seeds-bounty/).
 
-For that working group, we worked on a proposal for new blob transfer protocol. We wrote a small library called [krakensync](https://github.com/n0-computer/krakensync). Krakensync used [BLAKE3](https://github.com/BLAKE3-team/BLAKE3) exclusively for content addressing because BLAKE3 supports verified incremental streaming of large blobs.
+Turns out memory can play tricks on everyone: we now know they were instead generated with the POSIX-standard [drand48](https://man.archlinux.org/man/drand48.3.en) random number generator.
 
-After a few days we had a bare algorithm, and wanted to add networking to it to make the demo feel more real. We had only two days before the next meeting, and adding networking via [rust-libp2p](https://docs.rs/libp2p) seemed impossible (Remember that this was before LLM coding assistants!).
+The algorithm is as simple as passing the then-current UNIX timestamp to `srand48()` and then producing one byte at a time with drand48. Each sequence of 20 bytes is tried as a seed following ANSI X9.62 and rejected if the resulting curve is not valid. Some timestamps are used to generate multiple curves, by continuing to try seeds after accepting the first one. I [reimplemented the algorithm in Go](https://github.com/FiloSottile/mostly-harmless/blob/main/seeds/seeds.go) to verify the claim. Read more in [Anthropic’s writeup](https://www.anthropic.com/research/ecdsa-curve-origins).
 
-I had a tiny bit of previous experience with [QUIC](https://www.rfc-editor.org/rfc/rfc9000.html), and remembered from a project of a friend of mine, [quinn-noise](https://docs.rs/quinn-noise) that [quinn](https://docs.rs/quinn) is both hackable and has a simple idiomatic rust API. So I tried to add networking via quinn and found it *an absolute joy* to work with.
+There are two additional undocumented criteria beyond the ANSI X9.62 ones, one fairly clear and one that still escapes us.
 
-—  Rüdiger
+If the bit length of the order *n* of the resulting curve is more than the bit length of the base field *p* of the curve, the seed is rejected. (The condition is not the stricter *n* < *p*, because prime239v2 has *p* < *n* < 2²³⁹.)
 
-In parallel to working on the ipfs compatible iroh, we worked on a side project to implement a single narrow real world use case: transfer of [deltachat](https://delta.chat/) chat history when provisioning a new device. The technical task was to transfer a single large blob of backup data to a new device. There were hard constraints regarding disk and network usage. And the transfer had to be resumable.
+This leaves us with roughly twice as many valid seeds as were published. We explored a number of explanations for this last bit, and found no good fit. Maybe the same RNG was used to validate seeds, consuming RNG output and skipping some potential candidates, although the “gaps” are not regular. Maybe there was just a bug in one of the algorithms that returned the wrong result half the time; these calculations, which we can now do with off-the-shelf software in minutes, were still very much state-of-the-art in 1997.
 
-We found that *we could not* implement this very narrow use case with our ipfs based iroh implementation. Doing so would have had less than optimal network performance, and would have pulled in a very large dependency tree.
+```
+srand48(863711343) [1997-05-15 15:49:03 +0000 UTC]:
+  accepted   36th seed 25e5[...]: not published
+  accepted 1562nd seed d09b[...]: not published
+  accepted 2185th seed e43b[...]: prime239v1
+  accepted 2320th seed e8b4[...]: prime239v2
+  accepted 2491st seed 1256[...]: not published
+  accepted 2682nd seed d2c1[...]: not published
+  accepted 2863rd seed 3a70[...]: not published
+  accepted 3048th seed 7d73[...]: prime239v3
+srand48(863966734) [1997-05-18 14:45:34 +0000 UTC]:
+  accepted  139th seed 3045[...]: P-192 a.k.a. prime192v1
+  accepted 2198th seed 692d[...]: not published
+  accepted 5228th seed c469[...]: prime192v3
+  accepted 5405th seed 3ad1[...]: not published
+  accepted 6013th seed 31a9[...]: prime192v2
+srand48(871002724) [1997-08-08 01:12:04 +0000 UTC]:
+  accepted 1136th seed d09e[...]: P-521
+srand48(871696354) [1997-08-16 01:52:34 +0000 UTC]:
+  accepted  876th seed 50c7[...]: not published
+  accepted 1842nd seed c49d[...]: P-256 a.k.a. prime256v1
+srand48(872952608) [1997-08-30 14:50:08 +0000 UTC]:
+  accepted 2688th seed a335[...]: P-384
+srand48(891607927) [1998-04-03 12:52:07 +0000 UTC]:
+  accepted  777th seed d007[...]: not published
+  accepted 1485th seed 18cf[...]: not published
+  accepted 5736th seed 3c17[...]: not published
+  accepted 7026th seed bd71[...]: P-224
+```
 
-So we started writing a lightweight sync library from scratch, using QUIC as the networking layer and BLAKE3 verified streaming for large blob transfer.
+What does this mean for the security of elliptic curve cryptography based on the NIST curves? Well, even before this discovery there were no serious concerns among practitioners. In Section 3.1 of [their 2015 paper “A riddle wrapped in an enigma,”](https://eprint.iacr.org/2015/1018) Koblitz and Menezes make a convincing argument that it’s implausible that the NSA could have selected a seed to exploit a weakness that escaped more than 15 (now 25) years of cryptanalysis.
 
-Despite our best efforts, our main project was still far away from the theoretical limits. Meanwhile our sync side project showed what is possible. So we [made the decision](https://www.iroh.computer/blog/a-new-direction-for-iroh) to no longer pursue the goal of staying compatible with existing ipfs implementations.
+However, as reported in a later version of that paper, Daniel Bernstein and Tanja Lange described to Koblitz and Menezes in 2017 a technique that could have exploited 70 bits of freedom in selection of the seed to target a hypothetical class of 2⁶¹ weak prime-order curves. (Bernstein is the author of a competing elliptic curve design, Curve25519.) This contributed to enduring conspiracy theories, which had significant appeal among the non-specialist public (although many have since moved on to other, adjacent, conspiracy theories). All this speculation harmed confidence in robust cryptographic systems and was part of my motivation for the bounty.
 
-Instead of [multiaddrs](https://github.com/multiformats/multiaddr), endpoints were identified by an [Ed25519](https://www.rfc-editor.org/rfc/rfc8032.html) public key.  
+This week’s findings completely rule out the technique described by Bernstein and Lange. Even if the NSA had been free to pick any timestamp in 1997–98 and any of the first 16 prime-order candidates (which generously accounts for the unexplained rejections), they would have had barely 30 bits of freedom. Not enough to intentionally target a hypothetical small class of weak curves, not enough to embed any kind of [NOBUS](https://en.wikipedia.org/wiki/NOBUS) backdoor.
 
-Instead of [multihashes](https://github.com/multiformats/multihash), we had BLAKE3.  
+Along with [deterministic](https://www.rfc-editor.org/rfc/rfc6979) and [hedged](https://www.ietf.org/archive/id/draft-irtf-cfrg-det-sigs-with-noise-05.html) ECDSA signing algorithms, [formally verified field implementations](https://github.com/mit-plv/fiat-crypto), and [the 2015 complete addition formulas by Renes, Costello, and Batina](https://eprint.iacr.org/2015/1060), this nicely completes the “rehabilitation arc” of NIST elliptic curve cryptography, which I would now personally recommend over Curve25519/Ed25519/X25519.
 
-And instead of multiple transport protocols we had just QUIC.
+Just in time for them to be retired in favor of post-quantum signatures.
 
-The new iroh was just QUIC based networking using [quinn](https://docs.rs/quinn) and blob transfer using BLAKE3 verified streaming. Compared to the previous version, the functionality was anemic. But the single thing it did, it did with close to optimal performance. It was a lightweight enough dependency that [deltachat could justify including it into their rust code base](https://github.com/chatmail/core/commit/24856f3050be9a7705f9df736ab575fd856454d5). And suddenly we had both networking and sync deployed in a real app used by thousands of people across various platforms (windows, linux, iOS, android). The old code lives on in [beetle](https://github.com/n0-computer/beetle).
+P.S. The Anthropic team also figured out how the seeds of the NIST B-curves (the ones over binary fields) were generated, but no one uses those, so who cares.
 
-We decided to use just QUIC. But QUIC as specified in RFC 9000 has clear client and server roles, where the server is identified by a certificate chain. At the time we had to add a somewhat Rube Goldberg construction on top to make QUIC work for peer-to-peer connections, [a self-signed certificate carrying the real public key in a custom X.509 extension](https://github.com/libp2p/specs/blob/master/tls/tls.md), with a signature binding the two.
+## The picture
 
-Also, rustls is a heavy dependency, and its default crypto provider is a C dependency. So there was a temptation to replace the entire TLS encryption scheme with a protocol based on [noise](https://noiseprotocol.org/) that is made for peer-to-peer connections from the start.
+In a FamilyMart in Taiwan I found this delightful dice set. A full roll carries log₂(6²⁰) ≈ 51.7 bits of entropy. Rolling them twice can make a pretty robust cryptographic key!
 
-We ended up sticking with TLS as the industry standard. Without using TLS iroh would not really be QUIC, just reuse some of its parts. But we were still unhappy about the self-signed cert.
+I thought it would be funny to label them as Geomys FIPS 140-3 Entropy Sources (which of course they are not, though we do have one of those) and hand them out as swag. However, I found no way to order them online, so I simply visited over a dozen FamilyMarts and brought home 50 packs.
 
-Thankfully right around the time when we were discussing this [raw public keys](https://www.rfc-editor.org/rfc/rfc7250.html) in TLS support was [merged into rustls](https://github.com/rustls/rustls/pull/2062). So we didn't waste any time and switched to [raw public keys in TLS](https://www.iroh.computer/blog/iroh-0-34-0-raw-public-keys) soon after.
+![A set of 20 small dice in the evening light. They are white with red and black etchings. A small clear plastic box is next to them.](https://assets.buttondown.email/images/fc811646-65b3-4c41-9a2c-ff68584f75b5.jpeg?w=960&fit=max)
 
-## [Hole punching](https://www.iroh.computer/blog/the-road-to-iroh-1-0#hole-punching)
-
-One thing we were not yet happy with: for the deltachat chat history transfer to work, both devices had to be in the same network. Ideally this should work in all cases where the two devices are *somehow* connected to the internet. We also wanted these transfers to be *fast*. So what we needed was [hole punching](https://en.wikipedia.org/wiki/Hole_punching_(networking)). We looked at various systems that implement hole punching. Our goal was to get holepunching to work reliably, even at the expense of compromising p2p purity. If we would need a small server to help, so be it.
-
-Of all the existing open source implementations of holepunching, we found the [tailscale](https://tailscale.com/) approach best suited to our requirements. So we implemented something that was initially very similar, with good results. This was a [huge effort](https://github.com/n0-computer/iroh/pull/830), but once we merged it we had hole punch rates to be proud of. In most normal circumstances we punched holes almost immediately, and in the few corporate networks where hole punching was impossible, at least we could still transfer data via relays. It **just worked**.
-
-## [Iroh as a batteries included p2p application toolkit](https://www.iroh.computer/blog/the-road-to-iroh-1-0#iroh-as-a-batteries-included-p2p-application-toolkit)
-
-We achieved our goal of having a simple p2p library that just worked. But the API was still anemic. It was something that experienced rust teams such as deltachat could include, but not yet attractive to p2p application developers. So we decided to gradually add more functionality. One of the first things we did was extending the blob related API to expose more functionality for BLAKE3 verified streaming. In parallel we also optimized the verified streaming by implementing some advanced features such as [BLAKE3 chunk groups](https://github.com/n0-computer/iroh/pull/798).
-
-But even with blobs included, it was not enough. We had very useful functionality for experienced rust teams, but at the time that wasn't exactly a large group. So we decided to add a [document abstraction](https://github.com/n0-computer/iroh/pull/1333) that would make iroh viable as a batteries included p2p application development framework, where ideally you would only need to add application specific code.
-
-## [Bindings](https://www.iroh.computer/blog/the-road-to-iroh-1-0#bindings)
-
-As part of the push to make iroh approachable to more developers, we started to publish language bindings to almost all major languages. This worked well and was frequently used, but turned out to be a lot of work for us because of the frequent API changes on the road to 1.0.
-
-## [Protocol negotiation](https://www.iroh.computer/blog/the-road-to-iroh-1-0#protocol-negotiation)
-
-As we were adding protocols we also had to solve protocol *negotiation*.
-
-One common pattern is to add a [little handshake protocol](https://github.com/multiformats/multistream-select) on each stream where one side can propose a protocol and the other side can either accept or reject. But that would add overhead for *every single stream* and take us further away from just peer-to-peer QUIC.
-
-We found that complex schemes for protocol evolution are often a mirage. Truly evolving a protocol in a backwards compatible way leads to a combinatorial explosion of variants that have to be tested. It is really hard to get this right.
-
-So we decided to keep things simple and use the [ALPN TLS extension](https://www.rfc-editor.org/rfc/rfc7301.html). The connecting side proposes a list of ALPNs, and the server side either chooses one of the ALPNs or refuses the handshake. This happens directly during the QUIC handshake, so it has no overhead other than the raw bytes of the ALPN string.
-
-All in all we are very happy with this decision. Projects like [Media over QUIC](https://datatracker.ietf.org/group/moq/about/) use QUIC streams extensively in [a very creative way](https://moq-wg.github.io/moq-transport/draft-ietf-moq-transport.html#name-data-streams-and-datagrams), and since we provide just raw QUIC streams we can support these approaches out of the box.
-
-It is not entirely without downsides. The `ClientHello` containing the ALPN is unencrypted, so on-path observers can see which protocol is used by decoding `ClientHello`s. One way to work around this is to use a common ALPN such as `h3` and then just negotiate the actual protocol later. In a future version of iroh we might support [encrypted client hello](https://datatracker.ietf.org/doc/draft-ietf-tls-esni/).
-
-Another consequence of the decision to use ALPNs is that two iroh endpoints talking multiple protocols will have not one but *multiple* connections open (A QUIC connection is always for *exactly one* ALPN). We share some internal state for these connections so that e.g. hole punching doesn't have to start from zero.
-
-### Sendme and dumbpipe
-
-To show off iroh, we published two small tools: [sendme](https://www.iroh.computer/sendme) and [dumbpipe](https://www.dumbpipe.dev/). These were meant to just show off different iroh capabilities, but also be useful on their own.
-
-To this day we use sendme every day to send logs around. And there are a large number of popular sendme clones: [Lightning P2P](https://github.com/Kerim-Sabic/lightning-p2p), [alt-sendme](https://github.com/tonyantony300/alt-sendme), [ARK Drop Desktop](https://github.com/ARK-Builders/ARK-Drop-Desktop), [DataBeam](https://github.com/vinay-winai/DataBeam), [sendme-egui](https://github.com/zignig/sendme-egui), and [iroh-send](https://github.com/thiswillbeyourgithub/iroh-send).
-
-Dumbpipe also inspired a number of projects: [pai-sho](https://github.com/cablehead/pai-sho), [iroh-ssh](https://github.com/rustonbsd/iroh-ssh), [do-ssh](https://github.com/doEggi/do-ssh), and [iroh-ssh-android](https://github.com/futpib/iroh-ssh-android). But more importantly it showed **how useful** just direct connections by endpoint id are a building block.
-
-## [Address lookup](https://www.iroh.computer/blog/the-road-to-iroh-1-0#address-lookup)
-
-For a long time we did not have the ability to dial an iroh endpoint by endpoint id only. You needed the id of course, but you also needed an additional piece of info: either an ip address or a relay url. Sendme works like this to this day.
-
-But the additional information is not stable. An iroh endpoint can frequently change its public IP address, e.g. when the ISP assigns a new public IP address. It can also change its home relay when it moves to another geographic region. In addition, dealing with tickets is cumbersome for large scale systems where you work with a large number of peers.
-
-In many peer-to-peer projects the mechanism to implement such discovery is a distributed hash table. But our previous experience with DHTs was somewhat traumatic. We deciced very quickly that we did not have the resources to implement a DHT and *get adoption for it*. So just like with the relays, we compromised a bit on peer-to-peer purity. We explored various centralized options such as cloudflare workers.
-
-But right at this time we discovered an emerging project that would allow us to have our cake and eat it too. [Pkarr](https://github.com/pubky/pkarr) is the incredibly simple idea of storing signed DNS records on the [bittorrent mainline DHT](https://en.wikipedia.org/wiki/Mainline_DHT). We ended up using the pkarr format for our centralized address lookup service, but also giving iroh users the option to [use the mainline dht directly](https://docs.rs/iroh-mainline-address-lookup) to get a fully decentralized address lookup system.
-
-Mainline has some unfortunate limitations that are unlikely to go away any time soon. So [I started writing a DHT](https://www.iroh.computer/blog/lets-write-a-dht-1), using on iroh [0-rtt](https://www.iroh.computer/blog/0rtt-api) connections. But as of now this is strictly an experiment that pushes the limits for iroh connections, not a production tool.
-
-—  Rüdiger
-
-After working on iroh as a batteries included toolkit for some time, the API surface was increasing substantially. And we could not guarantee the same level of quality for all parts of the API. In addition, we noticed that each of our users was using a different subset of the API. The one thing everybody had in common was that they needed dial by endpoint id and connections that reliably hole punch. So we [made the decision](https://www.iroh.computer/blog/smaller-is-better) to narrow the scope of what iroh is significantly. From now on iroh would be just direct connections dialed by endpoint id. The other functionality, that several teams depend on, was [moved into separate crates](https://www.iroh.computer/blog/iroh-0-28-let-them-have-crates).
-
-We were now at the enviable position that several important projects depended on iroh. But we needed freedom to evolve iroh, and did not want to do so on a feature branch due to previous bad experiences with this approach. So we made our first long term stable release, [0.35](https://www.iroh.computer/blog/iroh-0-35-prepping-for-1-0) and started the [canary series](https://www.iroh.computer/blog/iroh-0-90-the-canary-series) for people that wanted to stay on the bleeding edge on the way to 1.0.
-
-In retrospect it would have been fine to call this iroh 1.0. It is a rock solid version of iroh that many projects depend on even today. But we are happy with the decision to develop on main and let people follow along.
-
-In addition to various functionality changes we also spent quite some time thinking about naming. For example, the identity of an iroh endpoint used to be called `NodeId`. Back when iroh came as a large binary with several different built in protocols, this made a lot of sense. Also what is now known as address lookup used to be called just `Discovery`. But we found that discovery isn't really a good name for the process of finding relay or ip addresses for an existing endpoint id. After all you don't *discover* the endpoint id, you just look up additional data for it.
-
-## [Multipath](https://www.iroh.computer/blog/the-road-to-iroh-1-0#multipath)
-
-Iroh was working just fine in most cases. But there were some dark clouds on the horizon. To get one of the main features of iroh, seamless migration of the underlying transport, to work reliably, we had to do some [not so nice hacks](https://github.com/n0-computer/iroh/pull/2835). In the short term this wasn't really a big problem. But we knew that the current approach would limit us substantially in the future.
-
-So we [made the decision](https://www.iroh.computer/blog/iroh-on-QUIC-multipath) to fundamentally rework how iroh works under the hood. We were already using multiple paths of course, but QUIC was unaware of all of this. Which was the root cause for various problems.
-
-So far we had used quinn and contributed a few improvements. But now we were doing something fundamentally new: extending quinn to support multipath. For a long time we worked with the assumption that we would upstream our changes, but as the diff grew this became increasingly unlikely. So we [decided to fork quinn](https://www.iroh.computer/blog/noq-announcement) and maintain our own QUIC implementation, [noq](https://docs.rs/noq).
-
-### Configurable key algorithms
-
-A frequent request for iroh was to use key algorithms other than Ed25519. We ended up deciding against it. Many of our current systems such as pkarr address lookup are only ever going to work with Ed25519 keys. So while an iroh version with support for e.g. secp256k1 or P-256 would technically be straightforward, it would make iroh more complex. Our [key encoding](https://www.rfc-editor.org/rfc/rfc7250.html#section-3) for the TLS handshake is already key agnostic, so we can likely add support for additional key algorithms without breaking the wire format.
-
-### Post quantum signatures
-
-Currently standardized post quantum signature algorithms have very large public key sizes. So supporting them would require us to change from the endpoint id *being* the public key to the endpoint id being something *derived from* the public key to keep the size manageable.
-
-### Encrypted ClientHello
-
-Encrypted ClientHello has [recently been standardized](https://www.rfc-editor.org/rfc/rfc9849.html). We might want to use it or a very similar mechanism to hide handshake metadata such as the ALPN.
-
-In the four years we have been working on iroh we have written a lot of code, without any LLM assistance. We have thrown away almost as much code. What remains is a minimal library that heavily relies on existing standards and gives you authenticated, encrypted, direct connections to any endpoint, addressed by nothing but its public key.
-
-The road to 1.0 was anything but straight, but certainly extremely exciting and interesting. And we are not at the end. Iroh 1.0 just means that the wire format and API are stable. But there are various extension points both in the wire format and in the API, and we continue to improve things under the hood.
-
-Meanwhile we can't wait to see what you build on iroh.
+Speaking of swag, I am 100% making stickers with the `srand48()` seeds, and t-shirts for the Anthropic team and the contributors to the bounty. I accept suggestions for other seed-based swag. If you want to catch some, follow me on Bluesky at [@filippo.abyssdomain.expert](https://bsky.app/profile/filippo.abyssdomain.expert) or on Mastodon at [@filippo@abyssdomain.expert](https://abyssdomain.expert/@filippo).

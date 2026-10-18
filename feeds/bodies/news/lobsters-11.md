@@ -1,89 +1,304 @@
-‘AI’ is not a neutral tool. It is a tool of a society that has given up. By its developers’ own admission, ‘AI’ is meant to enable control of population that subverts, and overpowers, all existing political apparatuses, and which, by design, is meant to substitute people’s capacity to make their judgements. If anyone is deluded in their misplaced optimism, it’s the ‘AI’ users and promoters who think they can plug themselves into this massive thing and use it to their advantage, *without being dominated by it*, not us who recognise that ‘AI’ can (and must) be abolished. If we muster *just a fraction* of the faith that ‘AI’ boosters allocate to ‘AI’, and put this faith into a revolutionary project instead, that would be enough to change the world. We just need to convincingly argue for such a (re)allocation.
+*How a $1 million sandbox challenge led us to a vulnerability in Linux networking, repeatable host-memory disclosure, and ultimately a full guest-to-host escape.*
 
-In short, working towards ‘AI’ abolition is working towards liberation. But what exactly do we mean by that?
+## Part 00: Intro
 
-## Abolition means working towards a liberatory alternative.
+On August 18, 2026, Vercel announced a [$1 million challenge](https://vercel.com/blog/one-million-dollar-hacker-challenge-for-vercel-sandbox) inviting researchers to break the isolation boundary of its Sandbox product (total prize pool). The announcement came just weeks after OpenAI had [disclosed a remarkable security incident](https://openai.com/index/hugging-face-model-evaluation-security-incident/): AI agents running inside restricted evaluation environments had found ways around their network isolation, compromised internal infrastructure, and eventually breached systems at Hugging Face. The agents weren't supposed to have internet access in the first place.
 
-Abolition as a political project is most famously associated with the abolition of slavery. The political project of abolition identifies an **oppressive institution** that it wants to eradicate (in this example, slavery); and importantly, also, the project of abolition suggests a **positive worldview** (in this example, a vision of the future where humans treat each other equally and do not dehumanize and enslave each other). Taking an abolitionist perspective is *not* (or at least not primarily) being *against* an oppressive institution; taking an abolitionist perspective is being *in favour of a liberatory alternative* to an oppressive institution.
+But there was an important distinction. **Escaping a sandbox's network restrictions is one thing. Escaping the virtual machine itself and reaching the host is another.** Vercel's challenge explicitly invited researchers to attempt both. We were interested in the latter. (Although we ended up finding vulnerabilities that also allow the former - more on those findings in a later post)
 
-Other abolitionist projects follow this logic, too: prison abolition works towards restorative justice *as an alternative* to the carceral system; police abolition works towards nonviolent public safety *as an alternative to* the police (and/or policing) state; family abolition words towards community care *as an alternative* to normatively imposed heteropatriarchal nuclear family structures.
+The question was simple: **how much could an untrusted guest influence the host kernel without ever exploiting KVM itself?** We took the challenge, put our research infrastructure to work, and within three days discovered a primitive buried in Linux networking that allowed guest-controlled checksum metadata to rewrite an IPv4 header *after the kernel had already validated it*.
 
-As AI abolitionists, we place ourselves in the context of other liberatory struggles against oppressive institutions and in favor of humane alternatives. AI abolition works towards *a revolution from the left* as an alternative to *global technofascism*.
+What initially looked like a 32-byte host-memory disclosure would eventually become a full guest-to-host escape in our own KVM and many many other Hypervisor environments. And the beautiful part about it was that the vulnerability wasn't even in the hypervisor, it was in the Linux networking stack.
 
-Many proponents of the abolitionist movements mentioned above – abolition of slavery, prisons, police, and family – come to the conclusion that their abolitionist project is not possible within a capitalist system. The same is true for AI abolition. We believe that the abolition of AI is only possible if it goes hand in hand with the abolition of capitalism.
+[Vercel later described it as the program's most important report](https://vercel.com/blog/findings-from-the-1-million-dollar-vercel-sandbox-challenge#the-kernel-zero-day), and its final tally recorded just one Critical finding. That Critical was what is now pwnescape. Together with a separate network-escape report, we had accomplished both network and host escape goals. Its important to emphasize Vercel's sandbox was already hardened beyond normal industry standards and had no misconfigurations we could spot. Although the vulnerability originated in the Linux kernel and wasn't a Vercel-specific flaw or misconfiguration, Vercel deserves tremendous credit for how they handled it. They moved quickly to protect their customers, launched their own independent research, identified and notified other affected hypervisor and sandbox providers, and worked closely with us to coordinate disclosure and fixes across the industry. Their efforts helped protect not just Vercel's customers, but the wider ecosystem.
 
-At this point in the text, since, as the famous saying goes, “it is easier to imagine the end of the world than the end of capitalism” (*Frederic Jameson*), it is worth reminding ourselves that not only are alternatives *imaginable*; they are also *feasible* and *realistic*, as for the most of human history — for the absolutely longest time of our human existence on earth — we humans lived without slavery; lived without prisons; lived without police; lived in communities without cisheteropatriarchal norms; and lived without AI.
+This is the story of CVE-2026-99999, a Critical rated Linux kernel vulnerability leading to KVM escape.
 
-## While we argue about what “AI” really means, real harm is being done.
+## Research
 
-Whole books and articles have been written, and will be written, about “what exactly” AI is. While these discussions are interesting, they are also beyond the point for our abolitionist purpose here; arguing about competing definitions of AI is distracting our eyes from the actual prize: *an urgently needed revolution from the left*. The good news is that we do not need to go through all of the small print in order to start working towards that *positive worldview*. This is also reflective of reality: since “AI” means different things to different people, you are invited to join the struggle — no matter if you are fighting against…
+We used Omega-Pwn, pwn.ai's experimental research harness combining our custom security architecture and automation with elements of [OmegaClaw](https://github.com/asi-alliance/OmegaClaw-Core), developed by researchers at SingularityNET and BGI Labs for this ambitious project. Compared to traditional LLM harnesses, it enabled longer research horizons, persistent campaign state, parallel collaborative investigations, and the accumulation of hypotheses, failed experiments, and evidence across complex research sessions.
 
-- AI as a set of technologies;
-- AI as marketing term rooted in eugenics;
-- AI as a product with for-profit promises that are failing to materialize;
-- AI as a misconception of what computers can do;
-- AI as a cultural practice of outsourcing our thinking;
-- AI as floating signifier;
-- AI as a political argument for the extraction and appropriation of vast material resources;
-- and the list continues.
+Humans led the research, framing the hard questions, engineering workflows, and directing investigations. **GPT-5.6 Sol** served as the primary reasoning engine for source-level analysis, exploring attack paths, and challenging assumptions. Omega-Pwn bridged human intuition and contextual insight with the analytical capabilities of advanced LLMs.
 
-What all of these definitions of AI have in common is that **enormous harm is being done *in the name of* “AI”**.
+**As far as we know, PwnEscape exposes an entirely new class of attacks in Linux networking: untrusted checksum metadata can rewrite security-sensitive packet fields after the kernel has already validated and acted on them, undermining assumptions across the networking stack far beyond the original VM escape.**
 
-*[here could be inserted the typical laundry list of: the planet, the data privacy, the enshittification, the resources, the acceleration of work, the inhumane working conditions for data labellers, the damage to education, the detrimental psychological effects on people, the gigantic natural resources consumed, the gigantic dual use notjustpotentialbutactualuse see warfare in Gaza and elsewhere, the makingpeopledependentonithencelessawareof the issues, etc.]*
+## Part 01: A deferred checksum and a mutable IPv4 header
 
-Of course, technology is never neutral. And we do not buy into singularity narratives into “AI” bringing human beings closer to God, or the Devil, or both. So, what makes AI *not* just “yet another technology, and why don’t you go abolish the telephone and the printer if you hate technology so much?”, is **the enormous scale at which the term is being used to do harm in the name of some diffuse technooptimist future**. The harm done in the name of AI is much, much, much larger than any of the supposed benefits brought about by AI. And do not fool yourself at this point (just like we do not want to fool you): it is not enough to try to figure out how to “mitigate the harms while exploiting the benefits”. We can see that all of the harms done in the name of AI are integral part of AI; and are integral parts of capitalism. As such, there is no ethical AI, and never will be; and there is no AI abolition under capitalism.
+The accepted Linux fix is upstream as [`6785011f8b16`](https://github.com/torvalds/linux/commit/6785011f8b16abf40b1e9d8b2e332232b3e68822), **`ipv4: validate checksum_start before completing checksum`**.
 
-## You can take action, now.
+This is the first installment of **PwnEscape**. We are going to spend most of it inside `sk_buff`, checksum metadata, and IPv4 fragmentation, because that is where the actual failure happened.
 
-It is easy to feel overwhelmed by the magnitude of the issues. Feeling overwhelmed, however, is not the same as being paralyzed. Even when you feel overwhelmed, you still have the agency to act. We collected here a list of actions you can take, from the smallest to the most involved, sorted more or less by magnitude of efforts needed.
+*Figure 1. The vulnerable component is the host networking stack. “KVM escape” describes the guest/host security boundary crossed in our isolated proof, not the source file that contained the bug.*
 
-### Tips to improve your wellbeing
+## 01A / We went looking beyond the hypervisor
 
-You can abolish AI in your own life. Starting today.
+Our [previous kvmCTF research](https://pwn.ai/blog/kvmescape) was about KVM's shadow-MMU behavior: an intricate interaction among mappings, reverse maps, and memory lifetime. This campaign began with a broader hypothesis. The security of a sandbox depends on much more than its hypervisor. A guest interacts with an entire host operating system, including device emulation, virtual networking, packet filters, memory allocators, and the APIs that glue those pieces together.
 
-- Most importantly: find your people. And support each other. None of this can be carried by one single individual; we all need community to support and sustain us.
-- Stay with the trouble: In a dehumanizing world, embrace the human experience.
-- Ask yourself, not “AI”.
-- Ask other people, not “AI”.
-- Find out more about the topic: learn & disseminate knowledge about the narratives that make AI seem “inevitable” or “unavoidable” even as these same narratives serve to perpetuate oppression, slavery, de-skilling, authoritarianism and ecological breakdown on a planetary scale.
-- Find analogue activities to replace your volunteering your time feeding the BigDumbRobot (aka, do more of what you actually enjoy, instead of scrolling through Instagram or conversing with ChatGPT)
-- Re-skill and up-skill yourself by phasing out tech crutches (like on-the-road access to your emails, 24/7 online availability for communication, GPS navigation) by working on your planning, organizing, navigation and community-building skills
-- Find like-minded people, gather in real life, and organize together
-- Stand up and speak up: instead of being part of the discursive normalization, be part of the critical voices who ask foundational questions
-- Stretching exercise: “reach up and out”. Reach up to the people you can reach that are the highest up in the decision making hierarchy at your workplace, in your community. And reach out to the people that are not (yet) part of your social environment: talk to acquaintances, strangers, the media.
-- Organize demonstrations and strikes (see Pull the Plug in the UK)
-- Organize conferences (see Cables of Resistance in Germany)
-- Start building resources for a difficult future (community and survival skills)
-- Direct action: start blocking and dismantling instruments of oppression
+For pwn, that suggested an efficient research strategy: map the reachable boundary, search for places where untrusted state gets promoted to trusted state, and challenge the assumptions at **every later consumer**, not just at the initial parser. We used GPT5-6-Sol-assisted source inspection with human set the scope and decide what actually constitutes evidence. The particularly interesting question at this time was:
 
-### “AI” is human cultural practice.
+> **Can an asynchronous or deferred operation modify packet bytes after the kernel has already made security-relevant decisions about those same bytes?**
 
-When we ask to abolish AI, we are not asking to abolish numbers. *The models that be* may peacefully continue to exist in hypergeometric space, as they have for time eternal, independently of our human dis/usage of them.
+Linux checksum offload offered exactly that possibility.
 
-When we ask to abolish AI, we ask to abolish what has become (from a 2026 standpoint), over the last few years, a prevalent cultural practice whose most salient feat is its overwhelming uncritical adoption (which, as we explain below, is not a fluke, but willfully engineered into AI systems).
+## 02 / `CHECKSUM_PARTIAL` is a promise to write later
 
-### “AI” is the cultural practice of outsourcing our thinking.
+Linux does not always compute transport checksums immediately. Instead, it can carry a packet in a state where the checksum still needs to be completed. The relevant `sk_buff` bookkeeping includes:
 
-What people that praise “AI” for its possibilities “for the benefit of humanity” (solving the climate crisis, eradicating racism, curing cancer, and render the working class superfluous through automation) miss out on is a simple reality check of scales and proportions. All of the enticing future promises so far have largely failed to materialize — quite on the contrary, “AI” is often driving the opposite of what the salvation promise is claiming, i.e., fueling the climate crisis, exacerbating racialized violence, facilitating the mental and physical suffering and death of billions, and trapping enormous segments of the population in increasingly meaningless and agencyless work. And at the same time (here the scale comes in!), if we weigh every single human’s participation in the BigDumbRobotInc. equally, the overwhelming majority of us humans nowadays is using “AI” for one single purpose: to outsource our thinking.
+```text
+skb->ip_summed     CHECKSUM_PARTIAL  (checksum still pending)
+skb->csum_start    location where checksum accumulation begins
+skb->csum_offset   offset from that location to the output field
 
-### You can abolish AI in your own life. Starting today.
+             write location = csum_start + csum_offset
+```
 
-You may feel disempowered to act “against” anything as big as the BigDumbRobot (as cultural practice). Speaking of AI abolition can feel liberating — but also daunting. You can, however, start today to abolish AI in your own life, and then let the waves ripple outwards towards the lives of other people. Here is an incomplete list of feasible steps to take, sorted more or less by magnitude of efforts needed.
+This is normal, documented functionality. On the transmit side, a network device or the software helper `skb_checksum_help()` can calculate the checksum and store the result at the designated field. In well-formed TCP/UDP traffic, that field belongs to the transport checksum. In the ordinary kernel path, the metadata is supposed to describe the packet that actually exists. See the [kernel checksum-offload documentation](https://docs.kernel.org/networking/checksum-offloads.html).
 
-- Stay with the trouble. In a dehumanizing world, embrace the human experience.
-- ask yourself, not “AI”.
-- ask people, not “AI”.
-- read more about the topic (insert some resources here); learn & disseminate knowledge
-- find analogue activities to replace your volunteering your time feeding the BigDumbRobot (aka, do more of what you actually enjoy, instead of scrolling through instagram)
-- re-skill and upskill yourself by phasing out tech crutches (like on-the-road access to your emails, 24/7 online availability for communication, GPS navigation) by working on your planning, organizing, navigation etc. skills
-- find like-minded people, gather in real life, and organize together
-- stand up and speak up: instead of being part of the discursive normalization, be part of the critical voices who ask foundational questions
-- stretching exercise: reach up and out. Reach up to the people you can reach that are the highest up in the decision making hiearchy at your workplace, in your community. And reach out to the people that are not (yet) part of your social environment: talk to acquaintances, strangers, the media.
-- organize demonstrations (see Pull the Plug in the UK)
-- organize conferences (see Cables of Resistance in Germany)
-- start building resources for a difficult future (community and survival skills)
-- direct action
-- sabotage
-- strike
+The critical point is that these values are **not just descriptive metadata**. They authorize a subsequent write into packet memory. If less-trusted software can influence them, their validity must survive every operation between admission and completion.
 
-Refuse to accept that comfort is the ultimate goal.
+An `sk_buff` also has multiple notions of where packet data begins:
+
+```text
+skb->head              beginning of the underlying head allocation
+skb->data              current data pointer (can advance as headers are pulled)
+skb->network_header    position of the network header
+skb->csum_start        stored checksum-start position
+skb_headlen(skb)       amount of packet data currently held linearly
+```
+
+The distinction between the **frame-relative view** and the **network-header-relative view** is important. A packet can arrive with Ethernet and additional link-layer headers still in its linear data. Later, those headers are removed or skipped for L3 processing. Merely checking that a checksum start falls far enough into the original frame is not the same as proving that it follows the IPv4 header after normalization.
+
+*Figure 2. The accepted packet's link-layer context is not the final IPv4 context. The issue is a mismatch of stored metadata and the current network-header boundary, not that the physical allocation magically moves. Our original reports cover the exact packet geometry; this figure focuses on the broken invariant.*
+
+### The input-side comparison was not enough
+
+The first public patch series makes the entry-path defect especially clear. In `__virtio_net_hdr_to_skb()`, the historical minimum-header check used `skb_transport_offset(skb)`, an offset relative to the current `skb->data` view. That protects against a checksum start that is trivially too early in that view. It does **not** by itself establish how far the start is from the network header when the packet contains additional link-layer structure.
+
+The original reported hardening therefore proposed an additional **network-relative** comparison:
+
+```c
+/* Conceptual comparison, adapted from our public patch series */
+transport_offset >= minimum_network_header_length
+transport_offset - network_offset >= minimum_network_header_length
+```
+
+Those two inequalities are not interchangeable. The distinction is the essence of the L2/L3 coordinate mismatch. The patch review grew beyond this first formulation because nested headers, IP options, IPv6, and differing ingress callers require more careful validation than a single optimistic fixed offset. [Our original input-side patch](https://lists.openwall.net/netdev/2026/09/20/13) and [Willem de Bruijn's later proposed broader input validation](https://lists.openwall.net/netdev/2026/10/07/283) provide the source-level history.
+
+For the eventual IPv4 consumer, the accepted guard expresses a particularly useful invariant. With `N = skb->network_header`, `H = ip_hdrlen(skb)`, `C = skb->csum_start`, and nonnegative checksum offset `O`, the eventual output location is `W = C + O`. Requiring **`C >= N + H`** before completion implies **`W >= N + H`**. The guard therefore prevents this completion from writing *into the IPv4 header*. It does **not** prove that `W` is the correct field within TCP or UDP; that is a separate protocol-validity question.
+
+This is the first trust failure: **checksum metadata from a less-trusted origin crossed into host packet processing without being constrained against the header that later code would actually use.**
+
+## 03 / The header was checked. Then the header changed.
+
+The most interesting part is the order of operations.
+
+Host ingress sees and parses an IPv4 packet with an ordinary header. Fragment processing and routing can operate on that state. Later, output fragmentation reaches the pending checksum. In the historical code, `ip_do_fragment()` completed the checksum before obtaining the IPv4 header pointer and using the header length. The pre-fix ordering in [`net/ipv4/ip_output.c`](https://github.com/torvalds/linux/commit/6785011f8b16abf40b1e9d8b2e332232b3e68822) was effectively:
+
+```c
+/* Historical ordering, abbreviated for explanation */
+if (skb->ip_summed == CHECKSUM_PARTIAL)
+    skb_checksum_help(skb);    /* deferred write */
+
+iph = ip_hdr(skb);
+/* Fragmentation later derives hlen from iph->ihl. */
+```
+
+`skb_checksum_help()` is not inherently unsafe. It becomes unsafe here because malformed metadata allows its write to overlap bytes that were **already parsed as an IPv4 header**.
+
+The header field that gives the leak its shape is IPv4 `ihl`, a 4-bit count of 32-bit words. The first byte of a normal IPv4 packet contains version and IHL. In our controlled research geometry, it could change from `0x45` (IPv4, five words = 20 bytes) to `0x4f` (IPv4, fifteen words = 60 bytes), without changing the version nibble.
+
+*Figure 3. A two-byte header mutation can leave the packet looking like IPv4 while dramatically changing the header-length interpretation. `0x4500` and `0x4f00` are the before/after first words observed in the research case.*
+
+**Static IHL readout**
+
+| Packet view | First byte | IHL | Interpreted IPv4 header length |
+| --- | --- | --- | --- |
+| Parsed state | `0x45` | 5 words | 20 bytes |
+| After deferred write | `0x4f` | 15 words | 60 bytes |
+
+The IPv4 version nibble remains `4`; only the four-bit header-length interpretation changes.
+
+The earlier stages had not endorsed a 60-byte header. They had made decisions on a 20-byte header. But the later consumer read an updated field as though it were authoritative.
+
+This is a **time-of-check/time-of-use problem in the semantic sense**, but not the usual race between threads. The execution can be fully deterministic. The “time” separating validation and use is the sequence of legitimate networking operations, with an attacker-influenced deferred write in between.
+
+### A simplified control-flow trace
+
+```text
+LESS-TRUSTED INPUT                         HOST NETWORK STACK
+──────────────────────                    ─────────────────────────────────────
+packet + partial-checksum metadata ─────► offload metadata installed in skb
+                                          │
+                                          ▼
+                                    link-layer processing / L3 normalization
+                                          │
+                                          ▼
+                                    IPv4 parse, reassembly, policy, routing
+                                    header trusted as IHL=5 (20 bytes)
+                                          │
+                                          ▼
+                                    output fragmentation
+                                          │
+                                          ▼
+                                    skb_checksum_help()
+                                    pending write can alter parsed header
+                                          │
+                                          ▼
+                                    ip_do_fragment() consumes late IHL
+                                    header now claims 60 bytes
+                                          │
+                                          ▼
+                                    header copy exceeds logical linear data
+                                          │
+                                          ▼
+                                    emitted IPv4 options include host bytes
+```
+
+*This is an example of vulnerability-oriented path diagram, not a claim that every network configuration takes precisely these exact hooks, although we have found numerous other methods to invoke these vulnerable paths.*
+
+## 04 / Where the 32 bytes actually came from
+
+This part is easy to explain poorly. Linux packet buffers need not contain all packet bytes as one contiguous linear object. An `sk_buff` has a **linear head** plus possible non-linear fragment data. After the relevant reassembly, the research case's **logical linear data length** was just:
+
+```text
+20 bytes     original IPv4 header
+ 8 bytes     payload available in the first fragment
+────────
+28 bytes     skb logical linear head
+```
+
+The late checksum operation made the fragmenter believe that the IPv4 header was **60 bytes** long. That means it treated the next 40 bytes after the original 20-byte header as IPv4 options. Eight of those bytes were genuinely inside the linear head, though they had been payload. The **next 32 bytes were not part of the packet's logical linear data**.
+
+*Figure 4. `skb_headlen(skb) = 28` while the later copy length is 60. The discrepancy is 32 bytes. This is a logical skb-data out-of-bounds read; it need not cross the boundary of the physical allocation or an individual slab object.*
+
+That final distinction is important. “Out of bounds” here refers to the `sk_buff`'s **valid logical linear packet data**, not necessarily to an access beyond the entire allocator object. The host may have physically mapped allocation tailroom past `skb_headlen()`. Reading those bytes and incorporating them into an outgoing network header still crosses a confidentiality boundary. They are host memory, not bytes the sender provided as part of the logical packet.
+
+The IPv4 fragmenter can then generate outgoing fragments using the mutated header shape. The resulting transmitted packet exposes those bytes as apparent IP options. The problem has moved from an internal host state into an externally observable artifact.
+
+That is the difference between the statements *“this might read past a buffer”* and *“the host emitted data outside the sender's logical packet.”*
+
+### Why the proof needed controls
+
+We did not want to confuse an interesting hex dump with a host leak. The evidence design separated an identity case, where the packet's original header length remained unchanged, from the active case, where a later operation changed its interpretation. It checked whether the final transmitted packet was structurally valid, whether nonzero bytes appeared past the known logical data, and whether those bytes differed from the sender's controlled guard data.
+
+The tests also used an independent application-level receipt alongside raw packet observation. Those two signals helped distinguish a genuine host-side rewrite and transmission from a packet-construction or packet-capture artifact.
+
+The first bounded disclosure reproduced **32 bytes per active case**. We treated the contents as sensitive and did not need to preserve unrelated raw host memory to demonstrate the boundary crossing.
+
+We separately confirmed a host-availability failure on **disposable, researcher-owned Linux 6.12 and 7.x. hosts**.
+
+## 05 / Why this was an escape primitive, not just a leak
+
+A repeatable, attacker-controlled host-memory disclosure is already serious in a multi-tenant environment. It exposes information from a trust domain the guest is supposed to be unable to observe. It also changes the exploit-research problem: a working read primitive can help resolve uncertainty about host memory state and make additional memory-manipulation hypotheses testable.
+
+In our **owned KVM fixture**, the research advanced beyond read-only disclosure. Using host-memory observations and carefully controlled allocation behavior, we demonstrated **selected 64-byte host-kernel writes**. We used the resulting capability in a bounded lab chain to execute a host-root helper and return a host-generated marker to the guest. Four separate true-cold boots completed that chain.
+
+That is why we use the phrase **guest-to-host escape** for the isolated proof. It is not an inference from an out-of-bounds read, and it is not a claim of root command execution in any vendor's production environment.
+
+*Figure 5. Each rung is a different evidence claim. Source review alone does not prove a leak; a leak alone does not prove a write; a lab execution result does not become a production-execution claim.*
+
+The allocator-sensitive write chain, object-lifetime controls, and other hypervisor-specific adaptation are large enough to require a separate article. Although we suspect the security industry will use this post to figure out the other affected hypervisors and we expect exploits in weaker configurations to arrive in weeks, and exploits working in default hypervisor configurations to arrive in under a month. **Part 2 of pwnescape will deal with what it took to move from the primitive to host control**, rather than pretending that a 32-byte disclosure trivially becomes code execution, if the security community doesn't beat us to it.
+
+## 06 / The broader failure mode: deferred-metadata trust inversion
+
+What makes this research interesting beyond the particular kernel patch is the combination of **three different trust transitions**:
+
+1. Origin trust: a less-trusted guest or process describes an operation the host will later perform.
+2. Interpretation trust: the packet changes representation as link-layer headers are processed, and the kernel parses fields under a particular layout.
+3. Temporal trust: a deferred operation changes that already-parsed state before another kernel consumer uses it.
+
+For our own research discussions, we call this pattern **deferred-metadata trust inversion**. That is a descriptive name for the mechanism. Its building blocks are known, and lots of the fundamentals the exploit abuses are publicly documented; the new and consequential result here is a concrete host-boundary exploit chain through these Linux networking interactions.
+
+The recurring anti-pattern looks like this:
+
+```text
+untrusted metadata enters
+          │
+          ▼
+validated against an early representation
+          │
+          ▼
+packet is normalized, parsed, authorized
+          │
+          ▼
+metadata-driven operation runs later
+          │
+          ▼
+security-relevant bytes change
+          │
+          ▼
+later consumer trusts the changed interpretation
+          │
+          ▼
+memory-safety or policy-boundary failure
+```
+
+The corresponding audit question is not merely *“did we validate the checksum offsets?”* It is: **“after every transformation, can a deferred writer still target bytes whose semantic meaning has already been trusted?”**
+
+The distinction matters for defenses too. A narrow check that prevents IPv4-header overwrites can stop the memory-safety path demonstrated here without proving that every protocol-specific checksum destination is correct. During upstream review, researchers also raised distinct concerns about later mutation of transport fields after policy checks. Those are related consistency risks, but **they should not be folded into the proven 32-byte disclosure or claimed as fully addressed by the IPv4 fix**.
+
+The lesson generalizes as an audit technique for deferred work and mutable metadata. It is **not evidence by itself that unrelated protocols, operating systems, or products are vulnerable**.
+
+## 07 / What Linux actually changed
+
+The story of the fix(es) is worth telling because the shape of the remediation changed during review.
+
+Our initial candidate series addressed two different points in the path: admission of virtio checksum metadata and the IPv4 fragmentation consumer. The public [September patch series](https://lists.openwall.net/netdev/2026/09/20/11) explains that rationale and includes the reviewer discussion. Subsequent review identified more checksum-completion consumers and debated the risk of a broad check in a central helper versus targeted checks at multiple sinks.
+
+Michael S. Tsirkin's accepted upstream patch took the latter approach: a small IPv4-specific guard placed **before** checksum completion in each of five affected consumers. The helper was added in `include/net/ip.h`:
+
+For a normal nonnegative `csum_offset`, that ensures the eventual checksum output location cannot fall inside the IPv4 header. The check does not try to certify that the target is a valid TCP or UDP checksum field; it makes the narrower claim needed to protect the already-trusted **IPv4 network header**.
+
+The accepted commit, [`6785011f8b16`](https://github.com/torvalds/linux/commit/6785011f8b16abf40b1e9d8b2e332232b3e68822), adds the guard to these consumer paths:
+
+*Figure 6. One shared `ip_check_csum_start()` helper, five protected checksum-completion sites. The shared helper is in the sixth modified file. The patch is expressly described as defense in depth.*
+
+The critical new ordering at each relevant site is **validate the checksum start first, then complete the checksum**. In `ip_do_fragment()`, the simplified post-fix sequence is:
+
+```c
+if (skb->ip_summed == CHECKSUM_PARTIAL) {
+    err = ip_check_csum_start(skb);
+    if (!err)
+        err = skb_checksum_help(skb);
+    if (err)
+        goto fail;
+}
+```
+
+One detail is especially important if you are backporting or reviewing related work: this commit is **not a complete redesign of the virtio checksum API**. The accepted commit message explicitly calls it a defense-in-depth measure and says broader ingress validation requires further work. The original discussion also considered TUN/AF_PACKET scenarios without a VM.
+
+Michael reproduced the original issue during private review. Willem de Bruijn and other networking reviewers evaluated the accepted approach, including the cost of changing widely used checksum paths.
+
+The patch was applied to `net.git` on October 8, 2026, and subsequently merged into the mainline Linus's tree Oct 14th, 2026. Stable backports and official CVE publication should be checked against the live kernel records at publication time;
+
+## 08 / Research notes: three days to the primitive, weeks to the fix
+
+| Date, 2026 | Research milestone |
+| --- | --- |
+| **Aug 18** | Vercel publishes the $1 million Sandbox research challenge. |
+| **Aug 20** | We submit the initial bounded host-memory disclosure report. |
+| **Sep 4** | We report the host-kernel root cause privately to the kernel security contact and networking maintainers, with candidate patches. |
+| **Sep 7** | Michael S. Tsirkin replies that he reproduced the issue and acknowledges the candidate patches. |
+| **Sep 19–22** | Public netdev submissions and revisions expand review of the network-header invariant and related paths. |
+| **Oct 7–8** | The revised upstream guard is posted and accepted into `net.git`. |
+| **Oct 13–14** | Stable review and CVE coordination continue. |
+
+We made deliberate evidence distinctions throughout: a suspected bug versus a demonstrated disclosure, a disclosure versus a host write, an owned-host root marker versus a provider-production result, and a code review versus an accepted upstream patch. Those are not bureaucratic labels. They are how you keep ambitious vulnerability research falsifiable.
+
+That is also the point of the AI systems around the models. The research loop is much closer to is *model or researcher proposes an invariant violation → build a bounded test → check controls and falsification cases → preserve evidence → iterate with expert researcher → ask independent reviewers to attack the conclusion → implement and retest an exploit*. We use that loop to search a larger space without lowering the proof standard for under 700$ of API tokens.
+
+We are keeping Part 1 focused on the public kernel fix and our owned-host evidence. We are also keeping the provider-specific coordination and private production telemetry separate until their disclosure status is explicitly cleared.
+
+## 09 / Why this matters to people building sandboxes
+
+The popular mental model is that VM isolation lives in the virtual-machine monitor. Much of it does. But an attacker-controlled workload does not interact only with `arch/x86/kvm/`. It interacts with a host OS full of optimized, highly composable interfaces. Some of those interfaces are performance contracts.
+
+If the metadata crosses a trust boundary, every deferred consumer has to inherit the right invariants. And if the packet can be transformed after those invariants are checked, the invariants have to remain true in the new representation.
+
+That is why a bug that looks, at first, like a malformed checksum hint can become a memory disclosure and a guest-to-host escape primitive. **The problem was not how difficult IPv4 is to parse. It was that different parts of Linux were allowed to trust different versions of the same packet.**
+
+### Special Thanks
+
+A huge thank you to Michael S. Tsirkin of Red Hat, Willem de Bruijn and Eric Dumazet of Google, David Ahern of NVIDIA, Jakub Kicinski of Meta, Chris Arges of Cloudflare, Greg Kroah-Hartman of Linux Foundation, and the wider Linux kernel community for their technical guidance, collaboration, and efforts to get this vulnerability fixed upstream.
+
+We're equally grateful to Guillermo Rauch, Malte Ubl, Andy Riancho, Andrey Sibirev and the entire Vercel team for their exceptional collaboration and commitment to protecting the wider industry. Special thanks also to Eric Daniels (Modal) and everyone else who contributed, reviewed, reproduced, or helped along the way. This research wouldn't have been the same without you.
