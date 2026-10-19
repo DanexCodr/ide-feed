@@ -1,85 +1,218 @@
-There are some things I do on a regular basis, and of course I try to automate as much as possible so that I don’t need to remember them. One of these things is a weekly review. A part of my weekly review is checking how much time I’d spent on various things during the past week. Of course, I use Org-mode [clock tables](https://www.gnu.org/software/emacs/manual/html_node/org/The-clock-table.html) for that. I have this piece of Elisp
+For quick and dirty rendering of simple dynamic content, you may not need the complexity of a templating language like Handlebars or a PHP backend.
+
+Let’s use the example phrase, *“Come on, it’s `<currentYear>`”*. It should result in *“Come on, it’s ”* when rendered today.
+
+You can write this directly in HTML—*without IDs, classes, or querySelectors in your JS!* Thanks to the [`document.currentScript`](https://developer.mozilla.org/en-US/docs/Web/API/Document/currentScript) property, we can refer to the *currently running `<script>` element* directly and go from there.
+
+So the dynamic phrase **“Come on, it’s ”** would now be written as:
 
 ```
-(org-dblock-update '(4))
+Come on, it’s
+<script>
+  document.currentScript.replaceWith(new Date().getFullYear())
+</script>
 ```
 
-which updates all clock tables in the current buffer, and I run it in the Org file before I start my review.
+The script simply replaces itself with its computed value on the spot.
 
-However, this takes some time (slightly less than a minute, but still). My usual procedure is that I evaluate that form some time after I get up on Sundays (I do my review on Sunday morning), then I go to the bathroom or something, and when I’m back, my clock tables are updated.
-
-I thought that it would be cool if Emacs did it itself when I open my laptop on Sunday morning. Emacs has the concept of [idle timers](https://www.gnu.org/software/emacs/manual/html_node/elisp/Idle-Timers.html) which run after it is “idle” for some time (meaning the user didn’t do anything). My idea is that if Emacs is idle for, say, a minute, it’s probable that I am away from keyboard, so I may not come back within another minute. It is then relatively safe to run something which could take a bit longer.
-
-Of course, I definitely do not want Emacs to update my clock tables every time I don’t do anything in it for one (or even ten) minutes – that would be wasteful and potentially annoying. I only want to do this on Sundays, and only once per Sunday.
-
-This means that I need my idle timer to be set up only on Sunday mornings. This means that I need a [regular timer](https://www.gnu.org/software/emacs/manual/html_node/elisp/Timers.html) to set up an idle timer.
-
-Now, I can just set up a repeating timer with a period of one week, aimed at, say, 3am on Sundays. I don’t turn my laptop off (usually), just put it to sleep, so Emacs is basically open all the time. This means that my “regular” timer would run as soon as I open my laptop, say on Sunday at about 5:30am (which is when I usually sit down to my weekly review). This would break if I actually *turned my laptop off* on Saturday evening and turned it back on on Sunday, since the timer set up for 3am would be skipped. If I were worried about such a case, I could add a check in `init.el` to make sure that the idle timer is set up when I turn my laptop on on Sunday morning. (In fact, I could even update the clock tables *in my `init.el`* – since I start Emacs once every few days at most, I don’t really care about longer startup times.) I don’t expect to turn my laptop off on Saturday evening, though, so let’s concentrate on the initial idea of an idle timer.
-
-Note that I don’t need to write any code to find when 3am next Sunday falls – Emacs can already do that using the excellent `org-read-date` function: `(org-read-date t t "Sun 3:00")`. Of course, in order to be able to do that, I need to `(require 'org)` first.
+The code’s a bit wordy though, but we can *alias* it to a constant like `$` via `$=(...n)=>document.currentScript.replaceWith(...n)`. Then we’d have something reminiscent of [template literals](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals) in JS.
 
 ```
-(require 'org)
-
-(defun mbork/update-clock-tables-for-weekly-review ()
-  "Update clock tables for the weekly review."
-  (message "Updating clock tables in personal.org...")
-  (let ((inhibit-message t))
-    (with-current-buffer "personal.org"
-      (org-dblock-update '(4))))
-  (message "Updating clock tables in personal.org...done"))
-
-(defun mbork/set-up-clock-tables-update ()
-  "Set up updating clock tables with an idle timer."
-  (run-with-idle-timer
-   60 nil
-   #'mbork/update-clock-tables-for-weekly-review))
-
-(run-at-time
- (org-read-date t t "Sun 3:00")
- (* 60 60 24 7)
- #'mbork/set-up-clock-tables-update)
+Come on, it’s <script>$(new Date().getFullYear())</script>
 ```
 
-As is often the case, after writing this code I learned that it doesn’t work as I expected. The problem is simple. When `mbork/set-up-clock-tables-update` is run after I open my laptop, the time it was asleep is also counted as idle time, so the clock tables are updated *as soon as I open my laptop* – definitely not what I want.
+The code is pretty readable at a glance without context (after you get past the bit of indirection that is the `$` alias).
 
-At first I thought that I could attach `mbork/set-up-clock-tables-update` to `post-command-hook` in my `run-with-timer` invocation, and make that function remove itself from that hook. It is definitely not an elegant way, but at least it could work. However, it dawned on me that there might be a better way. If only I could find a way to *reset* the idle timer (without the user doing anything), I could add such a reset to `mbork/set-up-clock-tables-update`. I couldn’t find anything about resetting the idle timer in the Elisp manual, and grepping the sources didn’t give any obvious hints. I asked an LLM how to do that, and it suggested `(setq unread-command-events '(t))` – however, it was not able to explain why I should use `(t)`. I tried reading [the docs](https://www.gnu.org/software/emacs/manual/html_node/elisp/Event-Input-Misc.html), and it seemed to me that the `(t)` was a typical hallucination. (I also asked another LLM, and the answer was a hilarious back-and-forth of “do it this way… no, wait, that doesn’t exist, this way is the right one… no, it doesn’t exist, either”, ended by a suggestion of using `(discard-input)`. After some experiments, I arrived at something that seemed better to me, that is, `(setq unread-command-events nil)`.
+This is the `RenderJS` custom element. All it does is replace itself with the result of its contents treated as JavaScript code.
 
-I ended up [asking on the Emacs mailing list](https://lists.gnu.org/archive/html/help-gnu-emacs/2026-02/msg00156.html), and after a [false start due to my poor wording](https://lists.gnu.org/archive/html/help-gnu-emacs/2026-03/msg00000.html) of the question, I’ve received a few very interesting answers. (Protip: if you want to ask a question on one of the GNU mailing lists, and you expect a need to link to the ensuing thread, don’t ask near the end of a month, since apparently there is no way to have a single link to a thread spanning more than one month.) First of all, Eli Zaretskii told me that the `(setq unread-command-events nil)` is rather fragile. I didn’t understand why, but it’s Eli, so it’s safe to assume that he does know what he’s talking about. The solution he suggested was very clever – a bit tricky but clearly robust. His idea was to set up a “normal” timer which would then set up an idle timer for 60 seconds. This means that when I wake up my laptop on Sunday morning, this is what will happen. The “Sunday 3:00am” timer will fire and set up another timer. That timer will fire in 60 seconds and set up yet another timer, set up to fire after 60 seconds of idleness. So, if I just open my laptop and do nothing else, the idle time from the whole night will accumulate (so to speak) and the idle timer will run as soon as it is set up, that is, a minute after the laptop was opened. On the other hand, if I do anything in Emacs during that 60 seconds after opening my laptop, my action will reset the idle time, and the idle timer will properly wait until 60 seconds of idleness. Phew! I admit that stacking three timers *is* a bit convoluted (as you can see from my slightly awkward attempts to explain the whole idea in English), but I can see no reason for this contraption to fail. So, let’s get coding!
+To use it, we must first name the tag. The beloved dollar sign `$` is not allowed, so we use the next best thing—the emoji 💲. Sadly, that’s not enough: Tag names must start with a letter of the alphabet and include a hyphen. As such, we are forced to name it: `j-💲` representing JavaScript.
 
 ```
-(require 'org)
-
-(defun mbork/update-clock-tables-for-weekly-review ()
-  "Update clock tables for the weekly review."
-  (message "Updating clock tables in personal.org...")
-  (let ((inhibit-message t))
-    (with-current-buffer "personal.org"
-      (org-dblock-update '(4))))
-  (message "Updating clock tables in personal.org...done"))
-
-(defun mbork/set-up-clock-tables-update-after-60-seconds-idleness ()
-  "Set up an idle timer to update clock tables."
-  (run-with-idle-timer
-   60 nil
-   #'mbork/update-clock-tables-for-weekly-review))
-
-(defun mbork/set-up-clock-tables-update-in-60-seconds ()
-  "In 60 seconds, set up an idle timer to update clock tables."
-  (run-with-timer
-   60 nil
-   #'mbork/set-up-clock-tables-update-after-60-seconds-idleness))
-
-(run-at-time
- (- (org-read-date t t "Sun 3:00")
-    (float-time))
- (* 60 60 24 7)
- #'mbork/set-up-clock-tables-update-in-60-seconds)
+<script>customElements.define('j-💲', RenderJS);</script>
 ```
 
-And from now on, every Sunday on 3am (in reality, as soon as I open my laptop) Emacs will update the clock tables *when I leave it for a minute or more*. This way, I can open my laptop on Sunday morning, do things like [capture my weight](https://mbork.pl/2023-05-13_Dieting_with_Org_mode), then go to the bathroom – and assuming I spend at least about two minutes there, come back to updated clock tables. Yay for automation!
+### Example usage
 
-One final remark is that one of the answers on the mailing list prompted me to update my Emacs. It turned out that after I blogged about some [cool new things on the master branch](https://mbork.pl/2025-12-08_Some_new_additions_to_Emacs) last December, some *new* cool things landed! One of them is a new built-in package called [system-sleep](https://cgit.git.savannah.gnu.org/cgit/emacs.git/tree/lisp/system-sleep.el?h=master). One of its features is that it allows to attach Elisp functions to `pre-sleep` and `post-wake` events. Note that the `pre-sleep` event is potentially fragile because of reasons outside Emacs – this is what the manual says:  
-*Handling ‘pre-sleep’ events should be done as fast as possible and avoid user prompting. Systems often grant a very short pre-sleep processing interval, typically ranging between 2 and 5 seconds. The system may sleep even if your processing is not complete, so be sure you do as little as possible. For example, your function could close active connections or serial ports.*
+```
+I overslept by about <j-💲>Math.PI</j-💲> hours this morning.
+```
 
-I don’t think these will be useful in my case – checking if it’s Sunday morning *and* whether the clock tables were updated today or not every time I open my laptop is certainly possible but even more complex than what I have above. Still, it’s good to know that `system-sleep` exists, since it might come in handy some day. As you can see, contrary to some opinions, Emacs is far from dead and new useful things are being implemented all the time!
+A [`noscript`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/noscript) fallback would be nice for those that don’t run JS.
+
+```
+Come on, it’s
+<noscript>current year</noscript>
+<script>$(new Date().getFullYear())</script>
+```
+
+The resulting script-noscript juxtaposition in the markup looks almost like Angular/Vue’s if-else markup, neat.
+
+## Real world examples
+
+If you thought this technique is only useful for rendering the current year, you’re mostly right! As an example, I’ve used inline scripts to refer to relative dates in my living pages. Because **“ years ago”** sounds more natural than **“2017”**.
+
+```
+It was planted
+<noscript>in 2017</noscript>
+<script>$(new Date().getFullYear()-2017, ' years ago')</script>
+but now it has grown tall and strong.
+```
+
+### Random greeting
+
+Another example is in my front page, which says a randomly selected greeting on each visit.
+
+```
+<span class="intro-line">
+  <noscript>Hello!</noscript>
+  <script>
+    $([
+      "Hello!",
+      "Hey~~~",
+      "What’s up ↑",
+      "Hi there →",
+      "Hey there →",
+    ][Date.now() % 5])
+  </script>
+</span>
+```
+
+### Splitting text for animation
+
+Split text into characters using inline scripts to generate markup per character which can then be controlled or animated! In my case, I used it to render circular text, but a more common use case is text animation like the following.
+
+```
+It has been a
+<script>document.currentScript.outerHTML=
+  "supercalifragilisticexpialidocious"
+    .replace(/./g, c => `<strong>${c}</strong>`)
+</script>
+week.
+
+<style>
+  strong {
+    display: inline-block;
+    animation: wave 0.3s infinite alternate ease-in-out;
+    &:nth-child(4n + 1) { animation-delay: -0.6s; }
+    &:nth-child(4n + 2) { animation-delay: -0.45s; }
+    &:nth-child(4n + 3) { animation-delay: -0.3s; }
+    &:nth-child(4n + 4) { animation-delay: -0.15s; }
+  }
+  @keyframes wave {
+    to { transform: translateY(-2px); }
+  }
+</style>
+```
+
+Why import a text splitting library?
+
+### Rendering metadata to reduce duplication
+
+This post’s heading is dynamically derived from the page title metadata. I only have to define this post’s title once, in the `<title>` tag.
+
+```
+<blog-header>
+  <h1><script>$(document.title)</script></h1>
+  <img src="hero.jpg" alt="" loading="lazy"></img>
+</blog-header>
+```
+
+### Auto-updating footer
+
+How about an auto-updating copyright notice in the footer which may or may not have legal implications? <small>(IANAL)</small>
+
+```
+<footer>
+  © <script>$(new Date().getFullYear())</script> Mycorp, Ltd.
+</footer>
+```
+
+For comparison, here’s the StackOverflow/ChatGPT answer:
+
+```
+document
+  .getElementById("copyright-year")
+  .textContent = new Date().getFullYear();
+```
+
+```
+<footer>
+  © <span id="copyright-year"></span> Mycorp, Ltd.
+</footer>
+```
+
+Why pollute the global ID namespace and separate coupled code if we can avoid it?
+
+At this point you may be asking, is this technique only really useful for rendering the current year? Maybe, but we can do more than just *rendering* text.
+
+Come on, it’s , the web is rich and interactive!
+
+### The ubiquitous counter app example
+
+This is not a simple templating example anymore, but shows the power of `currentScript` in [hydrating](https://en.wikipedia.org/wiki/Hydration_(web_development)) self-contained bits of interactive HTML.
+
+```
+<div>
+  Count: <span>0</span>
+  <button>Increment</button>
+  <button>Decrement</button>
+  <script>
+    const [span, increment, decrement] =
+      document.currentScript.parentElement.children;
+    let count = 0;
+    increment.onclick = () => span.replaceChildren(++count);
+    decrement.onclick = () => span.replaceChildren(--count);
+  </script>
+</div>
+```
+
+I used this ‘local script’ pattern all the time in a previous version of this blog. It’s useful when making interactive illustrations in the middle of a long post. You wouldn’t want to put that logic at the very end or start of the file, away from the relevant section! Same goes for styles, now made even better with the [`@scope` rule](https://developer.chrome.com/docs/css-ui/at-scope#prelude-less_scope).
+
+It’s a good way to manage islands of interactivity.
+
+## The catch
+
+There are reasons people gravitate to libraries and frameworks. They’re just too convenient.
+
+If you want to use the alias definition above—the `$` shorthand—then you'd first have to define it at the top of the HTML, **synchronously**. Say you want to use this in multiple pages, so you put this in a common script file and load it via `<script src="$.js"</script>`. This could result in a parser- and render-blocking fetch: potentially very bad for performance!
+
+For my own cases, I don’t use the alias. I straight up just use `document.currentScript​.replaceWith`. Wish it was  [shorter…](https://developer.mozilla.org/en-US/docs/Web/API/Document/write)
+
+<del>Also, you cannot do **data-driven templating** this way, in the sense that you have **templates** to apply **data** onto. Metadata such as date published, post title, and tags that are stored in some posts table or in frontmatter somewhere, cannot be used for inline scripting purposes. You can’t fetch data from inline scripts. Therefore, unless data is somehow pre-injected in the global scope, no luck in pure vanilla JS templating. This is where templating languages like [Liquid](https://shopify.github.io/liquid/) really shine.</del>
+
+## Update: Data-driven templating
+
+I previously said that you cannot do **data-driven templating** this way (see deleted section above). However, a nice reader has found a way to do so (thanks Amier)!
+
+All you need is to save the `currentScript` in a variable, then you can refer to it in any async operation!
+
+Here’s the code for that: [jsfiddle](https://jsfiddle.net/0xh2mg8f/).
+
+```
+<ul class="posts">
+  <script>
+    const script = document.currentScript;
+    fetch("/posts.json") 
+      .then(response => response.json()) 
+      .then(data => data.map(p => (
+        `<li><a href="${p.url}">${p.title}</a></li>`
+      )).join(""))
+      .then(html => script.outerHTML = html);
+  </script>
+</ul>
+```
+
+It incurs an extra HTTP request on the client, though, unlike backend-side templating systems.
+
+For my site, I don’t need a templating system—I use direct patching to data-drive my HTML (in which the source and the output files are the same).
+
+Even if you use a templating framework or a static site generator, inline scripts remain useful!
+
+## Further reading
+
+- Surreal - a library that offers this technique, plus other jQuery-style helpers. Note the synchronous script tag loading issue though!
+- currentScript discussion in SvelteKit - this as an alternative to global IDs for self-hydrating things. In the end they went with generated IDs. :|
+
+## Appendix
+
+[`document.write()`](https://developer.mozilla.org/en-US/docs/Web/API/Document/write) used to (?) work like this for inline rendering, but it’s now deprecated because it had inconsistent behaviour.

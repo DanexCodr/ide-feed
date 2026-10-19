@@ -1,170 +1,379 @@
-I recently acquired a lightly-used HP Envy 17" laptop, model DA0013dx, and of course wanted to run
-[OpenBSD](https://openbsd.org/) on it.
-It came with Windows 11 on an internal NVME drive.
-Booting OpenBSD from a USB device failed fast: it hung.
-To get there, first of course I had to disable "secure boot" in the BIOS.
-Then, the boot process hung part way through the device probe section of the boot process.
-Familiar to BSD users since 1979, probing is where the OS tries every device it knows about and,
-if the device responds appropriately, marks it active and prints a short message on the console.
-Other OSes go through the same process, but the three mainstream OSes simply choose to hide it under a GUI.
-Both Linux and macOS have a Unix-derived `dmesg` command which prints the messages that are hidden at boot.
-On Windows, you have to into System Settings or some such to get hardware information.
+ASMC [https://github.com/philzook58/asmc](https://github.com/philzook58/asmc) is [another](https://github.com/philzook58/pcode2c) attempt to glue lifted Ghidra assembly semantics into CBMC.
 
-So. On the HP Envy in question, the device probing stops after the iwx(4) (Intel AX211 WiFi) probe.
-This implies that some device after the IWX in the probe sequence does something bad when trying its device.
-How do we find out which device is at fault?
+The C Bounded Model Checker [https://github.com/diffblue/cbmc](https://github.com/diffblue/cbmc) is a useful tool on the pareto frontier of soundness, scalability, and pragmatism. I think it’s [really cool](https://www.philipzucker.com/cbmc_tut/).
 
-## Getting Past Device Probe Hangs
+CBMC has an intermediate representation call GOTO IR and object file format `.gb`. `asmc-lift` takes a compiled .elf file and lifts it into a `.gb` file using the ghidra pcode semantics as packaged by Trail of Bits [https://github.com/lifting-bits/sleigh](https://github.com/lifting-bits/sleigh) (Hi Eric!). `asmc` itself is a driver program that runs `asmc-lift` and other CBMC tools to actually perform model checking.
 
-In the simplest case, you would use ddb(4) on a debug kernel:
+What I like about this is that it, like CBMC, is flexible for many use cases (standalone assembly verification, translation validation, linking to external assembly, C specs for assembly, DWARF debug data verification, patched assembly verification, decompilation verification) and actually a fairly small amount of glue C++ code for the main lifting tool itself (~1kLOC). GOTO and P-Code are pretty similar. Ultimately many of the questions we want to ask of assembly are about its interaction with C level concepts, or are more simply expressed / specced at something akin to C, so tight integration with CBMC is super useful.
 
-- `boot -c bsd.gdb` This file is created as part of kernel building, so you may have to build your own kernel to get this.
-- At config prompt, enter `ddb` to enter kernel debugger
-- `write autoconf_verbose 1`
-- `continue` # back to config
-- `quit` # resume booting
+# Basic Examples
 
-This produces a massive stream of output, so fast that a normal video recorder at 24FPS will show
-overlapping text that’s hard to read.
-I did try several different kernels, and eventually got one to panic instead of hanging with no output.
-With a bit of decrypting of a blurry video, I was able to read
-the panic as `panic: cpu at apic id 0 already attached.`
-A bit of cogitation led me to suspect a defective ACPI/AML implementation.
-And that led me to the next giant leap: update the BIOS!
-Sure enough, the machine was running a BIOS from 2024, the year the machine was first released.
-First releases these days often being really beta releases, I went looking for an update.
-A 2026 version was available, with numerous corrections, including the one that mattered.
-Since I hadn’t been able to clobber the Windows load, updating the BIOS was no problem,
-and the process ran smoothly.
-Then, booting off an external drive over USB booted into OpenBSD with no problem!
+## Mov 42
 
-The next step was to swap the NVME drives: take the OpenBSD 4TB from my older laptop and install it here,
-keeping the Windows-loaded 1TB aside in case of future BIOS updates.
-And yes, I remain paranoid enough to *remove the OpenBSD NVME when running MS-Windows*.
-Better safe than sorry.
+Here is a most basic example. We move 42 into rax (the return register)
 
-Here we run into two areas that differ from the Framework laptop this is replacing, and make little annoyances for servicing.
-First, the screws holding the bottom of the HP’s case are not captive,
-so you can lose them if not careful (I was, and didn’t).
-Second, the screws holding the bottom of the case carry Torx heads, while the screws holding the
-NVME itself use Philips (+) head. How hard would it have been for HP to make all the service screws
-have the same head? Framework did this some years ago.
-So maybe that’s a third: big companies should overcome their arrogance and look at what the
-new kids on the block are doing.
+```
+%%file /tmp/mov42.s
+.text
+.globl myfun
+myfun:
+    mov $42, %rax
+    ret
+```
 
-After the first set of screws was removed, there came a mighty struggle to get the case bottom off.
-It’s held in on all four sides with press-fit couplers all along each edge, so you have to pry like mad to remove it.
-The base is plastic, btw, so it flexes, but it’s still annoying.
-I guess you have to do that when making inexpensive plastic parts on an expensive laptop(?).
+```
+Overwriting /tmp/mov42.s
+```
 
-![hp envy17 insides](https://darwinsys.com/blog/images/hp-envy17-insides.jpg)
+We can run it and check tat 42 is indeed returned. The driver under the hood is calling `CC` and linking an assembly file. We could also give a preassembled `.elf`. The post condition string is basically spliced into a CBMC assertion in C, so the assertion language is C. For more complex stuff we want to write a harness
 
-Finally, I got to swap in the OpenBSD NVME. Powered it up. Nothing! Just a moment of silence.
-Oh shite! I thought. Have I busted something inside!?
-Well, not so fast. Several minutes of doom-and-gloom later,
-I was starting to get the external OpenBSD drive ready again, when I got a BIOS screen about the CMOS
-being corrupt, is it OK to recompute? Of course it disappeared before I could read it all.
-Rebooting again, I let it get back to this popup, accepted it, and, *mirabile dictu*,
-the machine booted up completely.
-Seems these machines often get upset when you change memory or hard drive,
-and take some time and/or an OK click to settle down.
+```
+! asmc /tmp/mov42.s --function myfun --post 'outreg.rax == 42'
+```
 
-So, I now have the machine running -current with all my files from the older laptop.
-Tada!
+```
+Output: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-kdgw9qv7
+assemble: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-kdgw9qv7/assemble.log
+ELF: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-kdgw9qv7/target.elf
+Harness: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-kdgw9qv7/demo.c (x86-64 SysV)
+Checking: 1 postcondition(s), safety and scalar ABI obligations.
+seed: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-kdgw9qv7/seed.log
+lift: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-kdgw9qv7/lift.log
+ASMC lift range: myfun has no ELF size; reachable code window in .text [0x401000, 0x401008)
+link: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-kdgw9qv7/link.log
+cbmc: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-kdgw9qv7/cbmc.log
+PASS: all checked properties passed with unwinding assertions
+```
 
-## About the Laptop
+This of course should fail.
 
-I’ve never had a 17" laptop before, so its size and weight are, well, different.
-My lightweight laptop backpack, which fits my [Framework 13](https://frame.work), simply won’t zip up around it!
-A larger backpack does, thankfully.
+```
+! asmc /tmp/mov42.s --function myfun --post 'outreg.rax == 43'
+```
 
-Reminder: we have two measures for any laptop, the screen diagonal and the actual physical width.
-Bigger laptops cluster around 17" diagonal, but most have a base "only" 15" or 15.6" wide.
-The former measure is used in advertising, e.g., "HP Envy-17", while the latter is used in sizing
-a backpack or carrying sleeve.
+```
+Output: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-ej9b_2i2
+assemble: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-ej9b_2i2/assemble.log
+ELF: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-ej9b_2i2/target.elf
+Harness: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-ej9b_2i2/demo.c (x86-64 SysV)
+Checking: 1 postcondition(s), safety and scalar ABI obligations.
+seed: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-ej9b_2i2/seed.log
+lift: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-ej9b_2i2/lift.log
+ASMC lift range: myfun has no ELF size; reachable code window in .text [0x401000, 0x401008)
+link: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-ej9b_2i2/link.log
+cbmc: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-ej9b_2i2/cbmc.log
+  [harness.assertion.1] line 247: FAILURE
+Counterexample (contract register views; use --full-trace for all values and machine steps):
+Trace for harness.assertion.1:
 
-The HP originally shipped with a 65W power supply (there’s a model with an extra graphics card that ships with 100W).
-So of course it runs with the 65W power supply from my Framework 13, but every so often (when running Windows)
-there was a notice that HP recommends using an HP power supply.
+  demo.c:172  outreg.rax=42ul
+  Recent machine instructions:
+    0x401000 MOV RAX,0x2a
+    0x401007 RET 
+Violated property:
+  file /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-ej9b_2i2/demo.c function harness line 247 thread 0
+  post: outreg.rax == 43
 
-Note that there is a range of variations of the Envy 17, denoted by a string of characters and digits.
-Some of the detail listed here is specific to the DA0013dx model which I have.
-I got my Envy used, and it didn’t come with the official power supply, nor with the USB dock
-that expands on its fixed set of ports (three USB-A, 2 USB-C/DP (one for power in), one HDMI,
-and a 1/8" headphone jack).
-Again, my Framework has a series of interchangeable ports, of which any 4 can be in use at ome time on the 13,
-or more on Framework’s larger laptops; this is great if you need a particular cable on the left or the right).
+Trace and details: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-ej9b_2i2/cbmc.log
+FAIL: counterexample found
+```
 
-The screen is bright and beautiful, and works "out of the box" with OpenBSD’s X Windows system.
-This Envy model has a 1920x1024 display and can drive an external HDMI monitor to 4K via the HDMI port,
-or a DisplayPort monitor on one of the USB-C ports.
-The 1920x1024 is the 19:6 ratio that used on many monitors these days, but due to the
-different sizes and resolutions, it takes quite some fiddling to update my XFCE4 layout just the way I wanted it.
-Unlike many lesser laptops, this features a touchscreen, which does work with OpenBSD’s ism(4)
-(trackpad and touchscreen) driver, with one important exception noted below.
+## ABI Checks
 
-Here’s a screenshot of my XFCE4 setup.
+This also fails because we stomp the return pointer
 
-| ![xfce4 framework](https://darwinsys.com/blog/images/xfce4-framework.jpg) | ![xfce4 hp envy](https://darwinsys.com/blog/images/xfce4-hp-envy.png) |
-| --- | --- |
-| Framework (a while ago) | HP Envy-17 |
+```
+%%file /tmp/mov42.s
+.text
+.globl myfun
+myfun:
+    mov $42, (%rsp)
+    ret
+```
 
-The CPU is a
-[Intel® Core™ Ultra 7 155H, 4484.32 MHz](https://www.intel.com/content/www/us/en/products/sku/236847/intel-core-ultra-7-processor-155h-24m-cache-up-to-4-80-ghz/specifications.html).
-We’ll just call it 4.5GHz, the maximum speed. This is a "Meteor Lake" CPU, with several types of cores
-(6 Performance cores each with two threads,
-8 Efficient cores, and
-2 Low Power Efficient cores, for a total of 22 threads; shows as 22 CPUs in dmesg).
-The Envy-17 is also available with the less expensive 120U CPU version.
+```
+Overwriting /tmp/mov42.s
+```
 
-This model ships with 16GB RAM but is available from HP configured with 32G.
-It’s DDR-5 SODIMM memory, so you can in theory upgrade as much as you can afford.
-Similarly, the Envy-17 is available configured with a 1 or 2 TB SSD;
-I moved my 4GB NVME SSD from the Framework into the HP Envy, and it works fine.
-My Framework may someday be reborn by installing a newer motherboard with more CPU power than the Envy I have
-([https://Frame.work](https://Frame.work), as per their promise and their culture, continues to bring out upgrades for all their models).
+```
+! asmc /tmp/mov42.s --function myfun
+```
 
-## Minor nits:
+```
+Output: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-8j5vcj4x
+assemble: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-8j5vcj4x/assemble.log
+ELF: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-8j5vcj4x/target.elf
+Harness: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-8j5vcj4x/demo.c (x86-64 SysV)
+Checking: safety and scalar ABI obligations only (no --post).
+seed: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-8j5vcj4x/seed.log
+lift: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-8j5vcj4x/lift.log
+ASMC lift range: myfun has no ELF size; reachable code window in .text [0x401000, 0x401008)
+link: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-8j5vcj4x/link.log
+cbmc: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-8j5vcj4x/cbmc.log
+  [asmc_target.asmc.13] line 6 unexpected return address (possible clobbered stack return address or incorrect RSP); 0x401007 pcode[2] RET  (RETURN)
+    Machine: 0x401007 pcode[2] RET  (RETURN)
+Counterexample (harness/reference values; use --full-trace for all values and machine steps):
+Trace for asmc_target.asmc.13:
 
-The lid hinge is very stiff.
+  demo.c:94  inreg.rax=0ul
+  demo.c:95  inreg.rcx=0ul
+  demo.c:96  inreg.rdx=0ul
+  demo.c:97  inreg.rbx=0ul
+  demo.c:98  inreg.rsp=4344ul
+  demo.c:99  inreg.rbp=0ul
+  demo.c:100  inreg.rsi=0ul
+  demo.c:101  inreg.rdi=0ul
+  demo.c:102  inreg.r8=0ul
+  demo.c:103  inreg.r9=0ul
+  demo.c:104  inreg.r10=0ul
+  demo.c:105  inreg.r11=0ul
+  demo.c:106  inreg.r12=0ul
+  demo.c:107  inreg.r13=0ul
+  demo.c:108  inreg.r14=0ul
+  demo.c:109  inreg.r15=0ul
+  demo.c:110  inreg.cf=0
+  demo.c:111  inreg.pf=0
+  demo.c:112  inreg.af=0
+  demo.c:113  inreg.zf=0
+  demo.c:114  inreg.sf=0
+  demo.c:115  inreg.of=0
+  demo.c:116  inreg.df=0
+  Recent machine instructions:
+    0x401000 MOV dword ptr [RSP],0x2a
+    0x401007 RET 
+Violated property:
+  file /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-8j5vcj4x/lifted.gb.asm function asmc_target line 6 thread 0
+  unexpected return address (possible clobbered stack return address or incorrect RSP); 0x401007 pcode[2] RET  (RETURN)
+  asmc_tmp_12 == asmc_tmp_13
 
-The keyboard seems a little off in terms of the row positions, but I guess that’s just down to whatever keyboard you’re used to.
-And the fact that it’s wider than most.
+  Return destination: 0x7fff0000002a (140733193388074)
+  Expected harness return sentinel: 0x7fffffff0000
 
-The official Intel stickers beside the touchpad are about the size of SD cards and I keep wanting to brush them off.
-Guess I’ll scrape them off when it gets too annoying.
+Trace and details: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-8j5vcj4x/cbmc.log
+FAIL: counterexample found
+```
 
-There is an error in HP’s "AML",the ACPI Machine Language which tells the OS about the details of the hardware.
-THis results in the error: `# AML PARSE ERROR (0x944): Undefined name: \_SB_.PC00.LPCB.MXTP`.
-This is a failed attempt at providing the MaXimum TemPerature that the CPU can run it without damage.
-In this case, `acpitz` driver doesn’t know the max temp.
-I just set temp:high=90C in `/etc/sensorsd.conf`, a bit more conservative than the 100C that some laptops provide.
+A different ABI violation, not restoring the callee saved R12
 
-## All that remains
+```
+%%file /tmp/movr12.s
+.text
+.globl myfun
+myfun:
+    mov $42, %r12
+    ret
+```
 
-There remain some minor issues to work out.
+```
+Overwriting /tmp/movr12.s
+```
 
-- The AML problem mentioned above means that the ACPI doesn’t know the maximum temperature, so maybe the CPU will catch fire if I ask too much of it at a time. This is a likely "won’t fix".
-- There’s a DRM warning message at boot time, due to "a call to a driver we don’t have" (jsg@). There were previously several other errors, but most were fixed in a recent (pre-8.0) commit.
-- The driver for the Intel Wifi (AX210) gives a seemingly-harmless error at bootup:
-- When there are two monitors, the touch screen behaves like x = k*x (k is 2 if they’re both the same width, otherwise YMMV). This seems to be a fundamental issue with X. Most of these should get resolved shortly. iwx0: timeout waiting for master
-- sndio isn’t talking to the built-in speaker via audio device(s) properly; it works with usb headphones. I don’t care, because I don’t like annoying the people around me with sudden blasts of noise when some advertisement pops up.
-- When there are two monitors, the mouse works correctly but the touch screen behaves like x = k*x (k is 2 if they’re both the same width, otherwise YMMV). This seesms to be a fundamental issue with X.
+```
+! asmc /tmp/movr12.s --function myfun
+```
 
-Most of these should get resolved eventually.
+```
+Output: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-0_l28dvp
+assemble: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-0_l28dvp/assemble.log
+ELF: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-0_l28dvp/target.elf
+Harness: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-0_l28dvp/demo.c (x86-64 SysV)
+Checking: safety and scalar ABI obligations only (no --post).
+seed: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-0_l28dvp/seed.log
+lift: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-0_l28dvp/lift.log
+ASMC lift range: myfun has no ELF size; reachable code window in .text [0x401000, 0x401008)
+link: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-0_l28dvp/link.log
+cbmc: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-0_l28dvp/cbmc.log
+  [asmc_sysv_check.assertion.5] line 91 ABI violation: callee-saved register R12 was not restored
+Counterexample (harness/reference values; use --full-trace for all values and machine steps):
+Trace for asmc_sysv_check.assertion.5:
 
-## Lessons learned:
+  demo.c:94  inreg.rax=0ul
+  demo.c:95  inreg.rcx=0ul
+  demo.c:96  inreg.rdx=0ul
+  demo.c:97  inreg.rbx=0ul
+  demo.c:98  inreg.rsp=4344ul
+  demo.c:99  inreg.rbp=0ul
+  demo.c:100  inreg.rsi=0ul
+  demo.c:101  inreg.rdi=0ul
+  demo.c:102  inreg.r8=0ul
+  demo.c:103  inreg.r9=0ul
+  demo.c:104  inreg.r10=0ul
+  demo.c:105  inreg.r11=0ul
+  demo.c:106  inreg.r12=16777216ul
+  demo.c:107  inreg.r13=0ul
+  demo.c:108  inreg.r14=0ul
+  demo.c:109  inreg.r15=0ul
+  demo.c:110  inreg.cf=0
+  demo.c:111  inreg.pf=0
+  demo.c:112  inreg.af=0
+  demo.c:113  inreg.zf=0
+  demo.c:114  inreg.sf=0
+  demo.c:115  inreg.of=0
+  demo.c:116  inreg.df=0
+  Recent machine instructions:
+    0x401000 MOV R12,0x2a
+    0x401007 RET 
+Violated property:
+  file /home/philip/vibe_coding/asmc/include/asmc_x86.h function asmc_sysv_check line 91 thread 0
+  ABI violation: callee-saved register R12 was not restored
+  return_value_asmc_get_reg$3 == frame->preserved[(signed long int)2]
 
-- Carry many different screwdrivers.
-- When in doubt, update your PC’s BIOS.
-- Big computer companies: look around more.
+Trace and details: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-0_l28dvp/cbmc.log
+FAIL: counterexample found
+```
 
-## Last words
+## Risc V
 
-If you want a modern laptop with a 16:9 touchscreen display to run OpenBSD, the HP Envy is not a bad choice.
+It also currently has RV32/64 support. Supporting all the different architectures ghidra does mainly requires writing a new abi shim in C.
 
-I recently acquired a lightly-used HP Envy 17" laptop, model DA0013dx, and of course wanted to run
-[OpenBSD](https://openbsd.org/) on it.
-It came with Windows 11 on an internal NVME drive.
-Booting OpenBSD from a USB device failed fast: it hung.
-To get there, first of course I had to disable "secure boot" in …
+```
+%%file /tmp/mov42.s
+.text
+.globl myfun
+myfun:
+    li a0, 42
+    ret
+```
+
+```
+Overwriting /tmp/mov42.s
+```
+
+```
+! CC=riscv64-unknown-elf-gcc asmc /tmp/mov42.s --function myfun
+```
+
+```
+Output: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-mvmxg5f8
+assemble: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-mvmxg5f8/assemble.log
+ELF: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-mvmxg5f8/target.elf
+Harness: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-mvmxg5f8/demo.c (RV64)
+Checking: safety and scalar ABI obligations only (no --post).
+seed: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-mvmxg5f8/seed.log
+lift: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-mvmxg5f8/lift.log
+ASMC lift range: myfun has no ELF size; reachable code window in .text [0x100b0, 0x100b6)
+link: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-mvmxg5f8/link.log
+cbmc: /home/philip/philzook58.github.io/_drafts/asmc-out/myfun-mvmxg5f8/cbmc.log
+PASS: all checked properties passed with unwinding assertions; safety/ABI only, no functional postcondition
+```
+
+## Compiling and Comparing mymax
+
+We can compile a C function into an assembly file  (or elf) and just verify properties about that.
+
+```
+%%file /tmp/max.c
+#include <stdint.h>
+uint32_t mymax(uint32_t a, uint32_t b) {
+    return a >= b ? a : b;
+}
+```
+
+```
+Overwriting /tmp/max.c
+```
+
+```
+! gcc -c -S /tmp/max.c -o /tmp/max.s
+```
+
+Now we can hand the assembled version to CBMC
+
+```
+! asmc /tmp/max.s --function mymax --post 'outreg.eax == (inreg.edi >= inreg.esi ? inreg.edi : inreg.esi)'
+```
+
+```
+Output: /home/philip/philzook58.github.io/_drafts/asmc-out/mymax-mq_lzxqu
+assemble: /home/philip/philzook58.github.io/_drafts/asmc-out/mymax-mq_lzxqu/assemble.log
+ELF: /home/philip/philzook58.github.io/_drafts/asmc-out/mymax-mq_lzxqu/target.elf
+Harness: /home/philip/philzook58.github.io/_drafts/asmc-out/mymax-mq_lzxqu/demo.c (x86-64 SysV)
+Checking: 1 postcondition(s), safety and scalar ABI obligations.
+seed: /home/philip/philzook58.github.io/_drafts/asmc-out/mymax-mq_lzxqu/seed.log
+lift: /home/philip/philzook58.github.io/_drafts/asmc-out/mymax-mq_lzxqu/lift.log
+link: /home/philip/philzook58.github.io/_drafts/asmc-out/mymax-mq_lzxqu/link.log
+cbmc: /home/philip/philzook58.github.io/_drafts/asmc-out/mymax-mq_lzxqu/cbmc.log
+PASS: all checked properties passed with unwinding assertions
+```
+
+But we can also compare the original C and the assembly version. This is translation validation.
+
+Here we have our first custom harness. Basically, asmc makes available a function to call into the assembly snippet. This all goes through CBMC so you have anything it offers available. Here we are comparing the output of the C and assembly version.
+
+```
+%%file /tmp/harness.c
+#include "asmc_x86.h"
+#include "/tmp/max.c"
+
+uint32_t mymax(uint32_t a, uint32_t b);
+uint32_t nondet_u32(void);
+
+void harness(void) {
+    uint32_t a = nondet_u32();
+    uint32_t b = nondet_u32();
+    uint8_t stack[256];
+    struct asmc_state st;
+
+    // set up arguments 
+    asmc_sysv_arg32(&st, 0, a);
+    asmc_sysv_arg32(&st, 1, b);
+
+    /* Set up the stack, execute assembly, and check ABI preservation. */
+    asmc_sysv_call_ram_model(&st, stack, 0x1000, sizeof stack);
+
+    assert(asmc_sysv_result32(&st) == mymax(a, b));
+}
+```
+
+```
+Overwriting /tmp/harness.c
+```
+
+```
+! asmc /tmp/max.s --function mymax --harness /tmp/harness.c
+```
+
+```
+Output: /home/philip/philzook58.github.io/_drafts/asmc-out/mymax-ql9__2ez
+assemble: /home/philip/philzook58.github.io/_drafts/asmc-out/mymax-ql9__2ez/assemble.log
+ELF: /home/philip/philzook58.github.io/_drafts/asmc-out/mymax-ql9__2ez/target.elf
+seed: /home/philip/philzook58.github.io/_drafts/asmc-out/mymax-ql9__2ez/seed.log
+lift: /home/philip/philzook58.github.io/_drafts/asmc-out/mymax-ql9__2ez/lift.log
+link: /home/philip/philzook58.github.io/_drafts/asmc-out/mymax-ql9__2ez/link.log
+cbmc: /home/philip/philzook58.github.io/_drafts/asmc-out/mymax-ql9__2ez/cbmc.log
+PASS: all checked properties passed with unwinding assertions
+```
+
+# Bits and Bobbles
+
+There are bigger examples in the repository.
+
+This is ultimately a very similar tool to pcode2c, which lifted ghidra pcode to a specialized C interpreter so that you could use CBMC.
+
+- PCode2C: Steps Towards Translation Validation with Ghidra and CBMC https://www.philipzucker.com/pcode2c/
+- DWARF Verification via Ghidra and CBMC https://www.philipzucker.com/pcode2c-dwarf/
+
+More recently I’ve been trying to do a similar thing as a python tool that runs it’s own symbolic execution engine through z3
+
+All of this is ultimately a follow on to CBAT [https://www.ndss-symposium.org/ndss-paper/auto-draft-437/](https://www.ndss-symposium.org/ndss-paper/auto-draft-437/)
+
+I do recall there being other efforts to connect assembly semantics to CBMC in the literature.
+
+There are advantages and disadvantages to this approach.
+
+- Encoding into C required some hoop jumping to talk about what are ultimately straightforward bitvector and memory operations.
+- There is something clean about
+- Outputting C might enable usage into other tools too, although I specialized some things to CBMC
+- Having a readable C output is actually pretty useful
+- being able to compile and run the outputted C model is useful for debugging.
+- Writing the C++ and editing it for the asmc generator is more complicated
+
+This new tool is heavily AI produced based on my notes and directions. I am not very proficient at C++ and more importantly proficient at the internals of CBMC. I was not on track to even try such a thing unless is became easy to do so. All told, `asmc-lift` is about 1kloc of pretty reasonably simple C++ just gluing Ghidra to GOTO. The new world is exciting and scary. There have been efforts to make CBMC available as a backend to other languages (Kani for Rust uses it and there was some Ada stuff.) so all the dominos are already there.
+
+It’s bitter sweet to have AI knock it out like this. On the other hand, I have always basically considered binary verification stuff to be a (good!) compromise between what interests me and what society needs. I have spent a lot of time tearing my hair out over this stuff. I’m not so sad to see that go (if it is). I think my stance is to continue writing my little snippets and prototypes. In this case, I’ve written like 4 or 5 prototypes over the last 7 years. Prototype 6 is not that exciting to write.
+
+One could complain that it’s C semantics are not super hardo semantics (I’ve seen complaints on twitter about semantics that are less hardo than this). It is not oriented towards finding undefined behavior and takes reasonable compromises on it’s choices for modelling C.
+
+Ghidra pcode semantics is also not a hardo semantics. It has known holes and problems. It performs reasonably well (for example, it is sufficient to emulate Mario [https://github.com/nevesnunes/ghidra-plays-mario](https://github.com/nevesnunes/ghidra-plays-mario) ). You can find unsupported instructions or flags or behavior that is not modelled. So be it. It is pretty good though, supports a ton of ISAs (20+) and is readily available prepackaged. The hardo version of assembly semantics is SAIL, which I have found hard to work with but also been refuted every time I say this by people I respect who didn’t find it hard to work with.
+
+It is possible that the pricepoint of a much higher level of soundness has changed so significantly since the agentic AI boom last November that anything less than this standard is now defunct. It is not clear at this point. It depends what is in the pipeline, but what I have seen publicly thus far does not lead to this conclusion.

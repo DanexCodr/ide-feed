@@ -1,159 +1,72 @@
-Leonardo da Vinci’s Mona Lisa is one of the most famous paintings of all time. And there has always been a discussion around her enigmatic smile. He used a trademark Renaissance technique called *sfumato,* which involves many thin layers of glaze mixed with subtle pigments. The striking result is that when you look directly at Mona Lisa’s smile, it seems to disappear. But when you look at the background your peripherals see a smiling face.
+Welcome back to the blog of Rainer Grimm! This is the first of hopefully many new C++-related articles in Rainer’s blog. Since you are reading this, you have potentially read many of his articles and have gotten an idea of his passion and his devotion to the C++ community. In this blog, for more than a decade, Rainer has provided the C++ community with countless articles about the latest and greatest of C++.
 
-One could spend decades studying the works of these masters from various perspectives, but if we want to hone in on the disappearing nature of that smile, mathematics can provide valuable insights. Indeed, though he may not have known the relationship between his work and da Vinci’s, hundreds of years later Salvador Dali did the artist’s equivalent of mathematically isolating the problem with his painting, “Gala Contemplating the Mediterranean Sea.”
+With deep sadness you may have already heard the news: Rainer passed away on October 6th 2025, as a victim of his ALS disease. He leaves a big hole in our hearts, but also in the C++ community. He will be sorely missed by many friends, colleagues, and students.
 
-Here you see a woman in the foreground, but step back quite far from the picture and there is a (more or less) clear image of Abraham Lincoln. Here the question of gaze is the blaring focus of the work. Now of course Dali and da Vinci weren’t scribbling down equations and computing integrals; their artistic expression was much less well-defined. But we the artistically challenged have tools of our own: mathematics, science, and programming.
+It would be a shame to let his amazing contribution to the C++ community go to waste. In order to honor his devotion to the community, a few C++ experts, in particular Mateusz Pusz, Jens Weller, Slobodan Dmitrović, Ivan Čukić, and me, have come together to continue his journey: bringing the latest and greatest news to you, the readers of Rainer’s blog. I’m making a start here, trying to uphold the spirit of his blog.
 
-In 2006 Aude Oliva, Antonio Torralba, and Philippe. G. Schyns used those tools to merge the distance of Dali and the faded smiles of da Vinci into one cohesive idea. In [their 2006 paper](http://web.archive.org/web/20191231032911/http://cvcl.mit.edu:80/publications/OlivaTorralb_Hybrid_Siggraph06.pdf) they presented the notion of a “hybrid image,” presented below.
+Of course there will be little changes: the five of us have our own style, our own interests, our own message. Thus the upcoming sequence of articles will inevitably be a little different from Rainer’s original articles. It will be a mixture of different areas of expertise, of different highlights and of different topics. But one thing will remain: we’ll make sure Rainer’s devotion to quality and insight will be upheld. We’ll make sure to continue on his path to bring valuable information to the C++ community.
 
-![](https://www.jeremykun.com/img/2014/monalisas1.png)
+## The Problem
 
-*The Mona Lisas of Science*
+So let’s start to talk about C++: we have a problem. C++ isn’t memory safe! …
 
-If you look closely, you’ll see three women, each of which looks the teensiest bit strange, like they might be trying to suppress a smile, but none of them are smiling. Blur your eyes or step back a few meters, and they clearly look happy. The effect is quite dramatic. At the risk of being overly dramatic, these three women are literally modern day versions of Mona Lisa, the “Mona Lisas of Science,” if you will.
+I suspect that this isn’t particularly new to you. In fact, the NSA published an article back in 2022, in which it explicitly recommended not to use C or C++ for safety and security related software anymore [[1](https://www.nsa.gov/Press-Room/News-Highlights/Article/Article/3215760/)]. The wording has softened since the first publication, but the spirit remains the same: prefer memory safe languages.
 
-Another, perhaps more famous version of their technique, since it was more widely publicized, is their “Marilyn Einstein,” which up close is Albert Einstein and from far away is Marilyn Monroe.
+But it is not just the US authorities. The recommendation in the “Cyber Resilience Act” of the European Union is similar: avoid memory unsafe languages. Although they did not explicitly mention C and C++ as the culprits, the message was clear enough.
 
-![](https://www.jeremykun.com/img/2014/marilyn-einstein.png)
+This sounds dire, but of course there is a fundamental and very good reasoning behind these articles. According to [[2](https://digital-strategy.ec.europa.eu/en/library/cyber-resilience-act)], *“Hardware and software products are increasingly subject to successful cyberattacks, leading to an estimated global annual cost of cybercrime of 5.5 trillion Euros by 2021.”*
 
-*Marilyn Einstein*
+5.5 trillion Euros!!! Yes, several trillion Euros have been lost due to malicious attacks, many of them from foreign countries interested in the downfall of our economy and society. And this number alone should be a perfect explanation for the desire to harden our software against cyber attacks.
 
-This one gets to the heart of the question of what the eye sees at close range versus long range. And it turns out that you can address this question (and create brilliant works of art like the ones above) with some basic Fourier analysis.
+But how does this relate to C++? Well, unfortunately some statistics have been pulled out of proportion and bent to emphasize what a significant and devastating impact the lack of memory safety of C++ has on cyber security. Officials therefore advise the use of languages that are considered memory safe.
 
-## Intuitive Fourier analysis (and references)
+Now we could start talking about these statistics and we could go into detail why C++ and memory safety in general are not the most important factors for cyber security and why C++ itself is by far not as unreliable and endangering as it sounds [[3](https://herbsutter.com/2025/12/30/software-taketh-away-faster-than-hardware-giveth-why-c-programmers-keep-growing-fast-despite-competition-safety-and-ai/)]. We could also, as so many people on social media do, start to argue that the arguments against C++ are exaggerated, misinformed or just plain wrong. However, let’s be serious: of course there is truth behind the statements. Truth that cannot really be denied, unfortunately. Therefore, from my perspective, it makes more sense to explore where and why these arguments emerge and what we can do about it.
 
-The basic idea of Fourier analysis is the idea that smooth functions are hard to understand, and realization of how great it would be if we could decompose them into simpler pieces. Decomposing complex things into simpler parts is one of the main tools in all of mathematics, and Fourier analysis is one of the clearest examples of its application.
+## An Example
 
-In particular, the things we care about are functions $ f(x)$ with specific properties I won’t detail here like “smoothness” and “finiteness.” And the building blocks are the complex exponential functions
+Based on my many years as a C++ trainer and consultant, I believe I have a pretty good idea about the real problem in our community. In order to make a point, let’s take a look at an example I saw on LinkedIn some time ago [[4](https://www.linkedin.com/feed/update/urn:li:activity:7409153900911468544/)]. A developer posted code for a “Palindrome Check in C++”. Here is the original code:
 
-where $ k$ can be any integer. If you have done some linear algebra (and ignore this if you haven’t), then I can summarize the idea succinctly by saying the complex exponentials form an orthonormal basis for the vector space of square-integrable functions.
+Before reading on, please take a look at this code and tell me if you see any problems — in particular any safety or security related issues.
 
-Back in colloquial language, what the Fourier theorem says is that *any* function of the kind we care about can be broken down into (perhaps infinitely many) pieces of this form called *Fourier coefficients* (I’m abusing the word “coefficient” here). The way it’s breaking down is also pleasingly simple: it’s a linear combination. Informally that means you’re just adding up all the complex exponentials with specific weights for each one. Mathematically, the conversion from the function to its Fourier coefficients is called the *Fourier transform,* and the set of all Fourier coefficients together is called the *Fourier spectrum*. So if you want to learn about your function $ f$, or more importantly *modify* it in some way, you can inspect and modify its spectrum instead. The reason this is useful is that Fourier coefficients have very natural interpretations in sound and images, as we’ll see for the latter.
+OK, I assume you’ve taken a good look and have found a couple of issues — yes, more than one. But in order to stay positive and in order to make an attempt, let’s start with the positive aspect of this code: yes, all semicolons in this code are correctly placed. Well done!
 
-We wrote $ f(x)$ and the complex exponential as a function of *one* real variable, but you can do the same thing for two variables (or a hundred!). And, if you’re willing to do some abusing and ignore the complexness of complex numbers, then you can visualize “complex exponentials in two variables” as images of stripes whose orientation and thickness correspond to two parameters (i.e., the $ k$ in the offset equation becomes two coefficients). The video below shows how such complex exponentials can be used to build up an image of striking detail. The left frame shows which complex exponential is currently being added, and the right frame shows the layers all put together. I think the result is quite beautiful.
+But unfortunately that’s it. The list of deficiencies is unfortunately much longer:
 
-This just goes to show how powerful da Vinci’s idea of fine layering is: it’s as powerful as possible because it can create *any image!*
+- a using directive for namespace std shouldn’t even be used in example code anymore. Inexperienced developers might get the impression it’s a good idea and apply this in their own code. So just to be explicit: this is a terrible idea. Core Guideline SF.7 will help you to understand the details [5].
+- the main() function is used to demonstrate the code instead of immediately providing a properly named function for the task. We could argue that it is just an example, but we could also argue that this is just lazy. Or is it just code written by AI? Perhaps, but more on that later.
+- the “input” string and the subsequent size variable are not const qualified. Which is a pity, because they are never changed, but only read. This clearly violates Core Guideline Con.1 [6].
+- the variables firstPointer and lastPointer are defined within the same statement. While this works and compiles of course, it is considered bad practice today. Please, don’t do this anymore! See also Core Guideline ES.10 [7].
+- although the variables are called Pointer, they are actually of type int. Thus the name is misleading at best — or just plain wrong.
+- lastPointer is set to size-1, which only “works” because the chosen type is int, not size_t. Yes, I agree, in this case everything is fine, but a generalized function would have to deal with the special case, which is just ignored here.
+- the characters of the string are accessed via the subscript operator. This operation takes a size_t, not an int, and does not perform any bounds checking, which could quickly lead to undefined behavior.
+- firstPointer and lastPointer are postfix incremented, although the old value is neither needed nor used in the code. This potential waste of resources is warned against in Core Guideline P.9 [8].
 
-Now for digital images like the one above, everything is finite. So rather than have an infinitely precise function and a corresponding infinite set of Fourier coefficients, you get a finite list of sampled values (pixels) and a corresponding grid of Fourier coefficients. But the important and beautiful theorem is, and I want to emphasize how groundbreakingly important this is:
+## A Generalized Function
 
-If you give me an image (or any function!) I can *compute* the decomposition very efficiently.
+This (hopefully) feels like a crushing review. But you might want to argue: *“OK, Klaus, that may be a little picky. I get it, a lot of core guidelines were violated, but it’s just a simple example. After all, it works, right?”*
 
-And the same theorem lets you go the other way: if you give me the decomposition, I can compute the original function’s samples quite easily. The algorithm to do this is called the Fast Fourier transform, and if *any* piece of mathematics or computer science has a legitimate claim to changing the world, it’s the Fast Fourier transform. It’s hard to [pinpoint specific applications](http://dsp.stackexchange.com/questions/69/why-is-the-fourier-transform-so-important), because the transform is so ubiquitous across science and engineering, but we definitely would not have cell phones, satellites, internet, or electronics anywhere near as small as we do without the Fourier transform and the ability to compute it quickly.
+Well, I honestly don’t think that it is a good idea to post “simple” code examples that violate so many of the community’s best practices. Actually, in my opinion it is a terrible idea. However, we could be well-meaning at this point and imagine a second attempt to solve the problem, this time with a generalized function named `is_palindrome()`:
 
-Constructing hybrid images is one particularly nice example of manipulating the Fourier spectrum of two images, and then combining them back into a single image. That’s what we’ll do now.
+OK, OK, I admit it, I’m providing this example to make a point. For this reason I also don’t adhere to all the best practices. But we, again well-meaning, could argue that this is a much better attempt to solve the problem. So please, take a close look at the `is_palindrome()` function and tell me if you are certain that there are no safety or security related issues.
 
-As a side note, by the nature of brevity, the discussion above is a big disservice to the mathematics involved. I summarized and abused in ways that mathematicians would object to. If you want to see a much better treatment of the material, this blog has a long series of posts developing Fourier transforms and their discrete analogues from scratch. See our four [primers](https://www.jeremykun.com/primers/), which lead into the main content posts where we [implement the Fast Fourier transform](https://www.jeremykun.com/2012/07/18/the-fast-fourier-transform/) in Python and use it to [apply digital watermarks to an image](https://www.jeremykun.com/2013/12/30/the-two-dimensional-fourier-transform-and-digital-watermarking/). Note that in those posts, as in this one, all of the materials and code used are posted on [this blog’s Github page](https://github.com/j2kun/).
+I hope you’ve really taken a good look. You might come up with the following summary: *“OK, Klaus, assuming you want to keep this simple and therefore really only want to apply this to a `std::string`, and considering this is only the next iteration, this appears to work well.”*
 
-## High and low frequencies
+But wait: the question wasn’t “does it work well”, but “are you certain”! So are you certain, i.e. 100% certain, that this code does not contain any safety or security related issues?
 
-For images, interpreting ranges of Fourier coefficients is easy to do. You can imagine the coefficients lying on a grid in the plane like so:
+At this point you might pause and reconsider. Honestly, if I were you, I wouldn’t be certain either. Although the code is just a few lines long, it is already difficult to think it through in every detail. Are all special cases covered? Could this result in an infinite loop? Could this accidentally access any invalid memory location? Are there other sources of undefined behavior? I can’t be certain by just looking at it. I’d need more time, potentially much more time to really think it through.
 
-Each dot in this grid corresponds to how “intense” the Fourier coefficient is. That is, it’s the magnitude of the (complex) coefficient of the corresponding complex exponential. Now the points that are closer to the origin correspond informally to the broad, smooth changes in the image. These are called “low frequency” coefficients. And points that are further away correspond to sharp changes and edges, and are likewise called “high frequency” components. So the if you wanted to “hybridize” two images, you’d pick ones with complementary intensities in these regions. That’s why Einstein (with all his wiry hair and wrinkles) and Monroe (with smooth features) are such good candidates. That’s also why, when we layered the Fourier components one by one in the video from earlier, we see the fuzzy shapes emerge before the fine details.
+For this reason — the reason of not being certain — I would rate this as poor code. Yes, seriously, poor code.
 
-Moreover, we can “extract” the high frequency Fourier components by simply removing the low frequency ones. It’s a bit more complicated than that, since you want the transition from “something” to “nothing” to be smooth in sone sense. A proper discussion of this would go into sampling and the Nyquist frequency, but that’s beyond the scope of this post. Rather, we’ll just define a family of “filtering functions” without motivation and observe that they work well.
+*“But Klaus, isn’t this a little too harsh? This code isn’t so bad after all!”*
 
-**Definition:** The *Gaussian filter function* with variance $ \sigma$ and center $ (a, b)$ is the function
+No, I’m dead serious. I would even argue that this is not the kind of C++ code we write and should write today, i.e. “modern C++” code. This is “classic C++” to me. And I’m very confident in saying this, because the modern solution is so much shorter and so much simpler.
 
-It looks like this
+## What’s next?
 
-In particular, at zero the function is 1 and it gradually drops to zero as you get farther away. The parameter $ \sigma$ controls the rate at which it vanishes, and in the picture above the center is set to $ (0,0)$.
+In the second part we’ll take a look at the modern C++ solution and discuss why it is superior to the classic solution. So stay tuned :-)
 
-Now what we’ll do is take our image, compute its spectrum, and multiply coordinatewise with a certain Gaussian function. If we’re trying to get rid of high-frequency components (called a “low-pass filter” because it lets the low frequencies through), we can just multiply the Fourier coefficients directly by the filter values $ g(x,y)$, and if we’re doing a “high-pass filter” we multiply by $ 1 – g(x,y)$.
+## References
 
-Before we get to the code, here’s an example of a low-pass filter. First, take this image of Marilyn Monroe
+**Thanks a lot to my [Patreon Supporters](https://www.patreon.com/rainer_grimm): Matt Braun, Roman Postanciuc, Tobias Zindl, G Prvulovic, Reinhold Dröge, Abernitzke, Frank Grimm, Sakib, Broeserl, António Pina, Sergey Agafyin, Андрей Бурмистров, Jake, GS, Lawton Shoemake, Jozo Leko, John Breland, Venkat Nandam, Jose Francisco, Douglas Tinkham, Kuchlong Kuchlong, Robert Blanch, Truels Wissneth, Mario Luoni, Friedrich Huber, lennonli, Pramod Tikare Muralidhara, Peter Ware, Daniel Hufschläger, Alessandro Pezzato, Bob Perry, Satish Vangipuram, Andi Ireland, Richard Ohnemus, Michael Dunsky, Leo Goodstadt, John Wiederhirn, Yacob Cohen-Arazi, Florian Tischler, Robin Furness, Michael Young, Holger Detering, Bernd Mühlhaus, Stephen Kelley, Kyle Dean, Tusar Palauri, Juan Dent, George Liao, Daniel Ceperley, Jon T Hess, Stephen Totten, Wolfgang Fütterer, Matthias Grün, Ben Atakora, Ann Shatoff, Rob North, Bhavith C Achar, Marco Parri Empoli, Philipp Lenk, Charles-Jianye Chen, Keith Jeffery, Matt Godbolt, Honey Sukesan, bruce_lee_wayne,  Silviu Ardelean, schnapper79,  Seeker, and Sundareswaran Senthilvel.**
 
-![](https://www.jeremykun.com/img/2014/marilyn1.png)
-
-*Marilyn Monroe*
-
-Now compute its Fourier transform
-
-![](https://www.jeremykun.com/img/2014/dft.png)
-
-*Marilyn's DFT*
-
-Apply the low-pass filter
-
-![](https://www.jeremykun.com/img/2014/filtered-dft1.png)
-
-*Marilyn's Filtered DFT*
-
-And reverse the Fourier transform to get an image
-
-![](https://www.jeremykun.com/img/2014/low-passed-marilyn1.png)
-
-*Low-passed Marilyn*
-
-In fact, this is a common operation in programs like photoshop for blurring an image (it’s called a *Gaussian blur* for obvious reasons). Here’s the python code to do this. You can [download it](https://github.com/j2kun/hybrid-images) along with all of the other resources used in making this post on [this blog’s Github page](https://github.com/j2kun/).
-
-```python
-import numpy
-from numpy.fft import fft2, ifft2, fftshift, ifftshift
-from scipy import misc
-from scipy import ndimage
-import math
-
-def makeGaussianFilter(numRows, numCols, sigma, highPass=True):
-   centerI = int(numRows/2) + 1 if numRows % 2 == 1 else int(numRows/2)
-   centerJ = int(numCols/2) + 1 if numCols % 2 == 1 else int(numCols/2)
-
-   def gaussian(i,j):
-      coefficient = math.exp(-1.0 * ((i - centerI)**2 + (j - centerJ)**2) / (2 * sigma**2))
-      return 1 - coefficient if highPass else coefficient
-
-   return numpy.array([[gaussian(i,j) for j in range(numCols)] for i in range(numRows)])
-
-def filterDFT(imageMatrix, filterMatrix):
-   shiftedDFT = fftshift(fft2(imageMatrix))
-   filteredDFT = shiftedDFT * filterMatrix
-   return ifft2(ifftshift(filteredDFT))
-
-def lowPass(imageMatrix, sigma):
-   n,m = imageMatrix.shape
-   return filterDFT(imageMatrix, makeGaussianFilter(n, m, sigma, highPass=False))
-
-def highPass(imageMatrix, sigma):
-   n,m = imageMatrix.shape
-   return filterDFT(imageMatrix, makeGaussianFilter(n, m, sigma, highPass=True))
-
-if __name__ == "__main__":
-   marilyn = ndimage.imread("marilyn.png", flatten=True)
-   lowPassedMarilyn = lowPass(marilyn, 20)
-   misc.imsave("low-passed-marilyn.png", numpy.real(lowPassedMarilyn))
-```
-
-The first function samples the values from a Gaussian function with the specified parameters, discretizing the function and storing the values in a matrix. Then the `filterDFT` function applies the filter by doing coordinatewise multiplication (note these are all numpy arrays). We can do the same thing with a high-pass filter, producing the edgy image below
-
-![](https://www.jeremykun.com/img/2014/high-passed-marilyn1.png)
-
-*High-passed Marilyn*
-
-And if we compute the average of these two images, we basically get back to the original.
-
-![](https://www.jeremykun.com/img/2014/sum-of-marilyns1.png)
-
-*Sum of two Marilyns*
-
-So the only difference between this and a hybrid image is that you take the low-passed part of one image and the high-passed part of another. Then the art is in balancing the parameters so as to make the averaged image look right. Indeed, with the following picture of Einstein and the above shot of Monroe, we can get a pretty good recreation of the Oliva-Torralba-Schyns piece. I think with more tinkering it could be even better (I did barely any centering/aligning/resizing to the original images).
-
-And here’s the code for it
-
-```python
-def hybridImage(highFreqImg, lowFreqImg, sigmaHigh, sigmaLow):
-   highPassed = highPass(highFreqImg, sigmaHigh)
-   lowPassed = lowPass(lowFreqImg, sigmaLow)
-
-   return highPassed + lowPassed
-```
-
-Interestingly enough, doing it in reverse doesn’t give quite as pleasing results, but it still technically works. So there’s something particularly important that the high-passed image does have a lot of high-frequency components, and vice versa for the low pass.
-
-You can see some of the other hybrid images Oliva et al constructed over at their [web gallery](https://web.archive.org/web/20180311064128/http://cvcl.mit.edu/hybrid_gallery/gallery.html).
-
-## Next Steps
-
-How can we take this idea further? There are a few avenues I can think of. The most obvious one would be to see how this extends to video. Could one come up with generic parameters so that when two videos are hybridized (frame by frame, using this technique) it is only easy to see one at close distance? Or else, could we apply a three-dimensional transform to a video and modify that in some principled way? I think one would not likely find anything astounding, but who knows?
-
-Second would be to look at the [many other transforms](http://en.wikipedia.org/wiki/List_of_transforms) we have at our disposal. How does manipulating the spectra of these transforms affect the original image, and can you make images that are hybridized in senses other than this one?
-
-And finally, can we bring this idea down in dimension to work with one-dimensional signals? In particular, can we hybridize music? It could usher in a new generation of mashup songs that sound different depending on whether you wear earmuffs 🙂
+**Thanks, in particular, to Jon Hess, Lakshman, Christian Wittenhorst, Sherhy Pyton, Dendi Suhubdy, Sudhakar Belagurusamy, Richard Sargeant, Rusty Fleming, John Nebel, Mipko, Alicja Kaminska, Slavko Radman, and David Poole.**

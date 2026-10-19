@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-18T20:16:33Z",
+  "updated": "2026-10-19T03:44:50Z",
   "items": [
     {
       "id": "devto-4858196",
@@ -218,27 +218,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4833419",
-      "title": "I was chasing the job market. One comment on DEV.to made me rethink everything",
-      "desc": "By EffessDev | 3 min read",
-      "tag": "tutorial",
-      "published": "2026-10-12T14:44:25Z",
-      "order": 19,
-      "url": "https://dev.to/effessdev/i-was-chasing-the-job-market-one-comment-on-devto-made-me-rethink-everything-4h20",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fcphbk52yjayt0h7tak46.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwIE/8QAFgEBAQEAAAAAAAAAAAAAAAAAAAEC/9oADAMBAAIQAxAAAAEGFNy86Qf/xAAXEAEBAQEAAAAAAAAAAAAAAAABABEh/9oACAEBAAEFAgsAkty3o27f/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFREBAQAAAAAAAAAAAAAAAAAAABH/2gAIAQIBAT8Bqv/EABgQAAMBAQAAAAAAAAAAAAAAAAAQETEB/9oACAEBAAY/AtKtUIdP/8QAGhAAAwADAQAAAAAAAAAAAAAAAAERITFRQf/aAAgBAQABPyHshY5JVVEmX8GCxDZJvdjaODR//9oADAMBAAIAAwAAABAd7//EABgRAAMBAQAAAAAAAAAAAAAAAAABESEx/9oACAEDAQE/EJOi1w//xAAXEQADAQAAAAAAAAAAAAAAAAAAAREh/9oACAECAQE/EKWDg//EABsQAQEBAQEAAwAAAAAAAAAAAAERACFhMUFx/9oACAEBAAE/EBE6P3AE2LDuQJCXEmcPdZDoUhM9mJrx+stlgKHkyikX5ct3/9k=",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4848909",
       "title": "Git, Docker, and IPFS All Hide the Same Beautiful Idea",
       "desc": "By James Anderson | 7 min read",
       "tag": "tutorial",
       "published": "2026-10-14T08:50:45Z",
-      "order": 20,
+      "order": 19,
       "url": "https://dev.to/james_anderson_h/git-docker-and-ipfs-all-hide-the-same-beautiful-idea-3j0",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Frjjnmpeah3gqjvc4u80m.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAAECBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHhZiUh/8QAFhABAQEAAAAAAAAAAAAAAAAAEQAg/9oACAEBAAEFAiN//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAGRABAAIDAAAAAAAAAAAAAAAAAQAxEBEg/9oACAEBAAE/IQJcQW41z//aAAwDAQACAAMAAAAQnX//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/ED//xAAdEAEAAQMFAAAAAAAAAAAAAAABABARITFRcZHR/9oACAEBAAE/EDK2Y2mpvAQMPsEl8Tqg2p//2Q==",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4833419",
+      "title": "I was chasing the job market. One comment on DEV.to made me rethink everything",
+      "desc": "By EffessDev | 3 min read",
+      "tag": "tutorial",
+      "published": "2026-10-12T14:44:25Z",
+      "order": 20,
+      "url": "https://dev.to/effessdev/i-was-chasing-the-job-market-one-comment-on-devto-made-me-rethink-everything-4h20",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fcphbk52yjayt0h7tak46.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwIE/8QAFgEBAQEAAAAAAAAAAAAAAAAAAAEC/9oADAMBAAIQAxAAAAEGFNy86Qf/xAAXEAEBAQEAAAAAAAAAAAAAAAABABEh/9oACAEBAAEFAgsAkty3o27f/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFREBAQAAAAAAAAAAAAAAAAAAABH/2gAIAQIBAT8Bqv/EABgQAAMBAQAAAAAAAAAAAAAAAAAQETEB/9oACAEBAAY/AtKtUIdP/8QAGhAAAwADAQAAAAAAAAAAAAAAAAERITFRQf/aAAgBAQABPyHshY5JVVEmX8GCxDZJvdjaODR//9oADAMBAAIAAwAAABAd7//EABgRAAMBAQAAAAAAAAAAAAAAAAABESEx/9oACAEDAQE/EJOi1w//xAAXEQADAQAAAAAAAAAAAAAAAAAAAREh/9oACAECAQE/EKWDg//EABsQAQEBAQEAAwAAAAAAAAAAAAERACFhMUFx/9oACAEBAAE/EBE6P3AE2LDuQJCXEmcPdZDoUhM9mJrx+stlgKHkyikX5ct3/9k=",
       "color": "#3B49DF"
     },
     {
@@ -266,39 +266,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4800180",
-      "title": "Does Your Favorite AI Tool's Cache Hit Mean Your Project's Uniqueness Miss?",
-      "desc": "By Fayaz | 4 min read",
-      "tag": "tutorial",
-      "published": "2026-10-05T07:53:32Z",
-      "order": 23,
-      "url": "https://dev.to/fm/does-your-favorite-ai-toolss-cache-hit-mean-your-projects-uniqueness-miss-dk3",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Frznvzqwg10cjgb3qx4pf.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwIE/8QAFQEBAQAAAAAAAAAAAAAAAAAAAgH/2gAMAwEAAhADEAAAAc7EtKQQsf/EABkQAQEBAQEBAAAAAAAAAAAAAAECAyESEf/aAAgBAQABBQKMvROXA5YgvT75dKCtKo//xAAYEQADAQEAAAAAAAAAAAAAAAAAAQIRMf/aAAgBAwEBPwGsXRTJ/8QAGBEAAgMAAAAAAAAAAAAAAAAAAAERIjH/2gAIAQIBAT8BlvCx/8QAGRAAAwADAAAAAAAAAAAAAAAAAAERECFR/9oACAEBAAY/ArmnDTIRs//EABwQAAICAwEBAAAAAAAAAAAAAAABESExQWFxof/aAAgBAQABPyFibxPwZBy74P0sc9EYCpxjqsqWYIAdGCDw/9oADAMBAAIAAwAAABAvf//EABYRAQEBAAAAAAAAAAAAAAAAAAEAIf/aAAgBAwEBPxAnVaF//8QAFxEBAQEBAAAAAAAAAAAAAAAAAQARQf/aAAgBAgEBPxAXd6b/xAAeEAEBAAICAgMAAAAAAAAAAAABEQAhMVFBkWGB4f/aAAgBAQABPxB+Qo0fZxUsgQib/MXZqohxRmb7068d+8e6g6EAyqB0gZ8C5oTicF946EtqAM//2Q==",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4796003",
       "title": "Dev log #24 Hardening the p2p stack: From flaky tests to WebSocket fixes",
       "desc": "By Yash Kumar Saini | 4 min read",
       "tag": "tutorial",
       "published": "2026-10-05T09:12:47Z",
-      "order": 24,
+      "order": 23,
       "url": "https://dev.to/yashksaini/dev-log-24-hardening-the-p2p-stack-from-flaky-tests-to-websocket-fixes-55f",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F99537lhxr01kt8nq46j3.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAQIDBP/EABQBAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhADEAAAAcNJMMCh/8QAGRAAAwADAAAAAAAAAAAAAAAAAAEQERIh/9oACAEBAAEFAhcNhuIxP//EABURAQEAAAAAAAAAAAAAAAAAAAEQ/9oACAEDAQE/ASf/xAAVEQEBAAAAAAAAAAAAAAAAAAABEP/aAAgBAgEBPwFn/8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAGRABAQEBAQEAAAAAAAAAAAAAAQARITFB/9oACAEBAAE/IWSTe7cbgErL8sZ5Gxdm/9oADAMBAAIAAwAAABBf3//EABcRAQEBAQAAAAAAAAAAAAAAAAEAITH/2gAIAQMBAT8QxI9v/8QAFhEAAwAAAAAAAAAAAAAAAAAAARAR/9oACAECAQE/EKK//8QAGxABAAMAAwEAAAAAAAAAAAAAAQARMSFBUWH/2gAIAQEAAT8QBTt/clzStsXJbgjQrINVlV4RF8Ralb2csQOp2Hqf/9k=",
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4817363",
-      "title": "How Our Engineering Team Uses AI, Part II: Meat Proxies",
-      "desc": "By Eyal Bukchin | 7 min read",
+      "id": "devto-4800180",
+      "title": "Does Your Favorite AI Tool's Cache Hit Mean Your Project's Uniqueness Miss?",
+      "desc": "By Fayaz | 4 min read",
       "tag": "tutorial",
-      "published": "2026-10-08T10:33:43Z",
-      "order": 25,
-      "url": "https://dev.to/metalbear/how-our-engineering-team-uses-ai-part-ii-meat-proxies-148g",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fmetalbear.com%2Fblog%2Fengineering-ai-use-part-2%2Fthumbnail.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAQMAAgT/xAAWAQEBAQAAAAAAAAAAAAAAAAABAAP/2gAMAwEAAhADEAAAAYDXYY/MS//EABoQAAIDAQEAAAAAAAAAAAAAAAECABEyEDH/2gAIAQEAAQUCbUEoAt7XE3//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAXEQEBAQEAAAAAAAAAAAAAAAABABEh/9oACAECAQE/AeyO3//EABcQAQEBAQAAAAAAAAAAAAAAAAEAECH/2gAIAQEABj8CdOTpf//EABsQAQACAgMAAAAAAAAAAAAAAAEAESFxEDGR/9oACAEBAAE/IV6S4Ry9EsJS0gvdw1BkW25//9oADAMBAAIAAwAAABC+f//EABYRAQEBAAAAAAAAAAAAAAAAAAARAf/aAAgBAwEBPxBcj//EABkRAAMAAwAAAAAAAAAAAAAAAAABESExQf/aAAgBAgEBPxBLnQ/Vwf/EABwQAQADAAIDAAAAAAAAAAAAAAEAESFRsTFhcf/aAAgBAQABPxCgPbthaXm9FnNwIjkLnnVa7gA3YKNqmUuEOv2f/9k=",
+      "published": "2026-10-05T07:53:32Z",
+      "order": 24,
+      "url": "https://dev.to/fm/does-your-favorite-ai-toolss-cache-hit-mean-your-projects-uniqueness-miss-dk3",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Frznvzqwg10cjgb3qx4pf.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwIE/8QAFQEBAQAAAAAAAAAAAAAAAAAAAgH/2gAMAwEAAhADEAAAAc7EtKQQsf/EABkQAQEBAQEBAAAAAAAAAAAAAAECAyESEf/aAAgBAQABBQKMvROXA5YgvT75dKCtKo//xAAYEQADAQEAAAAAAAAAAAAAAAAAAQIRMf/aAAgBAwEBPwGsXRTJ/8QAGBEAAgMAAAAAAAAAAAAAAAAAAAERIjH/2gAIAQIBAT8BlvCx/8QAGRAAAwADAAAAAAAAAAAAAAAAAAERECFR/9oACAEBAAY/ArmnDTIRs//EABwQAAICAwEBAAAAAAAAAAAAAAABESExQWFxof/aAAgBAQABPyFibxPwZBy74P0sc9EYCpxjqsqWYIAdGCDw/9oADAMBAAIAAwAAABAvf//EABYRAQEBAAAAAAAAAAAAAAAAAAEAIf/aAAgBAwEBPxAnVaF//8QAFxEBAQEBAAAAAAAAAAAAAAAAAQARQf/aAAgBAgEBPxAXd6b/xAAeEAEBAAICAgMAAAAAAAAAAAABEQAhMVFBkWGB4f/aAAgBAQABPxB+Qo0fZxUsgQib/MXZqohxRmb7068d+8e6g6EAyqB0gZ8C5oTicF946EtqAM//2Q==",
       "color": "#3B49DF"
     },
     {
@@ -307,10 +295,22 @@
       "desc": "By Michellebuchiokonicha | 13 min read",
       "tag": "tutorial",
       "published": "2026-10-08T06:31:39Z",
-      "order": 26,
+      "order": 25,
       "url": "https://dev.to/michellebuchiokonicha/i-turned-149k-messy-images-into-an-offline-recognition-system-3cp3",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F1mh3tg2u6x2dj6vgt8b3.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAAEDAv/EABYBAQEBAAAAAAAAAAAAAAAAAAEAAv/aAAwDAQACEAMQAAABwnLJZEp//8QAGhAAAgIDAAAAAAAAAAAAAAAAAREAIQISMf/aAAgBAQABBQJwGqeZGscKfT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAWEQEBAQAAAAAAAAAAAAAAAAAAATH/2gAIAQIBAT8BlY//xAAXEAEAAwAAAAAAAAAAAAAAAAAQITFB/9oACAEBAAY/AmGsP//EABoQAAMBAQEBAAAAAAAAAAAAAAABESFBMVH/2gAIAQEAAT8hqdEtNXgvl6W02sUiwfc2DIK6RLh//9oADAMBAAIAAwAAABAe/wD/xAAXEQEBAQEAAAAAAAAAAAAAAAABABEh/9oACAEDAQE/EDpBt//EABcRAAMBAAAAAAAAAAAAAAAAAAARIQH/2gAIAQIBAT8QojVR/8QAHBABAQEBAAIDAAAAAAAAAAAAAREAIUFRMXGB/9oACAEBAAE/EFakPbdDjACNo+tBQPFfDkmEIHm4pkvNcY/Jf3XgGhi8vvS30g3/2Q==",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4817363",
+      "title": "How Our Engineering Team Uses AI, Part II: Meat Proxies",
+      "desc": "By Eyal Bukchin | 7 min read",
+      "tag": "tutorial",
+      "published": "2026-10-08T10:33:43Z",
+      "order": 26,
+      "url": "https://dev.to/metalbear/how-our-engineering-team-uses-ai-part-ii-meat-proxies-148g",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fmetalbear.com%2Fblog%2Fengineering-ai-use-part-2%2Fthumbnail.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAQMAAgT/xAAWAQEBAQAAAAAAAAAAAAAAAAABAAP/2gAMAwEAAhADEAAAAYDXYY/MS//EABoQAAIDAQEAAAAAAAAAAAAAAAECABEyEDH/2gAIAQEAAQUCbUEoAt7XE3//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAXEQEBAQEAAAAAAAAAAAAAAAABABEh/9oACAECAQE/AeyO3//EABcQAQEBAQAAAAAAAAAAAAAAAAEAECH/2gAIAQEABj8CdOTpf//EABsQAQACAgMAAAAAAAAAAAAAAAEAESFxEDGR/9oACAEBAAE/IV6S4Ry9EsJS0gvdw1BkW25//9oADAMBAAIAAwAAABC+f//EABYRAQEBAAAAAAAAAAAAAAAAAAARAf/aAAgBAwEBPxBcj//EABkRAAMAAwAAAAAAAAAAAAAAAAABESExQf/aAAgBAgEBPxBLnQ/Vwf/EABwQAQADAAIDAAAAAAAAAAAAAAEAESFRsTFhcf/aAAgBAQABPxCgPbthaXm9FnNwIjkLnnVa7gA3YKNqmUuEOv2f/9k=",
       "color": "#3B49DF"
     },
     {
