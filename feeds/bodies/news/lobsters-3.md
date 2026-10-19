@@ -1,31 +1,79 @@
-Compilers are good at making mechanical transformations that make code faster. Unfortunately, most of them are not as good at non-trivial reasoning, so they can’t invent a completely novel approach to solving your problem.When designing a library for floating-point calculations, I had to implement a function that takes a float f and produces a float corresponding to the lowest set bit in f. For example, if f=1.01101⋅210 in binary, it would return 0.00001⋅210=25.This can be implemented with bit twiddling, but the straightforward algorithm breaks for powers of two, so I had to insert an `if`:`if f32::from_bits(x.to_bits() & !f32::MANTISSA_MASK) == x { // is x a power of two?
-    return x; // x itself is the lowest bit
-} else {
-    return x - f32::from_bits(x.to_bits() & (x.to_bits() - 1)); // x, minus x without lowest bit
-}
-`This `if` really annoyed me. It’s slowed down for the common case, and branches could be mispredicted. I wanted to find a formula that automatically handled powers of two, but try as I might, I couldn’t find anything convincingly optimal.So I made a non-orthodox play.Brute-forceWhat if there was a way to find such a formula automatically? No, not by spawning an LLM swarm, but by brute-forcing all possible formulas. LLMs can miss stuff or overindex on popular patterns; brute-force can’t.But how do we check if a formula is correct? Theorem provers are too slow, but we can design a few representative test cases and hope that whatever formula we find is correct. And if it has a counterexample, just add it to the list of test cases and repeat.This is not as insane as it sounds: by this moment I had already implemented an algorithm with 6 operations, so I just needed to iterate over formulas with 5 ops or fewer. I knew that the following operations could be useful:Integer addition/subtraction and bitwise AND/OR/XOR for bit tricks.Floating-point subtraction as the last operation.Maybe comparisons?There are 65=7776 ways to choose 5 operations, each of which can be one of 6 variants, and [C5=42 possible parentheses placements](https://en.wikipedia.org/wiki/Catalan_number). That’s not a lot!But we also need to choose the inputs to each operation, which can be either the input value x or some constant. I guessed that we’ll only need constants that cover various fields of the `float` binary representation, and not completely random ones, reducing the list to 64 different constants. That’s 656 combinations, which sounds like a lot, but in practice we can cull many of them.SearchTo implement the search efficiently, I build up the formula set inductively.Formulas with 0 operations are just x and constants; formulas with n operations can be found by combining all pairs of formulas with k and n−1−k operations:`for n_ops in 1..N_OPS {
-    let mut new_exprs = FxHashSet::default();
-    for a_ops in 0..n_ops {
-        let b_ops = n_ops - 1 - a_ops;
-        let a_exprs = &exprs_per_op_count[a_ops];
-        let b_exprs = &exprs_per_op_count[b_ops];
-        for a_expr in a_exprs {
-            for b_expr in b_exprs {
-                for op in OPS {
-                    // New expression: `a_expr op b_expr`
-                    new_exprs.insert(Expr {
-                        values: core::array::from_fn(|i| {
-                            op(a_expr.values[i], b_expr.values[i])
-                        }),
-                    });
-                }
-            }
-        }
-    }
-}
-`Induction allows us to prune duplicates. For example, (x+1)+2 and (x+2)+1 are different expressions, but they return the same values. Keeping just one expression for each set of outputs allows further iterations to complete faster. This is the reason why brute-force can complete in just 4 minutes! (I’m sure it can be optimized further, but I preferred watching YouTube over optimizing a one-off script.)To save time and memory, I avoid deduplication on the last iteration and output all matching candidates. Memory usage matters because I had 20 test cases by this point, so I had to store 80 bytes per expression, and there are *a lot* of expressions.ResultsSo, did this exhaustive search find anything interesting? Yes! There were several formulas with 5 operations, e.g. this one:`return x - f32::from_bits(x.to_bits() & (
-    (f32::EXPONENT_MASK - (x | f32::EXPONENT_MASK)) ^ !f32::EXPONENT_MASK
-));
-`I couldn’t find formulas with 4 operations, but this approach has a limitation: it doesn’t take into account that calculations can be reused. So, for example, if `x & 1` is used in two places, it will count that as two operations, not one. I was hoping that one of the 5-op formulas could actually be expressed as 4 operations via reuse, and after manually checking every formula, the very last one turned out to have this property! Here’s what it looks like:`let a = x.to_bits() & !f32::MANTISSA_MASK; // x without mantissa bits
-return f32::from_bits(x.to_bits() & (a - x.to_bits())) - f32::from_bits(a);
-`It behaves a little differently for powers of two – it flips the sign bit, which I don’t care about. And the logic doesn’t make sense at first glance, and yet it works.The reason why only this formula can reuse `a` is the subexpression `a - x.to_bits()`. It’s equivalent to `-(x & f32::MANTISSA_MASK)`, which is how other formulas refer to it. All formulas compute `x & !f32::MANTISSA_MASK` and `x & f32::MANTISSA_MASK`, but this one rewrites the latter as `x - (x & f32::MANTISSA_MASK)`, and then merges that with negation to save one operation!I was flabbergasted when I realized it found such a clever rewrite. You don’t need an LLM to be amazed by what computers can invent! And it doesn’t destroy industries.Anyway, this code now [lives in my work-in-progress FPU emulator](https://github.com/purplesyringa/fpu-v/blob/d3c3f72c691698e5095d259a79610e5293911651/src/ops/multiplication.rs#L485) and I’m proud of it.
+It has been 18 months since the first announcement of A5. What started off as an experiment in visualization (and an obsession with pentagons) has grown into a useful tool, with a wealth of [libraries, tools and software](https://a5geo.org/docs/ecosystem) building on top.
+
+Today I'm excited to announce that the `v1.0` version of A5 is out, bringing a [powerful set of features and performance improvements](https://a5geo.org/docs/whats-new) as well as [crystallizing the grid and index definition](https://a5geo.org/docs/upgrade-guide) for the future.
+
+If you're new to A5, in a nutshell it is a grid system that allows the representation of any position, line or polygon region on the globe as a pentagonal cell (or collection of cells), each represented as a compact 64-bit integer.
+
+The industry term for this is a Discrete Global Grid System (DGGS), and there are already a number of other systems out there which are powering some of the world's largest companies and data analytics pipelines.
+
+For a concrete example of an application leveraging A5, take a look at the [FIRMS Explorer](https://portolan-mirrors.github.io/firms-catalog/) which uses A5 to aggregate 631 million fire detections worldwide since 2000.
+
+## Stable platform for the future[​](https://a5geo.org/blog/2026/10/14/a5-v1#stable-platform-for-the-future)
+
+With `v1.0` we are committing to keeping the grid layout and the cell IDs frozen going forward. While the system will evolve and grow, for example by adding more utility functions, the fundamentals will stay fixed so applications, databases and workflows will be able to rely on an A5 cell representing a specific geographic location into the future.
+
+The community around the project has grown, in particular with the [DuckDB](https://query.farm/products/extensions/a5/) and [R](https://belian-earth.github.io/a5R/dev/index.html) implementations, whose beautiful sites arguably even put the official A5 site to shame! As such, going forward, the documentation on the A5 website will present code snippets and API documentation in these languages, as well as the officially supported TypeScript, Rust and Python libraries.
+
+## What's new[​](https://a5geo.org/blog/2026/10/14/a5-v1#whats-new)
+
+### Compacted data processing[​](https://a5geo.org/blog/2026/10/14/a5-v1#compacted-data-processing)
+
+New in `v1.0` is a whole new set of functions for working with collections of cells, known as [coverings](https://a5geo.org/docs/api-reference/coverings).
+
+When working with coverings, you can now use set operations: [`union`](https://a5geo.org/docs/api-reference/coverings#union), [`intersect`](https://a5geo.org/docs/api-reference/coverings#intersect) and [`difference`](https://a5geo.org/docs/api-reference/coverings#difference), predicates: [`contains`](https://a5geo.org/docs/api-reference/coverings#contains) and [`overlaps`](https://a5geo.org/docs/api-reference/coverings#overlaps) and measuring functions: [`count`](https://a5geo.org/docs/api-reference/coverings#count) and [`area`](https://a5geo.org/docs/api-reference/coverings#area).
+
+By using compacted data and these operations, it is possible to process billions of cells efficiently without having to uncompact the data, as was necessary before. An example workflow might be to union several coverings from database queries, intersect with a polygon or spherical cap and then filter a collection of points against the resulting covering. See the [example workflow](https://a5geo.org/docs/api-reference/coverings#example-processing-flow).
+
+### Spatial hierarchy functions[​](https://a5geo.org/blog/2026/10/14/a5-v1#spatial-hierarchy-functions)
+
+Geometrically, it is impossible to split an A5 pentagon into more pentagons in such a manner that the result exactly overlaps; the same is true of hexagons - unlike quadrilaterals and triangles, which can be split exactly. The A5 hierarchy is thus logical, and only approximately spatial.
+
+In order to support resampling and other operations, a new function [`cellToSubcells`](https://a5geo.org/docs/api-reference/hierarchy#celltosubcells) has been added. While this is slower than the `cellToChildren` API, it produces a correct covering (by centroid) of the cell. The inverse, [`cellToSupercell`](https://a5geo.org/docs/api-reference/hierarchy#celltosupercell), is also available.
+
+### Equal area[​](https://a5geo.org/blog/2026/10/14/a5-v1#equal-area)
+
+One of the key strengths of A5 has always been the guarantee that every cell is **exactly** the same area at a given resolution, which means that any analysis run using the system is [free of bias](https://a5geo.org/docs/recipes/a5-vs-h3) due to unequal cell sizes. New in `v1.0`, all the cells at all resolutions have the same pentagonal topology. This is in contrast to hexagonal DGGSs, which must include 12 pentagonal cells that complicate the topology and break the pure equal-area guarantee.
+
+## Vibrant ecosystem[​](https://a5geo.org/blog/2026/10/14/a5-v1#vibrant-ecosystem)
+
+One of the important characteristics of a grid system is its support across a range of tools and software, both in industry and academia. By standardizing on a definition of the grid and cell identifiers, it is easy to move data between systems and applications. For example, the FIRMS Explorer above was built using:
+
+- Geoparquet.io to aggregate the data: gpio add a5 input.parquet output.parquet --resolution 5
+- Portolan to host
+- a5-js and the A5Layer in deck.gl to visualize
+
+Along with a raft of implementations in popular systems, such as [DuckDB](https://query.farm/products/extensions/a5/), [R](https://belian-earth.github.io/a5R/dev/index.html), [QGIS](https://plugins.qgis.org/plugins/vgridtools/) and more, it is easier to build and experiment with A5 than ever. If you would like to get involved, or just have a question - feel free to join the [Slack channel](https://join.slack.com/t/a5-3ap4392/shared_invite/zt-35rpdc904-2vcsoikrJKFRJF7ncN1fmw)!
+
+## Under the hood[​](https://a5geo.org/blog/2026/10/14/a5-v1#under-the-hood)
+
+Over the past 18 months, both A5's internals and its APIs have been refined.
+
+### Teohedral space-filling curve[​](https://a5geo.org/blog/2026/10/14/a5-v1#teohedral-space-filling-curve)
+
+The key change that the majority of the other improvements flow from is the implementation (and, well, discovery!) of a new [teohedral](https://a5geo.org/docs/technical/teohedron) [space-filling curve](https://a5geo.org/examples/teohedral-curve), which defines the order in which the cells are indexed. The new curve passes around the whole world, without ever intersecting itself, while also grouping cells such that they form an (approximate) spatial hierarchy.
+
+![The teohedral curve touring the 12 faces of the dodecahedron](https://a5geo.org/assets/images/teohedral-curve-94336f4a2b0f0afa694dec5e18a3a03b.jpg)
+
+The fact that it doesn't self-intersect is crucial to some of the algorithms that can be built on top. For example, when filling a polygon with cells we can immediately deduce which cells are on the interior of the region without having to perform a costly flood fill. This works due to the boundary acting as a set of cutting points along the global space-filling curve - if we know these, then we can trivially fill in the cells in between.
+
+The benchmarks below are instructive:
+
+![polygonToCells time against the number of cells in the result, for old and new A5, H3 and S2](https://a5geo.org/assets/images/polygon-perf-12f499eafdc2fcc0afaec4e206678834.jpg)
+
+*How these were measured: each point is one call filling a country outline (UK, France, Brazil, USA and Australia, from the A5 test fixtures) at one resolution, timed with the native libraries: A5 1.0.0 and 0.10.1 (Rust crates, rustc 1.87), H3 4.5.0 (the C library, via h3-py's NumPy API) and S2 (the C++ library, via the s2geometry 0.14.0 Python bindings; `S2RegionCoverer` with no cell limit, so it returns a compacted covering at the target level). Times are the fastest of repeated runs, or a single run for calls over 2 seconds, on an Apple M1 Pro. Each library was stopped once a call took longer than a minute (6 seconds for A5), or past a billion cells.*
+
+Prior to v1, A5 polygon fills became impractically slow beyond a million cells. The same is true of [H3](https://h3geo.org/) today. By contrast, [S2](https://s2geometry.io/) is able to handle up to a billion cells without any issues, as is the new version of A5. It is no coincidence that S2 also uses a space-filling curve ([Hilbert](https://en.wikipedia.org/wiki/Hilbert_curve)) which **doesn't** self-intersect, while H3 index order has no such property.
+
+Similar algorithmic tricks can be used to speed up other operations, like intersections or area counts. For an interactive example of these operations, see the [Coverings](https://a5geo.org/examples/coverings) example.
+
+### Cell IDs[​](https://a5geo.org/blog/2026/10/14/a5-v1#cell-ids)
+
+A necessary consequence of changing the curve is that the cell IDs change. See the [Upgrade Guide](https://a5geo.org/docs/upgrade-guide) for migration instructions.
+
+## Thanks & looking forward[​](https://a5geo.org/blog/2026/10/14/a5-v1#thanks--looking-forward)
+
+It has been a challenge and a lot of fun to work on A5, and it has led to some great conversations with many smart people. A big thank you to all the people who have got involved, by building libraries on top of A5, reporting bugs or just spreading the word.
+
+I find the topic fascinating. I hope you find A5 useful in your work, and that the examples on the site help show how a DGGS is put together. I am currently working (with a few others) on a paper which will explain the design of A5 more rigorously as well as provide comparisons to other DGGS libraries.
+
+If you would like to get involved, join us on our [Slack channel](https://join.slack.com/t/a5-3ap4392/shared_invite/zt-35rpdc904-2vcsoikrJKFRJF7ncN1fmw), and if you build anything with A5, please share!

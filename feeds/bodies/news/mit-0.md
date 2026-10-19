@@ -1,83 +1,31 @@
-The global building boom of power-hungry data centers is straining electrical grids, causing greater reliance on energy from polluting fossil fuels.
+Despite millions of years of evolution, the development of the human fetus remains a complex process that is vulnerable to genetic, environmental, and metabolic disruptions. These disruptions could result in developmental abnormalities, starting with one of the first organs to begin developing in the fetus that continues to develop after birth: the brain.
 
-Christina Delimitrou, a newly tenured associate professor at MIT, is fighting this environmental threat by rethinking how the computer servers and networking equipment inside those data centers operate.
+In a routine prenatal ultrasound, the sonographer will flag possible brain abnormalities for additional magnetic resonance imaging (MRI). But imperfect imaging can result in missed or incorrect diagnoses.
 
-She and her group apply machine learning to make large-scale data centers more efficient, secure, and reliable. They redesign outdated cloud computing systems, develop methods to manage shared hardware resources, and create streamlined server architectures.
+To assist with the early detection and treatment of these abnormalities, researchers at MIT, Boston Children’s Hospital, and Inria have developed and trained a deep learning model called E(3)-Pose that helps image the fetus’s head while it’s in motion to capture a high-resolution image that the radiologist can examine. A paper about the work was presented at the [2026 European Conference on Computer Vision](https://eccv.ecva.net/).
 
-These advances allow data center operators to coax more computational power out of existing hardware.
+“One of the problems with having the baby move is that the slices are all over the place,” says first author Ramya Muthukrishnan. Muthukrishnan is an MIT PhD student in the lab of Sunlin (1966) and Priscilla Chou Professor of Electrical Engineering and Computer Science Polina Golland, who is a principal investigator at the [MIT Abdul Latif Jameel Clinic for Machine Learning in Health](https://jclinic.mit.edu/) (Jameel Clinic) and the MIT Computer Science and Artificial Intelligence Laboratory (CSAIL).
 
-“If data centers are not utilized to the best of their capabilities, then they will burn much more power than they need to meet growing user demand,” says Delimitrou, the KDD Career Development Associate Professor in Communications and Technology in the Department of Electrical Engineering and Computer Science (EECS) and a member of the Computer Science and Artificial Intelligence Laboratory (CSAIL). “There is a lot of bloating, especially on the software side of these systems. If we can remove that bloating in a way that doesn’t compromise performance, then we won’t need to build as many new data centers.”
+By slices, Muthukrishnan is referring to a series of 2D images taken during a fetal MRI scan. These 2D planes stacked together effectively make up one high-resolution, 3D image of the fetus’s head. But if the head shifts during imaging, each 2D image “slice” could end up being taken from a different angle, resulting in gaps in the final scan and unusual slice orientation. These problems may cause the physician reviewing the MRI to miss or incorrectly diagnose a pathology in the fetal brain.
 
-She also harnesses AI to help programmers find and fix problems in cloud-based applications, like music-streaming services or video conferencing systems. This eliminates application downtime that hampers performance and drains computational resources.
+“There are very fine details that you need a very good volumetric picture of the brain to see,” explains Muthukrishnan. “If you have coverage gaps, you can’t see critical regions, and you need to be able to see well to detect abnormal development.”
 
-“By managing resources more effectively in the cloud, the end user gets more predictable performance from the application running on their smartphone,” she adds.
+What makes E(3)-Pose particularly good at tracking fetal motion is its focus on physics. Rather than simply training the model to learn physics from the data, the very principles of physics are baked into the neural network: left-right symmetry of the fetal head is embedded in the model architecture, making it easier for the model to accurately identify the brain’s orientation.
 
-**Mathematical beginnings**
+When Muthukrishnan began working on the project at the start of her PhD, she had no background in physics, let alone MRI physics. Most of her experience was in computer science. “I was surprised when I had to go and implement this on the scanner,” she recalls. “I was not prepared for how many times I would crash the scanner because putting things on hardware and getting it to work on hardware is a different beast than training a model to run on data on a GPU.”
 
-Delimitrou grew up in a midsized town within the vast plains of northern Greece. Her early interest in math and science was sparked, in part, by the ancient history of her homeland, where Euclid and Pythagoras studied mathematical problems more than 2,000 years ago.
+Despite the challenges, Muthukrishnan persisted. She remembers shadowing a radiologist who performed fetal MRI scans at Boston Children’s Hospital at the start of her PhD and observing the shared frustration of the patient and radiologist: the pregnant mother felt uncomfortable after spending an hour in an MRI, only to quit the scan halfway; the radiologist was unable to procure a full, high-quality MRI to monitor the development of the fetus.
 
-“In Greece, there is a long tradition of geometry,” she says.
+“Seeing frustration about it helped me decide what I wanted to do with my PhD, because it felt like this was a pain point,” Muthukrishnan says.
 
-She also drew scientific inspiration from her parents. Her mother worked as a chemical engineer and her father as a pharmacist — and both encouraged their daughter’s innate curiosity.
+Fortunately, she had help: Co-author Borjan Gagoski, an assistant professor of radiology at Harvard Medical School and a researcher at Boston Children's Hospital, developed a sequence that acquires additional MRI scans to assist with training E(3)-Pose and worked with Muthukrishnan to help troubleshoot the scanner whenever it crashed. Co-author and Boston Children’s Research Assistant Aryn Lee recruited the pregnant volunteers and assisted with acquiring each of the MRI scans. Senior authors who helped guide the project include Elfar Adalsteinsson, MIT professor of electrical engineering and computer science; Ellen Grant, the Käthe Beutler Professor of Pediatrics and professor of radiology at Harvard Medical School; and Golland. Benjamin Billot, a researcher at Inria and a former postdoc in Golland’s group, helped Muthukrishnan get started with the initial method he developed.
 
-Her early affinity for math led Delimitrou to study computer engineering at the National Technical University of Athens, even though she didn’t know much about the field. She quickly gravitated toward courses that focused on the applied science of engineering.
+“Ramya’s work elegantly combines geometric concepts like equivariance and symmetry with the power of deep learning to change how MRI scanners acquire the images, and to ultimately help the physicians detect and treat problems early in development. It’s an impressive research project that is deep and fundamental in how it models image acquisition, with clear clinical impact,” says Golland.
 
-For her diploma thesis — a project all students complete during their fifth and final year of study — she studied resource management in a computer when multiple applications are running at once.
+Grant, who directs the Fetal Neonatal Neuroimaging and Developmental Science Center (FNNDSC) at Boston Children’s, adds that Muthukrishnan’s work “will automate fetal brain MRI, replacing today's slow, manual process with faster and more comfortable scans for mothers, while also providing higher-quality images for radiologists to interpret.”
 
-“A lot of the challenges I was looking at then would get much harder if, instead of a single system, you had 100,000 of these systems. That was a problem that piqued my interest,” she says.
+E(3)-Pose’s applications could extend beyond motion tracking for fetal MRIs. It could assist with imaging other hard-to-image anatomy, and even autonomous driving applications, where limited sensors need to capture noisy, 3D data in order to track 3D objects.
 
-Seeking to make a bigger impact as a researcher, Delimitrou pursued a graduate degree at Stanford University. She began tackling inefficiencies in cloud computing systems and large-scale data centers, which was a rapidly growing area of research.
+For now, Muthukrishnan hopes to improve E(3)-Pose so that it can help with imaging second-trimester or younger fetuses, as the model is primarily trained on third trimester fetuses. Second-trimester fetuses are “so small, they move around a lot more because there’s more space in the uterus,” Muthukrishnan says. “They’re more important to focus on because the earlier you detect brain abnormalities, the easier it is to intervene.”
 
-Through that work, Delimitrou and her research mentor, Christos Kozyrakis, the Leonard Bosack and Sandy K. Lerner Professor of Engineering, realized many large computing systems were underutilized.
-
-“You would expect, with all the demand for these systems, that they should be running close to 100 percent capacity. But we found that most were running at only about 15 percent capacity,” she says. “This is not a resource-efficient or sustainable way of scaling these systems.”
-
-**Applying AI**
-
-To push that utilization closer to 100 percent, she began investigating machine-learning solutions to streamline cumbersome computational processes. Machine learning could automate resource management operations in the cloud, identifying solutions that developers might miss on their own.
-
-“Applying machine learning to solve a large-scale system problem was a novel approach at the time. It was a bit risky because people had not yet shown that these techniques would work,” Delimitrou says. “But empirical approaches require a lot of expertise, and the scale of the system is so large that it is difficult for users to manage. This is why machine learning is often the best solution.”
-
-After earning her PhD, Delimitrou continued this line of work as an assistant professor at Cornell University.
-
-One tool her group developed, Seer, uses deep learning to anticipate and prevent problems in web applications before they happen. This averts widespread slowdowns that may occur if a developer tries to fix a problem manually.
-
-As she delved deeper into cloud computing, Delimitrou observed that cloud applications were changing. Developers were now splitting applications into smaller pieces to spread across multiple servers, which increases the speed of deployment.
-
-“But the servers were not built for this new style of application design. So, I rethought some of my earlier work to build machine-learning systems for this new class of applications,” she says.
-
-To tackle these new challenges, she found herself collaborating more often with faculty members who had different software and hardware expertise. Those collaborations opened exciting new research areas.
-
-A few years later, she decided to join MIT because of the opportunity to collaborate with researchers at the top of their fields in hardware and software engineering. She became an assistant professor in EECS in 2022.
-
-**Creative approaches**
-
-At MIT, Delimitrou also enjoys the teaching aspect of her role. One of her favorite courses to teach is 6.191 (Computation Structure), a popular undergraduate class with about 350 students each semester.
-
-While it’s challenging to keep the course material fresh when the field constantly evolves, she strives to inspire creativity in her students.
-
-“I want the students to learn how to think and learn on their own. Part of that involves shifting away from formulaic assignments and making classes more open-ended. I’d rather give the students something to make them think more deeply,” she says.
-
-In the lab, a creative mindset helps Delimitrou and her team identify novel solutions to problems in cloud computing that others might overlook.
-
-For instance, she extended prior work on debugging problems in cloud applications to encompass not just errors in the code, but also security issues that can make user data vulnerable to hackers.
-
-She also uses AI to redesign software systems so they better fit the capabilities of existing hardware.
-
-“One of the challenges when it comes to applying AI to these systems is that the AI is not interpretable,” she says. “A lot of the work we are doing now involves adding explainability into these AI tools so people can get useful feedback from the system.”
-
-That not only helps developers ensure AI is giving the right answer, but also provides insights into how to design systems better in the future.
-
-She finds that studying these large-scale cloud computing systems is becoming more challenging because tech companies that operate data centers use proprietary hardware, unlike the commodity equipment of early cloud computing days, as well as software systems that can’t be accessed by academic teams. A solution that works in the lab might not work in the real world.
-
-To that end, Delimitrou and her group create clones of proprietary systems and applications. One tool they developed, called Ditto, mimics an application’s structure and performance characteristics, enabling a wide range of studies.
-
-She expects her work to continue shifting as machine-learning models become more advanced, opening new possibilities to boost application performance and hardware efficiency.
-
-“But you still have to use AI carefully. While it can greatly accelerate the application development side, we still need to audit it and be especially careful about how these models are applied so we don’t lose the ability to gain insights out of the solutions AI is giving,” she says.
-
-Outside the lab, Delimitrou enjoys spending time with her husband and 1-year-old daughter.
-
-While she doesn’t have as much time for hobbies these days, she also enjoys gardening and building an electrical toy train track for her daughter, as well as playing classical piano and painting nature scenes. She became interested in painting at Cornell, where she would often paint the many waterfalls near the campus.
-
-Whether she is working in the garden or painting, Delimitrou says she finds spending time outdoors to be a relaxing escape from the technical nature of her work, but also an important reminder of the role her research plays in sustainability.
+This work is supported by the MIT Jameel Clinic, the MIT Takeda Program, the Chou Family Transformative Research Fund, the National Institute of Biomedical Imaging and Bioengineering, and the Eunice Kennedy Shriver National Institute of Child Health and Human Development.

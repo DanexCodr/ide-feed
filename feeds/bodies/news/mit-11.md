@@ -1,51 +1,57 @@
-When an artificial intelligence image generator produces a portrait, whose work went into it? The question sits at the center of lawsuits, licensing deals, and proposed regulations worldwide. Artists want credit. Companies want clarity. Policymakers want a way to assign responsibility.
+A new set of modular components allows users to create reconfigurable smart devices with electrical connections that keep working no matter which shape the structure forms.
 
-New work from a team of researchers at MIT's Computer Science and Artificial Intelligence Laboratory (CSAIL) suggests that for models trained on large datasets, the question may often have no answer. It's not that the tools for finding it are inadequate. The connection itself has disappeared.
+This electrical modularity can enable engineers to design interactive devices that can sense which shape they have taken, without the need for external wires. For instance, the modular components, which the researchers call “bifur-circuits,” could be used to rapidly design and prototype adaptable smart devices, like assistive furniture that helps individuals change body positions while recovering from injuries or reconfigurable robotic grippers that remain electrically connected when they change shapes for different applications.
 
-The scientists identified a phenomenon they call attribution decay, where the more data a generative model is trained on, the less any individual training example matters to any particular output. It feels counterintuitive, but at sufficiently large scales, they find, you can often remove any single image from the training data, or every image by a given artist, or every photograph of a given person, and the generated sample doesn't change.
+Developed by MIT researchers, these 3D-printed building blocks, which are a type of structure known as a mechanical metamaterial, can be combined to form many more possible configurations than traditional metamaterial structures.
 
-And if removing something changes nothing, the researchers argue, it can't be said to be responsible for anything.
+In a study presenting the new system, the researchers demonstrated several interactive objects, including a chair that converts to a table with storage and can also flatten for stowing. The structure senses its configuration and sends corresponding messages to an electronic display.
 
-"If you take away a piece of data and the output of the model doesn't change, then that piece of data didn't affect the output," says Zheng Dai SM ’21, PhD ’24, former MIT CSAIL researcher and lead author on the work. "So it doesn't make much sense to attribute the output to that piece of data. And if you then do this one at a time for every other piece of data and find that the output doesn’t change for any of them either, then it doesn't make much sense to attribute the output to any one of them."
+These new metamaterials could also be used to design antennas for communications and sensing that form new shapes to adjust their frequencies in changing environmental conditions, without bulky mechanical parts.
 
-"All previous methods were approximate," says MIT Professor David Gifford, who is an MIT CSAIL principal investigator. "They really could not absolutely show that deleting individual things did not change the output. This paper introduces the first method that is absolute. You're actually deleting the inputs and deleting all influences of the inputs. This is the first exact method for doing large-scale deletion efficiently and showing that the results don't change."
+“Metamaterials can make complex mechanical assemblies easy to manufacture just by using repeating units. Our work expands on this design space. If we think of mechanical metamaterials as building blocks, then our work is one way to take advantage of their geometry to embed intrinsic intelligence into hardware, which could open many possibilities,” says Marwa AlAlawi, a mechanical engineering graduate student and lead author of a [paper](https://hcie.csail.mit.edu/research/Bifur-circuit/bifur-circuits.html) on the devices.
 
-Dai and Gifford's project is described in an open-access [paper published today in *Nature Communications*](https://www.nature.com/articles/s41467-026-75667-5).
+AlAlawi is joined on the paper by co-senior authors Ticha Sethapakdi, an electrical engineering and computer science (EECS) graduate student at MIT; and Stefanie Mueller, an associate professor in MIT’s departments of EECS and Mechanical Engineering and leader of the Human-Computer Interaction Group at the Computer Science and Artificial Intelligence Lab (CSAIL). Their co-authors include others at MIT, the University of Tokyo, and the University of Michigan. The research will be presented at the ACM Symposium on User Interface Software and Technology.
 
-**The retraining problem**
+**Shape-changing interactive structures**
 
-Testing this idea directly meant answering a what-if question. What would this model have produced if it had never seen this particular image? Answering it honestly means retraining the model from scratch without that image, then doing it again for the next image, and the next. With millions of training examples, the math quickly becomes prohibitive, which is why prior work in the attribution field has relied on approximations that estimate a training example's influence, rather than actually removing it.
+Mechanical metamaterials are programmable, three-dimensional structures of repeating units that can form complex shapes due to their geometries. When squeezed, pushed, or pulled, metamaterials can bend or twist in precise ways.
 
-Their workaround is an architecture they built themselves, called a "diffusion ensemble." Instead of one monolithic model, it's made up of many smaller components, each trained on a different slice of the data. Want to know what the model would do without a particular image? Just switch off the parts that saw it. No retraining, no approximation. What's left is a true counterfactual model, not an estimate of one.
+For instance, “auxetic” metamaterials get wider when stretched, instead of narrowing.
 
-Of course, a clever architecture only matters if it still works as a generator. So the team put the ensembles head to head with 24 conventional diffusion models trained on the exact same data. The images came out looking about as good by standard measures.
+In prior work, the MIT researchers used auxetic metamaterials to build [reconfigurable antennas](https://news.mit.edu/2025/shape-changing-antenna-more-versatile-sensing-and-communication-0818) that formed three shapes depending on how the structure was stretched. This allowed the antenna to dynamically adjust its frequency range without complex, moving parts.
 
-One nice surprise in the numbers: The more training data, the better the ensembles held up against their single-model counterparts, a hint that they may actually be more data-efficient.
+Next, the team wanted to expand the number of antenna configurations but were limited because the auxetic metamaterials could only form three fixed states.
 
-"When you have low amounts of data, they do very poorly," says Dai. "But if you have more data, it actually scales better compared to the vanilla diffusion model."
+In this work they created “bifur-circuits,” which are auxetic metamaterials that can form many more shapes based on how the modular units are connected and rotated.
 
-**Exploring a counterfactual universe**
+The units are also designed to be electrically modular. Due to the way conductive material is integrated into the bifur-circuits, electrical connections throughout the structure are maintained no matter how the object is rotated, pressed, or twisted to form new shapes.
 
-With ablation working, the researchers could finally ask their question at scale. Take one generated image, then imagine every alternate version of it, each produced by removing a different piece of the training data. The team calls this the image's counterfactual universe. The distance between the original and its most different alternate, the counterfactual radius, captures the most that any single piece of training data could have mattered.
+To create interactive objects with many possible configurations, bifur-circuits leverage a property known as mechanical bifurcation.
 
-They trained 24 ensembles on datasets from 256 images to more than 160,000, pulled from seven public collections including CIFAR-10, CelebA, MetFaces, and ArtBench. The pattern was consistent: The bigger the training set, the smaller the radius, shrinking along an inverse power law. It held whether differences were measured pixel by pixel or by semantic meaning, with statistical significance both ways.
+Mechanical bifurcation is a sudden change in how a mechanism behaves when a force exerted on it passes a tipping point. For instance, when you gently bend the ends of a plastic ruler, once that force reaches a critical threshold, the ruler buckles.
 
-The team also stress-tested their own result. Maybe ablation itself was the culprit? They redid it the brute-force way at small scale, training 1,282 separate models, and the decay showed up anyway. Maybe bigger datasets just make each removal proportionally smaller? They pinned the removed fraction in place, and it persisted. Fixed epochs, text-prompted models, class-conditioned models, four similarity metrics — the finding survived everything.
+In bifur-circuits, this bifurcation occurs when connected blocks are rotated in certain ways around a pivot point. The property allows connected blocks to form more stable configurations than one block could on its own.
 
-**The privacy paradox**
+Adding more bifur-circuits to a structure exponentially increases the number of potential configurations.
 
-The implications run in a direction that surprised the researchers themselves.
+“Bifurcation allow us to significantly expand on this reconfigurability space. Just adding one extra unit gives us so many more combinations out of the same structure,” says AlAlawi.
 
-Gifford sees the finding as bearing directly on the legal question of whether model outputs are derivative works.
+Connecting and rotating components activates a unique circuit between adjacent units. This interactivity allows the units to communicate with one another, enabling the structure to sense its configuration.
 
-"One way to think about this is that these models are creative. They are not simply copying what they are fed, but creating brand new outputs. If those outputs have nothing to do with any individual piece of training data, that raises questions about fair use, about whether the outputs are themselves copyrightable as novel works, and about how authors get compensated when what comes out of a model isn't attributable to anything on the internet."
+One of the biggest challenges the researchers faced was incorporating a conductive material that was flexible enough to bend, but still offered enough efficiency in the flow of electricity.
 
-Gifford also notes that the work shows how to produce outputs that are guaranteed to be unattributable, a capability he frames as an obligation for the industry, rather than a loophole.
+“The conductive material was a constraint we had to work around in the design process, and it dictated how the sensing between blocks would happen,” AlAlawi says.
 
-"In order for these companies to claim their outputs aren't derivative of the internet in a copyright-infringing way, they need to revise their models to take advantage of the advances in this work, so they can show they're not creating derivatives of individual people or items."
+Once they perfected the design, the researchers tested the durability of reconfigurable structures by compressing them more than 10,000 times. The structures showed no degradation in electrical connectivity.
 
-The work looks at diffusion models, now dominant in generating audiovisual media and prevalent in scientific applications including protein structure modeling and therapeutic discovery. Whether the same decay holds for the large language models at the center of the highest-profile copyright litigation is still an open question.
+The researchers also developed a user-friendly construction and simulation tool to simplify the bifur-circuit design process. The software generates instructions for a multimaterial 3D printer, which can fabricate the reconfigurable objects in one pass.
 
-"If attribution worked, it would reliably tell us whether similarities between a model's output and a copyright-protected work are due to copying or coincidence," says James Grimmelmann, a law professor at Cornell Law School and Cornell Tech. "But this paper provides reason to think that attribution will fail for interesting models. Instead, technologists and courts will need to resort to other methods for assessing copying."
+They demonstrated the versatility of bifur-circuits by fabricating a chair that can sense its geometry when its shape is changed to a tea table, as well as a shape-shifting controller that will launch one of several video games based on its configuration.
 
-Dai and Gifford's work was supported by Schmidt Futures.
+Bifur-circuits could someday be used in applications like interactive rehabilitation tools, shape-changing grippers for modular soft robots, or reconfigurable shelters that could respond to changing environmental conditions after a natural disaster.
+
+In the future, the researchers want to explore more applications for bifur-circuits. They also want to add more interactivity into the structures and investigate additional metamaterial shapes.
+
+“Bifur-circuits are one step toward developing mechanical building blocks with integrated intelligence. It would be interesting to build on this work and come up with building blocks that allow us to create a structure with any form or shape we want, and which are structurally stable and can be actuated,” AlAlawi says.
+
+This work was funded, in part, by Japan’s Science and Technology Agency and the Bahrain Crown Prince International Scholarship Program.

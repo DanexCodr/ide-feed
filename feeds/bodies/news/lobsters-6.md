@@ -1,465 +1,222 @@
-Have you ever had a weird idea, and then it worked, but you can't really believe it?
+Almost all modern machines use [two’s
+complement](https://www.cs.cornell.edu/~tomf/notes/cps104/twoscomp.html) to
+represent integers. This representation is asymmetric, in the sense that the
+most negative number has no corresponding positive number. For example, with
+signed 8-bit numbers, the most negative number is `-128`, whilst the most
+positive number is `127`. This quirk shows up in various cases, but for the
+purpose of this post, I am concerned with signed integer division, where `x/-1`
+mathematically should produce `-x`, but in the case where `x` is the most
+negative number, that is not possible. For 32-bit integers, which I arbitrarily
+decide are the most common, this means that one out of every 2⁶⁴ possible inputs
+is impossible to represent correctly - leading to the somewhat clickbaity title
+of this post, and some recently fixed troubles in the Futhark compiler. In this
+post I will explain what the actual problem is for a language implementation,
+how we fix it, and what the performance cost looks like. The main audience of
+this post is other language implementers, but I think the concepts involved are
+simple enough that anyone curious about low level issues can follow along.
 
-That's what I'm feeling right now, about Valen's borrow checker.
+The Futhark compiler has multiple backends, but the most important ones work by
+generating C code. This has many practical advantages:
 
-Because it **travels backward through time.**
+1. It is easy to debug the generated code because it is easy to read and modify by hand.
+2. Most systems have a C compiler (or easy access to one), meaning Futhark has fewer dependencies, is portable, and doesn’t need to bundle native code generators.
+3. Many languages can interoperate with C, so by exposing Futhark as a C API, [those languages can also call Futhark](https://futhark-lang.org/blog/2022-07-01-how-futhark-talks-to-its-friends.html).
 
-Or, to be less dramatic, it **walks functions backwards,** which is still *very* weird.
+That said, there are also disadvantages:
 
-Years ago, if you told me it would be good to iterate a function in reverse, I would have called you crazy.
+1. Some code patterns are hard to express (or express efficiently) in C. This is mainly the case for advanced language features such as coroutines, tail calls, or garbage collection. Fortunately Futhark is [pretty boring from a semantic perspective](https://futhark-lang.org/blog/2025-09-26-the-biggest-semantic-mess.html), so this does not affect us too much.
+2. It is very easy to accidentally generate C code that is subtly wrong. This does unfortunately keep pestering us.
 
-It turns out, there's actually some really good reasons to do this, and it's fairly common when you're doing e.g. optimization passes. [0](https://verdagon.dev/blog/reverse-borrow-checking#note0) But I don't think anyone's done this for checking memory safety.
+C is of course renowned as a very safe and easy-to-use language, because C
+programmers never make coding mistakes. The few times they do make mistakes, it
+is often due to mishandling of pointers or array sizes, leading to buffer
+overflows, heap smashing, etc. These are actually not the main problem with
+generating C from Futhark, as Futhark itself is memory-safe, and systematically
+inserting in bounds checks in generated code is easy ([although a little more
+interesting in GPU code](https://futhark-lang.org/blog/2020-07-13-bounds-checking.html)).
 
-If you want a really deep look into the world of borrow checking, read on!
+No, the main problem we’ve had is actually undefined behaviour. As is by now
+well-known, C specifies various events as explicitly undefined, meaning not only
+that a C compiler can assume it will never occur, but also that no particular
+result is guaranteed should a program perform one of the undefined operations.
+Some causes of undefined behaviour are obvious and easy to avoid: reading arrays
+out-of-bounds, using freed memory, etc. But C has a long list of more obscure
+cases. My favourite example is that in C99, it is undefined behaviour if a
+source code file does not end with a final newline character. Yet we have
+honestly not spent that much time dealing with that particular issue in Futhark.
 
-*We're about to see some weird things.* [1](https://verdagon.dev/blog/reverse-borrow-checking#note1)
+No, the main problem, and now we are finally returning to the premise in the
+post, is that *signed* integer overflow is undefined behaviour in C. This is
+particularly insidious since most programmers have a mental model of fixed-size
+integer arithmetic where overflow is a natural event, and so does the actual
+machines we use, but a C compiler may assume it never happens. The reason behind
+this specification is so the C compiler can optimise based on useful properties
+such as `x+1>x`, which are not true in the presence of overflow, but the
+motivation does not actually matter to us. In a language like Futhark, where
+integer overflow *is* defined behaviour (it wraps around), this creates a very
+unfortunate mismatch between what we want to do, and what we can express in our
+target language.
 
-Thanks for reading =)
+Fortunately, C is merciful enough to specify that for *unsigned* numbers,
+overflow is well-defined, and behaves just as you would expect (on a
+two’s-complement machine, anyway). For this reason, Futhark’s C code generation
+actually represents all integer types using unsigned C types, (so `i64` becomes
+`uint64_t`), and then performs the arithmetic on unsigned types. This works due
+to the nice property of two’s complement representation that most arithmetic
+operations are done exactly the same, at the bit level, as for unsigned
+integers. One exception is comparison operators, in which we cast to the signed
+type (e.g. `int64_t`) before performing the comparison. Such conversions are
+free, since they do not need to change the bit representation of the number, but
+only affect what instructions the C compiler emits for e.g. a `<=` operation.
 
-This isn't going to be your normal shared-xor-mutable borrow checking.
+Another operator where sign matters is division. If we do `x/-1`, then it is
+quite important whether we are dividing with a small negative number, or with
+the number that arises if we interpret the two’s complement bit pattern for `-1`
+as an unsigned integer. This means that for signed integer division, Futhark
+generates a signed C division. This means that if we do `x/-1` where `x` is the
+most negative number, we are stuck with the issue described in the post opener -
+the correct result (`-x`) cannot be represented as a signed integer, so this is
+a signed integer overflow, and that is undefined behaviour in C.
 
-This is [Valen](https://github.com/valen-lang/valen)'s borrow checker, the one that [makes shared-xor-mutable optional](https://verdagon.dev/blog/valen-group-borrowing), and can [call into Rust functions](https://verdagon.dev/blog/golden-spike-reviving-vale-valen) with [memory safety across the boundary](https://verdagon.dev/blog/boundary-memory-safety).
+Futhark is a principled language, and therefore producing undefined behaviour is
+unacceptable. (I realise the hypocrisy of this puritan declaration whilst
+leaving in the bug for ten years.) Further, on x86 this kind of division will
+actually signal a CPU exception, crashing the program, so this is not merely a
+violation of the sanctity of the C specification. Fixing it in principle is
+easy. This is the definition of 32-bit signed division in the Futhark runtime
+system:
 
-It's kind of like Rust's borrow checker, but it also has memory-safe mutable aliasing. If you want to know more about that, check out [this post](https://verdagon.dev/blog/valen-group-borrowing), though you won't need to understand that for most of this post.
-
-Green dragons, specifically.
-
-Valen compiles a function in four phases: [3](https://verdagon.dev/blog/reverse-borrow-checking#note3)
-
-I'll explain all of this further below.
-
-**The weirdest part is that #4 happens in reverse.** It looks at the last statement in the function, and then walks backwards until it reaches the top of the function.
-
-This is weird because, as far as I know, it's the **only borrow checker whose safety check goes backwards.** [5](https://verdagon.dev/blog/reverse-borrow-checking#note5)
-
-Further below, I'll explain why we're going backwards (hint: convenience, loops, and speed).
-
-But first, let's see **how it works,** and what it even *means* to go backwards.
-
-Let's skip phase 1, and start with phase 2.
-
-There's also a secret fifth phase, where we calculate what attributes to send to LLVM to describe what operations might change what groups. But that's out of scope for this article.
-
-It also figures out all the groups invalidated by any mut effects from any instructions.
-
-For example:
-
-The static typing pass will be familiar to some of you, it assigns types to variables.
-
-For example, it turns this program:
-
-```valen
-exported func main() {
-  let fuel = 5;
-  let force = fuel;
+```
+int32_t squot32(int32_t x, int32_t y) {
+  return x / y;
 }
 ```
 
-into this program:
+And this is the version that avoids the 0.000000000000000000542% undefined cases:
 
-```valen
-exported func main() {
-  let fuel i64 = 5;
-  let force i64 = fuel;
+```
+int32_t squot32(int32_t x, int32_t y) {
+  return y == -1 ? (int32_t)(0 - (uint32_t)x) : x / y;
 }
 ```
 
-This is pretty normal, lots of compilers do it.
+This function simply checks whether the divisor is `-1`, and if so does the
+negation with unsigned (well-defined) arithmetic. The cost is a branch on every
+single division. The behaviour is still *implementation-defined*, but produces
+the right results on the machines we care about.
 
-Compilers usually do this as a **forward** pass, walking from the top of the function to the bottom, figuring out types as it goes.
+(Why `quot` instead of `div`? Futhark actually has *two* division operators -
+one that rounds sensibly towards negative infinity, and one that rounds towards
+zero like C. The function above is the one that follows C’s behaviour because it
+is less code, but the issue is the same either way.)
 
-We're going to do something *similar but weirder* in phase 3; phase 3 is going to do **static grouping.**
+### [The cost](https://futhark-lang.org/blog/2026-10-14-defining-division.html#the-cost)
 
-This is another forward pass, which figures out where each reference points to.
+Correctness is not really a thing we can compromise on, but in principle it is
+frustrating that *every* integer division needs an additional branch just to
+handle a *single* special case that may never actually happen, as it is highly
+unlikely that a program’s correctness *depends* on wraparound for signed integer
+division at the ends of the numeric scale. But apart from the principal
+frustration, what is the actual overhead?
 
-For example, in this program:
+Measured on the [Futhark benchmark
+suite](https://github.com/diku-dk/futhark-benchmarks) on GPU, I was unable to
+measure an impact. This is likely because signed integer divisions are
+relatively rare, and even when they do occur, they likely occur due to index
+arithmetic, where the resulting memory loads have so much latency that they
+easily [hide](https://modal.com/gpu-glossary/perf/latency-hiding) the cost of
+doing the divisions.
 
-```valen
-func print_first_fuel_cell(s &Ship) {
-  let first_ref = &s.fuel_cells[0];
-  print_int(first_ref);
-}
+But what if we try to construct a contrived program where the bottleneck is
+signed division throughput? That would demonstrate something close to worst-case
+overhead of adding the branch. Behold, `divisions.fut`:
+
+```
+-- ==
+-- random input { 1000000 [1000]i32 [1000]i32 }
+
+entry main [n] (k: i32) (xs: [n]i32) (ys: [n]i32) : [n]i32 =
+  map2 (\x y ->
+          loop z = x
+          for _i < k do
+            #[unsafe]
+            z // y)
+       xs
+       ys
 ```
 
-Static grouping figures out that first_ref is pointing in s.fuel_cells[]: [7](https://verdagon.dev/blog/reverse-borrow-checking#note7)
+The program accepts a number `k` and two arrays of integers. For each
+corresponding pair `x` and `y`, it `k` times divides `x` by `y`, using `//` to
+target the `squot32` function, and using `#[unsafe]` to remove division-by-zero
+checks.
 
-```valen
-func print_first_fuel_cell(s &Ship) {
-  // Static typing says:   first_ref &int
-  // Static grouping says: first_ref &int in s.fuel_cells[]
-  let first_ref = &s.fuel_cells[0];
-  print_int(first_ref);
-}
+For most values of `k`, repeated division quickly produces zero, but the
+compiler cannot assume this, so it will have to actually perform the divisions.
+You may reasonably argue that the program is not *purely* division bound, as the
+bookkeeping around the loop also involves costly things such as adding and
+comparing integers, but a program that contains a very long *unrolled* sequence
+of divisions stretches my credulity too far.
+
+Using the handy [futhark
+bench](https://futhark-lang.org/examples/benchmarking.html) tool, we can then
+measure the impact using the compiler with a fixed implementation of `squot32`
+([part of this pull request](https://github.com/diku-dk/futhark/pull/2579)).
+First on sequential code, using the `c` backend:
+
+```
+$ futhark-old-and-busted bench divisions.fut
+...
+
+divisions.fut (no tuning file):
+100000i32 [10000]i32 [10000]i32:    3390148μs (95% CI: [ 3387613.7,  3396498.1])
+
+$ futhark-new-hotness bench divisions.fut
+...
+
+divisions.fut (no tuning file):
+100000i32 [10000]i32 [10000]i32:    3389215μs (95% CI: [ 3387626.2,  3391036.4])
 ```
 
-In other words, it's pointing to an int somewhere in the s.fuel_cells[] array.
+There is no measurable difference, which is not a surprise on a modern
+speculatively executing CPU for a program with an easily predicted branch.
 
-This information is now *part of the variable's type.*
+But what about GPUs? After all, “GPUs are bad at branching” is a common motto by
+those of my students who like to replace an `if` with ten lines of dense
+branchfree code. Let’s try the experiment again with Futhark’s `cuda` backend:
 
-We'll be using this information in the next phase, which actually checks for use-after-free.
+```
+$ futhark-old-and-busted bench --backend=cuda divisions.fut
+...
 
-I'll probably start moving away from the term "group" soon, switching to "path" instead. Opinions welcome!
+divisions.fut (no tuning file):
+100000i32 [10000]i32 [10000]i32:       5548μs (95% CI: [    5546.4,     5552.2])
 
-In V1's static grouping phase, it would also figure out *when* a reference was made. So for example, instead of ∫ in s.fuel_cells[], it would know that it was ∫ in s.fuel_cells[] from line 7.2. This was pretty awesome, we were literally **smuggling time and space** information into a variable's type. This new V2 version doesn't need to do that because it does a backwards scan, as we'll see next.
+$ futhark-new-hotness bench --backend=cuda divisions.fut
+...
 
-Now we can use everything Phase 3 calculated!
-
-This is the phase that **checks for use-after-free.**
-
-It does it with a **backwards scan,** *as was foretold.*
-
-Let's see it happen in a slightly bigger example:
-
-```valen
-struct Entity { hp int; buffs []int; }
-func add_buff(self &Entity mut) { ... }
-
-func foo(e &Entity mut) {
-  let buff = &e.buffs[0];
-  e.add_buff();
-  print_int(buff);
-}
+divisions.fut (no tuning file):
+100000i32 [10000]i32 [10000]i32:      12592μs (95% CI: [   12563.5,    12622.1])
 ```
 
-This program is doing a **use after free,** and we want the compiler to complain.
-
-First, I'll desugar it into a more explicit syntax:
-
-```valen
-struct Entity { hp int; buffs []int; }
-func add_buff<g'>(self &Entity in g) mut(g) { ... }
-
-func foo<g'>(e &Entity in g) mut(g) {
-  let buff = &e.buffs[0];
-  e.add_buff();
-  print_int(buff);
-}
-```
-
-Now I'm going to add in some comments, all determined by the backwards scan as it goes.
-
-Further below, I'll explain what "DECLARE", "USE", and "MUTATE" mean.
-
-```valen
-struct Entity { hp int; buffs []int; }
-func add_buff<g'>(self &Entity in g) mut(g) { ... }
-
-func foo<g'>(
-  e &Entity in g          // DECLARE e (group g)
-) mut(g) {
-  let buff = &e.buffs[0]; // DECLARE buff (group g.buffs[])
-  e.add_buff();           // USE e (group g)
-                          // MUTATE group g
-  print_int(buff);        // USE buff (group g.buffs[])
-}
-```
-
-The algorithm walks **in reverse,** from the end of the function to the start.
-
-As it scans upward, it looks for these events:
-
-pending contains all of the things USEd below, that we hope to see DECLAREd above.
-
-We hope to never see a MUTATE to anything pending.
-
-To really understand it, let's see it in action.
-
-First, we **look at the last line:**
-
-```valen
-  print_int(buff);        // USE buff (group g.buffs[])
-```
-
-This is a USE, so we add it to the pending list. pending now has:
-
-- buff (group g.buffs[])
-
-Now, still going backwards, we encounter the line above it:
-
-```valen
-  e.add_buff();           // USE e (group g)
-                          // MUTATE group g
-```
-
-We see the MUTATE so we **ensure no variables in pending are invalidated.**
-
-Specifically, we'll ensure that nothing in pending is pointing at anything under e.
-
-Here's what just happened: buff was pointing at g.buffs[], which starts with the g we just mutated with add_buff. That means that buff is **invalidated above the line where it's used,** which is a use-after-free.
-
-So the compiler shows an error here. [Huzzah!](https://www.youtube.com/watch?v=y13n1CeyqjY&t=132s)
-
-First person to break it gets a prize!
-
-Let's see a **correct program,** so we can see the backwards walk encountering a declaration.
-
-Here's the same program, but with e.add_buff(); moved up, to be the first line in the function.
-
-```valen
-struct Entity { hp int; buffs []int; }
-func add_buff<g'>(self &Entity in g) mut(g) { ... }
-
-func foo<g'>(
-  e &Entity in g          // DECLARE e (group g)
-) mut(g) {
-  e.add_buff();           // USE e (group g)
-                          // MUTATE group g
-  let buff = &e.buffs[0]; // DECLARE buff (group g.buffs[])
-  print_int(buff);        // USE buff (group g.buffs[])
-}
-```
-
-Like before, we start at the end, and get to this line:
-
-```valen
-  print_int(buff);        // USE buff (group g.buffs[])
-```
-
-...and see that it's a USE so we add buff to the pending list:
-
-- buff (group g.buffs[])
-
-Now we go one line upward, to this line:
-
-```valen
-  let buff = &e.buffs[0]; // DECLARE buff (group g.buffs[])
-```
-
-This DECLAREs buff, so we **remove** it from pending.
-
-pending is now empty.
-
-(That means that **there are no variables that are used below/later in the function.**)
-
-Now we go one line upward, to this line:
-
-```valen
-  e.add_buff();           // USE e (group g)
-                          // MUTATE group g
-```
-
-We see the MUTATE, so we **ensure no variables in pending are invalidated.**
-
-There are no variables in pending, so nothing interesting happens.
-
-Then we see it USE e, so we **add** it to pending:
-
-- e (group g)
-
-And that's the end of the function!
-
-We made it all the way to the end without seeing any MUTATEing any pending variables, which means **the program is memory-safe.**
-
-There are three reasons: convenience, loops, and speed.
-
-Generally, going backwards is convenient for figuring out **when a thing is last used.**
-
-For example, look at this function:
-
-```valen
-func attack(a &Entity in g, d &Entity in g) mut(g) {
-  let a_power = a.calculate_attack_power();
-  let a_energy_cost = a.calculate_attack_cost(d);
-  let d_armor = d.calculate_defense();
-  let d_energy_cost = d.calculate_defend_cost(a);
-  a.use_energy(a_energy_cost);
-  d.use_energy(d_energy_cost);
-  d.damage(a_power - d_armor);
-}
-```
-
-If we want to do *bookkeeping X* when a is declared and do *bookkeeping Y* when a is no longer needed, [9](https://verdagon.dev/blog/reverse-borrow-checking#note9) we have two options:
-
-Notice how the forward scan involved that extra fetch/navigate, because we couldn't recognize the last use when we encountered it.
-
-The backward scan was simpler.
-
-Going backwards is also better for loops.
-
-Here are a couple examples that I've been using to think about loops: [10](https://verdagon.dev/blog/reverse-borrow-checking#note10)
-
-This is a correct program, but it shows how tricky it is to know if that observe(e) is valid.
-
-```valen
-exported func main() {
-  let arr = ArrayList<int>(3);
-  let e = &arr[0];
-
-  while ... {
-    observe(e); // Valid `e` use.
-    add_element(&arr);
-    set e = &arr[0];
-  }
-}
-```
-
-That e actually can come from two different places:
-
-A forward scan encountering observe(e) would need to **look ahead** to the set e to conclude it's valid.
-
-This is a similar example without the set e.
-
-```valen
-exported func main() {
-  let arr: ArrayList<int> = ...;
-  let e = &arr[0];
-
-  while ... {
-    observe(e); // Invalid `e` use.
-    add_element(&arr);
-
-  }
-}
-```
-
-Without the set e, the e in the loop is invalidated by a *previous iteration* of the loop.
-
-If we did a forward scan, we'd need to **look ahead** to see that there's no set e reviving e.
-
-This is a tricky problem. One can:
-
-The last one was tempting. Alas, its data structures ended up looking very complex, and it had the same "fetch/navigate" problem that we saw in the func attack example above.
-
-It was simpler to just go straight to V2's reverse-walking approach.
-
-I'm also fairly certain V2's approach is faster, because it only has to process each node once in the phase 3 forward pass, and once in the phase 4 backward pass. [11](https://verdagon.dev/blog/reverse-borrow-checking#note11)
-
-But of course, the reverse-walk approach doesn't get loops for free. We still need some adjustments.
-
-This bookkeeping might be decrementing a reference count, or [adding a destructor call](https://www.youtube.com/watch?v=IpuvQUVB8Cg), or checking for use-after-frees, etc.
-
-Note, in these examples, I use the name ArrayList, but in the real Valen compiler those are called Array, for weird historical reasons. That'll change soon.
-
-Note, this doesn't mean that the algorithm is O(n) yet. The MUTATE still needs to check everything in the pending list. However, I think there's a way to speed that check up a lot. Fingers crossed!
-
-V1 never had full loop support, so there's really nothing to benchmark against.
-
-The algorithm needs a little bit more to handle loops.
-
-Specifically, we'll do MUTATE and DECLARE differently, and we also react to LOOP START.
-
-We scan upward, looking for these events:
-
-Let's see what this does to this example. It's a **correct** program, so there should be no compile error.
-
-```valen
-exported func main() {
-  let arr: ArrayList<int> = ...; // DECLARE arr (group arr)
-  let e = &arr[0];               // DECLARE e (group arr[])
-
-  while ... {                    // LOOP START
-    observe(e);                  // USE e (group arr[])
-    add_element(&arr);           // MUTATE arr (group arr)
-    set e = &arr[0];             // DECLARE e (group arr[])
-  }
-}
-```
-
-We're walking backwards, so we start at the last line:
-
-```valen
-    set e = &arr[0];             // DECLARE e (group arr[])
-```
-
-It's a DECLARE [15](https://verdagon.dev/blog/reverse-borrow-checking#note15) so we do two things:
-
-revived_after_this now contains one entry: e.
-
-Now we walk up one line, seeing this:
-
-```valen
-    add_element(&arr);           // MUTATE arr (group arr)
-```
-
-It's a MUTATE, so we do two things:
-
-mutations_after_this now contains one entry: arr.
-
-Now we walk up one line, seeing this:
-
-```valen
-    observe(e);                  // USE e (group arr[])
-```
-
-It's a USE, so we **add** it to the pending list.
-
-pending now contains one entry: e (group arr[]).
-
-Now we walk up one line, seeing the loop start:
-
-```valen
-  while ... {                    // LOOP START
-```
-
-So we do the LOOP START check: For each thing in pending, if it's invalidated by something in the loop's mutations_after_this, ensure it's in the loop's revived_after_this.
-
-In this case, pending has e (group arr[]). e *is* invalidated by something in mutations_after_this. So check it's in the loop's revived_after_this (it is). Check passed, we're good.
-
-I'll skip the explanation for the top two DECLAREs, since we covered that before.
-
-And then we reach the start of the function! We encountered no errors, so the borrow checker can conclude **this function is memory-safe.**
-
-And that's it! That's how we handle loops with this new reverse borrow checker.
-
-Easter egg note!
-
-Sergeant Stubby was the star of the 102nd Infantry Regiment in World War I and travelled with his division to France to fight alongside the French. He served for 18 months and participated in 17 battles and four offensives on the Western Front.
-
-He received many awards, including a gold medal, a wound stripe, and two purple hearts.
-
-Sergeant Stubby has been called the most decorated war dog of the Great War and the only dog to be nominated and promoted to sergeant through combat.
-
-If you see this note, sneak the word "gold" into a [comment](https://www.reddit.com/r/programming/comments/1x92rhh/a_new_way_to_think_about_borrow_checking_in/)!
-
-(Congrats to [timpi4ever](https://www.reddit.com/r/Valen/comments/1x92s1o/comment/phi1ieo/) for finding this first!)
-
-We don't remove anything from pending here, because those pending uses still need to be satisfied by the code above the loop.
-
-Yes, I regret calling it DECLARE now, since really this is just re-pointing an existing variable.
-
-There's one more big thing I want to change, eventually.
-
-Rust has this very nice ability to use facts from *anywhere* in the function to figure out the lifetime of reference.
-
-For example, [this Rust program](https://play.rust-lang.org/?version=stable&mode=debug&edition=2024&gist=70b5f84ea984e1a3a60dff9e0110bcf9) looks at the later r = &b[0]; to figure out that r points at a *or* b.
-
-```rs
-fn main() {
-  let a = vec![1, 2, 3];
-  let b = vec![4, 5, 6];
-
-  let mut r = &a[0];
-  if some_condition() {
-    r = &b[0];
-  }
-  println!("{}", r);
-}
-```
-
-Valen doesn't do this yet; Valen's phase 3 (static grouping) is still doing normal one-directional inference.
-
-But if we change phase 3 into a full solve like rustc does, we can get some similar superpowers.
-
-The neat part: this wouldn't need to change phase 4's backward pass. In the end, we'd have a solver for phase 3, and a backward pass for phase 4.
-
-It's hard to explain how cool that is to me. It's moments like these I suspect that I might be a compiler nerd. [Huzzah!](https://www.youtube.com/watch?v=y13n1CeyqjY&t=132s)
-
-Valen's borrow checker is still pretty young, a mere 3,600 lines.
-
-And it's far from complete! We still have to add a lot of things to it, like interrupting control flow (break, continue), [16](https://verdagon.dev/blog/reverse-borrow-checking#note16) associated groups, closures, [17](https://verdagon.dev/blog/reverse-borrow-checking#note17) all the fun stuff.
-
-We'll get there one day. That day will be glorious.
-
-Thanks for reading!
-
-In the next few articles, I'm hoping to explain more about how we'll blend in reference counting and generational references. I'm also going to write about all the other languages exploring new memory safety approaches like this ([Ante](https://antelang.org/), [Carbon](https://github.com/carbon-language/carbon-lang), [Zeta](https://github.com/zeta-lang/zeta), [Fang](https://github.com/devast8a/Fang), [exclusion typing](https://dilated.me/blog/posts/introduction-to-exclusion-typing/), and more!).
-
-This is just the tip of the iceberg, so stay tuned by subscribing to my [RSS feed](https://verdagon.dev/rss.xml), [r/valen](https://www.reddit.com/r/Valen/), or joining the [Valen discord](https://discord.gg/SNB8yGH). And follow me on [Bluesky](https://bsky.app/profile/verdagon.bsky.social) and [Mastodon](https://fosstodon.org/@verdagon)!
-
-Cheers,
-
-- Evan Ovadia
-
-The current plan is to first refactor things so the borrow checker is looking at a [control-flow graph](https://en.wikipedia.org/wiki/Control-flow_graph) instead of a typed AST. That should make interrupting control flow much easier.
-
-I'm pretty excited about closures. I think I found a *very* elegant way to make them work. Stay tuned!
+Well then! This really is a major difference. Much more than I expected when I
+began this work, actually. Reading the generated PTX (CUDA machine code), the
+old version is partially unrolled into four consecutive `div.s32` instructions
+in a single basic block, whilst the fixed compiler still triggers unrolling, but
+with many branches between the divisions.
+
+I observed a similar result on an AMD GPU with the `hip` backend, although the
+impact was slightly less there.
+
+The cost of fixing those 0.000000000000000000542% of divisions is real and
+unfortunate, and I would certainly like to have a cheaper fix. Having undefined
+behaviour in the generated code is of course not acceptable, so we will have to
+live with this for now. On non-contrived benchmarks, it seems there is
+essentially no impact. For programmers unwilling to pay this cost, you can
+always stick to *unsigned* divisions, if you know that you will never have
+negative numbers.
+
+This is the last instance of undefined behaviour in Futhark’s generated C code
+that I remember. There is however at least one instance of
+*implementation-defined* behaviour, namely in the code generation for
+bit-shifting integers by more bits than their size, but I have yet to gather the
+courage to fix it.

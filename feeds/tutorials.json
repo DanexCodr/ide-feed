@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-19T12:28:38Z",
+  "updated": "2026-10-19T22:08:03Z",
   "items": [
     {
       "id": "devto-4858196",
@@ -38,12 +38,24 @@
       "color": "#3B49DF"
     },
     {
+      "id": "devto-4859158",
+      "title": "What I Actually Learn When I Build With AI",
+      "desc": "By Jessica Doering | 7 min read",
+      "tag": "tutorial",
+      "published": "2026-10-16T01:06:09Z",
+      "order": 4,
+      "url": "https://dev.to/sizzlebop/what-i-actually-learn-when-i-build-with-ai-1074",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F2atagf3xnyj2fwx6qtho.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAAIBAwT/xAAVAQEBAAAAAAAAAAAAAAAAAAAAAf/aAAwDAQACEAMQAAAByCizY6r/AP/EABsQAAMBAAMBAAAAAAAAAAAAAAECEQASITJB/9oACAEBAAEFAuXSyfVmAu8lVDZxD//EABURAQEAAAAAAAAAAAAAAAAAAAAR/9oACAEDAQE/AUf/xAAVEQEBAAAAAAAAAAAAAAAAAAAAEf/aAAgBAgEBPwFX/8QAFhABAQEAAAAAAAAAAAAAAAAAECFB/9oACAEBAAY/Amun/8QAHRABAAICAgMAAAAAAAAAAAAAAQARITFBYVGBkf/aAAgBAQABPyFshXEQtt7jblMq/EwDzKo7gmx7mqeJ/9oADAMBAAIAAwAAABAEz//EABcRAQADAAAAAAAAAAAAAAAAAAABESH/2gAIAQMBAT8QRTX/xAAXEQADAQAAAAAAAAAAAAAAAAAAAREh/9oACAECAQE/EGPEP//EABwQAQEAAgMBAQAAAAAAAAAAAAERADEhQWFRgf/aAAgBAQABPxBEsCDu3KMfYWsewtqeZwKTrBpGd/zOQFfDJl3Q7eWWBG7Of//Z",
+      "color": "#3B49DF"
+    },
+    {
       "id": "devto-4812559",
       "title": "I Write on a 2006 iMac and Code on a $200 Laptop",
       "desc": "By Mika Flowers | 4 min read",
       "tag": "tutorial",
       "published": "2026-10-07T13:27:39Z",
-      "order": 4,
+      "order": 5,
       "url": "https://dev.to/mikachu/i-write-on-a-2006-imac-and-code-on-a-200-laptop-9n4",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fa6s485r66rbdy2316p3r.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAwEBAAAAAAAAAAAAAAAAAAIDAQT/xAAWAQEBAQAAAAAAAAAAAAAAAAAAAgP/2gAMAwEAAhADEAAAAexJmdPsg//EABgQAAMBAQAAAAAAAAAAAAAAAAABERAx/9oACAEBAAEFAlwtxubT/8QAFREBAQAAAAAAAAAAAAAAAAAAEBH/2gAIAQMBAT8Bh//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABcQAAMBAAAAAAAAAAAAAAAAABARMSD/2gAIAQEABj8CEWKP/8QAGRAAAwEBAQAAAAAAAAAAAAAAAAERMUFx/9oACAEBAAE/IcBVOw2bYcG16VzRUJ8P/9oADAMBAAIAAwAAABCNP//EABYRAQEBAAAAAAAAAAAAAAAAAAEAEf/aAAgBAwEBPxATJhf/xAAWEQEBAQAAAAAAAAAAAAAAAAARAAH/2gAIAQIBAT8QSzW//8QAGhABAAMBAQEAAAAAAAAAAAAAAQARITFBYf/aAAgBAQABPxBVtFVWOMAEA5fv2VgfS4DXboX5BAdJ2oMqnL5DltzGf//Z",
@@ -55,22 +67,10 @@
       "desc": "By xulingfeng | 2 min read",
       "tag": "tutorial",
       "published": "2026-10-10T09:07:47Z",
-      "order": 5,
+      "order": 6,
       "url": "https://dev.to/xulingfeng/what-do-you-drink-while-you-work-17bm",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fsqu8mmyyofvus7v3q4ep.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAQIEA//EABYBAQEBAAAAAAAAAAAAAAAAAAABAv/aAAwDAQACEAMQAAABonpGbk7Of//EABkQAAMBAQEAAAAAAAAAAAAAAAABIRECEv/aAAgBAQABBQL0da2ngnHCEMP/xAAVEQEBAAAAAAAAAAAAAAAAAAAAAf/aAAgBAwEBPwFI/8QAFREBAQAAAAAAAAAAAAAAAAAAAQD/2gAIAQIBAT8BGW//xAAZEAACAwEAAAAAAAAAAAAAAAAAARARMUH/2gAIAQEABj8CaUdsVlmGR//EABwQAAMAAgMBAAAAAAAAAAAAAAABESExEEFRYf/aAAgBAQABPyHdjKHtTEQ19hikvRFQqTgNlnHh/9oADAMBAAIAAwAAABA6v//EABYRAQEBAAAAAAAAAAAAAAAAAAABYf/aAAgBAwEBPxCxg//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QA//EABsQAQADAAMBAAAAAAAAAAAAAAEAESExQVGB/9oACAEBAAE/EHDHVO4+eYYjzA7ICWc4rPsTUSFld+9wqXsa5v2IWA8gKhD1GyYHQ8n/2Q==",
-      "color": "#3B49DF"
-    },
-    {
-      "id": "devto-4803132",
-      "title": "What \"best practice\" did you quietly stop following?",
-      "desc": "By Mika Flowers | 1 min read",
-      "tag": "tutorial",
-      "published": "2026-10-05T19:29:26Z",
-      "order": 6,
-      "url": "https://dev.to/mikachu/what-best-practice-did-you-quietly-stop-following-53ne",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fvq8zyl6wcprqktchp2r3.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwIA/8QAFgEBAQEAAAAAAAAAAAAAAAAAAAID/9oADAMBAAIQAxAAAAF6DZ28kZ//xAAaEAACAgMAAAAAAAAAAAAAAAAAEQISECEx/9oACAEBAAEFAo8e0VwyxY//xAAVEQEBAAAAAAAAAAAAAAAAAAAQEf/aAAgBAwEBPwGH/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAGRABAQEBAQEAAAAAAAAAAAAAAQARITFB/9oACAEBAAE/IeFOMJyS/MnGsOXjJxKb/9oADAMBAAIAAwAAABDar//EABURAQEAAAAAAAAAAAAAAAAAAAAR/9oACAEDAQE/ECP/xAAVEQEBAAAAAAAAAAAAAAAAAAAAEf/aAAgBAgEBPxCq/8QAHRABAQEAAgIDAAAAAAAAAAAAAREAITFBUWGBkf/aAAgBAQABPxB2Ps7cxJVzbk1UjycZACoeE0sB/cRQp3y5jZfvHpYPzv/Z",
       "color": "#3B49DF"
     },
     {
@@ -86,27 +86,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4828206",
-      "title": "Git Isn't a Diff Tracker: How Blobs, Trees, DAG Commits, and the Index Actually Work Under the Hood",
-      "desc": "By S M Tahosin | 11 min read",
-      "tag": "tutorial",
-      "published": "2026-10-10T17:28:52Z",
-      "order": 8,
-      "url": "https://dev.to/smtahosin/git-isnt-a-diff-tracker-how-blobs-trees-dag-commits-and-the-index-actually-work-under-the-hood-19eo",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fi.imgur.com%2FR9pEpzM.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAQIAAwT/xAAVAQEBAAAAAAAAAAAAAAAAAAAAAf/aAAwDAQACEAMQAAAByhllD1w//8QAGxAAAgIDAQAAAAAAAAAAAAAAAAECEhEhIkH/2gAIAQEAAQUCS5GiM8HhYtr/xAAVEQEBAAAAAAAAAAAAAAAAAAABEP/aAAgBAwEBPwFn/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAGRAAAgMBAAAAAAAAAAAAAAAAADERICEy/9oACAEBAAY/ApzDkVEI/8QAHBAAAgMAAwEAAAAAAAAAAAAAAREAITFBUWGh/9oACAEBAAE/ITshQMFLviGQKgHIyx3AEdmBdfYmcPZpSf/aAAwDAQACAAMAAAAQP0//xAAXEQEBAQEAAAAAAAAAAAAAAAABADER/9oACAEDAQE/EAIcsy//xAAYEQACAwAAAAAAAAAAAAAAAAAAAREhMf/aAAgBAgEBPxBSi3p//8QAGxABAAMBAQEBAAAAAAAAAAAAAQARITFRQbH/2gAIAQEAAT8QWYgvab9gcaShrUs8vxRcap3RTzEP2b5L6XkFxtxyKHPxaZw6J0+T/9k=",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4852470",
       "title": "Requests, Promises, Assertions, and Declarations: Rewriting Our AI Agent Workflow as a 1986 'Committed Speech' Machine",
       "desc": "By Randal L. Schwartz | 26 min read",
       "tag": "tutorial",
       "published": "2026-10-14T19:53:12Z",
-      "order": 9,
+      "order": 8,
       "url": "https://dev.to/gde/requests-promises-assertions-and-declarations-rewriting-our-ai-agent-workflow-as-a-1986-4k4c",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F80k088q9sdie6yq9pbha.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAwEBAAAAAAAAAAAAAAAAAQIDAAT/xAAVAQEBAAAAAAAAAAAAAAAAAAABAP/aAAwDAQACEAMQAAAB5RMxVGyf/8QAGRAAAwADAAAAAAAAAAAAAAAAAAERECFC/9oACAEBAAEFAuSQbwijWv/EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABcQAAMBAAAAAAAAAAAAAAAAAAEQICH/2gAIAQEABj8CC2v/xAAaEAEBAAMBAQAAAAAAAAAAAAABABExUSFB/9oACAEBAAE/IUBPr7Yzqw6NllUDk0ZTu2C//9oADAMBAAIAAwAAABA/H//EABcRAAMBAAAAAAAAAAAAAAAAAAABESH/2gAIAQMBAT8QpiZ//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPxA//8QAHBABAAICAwEAAAAAAAAAAAAAAQARITFBUXFh/9oACAEBAAE/EEh1ughfi33KfoQl3QeRQONCYQ43UQtWu7hAwcP2f//Z",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4828206",
+      "title": "Git Isn't a Diff Tracker: How Blobs, Trees, DAG Commits, and the Index Actually Work Under the Hood",
+      "desc": "By S M Tahosin | 11 min read",
+      "tag": "tutorial",
+      "published": "2026-10-10T17:28:52Z",
+      "order": 9,
+      "url": "https://dev.to/smtahosin/git-isnt-a-diff-tracker-how-blobs-trees-dag-commits-and-the-index-actually-work-under-the-hood-19eo",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fi.imgur.com%2FR9pEpzM.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAQIAAwT/xAAVAQEBAAAAAAAAAAAAAAAAAAAAAf/aAAwDAQACEAMQAAAByhllD1w//8QAGxAAAgIDAQAAAAAAAAAAAAAAAAECEhEhIkH/2gAIAQEAAQUCS5GiM8HhYtr/xAAVEQEBAAAAAAAAAAAAAAAAAAABEP/aAAgBAwEBPwFn/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAGRAAAgMBAAAAAAAAAAAAAAAAADERICEy/9oACAEBAAY/ApzDkVEI/8QAHBAAAgMAAwEAAAAAAAAAAAAAAREAITFBUWGh/9oACAEBAAE/ITshQMFLviGQKgHIyx3AEdmBdfYmcPZpSf/aAAwDAQACAAMAAAAQP0//xAAXEQEBAQEAAAAAAAAAAAAAAAABADER/9oACAEDAQE/EAIcsy//xAAYEQACAwAAAAAAAAAAAAAAAAAAAREhMf/aAAgBAgEBPxBSi3p//8QAGxABAAMBAQEBAAAAAAAAAAAAAQARITFRQbH/2gAIAQEAAT8QWYgvab9gcaShrUs8vxRcap3RTzEP2b5L6XkFxtxyKHPxaZw6J0+T/9k=",
       "color": "#3B49DF"
     },
     {
@@ -158,24 +158,12 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4859158",
-      "title": "What I Actually Learn When I Build With AI",
-      "desc": "By Jessica Doering | 7 min read",
-      "tag": "tutorial",
-      "published": "2026-10-16T01:06:09Z",
-      "order": 14,
-      "url": "https://dev.to/sizzlebop/what-i-actually-learn-when-i-build-with-ai-1074",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F2atagf3xnyj2fwx6qtho.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAAIBAwT/xAAVAQEBAAAAAAAAAAAAAAAAAAAAAf/aAAwDAQACEAMQAAAByCizY6r/AP/EABsQAAMBAAMBAAAAAAAAAAAAAAECEQASITJB/9oACAEBAAEFAuXSyfVmAu8lVDZxD//EABURAQEAAAAAAAAAAAAAAAAAAAAR/9oACAEDAQE/AUf/xAAVEQEBAAAAAAAAAAAAAAAAAAAAEf/aAAgBAgEBPwFX/8QAFhABAQEAAAAAAAAAAAAAAAAAECFB/9oACAEBAAY/Amun/8QAHRABAAICAgMAAAAAAAAAAAAAAQARITFBYVGBkf/aAAgBAQABPyFshXEQtt7jblMq/EwDzKo7gmx7mqeJ/9oADAMBAAIAAwAAABAEz//EABcRAQADAAAAAAAAAAAAAAAAAAABESH/2gAIAQMBAT8QRTX/xAAXEQADAQAAAAAAAAAAAAAAAAAAAREh/9oACAECAQE/EGPEP//EABwQAQEAAgMBAQAAAAAAAAAAAAERADEhQWFRgf/aAAgBAQABPxBEsCDu3KMfYWsewtqeZwKTrBpGd/zOQFfDJl3Q7eWWBG7Of//Z",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4809038",
       "title": "Curiosity Over Comfort",
       "desc": "By Marceli Pawliński | 4 min read",
       "tag": "tutorial",
       "published": "2026-10-06T21:47:16Z",
-      "order": 15,
+      "order": 14,
       "url": "https://dev.to/marceli/curiosity-over-comfort-5cki",
       "image": "https://media2.dev.to/dynamic/image/width=1200,height=627,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fywr6b45wz5youd97xwx7.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAARACADASIAAhEBAxEB/8QAGAAAAwEBAAAAAAAAAAAAAAAAAAECAwT/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAHsVsmtIKYAgP/EABsQAAICAwEAAAAAAAAAAAAAAAECABEQEiAi/9oACAEBAAEFAiqylgVZosNFgAMX64//xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAEDAQE/AR//xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAECAQE/AR//xAAdEAABBAIDAAAAAAAAAAAAAAAAAREzoRAxIDKR/9oACAEBAAY/Ao6I6I6OqeGlNYZuP//EAB8QAAIBAwUBAAAAAAAAAAAAAAERABAxgSAhQWFx8P/aAAgBAQABPyEApDhPiEIuA9CjgIBN3xDmyZo1wk3p/9oADAMBAAIAAwAAABDQSBz/xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAEDAQE/EB//xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAECAQE/EB//xAAeEAEAAgIBBQAAAAAAAAAAAAABABEhYTEQIFHB8f/aAAgBAQABPxCjPDSA14mMXB9KM5g+YlYEBo0tcy1vhV5e+iQuLRNdv//Z",
@@ -187,7 +175,7 @@
       "desc": "By EffessDev | 3 min read",
       "tag": "tutorial",
       "published": "2026-10-14T11:31:46Z",
-      "order": 16,
+      "order": 15,
       "url": "https://dev.to/effessdev/i-argued-with-ai-until-it-apologized-for-calling-my-course-ai-slop-350d",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fsv9mqip5csydm4a6snax.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAwEAAv/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAENKvRKdf/EABoQAAICAwAAAAAAAAAAAAAAAAABAhARMUH/2gAIAQEAAQUC4qZgWhyP/8QAFREBAQAAAAAAAAAAAAAAAAAAARD/2gAIAQMBAT8BZ//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABYQAAMAAAAAAAAAAAAAAAAAAAAgMf/aAAgBAQAGPwJ4f//EABsQAAICAwEAAAAAAAAAAAAAAAABESEQQVFh/9oACAEBAAE/IWw/sI0LwpNlAlUvE//aAAwDAQACAAMAAAAQ3K//xAAWEQEBAQAAAAAAAAAAAAAAAAABABH/2gAIAQMBAT8QekJl/8QAFxEAAwEAAAAAAAAAAAAAAAAAAAEhEf/aAAgBAgEBPxDaNw//xAAbEAEBAQEBAQEBAAAAAAAAAAABEQAhMWFBUf/aAAgBAQABPxAOUVmjB4P5qJsGWT3I9/BmnRPN0e8+4FUZiVCL93//2Q==",
@@ -199,7 +187,7 @@
       "desc": "By Debashish Ghosal | 6 min read",
       "tag": "tutorial",
       "published": "2026-10-12T05:46:00Z",
-      "order": 17,
+      "order": 16,
       "url": "https://dev.to/debashish_ghosal/one-rm-f-silently-disabled-my-crash-detection-4khl",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Frbltpi5u7jl4xusaf8ir.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwEA/8QAFgEBAQEAAAAAAAAAAAAAAAAAAQAD/9oADAMBAAIQAxAAAAEsd0Ug2P/EABgQAAMBAQAAAAAAAAAAAAAAAAAQEQEh/9oACAEBAAEFAsXFSlKf/8QAFREBAQAAAAAAAAAAAAAAAAAAABH/2gAIAQMBAT8BV//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABQQAQAAAAAAAAAAAAAAAAAAADD/2gAIAQEABj8CD//EABoQAQEBAAMBAAAAAAAAAAAAAAEAESFBUWH/2gAIAQEAAT8hw93Dr5Bj7IQ8h5a2Xf/aAAwDAQACAAMAAAAQBt//xAAYEQEBAAMAAAAAAAAAAAAAAAABABFBUf/aAAgBAwEBPxAR1Ycv/8QAFREBAQAAAAAAAAAAAAAAAAAAABH/2gAIAQIBAT8Qqv/EABwQAAIDAAMBAAAAAAAAAAAAAAERACExQXGRgf/aAAgBAQABPxAbB9CAWgA0YyZ7OLaLy42DjK+PYbDXUMJzyf/Z",
@@ -211,10 +199,22 @@
       "desc": "By Shaurya Tiwari | 4 min read",
       "tag": "tutorial",
       "published": "2026-10-12T20:49:24Z",
-      "order": 18,
+      "order": 17,
       "url": "https://dev.to/dr5t/solodesk-ai-lpe",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fy11o4ykev6b1y23stmfi.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAABAED/8QAFgEBAQEAAAAAAAAAAAAAAAAAAgAB/9oADAMBAAIQAxAAAAESzpYhEY7f/8QAGBABAAMBAAAAAAAAAAAAAAAAAAECEDH/2gAIAQEAAQUCUX4hG//EABURAQEAAAAAAAAAAAAAAAAAAAAR/9oACAEDAQE/AVf/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAWEAADAAAAAAAAAAAAAAAAAAAAIFH/2gAIAQEABj8CI/8A/8QAGxAAAwACAwAAAAAAAAAAAAAAAAERITEQQYH/2gAIAQEAAT8hWxHN+iXXY+DqPBcDyf/aAAwDAQACAAMAAAAQ3J//xAAWEQEBAQAAAAAAAAAAAAAAAAAAETH/2gAIAQMBAT8QrT//xAAXEQADAQAAAAAAAAAAAAAAAAAAAREx/9oACAECAQE/ELEaj//EABsQAQACAwEBAAAAAAAAAAAAAAEAESExQVFx/9oACAEBAAE/EM/UJmFx6gqm9EMzeKkAr5DA3a3eoizTm+x9Az//2Q==",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4833419",
+      "title": "I was chasing the job market. One comment on DEV.to made me rethink everything",
+      "desc": "By EffessDev | 3 min read",
+      "tag": "tutorial",
+      "published": "2026-10-12T14:44:25Z",
+      "order": 18,
+      "url": "https://dev.to/effessdev/i-was-chasing-the-job-market-one-comment-on-devto-made-me-rethink-everything-4h20",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fcphbk52yjayt0h7tak46.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwIE/8QAFgEBAQEAAAAAAAAAAAAAAAAAAAEC/9oADAMBAAIQAxAAAAEGFNy86Qf/xAAXEAEBAQEAAAAAAAAAAAAAAAABABEh/9oACAEBAAEFAgsAkty3o27f/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFREBAQAAAAAAAAAAAAAAAAAAABH/2gAIAQIBAT8Bqv/EABgQAAMBAQAAAAAAAAAAAAAAAAAQETEB/9oACAEBAAY/AtKtUIdP/8QAGhAAAwADAQAAAAAAAAAAAAAAAAERITFRQf/aAAgBAQABPyHshY5JVVEmX8GCxDZJvdjaODR//9oADAMBAAIAAwAAABAd7//EABgRAAMBAQAAAAAAAAAAAAAAAAABESEx/9oACAEDAQE/EJOi1w//xAAXEQADAQAAAAAAAAAAAAAAAAAAAREh/9oACAECAQE/EKWDg//EABsQAQEBAQEAAwAAAAAAAAAAAAERACFhMUFx/9oACAEBAAE/EBE6P3AE2LDuQJCXEmcPdZDoUhM9mJrx+stlgKHkyikX5ct3/9k=",
       "color": "#3B49DF"
     },
     {
@@ -230,27 +230,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4833419",
-      "title": "I was chasing the job market. One comment on DEV.to made me rethink everything",
-      "desc": "By EffessDev | 3 min read",
-      "tag": "tutorial",
-      "published": "2026-10-12T14:44:25Z",
-      "order": 20,
-      "url": "https://dev.to/effessdev/i-was-chasing-the-job-market-one-comment-on-devto-made-me-rethink-everything-4h20",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fcphbk52yjayt0h7tak46.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwIE/8QAFgEBAQEAAAAAAAAAAAAAAAAAAAEC/9oADAMBAAIQAxAAAAEGFNy86Qf/xAAXEAEBAQEAAAAAAAAAAAAAAAABABEh/9oACAEBAAEFAgsAkty3o27f/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFREBAQAAAAAAAAAAAAAAAAAAABH/2gAIAQIBAT8Bqv/EABgQAAMBAQAAAAAAAAAAAAAAAAAQETEB/9oACAEBAAY/AtKtUIdP/8QAGhAAAwADAQAAAAAAAAAAAAAAAAERITFRQf/aAAgBAQABPyHshY5JVVEmX8GCxDZJvdjaODR//9oADAMBAAIAAwAAABAd7//EABgRAAMBAQAAAAAAAAAAAAAAAAABESEx/9oACAEDAQE/EJOi1w//xAAXEQADAQAAAAAAAAAAAAAAAAAAAREh/9oACAECAQE/EKWDg//EABsQAQEBAQEAAwAAAAAAAAAAAAERACFhMUFx/9oACAEBAAE/EBE6P3AE2LDuQJCXEmcPdZDoUhM9mJrx+stlgKHkyikX5ct3/9k=",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4826024",
       "title": "Surviving the 200k-Token Lobotomy: How Unix init.d and 'Memento' Made My AI Coding Agent Immune to Context Compaction",
       "desc": "By Randal L. Schwartz | 15 min read",
       "tag": "tutorial",
       "published": "2026-10-10T01:15:07Z",
-      "order": 21,
+      "order": 20,
       "url": "https://dev.to/gde/surviving-the-200k-token-lobotomy-how-unix-initd-and-memento-made-my-ai-coding-agent-immune-to-2f74",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fg7swfw5prf9o7zrcrnkn.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAQMCBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHnoNrKuT//xAAZEAEAAgMAAAAAAAAAAAAAAAABABAREkH/2gAIAQEAAQUCmkwFcW//xAAVEQEBAAAAAAAAAAAAAAAAAAAAEf/aAAgBAwEBPwGI/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAGBAAAgMAAAAAAAAAAAAAAAAAABARIFH/2gAIAQEABj8CW1g//8QAGRABAAMBAQAAAAAAAAAAAAAAAQARITGB/9oACAEBAAE/ITTjLVp6yk5aJRxhmORnrcF7c104T//aAAwDAQACAAMAAAAQpH//xAAVEQEBAAAAAAAAAAAAAAAAAAAAEf/aAAgBAwEBPxC1v//EABURAQEAAAAAAAAAAAAAAAAAAAAR/9oACAECAQE/EKr/xAAbEAEAAgMBAQAAAAAAAAAAAAABABEhMUGBUf/aAAgBAQABPxAZFD689lCAOiVAgtMjqmagR6G/YmhItkor1ncPhklauNNhDBP/2Q==",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4875822",
+      "title": "Your agent's retry bug isn't an AI problem. It's a distributed-systems problem with an LLM on top.",
+      "desc": "By Dimitris Kyrkos  | 3 min read",
+      "tag": "tutorial",
+      "published": "2026-10-19T06:42:45Z",
+      "order": 21,
+      "url": "https://dev.to/cyclopt_dimitrisk/your-agents-retry-bug-isnt-an-ai-problem-its-a-distributed-systems-problem-with-an-llm-on-top-1i6k",
+      "image": "https://media2.dev.to/dynamic/image/width=1200,height=627,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fiqdssmxk1srgbl586mox.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAARACADASIAAhEBAxEB/8QAGAABAQEBAQAAAAAAAAAAAAAAAAEDAgT/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAH2TSmN1HYED//EABoQAAICAwAAAAAAAAAAAAAAAAABESICIEH/2gAIAQEAAQUCawRUoUGQQd0//8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAwEBPwEf/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAgEBPwEf/8QAHBAAAgICAwAAAAAAAAAAAAAAAAIyQREgIXGR/9oACAEBAAY/AoqQUipFSy/SzHPev//EAB4QAAIBAwUAAAAAAAAAAAAAAAERABAgsVGRwdHw/9oACAEBAAE/ISCxRL0TyUAZYIDPA0C67oChUgna/9oADAMBAAIAAwAAABAjgBz/xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAEDAQE/EB//xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAECAQE/EB//xAAgEAACAgEDBQAAAAAAAAAAAAABEQAhMSDB8EFRcaHR/9oACAEBAAE/EHth6gNoLxDT4UXG2hYkO00W0vUfkAgEm1ru+yx+zCiXBljOHp//2Q==",
       "color": "#3B49DF"
     },
     {

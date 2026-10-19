@@ -1,20 +1,111 @@
-EuroPython 2026 was the 25th anniversary edition of Europe's longest running community Python conference. We provide an overview of this year's event. Organized by volunteer teams and the EuroPython Society, the week long event took place in Kraków, Poland. It brought together over 1,300 Python developers, maintainers, researchers, core language maintainers, domain specific software engineers and enthusiasts from around the world to share knowledge, collaborate and support the open source Python ecosystem. This year the conference covered a comprehensive range of topics across language core development, artificial intelligence, open source security, platform engineering and modern web frameworks. As such the main themes were: **1\. Core Python evolution and interpreter performance**  
-CPython JIT compiler: Deep dives into CPython's JIT compiler in Python 3.15, highlighting new trace recording, micro operation optimizations, top of stack register caching and stack unwinding metadata that allows native debuggers like GDB to inspect JIT execution frames. PEP 836 was also introduced to establish a formal support roadmap for the JIT. Free Threaded Python (no-GIL): Techniques for removing the Global Interpreter Lock using split local/shared reference counting, atomic operations and stop the world garbage collection. Python 3.14 and 3.15 features: Key additions include explicit lazy imports, built in sentinel() values and frozen_dict, the high performance Tachyon sampling profiler, sys.remote_exec() in Python 3.14 for attaching debuggers to live processes without restarts  
-and colorized error messages with keyword suggestions. Subinterpreters and deep immutability: Patterns for enforcing deep immutability to allow safe, lock free object sharing across subinterpreters. **2\. Artificial Intelligence, agents and codebase health**  
-Agentic workflows and model infrastructure: Deployment of self hosted small language models (SLMs), adoption of the Model Context Protocol Python SDK and native agent frameworks such as Vercel's. AI quality and security: Methods for detecting and preventing indirect prompt injection attacks in Python agent pipelines, alongside discussions on maintainer fatigue caused by automated pull requests and low quality "AI slop". **3\. Security, governance and supply chain defense**  
-PyPI and supply chain hardening: Security updates including WebAuthn/passkey enforcement, automated malware scanning and PEP 770 for standardizing Software Bill of Materials metadata inside Python wheel distributions. The CVE "vulnerability apocalypse": Strategies used by the Python Security Response Team (PSRT) to handle massive spikes in automated, AI generated vulnerability reports. Policy and software freedom: Open source compliance with regulations like the EU Cyber Resilience Act and the Free Software Foundation Europe's long term vision for device neutrality and public funding for free software. **4\. High performance computing, GPU and alternative platforms**  
-GPU programming and compilers: Authoring native GPU kernels in pure Python using Triton IR and PyTorch/CUDA, as well as the SPy statically typed variant of Python for compiled C level execution speed. Rust Integrations: Accelerating Python for High Performance Computing using Rust extensions with PyO3, Maturin and Polars. Hardware and edge Execution: Ecosystem enablement for Windows on Arm, embedded hardware development using MicroPython and running Python in browsers and edge networks via WebAssembly and Pyodide. **5\. Web frameworks, testing and architecture**  
-Modern web architectures: Performant API development with Litestar plugins and background task queue architectures. Testing practices: Advanced test isolation, fixture design and property based testing using Hypothesis. Great! But would want to be there but missed it? No worries as you can now watch on demand since the sessions are now available online. Because there's a lot of material to go through, we did a bit of digging to suggest the best to watch first. As such, the following three talks provided particularly unique, contrarian, or highly innovative perspectives compared to the rest of the conference program. VIDEO **1\. Keynote with Guido van Rossum**  
-This session brought Python's creator, Guido van Rossum, onto the main stage for a live conversation covering historical milestones such as marking 52 years since Guido won a bronze medal in the math olympiad, alongside reflections on language evolution. Guido shared that at age 40 he did not believe in static type checking, but later embraced type hinting ideas that ultimately transformed Python for the better. **2\. Inside Python 3.15's JIT optimizer**  
-The CPython JIT compiler represents one of the largest performance efforts in the interpreter, fitting directly into Core Python as the conference's most popular track.  
-Core developer Ken Jin explained how CPython 3.15's JIT delivers a 7–12% mean speedup across benchmarks (with speedups reaching up to 100% on specific workloads). He detailed micro optimizations like eliminating redundant C-level reference counting checks and discussed how the team expanded contributor involvement by decomposing complex compiler tasks into accessible sub projects. **3\. Free-threaded Python: past, present and future**  
-Removing the Global Interpreter Lock (GIL) is one of the most fundamental concurrency shifts in CPython's history. Steering Council member Thomas Wouters traced the historical progression from early GIL removal prototypes to Sam Gross's PEP backed multi threading architecture. He covered key safety mechanisms, such as atomic reference counting and thread sanitizers and highlighted rapid ecosystem adoption; 61 of the top 360 PyPI packages already offer free threaded wheels. While these were the most interesting talks, there were many other great sessions. So, take your time and delve into the conference by going through its massive YouTube playlist featuring 117 talks! In the end, EuroPython 2026 was a resounding success, bringing together more than 1K attendees for the conference's 25th anniversary, to showcase cutting edge technical developments, foster open source collaboration and celebrate the vibrant global Python community.
+Get up to speed on stuff that affects you as a developer with our weekly digest. It summarizes the week's news and lists new titles selected for Book Watch Archive. This week we learned that Margret Hamilton, inventor of the term Software Engineer who led the team whose code took men to the moon in 1969, had passed away. We look back at that remarkable achievement. To receive this digest automatically by email, sign up for our weekly [ newsletter. ](<https://www.i-programmer.info/register.html>) **October 8 - 14, 2026** | 
 
-#### More Information
+### Featured Articles  
 
-[EuroPython 2026](<https://ep2026.europython.eu/>) [Youtube Playlist](<https://www.youtube.com/watch?v=9ZuZfG8_jH8andlist=PLd3Y9yzyC5Uo>)
+---  
 
-#### Related Articles
+* * *
 
-[What Happened At PyCon US 2026](<https://www.i-programmer.info/news/216-python/19155-what-happened-at-pycon-us-2026.html>)  
- __ To be informed about new articles on I Programmer, sign up for our [weekly newsletter](<https://www.i-programmer.info/edit-profile.html?layout=form>),[ ](<https://s3.amazonaws.com/com.alexa.toolbar/atbp/hfdfGO/download/index.htm>)subscribe to the [RSS feed](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=3&format=raw>) and follow us on [Facebook](<http://www.facebook.com/pages/iProgrammer/127140977307932#%21/pages/iProgrammer/127140977307932?v=wall>) or [Linkedin](<http://www.linkedin.com/company/i-programmer>). [](<https://amzn.to/4iJFqTH>)
+[ Deep C Dives: Type ](<https://www.i-programmer.info/programming/111-cc/19211-deep-c-dives-type.html>)   
+14 Oct  |  Mike James    
+[ ](<https://www.i-programmer.info/programming/111-cc/19211-deep-c-dives-type.html>) Type is such a talking point - languages either love it or ignore it, but how did it all get started and what does it mean for C? <ASIN:B0D6LZZQ8R> [ \+ Full Story ](<https://www.i-programmer.info/programming/111-cc/19211-deep-c-dives-type.html>)  
+
+* * *
+
+[ Margaret Hamilton - Apollo and Beyond ](<https://www.i-programmer.info/history/8-people/10030-margaret-hamilton-apollo-and-beyond.html>)   
+09 Oct  |  Sue Gee    
+[ ](<https://www.i-programmer.info/history/8-people/10030-margaret-hamilton-apollo-and-beyond.html>) Margaret Hamilton was lead developer for the team that wrote the programs that landed men on the moon and has devoted a career to error detection and recovery. She coined the term "software engineer" to gain recognition for the work done by programmers and became a role model as a woman in a male dominated environment. [ \+ Full Story ](<https://www.i-programmer.info/history/8-people/10030-margaret-hamilton-apollo-and-beyond.html>)  
+
+### Programming News and Views  
+
+* * *
+
+[ ESP-Mosaico The One Smart Development Board You Need ](<https://www.i-programmer.info/news/91-hardware/19212-esp-mosaico-the-one-smart-development-board-you-need.html>)   
+14 Oct  |  Harry Fairhead    
+[ ](<https://www.i-programmer.info/news/91-hardware/19212-esp-mosaico-the-one-smart-development-board-you-need.html>) Microcontrollers are getting more and more like single board computers, but the latest ESP development board is a Swiss Army Knife of IoT development, complete with AI. This makes it a good candidate for so many projects. <ASIN:B0GX372RM5> <ASIN:B0GX2TRN6N> [ \+ Full Story ](<https://www.i-programmer.info/news/91-hardware/19212-esp-mosaico-the-one-smart-development-board-you-need.html>)  
+
+* * *
+
+[ Become A Certified AI Engineer ](<https://www.i-programmer.info/news/150-training-a-education/19213-become-a-certified-ai-engineer.html>)   
+14 Oct  |  Sue Gee    
+[ ](<https://www.i-programmer.info/news/150-training-a-education/19213-become-a-certified-ai-engineer.html>) The IBM AI Engineering Professional Certificate is a recent addition to the line up of IBM offerings on Coursera. It is designed to make you job-ready in terms the AI engineering skills and hands-on practical experience in less than 4 months. [ \+ Full Story ](<https://www.i-programmer.info/news/150-training-a-education/19213-become-a-certified-ai-engineer.html>)  
+
+* * *
+
+[ Ada Lovelace Day 2026 ](<https://www.i-programmer.info/news/82-heritage/19210-ada-lovelace-day-2026.html>)   
+13 Oct  |  Sue Gee    
+[ ](<https://www.i-programmer.info/news/82-heritage/19210-ada-lovelace-day-2026.html>) Today, October 13th, is Ada Lovelace Day with events around the globe taking place to raise the profile of women in science, technology, engineering and math. Although the date, the second Tuesday in October, isn't related to any events in Ada's life, it is a good time to discover, or revisit, her remarkable story. [ \+ Full Story ](<https://www.i-programmer.info/news/82-heritage/19210-ada-lovelace-day-2026.html>)  
+
+* * *
+
+[ Apache Pulsar 5 Adds Scalable Topics ](<https://www.i-programmer.info/news/141-cloud-computing/19208-apache-pulsar-5-adds-scalable-topics.html>)   
+13 Oct  |  Kay Ewbank    
+[ ](<https://www.i-programmer.info/news/141-cloud-computing/19208-apache-pulsar-5-adds-scalable-topics.html>) Apache Pulsar 5.0 has been released, with the addition of scalable topics, which grow and shrink with demand while preserving per-key ordering. The new version also has a new Java client API and Oxia as the recommended metadata store for new clusters. [ \+ Full Story ](<https://www.i-programmer.info/news/141-cloud-computing/19208-apache-pulsar-5-adds-scalable-topics.html>)  
+
+* * *
+
+[ Python 3.15 Adds Lazy Imports ](<https://www.i-programmer.info/news/216-python/19189-python-315-adds-lazy-imports.html>)   
+12 Oct  |  Mike James    
+[ ](<https://www.i-programmer.info/news/216-python/19189-python-315-adds-lazy-imports.html>) Python 3.15 has been released with updates including explicit lazy imports, new built-in types, and an upgraded JIT compiler. [ \+ Full Story ](<https://www.i-programmer.info/news/216-python/19189-python-315-adds-lazy-imports.html>)  
+
+* * *
+
+[ Microsoft Rust Sandbox Library Updated ](<https://www.i-programmer.info/news/149-security/19207-microsoft-rust-sandbox-library-updated.html>)   
+12 Oct  |  Kay Ewbank    
+[ ](<https://www.i-programmer.info/news/149-security/19207-microsoft-rust-sandbox-library-updated.html>) Microsoft's open-source Litebox library has been updated. The library is an open-source, Rust-based library operating system for sandboxing and security. The project is released under the MIT license, and aims to significantly minimize the attack surface by reducing the interfaces to the host system. [ \+ Full Story ](<https://www.i-programmer.info/news/149-security/19207-microsoft-rust-sandbox-library-updated.html>)  
+
+* * *
+
+[ PetShop Boys Pay Tribute To Alan Turing ](<https://www.i-programmer.info/news/82-heritage/19206-petshop-boys-pay-tribute-to-alan-turing.html>)   
+11 Oct  |  Sue Gee    
+[ ](<https://www.i-programmer.info/news/82-heritage/19206-petshop-boys-pay-tribute-to-alan-turing.html>) More than a decade after **"A Man From the Future",** the collaboration between the Pet Shop Boys and biographer Andrew Hodges about Alan Turing, originally debuted, a reworked and reorchestrated version is out on Parlophone Records. [ \+ Full Story ](<https://www.i-programmer.info/news/82-heritage/19206-petshop-boys-pay-tribute-to-alan-turing.html>)  
+
+* * *
+
+[ Margaret Hamiliton - Software Engineer Who Saved The Moon Landing ](<https://www.i-programmer.info/news/82-heritage/19205-margaret-hamiliton-software-engineer-who-saved-the-moon-landing.html>)   
+09 Oct  |  Sue Gee    
+[ ](<https://www.i-programmer.info/news/82-heritage/19205-margaret-hamiliton-software-engineer-who-saved-the-moon-landing.html>) Margaret Hamilton, who developed the software for NASA's Apollo Missions which not only landed men on the moon in 1969 but also averted a crash landing, passed away on September 30, 2026, at the age of 90. [ \+ Full Story ](<https://www.i-programmer.info/news/82-heritage/19205-margaret-hamiliton-software-engineer-who-saved-the-moon-landing.html>)  
+
+* * *
+
+[ Thirty Years That Shaped Postgres Architecture ](<https://www.i-programmer.info/news/84-database/19204-thirty-years-that-shaped-postgres-architecture.html>)   
+09 Oct  |  Nikos Vaggalis    
+[ ](<https://www.i-programmer.info/news/84-database/19204-thirty-years-that-shaped-postgres-architecture.html>) This insightful interview with Tom Lane, a core developer celebrating twenty five years as a committer on the PostgreSQL project, looks at foundational architectural choices that have sustained the open source database over its thirty-year history [ \+ Full Story ](<https://www.i-programmer.info/news/84-database/19204-thirty-years-that-shaped-postgres-architecture.html>)  
+
+* * *
+
+[ Token Meter Slashes Your Agents Token Cost ](<https://www.i-programmer.info/news/90-tools/19202-token-meter-slashes-your-agents-token-cost.html>)   
+08 Oct  |  Nikos Vaggalis    
+[ ](<https://www.i-programmer.info/news/90-tools/19202-token-meter-slashes-your-agents-token-cost.html>) Token Meter is an open source, local first dashboard that helps developers monitor and optimize the resource consumption of AI coding agents. [ \+ Full Story ](<https://www.i-programmer.info/news/90-tools/19202-token-meter-slashes-your-agents-token-cost.html>)  
+
+* * *
+
+[ Google Spanner Omni Released ](<https://www.i-programmer.info/news/84-database/19201-google-spanner-omni-released.html>)   
+08 Oct  |  Kay Ewbank    
+[ ](<https://www.i-programmer.info/news/84-database/19201-google-spanner-omni-released.html>) Google has released Spanner Omni, a deploy-anywhere version of Spanner, Google's multi-model database. Spanner Omni adds the ability to run Spanner in a on-premises data centers or on other clouds. [ \+ Full Story ](<https://www.i-programmer.info/news/84-database/19201-google-spanner-omni-released.html>)  
+
+### Book Watch  
+
+* * *
+
+[ Build an AI Agent From Scratch (Manning) ](<https://www.i-programmer.info/book-watch-archive/19214-build-an-ai-agent-from-scratch-manning.html>)   
+
+This book is a step-by-step journey through design, development, and deployment of a system of autonomous AI agents. Authors Jungjun Hur and Younghee Song guide the reader concept-by-concept as they build a sophisticated research agent in Python, designed to solve complex, multi-step tasks from the rigorous GAIA (General AI Assistants) benchmark. By covering the construction of the system end to end, the authors explain the underlying mechanics unobstructed by any existing blackbox libraries and frameworks. <ASIN:1633434613 > [ \+ Full Story ](<https://www.i-programmer.info/book-watch-archive/19214-build-an-ai-agent-from-scratch-manning.html>)  
+
+* * *
+
+[ Springer Handbook of Reliability (Springer) ](<https://www.i-programmer.info/book-watch-archive/18765-springer-handbook-of-reliability-springer.html>)   
+
+This book gathers the broad mix of theoretical and applied reliability knowledge needed for engineers, analysts, and scientists from all fields, with examples reflecting the growing importance of the subject in automotive, public transport, electronics, telecommunications, software, and other industries. Edited by Dr. Hoang Pham, the handbook's chapters have been written by leading reliability experts in academia and industry, providing comprehensive and authoritative coverage under the supervision of a distinguished international advisory and editorial board to ensure clarity and precision throughout. <ASIN:3031780515> [ \+ Full Story ](<https://www.i-programmer.info/book-watch-archive/18765-springer-handbook-of-reliability-springer.html>)  
+
+* * *
+
+[ Accessibility: The Illustrated Guide (Packt) ](<https://www.i-programmer.info/book-watch-archive/19203-accessibility-the-illustrated-guide-packt.html>)   
+
+This book, subtitled "Making digital communication inclusive for everyone", is a practical, illustrated guide for applying accessibility across social media, meetings, presentations, emails, and AI. Learn inclusive communication through engaging visuals and real-world examples. Nandita Gupta and Rachel Grossman-Kahn aim to make inclusion approachable, practical, and unexpectedly fun, showing how everyday people can make small changes that lead to a big impact. <ASIN:1807605531 > [ \+ Full Story ](<https://www.i-programmer.info/book-watch-archive/19203-accessibility-the-illustrated-guide-packt.html>)  
+
+I Programmer has reported news for over 12 years. You can access [ I Programmer Weekly ](<https://www.i-programmer.info/i-programmer-weekly>) back to January 2012 for all the headlines plus the book reviews and articles.
+
+To keep up with the latest news and receive this digest automatically by email, [ sign up ](<https://www.i-programmer.info/register.html>) for our [ weekly newsletter ](<https://www.i-programmer.info/edit-profile.html?layout=form>) and follow us on [ Twitter, ](<http://twitter.com/Iprogrammerinfo>) [ Facebook, ](<http://www.facebook.com/pages/iProgrammer/127140977307932#%21/pages/iProgrammer/127140977307932?v=wall>) and [ LinkedIn ](<http://www.linkedin.com/company/i-programmer>) , where you are welcome to share all our stories.
+
+You can also subscribe to our RSS Feeds - we have one for [ Full Contents ](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=3&format=raw>) , another for [ News ](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=1&format=raw>) and also one for [ Books ](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=2&format=raw>) with details of reviews and additions to Book Watch.

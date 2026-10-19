@@ -1,97 +1,55 @@
-A few days ago I wrote about reporting a bug to Google Disability Support. It's a bug that kills touch exploration for every screen reader on Android until you reboot the phone. In return I was asked to turn TalkBack off and on again, clear the cache of an app I don't use, and reboot, which is the one thing I'd already told them was the only workaround. If you haven't read that one, [Have You Tried Turning TalkBack Off and On Again?](https://fireborn.mataroa.blog/blog/have-you-tried-turning-talkback-off-and-on-again/) has the whole story, and this post won't make much sense without it.
+**For years, Tor Browser has been one of the most effective tools for protecting privacy and bypassing censorship online. But most people don't experience the internet through a browser anymore. They connect to it via their favorite apps. Wouldn't it be nice to extend the same privacy protections to messaging apps, social media, email, and other services?**
 
-There's been more since. I'm going to go through it, because the ending is better than anything I could have made up. But I can tell you how I feel about it in four words, so I'll get them out of the way now.
+And for years, we heard this again and again in our user research. People wanted a simple way to protect their entire device, which inspired the idea for Tor VPN back in 2021. We focused on Android first, where the need was greatest and where we could reach the most users in censored regions. We built Tor VPN Beta as a first version, with the expectation that we would learn from real-world use. And when we first launched Tor VPN Beta for Android in a limited release last fall, the primary use case quickly became much clearer: unblock the internet. This has shaped how we've prioritized development and user support in the time since the initial launch, and how we think about the product moving forward.
 
-Quite simply, fuck you.
+![Image app isolation feature](https://blog.torproject.org/tor-vpn-beta/per-app-routing.png)
 
-## Where we left it
+## What makes Tor VPN different
 
-When I published the first post, I'd answered every question Google's support team asked. I'd done every troubleshooting step they gave me, including the ones that couldn't possibly work, and reported the results. They'd said that once I'd done that, the case could be forwarded to their internal team for further review. So I did it, and I waited to be forwarded.
+Unlike commercial VPNs, Tor VPN Beta is built on a fundamentally different model. It is our first step into device-level network protection on mobile to extend Tor's protections beyond the browser. Each mobile app on your device gets its own Tor circuit, rather than sharing a single tunnel. That means activity from one app can't easily be linked to another. This type of app isolation is a design choice heavily inspired by the cross-site tracking protections in Tor Browser<sup>[1](https://blog.torproject.org/tor-vpn-beta/#fn-nested)</sup>. It's a different model from most VPNs, and one that's designed to reduce cross-tracking by default.
 
-I didn't only wait. The bug happened again the next morning, and this time I was ready for it. I took a full bug report while the phone was stuck. I captured every log buffer, before and after. I worked out exactly why the fake finger gets left on the screen: TouchExplorer gets itself into a dragging state with no valid pointer, tries to build an up event with no pointers in it, MotionEvent throws, the exception gets swallowed, and the up event that would have lifted the finger is never sent. I worked out why nothing short of a reboot clears it: the input dispatcher keeps the record of injected pointers in a verifier that is only ever thrown away when a display is removed, so turning accessibility off, turning every accessibility service off, even tearing down the whole input filter does nothing. I proved that on the phone. I found a way to clear it from the shell with a single cancel event, and a way for a screen reader to clear it with no special permissions at all. And then I wrote fixes, one patch for the accessibility code in frameworks/base and one for the input dispatcher in frameworks/native, and sent a summary of all of it back to the case, along with a request, again, for some way to get the files to an engineer, because their form still wouldn't take anything that wasn't a screenshot.
+As Tor VPN Beta has matured, we've also worked on making that app-level control easier to use. The Apps screen is now searchable, so people can more quickly find a specific app and decide whether it should be routed through Tor.
 
-That's a root cause, a recovery method, two patches and a reproduction you can trigger on demand, all done for free, on my own time, on a phone I could only half use.
+![Image App screen searchbar](https://blog.torproject.org/tor-vpn-beta/apps-screen-searchbar.png)
 
-## The second agent
+## Rethinking how we design for circumvention
 
-The next reply came from a different agent, stepping in for the first. And I'll be fair here, because I want to be: it was the best reply I'd had. It read like someone had actually read what I'd sent. It summarised the problem correctly, in proper terms: TouchExplorer failing to release injected pointers after an invalid dragging pointer state, with InputDispatcher rejecting the hover events that follow. It said it recognised the impact on screen reader users. It said it didn't want to give me an unverified technical answer to my three questions, and that they needed the team responsible for those framework components. It said, finally, that it understood the troubleshooting steps had been exhausted.
+While Tor VPN Beta includes features commonly associated with VPNs, such as exit selection, those aren't always the right approach for users trying to bypass censorship. This was one of the most important lessons that came from usability testing and early feedback during the development stage.
 
-What it couldn't say was whether anyone on an engineering team would look at any of it. It didn't have an upload link, or an engineering contact. It told me to hang on to my files in case a way to send them ever turned up in the case. It was polite, honest about what it didn't know, and it went nowhere.
+We originally explored giving users more control over exit selection, which, on paper, sounded great. But in practice, this introduced confusion. Users trying to bypass censorship were selecting exit locations when they should have been using bridges instead. There was a mismatch between how Tor works and how people expected it to work. This is why the current design required connecting the app to the Tor network first before selecting an exit. Exit selection is still something we want to explore more fully in the future, but it needs to be introduced in a way that doesn't create user error in high-risk situations.
 
-So I stopped waiting, and filed the bug myself.
+## Used where it's needed most
 
-## 102 minutes
+Early on, we saw strong adoption in highly censored regions, including Iran and Turkmenistan. This stood in contrast to Tor Browser for Android, which tends to skew more toward users in the Global North. With Tor VPN Beta, we're seeing much deeper engagement from users in the Global South, people dealing with network restrictions as a daily reality.
 
-Android has a public issue tracker. Anyone can file on it, and it has an Android Accessibility component. I wrote up everything: device and build, the natural trigger and a reliable reproduction from the shell, what happens in the logs during the trigger, why only a reboot recovers, the on-device test results, the workaround a screen reader can use, and both patches, with the reproduction helper attached. I filed it at 08:17 on a Friday morning, and sent the link to the support case so they could attach it and pass it on.
+Because of how people are using Tor VPN Beta, we've doubled down on improving its circumvention capabilities. One example was prioritizing the addition of WebTunnel bridges with one of the early releases (1.4.0 beta), which helps Tor traffic look like regular encrypted web traffic. This makes it harder for censors to detect and block connections. We have also fixed several bugs and made quality-of-life improvements across bridge support more generally, with the goal of making bridge use more reliable.
 
-At 09:59 it was assigned to a Google engineer, with a comment saying it had been passed to the development team.
+## Stability and reliability matter just as much as features
 
-That's an hour and forty-two minutes. Disability Support had had the case for four days by then, and in four days it hadn't got as far as an engineer. The tracker did it before I'd finished my second coffee.
+In fact, a significant amount of work since the early release has gone into improving stability. Tor VPN is built on [Arti, our next-generation Tor implementation written in Rust](https://blog.torproject.org/announcing-arti/). Under the hood, that means a new, solid technical foundation rather than patching around legacy architecture. One of the immediate benefits is improved reliability, including fewer crashes and better handling of network conditions. We have also invested in making our builds reproducible and getting the app onto F-Droid. Reproducible builds let anyone verify that the binary you're running matches the published source code, while F-Droid availability gives users a way to install and update the app without relying on Google Play, both of which matter for a privacy and security-focused tool.
 
-It's still moving. At the time of writing it's marked as assigned, severity S2, priority P2. It's on five hotlists. 114 people have given it a +1, and one of them commented that this is something that has "continued to plague users", and that it's been reported on forums like Blind Android Users. So it isn't just my phone and it isn't just me. Blind people have been hitting this for a long time, rebooting their phones, and getting nowhere, because the route Google gives them goes nowhere.
+While Tor VPN Beta doesn't behave like a commercial VPN optimized for speed, [the Tor network has become more performant](https://blog.torproject.org/congestion-contrl-047/) over time, and [we're continuing to bring those improvements into the mobile experience](https://gitlab.com/guardianproject/tormobile/arti-mobile). There are still performance features from Tor's C implementation, like congestion control, that are not yet available in Arti. Bringing those capabilities over is part of what comes next.
 
-## Outside our scope
+> *We set out to extend Tor beyond the browser to close a gap in mobile protection, but the project was quickly being shaped by how people actually use it, especially those who need reliable, device-wide circumvention. So we focused on building the right foundation for Tor on mobile with a modular Tor stack centered on Arti and [Onionmasq](https://gitlab.torproject.org/ahf/onionmasq) that can evolve with real-world use. These components are now reusable across multiple applications, reducing ecosystem fragmentation and long-term maintenance risk. 
+> -- Duncan, UX-Team Lead/ Product Manager, Tor VPN*
 
-Then, late on Saturday night, Disability Support replied for the last time.
+There's more work to do here. Tor Browser still sets the standard for what's possible, and part of our goal is to bring Tor VPN closer to that level over time.
 
-They'd reviewed my case with their internal team, it said, and the team had clarified that Google Disability Support "primarily assists with troubleshooting existing accessibility features and assistive technologies within Google products, including unexpected behavior or broken functionality."
+## What's next?
 
-Read that sentence again, because it's a perfect description of what I reported. Touch exploration is an existing accessibility feature. It's built into Android, which is a Google product. TalkBack, which it breaks along with every other screen reader, is a Google product. Touch exploration stopping system-wide until you reboot is, by any definition anyone could come up with, broken functionality. I didn't just fall within their scope. I was the textbook example of it.
+Tor VPN Beta is the result of a collaborative, multi-year effort. Thank you to [The Guardian Project](https://guardianproject.info/) for their guidance and critical low-level mobile libraries, and the LEAP Encryption Access Project for their quality work, without both the app would have never seen the light of day. We're [continuing to build Tor VPN Beta](https://blog.torproject.org/code-audit-tor-vpn/) in the open, shaped by how people are actually using it.
 
-But the very next paragraph explained that "technical development, custom accessibility service coding, and custom Android framework patches fall outside the scope of our support," so they couldn't review the patches or confirm any of the framework fixes I'd proposed.
+That means improving circumvention in restrictive environments, bringing more performance features into Arti, and refining the user experience to reduce confusion and risk.
 
-I never asked Disability Support to review a patch. I asked them, four times now, to pass a bug report to the people who own the code, and to give me a way to send them the logs. The patches were offered to an engineering team, because that's what you do with a fix: you hand it to the people who can use it. "Custom accessibility service coding" means Backtalk, I assume, which has nothing to do with the bug, as I'd said in the first message, and the second, and the third. The bug happens with TalkBack. Google's TalkBack, running on Google's Android, using Google's touch exploration.
+And most importantly, continuing to learn from the people who rely on it. If that includes you, and you want to help shape the development of Tor VPN Beta, please visit our [refreshed download pages](https://download.torproject.org/). In addition to downloading the app as an APK or from the Google Play Store, you can now use F-Droid to access Tor VPN Beta.
 
-So the more work I did, the further outside their scope the case became. Report a bug with logs, and you're told to clear a cache. Show that the cache had nothing to do with it, and you're told you need to do the troubleshooting first. Do the troubleshooting, find the cause, and write the fix, and you're told that fixes aren't their department. At no point in that loop was there a step where the report went to an engineer, and there was never going to be one. I just kept looking for it.
+## Comments
 
-Then the reply sent me some links. The Android Developers accessibility guide, which is documentation for people making their apps work with screen readers, and is about as relevant to a bug in the input dispatcher as a recipe book. A page of additional accessibility resources. And the Android Accessibility Help Community, where, it said, I could "share your findings, discuss touch exploration behavior, and connect with other accessibility developers." That's a forum. It's other users, answering each other's questions for free, which is exactly what has been happening with this bug for years, and exactly why it's still there.
-
-Nowhere in the email was the issue tracker mentioned. I'd sent them the link in my last message. By the time they wrote this, it had been with an engineer for a day and a half. Whoever reviewed my case either didn't see the link, or saw it and decided that the right thing to tell a blind developer whose bug was already assigned to a Google engineer was to go and post about it on a help forum.
-
-And then it closed with the line that, in the end, says it all: "If you encounter specific broken functionality involving Google's accessibility features or would like to suggest an enhancement to improve accessibility, please feel free to contact us again."
-
-I did. That's what this whole thing was.
-
-## What this tells you
-
-I said in the first post that I didn't blame the agents, and I still don't. The second one was genuinely decent, and I'd guess the final email wasn't really theirs at all: it reads like the internal team's verdict, passed down for someone on the front line to sign. These are people working inside a system, and the system decides what they're allowed to do.
-
-So here's what that system is for, now that I've seen it all the way through.
-
-Google Disability Support is a help desk for using Google's accessibility features. If you can't find a setting, it'll find it for you. If TalkBack is talking too fast, it'll tell you where to slow it down. It may well be good at that, and that's worth something. But it isn't a route for reporting accessibility bugs to Google, and it can't be, because nothing in it leads to anyone who can fix one. When a blind person tells it that something is broken, it can tell them how to turn things off and on again, and once that's run out, it can tell them it's out of scope. Then it sends them to a forum.
-
-What it doesn't do is the one thing a support channel exists for: take a report of something broken and put it in front of the people who can fix it.
-
-## Now imagine it wasn't me
-
-It's tempting to read all this as a story with a happy ending. The bug got to an engineer in the end, and I got there by going round Disability Support entirely. So the lesson is to file on the issue tracker, isn't it? Next time, skip the help desk.
-
-No. Fucking no.
-
-Think about who actually hits this bug. Not a developer with adb and a laptop and a working knowledge of the input pipeline. A blind person, maybe new to Android, maybe older, maybe someone whose phone is the main way they read their post and talk to their family and get a taxi, who one day can't find anything on the screen by touch. They don't know what TouchExplorer is. They've never heard of the input dispatcher. They don't know there's a fake finger stuck on their screen, and they have no way to find out, because every tool that would tell them needs a computer, a cable, developer options and a command line.
-
-So they do what Google tells them to do. They contact Disability Support, and they say: "My phone stopped reading things when I touch the screen. Swiping still works. Restarting fixes it but it keeps happening."
-
-That's a perfectly good bug report. It's the symptom, the workaround and the fact that it recurs. It's exactly what any user anywhere should be expected to give, and it's honestly more than most people manage.
-
-And we now know exactly what happens to it. They get nine questions. They get told to turn TalkBack off and on again, with a warning to have a sighted person nearby. They get told to update Android Accessibility Suite and clear its cache, and they do it, carefully, step by step, because they trust that the people telling them know what they're doing. They reboot, and it works, and they report back that it works, and the case is closed as resolved. A week later it happens again, and they start over. Or they don't, because they've learned that it's pointless, and they just reboot their phone a couple of times a day for the rest of its life, assuming that's what using Android blind is like.
-
-And if they don't take the reboot as an answer, if they push, the best they can hope for is the email I got. Out of scope. Go and read the developer documentation. Ask on the forum.
-
-Should that person be expected to find the Android issue tracker? Make an account, find the right component out of hundreds, and write a report that an engineer will take seriously, with a device fingerprint and a reproduction? With logs they have no way to capture? Of course not. That's not a reasonable thing to ask of a user, and asking it of a disabled user, through the support channel that exists specifically for disabled users, is obscene. Nobody expects a sighted person whose phone screen stops responding to go and file a bug on a developer tracker. They expect Google, or Samsung, or the shop they bought it from, to deal with it. Turning that work over to the people who are least able to do it, and calling it out of scope when they come asking, is the whole problem in one sentence.
-
-That's what makes it worse than my experience. I had the skills to route round the system, and it still took four days, a blog post, a root cause analysis and two patches. Everyone else just has the system. And the system's answer to "touch exploration is broken" is, in the end, that touch exploration being broken isn't its problem.
-
-So no, the answer isn't "file on the tracker". The answer is that Disability Support should be the thing that files on the tracker. It's Google. It has the same access to the same internal bug systems as every other part of the company. When a disabled user reports that a Google accessibility feature is broken, somebody in that team should write it up, with whatever the user could tell them, file it with the team that owns the feature, and tell the user it's been filed. That's the job. That's what "escalation" is supposed to mean. If the team doesn't have the training, the tools, or the authority to do it, that isn't a reason to tell users it's out of scope. It's a reason to fix the team.
-
-Google points disabled people at Disability Support. It's the channel on the help pages, the human, specialist, accessible route, the place to go when something doesn't work for you. And when one of us arrives with something that doesn't work for any of us, it has no idea what to do with it. Not because the people are bad at their jobs, but because the job, as Google has defined it, stops just short of where it would be any use.
-
-## If you've hit this bug
-
-If you're a blind Android user and touch exploration has died on you while swipes and taps kept working, that's this bug, and it's not your fault, and it's not your screen reader. Rebooting clears it for now.
-
-This one, at least, is filed: [TouchExplorer leaves injected pointers down; InputDispatcher then rejects all touch exploration events until reboot](https://issuetracker.google.com/issues/574059457). If you have a Google account and want to, sign in and give it a +1. If you can add something, such as a device that isn't a Samsung, a Pixel especially, an Android version, or what you were doing when it happened, add a comment. You shouldn't have to do that either. But it's the one place this report has actually reached a person who can fix it, and the more people say it hits them, the higher it goes.
-
-And if you've hit any other accessibility bug and you've been told it's out of scope, you weren't wrong to report it, and you weren't asking for the wrong thing. You were asking the right people to do their job.
-
-Quite simply, fuck you, Google. Fix the bug, and then fix the route, so the next blind person who finds one doesn't have to do your engineers' job to be heard.
+We encourage respectful, on-topic comments. Comments that violate our
+	  [Code of Conduct](https://community.torproject.org/policies/code_of_conduct)
+	  will be deleted. Off-topic comments may be deleted at the discretion of
+	  the moderators. Please do not comment as a way to receive support or to
+	  report bugs on a post unrelated to a release. If you are looking for
+	  support, please see our [FAQ](https://support.torproject.org/),
+	  [user support forum](https://forum.torproject.org/) or ways to
+	  [get in touch with us](https://www.torproject.org/contact).

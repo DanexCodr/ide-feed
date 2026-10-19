@@ -1,59 +1,37 @@
-To accelerate and refine decision-making in a fast-paced, global marketplace, enterprises may deploy generative artificial intelligence models to help summarize and interpret the charts that often fill market summaries and financial reports.
+In 2026, the hype for artificial intelligence agents is louder than ever before. These semi-autonomous programs can “think” and execute well-defined tasks in areas like customer service and software development, typically using language models (LMs). But fields like medical diagnosis and scientific discovery require them to inquire about a vast range of solutions in uncertain environments, which LMs struggle with.  
 
-But even the latest vision-language models sometimes struggle with this task, since it requires a model to integrate visual, numerical, and linguistic understanding. A company that invests in a state-of-the-art model might still receive inaccurate or incomplete information.
+Researchers at MIT’s Computer Science and Artificial Intelligence Laboratory (CSAIL) and Harvard University’s School of Engineering and Applied Sciences (SEAS) peered deeper into LMs to understand their main issues in high-stakes settings. Their test: “Battleship,” a classic guessing game that’s helped cognitive scientists study how humans seek information.
 
-To fill this performance gap, researchers from MIT and the MIT-IBM Computing Research Lab developed a multifaceted resource for AI users that is specifically designed to teach vision-language models (VLMs) how to effectively interpret charts.
+CSAIL and SEAS scholars added a twist by reframing the game around asking and answering natural language questions. In their “Collaborative Battleship” game, one participant is a “captain” who inquires about where hidden ships are, while their teammate plays the “spotter” by responding to those questions in real-time.
 
-They used a novel data generation method to build a state-of-the-art dataset that includes more than a million varied charts. The dataset also encodes many visual, linguistic, and numerical components of each chart image, which enable models to robustly reason about the information in a chart.
+The researchers first had over 40 humans play the game together, collecting their questions and yes-no answers to build the “BattleshipQA” dataset. These results were a helpful point of comparison when the team tested state-of-the-art LMs (like GPT-5) and smaller models (like Llama 4 Scout) on their game. Without training the models beforehand, they found that top LMs can “beat” humans at “Battleship” — that is, complete the game in fewer turns — but smaller systems are far less rational.
 
-The researchers used this dataset, called [ChartNet](https://arxiv.org/pdf/2603.27064), to train a series of open-source VLMs.  Many of these smaller models significantly outperformed orders of magnitude larger, commercial models on tasks like data extraction and chart summarization.
+The chief issue was that many models are simply not adept at coming up with useful questions. To get LMs to inquire in ways that reveal more information about hidden ships, the researchers gave each model a Monte Carlo inference strategy, which carefully measures the likelihood of different options being correct with each response. The result: AI models that can beat regular players at “Battleship,” regardless of scale.
 
-By enabling open-source models to outperform their commercial counterparts, ChartNet could allow small firms with limited budgets to more readily utilize AI. The open-source dataset can be used to improve the capabilities of AI models for tasks like business trend analysis and scientific figure interpretation.
+Perhaps the most striking results were Llama 4 Scout’s gains. As a relatively small LM, it only beat humans 8 percent of the time. But with refinements to its inference strategy, the model reached a “Battleship” win rate of 82 percent versus humans. This careful and efficient style of asking questions also enabled the model to outpace a frontier model (GPT-5), while operating at around 1 percent of its cost.
 
-“We developed ChartNet to be a one-stop shop for chart understanding, covering basically anything that an AI model and a practitioner who is training that model might need. We hope our work motivates researchers to achieve state-of-the-art performance with smaller models that don’t require infinite amounts of computation,” says Jovana Kondic, an MIT electrical engineering and computer science (EECS) graduate student and lead author of a [paper on ChartNet](https://arxiv.org/pdf/2603.27064).
+On top of this improvement, the researchers shrank the gap between humans and LMs in answering questions. While GPT-5 was a reliable spotter that helped models finish games faster, smaller systems had a bad habit of giving the wrong answers about where ships were hidden. The models saw an accuracy boost of 15 percent on average when they began converting questions into code that explicitly tells them how to verify their answers (for example, having the model run a quick search of an area when asked if a ship was there).
 
-She is joined on the paper by many co-authors from MIT, the MIT-IBM Computing Research Lab, and IBM Research, including Pengyuan Li, a research staff member at IBM Research; Dhiraj Joshi, a senior scientist at IBM Research; Isaac Sanchez, a software engineer at IBM Research; Aude Oliva, director of strategic industry engagement at the MIT Schwarzman College of Computing, MIT director of the MIT-IBM Computing Research Lab, and a senior research scientist in the Computer Science and Artificial Intelligence Laboratory (CSAIL); and Rogerio Feris, a principal scientist and manager at the MIT-IBM Computing Research Lab. The research will be presented at IEEE Computer Vision and Pattern Recognition Conference.
+“Today’s language models are primarily optimized to answer complex queries, but it’s less clear whether they learn to ask good questions for themselves,” says MIT PhD student and CSAIL researcher Gabriel Grand SM ’23, who is a lead author on a [paper](https://openreview.net/forum?id=EQhUvWH78U) about the work. “Our work shows that asking informative questions depends on the ability to predict and simulate the world. We find that when we give agents access to a ‘world model,’ they ask better questions and make discoveries more efficiently.”  
 
-**A dataset bottleneck**
+**A sea change for LMs**
 
-Researchers have made great strides developing generative AI models that excel at natural language processing and reasoning about natural images. But less work has focused on interpreting complex multimodal data contained within charts, Kondic says.
+The team’s first focus was getting LMs to ask better questions. By implementing Monte Carlo inference strategies, the LMs reason about potential guesses as individual particles. The ones that appear more valid with each answer from the spotter would be weighted more heavily, sort of like game balls that inflate or deflate each turn. With this more calculated, adaptive approach, the captain could make inquiries that extracted considerably more info from the spotter.
 
-Yet for large and small businesses in nearly every industry, chart understanding is a critical task.
+The scientists then turned to the widely used programming language Python to help out AI spotters. Each question the captain asked was automatically converted into an encoded command. For example, a question like, “Is there a ship in column one that spans two rows?” turns into instructions for the spotter LM to search the area in question and assess how wide the digital game piece is. By giving the model clear directions in a language it understands particularly well, each system gave correct answers considerably more often. The lightweight system GPT-4o-mini saw a nearly 30 percent performance bump, for instance, and even the large model Claude 4 Opus jumped about eight points.
 
-“The finance industry thrives on charts. If vision-language models can extract information out of charts, like descriptions of trends, that facilitates a lot of workflows that happen downstream,” Joshi says.
+“The field has seen a lot of success from ‘auto-formalization’ strategies, in which LMs generate code to verify their solutions,” says senior author Jacob Andreas, an MIT electrical engineering and computer science associate professor and CSAIL principal investigator. “What I find most exciting about this work is that it opens up the possibility of using these techniques to generate better solutions in the first place, by improving LMs’ exploration and information gathering capabilities. We are excited to scale this work up from scientific domains to applications like coding and mathematical problem-solving.”
 
-The lack of high-quality training data is a major bottleneck holding back the development of VLMs that can accurately interpret charts. Many datasets contain limited chart images pulled from the internet and often lack the necessary scale and additional information to help a model interpret the underlying data.
+**Let’s play something else**
 
-“A vision-language model, unlike our brains, may need to see thousands of examples during training to reliably recognize something as a line chart,” Kondic says.
+But how would this approach fare in other board games? The team tested their newly equipped LMs at “Guess Who?”, where large and small models skillfully whittled down 100 options to correctly guess which hidden character had been chosen. Llama 4 Scout was successful 30 percent of the time, but after Grand and his colleagues’ tweaks, it completed the task on over 72 percent of its runs. Meanwhile, GPT-4o leapt from 62 percent to 90 percent. GPT-5 was the spotter in each game to ensure questions were answered as accurately as possible.
 
-The researchers sought to overcome those shortcomings by generating synthetic data. Synthetic data are artificially generated by algorithms to mimic the statistical properties of actual data.
+While LMs have made promising progress in both games, there’s room for improvement. For instance, the models still struggle to answer complex questions, compared to humans. OpenAI researcher, recent Harvard graduate, and coauthor Valerio Pepe adds that “GPT-5 can beat your average ‘Battleship’ player, and gets a hair better with our methods. However, expert players are still hard to beat for all models, unlike in chess, where even top players don’t succeed against AI systems.”
 
-The ChartNet dataset holds more a million high-quality chart images, along with the corresponding code used to generate each chart, a textual description, and a table that contains its numerical information. In addition, each datapoint includes question-and-answer pairs to teach the model how to correctly answer questions about the chart image.
+The researchers’ findings show that AI agents have untapped potential in “needle-in-a-haystack” discovery — navigating a massive space of options to find a rare solution to scientific challenges. While improved information-seeking skills would make them excellent research assistants with, say, identifying a compound’s molecular structure, the researchers caution that “Collaborative Battleship” is a somewhat simple test bed. They’d like to test LMs in more complex settings, where the systems have to consider far more options.
 
-“These additional modes of data guide the model to connect and align the different pieces of information that the chart image encodes,” Kondic says.
+Grand also plans to have humans and AI models collaborate to study whether they work better together. The models might also benefit from a bit of fine-tuning on game simulations, and with more computing power, LMs would have more advanced inference capabilities to predict how a game will evolve.   
 
-**Data generation**
+“As AI systems become more agentic, the hardest problems turn out to be social ones: tracking common ground, resolving misunderstandings, and adapting to different partners over time,” says Robert Hawkins, assistant professor of linguistics at Stanford University, who wasn’t involved in the paper. “This work elegantly captures these phenomena in a controlled collaborative setting, and makes a compelling case that the real bottleneck for AI agents isn’t just the calculation of optimal questions, but the pragmatic reasoning needed to make the most of their answers.”
 
-To build ChartNet, the researchers created a two-step, synthetic data generation pipeline.
-
-First, their automated system translates any pre-existing set of chart images into code. Then the system iteratively augments that code to change different aspects of each chart, such as chart type, data values, topic, colors, etc.
-
-“We can start from a single chart that we use as a seed and come up with hundreds of augmentations of it. This is how we were able to build a dataset with more than a million diverse images,” Kondic explains.
-
-They also incorporated an automated quality check process to ensure the synthetic data are high quality. This process verifies that the code is executable and rendered chart images are accurate and clean.
-
-“We don’t want to just be generating diverse samples. We also want the information to be presented in a meaningful way,” she says.
-
-ChartNet also includes a selection of chart datapoints annotated by human experts. This provides access to additional types of charts and supporting data that carry validity guarantees.
-
-A practitioner could use the annotated data to fine-tune an existing VLM, further boosting performance for a specific application, Joshi adds**.**
-
-The researchers tested ChartNet by training IBM’s Granite Vision series of models as well as several other open-source models of various sizes and evaluating them on various chart interpretation tasks. The dataset improved the accuracy of all models in chart reconstruction, chart data extraction, chart summarization, and chart question answering.
-
-With ChartNet, small open-source models consistently outperformed much larger  commercial models.
-
-“A lot of prior training datasets only focused on answering simple questions about a chart. We tried to go beyond that with ChartNet by generating data that support all aspects of robust chart understanding,” Kondic says.
-
-In the future, the researchers plan to continue expanding ChartNet by incorporating data with added levels of complexity. They also want to draw on feedback from the research community.
-
-This research was funded, in part, by the MIT-IBM Computing Research Lab.
+Grand and Pepe wrote the paper with two CSAIL principal investigators: MIT Associate Professor Jacob Andreas and MIT Professor Joshua Tenenbaum. Their work was supported, in part, by the MIT Siegel Family Quest for Intelligence, the MIT-IBM Watson AI Lab, the FinTechAI@CSAIL initiative, a Sloan Research Fellowship, Intel, the Air Force Office of Scientific Research, the Defense Advanced Research Projects Agency, the Office of Naval Research, and the National Science Foundation. They showcased their paper as an oral presentation at the International Conference on Learning Representations (ICLR) in April.

@@ -1,71 +1,20 @@
-pg-java is a modern pre-release PostgreSQL database driver specifically designed for Java 21+ and the JVM. Developed primarily by AI with strict human architectural oversight, the project prioritizes PostgreSQL wire protocol efficiency and virtual thread friendly blocking I/O over legacy JDBC constraints. As such, the development of the driver was guided by several core design goals aimed at addressing the structural limitations of older drivers:
-
-  * **PostgreSQL first native API** : The driver is designed directly around PostgreSQL’s native wire protocol and feature set rather than lowest common denominator database constraints. Its native API directly exposes PostgreSQL idioms (such as $1 positional parameters and 1-based column indexing) without relying on java.sql abstractions.
-  * **JDBC as a layer, not a foundation** : Full JDBC compliance is supported via a java.sql.* layer that sits on top of the native API rather than serving as its core foundation. This ensures that historical JDBC limitations and assumptions do not dictate or corrupt the execution core. A full java.sql.* implementation module (postgresql-client-jdbc) provides standard Connection, PreparedStatement, ResultSet, DataSource and XADataSource support built directly on top of the native engine.
-  * **Modern java & virtual thread friendliness**: Built for Java 21+, the driver employs straightforward, blocking style code designed specifically not to pin carrier threads (e.g., using ReentrantLock instead of synchronized monitors around I/O). This allows applications to scale to thousands of concurrent connections using virtual threads without requiring asynchronous frameworks or event loops.
-  * **Pull-first streaming by default** : The fundamental query primitive is a pull cursor (PgResultStream) that reads row by row off the wire and never buffers the entire result set in memory. Memory overhead is bounded by individual row size rather than result set size, and collection helpers (forEach, map, collect) are adapters layered over this streaming cursor.
-  * **Full Postgresql feature set with external lifecycle primitives** : Over time, the driver aims to support the full range of PostgreSQL capabilities (including extended protocol features, COPY, LISTEN/NOTIFY, SCRAM authentication with channel binding and pipelining). Rather than embedding its own connection pool, it provides the essential connection lifecycle primitives needed by external poolers and the JDBC DataSource.
-
-Reading behind the lines, what does the driver offer to developers? The pg-java driver provides a modern, PostgreSQL specific feature set for JVM developers across multiple core areas. What is really powerful is the high performance batching & execution modes. The driver automatically rewrites bulk INSERT statements into an INSERT INTO ... SELECT * FROM unnest(?::type1[], ?::type2[]) form. This keeps the SQL text constant regardless of batch size, uses only one array parameter per column (bypassing PostgreSQL's 65,535 scalar parameter cap without chunking), reuses prepared statement plans and executes in a single round trip. Batch mode continued, there's also Multi Row VALUES batch rewrites. That is, it supports multi row VALUES (?,?), (?,?) batch rewrites chunked at power of two sizes under a single Sync section (rewriteBatchUsingMultipleValues) to reproduce pgjdbc's exact reWriteBatchedInserts behavior and plan cache profile. Other welcome features are
-
-  * Native pipelining API: Lets developers queue multiple arbitrary SQL queries across a single network write window and execute them under explicit sync() error boundaries, cutting network round trip overhead.
-  * GraalVM Native image support: Ships with pre-configured GraalVM native image metadata (reflect-config.json, proxy-config.json, resource-config.json) for ahead of time compilation into native binaries.
-  * Java record & Enum support: Supports mapping PostgreSQL composite row types directly into Java 21 records and custom database enums into Java enum constants.
-  * JSON / JSONB binding: Includes a pgjson wrapper type to carry and bind JSON parameters with proper OID typing, avoiding lossy string parameter typing or mandatory SQL typecasts.
-
-Great! How do you install it? Because pg-java is currently in pre-release and not yet published to Maven Central, you install it by cloning the repository and building it locally using Apache Maven. By way of requirments you need:
-
-  * Java: JDK 21 or newer.
-  * Build Tool: Apache Maven (a Maven Wrapper ./mvnw is included in the project, so installing Maven separately is optional).
-  * Docker (optional): Only required if you want to run the full integration test suite against real PostgreSQL and PgBouncer containers.
-
-Run the following commands in your terminal to build the driver and install the artifacts into your local Maven repository (~/.m2/repository):
-
-    git clone <https://github.com/pgjdbc/pg-java.git>  
-    cd pg-java  
-    ./mvnw clean install
-
-If you have Docker running and want to run integration tests against real database instances:
-
-    ./mvnw verify -Pintegration-tests
-
-Once built locally, you can declare dependencies in your application's pom.xml using the org.postgresql groupId For the PostgreSQL-Native API:
-
-    <dependency>  
-    <groupId>org.postgresql</groupId>  
-    <artifactId>postgresql-client</artifactId>  
-    <version>0.1.0-SNAPSHOT</version>  
-    </dependency>
-
-For standard JDBC support (jdbc:pg://):
-
-    <dependency>  
-    <groupId>org.postgresql</groupId>  
-    <artifactId>postgresql-client-jdbc</artifactId>  
-    <version>0.1.0-SNAPSHOT</version>  
-    </dependency>
-
-For legacy pgjdbc migration / drop-in compatibility:
-
-    <dependency>  
-    <groupId>org.postgresql</groupId>  
-    <artifactId>postgresql-client-pgjdbc-compat</artifactId>  
-    <version>0.1.0-SNAPSHOT</version>  
-    </dependency>
-
-To verify the installation in your Java application, connect using the canonical jdbc:pg:// URL scheme:
-
-    String url = "jdbc:pg://localhost:5432/appdb?user=app&sslmode=verify-full";  
-    try (Connection connection = DriverManager.getConnection(url, "app", password)) {  
-    System.out.println("Connected successfully!");  
-    }
-
-Ultimately, pg-java is a welcome newcomer providing a modern, PostgreSQL native JVM client optimized for Java 21+ virtual threads, delivering lower memory overhead through pull-first streaming, faster bulk operations via array-parameter rewrites, and native protocol pipelining without the performance limitations of legacy JDBC.
+EuroPython 2026 was the 25th anniversary edition of Europe's longest running community Python conference. We provide an overview of this year's event. Organized by volunteer teams and the EuroPython Society, the week long event took place in Kraków, Poland. It brought together over 1,300 Python developers, maintainers, researchers, core language maintainers, domain specific software engineers and enthusiasts from around the world to share knowledge, collaborate and support the open source Python ecosystem. This year the conference covered a comprehensive range of topics across language core development, artificial intelligence, open source security, platform engineering and modern web frameworks. As such the main themes were: **1\. Core Python evolution and interpreter performance**  
+CPython JIT compiler: Deep dives into CPython's JIT compiler in Python 3.15, highlighting new trace recording, micro operation optimizations, top of stack register caching and stack unwinding metadata that allows native debuggers like GDB to inspect JIT execution frames. PEP 836 was also introduced to establish a formal support roadmap for the JIT. Free Threaded Python (no-GIL): Techniques for removing the Global Interpreter Lock using split local/shared reference counting, atomic operations and stop the world garbage collection. Python 3.14 and 3.15 features: Key additions include explicit lazy imports, built in sentinel() values and frozen_dict, the high performance Tachyon sampling profiler, sys.remote_exec() in Python 3.14 for attaching debuggers to live processes without restarts  
+and colorized error messages with keyword suggestions. Subinterpreters and deep immutability: Patterns for enforcing deep immutability to allow safe, lock free object sharing across subinterpreters. **2\. Artificial Intelligence, agents and codebase health**  
+Agentic workflows and model infrastructure: Deployment of self hosted small language models (SLMs), adoption of the Model Context Protocol Python SDK and native agent frameworks such as Vercel's. AI quality and security: Methods for detecting and preventing indirect prompt injection attacks in Python agent pipelines, alongside discussions on maintainer fatigue caused by automated pull requests and low quality "AI slop". **3\. Security, governance and supply chain defense**  
+PyPI and supply chain hardening: Security updates including WebAuthn/passkey enforcement, automated malware scanning and PEP 770 for standardizing Software Bill of Materials metadata inside Python wheel distributions. The CVE "vulnerability apocalypse": Strategies used by the Python Security Response Team (PSRT) to handle massive spikes in automated, AI generated vulnerability reports. Policy and software freedom: Open source compliance with regulations like the EU Cyber Resilience Act and the Free Software Foundation Europe's long term vision for device neutrality and public funding for free software. **4\. High performance computing, GPU and alternative platforms**  
+GPU programming and compilers: Authoring native GPU kernels in pure Python using Triton IR and PyTorch/CUDA, as well as the SPy statically typed variant of Python for compiled C level execution speed. Rust Integrations: Accelerating Python for High Performance Computing using Rust extensions with PyO3, Maturin and Polars. Hardware and edge Execution: Ecosystem enablement for Windows on Arm, embedded hardware development using MicroPython and running Python in browsers and edge networks via WebAssembly and Pyodide. **5\. Web frameworks, testing and architecture**  
+Modern web architectures: Performant API development with Litestar plugins and background task queue architectures. Testing practices: Advanced test isolation, fixture design and property based testing using Hypothesis. Great! But would want to be there but missed it? No worries as you can now watch on demand since the sessions are now available online. Because there's a lot of material to go through, we did a bit of digging to suggest the best to watch first. As such, the following three talks provided particularly unique, contrarian, or highly innovative perspectives compared to the rest of the conference program. VIDEO **1\. Keynote with Guido van Rossum**  
+This session brought Python's creator, Guido van Rossum, onto the main stage for a live conversation covering historical milestones such as marking 52 years since Guido won a bronze medal in the math olympiad, alongside reflections on language evolution. Guido shared that at age 40 he did not believe in static type checking, but later embraced type hinting ideas that ultimately transformed Python for the better. **2\. Inside Python 3.15's JIT optimizer**  
+The CPython JIT compiler represents one of the largest performance efforts in the interpreter, fitting directly into Core Python as the conference's most popular track.  
+Core developer Ken Jin explained how CPython 3.15's JIT delivers a 7–12% mean speedup across benchmarks (with speedups reaching up to 100% on specific workloads). He detailed micro optimizations like eliminating redundant C-level reference counting checks and discussed how the team expanded contributor involvement by decomposing complex compiler tasks into accessible sub projects. **3\. Free-threaded Python: past, present and future**  
+Removing the Global Interpreter Lock (GIL) is one of the most fundamental concurrency shifts in CPython's history. Steering Council member Thomas Wouters traced the historical progression from early GIL removal prototypes to Sam Gross's PEP backed multi threading architecture. He covered key safety mechanisms, such as atomic reference counting and thread sanitizers and highlighted rapid ecosystem adoption; 61 of the top 360 PyPI packages already offer free threaded wheels. While these were the most interesting talks, there were many other great sessions. So, take your time and delve into the conference by going through its massive YouTube playlist featuring 117 talks! In the end, EuroPython 2026 was a resounding success, bringing together more than 1K attendees for the conference's 25th anniversary, to showcase cutting edge technical developments, foster open source collaboration and celebrate the vibrant global Python community.
 
 #### More Information
 
-[Introducing pg-java](<https://launchbylunch.com/posts/2026/Jul/29/introducing-pg-java/>) [pg-java on Github](<https://github.com/pgjdbc/pg-java>)
+[EuroPython 2026](<https://ep2026.europython.eu/>) [Youtube Playlist](<https://www.youtube.com/watch?v=9ZuZfG8_jH8andlist=PLd3Y9yzyC5Uo>)
 
 #### Related Articles
 
-[Polygres: Advanced Search On PostgreSQL](<https://www.i-programmer.info/news/84-database/19138-polygres-advanced-search-on-postgresql.html>) __ To be informed about new articles on I Programmer, sign up for our [weekly newsletter](<https://www.i-programmer.info/edit-profile.html?layout=form>),[ ](<https://s3.amazonaws.com/com.alexa.toolbar/atbp/hfdfGO/download/index.htm>)subscribe to the [RSS feed](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=3&format=raw>) and follow us on [Facebook](<http://www.facebook.com/pages/iProgrammer/127140977307932#%21/pages/iProgrammer/127140977307932?v=wall>) or [Linkedin](<http://www.linkedin.com/company/i-programmer>). [](<https://amzn.to/4iJFqTH>)
+[What Happened At PyCon US 2026](<https://www.i-programmer.info/news/216-python/19155-what-happened-at-pycon-us-2026.html>)  
+ __ To be informed about new articles on I Programmer, sign up for our [weekly newsletter](<https://www.i-programmer.info/edit-profile.html?layout=form>),[ ](<https://s3.amazonaws.com/com.alexa.toolbar/atbp/hfdfGO/download/index.htm>)subscribe to the [RSS feed](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=3&format=raw>) and follow us on [Facebook](<http://www.facebook.com/pages/iProgrammer/127140977307932#%21/pages/iProgrammer/127140977307932?v=wall>) or [Linkedin](<http://www.linkedin.com/company/i-programmer>). [](<https://amzn.to/4iJFqTH>)
