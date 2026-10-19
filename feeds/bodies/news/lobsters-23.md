@@ -1,71 +1,72 @@
-We now know how the seeds of the NIST elliptic curves were generated: they’re not the hash of some saucy sentence, but the output of [drand48](https://man.archlinux.org/man/drand48.3.en) seeded with the time, which was indeed in 1997–98.
+Welcome back to the blog of Rainer Grimm! This is the first of hopefully many new C++-related articles in Rainer’s blog. Since you are reading this, you have potentially read many of his articles and have gotten an idea of his passion and his devotion to the C++ community. In this blog, for more than a decade, Rainer has provided the C++ community with countless articles about the latest and greatest of C++.
 
-John Wood, Henry de Valence, Ava Howell, Zack Voase, Lucy Sweet, Amir Omidi, Paul Crowley, Iain McGinniss, Nicholas Carlini, and Steve Weis from Anthropic [solved the riddle](https://www.anthropic.com/research/ecdsa-curve-origins) and on October 15th, 2026, at 01:07:51 UTC, claimed [the full bounty I announced three years ago](https://words.filippo.io/seeds-bounty/). They chose to donate the prize to [ISRG](https://isrg.org/), the non-profit that operates Let’s Encrypt, tripling its value to $36,864 (36 Ki$). Thank you to Amir Omidi, Chris Palmer, Colm MacCárthaigh, David Adrian, David Anderson, Jeff Hodges, Matt Green, Matthew McPherrin, Paul Kehrer, Ryan Sleevi, and Soatok for contributing to the bounty.
+With deep sadness you may have already heard the news: Rainer passed away on October 6th 2025, as a victim of his ALS disease. He leaves a big hole in our hearts, but also in the C++ community. He will be sorely missed by many friends, colleagues, and students.
 
-This helps fill out a page of cryptographic history, and reinforces our confidence in these critical cryptographic primitives.
+It would be a shame to let his amazing contribution to the C++ community go to waste. In order to honor his devotion to the community, a few C++ experts, in particular Mateusz Pusz, Jens Weller, Slobodan Dmitrović, Ivan Čukić, and me, have come together to continue his journey: bringing the latest and greatest news to you, the readers of Rainer’s blog. I’m making a start here, trying to uphold the spirit of his blog.
 
-The NIST elliptic curves (P-192, P-224, P-256, P-384, and P-521) were published by NIST in FIPS 186-2 in 2000. They were generated at random according to ANSI X9.62 by taking an arbitrary seed, hashing it with SHA-1, and using the output to derive some of the parameters. Until this week, we had no idea how those arbitrary seeds were picked.
+Of course there will be little changes: the five of us have our own style, our own interests, our own message. Thus the upcoming sequence of articles will inevitably be a little different from Rainer’s original articles. It will be a mixture of different areas of expertise, of different highlights and of different topics. But one thing will remain: we’ll make sure Rainer’s devotion to quality and insight will be upheld. We’ll make sure to continue on his path to bring valuable information to the C++ community.
 
-The lore was that Dr. Jerry Solinas, who passed away in early 2023, generated them in 1997 by hashing some English sentences that he later forgot. You can read more in [this article by Steve Weis](https://saweis.net/posts/nist-curve-seed-origins.html) or in [the original bounty announcement](https://words.filippo.io/seeds-bounty/).
+## The Problem
 
-Turns out memory can play tricks on everyone: we now know they were instead generated with the POSIX-standard [drand48](https://man.archlinux.org/man/drand48.3.en) random number generator.
+So let’s start to talk about C++: we have a problem. C++ isn’t memory safe! …
 
-The algorithm is as simple as passing the then-current UNIX timestamp to `srand48()` and then producing one byte at a time with drand48. Each sequence of 20 bytes is tried as a seed following ANSI X9.62 and rejected if the resulting curve is not valid. Some timestamps are used to generate multiple curves, by continuing to try seeds after accepting the first one. I [reimplemented the algorithm in Go](https://github.com/FiloSottile/mostly-harmless/blob/main/seeds/seeds.go) to verify the claim. Read more in [Anthropic’s writeup](https://www.anthropic.com/research/ecdsa-curve-origins).
+I suspect that this isn’t particularly new to you. In fact, the NSA published an article back in 2022, in which it explicitly recommended not to use C or C++ for safety and security related software anymore [[1](https://www.nsa.gov/Press-Room/News-Highlights/Article/Article/3215760/)]. The wording has softened since the first publication, but the spirit remains the same: prefer memory safe languages.
 
-There are two additional undocumented criteria beyond the ANSI X9.62 ones, one fairly clear and one that still escapes us.
+But it is not just the US authorities. The recommendation in the “Cyber Resilience Act” of the European Union is similar: avoid memory unsafe languages. Although they did not explicitly mention C and C++ as the culprits, the message was clear enough.
 
-If the bit length of the order *n* of the resulting curve is more than the bit length of the base field *p* of the curve, the seed is rejected. (The condition is not the stricter *n* < *p*, because prime239v2 has *p* < *n* < 2²³⁹.)
+This sounds dire, but of course there is a fundamental and very good reasoning behind these articles. According to [[2](https://digital-strategy.ec.europa.eu/en/library/cyber-resilience-act)], *“Hardware and software products are increasingly subject to successful cyberattacks, leading to an estimated global annual cost of cybercrime of 5.5 trillion Euros by 2021.”*
 
-This leaves us with roughly twice as many valid seeds as were published. We explored a number of explanations for this last bit, and found no good fit. Maybe the same RNG was used to validate seeds, consuming RNG output and skipping some potential candidates, although the “gaps” are not regular. Maybe there was just a bug in one of the algorithms that returned the wrong result half the time; these calculations, which we can now do with off-the-shelf software in minutes, were still very much state-of-the-art in 1997.
+5.5 trillion Euros!!! Yes, several trillion Euros have been lost due to malicious attacks, many of them from foreign countries interested in the downfall of our economy and society. And this number alone should be a perfect explanation for the desire to harden our software against cyber attacks.
 
-```
-srand48(863711343) [1997-05-15 15:49:03 +0000 UTC]:
-  accepted   36th seed 25e5[...]: not published
-  accepted 1562nd seed d09b[...]: not published
-  accepted 2185th seed e43b[...]: prime239v1
-  accepted 2320th seed e8b4[...]: prime239v2
-  accepted 2491st seed 1256[...]: not published
-  accepted 2682nd seed d2c1[...]: not published
-  accepted 2863rd seed 3a70[...]: not published
-  accepted 3048th seed 7d73[...]: prime239v3
-srand48(863966734) [1997-05-18 14:45:34 +0000 UTC]:
-  accepted  139th seed 3045[...]: P-192 a.k.a. prime192v1
-  accepted 2198th seed 692d[...]: not published
-  accepted 5228th seed c469[...]: prime192v3
-  accepted 5405th seed 3ad1[...]: not published
-  accepted 6013th seed 31a9[...]: prime192v2
-srand48(871002724) [1997-08-08 01:12:04 +0000 UTC]:
-  accepted 1136th seed d09e[...]: P-521
-srand48(871696354) [1997-08-16 01:52:34 +0000 UTC]:
-  accepted  876th seed 50c7[...]: not published
-  accepted 1842nd seed c49d[...]: P-256 a.k.a. prime256v1
-srand48(872952608) [1997-08-30 14:50:08 +0000 UTC]:
-  accepted 2688th seed a335[...]: P-384
-srand48(891607927) [1998-04-03 12:52:07 +0000 UTC]:
-  accepted  777th seed d007[...]: not published
-  accepted 1485th seed 18cf[...]: not published
-  accepted 5736th seed 3c17[...]: not published
-  accepted 7026th seed bd71[...]: P-224
-```
+But how does this relate to C++? Well, unfortunately some statistics have been pulled out of proportion and bent to emphasize what a significant and devastating impact the lack of memory safety of C++ has on cyber security. Officials therefore advise the use of languages that are considered memory safe.
 
-What does this mean for the security of elliptic curve cryptography based on the NIST curves? Well, even before this discovery there were no serious concerns among practitioners. In Section 3.1 of [their 2015 paper “A riddle wrapped in an enigma,”](https://eprint.iacr.org/2015/1018) Koblitz and Menezes make a convincing argument that it’s implausible that the NSA could have selected a seed to exploit a weakness that escaped more than 15 (now 25) years of cryptanalysis.
+Now we could start talking about these statistics and we could go into detail why C++ and memory safety in general are not the most important factors for cyber security and why C++ itself is by far not as unreliable and endangering as it sounds [[3](https://herbsutter.com/2025/12/30/software-taketh-away-faster-than-hardware-giveth-why-c-programmers-keep-growing-fast-despite-competition-safety-and-ai/)]. We could also, as so many people on social media do, start to argue that the arguments against C++ are exaggerated, misinformed or just plain wrong. However, let’s be serious: of course there is truth behind the statements. Truth that cannot really be denied, unfortunately. Therefore, from my perspective, it makes more sense to explore where and why these arguments emerge and what we can do about it.
 
-However, as reported in a later version of that paper, Daniel Bernstein and Tanja Lange described to Koblitz and Menezes in 2017 a technique that could have exploited 70 bits of freedom in selection of the seed to target a hypothetical class of 2⁶¹ weak prime-order curves. (Bernstein is the author of a competing elliptic curve design, Curve25519.) This contributed to enduring conspiracy theories, which had significant appeal among the non-specialist public (although many have since moved on to other, adjacent, conspiracy theories). All this speculation harmed confidence in robust cryptographic systems and was part of my motivation for the bounty.
+## An Example
 
-This week’s findings completely rule out the technique described by Bernstein and Lange. Even if the NSA had been free to pick any timestamp in 1997–98 and any of the first 16 prime-order candidates (which generously accounts for the unexplained rejections), they would have had barely 30 bits of freedom. Not enough to intentionally target a hypothetical small class of weak curves, not enough to embed any kind of [NOBUS](https://en.wikipedia.org/wiki/NOBUS) backdoor.
+Based on my many years as a C++ trainer and consultant, I believe I have a pretty good idea about the real problem in our community. In order to make a point, let’s take a look at an example I saw on LinkedIn some time ago [[4](https://www.linkedin.com/feed/update/urn:li:activity:7409153900911468544/)]. A developer posted code for a “Palindrome Check in C++”. Here is the original code:
 
-Along with [deterministic](https://www.rfc-editor.org/rfc/rfc6979) and [hedged](https://www.ietf.org/archive/id/draft-irtf-cfrg-det-sigs-with-noise-05.html) ECDSA signing algorithms, [formally verified field implementations](https://github.com/mit-plv/fiat-crypto), and [the 2015 complete addition formulas by Renes, Costello, and Batina](https://eprint.iacr.org/2015/1060), this nicely completes the “rehabilitation arc” of NIST elliptic curve cryptography, which I would now personally recommend over Curve25519/Ed25519/X25519.
+Before reading on, please take a look at this code and tell me if you see any problems — in particular any safety or security related issues.
 
-Just in time for them to be retired in favor of post-quantum signatures.
+OK, I assume you’ve taken a good look and have found a couple of issues — yes, more than one. But in order to stay positive and in order to make an attempt, let’s start with the positive aspect of this code: yes, all semicolons in this code are correctly placed. Well done!
 
-P.S. The Anthropic team also figured out how the seeds of the NIST B-curves (the ones over binary fields) were generated, but no one uses those, so who cares.
+But unfortunately that’s it. The list of deficiencies is unfortunately much longer:
 
-## The picture
+- a using directive for namespace std shouldn’t even be used in example code anymore. Inexperienced developers might get the impression it’s a good idea and apply this in their own code. So just to be explicit: this is a terrible idea. Core Guideline SF.7 will help you to understand the details [5].
+- the main() function is used to demonstrate the code instead of immediately providing a properly named function for the task. We could argue that it is just an example, but we could also argue that this is just lazy. Or is it just code written by AI? Perhaps, but more on that later.
+- the “input” string and the subsequent size variable are not const qualified. Which is a pity, because they are never changed, but only read. This clearly violates Core Guideline Con.1 [6].
+- the variables firstPointer and lastPointer are defined within the same statement. While this works and compiles of course, it is considered bad practice today. Please, don’t do this anymore! See also Core Guideline ES.10 [7].
+- although the variables are called Pointer, they are actually of type int. Thus the name is misleading at best — or just plain wrong.
+- lastPointer is set to size-1, which only “works” because the chosen type is int, not size_t. Yes, I agree, in this case everything is fine, but a generalized function would have to deal with the special case, which is just ignored here.
+- the characters of the string are accessed via the subscript operator. This operation takes a size_t, not an int, and does not perform any bounds checking, which could quickly lead to undefined behavior.
+- firstPointer and lastPointer are postfix incremented, although the old value is neither needed nor used in the code. This potential waste of resources is warned against in Core Guideline P.9 [8].
 
-In a FamilyMart in Taiwan I found this delightful dice set. A full roll carries log₂(6²⁰) ≈ 51.7 bits of entropy. Rolling them twice can make a pretty robust cryptographic key!
+## A Generalized Function
 
-I thought it would be funny to label them as Geomys FIPS 140-3 Entropy Sources (which of course they are not, though we do have one of those) and hand them out as swag. However, I found no way to order them online, so I simply visited over a dozen FamilyMarts and brought home 50 packs.
+This (hopefully) feels like a crushing review. But you might want to argue: *“OK, Klaus, that may be a little picky. I get it, a lot of core guidelines were violated, but it’s just a simple example. After all, it works, right?”*
 
-![A set of 20 small dice in the evening light. They are white with red and black etchings. A small clear plastic box is next to them.](https://assets.buttondown.email/images/fc811646-65b3-4c41-9a2c-ff68584f75b5.jpeg?w=960&fit=max)
+Well, I honestly don’t think that it is a good idea to post “simple” code examples that violate so many of the community’s best practices. Actually, in my opinion it is a terrible idea. However, we could be well-meaning at this point and imagine a second attempt to solve the problem, this time with a generalized function named `is_palindrome()`:
 
-Speaking of swag, I am 100% making stickers with the `srand48()` seeds, and t-shirts for the Anthropic team and the contributors to the bounty. I accept suggestions for other seed-based swag. If you want to catch some, follow me on Bluesky at [@filippo.abyssdomain.expert](https://bsky.app/profile/filippo.abyssdomain.expert) or on Mastodon at [@filippo@abyssdomain.expert](https://abyssdomain.expert/@filippo).
+OK, OK, I admit it, I’m providing this example to make a point. For this reason I also don’t adhere to all the best practices. But we, again well-meaning, could argue that this is a much better attempt to solve the problem. So please, take a close look at the `is_palindrome()` function and tell me if you are certain that there are no safety or security related issues.
+
+I hope you’ve really taken a good look. You might come up with the following summary: *“OK, Klaus, assuming you want to keep this simple and therefore really only want to apply this to a `std::string`, and considering this is only the next iteration, this appears to work well.”*
+
+But wait: the question wasn’t “does it work well”, but “are you certain”! So are you certain, i.e. 100% certain, that this code does not contain any safety or security related issues?
+
+At this point you might pause and reconsider. Honestly, if I were you, I wouldn’t be certain either. Although the code is just a few lines long, it is already difficult to think it through in every detail. Are all special cases covered? Could this result in an infinite loop? Could this accidentally access any invalid memory location? Are there other sources of undefined behavior? I can’t be certain by just looking at it. I’d need more time, potentially much more time to really think it through.
+
+For this reason — the reason of not being certain — I would rate this as poor code. Yes, seriously, poor code.
+
+*“But Klaus, isn’t this a little too harsh? This code isn’t so bad after all!”*
+
+No, I’m dead serious. I would even argue that this is not the kind of C++ code we write and should write today, i.e. “modern C++” code. This is “classic C++” to me. And I’m very confident in saying this, because the modern solution is so much shorter and so much simpler.
+
+## What’s next?
+
+In the second part we’ll take a look at the modern C++ solution and discuss why it is superior to the classic solution. So stay tuned :-)
+
+## References
+
+**Thanks a lot to my [Patreon Supporters](https://www.patreon.com/rainer_grimm): Matt Braun, Roman Postanciuc, Tobias Zindl, G Prvulovic, Reinhold Dröge, Abernitzke, Frank Grimm, Sakib, Broeserl, António Pina, Sergey Agafyin, Андрей Бурмистров, Jake, GS, Lawton Shoemake, Jozo Leko, John Breland, Venkat Nandam, Jose Francisco, Douglas Tinkham, Kuchlong Kuchlong, Robert Blanch, Truels Wissneth, Mario Luoni, Friedrich Huber, lennonli, Pramod Tikare Muralidhara, Peter Ware, Daniel Hufschläger, Alessandro Pezzato, Bob Perry, Satish Vangipuram, Andi Ireland, Richard Ohnemus, Michael Dunsky, Leo Goodstadt, John Wiederhirn, Yacob Cohen-Arazi, Florian Tischler, Robin Furness, Michael Young, Holger Detering, Bernd Mühlhaus, Stephen Kelley, Kyle Dean, Tusar Palauri, Juan Dent, George Liao, Daniel Ceperley, Jon T Hess, Stephen Totten, Wolfgang Fütterer, Matthias Grün, Ben Atakora, Ann Shatoff, Rob North, Bhavith C Achar, Marco Parri Empoli, Philipp Lenk, Charles-Jianye Chen, Keith Jeffery, Matt Godbolt, Honey Sukesan, bruce_lee_wayne,  Silviu Ardelean, schnapper79,  Seeker, and Sundareswaran Senthilvel.**
+
+**Thanks, in particular, to Jon Hess, Lakshman, Christian Wittenhorst, Sherhy Pyton, Dendi Suhubdy, Sudhakar Belagurusamy, Richard Sargeant, Rusty Fleming, John Nebel, Mipko, Alicja Kaminska, Slavko Radman, and David Poole.**

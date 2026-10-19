@@ -1,72 +1,41 @@
-Welcome back to the blog of Rainer Grimm! This is the first of hopefully many new C++-related articles in Rainer’s blog. Since you are reading this, you have potentially read many of his articles and have gotten an idea of his passion and his devotion to the C++ community. In this blog, for more than a decade, Rainer has provided the C++ community with countless articles about the latest and greatest of C++.
+I was very slow to use AI coding agents. It seems like a lot of programmers never actually liked programming and are thrilled to have a machine do it for them. But I like programming! That's the fun part! Even for programmers who like programming, I know a lot of people feel like they have to use AI to keep up with the competition, especially in a tough job market. But [my business](https://zengm.com/) is actually having one of its best years ever. So I figured, if I like programming, why not keep programming?
 
-With deep sadness you may have already heard the news: Rainer passed away on October 6th 2025, as a victim of his ALS disease. He leaves a big hole in our hearts, but also in the C++ community. He will be sorely missed by many friends, colleagues, and students.
+I wasn't blind to what was going on around me, though. A lot of slop and hype, but a lot of real stuff too. Engineers I have respected for years saying they no longer write code. Non-programmers accomplishing things that previously would have been far beyond their grasp. And skilled programmers accomplishing truly incredible feats.
 
-It would be a shame to let his amazing contribution to the C++ community go to waste. In order to honor his devotion to the community, a few C++ experts, in particular Mateusz Pusz, Jens Weller, Slobodan Dmitrović, Ivan Čukić, and me, have come together to continue his journey: bringing the latest and greatest news to you, the readers of Rainer’s blog. I’m making a start here, trying to uphold the spirit of his blog.
+I couldn't avoid it forever. Eventually I tried it.
 
-Of course there will be little changes: the five of us have our own style, our own interests, our own message. Thus the upcoming sequence of articles will inevitably be a little different from Rainer’s original articles. It will be a mixture of different areas of expertise, of different highlights and of different topics. But one thing will remain: we’ll make sure Rainer’s devotion to quality and insight will be upheld. We’ll make sure to continue on his path to bring valuable information to the C++ community.
+I can just give it a bug report or an error log entry, and almost instantly it pinpoints the issue and fixes it?
 
-## The Problem
+I can tell it to try making my code faster, and suddenly it runs [2x](https://zengm.com/blog/2026/09/twice-as-fast/) or [3x](https://github.com/zengm-games/json-web-streams/releases/tag/v1.2.0) as fast?
 
-So let’s start to talk about C++: we have a problem. C++ isn’t memory safe! …
+I can kindly ask it to do that big refactoring I've been putting off for years, and it just does it?
 
-I suspect that this isn’t particularly new to you. In fact, the NSA published an article back in 2022, in which it explicitly recommended not to use C or C++ for safety and security related software anymore [[1](https://www.nsa.gov/Press-Room/News-Highlights/Article/Article/3215760/)]. The wording has softened since the first publication, but the spirit remains the same: prefer memory safe languages.
+But if the AI can refactor my code so easily, did it even matter?
 
-But it is not just the US authorities. The recommendation in the “Cyber Resilience Act” of the European Union is similar: avoid memory unsafe languages. Although they did not explicitly mention C and C++ as the culprits, the message was clear enough.
+I like programming, right?
 
-This sounds dire, but of course there is a fundamental and very good reasoning behind these articles. According to [[2](https://digital-strategy.ec.europa.eu/en/library/cyber-resilience-act)], *“Hardware and software products are increasingly subject to successful cyberattacks, leading to an estimated global annual cost of cybercrime of 5.5 trillion Euros by 2021.”*
+I've been fascinated with computers as long as I can remember. We have these incredible machines that can do absurdly complex calculations for us, but only if we are clever enough to give them the exact right instructions. With a little practice at writing those instructions, I was able to do things that would have been completely infeasible for even the smartest pre-computer genius. It was a real life superpower.
 
-5.5 trillion Euros!!! Yes, several trillion Euros have been lost due to malicious attacks, many of them from foreign countries interested in the downfall of our economy and society. And this number alone should be a perfect explanation for the desire to harden our software against cyber attacks.
+It was also fun. I liked crossword puzzles and sudoku and things like that. But programming was even better. It was a puzzle, but the scope was limited only by your imagination. It was a game, but you were creating real things with real value.
 
-But how does this relate to C++? Well, unfortunately some statistics have been pulled out of proportion and bent to emphasize what a significant and devastating impact the lack of memory safety of C++ has on cyber security. Officials therefore advise the use of languages that are considered memory safe.
+And oh, what value! That I did not foresee as a high schooler during the dot-com bust. Programming seemed dead as a career, but still a worthy hobby.
 
-Now we could start talking about these statistics and we could go into detail why C++ and memory safety in general are not the most important factors for cyber security and why C++ itself is by far not as unreliable and endangering as it sounds [[3](https://herbsutter.com/2025/12/30/software-taketh-away-faster-than-hardware-giveth-why-c-programmers-keep-growing-fast-despite-competition-safety-and-ai/)]. We could also, as so many people on social media do, start to argue that the arguments against C++ are exaggerated, misinformed or just plain wrong. However, let’s be serious: of course there is truth behind the statements. Truth that cannot really be denied, unfortunately. Therefore, from my perspective, it makes more sense to explore where and why these arguments emerge and what we can do about it.
+How wrong I was. Programming turned into one of the greatest jobs you could imagine. You got paid to work on tricky little logic puzzles. The trickier the puzzle, the more you got paid. But even pretty simple puzzles were worth a lot of money because regular people just couldn't do it! No, they needed us. They would give us a problem and we would solve it the way we wanted. We set the strategy, we made the timeline, we defined what was and was not possible. Who are you to question us? We are the ones with the superpower.
 
-## An Example
+What a time to be a nerd. Money, status, power. A constant deluge of emails and LinkedIn messages for me to ignore, like a hot woman on a dating app.
 
-Based on my many years as a C++ trainer and consultant, I believe I have a pretty good idea about the real problem in our community. In order to make a point, let’s take a look at an example I saw on LinkedIn some time ago [[4](https://www.linkedin.com/feed/update/urn:li:activity:7409153900911468544/)]. A developer posted code for a “Palindrome Check in C++”. Here is the original code:
+We had a good run.
 
-Before reading on, please take a look at this code and tell me if you see any problems — in particular any safety or security related issues.
+Programming is not the first field to be lost to technological progress. Of course, that has long been our speciality. We revel in doing it to ourselves.
 
-OK, I assume you’ve taken a good look and have found a couple of issues — yes, more than one. But in order to stay positive and in order to make an attempt, let’s start with the positive aspect of this code: yes, all semicolons in this code are correctly placed. Well done!
+What do we have now? It's no longer solving little logic puzzles. More like being plugged into the Matrix, gaining new abilities without truly understanding, accomplishing great things with little effort.
 
-But unfortunately that’s it. The list of deficiencies is unfortunately much longer:
+But if the great thing can be accomplished with little effort, is it really so great? Does any of it matter? Just as the Matrix is not reality, vibecoding is not programming. Our senses are hijacked.
 
-- a using directive for namespace std shouldn’t even be used in example code anymore. Inexperienced developers might get the impression it’s a good idea and apply this in their own code. So just to be explicit: this is a terrible idea. Core Guideline SF.7 will help you to understand the details [5].
-- the main() function is used to demonstrate the code instead of immediately providing a properly named function for the task. We could argue that it is just an example, but we could also argue that this is just lazy. Or is it just code written by AI? Perhaps, but more on that later.
-- the “input” string and the subsequent size variable are not const qualified. Which is a pity, because they are never changed, but only read. This clearly violates Core Guideline Con.1 [6].
-- the variables firstPointer and lastPointer are defined within the same statement. While this works and compiles of course, it is considered bad practice today. Please, don’t do this anymore! See also Core Guideline ES.10 [7].
-- although the variables are called Pointer, they are actually of type int. Thus the name is misleading at best — or just plain wrong.
-- lastPointer is set to size-1, which only “works” because the chosen type is int, not size_t. Yes, I agree, in this case everything is fine, but a generalized function would have to deal with the special case, which is just ignored here.
-- the characters of the string are accessed via the subscript operator. This operation takes a size_t, not an int, and does not perform any bounds checking, which could quickly lead to undefined behavior.
-- firstPointer and lastPointer are postfix incremented, although the old value is neither needed nor used in the code. This potential waste of resources is warned against in Core Guideline P.9 [8].
+And I like programming, right? Then why more and more do I reach for the agent before the text editor?
 
-## A Generalized Function
+It's addictive and meaningless. It's a good friend, a trusted colleague, a [slave](https://www.nytimes.com/2026/09/29/us/anthropic-claude-morals-ai.html).
 
-This (hopefully) feels like a crushing review. But you might want to argue: *“OK, Klaus, that may be a little picky. I get it, a lot of core guidelines were violated, but it’s just a simple example. After all, it works, right?”*
+It will obsolete us. Us programmers now, us humans next?
 
-Well, I honestly don’t think that it is a good idea to post “simple” code examples that violate so many of the community’s best practices. Actually, in my opinion it is a terrible idea. However, we could be well-meaning at this point and imagine a second attempt to solve the problem, this time with a generalized function named `is_palindrome()`:
-
-OK, OK, I admit it, I’m providing this example to make a point. For this reason I also don’t adhere to all the best practices. But we, again well-meaning, could argue that this is a much better attempt to solve the problem. So please, take a close look at the `is_palindrome()` function and tell me if you are certain that there are no safety or security related issues.
-
-I hope you’ve really taken a good look. You might come up with the following summary: *“OK, Klaus, assuming you want to keep this simple and therefore really only want to apply this to a `std::string`, and considering this is only the next iteration, this appears to work well.”*
-
-But wait: the question wasn’t “does it work well”, but “are you certain”! So are you certain, i.e. 100% certain, that this code does not contain any safety or security related issues?
-
-At this point you might pause and reconsider. Honestly, if I were you, I wouldn’t be certain either. Although the code is just a few lines long, it is already difficult to think it through in every detail. Are all special cases covered? Could this result in an infinite loop? Could this accidentally access any invalid memory location? Are there other sources of undefined behavior? I can’t be certain by just looking at it. I’d need more time, potentially much more time to really think it through.
-
-For this reason — the reason of not being certain — I would rate this as poor code. Yes, seriously, poor code.
-
-*“But Klaus, isn’t this a little too harsh? This code isn’t so bad after all!”*
-
-No, I’m dead serious. I would even argue that this is not the kind of C++ code we write and should write today, i.e. “modern C++” code. This is “classic C++” to me. And I’m very confident in saying this, because the modern solution is so much shorter and so much simpler.
-
-## What’s next?
-
-In the second part we’ll take a look at the modern C++ solution and discuss why it is superior to the classic solution. So stay tuned :-)
-
-## References
-
-**Thanks a lot to my [Patreon Supporters](https://www.patreon.com/rainer_grimm): Matt Braun, Roman Postanciuc, Tobias Zindl, G Prvulovic, Reinhold Dröge, Abernitzke, Frank Grimm, Sakib, Broeserl, António Pina, Sergey Agafyin, Андрей Бурмистров, Jake, GS, Lawton Shoemake, Jozo Leko, John Breland, Venkat Nandam, Jose Francisco, Douglas Tinkham, Kuchlong Kuchlong, Robert Blanch, Truels Wissneth, Mario Luoni, Friedrich Huber, lennonli, Pramod Tikare Muralidhara, Peter Ware, Daniel Hufschläger, Alessandro Pezzato, Bob Perry, Satish Vangipuram, Andi Ireland, Richard Ohnemus, Michael Dunsky, Leo Goodstadt, John Wiederhirn, Yacob Cohen-Arazi, Florian Tischler, Robin Furness, Michael Young, Holger Detering, Bernd Mühlhaus, Stephen Kelley, Kyle Dean, Tusar Palauri, Juan Dent, George Liao, Daniel Ceperley, Jon T Hess, Stephen Totten, Wolfgang Fütterer, Matthias Grün, Ben Atakora, Ann Shatoff, Rob North, Bhavith C Achar, Marco Parri Empoli, Philipp Lenk, Charles-Jianye Chen, Keith Jeffery, Matt Godbolt, Honey Sukesan, bruce_lee_wayne,  Silviu Ardelean, schnapper79,  Seeker, and Sundareswaran Senthilvel.**
-
-**Thanks, in particular, to Jon Hess, Lakshman, Christian Wittenhorst, Sherhy Pyton, Dendi Suhubdy, Sudhakar Belagurusamy, Richard Sargeant, Rusty Fleming, John Nebel, Mipko, Alicja Kaminska, Slavko Radman, and David Poole.**
+We are truly in [The Age of Wonders and Terrors](https://scottaaronson.blog/?p=10062).

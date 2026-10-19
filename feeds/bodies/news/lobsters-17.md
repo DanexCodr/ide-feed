@@ -1,119 +1,101 @@
-I purchased a Matrix CoolRunner Rev D back in 2017. This little chip is called a glitcher and it’s a type of modchip. Its sole purpose, the reason it was designed, is to deliver a short pulse of energy (~ 100 nanoseconds) to an Xbox 360 Console.
+The trend of VC-backed tooling ending in abandonment rears its ugly
+   head again. But hey, people gotta eat, right? The community will pick
+   up the slack and steward the projects, right?
 
-![](https://kennedn.com/blog/posts/glitching/coolrunner_in_xbox.webp)
+Body
 
-You might ask yourself, “What’s the point in that?”. The answer is quite interesting.
+   Deno is dead.
 
-# Microsoft are good at security
+   Announced[1] on a Friday[2], of course, the team has fled to
+   Cloudflare and in a year, will stop working on the runtime. Kudos to
+   them for finding an exit, Womp womp to us.
 
-It boils down to the simple fact that Microsoft learned from the mistakes of their previous console (the original Xbox) and designed security well on their successor.
+   This is the second time in just as many years that a technology I
+   depend on is “given up to the community.” If you’re new here, Disc[3]
+   came about because the team behind Gel fled to Vercel and gave their
+   project up to the community. This was two years ago and as of this
+   writing, no updates have been made on the “blessed” fork[4] of it.
 
-So well in fact, that it was deemed essentially unhackable by conventional approaches:
+   (Perhaps a bit petty of me to point out but someone in the Gel
+   Discord has been rather hostile/cowardly about my efforts and thus I
+   find delight in proving assholes wrong)
 
-> tmbinc said it himself, software based approaches of running unsigned code on the 360 mostly don’t work, it was designed to be secure from a software point of view. <sup>[1](https://kennedn.com/blog/posts/glitching/#fn:1)</sup>
+   The frustration of the Deno community is palpable and has created the
+   best crashout[5] I’ve seen in some time:
 
-The entry point for the system, dubbed 1BL, is physically baked into the silicon of the Xbox 360’s CPU <sup>[2](https://kennedn.com/blog/posts/glitching/#fn:2)</sup>. The job of 1BL is to load the next phase of the bootloader, called CB from flash storage, and verify that it was signed by Microsoft.
+   What the fuck do you mean Deno is ending development in a year????
 
-So without Microsoft’s signing keys, there was no real way to hijack control of the system during the boot process. And it only becomes harder as the console boots up through its different phases. Additional security features are turned on as it cascades up the boot chain. And they would all need individually circumvented to get any code running on the console that Microsoft haven’t been over with a fine toothed comb.
+   I JUST learned how to use this stupid runtime.
 
-So if the door to the castle is locked, and the guards, who are wise to equine ploys, are checking ID at the door, how does one get in? Well you don’t use a key. You inform the guard that his shoelaces are untied and hit him over the head with a club.
+   I don’t give a fuck about your Cloudflare acquisition or your edge
+   computing or whatever the fuck a Durable Object is.
 
-# Finding the weak link
+   I JUST WANT TO RUN MY TYPESCRIPT FILES.
 
-The point is that if the lock itself is secure, and the procedures surrounding entry are sound, sometimes the weakest link becomes something more fundamental. In our metaphor this is a person, but in the case of the Xbox 360, it is the fact that computation relies on stable energy conditions to behave in a predictable manner.
+   Why is there a shutdown date????
 
-And this is the idea that fault injection subverts. In the case of the Xbox 360, researchers found that by very quickly toggling a reset signal on the CPU (`CPU_RESET`), a signal that is usually supposed to reinitialise the CPU, something far more interesting happened. Instead of resetting, the CPU executed the current instruction incorrectly.
+   WHERE IS THE FUCKING DOWNLOAD BUTTON FOR MORE YEARS OF SUPPORT????
 
-![](https://kennedn.com/blog/posts/glitching/fault_injection.webp)
+   I went to the releases page and there is no deno-forever.exe.
 
-Graph demonstrating glitching as voltage over time <sup>[3](https://kennedn.com/blog/posts/glitching/#fn:3)</sup>.
+   WHY IS THERE NO deno-forever.exe?????
 
-This gave the researchers a very useful primitive. They found that an instruction integral to the signature verification process, the `mr` (move register) instruction, could be glitched into ignoring a value it was about to move and instead move a 0 into its destination register <sup>[4](https://kennedn.com/blog/posts/glitching/#fn:4)</sup>.
+   Just compile another 10 years of development into a fucking
+   executable and give it to me.
 
-So by simply knowing when, and toggling the lights on and off, they gained arbitrary code execution.
+   I don’t want to learn Node.js again.
 
-# The future is glitching
+   I don’t want to migrate to Bun.
 
-It is astounding to me that this kind of esoteric side channel exists at all. But I think the larger point is that it’s becoming more common.
+   I don’t want to understand your business model.
 
-The sort of trust chains that made the Xbox 360 hard to hack 10 years ago have now become commonplace in the world of computing hardware. Microsoft themselves began enforcing hardware backed secure boot for their Operating Systems back in 2021<sup>[5](https://kennedn.com/blog/posts/glitching/#fn:5)</sup>.
+   I JUST WANT MY DINOSAUR BACK.
 
-More recently in 2024, the security features of an ESP32 v3 (secure boot and flash encryption) were bypassed using a fault injection attack <sup>[6](https://kennedn.com/blog/posts/glitching/#fn:6)</sup>.
+   You cannot just Deno.exit(0) an entire runtime.
 
-And there are recent examples specifically leveraging the Raspberry Pi Pico Microcontroller to perform similar fault injection attacks
+   STUPID FUCKING CLOUD NERDS.
 
-![](https://kennedn.com/blog/posts/glitching/apple_airtag.webp)
+   Ryan Dahl’s comment[6] on HackerNews gave me pause (emphasis mine):
 
-Apple AirTag’s firmware was dumped in 2021 by stacksmashing using a Raspberry Pi Pico and fault injection <sup>[7](https://kennedn.com/blog/posts/glitching/#fn:7)</sup>.
+   It’s a joint decision and I agree with it. I’m most invested in its
+   success and have put the most work into it - and I no longer think
+   it’s where I can do the most important work. There are some
+   good ideas in Deno and it’s well engineered - but it ultimately
+   is not solving big problems. It has been sucked into the
+   gravity well of node compatibility, which forces it to behave
+   exactly as Node does. Why reimplement Node? It works. Marginal
+   performance or UX or security benefits are not enough.
 
-![](https://kennedn.com/blog/posts/glitching/picofly.webp)
+   …
 
-The PicoFly modchip, released in 2023 for the Nintendo Switch, uses fault injection to defeat secure boot on the console <sup>[8](https://kennedn.com/blog/posts/glitching/#fn:8)</sup>.
+   We’ll ship monthly releases for a year, and Deno stays
+   MIT-licensed. If people want to carry it forward, I’d like that.
 
-To me, this suggests that fault injection has become a more attractive attack vector in recent years due to a security ecosystem that has hardened over time. But I think it has in turn also become more accessible than ever, with the advent of cheap and accurate microcontrollers such as the Pi Pico.
+   My brother in Christ. YOU reimplemented Node and now you’re bored? I
+   get it was done for adoption purposes but like, that’s a solvable
+   problem? Whatever, this ain’t my first rodeo[7].
 
-# A love letter to the Pico
+   There’s bound to be other forks but this one’s mine; I’m calling it,
+   Ende (“end” in German). “Ende” is an anagram of “Deno” which is an
+   anagram of “Node” and it’ll do things differently:
 
-![](https://kennedn.com/blog/posts/glitching/pico.webp)
+   — no more Node compatibility
+   — no more distractions, period; that means Deploy, KV, Jupyter, &c
+     are also getting the boot
 
-The Raspberry Pi Pico microcontroller, released in 2021 for £5 by the Raspberry Pi Foundation <sup>[9](https://kennedn.com/blog/posts/glitching/#fn:9)</sup>.
+   The roadmap? Per-module permissions, sandboxes for untrusted code,
+   post-quantum crypto in Web Crypto, better binary output, &c. I depend
+   on Deno for all of my APIs and personal projects, and now am building
+   a serious business on it; EOL[8].
 
-The Pico itself is versatile because it allows for very precise timing via its PIO blocks. These specialised blocks come with enough primitives to implement many standard protocols and have an effective timing resolution of ~7.5 nanoseconds due to the 133 MHz clock <sup>[10](https://kennedn.com/blog/posts/glitching/#fn:10)</sup>:
+   I’m aiming for a soft launch in December so I can work out production
+   kinks before a proper one. It’s gonna be quite the flex when Ende
+   development is happening on EOL. Anyhoo, placeholder site for Ende[9]
+   is up, subscribe to the mailing list if you want to be notified when
+   it’s “official” (proper marketing and documentation websites). EOL
+   also has a mailing list[8] if you want to know when the beta opens.
 
-$$\frac{1}{133\text{ MHz}} \approx 7.52\text{ns}$$
+   I am very busy but excited. I wanted to build the Neue Internet[10]
+   after all, looks like I’m getting my chance. 🕸️
 
-I have seen this versatility myself first hand when I finally dusted off the Matrix CoolRunner in 2026 and decided to take another crack at modchipping my Xbox 360.
-
-Back in 2017, when I bought the thing, it was quite expensive to modchip an Xbox 360. You needed a number of tools and skills to successfully mod one:
-
-- A glitching chip
-- Solder and an iron
-- A NAND programmer
-- A JTAG programmer
-
-I tried to save some money by building my own NAND / JTAG programmer using the printer port (LPT port) on a very old PC that I had in reserve for the specific purpose. If I had ever got this working it would have taken over 30 minutes to dump the NAND. I do not recall the reason but I did not manage to pull this off in 2017 and the project was shelved.
-
-![](https://kennedn.com/blog/posts/glitching/LPT_port.webp)
-
-LPT NAND dumper wiring diagram <sup>[11](https://kennedn.com/blog/posts/glitching/#fn:11)</sup>.
-
-Reattempting this same procedure in 2026 was a breeze by comparison. I was able to flash [PicoFlasher](https://github.com/X360Tools/PicoFlasher)
- onto a Pi Pico and solder it to the correct pads on my Xbox 360. The dump operation then only took a handful of seconds to run.
-
-![](https://kennedn.com/blog/posts/glitching/nand_dump_console.webp)
-
-Raspberry Pi Pico wired to the NAND interface header on the Xbox 360.
-
-Similarly I flashed [Pico-dirtyJTAG](https://github.com/phdussud/pico-dirtyJtag)
- onto a Pi Pico and was able to program the CoolRunner’s timing files using [Octal450’s Timing Files](https://github.com/Octal450/Timing-Files/releases)
- and installing the [`urjtag`](https://git.code.sf.net/p/urjtag/git)
- project from source.
-
-![](https://kennedn.com/blog/posts/glitching/coolrunner_programming_closeup.webp)
-
-Raspberry Pi Pico wired to Matrix CoolRunner JTAG interface.
-
-# Summary
-
-So, even the most carefully crafted tower can collapse under the weight of its own fundamental assumptions. Like many aspects of computer security, fault injection has become a game of cat and mouse, with increasingly sophisticated defences being met by new tools and methods of circumventing them.
-
-But I think we have now reached a point where DIY tooling has really begun to shine, making light work of challenges that, just a decade ago, required expensive, specialised equipment.
-
-And I have seen this first hand, a project that defeated me in 2017 was made trivial in 2026 by a £5 microcontroller.
-
-> Funnily enough, a software-only exploit for the Xbox 360 dropped just [last week](https://github.com/grimdoomer/Xbox360PeerPressure/wiki/Installation)
-> , rendering my years of effort somewhat moot. Nevertheless, it was a fascinating deep dive into the inner workings of the console and the security mechanisms designed to protect it.
-
-# References
-
-1. GliGli and Tiros, *Reset Glitch Hack*, accessed 7 October 2026. [https://github.com/gligli/tools/blob/master/reset_glitch_hack/reset_glitch_hack.txt](https://github.com/gligli/tools/blob/master/reset_glitch_hack/reset_glitch_hack.txt) [↩︎](https://kennedn.com/blog/posts/glitching/#fnref:1)
-2. Free60Project, *Boot_Process*, Free60, accessed 7 October 2026. [https://free60.org/System-Software/Boot_Process/](https://free60.org/System-Software/Boot_Process/) [↩︎](https://kennedn.com/blog/posts/glitching/#fnref:2)
-3. Fault Injection Library, *Overview – Voltage Glitching*, accessed 8 October 2026. [https://fault-injection-library.readthedocs.io/en/latest/overview/](https://fault-injection-library.readthedocs.io/en/latest/overview/) [↩︎](https://kennedn.com/blog/posts/glitching/#fnref:3)
-4. Rodrigo Copetti, *Xbox 360 Architecture – The Glitcher*, A Practical Analysis, accessed 8 October 2026. [https://www.copetti.org/writings/consoles/xbox-360/#tab-13-1-the-glitcher](https://www.copetti.org/writings/consoles/xbox-360/#tab-13-1-the-glitcher) [↩︎](https://kennedn.com/blog/posts/glitching/#fnref:4)
-5. Tom Warren, *Microsoft’s Windows 11 will require TPM chips for security*, The Verge, 25 June 2021, accessed 8 October 2026. [https://www.theverge.com/2021/6/25/22550376/microsoft-windows-11-tpm-chips-requirement-security](https://www.theverge.com/2021/6/25/22550376/microsoft-windows-11-tpm-chips-requirement-security) [↩︎](https://kennedn.com/blog/posts/glitching/#fnref:5)
-6. Delvaux et al., *Fault Injection Attacks on the ESP32*, USENIX WOOT 2024, accessed 8 October 2026. [https://www.usenix.org/conference/woot24/presentation/delvaux](https://www.usenix.org/conference/woot24/presentation/delvaux) [↩︎](https://kennedn.com/blog/posts/glitching/#fnref:6)
-7. stacksmashing, *Hacking Apple AirTags*, YouTube, 2021, accessed 8 October 2026. [https://www.youtube.com/watch?v=_E0PWQvW-14](https://www.youtube.com/watch?v=_E0PWQvW-14) [↩︎](https://kennedn.com/blog/posts/glitching/#fnref:7)
-8. Ansem-SoD, *Picofly*, GitHub, 2023, accessed 8 October 2026. [https://github.com/Ansem-SoD/Picofly](https://github.com/Ansem-SoD/Picofly) [↩︎](https://kennedn.com/blog/posts/glitching/#fnref:8)
-9. Raspberry Pi Foundation, *Getting started with Raspberry Pi Pico*, Raspberry Pi Projects, accessed 8 October 2026. [https://projects.raspberrypi.org/en/projects/get-started-pico-w/1](https://projects.raspberrypi.org/en/projects/get-started-pico-w/1) [↩︎](https://kennedn.com/blog/posts/glitching/#fnref:9)
-10. Raspberry Pi Foundation, *RP2040 Datasheet*, accessed 8 October 2026. [https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf](https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf) [↩︎](https://kennedn.com/blog/posts/glitching/#fnref:10)
-11. Superben51, *How to hack (RGH) your Xbox 360*, Instructables, accessed 8 October 2026. [https://www.instructables.com/How-to-hackRHG-your-Xbox-360/](https://www.instructables.com/How-to-hackRHG-your-Xbox-360/) [↩︎](https://kennedn.com/blog/posts/glitching/#fnref:11)
+   EDIT: I’m also replacing SemVer with ChronVer[11].

@@ -1,41 +1,465 @@
-I was very slow to use AI coding agents. It seems like a lot of programmers never actually liked programming and are thrilled to have a machine do it for them. But I like programming! That's the fun part! Even for programmers who like programming, I know a lot of people feel like they have to use AI to keep up with the competition, especially in a tough job market. But [my business](https://zengm.com/) is actually having one of its best years ever. So I figured, if I like programming, why not keep programming?
+Have you ever had a weird idea, and then it worked, but you can't really believe it?
 
-I wasn't blind to what was going on around me, though. A lot of slop and hype, but a lot of real stuff too. Engineers I have respected for years saying they no longer write code. Non-programmers accomplishing things that previously would have been far beyond their grasp. And skilled programmers accomplishing truly incredible feats.
+That's what I'm feeling right now, about Valen's borrow checker.
 
-I couldn't avoid it forever. Eventually I tried it.
+Because it **travels backward through time.**
 
-I can just give it a bug report or an error log entry, and almost instantly it pinpoints the issue and fixes it?
+Or, to be less dramatic, it **walks functions backwards,** which is still *very* weird.
 
-I can tell it to try making my code faster, and suddenly it runs [2x](https://zengm.com/blog/2026/09/twice-as-fast/) or [3x](https://github.com/zengm-games/json-web-streams/releases/tag/v1.2.0) as fast?
+Years ago, if you told me it would be good to iterate a function in reverse, I would have called you crazy.
 
-I can kindly ask it to do that big refactoring I've been putting off for years, and it just does it?
+It turns out, there's actually some really good reasons to do this, and it's fairly common when you're doing e.g. optimization passes. [0](https://verdagon.dev/blog/reverse-borrow-checking#note0) But I don't think anyone's done this for checking memory safety.
 
-But if the AI can refactor my code so easily, did it even matter?
+If you want a really deep look into the world of borrow checking, read on!
 
-I like programming, right?
+*We're about to see some weird things.* [1](https://verdagon.dev/blog/reverse-borrow-checking#note1)
 
-I've been fascinated with computers as long as I can remember. We have these incredible machines that can do absurdly complex calculations for us, but only if we are clever enough to give them the exact right instructions. With a little practice at writing those instructions, I was able to do things that would have been completely infeasible for even the smartest pre-computer genius. It was a real life superpower.
+Thanks for reading =)
 
-It was also fun. I liked crossword puzzles and sudoku and things like that. But programming was even better. It was a puzzle, but the scope was limited only by your imagination. It was a game, but you were creating real things with real value.
+This isn't going to be your normal shared-xor-mutable borrow checking.
 
-And oh, what value! That I did not foresee as a high schooler during the dot-com bust. Programming seemed dead as a career, but still a worthy hobby.
+This is [Valen](https://github.com/valen-lang/valen)'s borrow checker, the one that [makes shared-xor-mutable optional](https://verdagon.dev/blog/valen-group-borrowing), and can [call into Rust functions](https://verdagon.dev/blog/golden-spike-reviving-vale-valen) with [memory safety across the boundary](https://verdagon.dev/blog/boundary-memory-safety).
 
-How wrong I was. Programming turned into one of the greatest jobs you could imagine. You got paid to work on tricky little logic puzzles. The trickier the puzzle, the more you got paid. But even pretty simple puzzles were worth a lot of money because regular people just couldn't do it! No, they needed us. They would give us a problem and we would solve it the way we wanted. We set the strategy, we made the timeline, we defined what was and was not possible. Who are you to question us? We are the ones with the superpower.
+It's kind of like Rust's borrow checker, but it also has memory-safe mutable aliasing. If you want to know more about that, check out [this post](https://verdagon.dev/blog/valen-group-borrowing), though you won't need to understand that for most of this post.
 
-What a time to be a nerd. Money, status, power. A constant deluge of emails and LinkedIn messages for me to ignore, like a hot woman on a dating app.
+Green dragons, specifically.
 
-We had a good run.
+Valen compiles a function in four phases: [3](https://verdagon.dev/blog/reverse-borrow-checking#note3)
 
-Programming is not the first field to be lost to technological progress. Of course, that has long been our speciality. We revel in doing it to ourselves.
+I'll explain all of this further below.
 
-What do we have now? It's no longer solving little logic puzzles. More like being plugged into the Matrix, gaining new abilities without truly understanding, accomplishing great things with little effort.
+**The weirdest part is that #4 happens in reverse.** It looks at the last statement in the function, and then walks backwards until it reaches the top of the function.
 
-But if the great thing can be accomplished with little effort, is it really so great? Does any of it matter? Just as the Matrix is not reality, vibecoding is not programming. Our senses are hijacked.
+This is weird because, as far as I know, it's the **only borrow checker whose safety check goes backwards.** [5](https://verdagon.dev/blog/reverse-borrow-checking#note5)
 
-And I like programming, right? Then why more and more do I reach for the agent before the text editor?
+Further below, I'll explain why we're going backwards (hint: convenience, loops, and speed).
 
-It's addictive and meaningless. It's a good friend, a trusted colleague, a [slave](https://www.nytimes.com/2026/09/29/us/anthropic-claude-morals-ai.html).
+But first, let's see **how it works,** and what it even *means* to go backwards.
 
-It will obsolete us. Us programmers now, us humans next?
+Let's skip phase 1, and start with phase 2.
 
-We are truly in [The Age of Wonders and Terrors](https://scottaaronson.blog/?p=10062).
+There's also a secret fifth phase, where we calculate what attributes to send to LLVM to describe what operations might change what groups. But that's out of scope for this article.
+
+It also figures out all the groups invalidated by any mut effects from any instructions.
+
+For example:
+
+The static typing pass will be familiar to some of you, it assigns types to variables.
+
+For example, it turns this program:
+
+```valen
+exported func main() {
+  let fuel = 5;
+  let force = fuel;
+}
+```
+
+into this program:
+
+```valen
+exported func main() {
+  let fuel i64 = 5;
+  let force i64 = fuel;
+}
+```
+
+This is pretty normal, lots of compilers do it.
+
+Compilers usually do this as a **forward** pass, walking from the top of the function to the bottom, figuring out types as it goes.
+
+We're going to do something *similar but weirder* in phase 3; phase 3 is going to do **static grouping.**
+
+This is another forward pass, which figures out where each reference points to.
+
+For example, in this program:
+
+```valen
+func print_first_fuel_cell(s &Ship) {
+  let first_ref = &s.fuel_cells[0];
+  print_int(first_ref);
+}
+```
+
+Static grouping figures out that first_ref is pointing in s.fuel_cells[]: [7](https://verdagon.dev/blog/reverse-borrow-checking#note7)
+
+```valen
+func print_first_fuel_cell(s &Ship) {
+  // Static typing says:   first_ref &int
+  // Static grouping says: first_ref &int in s.fuel_cells[]
+  let first_ref = &s.fuel_cells[0];
+  print_int(first_ref);
+}
+```
+
+In other words, it's pointing to an int somewhere in the s.fuel_cells[] array.
+
+This information is now *part of the variable's type.*
+
+We'll be using this information in the next phase, which actually checks for use-after-free.
+
+I'll probably start moving away from the term "group" soon, switching to "path" instead. Opinions welcome!
+
+In V1's static grouping phase, it would also figure out *when* a reference was made. So for example, instead of ∫ in s.fuel_cells[], it would know that it was ∫ in s.fuel_cells[] from line 7.2. This was pretty awesome, we were literally **smuggling time and space** information into a variable's type. This new V2 version doesn't need to do that because it does a backwards scan, as we'll see next.
+
+Now we can use everything Phase 3 calculated!
+
+This is the phase that **checks for use-after-free.**
+
+It does it with a **backwards scan,** *as was foretold.*
+
+Let's see it happen in a slightly bigger example:
+
+```valen
+struct Entity { hp int; buffs []int; }
+func add_buff(self &Entity mut) { ... }
+
+func foo(e &Entity mut) {
+  let buff = &e.buffs[0];
+  e.add_buff();
+  print_int(buff);
+}
+```
+
+This program is doing a **use after free,** and we want the compiler to complain.
+
+First, I'll desugar it into a more explicit syntax:
+
+```valen
+struct Entity { hp int; buffs []int; }
+func add_buff<g'>(self &Entity in g) mut(g) { ... }
+
+func foo<g'>(e &Entity in g) mut(g) {
+  let buff = &e.buffs[0];
+  e.add_buff();
+  print_int(buff);
+}
+```
+
+Now I'm going to add in some comments, all determined by the backwards scan as it goes.
+
+Further below, I'll explain what "DECLARE", "USE", and "MUTATE" mean.
+
+```valen
+struct Entity { hp int; buffs []int; }
+func add_buff<g'>(self &Entity in g) mut(g) { ... }
+
+func foo<g'>(
+  e &Entity in g          // DECLARE e (group g)
+) mut(g) {
+  let buff = &e.buffs[0]; // DECLARE buff (group g.buffs[])
+  e.add_buff();           // USE e (group g)
+                          // MUTATE group g
+  print_int(buff);        // USE buff (group g.buffs[])
+}
+```
+
+The algorithm walks **in reverse,** from the end of the function to the start.
+
+As it scans upward, it looks for these events:
+
+pending contains all of the things USEd below, that we hope to see DECLAREd above.
+
+We hope to never see a MUTATE to anything pending.
+
+To really understand it, let's see it in action.
+
+First, we **look at the last line:**
+
+```valen
+  print_int(buff);        // USE buff (group g.buffs[])
+```
+
+This is a USE, so we add it to the pending list. pending now has:
+
+- buff (group g.buffs[])
+
+Now, still going backwards, we encounter the line above it:
+
+```valen
+  e.add_buff();           // USE e (group g)
+                          // MUTATE group g
+```
+
+We see the MUTATE so we **ensure no variables in pending are invalidated.**
+
+Specifically, we'll ensure that nothing in pending is pointing at anything under e.
+
+Here's what just happened: buff was pointing at g.buffs[], which starts with the g we just mutated with add_buff. That means that buff is **invalidated above the line where it's used,** which is a use-after-free.
+
+So the compiler shows an error here. [Huzzah!](https://www.youtube.com/watch?v=y13n1CeyqjY&t=132s)
+
+First person to break it gets a prize!
+
+Let's see a **correct program,** so we can see the backwards walk encountering a declaration.
+
+Here's the same program, but with e.add_buff(); moved up, to be the first line in the function.
+
+```valen
+struct Entity { hp int; buffs []int; }
+func add_buff<g'>(self &Entity in g) mut(g) { ... }
+
+func foo<g'>(
+  e &Entity in g          // DECLARE e (group g)
+) mut(g) {
+  e.add_buff();           // USE e (group g)
+                          // MUTATE group g
+  let buff = &e.buffs[0]; // DECLARE buff (group g.buffs[])
+  print_int(buff);        // USE buff (group g.buffs[])
+}
+```
+
+Like before, we start at the end, and get to this line:
+
+```valen
+  print_int(buff);        // USE buff (group g.buffs[])
+```
+
+...and see that it's a USE so we add buff to the pending list:
+
+- buff (group g.buffs[])
+
+Now we go one line upward, to this line:
+
+```valen
+  let buff = &e.buffs[0]; // DECLARE buff (group g.buffs[])
+```
+
+This DECLAREs buff, so we **remove** it from pending.
+
+pending is now empty.
+
+(That means that **there are no variables that are used below/later in the function.**)
+
+Now we go one line upward, to this line:
+
+```valen
+  e.add_buff();           // USE e (group g)
+                          // MUTATE group g
+```
+
+We see the MUTATE, so we **ensure no variables in pending are invalidated.**
+
+There are no variables in pending, so nothing interesting happens.
+
+Then we see it USE e, so we **add** it to pending:
+
+- e (group g)
+
+And that's the end of the function!
+
+We made it all the way to the end without seeing any MUTATEing any pending variables, which means **the program is memory-safe.**
+
+There are three reasons: convenience, loops, and speed.
+
+Generally, going backwards is convenient for figuring out **when a thing is last used.**
+
+For example, look at this function:
+
+```valen
+func attack(a &Entity in g, d &Entity in g) mut(g) {
+  let a_power = a.calculate_attack_power();
+  let a_energy_cost = a.calculate_attack_cost(d);
+  let d_armor = d.calculate_defense();
+  let d_energy_cost = d.calculate_defend_cost(a);
+  a.use_energy(a_energy_cost);
+  d.use_energy(d_energy_cost);
+  d.damage(a_power - d_armor);
+}
+```
+
+If we want to do *bookkeeping X* when a is declared and do *bookkeeping Y* when a is no longer needed, [9](https://verdagon.dev/blog/reverse-borrow-checking#note9) we have two options:
+
+Notice how the forward scan involved that extra fetch/navigate, because we couldn't recognize the last use when we encountered it.
+
+The backward scan was simpler.
+
+Going backwards is also better for loops.
+
+Here are a couple examples that I've been using to think about loops: [10](https://verdagon.dev/blog/reverse-borrow-checking#note10)
+
+This is a correct program, but it shows how tricky it is to know if that observe(e) is valid.
+
+```valen
+exported func main() {
+  let arr = ArrayList<int>(3);
+  let e = &arr[0];
+
+  while ... {
+    observe(e); // Valid `e` use.
+    add_element(&arr);
+    set e = &arr[0];
+  }
+}
+```
+
+That e actually can come from two different places:
+
+A forward scan encountering observe(e) would need to **look ahead** to the set e to conclude it's valid.
+
+This is a similar example without the set e.
+
+```valen
+exported func main() {
+  let arr: ArrayList<int> = ...;
+  let e = &arr[0];
+
+  while ... {
+    observe(e); // Invalid `e` use.
+    add_element(&arr);
+
+  }
+}
+```
+
+Without the set e, the e in the loop is invalidated by a *previous iteration* of the loop.
+
+If we did a forward scan, we'd need to **look ahead** to see that there's no set e reviving e.
+
+This is a tricky problem. One can:
+
+The last one was tempting. Alas, its data structures ended up looking very complex, and it had the same "fetch/navigate" problem that we saw in the func attack example above.
+
+It was simpler to just go straight to V2's reverse-walking approach.
+
+I'm also fairly certain V2's approach is faster, because it only has to process each node once in the phase 3 forward pass, and once in the phase 4 backward pass. [11](https://verdagon.dev/blog/reverse-borrow-checking#note11)
+
+But of course, the reverse-walk approach doesn't get loops for free. We still need some adjustments.
+
+This bookkeeping might be decrementing a reference count, or [adding a destructor call](https://www.youtube.com/watch?v=IpuvQUVB8Cg), or checking for use-after-frees, etc.
+
+Note, in these examples, I use the name ArrayList, but in the real Valen compiler those are called Array, for weird historical reasons. That'll change soon.
+
+Note, this doesn't mean that the algorithm is O(n) yet. The MUTATE still needs to check everything in the pending list. However, I think there's a way to speed that check up a lot. Fingers crossed!
+
+V1 never had full loop support, so there's really nothing to benchmark against.
+
+The algorithm needs a little bit more to handle loops.
+
+Specifically, we'll do MUTATE and DECLARE differently, and we also react to LOOP START.
+
+We scan upward, looking for these events:
+
+Let's see what this does to this example. It's a **correct** program, so there should be no compile error.
+
+```valen
+exported func main() {
+  let arr: ArrayList<int> = ...; // DECLARE arr (group arr)
+  let e = &arr[0];               // DECLARE e (group arr[])
+
+  while ... {                    // LOOP START
+    observe(e);                  // USE e (group arr[])
+    add_element(&arr);           // MUTATE arr (group arr)
+    set e = &arr[0];             // DECLARE e (group arr[])
+  }
+}
+```
+
+We're walking backwards, so we start at the last line:
+
+```valen
+    set e = &arr[0];             // DECLARE e (group arr[])
+```
+
+It's a DECLARE [15](https://verdagon.dev/blog/reverse-borrow-checking#note15) so we do two things:
+
+revived_after_this now contains one entry: e.
+
+Now we walk up one line, seeing this:
+
+```valen
+    add_element(&arr);           // MUTATE arr (group arr)
+```
+
+It's a MUTATE, so we do two things:
+
+mutations_after_this now contains one entry: arr.
+
+Now we walk up one line, seeing this:
+
+```valen
+    observe(e);                  // USE e (group arr[])
+```
+
+It's a USE, so we **add** it to the pending list.
+
+pending now contains one entry: e (group arr[]).
+
+Now we walk up one line, seeing the loop start:
+
+```valen
+  while ... {                    // LOOP START
+```
+
+So we do the LOOP START check: For each thing in pending, if it's invalidated by something in the loop's mutations_after_this, ensure it's in the loop's revived_after_this.
+
+In this case, pending has e (group arr[]). e *is* invalidated by something in mutations_after_this. So check it's in the loop's revived_after_this (it is). Check passed, we're good.
+
+I'll skip the explanation for the top two DECLAREs, since we covered that before.
+
+And then we reach the start of the function! We encountered no errors, so the borrow checker can conclude **this function is memory-safe.**
+
+And that's it! That's how we handle loops with this new reverse borrow checker.
+
+Easter egg note!
+
+Sergeant Stubby was the star of the 102nd Infantry Regiment in World War I and travelled with his division to France to fight alongside the French. He served for 18 months and participated in 17 battles and four offensives on the Western Front.
+
+He received many awards, including a gold medal, a wound stripe, and two purple hearts.
+
+Sergeant Stubby has been called the most decorated war dog of the Great War and the only dog to be nominated and promoted to sergeant through combat.
+
+If you see this note, sneak the word "gold" into a [comment](https://www.reddit.com/r/programming/comments/1x92rhh/a_new_way_to_think_about_borrow_checking_in/)!
+
+(Congrats to [timpi4ever](https://www.reddit.com/r/Valen/comments/1x92s1o/comment/phi1ieo/) for finding this first!)
+
+We don't remove anything from pending here, because those pending uses still need to be satisfied by the code above the loop.
+
+Yes, I regret calling it DECLARE now, since really this is just re-pointing an existing variable.
+
+There's one more big thing I want to change, eventually.
+
+Rust has this very nice ability to use facts from *anywhere* in the function to figure out the lifetime of reference.
+
+For example, [this Rust program](https://play.rust-lang.org/?version=stable&mode=debug&edition=2024&gist=70b5f84ea984e1a3a60dff9e0110bcf9) looks at the later r = &b[0]; to figure out that r points at a *or* b.
+
+```rs
+fn main() {
+  let a = vec![1, 2, 3];
+  let b = vec![4, 5, 6];
+
+  let mut r = &a[0];
+  if some_condition() {
+    r = &b[0];
+  }
+  println!("{}", r);
+}
+```
+
+Valen doesn't do this yet; Valen's phase 3 (static grouping) is still doing normal one-directional inference.
+
+But if we change phase 3 into a full solve like rustc does, we can get some similar superpowers.
+
+The neat part: this wouldn't need to change phase 4's backward pass. In the end, we'd have a solver for phase 3, and a backward pass for phase 4.
+
+It's hard to explain how cool that is to me. It's moments like these I suspect that I might be a compiler nerd. [Huzzah!](https://www.youtube.com/watch?v=y13n1CeyqjY&t=132s)
+
+Valen's borrow checker is still pretty young, a mere 3,600 lines.
+
+And it's far from complete! We still have to add a lot of things to it, like interrupting control flow (break, continue), [16](https://verdagon.dev/blog/reverse-borrow-checking#note16) associated groups, closures, [17](https://verdagon.dev/blog/reverse-borrow-checking#note17) all the fun stuff.
+
+We'll get there one day. That day will be glorious.
+
+Thanks for reading!
+
+In the next few articles, I'm hoping to explain more about how we'll blend in reference counting and generational references. I'm also going to write about all the other languages exploring new memory safety approaches like this ([Ante](https://antelang.org/), [Carbon](https://github.com/carbon-language/carbon-lang), [Zeta](https://github.com/zeta-lang/zeta), [Fang](https://github.com/devast8a/Fang), [exclusion typing](https://dilated.me/blog/posts/introduction-to-exclusion-typing/), and more!).
+
+This is just the tip of the iceberg, so stay tuned by subscribing to my [RSS feed](https://verdagon.dev/rss.xml), [r/valen](https://www.reddit.com/r/Valen/), or joining the [Valen discord](https://discord.gg/SNB8yGH). And follow me on [Bluesky](https://bsky.app/profile/verdagon.bsky.social) and [Mastodon](https://fosstodon.org/@verdagon)!
+
+Cheers,
+
+- Evan Ovadia
+
+The current plan is to first refactor things so the borrow checker is looking at a [control-flow graph](https://en.wikipedia.org/wiki/Control-flow_graph) instead of a typed AST. That should make interrupting control flow much easier.
+
+I'm pretty excited about closures. I think I found a *very* elegant way to make them work. Stay tuned!

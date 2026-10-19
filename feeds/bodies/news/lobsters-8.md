@@ -1,5 +1,95 @@
-Peers only need standard IKEv2, ESP, Babel and SRv6.Interoperability is checked against:strongSwanIKEv2 and ESP sessions with Ed25519 keysBIRDBabel routes with RTT metrics, matched route for routeLinuxKernel seg6local acts on the SRv6 headers ranet3 writesAny other router or switch that supports IKEv2 with Ed25519 keys, Babel and SRv6 should interoperate as well.Common mesh VPN and SD-WAN tools (Tailscale, NetBird, ZeroTier, Nebula, etc.) admit only nodes that run their own agent, and ranet3 runs beside them on the same host.Latency routingBabel measures the round trip of every link and routes through a relay whenever the direct link is slower.Chosen path through B, 80 msDirect link, 265 msRTT is measured continuously, and packet loss and outages count against a link. Traffic always takes the fastest path, moving back to the direct link once it is faster again.Segment routingA policy on source and destination prefix sends traffic through chosen waypoints and out at a chosen exit. Segment routing is implemented in userspace and works even on macOS, whose XNU kernel has no support for it.Waypoints can come in any order the user specifies and may repeat, e.g. A->B->C->B->D with D as the exit.
+This book is an introduction to programming language theory using the proof assistant Agda.
 
-## Benchmarks
+Comments on all matters—organisation, material to add, material to remove, parts that require better explanation, good exercises, errors, and typos—are welcome. The book repository is on [GitHub](https://github.com/plfa/plfa.github.io/). Pull requests are encouraged. There is a private repository of answers to selected questions on github. Please contact one of the authors if you would like to access it.
 
-Medians of 3 runs under saturationHead to headDataplaneThroughput<small>higher is better</small>CPU per Gbit/s<small>lower is better</small>Latency p99<small>lower is better</small>wireguard-go <small>user</small>1.2-1.5x <small>better</small>0.8-0.9x <small>better</small>0.2-1.0x <small>mixed</small>WireGuard <small>kernel</small>1.6-2.1x <small>better</small>0.6x <small>better</small>1.9-2.4x <small>worse</small>IPsec <small>kernel</small>1.8-3.9x <small>better</small>1.1-1.7x <small>worse</small>1.6-2.0x <small>worse</small>Each range is ranet3's result divided by the other dataplane's across the 6 tests below.Kernel and userspaceUserspace dataplanes copy every packet into their own process and are usually expected to be slower than kernel ones.<small>1 stream, Gbit/s</small>One wayBoth waysShare of line<small>one way</small>Line limit (10 GbE)8.8418.76<sup>*</sup>100%Kernel, best of 25.357.4661%Userspace, wireguard-go6.7710.7877%Userspace, ranet38.3914.8795%* Plain TCP without tunnelKernel WireGuard stays at 5.1 to 5.4 Gbit/s one way.Kernel IPsec stays at 4.0 to 4.7 Gbit/s because its single flow lands on 1 NIC receive queue.Full results**Throughput, saturated**Gbit/s receivedHigher is betterranet3<small>user</small>wireguard-go<small>user</small>WireGuard<small>kernel</small>IPsec<small>kernel</small>1 stream, out8.396.775.354.671 stream, in8.376.955.104.441 stream, both14.8710.787.464.678 streams, out8.526.065.143.978 streams, in8.486.725.124.068 streams, both15.7910.337.414.10**CPU cost at 3 Gbit/s offered**Busy cores per Gbit/s, both hostsLower is betterranet3<small>user</small>wireguard-go<small>user</small>WireGuard<small>kernel</small>IPsec<small>kernel</small>1 stream, out0.9091.0791.5110.6721 stream, in0.9251.0921.5250.6641 stream, both0.8980.9961.5040.5258 streams, out0.9961.2131.7400.8458 streams, in0.9901.1821.7480.8668 streams, both0.9481.0871.5000.620In the "both" rows kernel IPsec carried only 4.67 and 4.14 of the 6 Gbit/s offered.**Latency under saturation**RTT p99, msLower is betterranet3<small>user</small>wireguard-go<small>user</small>WireGuard<small>kernel</small>IPsec<small>kernel</small>1 stream, out2.012.101.071.041 stream, in1.912.180.851.231 stream, both3.173.151.651.768 streams, out2.7716.401.261.538 streams, in2.865.091.171.508 streams, both4.967.692.482.51
+## Front matter
+
+## Part 1: Logical Foundations
+
+- Naturals: Natural numbers
+- Induction: Proof by Induction
+- Relations: Inductive definition of relations
+- Equality: Equality and equational reasoning
+- Isomorphism: Isomorphism and Embedding
+- Connectives: Conjunction, disjunction, and implication
+- Negation: Negation, with intuitionistic and classical logic
+- Quantifiers: Universals and existentials
+- Decidable: Booleans and decision procedures
+- Lists: Lists and higher-order functions
+
+## Part 2: Programming Language Foundations
+
+- Lambda: Introduction to Lambda Calculus
+- Properties: Progress and Preservation
+- DeBruijn: Intrinsically-typed de Bruijn representation
+- More: Additional constructs of simply-typed lambda calculus
+- Bisimulation: Relating reduction systems
+- Inference: Bidirectional type inference
+- Untyped: Untyped lambda calculus with full normalisation
+- Confluence: Confluence of untyped lambda calculus
+- BigStep: Big-step semantics of untyped lambda calculus
+
+## Part 3: Denotational Semantics
+
+- Denotational: Denotational semantics of untyped lambda calculus
+- Compositional: The denotational semantics is compositional
+- Soundness: Soundness of reduction with respect to denotational semantics
+- Adequacy: Adequacy of denotational semantics with respect to operational semantics
+- ContextualEquivalence: Denotational equality implies contextual equivalence
+
+## Appendix
+
+- Substitution: Substitution in the untyped lambda calculus
+
+## Back matter
+
+## Related
+
+### Courses taught from the textbook
+
+#### 2026
+
+#### 2025
+
+#### 2024
+
+- Philip Wadler, University of Edinburgh
+
+#### 2023
+
+- Peter Thiemann, Albert-Ludwigs University
+- Philip Wadler, University of Edinburgh
+
+#### 2022
+
+- Andrej Bauer, University of Ljubljana
+- Michael Shulman, University of San Diego
+- Peter Thiemann, Albert-Ludwigs University
+- Philip Wadler, University of Edinburgh
+
+#### 2021
+
+- Favonia, University of Minnesota
+- Prabhakar Ragde, University of Waterloo
+- Jacques Carette, McMaster University (based on Prabhakar’s)
+
+#### 2020
+
+- William Cook, University of Texas
+- Maria Emilia Maietti and Ingo Blechschmidt, Università di Padova
+- John Maraist, University of Wisconsin-La Crosse
+- Jeremy Siek, Indiana University
+- Ugo de’Liguoro, Università di Torino
+
+#### 2019
+
+#### 2018
+
+- David Darais, University of Vermont
+- Philip Wadler, University of Edinburgh
+- John Leo, Google Seattle
+
+### Derived works
+
+- PLFArend: the PLFA book with all code snippets rewritten in Arend.
+- PLFaLean: PLFA proofs implemented in Lean 4, covering Parts 2-3 of the v22.08 release of the book.

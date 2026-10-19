@@ -1,31 +1,55 @@
-Compilers are good at making mechanical transformations that make code faster. Unfortunately, most of them are not as good at non-trivial reasoning, so they can’t invent a completely novel approach to solving your problem.When designing a library for floating-point calculations, I had to implement a function that takes a float f and produces a float corresponding to the lowest set bit in f. For example, if f=1.01101⋅210 in binary, it would return 0.00001⋅210=25.This can be implemented with bit twiddling, but the straightforward algorithm breaks for powers of two, so I had to insert an `if`:`if f32::from_bits(x.to_bits() & !f32::MANTISSA_MASK) == x { // is x a power of two?
-    return x; // x itself is the lowest bit
-} else {
-    return x - f32::from_bits(x.to_bits() & (x.to_bits() - 1)); // x, minus x without lowest bit
-}
-`This `if` really annoyed me. It’s slowed down for the common case, and branches could be mispredicted. I wanted to find a formula that automatically handled powers of two, but try as I might, I couldn’t find anything convincingly optimal.So I made a non-orthodox play.Brute-forceWhat if there was a way to find such a formula automatically? No, not by spawning an LLM swarm, but by brute-forcing all possible formulas. LLMs can miss stuff or overindex on popular patterns; brute-force can’t.But how do we check if a formula is correct? Theorem provers are too slow, but we can design a few representative test cases and hope that whatever formula we find is correct. And if it has a counterexample, just add it to the list of test cases and repeat.This is not as insane as it sounds: by this moment I had already implemented an algorithm with 6 operations, so I just needed to iterate over formulas with 5 ops or fewer. I knew that the following operations could be useful:Integer addition/subtraction and bitwise AND/OR/XOR for bit tricks.Floating-point subtraction as the last operation.Maybe comparisons?There are 65=7776 ways to choose 5 operations, each of which can be one of 6 variants, and [C5=42 possible parentheses placements](https://en.wikipedia.org/wiki/Catalan_number). That’s not a lot!But we also need to choose the inputs to each operation, which can be either the input value x or some constant. I guessed that we’ll only need constants that cover various fields of the `float` binary representation, and not completely random ones, reducing the list to 64 different constants. That’s 656 combinations, which sounds like a lot, but in practice we can cull many of them.SearchTo implement the search efficiently, I build up the formula set inductively.Formulas with 0 operations are just x and constants; formulas with n operations can be found by combining all pairs of formulas with k and n−1−k operations:`for n_ops in 1..N_OPS {
-    let mut new_exprs = FxHashSet::default();
-    for a_ops in 0..n_ops {
-        let b_ops = n_ops - 1 - a_ops;
-        let a_exprs = &exprs_per_op_count[a_ops];
-        let b_exprs = &exprs_per_op_count[b_ops];
-        for a_expr in a_exprs {
-            for b_expr in b_exprs {
-                for op in OPS {
-                    // New expression: `a_expr op b_expr`
-                    new_exprs.insert(Expr {
-                        values: core::array::from_fn(|i| {
-                            op(a_expr.values[i], b_expr.values[i])
-                        }),
-                    });
-                }
-            }
-        }
-    }
-}
-`Induction allows us to prune duplicates. For example, (x+1)+2 and (x+2)+1 are different expressions, but they return the same values. Keeping just one expression for each set of outputs allows further iterations to complete faster. This is the reason why brute-force can complete in just 4 minutes! (I’m sure it can be optimized further, but I preferred watching YouTube over optimizing a one-off script.)To save time and memory, I avoid deduplication on the last iteration and output all matching candidates. Memory usage matters because I had 20 test cases by this point, so I had to store 80 bytes per expression, and there are *a lot* of expressions.ResultsSo, did this exhaustive search find anything interesting? Yes! There were several formulas with 5 operations, e.g. this one:`return x - f32::from_bits(x.to_bits() & (
-    (f32::EXPONENT_MASK - (x | f32::EXPONENT_MASK)) ^ !f32::EXPONENT_MASK
-));
-`I couldn’t find formulas with 4 operations, but this approach has a limitation: it doesn’t take into account that calculations can be reused. So, for example, if `x & 1` is used in two places, it will count that as two operations, not one. I was hoping that one of the 5-op formulas could actually be expressed as 4 operations via reuse, and after manually checking every formula, the very last one turned out to have this property! Here’s what it looks like:`let a = x.to_bits() & !f32::MANTISSA_MASK; // x without mantissa bits
-return f32::from_bits(x.to_bits() & (a - x.to_bits())) - f32::from_bits(a);
-`It behaves a little differently for powers of two – it flips the sign bit, which I don’t care about. And the logic doesn’t make sense at first glance, and yet it works.The reason why only this formula can reuse `a` is the subexpression `a - x.to_bits()`. It’s equivalent to `-(x & f32::MANTISSA_MASK)`, which is how other formulas refer to it. All formulas compute `x & !f32::MANTISSA_MASK` and `x & f32::MANTISSA_MASK`, but this one rewrites the latter as `x - (x & f32::MANTISSA_MASK)`, and then merges that with negation to save one operation!I was flabbergasted when I realized it found such a clever rewrite. You don’t need an LLM to be amazed by what computers can invent! And it doesn’t destroy industries.Anyway, this code now [lives in my work-in-progress FPU emulator](https://github.com/purplesyringa/fpu-v/blob/d3c3f72c691698e5095d259a79610e5293911651/src/ops/multiplication.rs#L485) and I’m proud of it.
+**For years, Tor Browser has been one of the most effective tools for protecting privacy and bypassing censorship online. But most people don't experience the internet through a browser anymore. They connect to it via their favorite apps. Wouldn't it be nice to extend the same privacy protections to messaging apps, social media, email, and other services?**
+
+And for years, we heard this again and again in our user research. People wanted a simple way to protect their entire device, which inspired the idea for Tor VPN back in 2021. We focused on Android first, where the need was greatest and where we could reach the most users in censored regions. We built Tor VPN Beta as a first version, with the expectation that we would learn from real-world use. And when we first launched Tor VPN Beta for Android in a limited release last fall, the primary use case quickly became much clearer: unblock the internet. This has shaped how we've prioritized development and user support in the time since the initial launch, and how we think about the product moving forward.
+
+![Image app isolation feature](https://blog.torproject.org/tor-vpn-beta/per-app-routing.png)
+
+## What makes Tor VPN different
+
+Unlike commercial VPNs, Tor VPN Beta is built on a fundamentally different model. It is our first step into device-level network protection on mobile to extend Tor's protections beyond the browser. Each mobile app on your device gets its own Tor circuit, rather than sharing a single tunnel. That means activity from one app can't easily be linked to another. This type of app isolation is a design choice heavily inspired by the cross-site tracking protections in Tor Browser<sup>[1](https://blog.torproject.org/tor-vpn-beta/#fn-nested)</sup>. It's a different model from most VPNs, and one that's designed to reduce cross-tracking by default.
+
+As Tor VPN Beta has matured, we've also worked on making that app-level control easier to use. The Apps screen is now searchable, so people can more quickly find a specific app and decide whether it should be routed through Tor.
+
+![Image App screen searchbar](https://blog.torproject.org/tor-vpn-beta/apps-screen-searchbar.png)
+
+## Rethinking how we design for circumvention
+
+While Tor VPN Beta includes features commonly associated with VPNs, such as exit selection, those aren't always the right approach for users trying to bypass censorship. This was one of the most important lessons that came from usability testing and early feedback during the development stage.
+
+We originally explored giving users more control over exit selection, which, on paper, sounded great. But in practice, this introduced confusion. Users trying to bypass censorship were selecting exit locations when they should have been using bridges instead. There was a mismatch between how Tor works and how people expected it to work. This is why the current design required connecting the app to the Tor network first before selecting an exit. Exit selection is still something we want to explore more fully in the future, but it needs to be introduced in a way that doesn't create user error in high-risk situations.
+
+## Used where it's needed most
+
+Early on, we saw strong adoption in highly censored regions, including Iran and Turkmenistan. This stood in contrast to Tor Browser for Android, which tends to skew more toward users in the Global North. With Tor VPN Beta, we're seeing much deeper engagement from users in the Global South, people dealing with network restrictions as a daily reality.
+
+Because of how people are using Tor VPN Beta, we've doubled down on improving its circumvention capabilities. One example was prioritizing the addition of WebTunnel bridges with one of the early releases (1.4.0 beta), which helps Tor traffic look like regular encrypted web traffic. This makes it harder for censors to detect and block connections. We have also fixed several bugs and made quality-of-life improvements across bridge support more generally, with the goal of making bridge use more reliable.
+
+## Stability and reliability matter just as much as features
+
+In fact, a significant amount of work since the early release has gone into improving stability. Tor VPN is built on [Arti, our next-generation Tor implementation written in Rust](https://blog.torproject.org/announcing-arti/). Under the hood, that means a new, solid technical foundation rather than patching around legacy architecture. One of the immediate benefits is improved reliability, including fewer crashes and better handling of network conditions. We have also invested in making our builds reproducible and getting the app onto F-Droid. Reproducible builds let anyone verify that the binary you're running matches the published source code, while F-Droid availability gives users a way to install and update the app without relying on Google Play, both of which matter for a privacy and security-focused tool.
+
+While Tor VPN Beta doesn't behave like a commercial VPN optimized for speed, [the Tor network has become more performant](https://blog.torproject.org/congestion-contrl-047/) over time, and [we're continuing to bring those improvements into the mobile experience](https://gitlab.com/guardianproject/tormobile/arti-mobile). There are still performance features from Tor's C implementation, like congestion control, that are not yet available in Arti. Bringing those capabilities over is part of what comes next.
+
+> *We set out to extend Tor beyond the browser to close a gap in mobile protection, but the project was quickly being shaped by how people actually use it, especially those who need reliable, device-wide circumvention. So we focused on building the right foundation for Tor on mobile with a modular Tor stack centered on Arti and [Onionmasq](https://gitlab.torproject.org/ahf/onionmasq) that can evolve with real-world use. These components are now reusable across multiple applications, reducing ecosystem fragmentation and long-term maintenance risk. 
+> -- Duncan, UX-Team Lead/ Product Manager, Tor VPN*
+
+There's more work to do here. Tor Browser still sets the standard for what's possible, and part of our goal is to bring Tor VPN closer to that level over time.
+
+## What's next?
+
+Tor VPN Beta is the result of a collaborative, multi-year effort. Thank you to [The Guardian Project](https://guardianproject.info/) for their guidance and critical low-level mobile libraries, and the LEAP Encryption Access Project for their quality work, without both the app would have never seen the light of day. We're [continuing to build Tor VPN Beta](https://blog.torproject.org/code-audit-tor-vpn/) in the open, shaped by how people are actually using it.
+
+That means improving circumvention in restrictive environments, bringing more performance features into Arti, and refining the user experience to reduce confusion and risk.
+
+And most importantly, continuing to learn from the people who rely on it. If that includes you, and you want to help shape the development of Tor VPN Beta, please visit our [refreshed download pages](https://download.torproject.org/). In addition to downloading the app as an APK or from the Google Play Store, you can now use F-Droid to access Tor VPN Beta.
+
+## Comments
+
+We encourage respectful, on-topic comments. Comments that violate our
+	  [Code of Conduct](https://community.torproject.org/policies/code_of_conduct)
+	  will be deleted. Off-topic comments may be deleted at the discretion of
+	  the moderators. Please do not comment as a way to receive support or to
+	  report bugs on a post unrelated to a release. If you are looking for
+	  support, please see our [FAQ](https://support.torproject.org/),
+	  [user support forum](https://forum.torproject.org/) or ways to
+	  [get in touch with us](https://www.torproject.org/contact).
