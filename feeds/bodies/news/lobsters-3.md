@@ -1,222 +1,63 @@
-Almost all modern machines use [two’s
-complement](https://www.cs.cornell.edu/~tomf/notes/cps104/twoscomp.html) to
-represent integers. This representation is asymmetric, in the sense that the
-most negative number has no corresponding positive number. For example, with
-signed 8-bit numbers, the most negative number is `-128`, whilst the most
-positive number is `127`. This quirk shows up in various cases, but for the
-purpose of this post, I am concerned with signed integer division, where `x/-1`
-mathematically should produce `-x`, but in the case where `x` is the most
-negative number, that is not possible. For 32-bit integers, which I arbitrarily
-decide are the most common, this means that one out of every 2⁶⁴ possible inputs
-is impossible to represent correctly - leading to the somewhat clickbaity title
-of this post, and some recently fixed troubles in the Futhark compiler. In this
-post I will explain what the actual problem is for a language implementation,
-how we fix it, and what the performance cost looks like. The main audience of
-this post is other language implementers, but I think the concepts involved are
-simple enough that anyone curious about low level issues can follow along.
+With my previous post on [“using the platform”](https://nolanlawson.com/2026/10/03/why-dont-more-developers-use-the-platform/), I was surprised that the comments on [Hacker News](https://news.ycombinator.com/item?id=49950554) and [Lobsters](https://lobste.rs/s/srduzv/why_don_t_more_developers_use_platform) tended to veer toward web components. This surprised me because I didn’t mention web components at all in the post.
 
-The Futhark compiler has multiple backends, but the most important ones work by
-generating C code. This has many practical advantages:
+I was less surprised when I did some research and found that the entire “use the platform” mantra was first popularized by [Polymer](https://polymer-project.appspot.com/blog/2016-05-26-IO-2016-Recap), which was Google’s early attempt at a web-components-based JavaScript framework. In 2018 they even called it [“our motto”](https://www.polymer-project.org/blog/2018-02-26-3.0-preview-paths-and-names)! So this explains why a lot of people seem to have it burned into their brains that “use the platform” means “use web components.”
 
-1. It is easy to debug the generated code because it is easy to read and modify by hand.
-2. Most systems have a C compiler (or easy access to one), meaning Futhark has fewer dependencies, is portable, and doesn’t need to bundle native code generators.
-3. Many languages can interoperate with C, so by exposing Futhark as a C API, [those languages can also call Futhark](https://futhark-lang.org/blog/2022-07-01-how-futhark-talks-to-its-friends.html).
+Now, one of the reasons I didn’t mention web components in the post is that, in my opinion, they’re actually not a great example of “use the platform” (regardless of the motto’s origins). I instead leaned on examples of HTML and CSS features that tend to be more performant, more accessible, and require far fewer lines of code than the equivalent in JavaScript. This is largely thanks to the advances that the browser vendors and standards bodies (e.g. the [CSS Working Group](https://www.w3.org/groups/wg/css/) and [Open UI project](https://open-ui.org/)) have made in the past few years.
 
-That said, there are also disadvantages:
+## Modern Web Guidance
 
-1. Some code patterns are hard to express (or express efficiently) in C. This is mainly the case for advanced language features such as coroutines, tail calls, or garbage collection. Fortunately Futhark is [pretty boring from a semantic perspective](https://futhark-lang.org/blog/2025-09-26-the-biggest-semantic-mess.html), so this does not affect us too much.
-2. It is very easy to accidentally generate C code that is subtly wrong. This does unfortunately keep pestering us.
+Web components popped into my head again, though, after a [comment on Mastodon](https://mamot.fr/@mokobien/117380327572292850) pointed me to Google’s [Modern Web Guidance](https://developer.chrome.com/docs/modern-web-guidance). I wasn’t aware of this tool before writing the post, but essentially it’s a set of skills that you can give to an agent to nudge them in the direction of using more modern browser features. Essentially, it’s “use the platform” for agents (or at least the Chrome team’s vision of it).
 
-C is of course renowned as a very safe and easy-to-use language, because C
-programmers never make coding mistakes. The few times they do make mistakes, it
-is often due to mishandling of pointers or array sizes, leading to buffer
-overflows, heap smashing, etc. These are actually not the main problem with
-generating C from Futhark, as Futhark itself is memory-safe, and systematically
-inserting in bounds checks in generated code is easy ([although a little more
-interesting in GPU code](https://futhark-lang.org/blog/2020-07-13-bounds-checking.html)).
+As I was watching [the demo](https://youtu.be/bo3i0FzDUYo), though, I was struck by how hard it is to see where web components fit into the picture. In the presentation, Phil Walton shows how you can use Modern Web Guidance to create a web app that feels more like a native app in terms of following your finger smoothly as you touch the screen, thanks to features like CSS [scroll snap points](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Scroll_snap) and [scroll-driven animations](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Scroll-driven_animations).
 
-No, the main problem we’ve had is actually undefined behaviour. As is by now
-well-known, C specifies various events as explicitly undefined, meaning not only
-that a C compiler can assume it will never occur, but also that no particular
-result is guaranteed should a program perform one of the undefined operations.
-Some causes of undefined behaviour are obvious and easy to avoid: reading arrays
-out-of-bounds, using freed memory, etc. But C has a long list of more obscure
-cases. My favourite example is that in C99, it is undefined behaviour if a
-source code file does not end with a final newline character. Yet we have
-honestly not spent that much time dealing with that particular issue in Futhark.
+But nowhere in the demo are we really seeing the code – this is pure vibe-coding. And as I watched, I struggled to think of any place where, if I were building Modern Web Guidance myself, I would put instructions to tell the agent, “Hey, you should use custom elements, shadow DOM, or other web component primitives here because it’s going to make the end user experience better.” And that’s because there’s *nothing* that web components can really do to make the end user experience better. (Arguably you could say that shadow DOM improves CSS performance, but [I’ve benchmarked this to death](https://nolanlawson.com/2022/06/22/style-scoping-versus-shadow-dom-which-is-fastest/), and you can effectively get the same boost with compile-time CSS scoping, which many frameworks and tools like Svelte, Vue, and Tailwind are already doing.)
 
-No, the main problem, and now we are finally returning to the premise in the
-post, is that *signed* integer overflow is undefined behaviour in C. This is
-particularly insidious since most programmers have a mental model of fixed-size
-integer arithmetic where overflow is a natural event, and so does the actual
-machines we use, but a C compiler may assume it never happens. The reason behind
-this specification is so the C compiler can optimise based on useful properties
-such as `x+1>x`, which are not true in the presence of overflow, but the
-motivation does not actually matter to us. In a language like Futhark, where
-integer overflow *is* defined behaviour (it wraps around), this creates a very
-unfortunate mismatch between what we want to do, and what we can express in our
-target language.
+So I took a look at the actual [code](https://github.com/GoogleChrome/modern-web-guidance) for Modern Web Guidance, and my hunch was confirmed: web components feel like an afterthought. For the first six months of the project’s lifetime, there was almost no mention of web components. This only changed 3 weeks ago when [a single commit](https://github.com/GoogleChrome/modern-web-guidance/commit/84ae7251ee919239d5ea85aef25897983f26601e) landed, which mostly provides guidelines for those *already using* web components, around the topics of [accessibility](https://github.com/GoogleChrome/modern-web-guidance/blob/84ae7251ee919239d5ea85aef25897983f26601e/skills/modern-web-guidance/guides/html/accessible-web-components.md), [pre-rendering](https://github.com/GoogleChrome/modern-web-guidance/blob/84ae7251ee919239d5ea85aef25897983f26601e/skills/modern-web-guidance/guides/html/prerendering-custom-elements.md), [styling](https://github.com/GoogleChrome/modern-web-guidance/blob/84ae7251ee919239d5ea85aef25897983f26601e/skills/modern-web-guidance/guides/html/styling-web-components.md), etc. But nowhere does the Modern Web Guidance strongly recommend the agent to use web components – in fact, there’s a whole section titled [“Decide whether you even need a custom element”](https://github.com/GoogleChrome/modern-web-guidance/blob/b31dc0a43ff5d19bcf386a3476a216f3b39a6f55/skills/modern-web-guidance/guides/html/web-components.md#decide-whether-you-even-need-a-custom-element) which sounds downright discouraging at times. As written, if you throw the Modern Web Guidance at an agent building a brand-new product, it seems unlikely to me that it would choose to use web components.
 
-Fortunately, C is merciful enough to specify that for *unsigned* numbers,
-overflow is well-defined, and behaves just as you would expect (on a
-two’s-complement machine, anyway). For this reason, Futhark’s C code generation
-actually represents all integer types using unsigned C types, (so `i64` becomes
-`uint64_t`), and then performs the arithmetic on unsigned types. This works due
-to the nice property of two’s complement representation that most arithmetic
-operations are done exactly the same, at the bit level, as for unsigned
-integers. One exception is comparison operators, in which we cast to the signed
-type (e.g. `int64_t`) before performing the comparison. Such conversions are
-free, since they do not need to change the bit representation of the number, but
-only affect what instructions the C compiler emits for e.g. a `<=` operation.
+To be fair, there is one exception: [a line for Chrome extension authors](https://github.com/GoogleChrome/modern-web-guidance/blob/b31dc0a43ff5d19bcf386a3476a216f3b39a6f55/skills/chrome-extensions/references/extensions/content-scripts.md?plain=1#L102) recommends using shadow DOM for complex UI injected into a page. This seems perfectly sensible to me, although it’s a fairly narrow use case. [Another line](https://github.com/GoogleChrome/modern-web-guidance/blob/b31dc0a43ff5d19bcf386a3476a216f3b39a6f55/skills/modern-web-guidance/guides/html/web-components.md?plain=1#L3) suggests using web components for “design systems, embeddable widgets, and self-contained UI,” but this is also fairly narrow, and reads to me as a faint nod within the larger context of “decide whether you even need a custom element.”
 
-Another operator where sign matters is division. If we do `x/-1`, then it is
-quite important whether we are dividing with a small negative number, or with
-the number that arises if we interpret the two’s complement bit pattern for `-1`
-as an unsigned integer. This means that for signed integer division, Futhark
-generates a signed C division. This means that if we do `x/-1` where `x` is the
-most negative number, we are stuck with the issue described in the post opener -
-the correct result (`-x`) cannot be represented as a signed integer, so this is
-a signed integer overflow, and that is undefined behaviour in C.
+## Web components at a crossroads
 
-Futhark is a principled language, and therefore producing undefined behaviour is
-unacceptable. (I realise the hypocrisy of this puritan declaration whilst
-leaving in the bug for ten years.) Further, on x86 this kind of division will
-actually signal a CPU exception, crashing the program, so this is not merely a
-violation of the sanctity of the C specification. Fixing it in principle is
-easy. This is the definition of 32-bit signed division in the Futhark runtime
-system:
+So where do web components fit into this new AI coding world? I’m not going to rehash all my points about web components’ strengths and weaknesses; I’ve already done that at [considerable](https://nolanlawson.com/2023/08/23/use-web-components-for-what-theyre-good-at/) [length](https://nolanlawson.com/2024/09/28/web-components-are-okay/). Instead I want to talk about what’s new if people are no longer writing the code (or increasingly, even reading it).
 
-```
-int32_t squot32(int32_t x, int32_t y) {
-  return x / y;
-}
-```
+This section was painful for me to write, because I spent years working on a web-components-based framework ([LWC](https://lwc.dev)), participating in the [Web Components Community Group](https://www.w3.org/community/webcomponents/) and [Accessibility Object Model group](https://github.com/WICG/aom), and defending web components [on my blog](https://nolanlawson.com/category/web-components/), [in](https://podrocket.logrocket.com/what-web-components-are-good-at) [podcasts](https://shoptalkshow.com/451/), etc. And yet I have to acknowledge that their core value proposition have been severely weakened by agentic coding.
 
-And this is the version that avoids the 0.000000000000000000542% undefined cases:
+In short, web components were designed for a world where people typed HTML by hand, code was scarce, and thus reuse was an economic necessity. None of those things are true anymore, or at least they’re much less true and becoming less so by the day. So the elevator pitch of “build for a common standard and your components will be easier to pick up and reuse” becomes less compelling as more and more people are vibing UIs from scratch on top of a largely invisible platform substrate.
 
-```
-int32_t squot32(int32_t x, int32_t y) {
-  return y == -1 ? (int32_t)(0 - (uint32_t)x) : x / y;
-}
-```
+This doesn’t just devastate the value proposition of web components: it also impacts the JavaScript frameworks that inspired them. Increasingly I read about teams [rewriting their entire frontend from one framework to another](https://dev.to/playfulprogramming/nobody-argued-for-your-stack-51fj), based largely on the vibes of “it’s probably better for agents.” Regardless of the merits of these rewrites (which I think ought to be more evidence-based along the lines of “it uses fewer tokens” or “it’s a faster end-user experience”), we’re likely to see more of them in the future. And if people start seeing the framework layer as disposable, it seems unlikely to me that they would assign much value to the layer one step below that.
 
-This function simply checks whether the divisor is `-1`, and if so does the
-negation with unsigned (well-defined) arithmetic. The cost is a branch on every
-single division. The behaviour is still *implementation-defined*, but produces
-the right results on the machines we care about.
+As I argued in a [2023 post](https://nolanlawson.com/2023/12/30/shadow-dom-and-the-problem-of-encapsulation/), component libraries were already moving from a “batteries-included” model to a more “DIY” mindset. The apotheosis of this is [shadcdn](https://ui.shadcn.com/), which might seem like a machine for spitting out reams of boilerplate, but in a sense, that’s the point. Rather than make your touchpoint with a component system an inflexible API that resists your attempts to style or tweak it, you import the individual bits and pieces and then rearrange them at your will. This shift was already underway before AI coding, and now with LLMs “reams of boilerplate” are an advantage rather than a detriment. And none of this plays to the strengths of shadow DOM, reflected attributes, or other web component mainstays.
 
-(Why `quot` instead of `div`? Futhark actually has *two* division operators -
-one that rounds sensibly towards negative infinity, and one that rounds towards
-zero like C. The function above is the one that follows C’s behaviour because it
-is less code, but the issue is the same either way.)
+## Salvaging web components
 
-### [The cost](https://futhark-lang.org/blog/2026-10-14-defining-division.html#the-cost)
+There are two (slightly weak) cases I can try to make for web components in this new world of AI coding.
 
-Correctness is not really a thing we can compromise on, but in principle it is
-frustrating that *every* integer division needs an additional branch just to
-handle a *single* special case that may never actually happen, as it is highly
-unlikely that a program’s correctness *depends* on wraparound for signed integer
-division at the ends of the numeric scale. But apart from the principal
-frustration, what is the actual overhead?
+The first is so-called micro-frontends, or the idea of separating a large UI into multiple sections that can be built by different teams without clobbering each other. Web components were explicitly designed for this scenario: avoiding [“friendly fire”](https://bkardell.com/blog/FriendlyFire.html) (in Brian Kardell’s memorable phrasing). In a world of agents, this kind of sandboxing is actually a well-known technique, because typically you want to isolate agents into strict boundaries to avoid them rampaging on top of each other. In other words, web components could theoretically allow you to have multiple swarms of agents working on separate parts of the UI without their CSS, events, or globals clashing with one another.
 
-Measured on the [Futhark benchmark
-suite](https://github.com/diku-dk/futhark-benchmarks) on GPU, I was unable to
-measure an impact. This is likely because signed integer divisions are
-relatively rare, and even when they do occur, they likely occur due to index
-arithmetic, where the resulting memory loads have so much latency that they
-easily [hide](https://modal.com/gpu-glossary/perf/latency-hiding) the cost of
-doing the divisions.
+The obvious counterpoint is that the web already has a great sandboxing primitive, which is iframes. Iframes offer even firmer boundaries than web components: not only are components isolated from each other, but they also live in separate JavaScript realms with `postMessage` as the only communication channel. There are several tradeoffs that I don’t want to get into here (synchronous vs asynchronous communication, memory usage, the porousness of closed vs open shadow DOM), but I do think web components have a chance in this fight. (Arguably, the Modern Web Guidance’s “design systems and self-contained UI” are also examples of micro-frontend-like scenarios where web components can shine.)
 
-But what if we try to construct a contrived program where the bottleneck is
-signed division throughput? That would demonstrate something close to worst-case
-overhead of adding the branch. Behold, `divisions.fut`:
+The second argument is that reuse still matters even when rewrites are just a prompt away. For example, I still believe that my [`<emoji-picker>` element](https://github.com/nolanlawson/emoji-picker-element/) is a good poster child for an effective web component: there is no reason to rebuild this thing in React, Vue, Svelte, and a dozen other frameworks, even though you could trivially do so with an LLM these days. It’s a standalone, client-only component, and most of its complexity lives in managing the emoji data, IndexedDB, etc., with little need for touchpoints with a framework to manage its rendering or lifecycle. So packaging it as a web component and allowing folks to wrap it in their framework layer of choice (or none at all) is still a sensible distribution model.
 
-```
--- ==
--- random input { 1000000 [1000]i32 [1000]i32 }
+Arguing against web components as a [*lingua franca*](https://en.wikipedia.org/wiki/Lingua_franca) for reuse sounds (to me) like an argument that all code sharing or even open source in general is a waste of time in the agentic era. My colleague André Staltz has shown that this is [clearly false](https://socket.dev/blog/ai-has-taken-over-open-source): if anything, AI coding is increasing the amount of shared code, not decreasing it. Even if you *can* rebuild something with agents, that doesn’t mean that it’s worth spending the tokens to do so. (Although I do still wonder about [smaller projects](https://nolanlawson.com/2025/11/16/the-fate-of-small-open-source/).)
 
-entry main [n] (k: i32) (xs: [n]i32) (ys: [n]i32) : [n]i32 =
-  map2 (\x y ->
-          loop z = x
-          for _i < k do
-            #[unsafe]
-            z // y)
-       xs
-       ys
-```
+The stronger counterargument is that agents already have a perfectly good component reuse layer, which is [React](https://youtu.be/P1FLEnKZTAE). I don’t believe this, though, because I don’t think that React is the last JavaScript framework the world will ever need. Performance benchmarks like the [js-framework-benchmark](https://github.com/krausest/js-framework-benchmark) and [isomorphic SSR benchmark](https://github.com/marko-js/isomorphic-ui-benchmarks) still stubbornly argue against React adoption: as it turns out, [the virtual DOM is still pure overhead](https://svelte.dev/blog/virtual-dom-is-pure-overhead). React could certainly reinvent itself for the agentic era, but I imagine this could lead to compatibility problems that would argue more strongly for web component adoption, if for no other reason than to get off the update treadmill.
 
-The program accepts a number `k` and two arrays of integers. For each
-corresponding pair `x` and `y`, it `k` times divides `x` by `y`, using `//` to
-target the `squot32` function, and using `#[unsafe]` to remove division-by-zero
-checks.
+Still, I think the strongest argument of all is that neither web components nor React nor any other framework really matter, except maybe as a footnote in someone’s `AGENTS.md` or an aside in an agent’s thinking process. Recently I vibe-coded a small app for my wife, and the agent mentioned that it was wavering between Preact and Svelte before finally settling on Preact. To be honest, I didn’t care at all because the app worked and solved the problem at hand.
 
-For most values of `k`, repeated division quickly produces zero, but the
-compiler cannot assume this, so it will have to actually perform the divisions.
-You may reasonably argue that the program is not *purely* division bound, as the
-bookkeeping around the loop also involves costly things such as adding and
-comparing integers, but a program that contains a very long *unrolled* sequence
-of divisions stretches my credulity too far.
+## Conclusion
 
-Using the handy [futhark
-bench](https://futhark-lang.org/examples/benchmarking.html) tool, we can then
-measure the impact using the compiler with a fixed implementation of `squot32`
-([part of this pull request](https://github.com/diku-dk/futhark/pull/2579)).
-First on sequential code, using the `c` backend:
+I still have a soft spot for web components, and when push comes to shove I’ll happily defend them against any detractors.
 
-```
-$ futhark-old-and-busted bench divisions.fut
-...
+There’s even a web component on this very site! The theme picker above is an [“HTML web component”](https://adactio.com/journal/20618) (or “light DOM component”), which I find quite nice as an alternative to the old-school “HTML with jQuery sprinkles” approach. Defining setup logic in `connectedCallback` just *feels* cleaner to me than awkward `querySelector` acrobatics. That said, I’ll admit that I had to explicitly tell my agent to use a web component (otherwise I’m certain it would have just shrugged and reached for `querySelector`).
 
-divisions.fut (no tuning file):
-100000i32 [10000]i32 [10000]i32:    3390148μs (95% CI: [ 3387613.7,  3396498.1])
+Despite my sentimentality for web components, though, I think that the web component advocates working on standards, frameworks, or browsers will have to work twice as hard to argue for their relevance in an AI coding future. I no longer have a dog in this fight, but I looked at the status of some longstanding problems with web components and was disappointed to see that [server-side rendering](https://github.com/whatwg/html/issues/10673), [stylesheet sharing](https://github.com/WICG/webcomponents/issues/909), and [accessibility](https://chromestatus.com/feature/5188237101891584) still appear to be unsolved. These kinds of flaws – which mind you, directly impact the end-user experience and are thus unchanged with AI coding – will have to be fixed if web components want to have a fighting chance.
 
-$ futhark-new-hotness bench divisions.fut
-...
+If web components don’t survive, or they wither away to forgotten infrastructure on a [minority of websites](https://chromestatus.com/metrics/feature/timeline/popularity/1689), then what will they have accomplished? Well, I do think that one unambiguous victory for web components has been in “explaining the platform.” This was [one of the original goals of web components](https://domenic.me/explaining-away-the-webs-magic/): taking a native HTML element like `<video controls>` or `<details>`/`<summary>` and explaining how web developers could build it themselves from platform primitives. And in fact if you look at the browser DevTools, you’ll even see “user-agent shadow DOM” hiding inside these elements.
 
-divisions.fut (no tuning file):
-100000i32 [10000]i32 [10000]i32:    3389215μs (95% CI: [ 3387626.2,  3391036.4])
-```
+So from a standards and internal-consistency perspective, web components have been a clear win. They provide a degree of coherence between userland and the platform that, without them, might have felt ad-hoc or inconsistent from browser to browser.
 
-There is no measurable difference, which is not a surprise on a modern
-speculatively executing CPU for a program with an easily predicted branch.
+This has also created a symbiotic relationship between standards and userland, where web component concepts have flowed back into standards and influenced the design of new platform features. You can see this most clearly in the [Open UI project](https://open-ui.org/), where terms like “parts” and “slots” are frequently invoked (both of which come from web components), and which has landed several new features in browsers such as [customizable `<select>`](https://developer.mozilla.org/en-US/docs/Learn_web_development/Extensions/Forms/Customizable_select), [popovers](https://developer.mozilla.org/en-US/docs/Web/API/Popover_API), and [invoker commands](https://developer.mozilla.org/en-US/docs/Web/API/Invoker_Commands_API), with more likely on the way.
 
-But what about GPUs? After all, “GPUs are bad at branching” is a common motto by
-those of my students who like to replace an `if` with ten lines of dense
-branchfree code. Let’s try the experiment again with Futhark’s `cuda` backend:
+So whatever happens to web components in the future, and regardless of whether web developers ignore them, forget them, celebrate their demise, or write them off entirely, nothing can take this victory away from them. They are woven into the texture of the web platform in a way that can never be undone. For me, this makes me happy even if I never write another web component again.
 
-```
-$ futhark-old-and-busted bench --backend=cuda divisions.fut
-...
-
-divisions.fut (no tuning file):
-100000i32 [10000]i32 [10000]i32:       5548μs (95% CI: [    5546.4,     5552.2])
-
-$ futhark-new-hotness bench --backend=cuda divisions.fut
-...
-
-divisions.fut (no tuning file):
-100000i32 [10000]i32 [10000]i32:      12592μs (95% CI: [   12563.5,    12622.1])
-```
-
-Well then! This really is a major difference. Much more than I expected when I
-began this work, actually. Reading the generated PTX (CUDA machine code), the
-old version is partially unrolled into four consecutive `div.s32` instructions
-in a single basic block, whilst the fixed compiler still triggers unrolling, but
-with many branches between the divisions.
-
-I observed a similar result on an AMD GPU with the `hip` backend, although the
-impact was slightly less there.
-
-The cost of fixing those 0.000000000000000000542% of divisions is real and
-unfortunate, and I would certainly like to have a cheaper fix. Having undefined
-behaviour in the generated code is of course not acceptable, so we will have to
-live with this for now. On non-contrived benchmarks, it seems there is
-essentially no impact. For programmers unwilling to pay this cost, you can
-always stick to *unsigned* divisions, if you know that you will never have
-negative numbers.
-
-This is the last instance of undefined behaviour in Futhark’s generated C code
-that I remember. There is however at least one instance of
-*implementation-defined* behaviour, namely in the code generation for
-bit-shifting integers by more bits than their size, but I have yet to gather the
-courage to fix it.
+*You can comment on [the fediverse](https://toot.cafe/@nolan/117470449984835742) or [Lobsters](https://lobste.rs/s/dpjkzz/do_web_components_have_future_if_nobody_is).*

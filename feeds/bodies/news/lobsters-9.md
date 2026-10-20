@@ -1,101 +1,19 @@
-The trend of VC-backed tooling ending in abandonment rears its ugly
-   head again. But hey, people gotta eat, right? The community will pick
-   up the slack and steward the projects, right?
+**Microsoft No More:** European countries are increasing efforts to build sovereign digital infrastructure to replace Microsoft and other US-based solutions. The Dutch government is even working on its own Linux distribution because The Hague is reportedly tired of Washington's threats against EU-based institutions.
 
-Body
+The Dutch government is trying to solve its digital sovereignty problem with its own Linux operating system. A local source recently highlighted the development efforts being poured into [NixOS](https://tweakers.net/reviews/15334/nederland-maakt-soeverein-alternatief-voor-windows-en-office-op-basis-van-linux.html), a Linux distro that originated as a package manager created by Dutch developers. The idea is that US-based software solutions, most notably Microsoft's, would eventually be replaced by this new OS and open-source productivity solutions.
 
-   Deno is dead.
+[Nix](https://nixos.org/) is a package manager with a few peculiar features, including cross-platform compatibility and its own functional programming language for configuring Unix and Unix-like systems. The tool was first released in 2003, and NixOS debuted three years later. The Linux distro is built around Nix and is currently supported by the Dutch nonprofit organization NixOS Foundation.
 
-   Announced[1] on a Friday[2], of course, the team has fled to
-   Cloudflare and in a year, will stop working on the runtime. Kudos to
-   them for finding an exit, Womp womp to us.
+[![](https://www.techspot.com/images2/news/bigimage/2026/09/2026-09-29-image-25-j.webp)](https://www.techspot.com/images2/news/bigimage/2026/09/2026-09-29-image-25.jpg)
 
-   This is the second time in just as many years that a technology I
-   depend on is “given up to the community.” If you’re new here, Disc[3]
-   came about because the team behind Gel fled to Vercel and gave their
-   project up to the community. This was two years ago and as of this
-   writing, no updates have been made on the “blessed” fork[4] of it.
+Nix and NixOS are the foundations of the Digitaal Autonome Werkomgeving Overheid (DAWO) project, which includes all the tools required to build a sovereign IT infrastructure. With DAWO, The Hague plans to provide government and public institutions with a custom operating system, productivity and office applications, cloud services, management tools, and everything in between.
 
-   (Perhaps a bit petty of me to point out but someone in the Gel
-   Discord has been rather hostile/cowardly about my efforts and thus I
-   find delight in proving assholes wrong)
+Serious efforts to build the DAWO-based sovereign infrastructure apparently began a few months ago, when Dutch authorities decided to standardize the creation of a national IT ecosystem. The project is focused on accessibility, because NixOS developers are not exactly enthusiastic proponents of heavily GUI-based computer interfaces.
 
-   The frustration of the Deno community is palpable and has created the
-   best crashout[5] I’ve seen in some time:
+DAWO's first pilot programs have already been deployed in private and local environments, but the plan should eventually encompass all institutions in the Netherlands. Sovereignty efforts in the country apparently stalled for years, but the new US administration provided the right incentives to finally get the job done.
 
-   What the fuck do you mean Deno is ending development in a year????
+![](https://www.techspot.com/images2/news/bigimage/2026/09/2026-09-29-image-16-j.webp)
 
-   I JUST learned how to use this stupid runtime.
+Washington authorities recently decided to target the Hague-based International Criminal Court (ICC) with sanctions, while Microsoft allegedly blocked the court's prosecutors from accessing its email and other crucial IT services. The ICC is already [replacing](https://www.techspot.com/news/110095-international-criminal-court-replacing-microsoft-office-sovereign-eu.html) Microsoft Office with an open-source alternative, as DAWO and NixOS are going to extend the sovereignty efforts even further.
 
-   I don’t give a fuck about your Cloudflare acquisition or your edge
-   computing or whatever the fuck a Durable Object is.
-
-   I JUST WANT TO RUN MY TYPESCRIPT FILES.
-
-   Why is there a shutdown date????
-
-   WHERE IS THE FUCKING DOWNLOAD BUTTON FOR MORE YEARS OF SUPPORT????
-
-   I went to the releases page and there is no deno-forever.exe.
-
-   WHY IS THERE NO deno-forever.exe?????
-
-   Just compile another 10 years of development into a fucking
-   executable and give it to me.
-
-   I don’t want to learn Node.js again.
-
-   I don’t want to migrate to Bun.
-
-   I don’t want to understand your business model.
-
-   I JUST WANT MY DINOSAUR BACK.
-
-   You cannot just Deno.exit(0) an entire runtime.
-
-   STUPID FUCKING CLOUD NERDS.
-
-   Ryan Dahl’s comment[6] on HackerNews gave me pause (emphasis mine):
-
-   It’s a joint decision and I agree with it. I’m most invested in its
-   success and have put the most work into it - and I no longer think
-   it’s where I can do the most important work. There are some
-   good ideas in Deno and it’s well engineered - but it ultimately
-   is not solving big problems. It has been sucked into the
-   gravity well of node compatibility, which forces it to behave
-   exactly as Node does. Why reimplement Node? It works. Marginal
-   performance or UX or security benefits are not enough.
-
-   …
-
-   We’ll ship monthly releases for a year, and Deno stays
-   MIT-licensed. If people want to carry it forward, I’d like that.
-
-   My brother in Christ. YOU reimplemented Node and now you’re bored? I
-   get it was done for adoption purposes but like, that’s a solvable
-   problem? Whatever, this ain’t my first rodeo[7].
-
-   There’s bound to be other forks but this one’s mine; I’m calling it,
-   Ende (“end” in German). “Ende” is an anagram of “Deno” which is an
-   anagram of “Node” and it’ll do things differently:
-
-   — no more Node compatibility
-   — no more distractions, period; that means Deploy, KV, Jupyter, &c
-     are also getting the boot
-
-   The roadmap? Per-module permissions, sandboxes for untrusted code,
-   post-quantum crypto in Web Crypto, better binary output, &c. I depend
-   on Deno for all of my APIs and personal projects, and now am building
-   a serious business on it; EOL[8].
-
-   I’m aiming for a soft launch in December so I can work out production
-   kinks before a proper one. It’s gonna be quite the flex when Ende
-   development is happening on EOL. Anyhoo, placeholder site for Ende[9]
-   is up, subscribe to the mailing list if you want to be notified when
-   it’s “official” (proper marketing and documentation websites). EOL
-   also has a mailing list[8] if you want to know when the beta opens.
-
-   I am very busy but excited. I wanted to build the Neue Internet[10]
-   after all, looks like I’m getting my chance. 🕸️
-
-   EDIT: I’m also replacing SemVer with ChronVer[11].
+Earlier this year, the Netherlands blocked an attempt by a US company to buy a crucial app used by [Dutch citizens](https://www.techspot.com/news/112552-netherlands-blocked-us-company-buying-app-dutch-citizens.html). Elsewhere in Europe, countries are [investing millions](https://www.techspot.com/news/113763-switzerland-paying-11-million-stop-using-outlook-teams.html) in massive conversion projects based on the same concept: replacing Windows, Microsoft, and most US software services with Linux, open-source software, or other custom solutions.

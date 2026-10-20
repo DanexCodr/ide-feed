@@ -1,181 +1,139 @@
-You might have already noticed that 2026 seems to be a bit special year for Rust compiler. It seems like there's just a lot of stuff going on. Some things were already announced since I started writing this, but there's still a bunch more that's not as visible. I'll share some things that I personally find interesting.
+*Note: as always, all my public writing is written by hand by me.*
 
-To explain a bit of context, what happened this year is that multiple different initiatives are reaching final steps at the same time. In other words, 2026 is not that special with the amount of work being done, but it's a year when we see several long-term investments starting to pay dividends.
+#### Overview
 
-## Next solver
-[🔗](https://yoyo-code.com/2026-is-exciting-year-for-rust-compiler-and-me/#next-solver)
+A [bloom filter](https://en.wikipedia.org/wiki/Bloom_filter) is a probabilistic data structure that allows you to quickly and cheaply answer the question *"is key X in this set?"* with either *"definitely not"* or *"probably"*.
 
-Probably the biggest thing is the [next generation trait solver](https://goals.rust-lang.org/2026/next-solver.html). This is a reimplementation of a big part of the type system, and it has been in the works for a very long time - Almost 10 years in various forms.
-It fixes a bunch of soundness bugs and unblocks a lot of features and fixes for long-standing issues.
+You pick a false positive rate that is acceptable for your workload and hardware, add keys to the set, and check for their existence later on.
 
-It's easy to understate how big of a deal this is for the compiler. This work resolves a major piece of technical debt that a lot of compiler developers dreamed about for years. It also frees up a bunch of people with a fresh and deep understanding of the type system to work on new things. The queue of things that get unblocked includes many common pain points of the language, even things that might seem benign or unrelated. It contains solutions to big problems in `async` Rust, or various limitations of `impl Trait`.
+Bloom filters use a small amount of memory compared to the cardinality of the set, and are computationally very cheap. For these reasons, they're frequently used in high performance data systems.
 
-## Polonius
-[🔗](https://yoyo-code.com/2026-is-exciting-year-for-rust-compiler-and-me/#polonius)
+For example, a database might keep an in-memory bloom filter and check it before actually going to disk when looking up rows. This saves substantial amounts of very slow disk IO.
 
-Another big thing is [Polonius, a new borrow checker implementation](https://goals.rust-lang.org/2026/polonius.html), long time in the making as well. It enables more code to compile and unblocks several related features - including (hopefully one day) internal references. The compiler impact of this is not as big as with the new solver, but it's still a pretty big deal.
+We also use them all over the place in the [Bluesky](https://bsky.app) backend. They allow us to save *millions* of queries per second against our Scylla database when looking up blocks, mutes, labels, and more. For instance, we can often answer the question *"does user X block user Y"* without even hitting the database.
 
-## Perf
-[🔗](https://yoyo-code.com/2026-is-exciting-year-for-rust-compiler-and-me/#perf)
+Here's the last several days of some of our bloom filter positive hit rates:
 
-My main area of interest is compiler performance, and here we have quite a few things going on. After 1-2 years of a sort of stagnation (at least in terms of results), we suddenly have a lot of things going on at once. So much so that I have a hard time remembering everything, but from the top of my head:
+![Image of the bloom filter postitive rate we have in production](https://www.calabro.io/static/posts/bsky-bloom-filter-positive-rate.png)
 
-## Parallel frontend is close to stabilization
-[🔗](https://yoyo-code.com/2026-is-exciting-year-for-rust-compiler-and-me/#parallel-frontend-is-close-to-stabilization)
+The above yellow line has a roughly 1% positive rate, which means that 99% of the time, we can completely skip querying our database. This has been critical in our ability to scale the site and operate the site cheaply.
 
-Very old initiative that was put a few years on hiatus with many unclear blockers. The development restarted again a few years ago with a new contributor `@SparrowLi`, and over time a number of other people contributed to the effort.
+#### Traditional Bloom Filters
 
-Over the years, this turned out to be a massive can of worms. I get the feeling that almost nobody is really happy with the design. However, there doesn't seem to be a better alternative for the foreseeable future, and parallel frontend is highly desirable, so the solution ended up being just grinding through a number of annoying and hairy problems until there's nothing left.
+A bloom filter is an array of bits and *k* hash functions. You choose the size of the array and *k* before hand, and want to right-size it to your workload to achieve a specific false positive rate.
 
-The [current project goal](https://goals.rust-lang.org/2026/parallel-front-end.html) is driven by `@petrochenkov` and is getting close to stabilization.
+To add a key to the set, run it through the *k* hash functions and set the bits at each of those locations.
 
-## LLVM is getting faster
-[🔗](https://yoyo-code.com/2026-is-exciting-year-for-rust-compiler-and-me/#llvm-is-getting-faster)
+To check if a a key is in the set, hash it *k* times and check each resulting location in the bit array. If any bits are zero, the key was never added. If all bits are set to one, it might be in the set.
 
-LLVM 23 was unambiguous and unexpectedly large positive change in performance. For a long time, LLVM upgrades were not particularly great for rustc performance. This changed after LLVM 10 upgrade, which introduced a massive 10% regression, and `@nikic`, current lead developer of LLVM, called it out in his blog post, [Make LLVM fast again](https://www.npopov.com/2020/05/10/Make-LLVM-fast-again.html). In the post he also introduced a system for tracking LLVM performance over time, inspired by [the one we use for rustc](https://perf.rust-lang.org).
+Here's an example of a potential positive:
 
-Since then, LLVM started catching performance regressions earlier, and results for upgrades in rustc went from  "less bad", to "somewhat mixed", to "mostly positive with caveats." The last one of those was LLVM 22, which was green on `icount` benchmarks, but almost universally red on wall time.
+![Image showing how if all hash function items are one, then the item may be in the set](https://www.calabro.io/static/posts/bsky-bloom-filter-traditional-all-one.png)
 
-LLVM 23 is pretty much entirely positive. I don't follow LLVM development that much, but my understanding is that this is because there's now more work on actually optimizing it, as opposed to working on features without trying to regress performance. These days the improvements come both from new optimizations (those help optimize the compiler during bootstrap) and from LLVM itself getting faster.
+And a definite negative:
 
-## Lot perf improvements landing (micro-optimizations)
-[🔗](https://yoyo-code.com/2026-is-exciting-year-for-rust-compiler-and-me/#lot-perf-improvements-landing-micro-optimizations)
+![Image showing how if any hash function items are zero, then the item is definitely not in the set](https://www.calabro.io/static/posts/bsky-bloom-filter-traditional-any-zero.png)
 
-Compiler performance has been on a steady streak of improvements in the past few months. There's probably no single explanation for it, just a combination of new contributors coming in, old contributors getting to do more perf work, and tooling improvements combined with architectural cleanups unlocking new opportunities.
+Pretty simple!
 
-With more people working in this area, I've noticed a lot of cross-pollination,
-where a certain idea would circle around a few people's minds, as people get inspired by each other's PRs and try related things.
+#### Double Hashing
 
-I also feel like we got a lot better at managing regressions - triaging and addressing them.
-This is partially a tooling investment, but also a lot about processes and social structures.
-A major development here is the connection between tree ops and perf triage, represented notably by `@JonathanBrouwer`.
+While *much* cheaper than going to disk, computing *k* independent hashes per key is still a bit expensive for very high performance systems.
 
-This means that people who manage merges often directly triage their performance impact. This is important because it shrinks the response time, but the connection is useful for other reasons as well. The perf impact informs how you group PRs into [rollups](https://forge.rust-lang.org/release/rollups.html), for example. Turns out that [Conway's law](https://en.wikipedia.org/wiki/Conway%27s_law) is still a law.
+In 2008, Kirsch and Mitzenmacher wrote a [paper](https://www.eecs.harvard.edu/~michaelm/postscripts/rsa2008.pdf) demonstrating that two hashes can get you the same output. The math is far over my head, but if you derive the *i*-th location as `(hash_1 + i*hash_2) % n`, then the false positive rate is effectively the same as using *k* independent hashes. Phew!
 
-I also greatly enjoy helping people interpreting the measurement results and diagnose regressions.
-I often find that even just a few sentences from somebody who's been looking at the results every day for many years
-go a long way towards getting the regression addressed.
+[bits-and-blooms/bloom](https://github.com/bits-and-blooms/bloom) maintained by [Daniel Lemire](https://lemire.me/blog/) (a huge inspiration of mine, you should buy his [book](https://www.amazon.com/dp/B0HF4JT75J)) is a fantastic double hash bloom filter implementation written in go. It runs 128-bit murmur3 twice to get four 64-bit values, then combines them to produce all *k* bit locations. We used this in production at Bluesky for a long time.
 
-All in all, I feel like the compile time concerns are integrated into the development better than they have ever been.
+For the Bluesky backend, we essentially do a `SELECT * FROM blocks`, mutes, list items, etc. every time one the processes starts, and add all the items to the bloom filter. There's also a real time [atproto](https://atproto.com) firehose consumer inserting items in to bloom filters (even during process startup), so there is a race condition if you're not careful.
 
-## Move elimination
-[🔗](https://yoyo-code.com/2026-is-exciting-year-for-rust-compiler-and-me/#move-elimination)
+The problem with the `bits-and-blooms` library is that it's not internally thread-safe, so we needed to wrap all bloom filter access in a [mutex](https://pkg.go.dev/sync) lest we suffer a data race. [pprof](https://pkg.go.dev/net/http/pprof) showed that mutex contention was actually the bottleneck in launching the process. A single deploy used to take 90 minutes to roll out fully because of this!
 
-This seemingly came out of nowhere earlier this year, and it's quite interesting.
-`@Amanieu` [proposed](https://goals.rust-lang.org/2026/mir-move-elimination.html) a MIR optimization pass
-that allows the compiler to eliminate copies that LLVM has trouble optimizing. It speeds up both compile time and runtime.
+So my colleague [Jasmine](https://jazco.dev/) forked the library and created [atomic-bloom](https://github.com/jazware/atomic-bloom), which uses [atomic](https://pkg.go.dev/sync/atomic) CPU instructions to do the same logic, but safely and without mutexes. This led to substantially less contention and was massively faster than the mutex-based approach. Our deploys dropped from 90 minutes to about 15, which enabled us to ship faster and with greater confidence. Awesome!
 
-This is one of those passes that makes sense to implement in MIR instead of LLVM, because the Rust part of the compiler
-has better information about whether it's valid to apply specifically for Rust. Even more so because it actually requires changing the MIR semantics a bit.
+#### One Hash
 
-It matters for Rust in particular because Rust typically generates more moves than C(++), which is the primary LLVM target.
+Can we go further?
 
-## Polymorphization
-[🔗](https://yoyo-code.com/2026-is-exciting-year-for-rust-compiler-and-me/#polymorphization)
+For Bluesky, the answer is **no**. Contention was our original problem, not the number of hash functions or other factors, thus by [Amdahl's Law](https://en.wikipedia.org/wiki/Amdahl%27s_law) we did not receive any further speedup resulting in a noticeable impact. However, it's still fun to go deeper and learn something new!
 
-This one is particularly close to my heart because I've been following the efforts for a very long time. Polymorphization is one of the most impactful compiler performance optimizations we could ever do, but it's unfortunately really tricky to implement.
+As part of our research on bloom filter techniques, we came across [this paper](https://yangtonghome.github.io/uploads/One_Hashing.pdf) from Lu et al. that uses *even more math* to show how to do bloom filters using only a single hash.
 
-This would be the third experiment I'm aware of. This time it's slightly different from the previous ones, and it's inspired by a similar mechanism in Swift.
+Here's an overview of how it works:
 
-The difference is that the original polymorphization intends to only avoid duplicate or redundant monomorphizations, so it's purely a compile time optimization with no runtime impact, while the Swift-style one intends to polymorphize everything and pass around layouts of generic parameters as arguments. This will have a runtime cost, so it'll be something you can tweak with compiler flags.
+- Instead of one big bit array, split that into k array partitions of fixed sizes
+- Each partition has a different size, and all the sizes are pairwise coprime, meaning that no two sizes share a common factor other than one
+- You hash the given key once to get hash
+- The bit position in partition p is hash%size_p (the size of the partition)
+- Since you have k partitions, you get k bit positions to check out of that single hash
+- You can use those k bit positions as you would with other bloom filter types!
 
-If my understanding is still up to date, next-solver will also enable polymorphization in the previously intended way. Either way, both options run into the same problems, so the work is useful for both. It's also possible that both options come out of this same effort. Either way, this is still just an experiment with a bunch of problems to solve, so we'll have to wait to see how it turns out. [The project goal](https://goals.rust-lang.org/2026/polymorphization.html) has been proposed and driven by `@camelid`.
+With this technique in hand, I made [jcalabro/gloom](https://github.com/jcalabro/gloom), a one-hash bloom filter (OHBF) implementation in go. This has been live in the Bluesky backend for the past 9 months and has been holding up quite well. It's also used in [jetstream](https://github.com/bluesky-social/jetstream), our high performance sync service.
 
-## `cargo check` and `cargo build` sharing cache
-[🔗](https://yoyo-code.com/2026-is-exciting-year-for-rust-compiler-and-me/#cargo-check-and-cargo-build-sharing-cache)
+Here's an example of how it's used:
 
-`@blyxyas` is working on a [project goal](https://goals.rust-lang.org/2026/incremental-system-rethought.html),
-which will enable cargo to share artifacts between `cargo check` and `cargo build`.
-The goal is actually more general, but this is probably its most recognizable outcome.
-This is something we wanted for ages, so it's really cool to see progress on this front.
+```go
+package main
 
-## `no-embed-metadata` option enabled by default
-[🔗](https://yoyo-code.com/2026-is-exciting-year-for-rust-compiler-and-me/#no-embed-metadata-option-enabled-by-default)
+import (
+    "fmt"
+    "sync"
 
-[This was already announced](https://blog.rust-lang.org/inside-rust/2026/08/18/reducing-target-dir-size-on-nightly/),
-and it will shrink the target directory size by 5-30%, depending on the workload.
+    "github.com/jcalabro/gloom"
+)
 
-## New cargo build-dir layout
-[🔗](https://yoyo-code.com/2026-is-exciting-year-for-rust-compiler-and-me/#new-cargo-build-dir-layout)
+func main() {
+    // Create a thread-safe atomic bloom filter with:
+    //    - Expected capacity of 1 million items
+    //    - Approximate false positive rate of 1%
+    f := gloom.NewAtomic(1_000_000, 0.01)
 
-[Already announced as well](https://blog.rust-lang.org/2026/03/13/call-for-testing-build-dir-layout-v2/),
-this is another project that has been in the works for quite some time.
-As with the other things above, this is major internal restructuring that unlocks other things - namely granular locking of the target directory and cross-workspace caching.
+    var wg sync.WaitGroup
+    defer wg.Wait()
 
-## `no-link`/`link-only`
-[🔗](https://yoyo-code.com/2026-is-exciting-year-for-rust-compiler-and-me/#no-link-link-only)
+    for i := range 8 {
+        wg.Go(func() {
+            for j := range 100000 {
+                str := fmt.Sprintf("key-%d-%d", i, j)
 
-`@bjorn3` has been working on fixing support for these two flags, which enable pipelining of build scripts and proc macros. As you can see in the [proposal](https://github.com/rust-lang/compiler-team/issues/908), this is yet another line of work that boils down to fixing a laundry list of internal issues and architectural problems until suddenly a big thing is unlocked.
+                if f.TestString(str) {
+                    // always a false positive since the key isn't in the set
+                    fmt.Printf("found a false positive: %s\n", str)
+                }
 
-## Architecture
-[🔗](https://yoyo-code.com/2026-is-exciting-year-for-rust-compiler-and-me/#architecture)
+                f.AddString(str)
+            }
+        })
+    }
+}
+```
 
-There have been a number of initiatives in the compiler architecture. I'll mention a few, just to (once again)
-underscore the point that big things don't happen in big-bang projects coming out of nowhere, but rather as consequences of
-sustained long-term investments into a healthy system.
+Now, let's step through how it works under the hood in more detail. Here's some sample go code that shows how we select the block index as well as `h` for a given key we want to check:
 
-Two years ago, `@jdonszelmann` [started the effort](https://github.com/rust-lang/rust/issues/131229) to unify and cleanup how attributes are represented and checked in the compiler.
-Just a few days ago, the last remaining attribute was ported to the new system. This significantly improves how attributes are checked and unblocks improvements to diagnostics and other things.
+```go
+hash := xxh3.Hash128(key) // calculate the 128-bit hash
 
-Earlier this year, `@Zalathar` and `@nnethercote` cleaned up the implementation of rustc's query system. This improved performance but more importantly, made the system easier to understand, which was often a blocker for making improvements to it. The system is still a pretty scary part of the codebase, but this is a big step forward.
+block := hash.Hi % numBlocks // high 64 bits pick the block
+h := hash.Lo                 // low 64 bits are the hash we'll check
+```
 
-There's actually more architectural work in this area, `@oli-obk` has been working on [architectural groundwork for expansion-time evaluation](https://goals.rust-lang.org/2026/expansion-time-evaluation.html),
-and there's been a lot of work by `@cjgilot`, `@petrochenkov` and other people I'm forgetting (sorry) on queries and incremental in general.
-Similarly, a lot of work happened to enable const generics to progress further. A common theme of these efforts is that
-they enable the compiler to use its capabilities in more contexts where it was previously limited,
-often because of strict ordering of some compilation phases.
+Then, you check your bloom filter as follows:
 
-## Project goals and funding
-[🔗](https://yoyo-code.com/2026-is-exciting-year-for-rust-compiler-and-me/#project-goals-and-funding)
+![Image showing one hash bloom filters work](https://www.calabro.io/static/posts/bsky-bloom-filter-one-hash.png)
 
-There's quite a bit of meta stuff as well. Rust project has been experimenting with a new organizational framework called "project goals."
+In addition to being a single hash, it also does some fun performance optimization techniques.
 
-It went through multiple iterations with various changes and experiments, but it seems that the system has finally reached some optimal steady state, and we see the benefits play out.
-I think you can clearly see that from the list above.
+First, we split the bloom filter into many 64-byte blocks to match common CPU cache line size. Next, since go's allocator doesn't ensure that those block allocations are [cache aligned](https://learn.arm.com/learning-paths/cross-platform/memory-latency/latency-and-cache-alignment/), we slightly over-allocate and use [unsafe](https://pkg.go.dev/unsafe) to ensure alignment. [See here](https://github.com/jcalabro/gloom/blob/41399c29b47251fe3822e64cbb934c609f7b29c8/bloom.go#L90-L99) for the implementation.
 
-We now have [a Fast Builds](https://goals.rust-lang.org/2026/roadmap-fast-builds.html) roadmap and multiple perf related project goals. That's pretty exciting.
+These two techniques combined guarantee that in the worst case, a bloom filter lookup only takes one cache miss. Nice!
 
-There are also multiple new developments in funding. One is explicitly attached to project goals, we also have a new ["Maintainers in Residence"](https://blog.rust-lang.org/2026/08/26/announcing-our-first-maintainers-in-residence/) program,
-and a new funding team was established as well.
+There's another fun [optimization](https://lemire.me/blog/2016/06/27/a-fast-alternative-to-the-modulo-reduction/) from Daniel Lemire that allows you to select which block to check with a single `MUL` instruction rather than modulo, which requires an expensive division instruction.
 
-One also can't help but notice how many results came out of [Hexcat](https://https://hexcat.nl) employing a bunch of people in the past year.
+The final interesting optimization I'll talk about is the [ShardedAtomicFilter](https://github.com/jcalabro/gloom/tree/bf26d4b6e5e9e0a86e48ad444dd4e85740a90ceb#high-throughput-concurrent-writes). At Bluesky, I managed a large fleet of top of the line bare metal servers. In order to eke the most performance out of those systems, it's good to avoid having multiple cores fight over the same data. `ShardedAtomicFilter` spreads writes over many backing filter shards, which reduces the likelihood of contention.
 
-## ...and me
-[🔗](https://yoyo-code.com/2026-is-exciting-year-for-rust-compiler-and-me/#and-me)
+#### Conclusion
 
-And lastly, 2026 is also an exciting year for me. After a few years of watching from the sidelines and eventually joining the perf triage, I decided to start working on the Rust project more seriously.
+Bloom filters (and [roaring bitmaps](https://lemire.me/en/publication/spe2016roaring/)) [make the world go around](https://bsky.app/profile/jaz.sh/post/3mizi7ns23s2u).
 
-Earlier this year, it became clear that I need to decide what to work on next. My current work is slowly winding down and turning into maintenance, and I also started to feel a bit burnt out on web-based work. For quite some time, I've been feeling the desire to return to something more technical and challenging.
+Hopefully this was an interesting little exploration in to how they work. If you're interested in fun low-level engineering details, consider [following me on Bluesky](https://bsky.app/profile/calabro.io/) or subscribing to this blog via atproto, RSS or similar.
 
-I was considering a few options, but somewhat unable to decide between them. To use the term from Marie Kondo, nothing really felt like it "sparks joy." After some exhausting events and feeling a bit down from all of this on one evening, I received an invitation to Rust All Hands. This was a pleasant surprise. I signed up for it earlier that year, but I didn't really expect much because I didn't know the likelihood of being invited. I took this as a sort of sign from the universe or something and booked the trip.
-
-The experience was overwhelmingly positive. I have to say that this was one of the most exciting events I attended in a long time. It reminded me that there's this big part of my life that I don't get to share with anybody almost ever, especially in real life. It seems so easy to forget that until you actually experience it again.
-
-Yes, sure, I can talk about some curious aspects of the Rust compiler with my friends, but it's a whole another level to talk about it with people who actually work on it and understand what you talk about on a deep level. It was really nice to meet people I know from their work and join the discussions about the development of the language.
-
-Long story short, it became clear that this is it, this is what I want to do. I was thinking about it before, but I guess I needed some strong "spark of joy" moment to stop doubting my feelings and force me to make a decision.
-
-## How to get a job on Rust?
-[🔗](https://yoyo-code.com/2026-is-exciting-year-for-rust-compiler-and-me/#how-to-get-a-job-on-rust)
-
-Now, of course, the question is how to actually do it. As you may know (and I somewhat hinted above), it's not exactly straightforward to find a job on the project.
-There's no "Rust inc." company you can send a CV to.
-There's a fractured and diverse space of possibilities where everybody finds their own way somehow.
-
-It's getting more approachable with those new programs, but I still expect this to take some time. Part of it depends on connections and trust, and those are built over time.
-I don't have to rush this, so I'll keep working until I figure something out.
-
-I've agreed to work on the [target directory size reduction project goal](https://github.com/rust-lang/goals/pull/805)
-if there is enough funding for that. I've also applied for MiR program, but I don't think that'll be available soon because the funds are limited and there are more important areas that need this specific funding.
-
-btw. I also opened [GitHub sponsors](https://github.com/sponsors/panstromek), so feel free to join if you want to support some compiler performance work ;)
-
-## Conclusion
-[🔗](https://yoyo-code.com/2026-is-exciting-year-for-rust-compiler-and-me/#conclusion)
-
-There's so much happening in the project that I feel like it's really challenging to do it justice.
-I already feel like I left out a ton of interesting work, but I have to stop somewhere. I hope that even this incomplete overview has been interesting.
-
-I think I should also say that not everything has been positive. The beginning of the year was overshadowed by a bunch of people losing funding and heated discussions around AI policy. Just a few days before All Hands, somebody posted the policy draft to social media, and our small moderation team and other people spent a stressful weekend trying to limit the damage.
-
-In light of that, I have a feeling that All Hands was a turning point where everybody could recharge, refocus, and take the positive energy back to the project. I certainly feel that, and I hope I'm not alone.
+Side note: I've been working on a novel observability suite that pushes the state of the art. [Star it on github](https://github.com/microscope-dev/microscope) and keep an eye out for more discussion in the near future!
