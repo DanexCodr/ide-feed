@@ -1,181 +1,63 @@
-You might have already noticed that 2026 seems to be a bit special year for Rust compiler. It seems like there's just a lot of stuff going on. Some things were already announced since I started writing this, but there's still a bunch more that's not as visible. I'll share some things that I personally find interesting.
+With my previous post on [“using the platform”](https://nolanlawson.com/2026/10/03/why-dont-more-developers-use-the-platform/), I was surprised that the comments on [Hacker News](https://news.ycombinator.com/item?id=49950554) and [Lobsters](https://lobste.rs/s/srduzv/why_don_t_more_developers_use_platform) tended to veer toward web components. This surprised me because I didn’t mention web components at all in the post.
 
-To explain a bit of context, what happened this year is that multiple different initiatives are reaching final steps at the same time. In other words, 2026 is not that special with the amount of work being done, but it's a year when we see several long-term investments starting to pay dividends.
+I was less surprised when I did some research and found that the entire “use the platform” mantra was first popularized by [Polymer](https://polymer-project.appspot.com/blog/2016-05-26-IO-2016-Recap), which was Google’s early attempt at a web-components-based JavaScript framework. In 2018 they even called it [“our motto”](https://www.polymer-project.org/blog/2018-02-26-3.0-preview-paths-and-names)! So this explains why a lot of people seem to have it burned into their brains that “use the platform” means “use web components.”
 
-## Next solver
-[🔗](https://yoyo-code.com/2026-is-exciting-year-for-rust-compiler-and-me/#next-solver)
+Now, one of the reasons I didn’t mention web components in the post is that, in my opinion, they’re actually not a great example of “use the platform” (regardless of the motto’s origins). I instead leaned on examples of HTML and CSS features that tend to be more performant, more accessible, and require far fewer lines of code than the equivalent in JavaScript. This is largely thanks to the advances that the browser vendors and standards bodies (e.g. the [CSS Working Group](https://www.w3.org/groups/wg/css/) and [Open UI project](https://open-ui.org/)) have made in the past few years.
 
-Probably the biggest thing is the [next generation trait solver](https://goals.rust-lang.org/2026/next-solver.html). This is a reimplementation of a big part of the type system, and it has been in the works for a very long time - Almost 10 years in various forms.
-It fixes a bunch of soundness bugs and unblocks a lot of features and fixes for long-standing issues.
+## Modern Web Guidance
 
-It's easy to understate how big of a deal this is for the compiler. This work resolves a major piece of technical debt that a lot of compiler developers dreamed about for years. It also frees up a bunch of people with a fresh and deep understanding of the type system to work on new things. The queue of things that get unblocked includes many common pain points of the language, even things that might seem benign or unrelated. It contains solutions to big problems in `async` Rust, or various limitations of `impl Trait`.
+Web components popped into my head again, though, after a [comment on Mastodon](https://mamot.fr/@mokobien/117380327572292850) pointed me to Google’s [Modern Web Guidance](https://developer.chrome.com/docs/modern-web-guidance). I wasn’t aware of this tool before writing the post, but essentially it’s a set of skills that you can give to an agent to nudge them in the direction of using more modern browser features. Essentially, it’s “use the platform” for agents (or at least the Chrome team’s vision of it).
 
-## Polonius
-[🔗](https://yoyo-code.com/2026-is-exciting-year-for-rust-compiler-and-me/#polonius)
+As I was watching [the demo](https://youtu.be/bo3i0FzDUYo), though, I was struck by how hard it is to see where web components fit into the picture. In the presentation, Phil Walton shows how you can use Modern Web Guidance to create a web app that feels more like a native app in terms of following your finger smoothly as you touch the screen, thanks to features like CSS [scroll snap points](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Scroll_snap) and [scroll-driven animations](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Scroll-driven_animations).
 
-Another big thing is [Polonius, a new borrow checker implementation](https://goals.rust-lang.org/2026/polonius.html), long time in the making as well. It enables more code to compile and unblocks several related features - including (hopefully one day) internal references. The compiler impact of this is not as big as with the new solver, but it's still a pretty big deal.
+But nowhere in the demo are we really seeing the code – this is pure vibe-coding. And as I watched, I struggled to think of any place where, if I were building Modern Web Guidance myself, I would put instructions to tell the agent, “Hey, you should use custom elements, shadow DOM, or other web component primitives here because it’s going to make the end user experience better.” And that’s because there’s *nothing* that web components can really do to make the end user experience better. (Arguably you could say that shadow DOM improves CSS performance, but [I’ve benchmarked this to death](https://nolanlawson.com/2022/06/22/style-scoping-versus-shadow-dom-which-is-fastest/), and you can effectively get the same boost with compile-time CSS scoping, which many frameworks and tools like Svelte, Vue, and Tailwind are already doing.)
 
-## Perf
-[🔗](https://yoyo-code.com/2026-is-exciting-year-for-rust-compiler-and-me/#perf)
+So I took a look at the actual [code](https://github.com/GoogleChrome/modern-web-guidance) for Modern Web Guidance, and my hunch was confirmed: web components feel like an afterthought. For the first six months of the project’s lifetime, there was almost no mention of web components. This only changed 3 weeks ago when [a single commit](https://github.com/GoogleChrome/modern-web-guidance/commit/84ae7251ee919239d5ea85aef25897983f26601e) landed, which mostly provides guidelines for those *already using* web components, around the topics of [accessibility](https://github.com/GoogleChrome/modern-web-guidance/blob/84ae7251ee919239d5ea85aef25897983f26601e/skills/modern-web-guidance/guides/html/accessible-web-components.md), [pre-rendering](https://github.com/GoogleChrome/modern-web-guidance/blob/84ae7251ee919239d5ea85aef25897983f26601e/skills/modern-web-guidance/guides/html/prerendering-custom-elements.md), [styling](https://github.com/GoogleChrome/modern-web-guidance/blob/84ae7251ee919239d5ea85aef25897983f26601e/skills/modern-web-guidance/guides/html/styling-web-components.md), etc. But nowhere does the Modern Web Guidance strongly recommend the agent to use web components – in fact, there’s a whole section titled [“Decide whether you even need a custom element”](https://github.com/GoogleChrome/modern-web-guidance/blob/b31dc0a43ff5d19bcf386a3476a216f3b39a6f55/skills/modern-web-guidance/guides/html/web-components.md#decide-whether-you-even-need-a-custom-element) which sounds downright discouraging at times. As written, if you throw the Modern Web Guidance at an agent building a brand-new product, it seems unlikely to me that it would choose to use web components.
 
-My main area of interest is compiler performance, and here we have quite a few things going on. After 1-2 years of a sort of stagnation (at least in terms of results), we suddenly have a lot of things going on at once. So much so that I have a hard time remembering everything, but from the top of my head:
+To be fair, there is one exception: [a line for Chrome extension authors](https://github.com/GoogleChrome/modern-web-guidance/blob/b31dc0a43ff5d19bcf386a3476a216f3b39a6f55/skills/chrome-extensions/references/extensions/content-scripts.md?plain=1#L102) recommends using shadow DOM for complex UI injected into a page. This seems perfectly sensible to me, although it’s a fairly narrow use case. [Another line](https://github.com/GoogleChrome/modern-web-guidance/blob/b31dc0a43ff5d19bcf386a3476a216f3b39a6f55/skills/modern-web-guidance/guides/html/web-components.md?plain=1#L3) suggests using web components for “design systems, embeddable widgets, and self-contained UI,” but this is also fairly narrow, and reads to me as a faint nod within the larger context of “decide whether you even need a custom element.”
 
-## Parallel frontend is close to stabilization
-[🔗](https://yoyo-code.com/2026-is-exciting-year-for-rust-compiler-and-me/#parallel-frontend-is-close-to-stabilization)
+## Web components at a crossroads
 
-Very old initiative that was put a few years on hiatus with many unclear blockers. The development restarted again a few years ago with a new contributor `@SparrowLi`, and over time a number of other people contributed to the effort.
+So where do web components fit into this new AI coding world? I’m not going to rehash all my points about web components’ strengths and weaknesses; I’ve already done that at [considerable](https://nolanlawson.com/2023/08/23/use-web-components-for-what-theyre-good-at/) [length](https://nolanlawson.com/2024/09/28/web-components-are-okay/). Instead I want to talk about what’s new if people are no longer writing the code (or increasingly, even reading it).
 
-Over the years, this turned out to be a massive can of worms. I get the feeling that almost nobody is really happy with the design. However, there doesn't seem to be a better alternative for the foreseeable future, and parallel frontend is highly desirable, so the solution ended up being just grinding through a number of annoying and hairy problems until there's nothing left.
+This section was painful for me to write, because I spent years working on a web-components-based framework ([LWC](https://lwc.dev)), participating in the [Web Components Community Group](https://www.w3.org/community/webcomponents/) and [Accessibility Object Model group](https://github.com/WICG/aom), and defending web components [on my blog](https://nolanlawson.com/category/web-components/), [in](https://podrocket.logrocket.com/what-web-components-are-good-at) [podcasts](https://shoptalkshow.com/451/), etc. And yet I have to acknowledge that their core value proposition have been severely weakened by agentic coding.
 
-The [current project goal](https://goals.rust-lang.org/2026/parallel-front-end.html) is driven by `@petrochenkov` and is getting close to stabilization.
+In short, web components were designed for a world where people typed HTML by hand, code was scarce, and thus reuse was an economic necessity. None of those things are true anymore, or at least they’re much less true and becoming less so by the day. So the elevator pitch of “build for a common standard and your components will be easier to pick up and reuse” becomes less compelling as more and more people are vibing UIs from scratch on top of a largely invisible platform substrate.
 
-## LLVM is getting faster
-[🔗](https://yoyo-code.com/2026-is-exciting-year-for-rust-compiler-and-me/#llvm-is-getting-faster)
+This doesn’t just devastate the value proposition of web components: it also impacts the JavaScript frameworks that inspired them. Increasingly I read about teams [rewriting their entire frontend from one framework to another](https://dev.to/playfulprogramming/nobody-argued-for-your-stack-51fj), based largely on the vibes of “it’s probably better for agents.” Regardless of the merits of these rewrites (which I think ought to be more evidence-based along the lines of “it uses fewer tokens” or “it’s a faster end-user experience”), we’re likely to see more of them in the future. And if people start seeing the framework layer as disposable, it seems unlikely to me that they would assign much value to the layer one step below that.
 
-LLVM 23 was unambiguous and unexpectedly large positive change in performance. For a long time, LLVM upgrades were not particularly great for rustc performance. This changed after LLVM 10 upgrade, which introduced a massive 10% regression, and `@nikic`, current lead developer of LLVM, called it out in his blog post, [Make LLVM fast again](https://www.npopov.com/2020/05/10/Make-LLVM-fast-again.html). In the post he also introduced a system for tracking LLVM performance over time, inspired by [the one we use for rustc](https://perf.rust-lang.org).
+As I argued in a [2023 post](https://nolanlawson.com/2023/12/30/shadow-dom-and-the-problem-of-encapsulation/), component libraries were already moving from a “batteries-included” model to a more “DIY” mindset. The apotheosis of this is [shadcdn](https://ui.shadcn.com/), which might seem like a machine for spitting out reams of boilerplate, but in a sense, that’s the point. Rather than make your touchpoint with a component system an inflexible API that resists your attempts to style or tweak it, you import the individual bits and pieces and then rearrange them at your will. This shift was already underway before AI coding, and now with LLMs “reams of boilerplate” are an advantage rather than a detriment. And none of this plays to the strengths of shadow DOM, reflected attributes, or other web component mainstays.
 
-Since then, LLVM started catching performance regressions earlier, and results for upgrades in rustc went from  "less bad", to "somewhat mixed", to "mostly positive with caveats." The last one of those was LLVM 22, which was green on `icount` benchmarks, but almost universally red on wall time.
+## Salvaging web components
 
-LLVM 23 is pretty much entirely positive. I don't follow LLVM development that much, but my understanding is that this is because there's now more work on actually optimizing it, as opposed to working on features without trying to regress performance. These days the improvements come both from new optimizations (those help optimize the compiler during bootstrap) and from LLVM itself getting faster.
+There are two (slightly weak) cases I can try to make for web components in this new world of AI coding.
 
-## Lot perf improvements landing (micro-optimizations)
-[🔗](https://yoyo-code.com/2026-is-exciting-year-for-rust-compiler-and-me/#lot-perf-improvements-landing-micro-optimizations)
+The first is so-called micro-frontends, or the idea of separating a large UI into multiple sections that can be built by different teams without clobbering each other. Web components were explicitly designed for this scenario: avoiding [“friendly fire”](https://bkardell.com/blog/FriendlyFire.html) (in Brian Kardell’s memorable phrasing). In a world of agents, this kind of sandboxing is actually a well-known technique, because typically you want to isolate agents into strict boundaries to avoid them rampaging on top of each other. In other words, web components could theoretically allow you to have multiple swarms of agents working on separate parts of the UI without their CSS, events, or globals clashing with one another.
 
-Compiler performance has been on a steady streak of improvements in the past few months. There's probably no single explanation for it, just a combination of new contributors coming in, old contributors getting to do more perf work, and tooling improvements combined with architectural cleanups unlocking new opportunities.
+The obvious counterpoint is that the web already has a great sandboxing primitive, which is iframes. Iframes offer even firmer boundaries than web components: not only are components isolated from each other, but they also live in separate JavaScript realms with `postMessage` as the only communication channel. There are several tradeoffs that I don’t want to get into here (synchronous vs asynchronous communication, memory usage, the porousness of closed vs open shadow DOM), but I do think web components have a chance in this fight. (Arguably, the Modern Web Guidance’s “design systems and self-contained UI” are also examples of micro-frontend-like scenarios where web components can shine.)
 
-With more people working in this area, I've noticed a lot of cross-pollination,
-where a certain idea would circle around a few people's minds, as people get inspired by each other's PRs and try related things.
+The second argument is that reuse still matters even when rewrites are just a prompt away. For example, I still believe that my [`<emoji-picker>` element](https://github.com/nolanlawson/emoji-picker-element/) is a good poster child for an effective web component: there is no reason to rebuild this thing in React, Vue, Svelte, and a dozen other frameworks, even though you could trivially do so with an LLM these days. It’s a standalone, client-only component, and most of its complexity lives in managing the emoji data, IndexedDB, etc., with little need for touchpoints with a framework to manage its rendering or lifecycle. So packaging it as a web component and allowing folks to wrap it in their framework layer of choice (or none at all) is still a sensible distribution model.
 
-I also feel like we got a lot better at managing regressions - triaging and addressing them.
-This is partially a tooling investment, but also a lot about processes and social structures.
-A major development here is the connection between tree ops and perf triage, represented notably by `@JonathanBrouwer`.
+Arguing against web components as a [*lingua franca*](https://en.wikipedia.org/wiki/Lingua_franca) for reuse sounds (to me) like an argument that all code sharing or even open source in general is a waste of time in the agentic era. My colleague André Staltz has shown that this is [clearly false](https://socket.dev/blog/ai-has-taken-over-open-source): if anything, AI coding is increasing the amount of shared code, not decreasing it. Even if you *can* rebuild something with agents, that doesn’t mean that it’s worth spending the tokens to do so. (Although I do still wonder about [smaller projects](https://nolanlawson.com/2025/11/16/the-fate-of-small-open-source/).)
 
-This means that people who manage merges often directly triage their performance impact. This is important because it shrinks the response time, but the connection is useful for other reasons as well. The perf impact informs how you group PRs into [rollups](https://forge.rust-lang.org/release/rollups.html), for example. Turns out that [Conway's law](https://en.wikipedia.org/wiki/Conway%27s_law) is still a law.
+The stronger counterargument is that agents already have a perfectly good component reuse layer, which is [React](https://youtu.be/P1FLEnKZTAE). I don’t believe this, though, because I don’t think that React is the last JavaScript framework the world will ever need. Performance benchmarks like the [js-framework-benchmark](https://github.com/krausest/js-framework-benchmark) and [isomorphic SSR benchmark](https://github.com/marko-js/isomorphic-ui-benchmarks) still stubbornly argue against React adoption: as it turns out, [the virtual DOM is still pure overhead](https://svelte.dev/blog/virtual-dom-is-pure-overhead). React could certainly reinvent itself for the agentic era, but I imagine this could lead to compatibility problems that would argue more strongly for web component adoption, if for no other reason than to get off the update treadmill.
 
-I also greatly enjoy helping people interpreting the measurement results and diagnose regressions.
-I often find that even just a few sentences from somebody who's been looking at the results every day for many years
-go a long way towards getting the regression addressed.
-
-All in all, I feel like the compile time concerns are integrated into the development better than they have ever been.
-
-## Move elimination
-[🔗](https://yoyo-code.com/2026-is-exciting-year-for-rust-compiler-and-me/#move-elimination)
-
-This seemingly came out of nowhere earlier this year, and it's quite interesting.
-`@Amanieu` [proposed](https://goals.rust-lang.org/2026/mir-move-elimination.html) a MIR optimization pass
-that allows the compiler to eliminate copies that LLVM has trouble optimizing. It speeds up both compile time and runtime.
-
-This is one of those passes that makes sense to implement in MIR instead of LLVM, because the Rust part of the compiler
-has better information about whether it's valid to apply specifically for Rust. Even more so because it actually requires changing the MIR semantics a bit.
-
-It matters for Rust in particular because Rust typically generates more moves than C(++), which is the primary LLVM target.
-
-## Polymorphization
-[🔗](https://yoyo-code.com/2026-is-exciting-year-for-rust-compiler-and-me/#polymorphization)
-
-This one is particularly close to my heart because I've been following the efforts for a very long time. Polymorphization is one of the most impactful compiler performance optimizations we could ever do, but it's unfortunately really tricky to implement.
-
-This would be the third experiment I'm aware of. This time it's slightly different from the previous ones, and it's inspired by a similar mechanism in Swift.
-
-The difference is that the original polymorphization intends to only avoid duplicate or redundant monomorphizations, so it's purely a compile time optimization with no runtime impact, while the Swift-style one intends to polymorphize everything and pass around layouts of generic parameters as arguments. This will have a runtime cost, so it'll be something you can tweak with compiler flags.
-
-If my understanding is still up to date, next-solver will also enable polymorphization in the previously intended way. Either way, both options run into the same problems, so the work is useful for both. It's also possible that both options come out of this same effort. Either way, this is still just an experiment with a bunch of problems to solve, so we'll have to wait to see how it turns out. [The project goal](https://goals.rust-lang.org/2026/polymorphization.html) has been proposed and driven by `@camelid`.
-
-## `cargo check` and `cargo build` sharing cache
-[🔗](https://yoyo-code.com/2026-is-exciting-year-for-rust-compiler-and-me/#cargo-check-and-cargo-build-sharing-cache)
-
-`@blyxyas` is working on a [project goal](https://goals.rust-lang.org/2026/incremental-system-rethought.html),
-which will enable cargo to share artifacts between `cargo check` and `cargo build`.
-The goal is actually more general, but this is probably its most recognizable outcome.
-This is something we wanted for ages, so it's really cool to see progress on this front.
-
-## `no-embed-metadata` option enabled by default
-[🔗](https://yoyo-code.com/2026-is-exciting-year-for-rust-compiler-and-me/#no-embed-metadata-option-enabled-by-default)
-
-[This was already announced](https://blog.rust-lang.org/inside-rust/2026/08/18/reducing-target-dir-size-on-nightly/),
-and it will shrink the target directory size by 5-30%, depending on the workload.
-
-## New cargo build-dir layout
-[🔗](https://yoyo-code.com/2026-is-exciting-year-for-rust-compiler-and-me/#new-cargo-build-dir-layout)
-
-[Already announced as well](https://blog.rust-lang.org/2026/03/13/call-for-testing-build-dir-layout-v2/),
-this is another project that has been in the works for quite some time.
-As with the other things above, this is major internal restructuring that unlocks other things - namely granular locking of the target directory and cross-workspace caching.
-
-## `no-link`/`link-only`
-[🔗](https://yoyo-code.com/2026-is-exciting-year-for-rust-compiler-and-me/#no-link-link-only)
-
-`@bjorn3` has been working on fixing support for these two flags, which enable pipelining of build scripts and proc macros. As you can see in the [proposal](https://github.com/rust-lang/compiler-team/issues/908), this is yet another line of work that boils down to fixing a laundry list of internal issues and architectural problems until suddenly a big thing is unlocked.
-
-## Architecture
-[🔗](https://yoyo-code.com/2026-is-exciting-year-for-rust-compiler-and-me/#architecture)
-
-There have been a number of initiatives in the compiler architecture. I'll mention a few, just to (once again)
-underscore the point that big things don't happen in big-bang projects coming out of nowhere, but rather as consequences of
-sustained long-term investments into a healthy system.
-
-Two years ago, `@jdonszelmann` [started the effort](https://github.com/rust-lang/rust/issues/131229) to unify and cleanup how attributes are represented and checked in the compiler.
-Just a few days ago, the last remaining attribute was ported to the new system. This significantly improves how attributes are checked and unblocks improvements to diagnostics and other things.
-
-Earlier this year, `@Zalathar` and `@nnethercote` cleaned up the implementation of rustc's query system. This improved performance but more importantly, made the system easier to understand, which was often a blocker for making improvements to it. The system is still a pretty scary part of the codebase, but this is a big step forward.
-
-There's actually more architectural work in this area, `@oli-obk` has been working on [architectural groundwork for expansion-time evaluation](https://goals.rust-lang.org/2026/expansion-time-evaluation.html),
-and there's been a lot of work by `@cjgilot`, `@petrochenkov` and other people I'm forgetting (sorry) on queries and incremental in general.
-Similarly, a lot of work happened to enable const generics to progress further. A common theme of these efforts is that
-they enable the compiler to use its capabilities in more contexts where it was previously limited,
-often because of strict ordering of some compilation phases.
-
-## Project goals and funding
-[🔗](https://yoyo-code.com/2026-is-exciting-year-for-rust-compiler-and-me/#project-goals-and-funding)
-
-There's quite a bit of meta stuff as well. Rust project has been experimenting with a new organizational framework called "project goals."
-
-It went through multiple iterations with various changes and experiments, but it seems that the system has finally reached some optimal steady state, and we see the benefits play out.
-I think you can clearly see that from the list above.
-
-We now have [a Fast Builds](https://goals.rust-lang.org/2026/roadmap-fast-builds.html) roadmap and multiple perf related project goals. That's pretty exciting.
-
-There are also multiple new developments in funding. One is explicitly attached to project goals, we also have a new ["Maintainers in Residence"](https://blog.rust-lang.org/2026/08/26/announcing-our-first-maintainers-in-residence/) program,
-and a new funding team was established as well.
-
-One also can't help but notice how many results came out of [Hexcat](https://https://hexcat.nl) employing a bunch of people in the past year.
-
-## ...and me
-[🔗](https://yoyo-code.com/2026-is-exciting-year-for-rust-compiler-and-me/#and-me)
-
-And lastly, 2026 is also an exciting year for me. After a few years of watching from the sidelines and eventually joining the perf triage, I decided to start working on the Rust project more seriously.
-
-Earlier this year, it became clear that I need to decide what to work on next. My current work is slowly winding down and turning into maintenance, and I also started to feel a bit burnt out on web-based work. For quite some time, I've been feeling the desire to return to something more technical and challenging.
-
-I was considering a few options, but somewhat unable to decide between them. To use the term from Marie Kondo, nothing really felt like it "sparks joy." After some exhausting events and feeling a bit down from all of this on one evening, I received an invitation to Rust All Hands. This was a pleasant surprise. I signed up for it earlier that year, but I didn't really expect much because I didn't know the likelihood of being invited. I took this as a sort of sign from the universe or something and booked the trip.
-
-The experience was overwhelmingly positive. I have to say that this was one of the most exciting events I attended in a long time. It reminded me that there's this big part of my life that I don't get to share with anybody almost ever, especially in real life. It seems so easy to forget that until you actually experience it again.
-
-Yes, sure, I can talk about some curious aspects of the Rust compiler with my friends, but it's a whole another level to talk about it with people who actually work on it and understand what you talk about on a deep level. It was really nice to meet people I know from their work and join the discussions about the development of the language.
-
-Long story short, it became clear that this is it, this is what I want to do. I was thinking about it before, but I guess I needed some strong "spark of joy" moment to stop doubting my feelings and force me to make a decision.
-
-## How to get a job on Rust?
-[🔗](https://yoyo-code.com/2026-is-exciting-year-for-rust-compiler-and-me/#how-to-get-a-job-on-rust)
-
-Now, of course, the question is how to actually do it. As you may know (and I somewhat hinted above), it's not exactly straightforward to find a job on the project.
-There's no "Rust inc." company you can send a CV to.
-There's a fractured and diverse space of possibilities where everybody finds their own way somehow.
-
-It's getting more approachable with those new programs, but I still expect this to take some time. Part of it depends on connections and trust, and those are built over time.
-I don't have to rush this, so I'll keep working until I figure something out.
-
-I've agreed to work on the [target directory size reduction project goal](https://github.com/rust-lang/goals/pull/805)
-if there is enough funding for that. I've also applied for MiR program, but I don't think that'll be available soon because the funds are limited and there are more important areas that need this specific funding.
-
-btw. I also opened [GitHub sponsors](https://github.com/sponsors/panstromek), so feel free to join if you want to support some compiler performance work ;)
+Still, I think the strongest argument of all is that neither web components nor React nor any other framework really matter, except maybe as a footnote in someone’s `AGENTS.md` or an aside in an agent’s thinking process. Recently I vibe-coded a small app for my wife, and the agent mentioned that it was wavering between Preact and Svelte before finally settling on Preact. To be honest, I didn’t care at all because the app worked and solved the problem at hand.
 
 ## Conclusion
-[🔗](https://yoyo-code.com/2026-is-exciting-year-for-rust-compiler-and-me/#conclusion)
 
-There's so much happening in the project that I feel like it's really challenging to do it justice.
-I already feel like I left out a ton of interesting work, but I have to stop somewhere. I hope that even this incomplete overview has been interesting.
+I still have a soft spot for web components, and when push comes to shove I’ll happily defend them against any detractors.
 
-I think I should also say that not everything has been positive. The beginning of the year was overshadowed by a bunch of people losing funding and heated discussions around AI policy. Just a few days before All Hands, somebody posted the policy draft to social media, and our small moderation team and other people spent a stressful weekend trying to limit the damage.
+There’s even a web component on this very site! The theme picker above is an [“HTML web component”](https://adactio.com/journal/20618) (or “light DOM component”), which I find quite nice as an alternative to the old-school “HTML with jQuery sprinkles” approach. Defining setup logic in `connectedCallback` just *feels* cleaner to me than awkward `querySelector` acrobatics. That said, I’ll admit that I had to explicitly tell my agent to use a web component (otherwise I’m certain it would have just shrugged and reached for `querySelector`).
 
-In light of that, I have a feeling that All Hands was a turning point where everybody could recharge, refocus, and take the positive energy back to the project. I certainly feel that, and I hope I'm not alone.
+Despite my sentimentality for web components, though, I think that the web component advocates working on standards, frameworks, or browsers will have to work twice as hard to argue for their relevance in an AI coding future. I no longer have a dog in this fight, but I looked at the status of some longstanding problems with web components and was disappointed to see that [server-side rendering](https://github.com/whatwg/html/issues/10673), [stylesheet sharing](https://github.com/WICG/webcomponents/issues/909), and [accessibility](https://chromestatus.com/feature/5188237101891584) still appear to be unsolved. These kinds of flaws – which mind you, directly impact the end-user experience and are thus unchanged with AI coding – will have to be fixed if web components want to have a fighting chance.
+
+If web components don’t survive, or they wither away to forgotten infrastructure on a [minority of websites](https://chromestatus.com/metrics/feature/timeline/popularity/1689), then what will they have accomplished? Well, I do think that one unambiguous victory for web components has been in “explaining the platform.” This was [one of the original goals of web components](https://domenic.me/explaining-away-the-webs-magic/): taking a native HTML element like `<video controls>` or `<details>`/`<summary>` and explaining how web developers could build it themselves from platform primitives. And in fact if you look at the browser DevTools, you’ll even see “user-agent shadow DOM” hiding inside these elements.
+
+So from a standards and internal-consistency perspective, web components have been a clear win. They provide a degree of coherence between userland and the platform that, without them, might have felt ad-hoc or inconsistent from browser to browser.
+
+This has also created a symbiotic relationship between standards and userland, where web component concepts have flowed back into standards and influenced the design of new platform features. You can see this most clearly in the [Open UI project](https://open-ui.org/), where terms like “parts” and “slots” are frequently invoked (both of which come from web components), and which has landed several new features in browsers such as [customizable `<select>`](https://developer.mozilla.org/en-US/docs/Learn_web_development/Extensions/Forms/Customizable_select), [popovers](https://developer.mozilla.org/en-US/docs/Web/API/Popover_API), and [invoker commands](https://developer.mozilla.org/en-US/docs/Web/API/Invoker_Commands_API), with more likely on the way.
+
+So whatever happens to web components in the future, and regardless of whether web developers ignore them, forget them, celebrate their demise, or write them off entirely, nothing can take this victory away from them. They are woven into the texture of the web platform in a way that can never be undone. For me, this makes me happy even if I never write another web component again.
+
+*You can comment on [the fediverse](https://toot.cafe/@nolan/117470449984835742) or [Lobsters](https://lobste.rs/s/dpjkzz/do_web_components_have_future_if_nobody_is).*

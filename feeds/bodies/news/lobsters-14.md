@@ -1,50 +1,19 @@
-Like many others in the free software community, I've been been growing
-apathetic with the whole thing, lately. One project after the other - and one
-Linux distro after the other - embrace the proprietary world destroying
-plagiarism machine. I've been questioning the point of it all. Why make the
-effort of writing software, and publishing it, only for huge corporations to
-gobble it up, while blatantly ignoring the license?I felt Debian's embrace of it the worst. To me it has been a community-focused
-constant. Until it wasn't. That isn't to say I feel Debian owes me anything.
-They don't. But it still made me sad.But I still like computers. Coding and tinkering is fun. Unix-like systems are
-where I feel comfortable. But, if possible, I'd like to use something that
-aligns more with my values than my previous go-to, Debian, does.Discovering Chimera LinuxI've been looking into community-focused distros that have firm LLM policies.
-While doing this I came over the post «[Creating distro build tooling for a
-small community](https://chimera-linux.org/news/2026/10/the-case-for-cbuild.html)» on the
-[Chimera Linux](https://chimera-linux.org/) website. I was intrigued. They also
-reject [LLM contributions](https://chimera-linux.org/community/) completely.It's not just their firm focus on community that makes Chimera interesting,
-though. They've also got a tech stack that deviates from mainstream Linux.
-Chimera uses [musl](https://musl.libc.org), not glibc, it uses a
-FreeBSD-derived userspace, not GNU coreutils, and it uses
-[dinit](https://github.com/davmac314/dinit), not systemd.The latter, not using systemd, required a bit of research. Not because it's a
-bad choice, but because some of the discourse among non-systemd-users is
-frankly bizarre. But Chimera has my back here too. Chimera «is explicitly
-not a part of this community».I was sold, and quickly installed Chimera. Suddenly I was back to when I
-discovered Linux in the early 2000's, poking around something new and fresh.
-This time I knew my way around, but a new init and service manager, the
-FreeBSD-based userspace and new-to-me apk-package manager meant I had to learn
-some new tricks. It's loads of fun.Making it easy to contributeOne thing that stood out [in the blog post I](https://chimera-linux.org/news/2026/10/the-case-for-cbuild.html)was
-«[…]Every user can be a maintainer. It shouldn't be unnecessarily intimidating.
-We don't gatekeep here when possible. You should also be having fun using the
-system and being here.».The barrier to entry for contributing to many Linux distributions these days is
-pretty high. Chimera makes it an explicit goal to make contributing easy - and
-I'd say they've succeeded. The packaging tools, and the format you write
-packages in, are both easy to learn and easy to use. As of writing, I've got
-one new package and one update accepted into «cports», Chimera's package
-repository.More importantly, I made mistakes when contributing, and I was met with advice
-and suggestions on how to improve, not with hostility or rejection. What I
-first tried to submit wasn't good enough, but I was given a chance to improve -
-and I did.This welcoming, friendly atmosphere, in my experience, extends to the rest of
-the community. I've been talking and asking questions in the [`#chimera-linux`
-IRC channel on OFTC](https://webchat.oftc.net/?channels=#chimera-linux). People
-were more than happy to lend me a hand, give me hints and even just chat.But, Eskild, you're still running LLM-generated codeI am. There's LLM code in projects upstream from Chimera, perhaps most notably
-the Linux kernel. It's impossible to avoid it at this point, and still be left
-with a usable system. I still think there's value in a project taking a stand,
-as much as it can, and I think there's also value in non-LLM forks like
-[vim-classic](https://vim-classic.org) and
-[opentmux](https://codeberg.org/opentmux/opentmux). I'm happy to be in a
-community of builders that take a stand.There are othersIf you think this sounds interesting, I urge you to try out [Chimera
-Linux](https://chimera-linux.org/). That said, it's not alone, even though many
-of the largest Linux distributions, and *BSDs, are embracing LLMs. [Elementary
-OS](https://elementary.io/), [Gentoo Linux](https://www.gentoo.org/), [Asahi
-Linux](https://asahilinux.org/) and [Nura](https://nura.eco/) on the Linux
-side, and [NetBSD](https://www.netbsd.org/) on the BSD side, are also options.
+**Microsoft No More:** European countries are increasing efforts to build sovereign digital infrastructure to replace Microsoft and other US-based solutions. The Dutch government is even working on its own Linux distribution because The Hague is reportedly tired of Washington's threats against EU-based institutions.
+
+The Dutch government is trying to solve its digital sovereignty problem with its own Linux operating system. A local source recently highlighted the development efforts being poured into [NixOS](https://tweakers.net/reviews/15334/nederland-maakt-soeverein-alternatief-voor-windows-en-office-op-basis-van-linux.html), a Linux distro that originated as a package manager created by Dutch developers. The idea is that US-based software solutions, most notably Microsoft's, would eventually be replaced by this new OS and open-source productivity solutions.
+
+[Nix](https://nixos.org/) is a package manager with a few peculiar features, including cross-platform compatibility and its own functional programming language for configuring Unix and Unix-like systems. The tool was first released in 2003, and NixOS debuted three years later. The Linux distro is built around Nix and is currently supported by the Dutch nonprofit organization NixOS Foundation.
+
+[![](https://www.techspot.com/images2/news/bigimage/2026/09/2026-09-29-image-25-j.webp)](https://www.techspot.com/images2/news/bigimage/2026/09/2026-09-29-image-25.jpg)
+
+Nix and NixOS are the foundations of the Digitaal Autonome Werkomgeving Overheid (DAWO) project, which includes all the tools required to build a sovereign IT infrastructure. With DAWO, The Hague plans to provide government and public institutions with a custom operating system, productivity and office applications, cloud services, management tools, and everything in between.
+
+Serious efforts to build the DAWO-based sovereign infrastructure apparently began a few months ago, when Dutch authorities decided to standardize the creation of a national IT ecosystem. The project is focused on accessibility, because NixOS developers are not exactly enthusiastic proponents of heavily GUI-based computer interfaces.
+
+DAWO's first pilot programs have already been deployed in private and local environments, but the plan should eventually encompass all institutions in the Netherlands. Sovereignty efforts in the country apparently stalled for years, but the new US administration provided the right incentives to finally get the job done.
+
+![](https://www.techspot.com/images2/news/bigimage/2026/09/2026-09-29-image-16-j.webp)
+
+Washington authorities recently decided to target the Hague-based International Criminal Court (ICC) with sanctions, while Microsoft allegedly blocked the court's prosecutors from accessing its email and other crucial IT services. The ICC is already [replacing](https://www.techspot.com/news/110095-international-criminal-court-replacing-microsoft-office-sovereign-eu.html) Microsoft Office with an open-source alternative, as DAWO and NixOS are going to extend the sovereignty efforts even further.
+
+Earlier this year, the Netherlands blocked an attempt by a US company to buy a crucial app used by [Dutch citizens](https://www.techspot.com/news/112552-netherlands-blocked-us-company-buying-app-dutch-citizens.html). Elsewhere in Europe, countries are [investing millions](https://www.techspot.com/news/113763-switzerland-paying-11-million-stop-using-outlook-teams.html) in massive conversion projects based on the same concept: replacing Windows, Microsoft, and most US software services with Linux, open-source software, or other custom solutions.

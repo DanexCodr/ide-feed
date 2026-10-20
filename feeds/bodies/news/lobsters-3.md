@@ -1,79 +1,222 @@
-It has been 18 months since the first announcement of A5. What started off as an experiment in visualization (and an obsession with pentagons) has grown into a useful tool, with a wealth of [libraries, tools and software](https://a5geo.org/docs/ecosystem) building on top.
+Almost all modern machines use [two’s
+complement](https://www.cs.cornell.edu/~tomf/notes/cps104/twoscomp.html) to
+represent integers. This representation is asymmetric, in the sense that the
+most negative number has no corresponding positive number. For example, with
+signed 8-bit numbers, the most negative number is `-128`, whilst the most
+positive number is `127`. This quirk shows up in various cases, but for the
+purpose of this post, I am concerned with signed integer division, where `x/-1`
+mathematically should produce `-x`, but in the case where `x` is the most
+negative number, that is not possible. For 32-bit integers, which I arbitrarily
+decide are the most common, this means that one out of every 2⁶⁴ possible inputs
+is impossible to represent correctly - leading to the somewhat clickbaity title
+of this post, and some recently fixed troubles in the Futhark compiler. In this
+post I will explain what the actual problem is for a language implementation,
+how we fix it, and what the performance cost looks like. The main audience of
+this post is other language implementers, but I think the concepts involved are
+simple enough that anyone curious about low level issues can follow along.
 
-Today I'm excited to announce that the `v1.0` version of A5 is out, bringing a [powerful set of features and performance improvements](https://a5geo.org/docs/whats-new) as well as [crystallizing the grid and index definition](https://a5geo.org/docs/upgrade-guide) for the future.
+The Futhark compiler has multiple backends, but the most important ones work by
+generating C code. This has many practical advantages:
 
-If you're new to A5, in a nutshell it is a grid system that allows the representation of any position, line or polygon region on the globe as a pentagonal cell (or collection of cells), each represented as a compact 64-bit integer.
+1. It is easy to debug the generated code because it is easy to read and modify by hand.
+2. Most systems have a C compiler (or easy access to one), meaning Futhark has fewer dependencies, is portable, and doesn’t need to bundle native code generators.
+3. Many languages can interoperate with C, so by exposing Futhark as a C API, [those languages can also call Futhark](https://futhark-lang.org/blog/2022-07-01-how-futhark-talks-to-its-friends.html).
 
-The industry term for this is a Discrete Global Grid System (DGGS), and there are already a number of other systems out there which are powering some of the world's largest companies and data analytics pipelines.
+That said, there are also disadvantages:
 
-For a concrete example of an application leveraging A5, take a look at the [FIRMS Explorer](https://portolan-mirrors.github.io/firms-catalog/) which uses A5 to aggregate 631 million fire detections worldwide since 2000.
+1. Some code patterns are hard to express (or express efficiently) in C. This is mainly the case for advanced language features such as coroutines, tail calls, or garbage collection. Fortunately Futhark is [pretty boring from a semantic perspective](https://futhark-lang.org/blog/2025-09-26-the-biggest-semantic-mess.html), so this does not affect us too much.
+2. It is very easy to accidentally generate C code that is subtly wrong. This does unfortunately keep pestering us.
 
-## Stable platform for the future[​](https://a5geo.org/blog/2026/10/14/a5-v1#stable-platform-for-the-future)
+C is of course renowned as a very safe and easy-to-use language, because C
+programmers never make coding mistakes. The few times they do make mistakes, it
+is often due to mishandling of pointers or array sizes, leading to buffer
+overflows, heap smashing, etc. These are actually not the main problem with
+generating C from Futhark, as Futhark itself is memory-safe, and systematically
+inserting in bounds checks in generated code is easy ([although a little more
+interesting in GPU code](https://futhark-lang.org/blog/2020-07-13-bounds-checking.html)).
 
-With `v1.0` we are committing to keeping the grid layout and the cell IDs frozen going forward. While the system will evolve and grow, for example by adding more utility functions, the fundamentals will stay fixed so applications, databases and workflows will be able to rely on an A5 cell representing a specific geographic location into the future.
+No, the main problem we’ve had is actually undefined behaviour. As is by now
+well-known, C specifies various events as explicitly undefined, meaning not only
+that a C compiler can assume it will never occur, but also that no particular
+result is guaranteed should a program perform one of the undefined operations.
+Some causes of undefined behaviour are obvious and easy to avoid: reading arrays
+out-of-bounds, using freed memory, etc. But C has a long list of more obscure
+cases. My favourite example is that in C99, it is undefined behaviour if a
+source code file does not end with a final newline character. Yet we have
+honestly not spent that much time dealing with that particular issue in Futhark.
 
-The community around the project has grown, in particular with the [DuckDB](https://query.farm/products/extensions/a5/) and [R](https://belian-earth.github.io/a5R/dev/index.html) implementations, whose beautiful sites arguably even put the official A5 site to shame! As such, going forward, the documentation on the A5 website will present code snippets and API documentation in these languages, as well as the officially supported TypeScript, Rust and Python libraries.
+No, the main problem, and now we are finally returning to the premise in the
+post, is that *signed* integer overflow is undefined behaviour in C. This is
+particularly insidious since most programmers have a mental model of fixed-size
+integer arithmetic where overflow is a natural event, and so does the actual
+machines we use, but a C compiler may assume it never happens. The reason behind
+this specification is so the C compiler can optimise based on useful properties
+such as `x+1>x`, which are not true in the presence of overflow, but the
+motivation does not actually matter to us. In a language like Futhark, where
+integer overflow *is* defined behaviour (it wraps around), this creates a very
+unfortunate mismatch between what we want to do, and what we can express in our
+target language.
 
-## What's new[​](https://a5geo.org/blog/2026/10/14/a5-v1#whats-new)
+Fortunately, C is merciful enough to specify that for *unsigned* numbers,
+overflow is well-defined, and behaves just as you would expect (on a
+two’s-complement machine, anyway). For this reason, Futhark’s C code generation
+actually represents all integer types using unsigned C types, (so `i64` becomes
+`uint64_t`), and then performs the arithmetic on unsigned types. This works due
+to the nice property of two’s complement representation that most arithmetic
+operations are done exactly the same, at the bit level, as for unsigned
+integers. One exception is comparison operators, in which we cast to the signed
+type (e.g. `int64_t`) before performing the comparison. Such conversions are
+free, since they do not need to change the bit representation of the number, but
+only affect what instructions the C compiler emits for e.g. a `<=` operation.
 
-### Compacted data processing[​](https://a5geo.org/blog/2026/10/14/a5-v1#compacted-data-processing)
+Another operator where sign matters is division. If we do `x/-1`, then it is
+quite important whether we are dividing with a small negative number, or with
+the number that arises if we interpret the two’s complement bit pattern for `-1`
+as an unsigned integer. This means that for signed integer division, Futhark
+generates a signed C division. This means that if we do `x/-1` where `x` is the
+most negative number, we are stuck with the issue described in the post opener -
+the correct result (`-x`) cannot be represented as a signed integer, so this is
+a signed integer overflow, and that is undefined behaviour in C.
 
-New in `v1.0` is a whole new set of functions for working with collections of cells, known as [coverings](https://a5geo.org/docs/api-reference/coverings).
+Futhark is a principled language, and therefore producing undefined behaviour is
+unacceptable. (I realise the hypocrisy of this puritan declaration whilst
+leaving in the bug for ten years.) Further, on x86 this kind of division will
+actually signal a CPU exception, crashing the program, so this is not merely a
+violation of the sanctity of the C specification. Fixing it in principle is
+easy. This is the definition of 32-bit signed division in the Futhark runtime
+system:
 
-When working with coverings, you can now use set operations: [`union`](https://a5geo.org/docs/api-reference/coverings#union), [`intersect`](https://a5geo.org/docs/api-reference/coverings#intersect) and [`difference`](https://a5geo.org/docs/api-reference/coverings#difference), predicates: [`contains`](https://a5geo.org/docs/api-reference/coverings#contains) and [`overlaps`](https://a5geo.org/docs/api-reference/coverings#overlaps) and measuring functions: [`count`](https://a5geo.org/docs/api-reference/coverings#count) and [`area`](https://a5geo.org/docs/api-reference/coverings#area).
+```
+int32_t squot32(int32_t x, int32_t y) {
+  return x / y;
+}
+```
 
-By using compacted data and these operations, it is possible to process billions of cells efficiently without having to uncompact the data, as was necessary before. An example workflow might be to union several coverings from database queries, intersect with a polygon or spherical cap and then filter a collection of points against the resulting covering. See the [example workflow](https://a5geo.org/docs/api-reference/coverings#example-processing-flow).
+And this is the version that avoids the 0.000000000000000000542% undefined cases:
 
-### Spatial hierarchy functions[​](https://a5geo.org/blog/2026/10/14/a5-v1#spatial-hierarchy-functions)
+```
+int32_t squot32(int32_t x, int32_t y) {
+  return y == -1 ? (int32_t)(0 - (uint32_t)x) : x / y;
+}
+```
 
-Geometrically, it is impossible to split an A5 pentagon into more pentagons in such a manner that the result exactly overlaps; the same is true of hexagons - unlike quadrilaterals and triangles, which can be split exactly. The A5 hierarchy is thus logical, and only approximately spatial.
+This function simply checks whether the divisor is `-1`, and if so does the
+negation with unsigned (well-defined) arithmetic. The cost is a branch on every
+single division. The behaviour is still *implementation-defined*, but produces
+the right results on the machines we care about.
 
-In order to support resampling and other operations, a new function [`cellToSubcells`](https://a5geo.org/docs/api-reference/hierarchy#celltosubcells) has been added. While this is slower than the `cellToChildren` API, it produces a correct covering (by centroid) of the cell. The inverse, [`cellToSupercell`](https://a5geo.org/docs/api-reference/hierarchy#celltosupercell), is also available.
+(Why `quot` instead of `div`? Futhark actually has *two* division operators -
+one that rounds sensibly towards negative infinity, and one that rounds towards
+zero like C. The function above is the one that follows C’s behaviour because it
+is less code, but the issue is the same either way.)
 
-### Equal area[​](https://a5geo.org/blog/2026/10/14/a5-v1#equal-area)
+### [The cost](https://futhark-lang.org/blog/2026-10-14-defining-division.html#the-cost)
 
-One of the key strengths of A5 has always been the guarantee that every cell is **exactly** the same area at a given resolution, which means that any analysis run using the system is [free of bias](https://a5geo.org/docs/recipes/a5-vs-h3) due to unequal cell sizes. New in `v1.0`, all the cells at all resolutions have the same pentagonal topology. This is in contrast to hexagonal DGGSs, which must include 12 pentagonal cells that complicate the topology and break the pure equal-area guarantee.
+Correctness is not really a thing we can compromise on, but in principle it is
+frustrating that *every* integer division needs an additional branch just to
+handle a *single* special case that may never actually happen, as it is highly
+unlikely that a program’s correctness *depends* on wraparound for signed integer
+division at the ends of the numeric scale. But apart from the principal
+frustration, what is the actual overhead?
 
-## Vibrant ecosystem[​](https://a5geo.org/blog/2026/10/14/a5-v1#vibrant-ecosystem)
+Measured on the [Futhark benchmark
+suite](https://github.com/diku-dk/futhark-benchmarks) on GPU, I was unable to
+measure an impact. This is likely because signed integer divisions are
+relatively rare, and even when they do occur, they likely occur due to index
+arithmetic, where the resulting memory loads have so much latency that they
+easily [hide](https://modal.com/gpu-glossary/perf/latency-hiding) the cost of
+doing the divisions.
 
-One of the important characteristics of a grid system is its support across a range of tools and software, both in industry and academia. By standardizing on a definition of the grid and cell identifiers, it is easy to move data between systems and applications. For example, the FIRMS Explorer above was built using:
+But what if we try to construct a contrived program where the bottleneck is
+signed division throughput? That would demonstrate something close to worst-case
+overhead of adding the branch. Behold, `divisions.fut`:
 
-- Geoparquet.io to aggregate the data: gpio add a5 input.parquet output.parquet --resolution 5
-- Portolan to host
-- a5-js and the A5Layer in deck.gl to visualize
+```
+-- ==
+-- random input { 1000000 [1000]i32 [1000]i32 }
 
-Along with a raft of implementations in popular systems, such as [DuckDB](https://query.farm/products/extensions/a5/), [R](https://belian-earth.github.io/a5R/dev/index.html), [QGIS](https://plugins.qgis.org/plugins/vgridtools/) and more, it is easier to build and experiment with A5 than ever. If you would like to get involved, or just have a question - feel free to join the [Slack channel](https://join.slack.com/t/a5-3ap4392/shared_invite/zt-35rpdc904-2vcsoikrJKFRJF7ncN1fmw)!
+entry main [n] (k: i32) (xs: [n]i32) (ys: [n]i32) : [n]i32 =
+  map2 (\x y ->
+          loop z = x
+          for _i < k do
+            #[unsafe]
+            z // y)
+       xs
+       ys
+```
 
-## Under the hood[​](https://a5geo.org/blog/2026/10/14/a5-v1#under-the-hood)
+The program accepts a number `k` and two arrays of integers. For each
+corresponding pair `x` and `y`, it `k` times divides `x` by `y`, using `//` to
+target the `squot32` function, and using `#[unsafe]` to remove division-by-zero
+checks.
 
-Over the past 18 months, both A5's internals and its APIs have been refined.
+For most values of `k`, repeated division quickly produces zero, but the
+compiler cannot assume this, so it will have to actually perform the divisions.
+You may reasonably argue that the program is not *purely* division bound, as the
+bookkeeping around the loop also involves costly things such as adding and
+comparing integers, but a program that contains a very long *unrolled* sequence
+of divisions stretches my credulity too far.
 
-### Teohedral space-filling curve[​](https://a5geo.org/blog/2026/10/14/a5-v1#teohedral-space-filling-curve)
+Using the handy [futhark
+bench](https://futhark-lang.org/examples/benchmarking.html) tool, we can then
+measure the impact using the compiler with a fixed implementation of `squot32`
+([part of this pull request](https://github.com/diku-dk/futhark/pull/2579)).
+First on sequential code, using the `c` backend:
 
-The key change that the majority of the other improvements flow from is the implementation (and, well, discovery!) of a new [teohedral](https://a5geo.org/docs/technical/teohedron) [space-filling curve](https://a5geo.org/examples/teohedral-curve), which defines the order in which the cells are indexed. The new curve passes around the whole world, without ever intersecting itself, while also grouping cells such that they form an (approximate) spatial hierarchy.
+```
+$ futhark-old-and-busted bench divisions.fut
+...
 
-![The teohedral curve touring the 12 faces of the dodecahedron](https://a5geo.org/assets/images/teohedral-curve-94336f4a2b0f0afa694dec5e18a3a03b.jpg)
+divisions.fut (no tuning file):
+100000i32 [10000]i32 [10000]i32:    3390148μs (95% CI: [ 3387613.7,  3396498.1])
 
-The fact that it doesn't self-intersect is crucial to some of the algorithms that can be built on top. For example, when filling a polygon with cells we can immediately deduce which cells are on the interior of the region without having to perform a costly flood fill. This works due to the boundary acting as a set of cutting points along the global space-filling curve - if we know these, then we can trivially fill in the cells in between.
+$ futhark-new-hotness bench divisions.fut
+...
 
-The benchmarks below are instructive:
+divisions.fut (no tuning file):
+100000i32 [10000]i32 [10000]i32:    3389215μs (95% CI: [ 3387626.2,  3391036.4])
+```
 
-![polygonToCells time against the number of cells in the result, for old and new A5, H3 and S2](https://a5geo.org/assets/images/polygon-perf-12f499eafdc2fcc0afaec4e206678834.jpg)
+There is no measurable difference, which is not a surprise on a modern
+speculatively executing CPU for a program with an easily predicted branch.
 
-*How these were measured: each point is one call filling a country outline (UK, France, Brazil, USA and Australia, from the A5 test fixtures) at one resolution, timed with the native libraries: A5 1.0.0 and 0.10.1 (Rust crates, rustc 1.87), H3 4.5.0 (the C library, via h3-py's NumPy API) and S2 (the C++ library, via the s2geometry 0.14.0 Python bindings; `S2RegionCoverer` with no cell limit, so it returns a compacted covering at the target level). Times are the fastest of repeated runs, or a single run for calls over 2 seconds, on an Apple M1 Pro. Each library was stopped once a call took longer than a minute (6 seconds for A5), or past a billion cells.*
+But what about GPUs? After all, “GPUs are bad at branching” is a common motto by
+those of my students who like to replace an `if` with ten lines of dense
+branchfree code. Let’s try the experiment again with Futhark’s `cuda` backend:
 
-Prior to v1, A5 polygon fills became impractically slow beyond a million cells. The same is true of [H3](https://h3geo.org/) today. By contrast, [S2](https://s2geometry.io/) is able to handle up to a billion cells without any issues, as is the new version of A5. It is no coincidence that S2 also uses a space-filling curve ([Hilbert](https://en.wikipedia.org/wiki/Hilbert_curve)) which **doesn't** self-intersect, while H3 index order has no such property.
+```
+$ futhark-old-and-busted bench --backend=cuda divisions.fut
+...
 
-Similar algorithmic tricks can be used to speed up other operations, like intersections or area counts. For an interactive example of these operations, see the [Coverings](https://a5geo.org/examples/coverings) example.
+divisions.fut (no tuning file):
+100000i32 [10000]i32 [10000]i32:       5548μs (95% CI: [    5546.4,     5552.2])
 
-### Cell IDs[​](https://a5geo.org/blog/2026/10/14/a5-v1#cell-ids)
+$ futhark-new-hotness bench --backend=cuda divisions.fut
+...
 
-A necessary consequence of changing the curve is that the cell IDs change. See the [Upgrade Guide](https://a5geo.org/docs/upgrade-guide) for migration instructions.
+divisions.fut (no tuning file):
+100000i32 [10000]i32 [10000]i32:      12592μs (95% CI: [   12563.5,    12622.1])
+```
 
-## Thanks & looking forward[​](https://a5geo.org/blog/2026/10/14/a5-v1#thanks--looking-forward)
+Well then! This really is a major difference. Much more than I expected when I
+began this work, actually. Reading the generated PTX (CUDA machine code), the
+old version is partially unrolled into four consecutive `div.s32` instructions
+in a single basic block, whilst the fixed compiler still triggers unrolling, but
+with many branches between the divisions.
 
-It has been a challenge and a lot of fun to work on A5, and it has led to some great conversations with many smart people. A big thank you to all the people who have got involved, by building libraries on top of A5, reporting bugs or just spreading the word.
+I observed a similar result on an AMD GPU with the `hip` backend, although the
+impact was slightly less there.
 
-I find the topic fascinating. I hope you find A5 useful in your work, and that the examples on the site help show how a DGGS is put together. I am currently working (with a few others) on a paper which will explain the design of A5 more rigorously as well as provide comparisons to other DGGS libraries.
+The cost of fixing those 0.000000000000000000542% of divisions is real and
+unfortunate, and I would certainly like to have a cheaper fix. Having undefined
+behaviour in the generated code is of course not acceptable, so we will have to
+live with this for now. On non-contrived benchmarks, it seems there is
+essentially no impact. For programmers unwilling to pay this cost, you can
+always stick to *unsigned* divisions, if you know that you will never have
+negative numbers.
 
-If you would like to get involved, join us on our [Slack channel](https://join.slack.com/t/a5-3ap4392/shared_invite/zt-35rpdc904-2vcsoikrJKFRJF7ncN1fmw), and if you build anything with A5, please share!
+This is the last instance of undefined behaviour in Futhark’s generated C code
+that I remember. There is however at least one instance of
+*implementation-defined* behaviour, namely in the code generation for
+bit-shifting integers by more bits than their size, but I have yet to gather the
+courage to fix it.

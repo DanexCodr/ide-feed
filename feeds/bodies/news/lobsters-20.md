@@ -1,254 +1,527 @@
-[**Servo 0.6.0**](https://github.com/servo/servo/releases/tag/v0.6.0) contains all of the changes we landed in August, which came out to **417 commits**!
-
-The big news is that we’ve turned on support for **CSS Grid** by default ([@nicoburns](https://github.com/nicoburns), [#45621](https://github.com/servo/servo/pull/45621)).
-This has had a huge positive impact on the visual appearance of many websites!
-
-![a black and white cat named Gary showing off new visual web platform features](https://servo.org/img/blog/2026-10-gary.png)
-
-We’ve shipped several new web platform features:
-
-- touch-action (@yezhizhen, #47043)
-- animation-composition (@nicoburns, #47405)
-- color-scheme (@TimvdLippe, #47042)
-- full-width, math-auto, full-size-kana values for text-transform (@SimonSapin, #47160, #47160, #47225)
-
-Plus a bunch of new DOM APIs:
-
-- requestAnimationFrame() on DedicatedWorkerGlobalScope (@Taym95, #46232)
-- ancestorOrigins on Location (@TimvdLippe, @mrobinson, #46056)
-- imagesrcset and imagesizes on <link rel=preload as=image> (@lumiscosity, @TimvdLippe, #47103)
-- style on CSSFontFaceRule (@simonwuelker, #47388)
-- isReloadNavigation and isHistoryNavigation on Request (@Taym95, @yezhizhen, #46917)
-- name=color-scheme on <meta> (@TimvdLippe, @jdm, #46993)
-- focusin and focusout events (@RichardTjokroutomo, @yezhizhen, #46980)
-- new TextEvent() (@moamenhesham0, @mrobinson, #47391)
-- PeriodicWave and createPeriodicWave on BaseAudioContext (@kevlu93, #47492)
-
-This release also contains significant improvements to **navigation**, **document loading**, and **session history**, which are some of the [gnarliest](https://html.spec.whatwg.org/multipage/browsing-the-web.html#navigation-and-session-history) parts of the HTML specification. Who knew that loading `about:blank` was [so complicated](https://hsivonen.fi/about-blank/)? The upshot to all this work is that pages that open additional windows or include iframes work much more reliably.
-
-This is another big update, so here’s an outline:
-
-- [**Security**](https://servo.org/blog/2026/10/09/august-in-servo/#security)
-- [**Real world compat**](https://servo.org/blog/2026/10/09/august-in-servo/#real-world-compat)
-- [**Work in progress**](https://servo.org/blog/2026/10/09/august-in-servo/#work-in-progress)
-- [**Embedding API**](https://servo.org/blog/2026/10/09/august-in-servo/#embedding-api)
-- [**For users and developers**](https://servo.org/blog/2026/10/09/august-in-servo/#for-users-and-developers)
-- [**More on the web platform**](https://servo.org/blog/2026/10/09/august-in-servo/#more-on-the-web-platform)
-- [**Performance and stability**](https://servo.org/blog/2026/10/09/august-in-servo/#performance-and-stability)
-- [**New contributors**](https://servo.org/blog/2026/10/09/august-in-servo/#new-contributors)
-
-## Security [**](https://servo.org/blog/2026/10/09/august-in-servo/#security)
-
-We upgraded to **SpiderMonkey v153**, which brings many new security and crash fixes to Servo’s JavaScript engine integration ([@sagudev](https://github.com/sagudev), [@Gae24](https://github.com/Gae24), [#47489](https://github.com/servo/servo/pull/47489)).
-
-Navigating away from a document that **activated fullscreen mode** now exits fullscreen mode ([@shubhamg13](https://github.com/shubhamg13), [@jdm](https://github.com/jdm), [#47123](https://github.com/servo/servo/pull/47123)).
-
-## Real world compat [**](https://servo.org/blog/2026/10/09/august-in-servo/#real-world-compat)
-
-CSS Grid enabled by default means that many websites with traditional grid layouts now look correct, like [rustweek.org](https://rustweek.org/).
-
-It also makes a lot of websites look better that you wouldn’t assume rely on CSS Grid:
-
-Panning gestures initiated by touch inputs now lock to the dominant axis ([@yezhizhen](https://github.com/yezhizhen), [#46983](https://github.com/servo/servo/pull/46983)).
-This results in more predictable panning when interacting with pages in Servo.
-
-We fixed a crash affecting [gumroad.com.au](https://gumroad.com.au) ([@lumiscosity](https://github.com/lumiscosity), [#47266](https://github.com/servo/servo/pull/47266)).
-
-We’re interested to hear how well your favourite websites run in Servo! Report successes in [this Zulip thread](https://servo.zulipchat.com/#narrow/channel/263398-general/topic/Servo.20web.20compat.20success.20stories/with/612898341) or [this Github discussion](https://github.com/servo/servo/discussions/49037), and failures [in our GitHub issues](https://github.com/servo/servo/issues).
-
-## Work in progress [**](https://servo.org/blog/2026/10/09/august-in-servo/#work-in-progress)
-
-**Accessibility support** in Servo continues to make great strides; it can be enabled with the `--pref accessibility_enabled` command line argument.
-Servo now reports **positions and sizes** for items in the content accessibility tree ([@philocalyst](https://github.com/philocalyst), [@alice](https://github.com/alice), [@mrobinson](https://github.com/mrobinson), [#46996](https://github.com/servo/servo/pull/46996)), allowing macOS VoiceOver to work more reliably.
-We also report many [**ARIA roles**](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Roles) for web content elements to accessibility toolkits ([@mukilan](https://github.com/mukilan), [#47318](https://github.com/servo/servo/pull/47318)).
-
-- alert
-- banner
-- blockquote
-- caption
-- code
-- complementary
-- contentinfo
-- definition
-- deletion
-- directory
-- document
-- emphasis
-- feed
-- figure
-- generic
-- insertion
-- list
-- log
-- main
-- math
-- navigation
-- none
-- note
-- paragraph
-- presentation
-- rowgroup
-- search
-- status
-- strong
-- term
-- time
-- timer
-
-Servo’s support for **Document.execCommand()** is rapidly improving, and can be enabled with `--pref dom_exec_command_enabled`.
-We fixed issues with the **inserttext** command ([@Psychpsyo](https://github.com/Psychpsyo), [#47224](https://github.com/servo/servo/pull/47224), [#47306](https://github.com/servo/servo/pull/47306)), editing uneditable content ([@Psychpsyo](https://github.com/Psychpsyo), [#47362](https://github.com/servo/servo/pull/47362)), computing contained nodes ([@TimvdLippe](https://github.com/TimvdLippe), [#47429](https://github.com/servo/servo/pull/47429)), adjusting selections in **contenteditable** ([@mrobinson](https://github.com/mrobinson), [#47393](https://github.com/servo/servo/pull/47393), [#47581](https://github.com/servo/servo/pull/47581), [#47581](https://github.com/servo/servo/pull/47581)), and implemented the **indent** and **insertLineBreak** commands ([@Psychpsyo](https://github.com/Psychpsyo), [#47416](https://github.com/servo/servo/pull/47416), [#47445](https://github.com/servo/servo/pull/47445)).
-
-We made a lot of progress on the **LargestContentfulPaint** performance metric, implemented behind the `--pref largest_contentful_paint_enabled` argument.
-Servo now supports the **element** and **loadTime** attributes, ([@shubhamg13](https://github.com/shubhamg13), [#46553](https://github.com/servo/servo/pull/46553), [#47475](https://github.com/servo/servo/pull/47475)), URLs for video element posters ([@shubhamg13](https://github.com/shubhamg13), [#43376](https://github.com/servo/servo/pull/43376)), accurate size information ([@shubhamg13](https://github.com/shubhamg13), [#43378](https://github.com/servo/servo/pull/43378)), and painting text nodes ([@shubhamg13](https://github.com/shubhamg13), [#47212](https://github.com/servo/servo/pull/47212)).
-
-There was preparatory work for a future [**AudioWorklet**](https://developer.mozilla.org/en-US/docs/Web/API/AudioWorklet) implementation ([@niyabits](https://github.com/niyabits), [#46856](https://github.com/servo/servo/pull/46856), [#47016](https://github.com/servo/servo/pull/47016), [#47199](https://github.com/servo/servo/pull/47199)).
-See Niya’s [blog post](https://text.tchncs.de/niya/wrapping-up-my-work-on-servos-audioworklet) about her Outreachy project for more details!
-
-We’re continuing work on the **ServiceWorker** feature, which can be enabled with `--pref dom_serviceworker_enabled`.
-This month we implemented the **CookieStore** interface behind the `--pref dom_cookiestore_enabled` command line argument ([@Taym95](https://github.com/Taym95), [#47044](https://github.com/servo/servo/pull/47044)) as well as the **Cache** interface ([@gterzian](https://github.com/gterzian), [#47220](https://github.com/servo/servo/pull/47220)).
-
-Servo now supports a **disk-backed HTTP cache** that can be enabled with `--pref network_http_disk_cache` ([@Narfinger](https://github.com/Narfinger), [#43819](https://github.com/servo/servo/pull/43819)).
-This cache persists between runs, but there is not yet any way to clear it.
-
-## Embedding API [**](https://servo.org/blog/2026/10/09/august-in-servo/#embedding-api)
-
-**Breaking change:** [`WebView`](https://doc.servo.org/servo/struct.WebView.html)::`toggle_sampling_profiler` has been removed ([@lumiscosity](https://github.com/lumiscosity), [#47014](https://github.com/servo/servo/pull/47014)).
-To perform sampling profiling on Servo, follow the instructions in [the book](https://book.servo.org/contributing/profiling.html).
-
-**Breaking change:** The variants of [`MouseButton`](https://doc.servo.org/servo/enum.MouseButton.html) have been renamed to `Primary`, `Secondary`, and `Auxiliary` ([@mrobinson](https://github.com/mrobinson), [@SimonSapin](https://github.com/SimonSapin), [#47327](https://github.com/servo/servo/pull/47327)).
-
-We’ve added several new Cargo features reflecting common usage patterns:
-
-- default_web_features, to include optional web platform features in the build (e.g. WebXR and WebGPU) (@jschwe, #44032)
-- bundled, to include required resources in the binary (@jschwe, #44032)
-- brotli-compression-stream, enabling support for brotli content in the CompressionStream/DecompressionStream web APIs (@Narfinger, @jdm, #47197)
-- webcrypto, to enable support for the Crypto and WebCrypto web APIs (@Narfinger, #47198)
-- webgl, to enable support for WebGL (@janeoa, #47200)
-
-## For users and developers [**](https://servo.org/blog/2026/10/09/august-in-servo/#for-users-and-developers)
-
-One visible change is that interactive **text selection** now works!
-This is the result of lots of work across our script and layout code to ensure it respects the actual geometry of the page content ([@mrobinson](https://github.com/mrobinson), [@SimonSapin](https://github.com/SimonSapin), [#47022](https://github.com/servo/servo/pull/47022), [#47025](https://github.com/servo/servo/pull/47025), [#47329](https://github.com/servo/servo/pull/47329), [#47358](https://github.com/servo/servo/pull/47358), [#46982](https://github.com/servo/servo/pull/46982), [#47425](https://github.com/servo/servo/pull/47425), [#47438](https://github.com/servo/servo/pull/47438), [#47437](https://github.com/servo/servo/pull/47437), [#47581](https://github.com/servo/servo/pull/47581), [#47070](https://github.com/servo/servo/pull/47070), [#47048](https://github.com/servo/servo/pull/47048), [#46963](https://github.com/servo/servo/pull/46963)).
-
-![servoshell 0.6.0 showing text selection on an element using CSS perspective](https://servo.org/img/blog/2026-10-select.png)
-
-Building Servo now requires at least **Clang 19** on all platforms ([@jschwe](https://github.com/jschwe), [#47421](https://github.com/servo/servo/pull/47421)).
-Additionally, the `cargo-ohos` tool is now required for building for OpenHarmony ([@jschwe](https://github.com/jschwe), [#47334](https://github.com/servo/servo/pull/47334)).
-
-Debug builds on Windows can now complete successfully ([@jschwe](https://github.com/jschwe), [#47372](https://github.com/servo/servo/pull/47372)).
-
-Linux arm64 builds have been customized to work on **Raspberry Pi 5** ([@mukilan](https://github.com/mukilan), [#47113](https://github.com/servo/servo/pull/47113)).
-Any libservo embedders targeting the same platform will require a similar change if they are using jemalloc.
-
-Under **Wayland** and **OpenHarmony**, we now integrate with the system clipboard ([@TheZoq2](https://github.com/TheZoq2), [@yezhizhen](https://github.com/yezhizhen), [@jschwe](https://github.com/jschwe), [#46938](https://github.com/servo/servo/pull/46938), [#47177](https://github.com/servo/servo/pull/47177)).
-
-The macOS command key and Windows logo key is now reported as `Meta` instead of `Super` ([@eachra-bawn](https://github.com/eachra-bawn), [#47330](https://github.com/servo/servo/pull/47330)).
-
-The **Android** port has had many rough edges filed off as part of modernizing it for the **Compose UI** ([@veyndan](https://github.com/veyndan), [#47656](https://github.com/servo/servo/pull/47656), [#47491](https://github.com/servo/servo/pull/47491), [#47494](https://github.com/servo/servo/pull/47494), [#47697](https://github.com/servo/servo/pull/47697), [#46955](https://github.com/servo/servo/pull/46955), [#47644](https://github.com/servo/servo/pull/47644), [#47652](https://github.com/servo/servo/pull/47652), [#47276](https://github.com/servo/servo/pull/47276), [#47277](https://github.com/servo/servo/pull/47277), [#47299](https://github.com/servo/servo/pull/47299), [#47439](https://github.com/servo/servo/pull/47439)) and converting its implementation to Kotlin ([@veyndan](https://github.com/veyndan), [#46926](https://github.com/servo/servo/pull/46926), [#46925](https://github.com/servo/servo/pull/46925), [#46951](https://github.com/servo/servo/pull/46951), [#46965](https://github.com/servo/servo/pull/46965)).
-Library consumers are no longer responsible for implementing **pause and resume** support ([@veyndan](https://github.com/veyndan), [#47555](https://github.com/servo/servo/pull/47555)).
-
-Meanwhile, the **OpenHarmony** port now supports external keyboards with US keyboard layouts ([@jschwe](https://github.com/jschwe), [#47359](https://github.com/servo/servo/pull/47359)).
-Additionally, there are now better fallback font selections for CJK characters ([@RichardTjokroutomo](https://github.com/RichardTjokroutomo), [#47116](https://github.com/servo/servo/pull/47116), [#47664](https://github.com/servo/servo/pull/47664)).
-
-Setting the `device_pixel_ratio_override` preference is no longer ignored on Android and OpenHarmony ([@jschwe](https://github.com/jschwe), [#47081](https://github.com/servo/servo/pull/47081)).
-
-## Performance and stability [**](https://servo.org/blog/2026/10/09/august-in-servo/#performance-and-stability)
-
-There were many small changes this month that **removed unnecessary allocations** ([@Narfinger](https://github.com/Narfinger), [@jschwe](https://github.com/jschwe), [@yezhizhen](https://github.com/yezhizhen), [#47264](https://github.com/servo/servo/pull/47264), [#47147](https://github.com/servo/servo/pull/47147), [#47066](https://github.com/servo/servo/pull/47066), [#47249](https://github.com/servo/servo/pull/47249), [#47249](https://github.com/servo/servo/pull/47249), [#47285](https://github.com/servo/servo/pull/47285), [#47307](https://github.com/servo/servo/pull/47307), [#47343](https://github.com/servo/servo/pull/47343), [#47361](https://github.com/servo/servo/pull/47361), [#47395](https://github.com/servo/servo/pull/47395), [#47427](https://github.com/servo/servo/pull/47427), [#47454](https://github.com/servo/servo/pull/47454), [#47474](https://github.com/servo/servo/pull/47474), [#47506](https://github.com/servo/servo/pull/47506), [#47479](https://github.com/servo/servo/pull/47479), [#47530](https://github.com/servo/servo/pull/47530), [#47541](https://github.com/servo/servo/pull/47541), [#47566](https://github.com/servo/servo/pull/47566), [#47509](https://github.com/servo/servo/pull/47509), [#47622](https://github.com/servo/servo/pull/47622)).
-
-We also **reduced GC interactions** leading to better JS performance ([@jdm](https://github.com/jdm), [@Narfinger](https://github.com/Narfinger), [@webbeef](https://github.com/webbeef), [@TimvdLippe](https://github.com/TimvdLippe), [@mrobinson](https://github.com/mrobinson), [#47513](https://github.com/servo/servo/pull/47513), [#47250](https://github.com/servo/servo/pull/47250), [#47158](https://github.com/servo/servo/pull/47158), [#47165](https://github.com/servo/servo/pull/47165), [#47049](https://github.com/servo/servo/pull/47049), [#47251](https://github.com/servo/servo/pull/47251), [#47510](https://github.com/servo/servo/pull/47510), [#46981](https://github.com/servo/servo/pull/46981)).
-
-On platforms that memory map font data (such as OpenHarmony and macOS), we can now save time that would otherwise be spent loading font files from disk ([@jschwe](https://github.com/jschwe), [#47029](https://github.com/servo/servo/pull/47029)).
-Similarly, reading system fonts is no longer in the critical path of starting up the engine ([@Narfinger](https://github.com/Narfinger), [@jdm](https://github.com/jdm), [#46476](https://github.com/servo/servo/pull/46476)).
-
-There were were also a number of savings in the final binary size ([@jschwe](https://github.com/jschwe), [@kkoyung](https://github.com/kkoyung), [@Narfinger](https://github.com/Narfinger), [@jschwe](https://github.com/jschwe), [#47211](https://github.com/servo/servo/pull/47211), [#47214](https://github.com/servo/servo/pull/47214), [#47210](https://github.com/servo/servo/pull/47210), [#46950](https://github.com/servo/servo/pull/46950)).
-
-We **fixed crashes** related to media playback ([@calvaris](https://github.com/calvaris), [#46891](https://github.com/servo/servo/pull/46891)), the 2d canvas renderer ([@yezhizhen](https://github.com/yezhizhen), [#46915](https://github.com/servo/servo/pull/46915)), fonts with negative line gaps ([@jschwe](https://github.com/jschwe), [#47374](https://github.com/servo/servo/pull/47374)), and resolving fonts variants ([@simonwuelker](https://github.com/simonwuelker), [#47356](https://github.com/servo/servo/pull/47356)).
-
-Canvas renderer worker threads can now be adjusted by the `thread_pool_canvas_workers` preference, allowing more performance granularity according to embedder needs. ([@jschwe](https://github.com/jschwe), [#46691](https://github.com/servo/servo/pull/46691), [#47018](https://github.com/servo/servo/pull/47018))
-
-We’ve continued our long-running effort to use the Rust type system to make Servo’s integration with SpiderMonkey **safer and more reliable** ([@jdm](https://github.com/jdm), [@treetmitterglad](https://github.com/treetmitterglad), [@Narfinger](https://github.com/Narfinger), [@Gae24](https://github.com/Gae24), [#47398](https://github.com/servo/servo/pull/47398), [#47296](https://github.com/servo/servo/pull/47296), [#47051](https://github.com/servo/servo/pull/47051), [#47005](https://github.com/servo/servo/pull/47005), [#47323](https://github.com/servo/servo/pull/47323), [#47297](https://github.com/servo/servo/pull/47297), [#47322](https://github.com/servo/servo/pull/47322), [#47368](https://github.com/servo/servo/pull/47368), [#47446](https://github.com/servo/servo/pull/47446), [#47317](https://github.com/servo/servo/pull/47317)). We’re also working on statically preventing [a footgun](https://github.com/servo/servo/issues/39139) that can lead to uncollectible GC cycles and leaking memory ([@Gae24](https://github.com/Gae24), [#47355](https://github.com/servo/servo/pull/47355), [#47650](https://github.com/servo/servo/pull/47650)).
-
-Historically, **about:memory** has reported all memory usage by Rust implementations of JS APIs as one undifferentiated `js/malloc-heap` number.
-We now break it down by memory usage of nodes in document trees ([@pylbrecht](https://github.com/pylbrecht), [#46931](https://github.com/servo/servo/pull/46931)) and interfaces that are not part of the DOM ([@jdm](https://github.com/jdm), [#47531](https://github.com/servo/servo/pull/47531)). We also report memory usage for the network stack’s cookie database ([@Narfinger](https://github.com/Narfinger), [#47248](https://github.com/servo/servo/pull/47248)) and the canvas renderer backend ([@janeoa](https://github.com/janeoa), [@jdm](https://github.com/jdm), [#46958](https://github.com/servo/servo/pull/46958)).
-
-We’ve added an **experimental threadboost** mechanism ([@jschwe](https://github.com/jschwe), [@mrobinson](https://github.com/mrobinson), [#46843](https://github.com/servo/servo/pull/46843), [#47027](https://github.com/servo/servo/pull/47027)) that has been observed to improve Speedometer results by **50%** and allow canvas rendering to reach 60 FPS.
-This is initially enabled for OpenHarmony, but future expansion to other Linux-based platforms is expected.
-
-## More on the web platform [**](https://servo.org/blog/2026/10/09/august-in-servo/#more-on-the-web-platform)
-
-We upgraded to [resvg 0.48](https://github.com/linebender/resvg/blob/main/CHANGELOG.md#0480-2026-07-31), fixing **many issues with SVG images** with missing width/height attributes that specified a `viewBox` ([@nicoburns](https://github.com/nicoburns), [#46937](https://github.com/servo/servo/pull/46937)).
-
-Upgrading to [Taffy 0.14](https://github.com/DioxusLabs/taffy/blob/main/CHANGELOG.md#0130) fixed a number of **CSS grid-related crashes**, support for grid names, better intrinsic sizing, and improved performance ([@nicoburns](https://github.com/nicoburns), [#47031](https://github.com/servo/servo/pull/47031), [#47493](https://github.com/servo/servo/pull/47493)).
-We also fixed some issues in the Taffy grid integration for more accurate baselines ([@nicoburns](https://github.com/nicoburns), [#47518](https://github.com/servo/servo/pull/47518)).
-
-Session history traversals (i.e. navigating backwards or forwards in history) now wait for any outstanding traversal to complete ([@mrobinson](https://github.com/mrobinson), [#47293](https://github.com/servo/servo/pull/47293), [#47485](https://github.com/servo/servo/pull/47485)).
-Meanwhile, navigations to `about:blank` are skipped if the initial about:blank document is present ([@jdm](https://github.com/jdm), [#47074](https://github.com/servo/servo/pull/47074)).
-
-`about:blank` documents no longer use the asynchronous HTML parser ([@jdm](https://github.com/jdm), [#47050](https://github.com/servo/servo/pull/47050)), and no longer report a `readyState` of `LOADING` ([@mrobinson](https://github.com/mrobinson), [#47450](https://github.com/servo/servo/pull/47450)).
-Opening auxiliary windows will wait to dispatch the load event until the initial `about:blank` document has [been replaced](https://html.spec.whatwg.org/multipage/document-sequences.html#windows%3Awindow) ([@jdm](https://github.com/jdm), [@mrobinson](https://github.com/mrobinson), [#47442](https://github.com/servo/servo/pull/47442), [#46975](https://github.com/servo/servo/pull/46975)).
-
-For non-about:blank content, we also made the document loading phases more reliable ([@TimvdLippe](https://github.com/TimvdLippe), [@mrobinson](https://github.com/mrobinson), [#47426](https://github.com/servo/servo/pull/47426)), improved conformance of `javascript:` URL evaluation and navigation target selection ([@mrobinson](https://github.com/mrobinson), [#47486](https://github.com/servo/servo/pull/47486), [#47516](https://github.com/servo/servo/pull/47516)), and addressed longstanding compatibility issues with cross-origin `Window` and `Location` objects ([@mrobinson](https://github.com/mrobinson), [#47549](https://github.com/servo/servo/pull/47549)).
-
-Our media playback has improved; we fixed several issues around **canPlayType()** on **HTMLMediaElement** that allow Servo to report that **MP4 content is playable** ([@jdm](https://github.com/jdm), [#47612](https://github.com/servo/servo/pull/47612), [#47641](https://github.com/servo/servo/pull/47641), [#47670](https://github.com/servo/servo/pull/47670)).
-
-Input elements with the `autofocus` property inside of a `<dialog>` now receive focus when that dialog is opened ([@skyz1](https://github.com/skyz1), [@mrobinson](https://github.com/mrobinson), [#45826](https://github.com/servo/servo/pull/45826)).
-
-We improved the exception error text for numerous web APIs ([@jdm](https://github.com/jdm), [@eachra-bawn](https://github.com/eachra-bawn), [#46960](https://github.com/servo/servo/pull/46960), [#47124](https://github.com/servo/servo/pull/47124), [#47168](https://github.com/servo/servo/pull/47168), [#47580](https://github.com/servo/servo/pull/47580), [#47430](https://github.com/servo/servo/pull/47430), [#47127](https://github.com/servo/servo/pull/47127)).
-
-We also fixed issues related to many other APIs, including:
-
-- matching other browsers’ treatment of Access-Control-Allow-Headers (@yezhizhen, #47600)
-- WebCrypto CryptoKey usage checks (@kkoyung, #47112, #47141, #47178) and key lengths (@kkoyung, #47452, #47453)
-- determining referrers when navigating (@mrobinson, #47487)
-- reading name on Window inside of iframes (@TimvdLippe, @jdm, #47270)
-- many edge cases around determining dirty roots for incremental layout (@mrobinson, #46906)
-- edge cases around compareDocumentPosition on Node (@SimonSapin, #46886)
-- resolving ties in web font matching (@simonwuelker, #47449)
-- Range.getClientBoundingRect()/getClientRects() for empty ranges (@yezhizhen, #47143)
-- JS module fetching failures can now be retried (@Gae24, #46919)
-- KeyEvent.keyCode values for many nonprintable keys now match other browsers (@eachra-bawn, #47461)
-- making timing on Performance return a PerformanceTiming object (@jdm, @aniebietafia, #46990)
-- synthesizing font variations from font-style (@simonwuelker, @mrobinson, #46918, #47364)
-- the Get Element Tag Name WebDriver command (@yezhizhen, #47216)
-- removed nonstandard WebDriver-related properties on the global object (@mrobinson, #47542)
-- sniffing RAR responses correctly (@wood-ghost, #47366)
-- Attribute nodes created during parsing now have the expected namespace prefix (@Ms2ger, #47030)
-- improving text-transform: capitalize (@mrobinson, #46910)
-- zero-sized margins inside of inline boxes (@Loirooriol, #47020)
-- incorrect buttons values in pointer capture transitions (@steigeo, #45628)
-- empty lists returned by load() on FontFaceSet (@simonwuelker, #47564)
-- cancelling more ongoing network requests when performing a navigation (@mrobinson, #47576)
-- shaping text across inline boxes (@mrobinson, #46829)
-- scrollable overflow for position: sticky (@rayguo17, #43766)
-- fixing hyperlinks for blob: URLs (@TimvdLippe, #47226)
-- firing the error callback for decodeAudioData on BaseAudioContext (@amittenak47, @jdm, #46870)
-
-## New contributors [**](https://servo.org/blog/2026/10/09/august-in-servo/#new-contributors)
-
-A special thanks to the following people for landing their first patch in Servo:
-
-- Frans Skarman (@TheZoq2, #46938)
-- Moamen Hesham (@moamenhesham0, #47391)
-- Miles Wirht (@philocalyst, #46996)
-- Vaibhav Srivastava (@vaibhav8a, #47626)
-- wood-ghost (@wood-ghost, #47366)
-- 禾可 (@Lfan-ke, #47514)
-
-Interested in helping build a web browser?
-Take a look at our [curated list](https://starters.servo.org) of issues that are good for new contributors!
-
-## Donations [**](https://servo.org/blog/2026/10/09/august-in-servo/#donations)
-
-Thanks again for your generous support!
-We are now receiving **8128 USD/month** (+3% from July) in recurring donations.
-This helps us cover the cost of our **[speedy](https://ci0.servo.org) [CI](https://ci1.servo.org) [and](https://ci2.servo.org) [benchmarking](https://ci3.servo.org) [servers](https://ci4.servo.org)**, one of our latest **[Outreachy interns](https://www.outreachy.org/alums/2026-05/#:~:text=Servo)**, and funding **[maintainer work](https://servo.org/blog/2026/09/15/one-year-of-sponsorship/)** that helps more people contribute to Servo.
-
-Servo is also on [thanks.dev](https://thanks.dev), and already **36 GitHub users** (+1 from July) that depend on Servo are sponsoring us there.
-If you use Servo libraries like [url](https://crates.io/crates/url/reverse_dependencies), [html5ever](https://crates.io/crates/html5ever/reverse_dependencies), [selectors](https://crates.io/crates/selectors/reverse_dependencies), or [cssparser](https://crates.io/crates/cssparser/reverse_dependencies), signing up for [thanks.dev](https://thanks.dev) could be a good way for you (or your employer) to give back to the community.
-
-We now have [**sponsorship tiers**](https://servo.org/blog/2025/11/21/sponsorship-tiers/) that allow you or your organisation to donate to the Servo project with public acknowlegement of your support.
-If you’re interested in this kind of sponsorship, please contact us at [[email protected]](https://servo.org/cdn-cgi/l/email-protection#ea80858384aa998f989c85c485988d).
-
-Use of donations is decided transparently via the Technical Steering Committee’s public **[funding request process](https://github.com/servo/project/blob/main/FUNDING_REQUEST.md)**, and active proposals are tracked in [servo/project#187](https://github.com/servo/project/issues/187).
-For more details, head to our [Sponsorship page](https://servo.org/sponsorship/).
+Ante is a low-level<sup>[1](https://antelang.org/blog/safe_cyclic_mutability/#fn:1)</sup> functional language built on ownership semantics and borrowing, similar to Rust.
+Unlike Rust, however, a core goal of Ante is to be more lenient in its borrow checker, notably by relaxing Rust’s
+rule that you can either alias a reference or mutate it, but never both at the same time.
+
+```rs
+// In Rust:
+let mut my_tuple = (1, 2);
+let first_elem = &my_tuple.0;
+
+// error[E0506]: cannot assign to `my_tuple` because it is borrowed
+my_tuple = (3, 4);
+println!("{first_elem}");
+```
+
+I wanted to allow for code like the above while still disallowing code that would lead to dangling
+pointers, and I wanted to do this entirely statically in the type system.
+
+Alas! That’s old news - the [very first
+blog post](https://antelang.org/blog/safe_shared_mutability/) on this site covered it. That post is frankly quite outdated
+now. It’s been years since then
+and Ante’s approach has substantially changed, having accrued many additions to make it more flexible.
+Now, it has changed again, having blended many elements from
+[group borrowing](https://verdagon.dev/blog/group-borrowing) with my own ideas to produce a more
+radically safe whole.
+In this post, I want to go over the new design and show how it leads to a more flexible kind of safe, shared
+mutability that is expressive enough to support *cyclic mutability* and *complex data flow* safely.
+
+# Why Shared Mutability?
+
+Since many Rustaceans are skeptical of the value of shared mutability at all, it’s worth reiterating
+why being more lenient here is useful. More lenience means:
+
+- Fewer borrow checker errors. Fewer errors both eases the learning curve for new users and speeds up iteration times for experienced ones.
+- More design patterns are allowed. The observer pattern is difficult to get working without shared mutability. Cyclic types can also be more directly represented.
+- Existing design patterns can have fewer workarounds. Fewer forced indices into vectors in particular. While this can be a useful pattern, I don’t believe the language should force users into this approach.
+- More straightforward interop with other languages that also support shared mutability.
+
+The last point in particular is more important than it seems. Ante is meant to be opt-in to ownership
+to some extent so that by default using it feels more like C# than it does Rust. This is an aspirational
+goal but allowing shared mutability greatly helps here.
+
+# Aside: What was wrong with Ante’s previous rules?
+
+I imagine most will not be familiar with Ante’s old borrow checking rules, but for those curious I’ll
+lay out some more motivations for the change. If this isn’t you, feel free to skip this section.
+
+The [original article](https://antelang.org/blog/safe_shared_mutability/) mentions Ante’s `ref` and `mut` references as being
+`&Cell<T>` analogues in a way, and this has largely remained true at its core. Most of the extensions
+made since then were to extend this in some way, notably by introducing “local uniqueness” where a shared
+mutable reference only needed to be *locally unique* to be used where a `uniq` reference (think `&mut T` in Rust)
+was expected. This meant the compiler only needed to show that any variable used at the same time as a `mut String`
+did not mutably alias it. This ended up taking the form of a `Distinct a b` trait which was implemented if
+`a` did not occur anywhere within `b`. For example, if you use a `Vec I32` at the same time a `mut String` is
+treated as a `uniq String`, the compiler would check a `Distinct String (Vec I32)` constraint in the background.
+Since a `String` can’t occur within a `Vec I32`, the code is allowed and the `String` is locally unique. This
+would be repeated for each variable used while the converted `uniq String` reference was still alive.
+
+Allowing what is essentially a `&Cell<T>` to `&mut T` conversion like this was great for flexibility but had a few major flaws:
+
+- Common types like String would occur within other types more often making them more difficult to use compared to less common types when converted into a local uniq reference.
+- Distinct a b recurs into every field of b, including private fields. This meant adding a private field to a public struct in a library was a breaking change since it could make previously valid local unique conversions invalid.
+- Converting between mut and local uniq happened often, and was confusing even though the compiler did it automatically.
+- It relied on four reference types: ref and mut which allow shared mutability, and imm and uniq which don’t.
+
+It wasn’t all bad though. Notably, it was powerful enough to encode *safe, cyclic mutability*, with the caveat
+that some `Rc` values had to be cloned (have their reference count incremented) during traversal.
+
+For the reasons above though, it was clear the design had to change. The rest of the article is about the
+new design I eventually landed on which fixes all of these issues, but still keeps the good parts
+like safe, cyclic mutability<sup>[2](https://antelang.org/blog/safe_cyclic_mutability/#fn:2)</sup> and thread-safety.
+
+# The Core Problem
+
+Why are some cases of shared mutability safe, like:
+
+```ante
+my_safe_fn (var pair: String, String) =
+    name = ref pair.first
+    pair.first := "Foo"
+    println name  // Ok!
+```
+
+While others are not:
+
+```ante
+my_unsafe_fn (vec: mut Vec t) =
+    elem = vec.get 1
+    vec.clear ()
+    println elem  // Dangling ref!
+```
+
+The difference is in what I call *shape stability*. If the shape of a type is stable, then there is no way
+to mutate it such that a previously valid reference into it becomes invalid. Picturing the references
+in memory helps here. Let’s look at how `pair` and `name` look in memory:
+
+```fallback
+Before mutation:
+
+      name
+       |
+       V
+pair: ((first_ptr, first_len, ..), (second_ptr, second_len, ..))
+
+After mutation:
+
+      name
+       |
+       V
+pair: ((first_ptr, first_len, ..), (second_ptr, second_len, ..))
+```
+
+Each `String` is an unboxed tuple of `ptr, len, metadata`, and each component of the
+outer pair is also unboxed. With this layout, there’s no way we could mutate `pair`
+to invalidate `name`!
+
+Looking at `vec` and `elem` however, we see a clear difference:
+
+```fallback
+Before mutation:
+
+vec: (data_ptr, length, capacity)
+          |
+          V
+          [0, 1, 2, 3]
+              ^
+              |
+             elem
+
+After mutation:
+
+vec: (data_ptr, length, capacity)
+          |
+          V
+          []
+              ^
+              |
+             elem
+```
+
+`elem` is clearly dangling! The problem here is that mutating `vec` can mutate `data_ptr`, causing
+it to potentially point elsewhere when it is reallocated. Its shape has changed,
+leaving `elem` stranded.
+
+It’d be nice if a reference type could remember whether it’s pointing at something stable or
+unstable - then we could do away with uniqueness in favor of a much more accurate restriction that
+rejects fewer valid programs.
+
+# Places Over Lifetimes
+
+The first core part of the puzzle is the use of *places* instead of lifetimes.
+
+Unlike a lifetime which is some arbitrary symbol representing an abstract region of code a
+variable or reference is valid for, a place is the exact set of things a reference may borrow
+from:
+
+```ante
+foo (x: I32) (y: I32): Unit =
+    r1: ref 'x I32 = ref x
+    r2: ref 'y I32 = ref y
+
+    r3: ref '(x, y) I32 =
+        if true then ref x else ref y
+```
+
+Above, `r1` borrows from only `x` so it has the place `'x`. Similarly, `r2` borrows from only `y`
+so it has the place `'y`. `r3` may borrow from `x` or `y` so its place is the union of both: `'(x, y)`.
+Places can also be paths such as `'z.bar` to represent a reference borrowing from the struct field
+`bar` on a variable `z`.
+
+Places don’t always name variables. There are anonymous places as well such as those for a reference
+to a temporary like `ref 2`, but that’s not important for this article.
+
+> Places make borrow checking easier in general too!
+> Borrow checking in Ante is actually very simple: whenever a value is used, error if any place it
+> refers to has already been moved. There is truthfully
+> a little bit more to it than that, but that really is the core and it can be implemented in only
+> a few lines of code.
+
+# Unstable Places
+
+Once we have places we can model *unstable* places with a simple marker: `!`.
+An unstable place like `a!` will be invalidated by any mutation to the place `a`.
+This also means if we have 20 variables with place `a!`, we can mutate them all simultaneously
+since mutating them would only invalidate variables with place `a!!`.
+
+This is a bit abstract though, so let’s see how this works in practice. Starting off, we have some
+Rust code which should be safe but gets rejected by the compiler:
+
+```rs
+fn rejected(v: &mut Vec<String>) {
+    // error: cannot borrow `*v` as mutable more than once at a time
+    let (first, last) = (v.first_mut().unwrap(), v.last_mut().unwrap());
+    *first = "Mutate first".to_string();
+    println!("{last}");
+}
+```
+
+Rust’s compiler rejects this even though there is no way we can mutate `first` which would invalidate `last`.
+Theoretically, even if the first element is also the last, this code should still be valid<sup>[3](https://antelang.org/blog/safe_cyclic_mutability/#fn:3)</sup>.
+
+We can model this in Ante by flagging any references to returned elements of a vector as *unstable*:
+
+```ante
+// Declare a `first_mut` method taking a mutable vector and returning
+// an unstable reference inside 'v to the first element
+Vec.first_mut (v: mut Vec t): mut 'v! t can Fail = ...
+Vec.last_mut  (v: mut Vec t): mut 'v! t can Fail = ...
+```
+
+Now, we can write the equivalent of `rejected` just fine:
+
+```ante
+not_rejected (v: mut Vec String) =
+    first, last = v.first_mut (), v.last_mut ()
+    first.* := "Mutate first"
+    println last  // ok!
+```
+
+Above, `first` and `last` both have the type `mut 'v! String` so when we mutate `first`
+it would prevent us from using anything with a place of `v!!`<sup>[4](https://antelang.org/blog/safe_cyclic_mutability/#fn:4)</sup>, but nothing does. So we’re
+free to use both `first` and `last` even if they alias.
+
+> Whether a reference is unstable or not is inferred in practice and doesn’t always need to
+> be a manual choice by users. Any reference through a tagged union or element of a collection
+> type will be unstable for example.
+
+## Loops
+
+Loops and branching in general are fairly straightforward. They largely follow the same rules
+ownership has where an error is issued if a variable declared outside of the loop is
+invalidated within it:
+
+```ante
+var v = Vec.of [1, 2, 3]
+one = v.get 0
+
+for _ in 0 .. 3 do
+    println one  // error: one may be invalidated by a later mutation in the for loop
+    v.clear ()   // note: one invalidated here
+```
+
+Similarly, any closure which invalidates any part of its captured environment is treated
+as a `FnOnce` in Rust terms, preventing it from being called more than a single time.
+
+> Ante has effect handlers too! Control-flow for them is more complex and the rules
+> for how they interact with invalidations of unstable places are [documented here](https://antelang.org/docs/language/#in-traits-and-effect-handlers),
+> but are subject to change (I think they’re a bit hacky). Note that `handle` interactions
+> with unstable places are (at the time of writing) still unimplemented.
+
+# Exclusivity
+
+It’s possible to write functions that are only valid if certain parameters don’t alias:
+
+```ante
+a_and_b_cant_alias (a: mut Vec String) (b: mut Vec String) =
+    elem = a.first_mut ()
+    b.clear ()
+    println elem  // ok! But how?
+```
+
+In cases like these the compiler still needs some kind of exclusivity rule. In this case,
+when a parameter is mutated the compiler needs to ensure the caller of the function gives
+a unique value for it:
+
+```ante
+bad_caller (c: mut Vec String) =
+    // error: 'a cannot alias 'b in this use of a_and_b_cant_alias, but 'c was used for both
+    a_and_b_cant_alias c c
+```
+
+To check for this, whenever a mutation occurs the compiler issues a `Mutate 'p` effect
+which tags a function with the places that may be mutated. At call sites, each place that
+may be mutated must be distinct from other places instantiated<sup>[5](https://antelang.org/blog/safe_cyclic_mutability/#fn:5)</sup>. Note that `mut` itself
+still allows arbitrary aliasing. It is only when an actual mutation occurs and `Mutate 'p` is
+issued does the compiler check call sites that any generic used doesn’t become `'p` while it
+is still in scope.
+
+## Use vs Mention
+
+`Mutate 'p` is an example of a *use* vs *mention* distinction. Code which merely mentions
+mutability isn’t subject to any uniqueness constraints. This is most notable since places
+can be paths so we may pass an entire `mut Context` to a function but it may only `Mutate 'ctx.field`.
+This scenario often occurs when iterating mutably over a field of some context value:
+
+```ante
+type Entity = name: String, health: I32
+type Context = entities: Vec Entity, events: Vec String, score: U32
+
+Context.on_death (ctx: mut Context) (entity: ref Entity): Unit
+    can Mutate 'ctx.events
+=
+    ctx.score += 10
+    ctx.events.push "${entity.name} died"
+
+iterate_example (ctx: mut Context) =
+    for entity in ctx.entities do
+        entity.health -= 1
+        if entity.health <= 0 then
+            ctx.on_death entity  // ok!
+```
+
+In Rust the above code would be rejected, but there are actually several options in Ante.
+You can expose `Mutate 'ctx.events` on `Context.on_death` above, guaranteeing only that
+field may be mutated (`ctx.score` doesn’t need a similar annotation because mutating integers
+can never invalidate references), or you can tell `on_death` that `entity` may be stored
+within `ctx` to begin with:
+
+```ante
+Context.on_death (ctx: mut Context) (entity: ref 'ctx.entities! Entity): Unit
+    can Mutate 'ctx
+=
+    ctx.score += 10
+    ctx.events.push "${entity.name} died"
+```
+
+Above, we’re saying all of `'ctx` may be mutated. For this specific example, this is less
+desirable since it’d mean `entity` as an unstable reference wouldn’t be valid after the
+call to `on_death` ends. For other patterns of code though, we may truly need to mutate
+all of `'ctx` or keep it opaque<sup>[6](https://antelang.org/blog/safe_cyclic_mutability/#fn:6)</sup> and this would be exactly what we’d want.
+
+## Complex Data-Flow
+
+Taking a bit of a step back, I want to show a bit how powerful it is to reframe
+borrow checking in terms of *places* and *mutations* rather than lifetimes. Because
+lifetimes are tied to a region of code, Rust can struggle with complex data-flow:
+
+```rs
+fn get_default<'r, K: Hash + Eq + Copy, V: Default>(
+    map: &'r mut HashMap<K, V>,
+    key: K,
+) -> &'r mut V {
+    match map.get_mut(&key) {
+    //    --- first mutable borrow occurs here
+        Some(value) => value,
+        None => {
+            map.insert(key, V::default());
+            //  ^~~~~~ error[E0499]: cannot borrow `*map` as mutable more than once at a time
+            map.get_mut(&key).unwrap()
+        }
+    }
+}
+```
+
+With Rust’s current model, getting the above code working requires a next-gen borrow checker
+called [Polonius](https://goals.rust-lang.org/2026/polonius.html) which models lifetimes as
+something much closer to places (alias sets) than regions of source code.
+In Ante, it just works:
+
+```ante
+get_default
+    (map: mut 'r HashMap k v)
+    (key: k)
+    {Hash k} {Eq k} {Copy k} {Default v}
+: mut 'r! v can Mutate 'r, Panic =
+    match try do map.get_mut key
+    | Some value -> value
+    | None ->
+        map.insert key (default ())  // ok!
+        map.get_mut key ~> panic_on_fail
+```
+
+Ante’s borrow checker is already based on places and thus doesn’t try tying references
+to any particular region of code. Instead, since the returned element reference from `map.get_mut`
+is unused in the `None` branch, it doesn’t need to be verified at all.
+This should make some intuitive sense. If the reference is never used, it shouldn’t matter whether
+it’s dangling or not.
+
+Let’s look at another example:
+
+```rs
+struct Thing;
+
+impl Thing {
+    fn maybe_next(&mut self) -> Option<&mut Self> { None }
+}
+
+fn main() {
+    let mut temp = &mut Thing;
+
+    loop {
+        match temp.maybe_next() {
+        //    ^^^^ error: `*temp` was mutably borrowed here in the previous iteration
+        //         of the loop first borrow used here, in later iteration of loop
+            Some(v) => { temp = v; }
+            None => { }
+        }
+    }
+}
+```
+
+Above, Rust thinks the `maybe_next` borrow may last longer than the loop itself due
+to the `temp = v;` assignment to a variable defined outside of the loop.
+
+```ante
+type Thing = x: Unit
+
+Thing.maybe_next (_: mut Thing): Maybe (mut Thing) = None
+
+main () =
+    var temp = mut Thing ()
+
+    while true do
+        match temp.maybe_next ()  // ok!
+        | Some v -> temp := v
+        | None -> ()
+```
+
+Meanwhile, the equivalent Ante code is okay since `temp` gets some anonymous place `'p`,
+`maybe_next` returns the same `'p`, and the mutation would only invalidate any *unstable*
+references to `'p`.
+
+# Shared Mutability
+
+We can use unstable places to safely allow mutating shared pointers like an `Rc<T>`
+(reference-counted pointer) in Rust.
+
+The first realization is that since our analysis is based on places, `Rc` needs a place
+to represent the shared element: `Rc 'p t`. This isn’t needed on other
+pointer types like `Box`, but for `Rc`, this extra parameter `'p` is necessary to link
+separate clones of the same value to the same internal value.
+
+When modeling getting a mutable reference into the interior of an `Rc`, we need to make
+use of a union of places from earlier:
+
+```ante
+Rc.get (rc: mut 'outer (Rc 'inner t)): mut '(outer!, inner) t = ...
+```
+
+This type says that if we have a mutable reference to an `Rc`, we can get a mutable
+reference to the inner element. This returned reference will have two places: `outer!`
+(unstable because we’re crossing through a shared pointer boundary, and the `Rc` value
+itself may be swapped out), and `inner` - the
+shared value pointed to by every clone of this `Rc`.
+
+Let’s try an example:
+
+```ante
+mutate_rc_bad (rc1: mut Rc 'p (Vec String)) (rc2: mut Rc 'p (Vec String)) =
+    // string_ref: mut '(rc1!!, p!) String
+    string_ref = rc1.get () |> Vec.first_mut
+
+    // Mutates 'p, so string_ref with unstable 'p! is invalidated
+    // note: string_ref may be invalidated by this mutation
+    rc2.get () |> Vec.clear
+
+    // error: string_ref may have been invalidated by an earlier mutation
+    println string_ref       
+```
+
+Great! We can safely mutate through an `Rc` value with no runtime checks, and the
+compiler still has our back if we try to do something unsafe. Is this enough
+to represent even cyclic references though?
+
+# Cyclic Mutability
+
+For cyclic mutability we need… well, nothing else! We can just
+start using `Rc` to form cycles<sup>[7](https://antelang.org/blog/safe_cyclic_mutability/#fn:7)</sup>.
+
+```ante
+type List 'p t =
+   | Nil
+   | Cons t (Rc 'p (List 'p t))
+
+main () =
+    var f = Rc.of (Cons false (Rc.of Nil))  // false -> []
+    var t = Rc.of (Cons true f)             // true -> false -> []
+    if f is Cons _ tail then
+        // tail's places are '(f!!, a!), so it'd be invalidated by any mutation to f or the shared place 'a.
+        // The latter 'a invalidation is important to prevent us from using it if we mutate any other shared node.
+        tail := t
+
+    emit_list t
+        |> take 5
+        |> iter println  // true, false, true, false, true
+
+// The `do` here is unrelated, it just returns a thunk to be used as a generator function
+emit_list (l: ref List t) = do
+    if l is Cons elem tail then
+        emit elem
+        emit_list tail
+```
+
+This pattern is very similar to using [GhostCell](https://plv.mpi-sws.org/rustbelt/ghostcell/) in Rust,
+but in a more ergonomic (no more `GhostToken`), built-in way. I’ll also emphasize that these checks are
+*entirely static* with *no runtime checks*.
+
+If we wanted, we could even use `shared mut type` sugar to simplify things a bit. See
+[the relevant section in the docs](https://antelang.org/docs/language#shared-mutable-types) for that.
+
+# Note on Multi-threading
+
+With more permissive shared mutability, how does Ante maintain thread-safety?
+
+There’s not a very interesting answer here. Ante simply copies Rust’s `Send`/`Sync` traits.
+`ref`/`mut` references both allow for shared mutability and thus implement neither trait.
+
+Instead, Ante has additional reference kinds `imm` and `uniq` which correspond to Rust’s
+`&` and `&mut`. These references are *very rarely used* - they’re more or less only used
+in multi-threaded code where after passing a thread boundary they can degrade back to `ref`/`mut`
+to call functions.
+
+> In the future, the kind of a reference will be attached to the place variable to more easily
+> write code which is polymorphic over any reference kind.
+
+# Summary
+
+This was a lot! Thanks to anyone sticking around to the end! It’s a lot to grok at once but despite the length
+this article ended up being, I do think the core concepts aren’t *that* complex. There are certainly rules to be
+had but most are in service of making the language more flexible and making more code “just work.” The main
+mental model is keeping track of the *places* a reference may borrow from, and whether any are unstable.
+
+This article is mostly a restating of Ante’s [shared mutability rules](https://antelang.org/docs/language#shared-mutability-and-stability)
+documentation, but I wanted to write an article version of it to follow up the original shared mutability article and
+to speak on some motivations behind the change.
+
+If any of this interests you, join [Ante’s Discord](https://discord.gg/NPJncGBAws) to keep up with the language and ask me questions!
+You can also clone the compiler at [GitHub page](https://github.com/jfecher/ante) to try out the language yourself.
+If you are interested in the project, the best way to help would be to help spread the project around
+to get some more visibility on it! Contributing would be appreciated as well of course (the compiler is small and I can help)!
+
+1. Low-level is always a contentious term. I’m using it here to mean a language with unboxed types by default and no pervasive GC. If you have a preferred definition, let me know! [↩︎](https://antelang.org/blog/safe_cyclic_mutability/#fnref:1)
+2. The new design is actually more efficient for cyclic mutability! It doesn’t require the clones the previous design did. [↩︎](https://antelang.org/blog/safe_cyclic_mutability/#fnref:2)
+3. It wouldn’t be sound in Rust since multiple `&mut` references to the same data would violate aliasing assumptions, but it should be in our target semantics! [↩︎](https://antelang.org/blog/safe_cyclic_mutability/#fnref:3)
+4. `!` on places can nest! `'foo!` is an unstable place within `'foo` while `'foo!!` would be an unstable place within that previous unstable place. This could be, for example, a String element of a `Vec (Vec String)`. If a type has multiple sources of instability (e.g. a struct holding multiple vectors), an API designer may choose to expose the separate fields, e.g. `'foo.bar!` vs `'foo.baz!`, or may choose to hide this by coercing to the parent place `'foo!`. [↩︎](https://antelang.org/blog/safe_cyclic_mutability/#fnref:4)
+5. Any places that were already `'p` are actually okay. The body of the function would already be aware of and check those cases. This enables patterns like passing in an immutable container and a mutable reference inside the same container. [↩︎](https://antelang.org/blog/safe_cyclic_mutability/#fnref:5)
+6. Future versions of Ante will allow for ‘abstract places’ where structs could declare a set of places inside of them to expose, separate from their actual fields. Library authors wanting to hide specific struct fields while keeping multiple places within the same struct distinct from each other in usual code could make use of this. The downside is that since these aren’t connected to specific struct fields, it’d be up to the library author to keep the translation to abstract places sound. [↩︎](https://antelang.org/blog/safe_cyclic_mutability/#fnref:6)
+7. Using `Rc` to form cycles still leads to leaks! Some other collection mechanism is needed to prevent leaks, but that is a separate issue from the mutability of a cycle. [↩︎](https://antelang.org/blog/safe_cyclic_mutability/#fnref:7)

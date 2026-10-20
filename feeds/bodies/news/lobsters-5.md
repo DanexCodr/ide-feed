@@ -1,101 +1,79 @@
-The trend of VC-backed tooling ending in abandonment rears its ugly
-   head again. But hey, people gotta eat, right? The community will pick
-   up the slack and steward the projects, right?
+It has been 18 months since the first announcement of A5. What started off as an experiment in visualization (and an obsession with pentagons) has grown into a useful tool, with a wealth of [libraries, tools and software](https://a5geo.org/docs/ecosystem) building on top.
 
-Body
+Today I'm excited to announce that the `v1.0` version of A5 is out, bringing a [powerful set of features and performance improvements](https://a5geo.org/docs/whats-new) as well as [crystallizing the grid and index definition](https://a5geo.org/docs/upgrade-guide) for the future.
 
-   Deno is dead.
+If you're new to A5, in a nutshell it is a grid system that allows the representation of any position, line or polygon region on the globe as a pentagonal cell (or collection of cells), each represented as a compact 64-bit integer.
 
-   Announced[1] on a Friday[2], of course, the team has fled to
-   Cloudflare and in a year, will stop working on the runtime. Kudos to
-   them for finding an exit, Womp womp to us.
+The industry term for this is a Discrete Global Grid System (DGGS), and there are already a number of other systems out there which are powering some of the world's largest companies and data analytics pipelines.
 
-   This is the second time in just as many years that a technology I
-   depend on is “given up to the community.” If you’re new here, Disc[3]
-   came about because the team behind Gel fled to Vercel and gave their
-   project up to the community. This was two years ago and as of this
-   writing, no updates have been made on the “blessed” fork[4] of it.
+For a concrete example of an application leveraging A5, take a look at the [FIRMS Explorer](https://portolan-mirrors.github.io/firms-catalog/) which uses A5 to aggregate 631 million fire detections worldwide since 2000.
 
-   (Perhaps a bit petty of me to point out but someone in the Gel
-   Discord has been rather hostile/cowardly about my efforts and thus I
-   find delight in proving assholes wrong)
+## Stable platform for the future[​](https://a5geo.org/blog/2026/10/14/a5-v1#stable-platform-for-the-future)
 
-   The frustration of the Deno community is palpable and has created the
-   best crashout[5] I’ve seen in some time:
+With `v1.0` we are committing to keeping the grid layout and the cell IDs frozen going forward. While the system will evolve and grow, for example by adding more utility functions, the fundamentals will stay fixed so applications, databases and workflows will be able to rely on an A5 cell representing a specific geographic location into the future.
 
-   What the fuck do you mean Deno is ending development in a year????
+The community around the project has grown, in particular with the [DuckDB](https://query.farm/products/extensions/a5/) and [R](https://belian-earth.github.io/a5R/dev/index.html) implementations, whose beautiful sites arguably even put the official A5 site to shame! As such, going forward, the documentation on the A5 website will present code snippets and API documentation in these languages, as well as the officially supported TypeScript, Rust and Python libraries.
 
-   I JUST learned how to use this stupid runtime.
+## What's new[​](https://a5geo.org/blog/2026/10/14/a5-v1#whats-new)
 
-   I don’t give a fuck about your Cloudflare acquisition or your edge
-   computing or whatever the fuck a Durable Object is.
+### Compacted data processing[​](https://a5geo.org/blog/2026/10/14/a5-v1#compacted-data-processing)
 
-   I JUST WANT TO RUN MY TYPESCRIPT FILES.
+New in `v1.0` is a whole new set of functions for working with collections of cells, known as [coverings](https://a5geo.org/docs/api-reference/coverings).
 
-   Why is there a shutdown date????
+When working with coverings, you can now use set operations: [`union`](https://a5geo.org/docs/api-reference/coverings#union), [`intersect`](https://a5geo.org/docs/api-reference/coverings#intersect) and [`difference`](https://a5geo.org/docs/api-reference/coverings#difference), predicates: [`contains`](https://a5geo.org/docs/api-reference/coverings#contains) and [`overlaps`](https://a5geo.org/docs/api-reference/coverings#overlaps) and measuring functions: [`count`](https://a5geo.org/docs/api-reference/coverings#count) and [`area`](https://a5geo.org/docs/api-reference/coverings#area).
 
-   WHERE IS THE FUCKING DOWNLOAD BUTTON FOR MORE YEARS OF SUPPORT????
+By using compacted data and these operations, it is possible to process billions of cells efficiently without having to uncompact the data, as was necessary before. An example workflow might be to union several coverings from database queries, intersect with a polygon or spherical cap and then filter a collection of points against the resulting covering. See the [example workflow](https://a5geo.org/docs/api-reference/coverings#example-processing-flow).
 
-   I went to the releases page and there is no deno-forever.exe.
+### Spatial hierarchy functions[​](https://a5geo.org/blog/2026/10/14/a5-v1#spatial-hierarchy-functions)
 
-   WHY IS THERE NO deno-forever.exe?????
+Geometrically, it is impossible to split an A5 pentagon into more pentagons in such a manner that the result exactly overlaps; the same is true of hexagons - unlike quadrilaterals and triangles, which can be split exactly. The A5 hierarchy is thus logical, and only approximately spatial.
 
-   Just compile another 10 years of development into a fucking
-   executable and give it to me.
+In order to support resampling and other operations, a new function [`cellToSubcells`](https://a5geo.org/docs/api-reference/hierarchy#celltosubcells) has been added. While this is slower than the `cellToChildren` API, it produces a correct covering (by centroid) of the cell. The inverse, [`cellToSupercell`](https://a5geo.org/docs/api-reference/hierarchy#celltosupercell), is also available.
 
-   I don’t want to learn Node.js again.
+### Equal area[​](https://a5geo.org/blog/2026/10/14/a5-v1#equal-area)
 
-   I don’t want to migrate to Bun.
+One of the key strengths of A5 has always been the guarantee that every cell is **exactly** the same area at a given resolution, which means that any analysis run using the system is [free of bias](https://a5geo.org/docs/recipes/a5-vs-h3) due to unequal cell sizes. New in `v1.0`, all the cells at all resolutions have the same pentagonal topology. This is in contrast to hexagonal DGGSs, which must include 12 pentagonal cells that complicate the topology and break the pure equal-area guarantee.
 
-   I don’t want to understand your business model.
+## Vibrant ecosystem[​](https://a5geo.org/blog/2026/10/14/a5-v1#vibrant-ecosystem)
 
-   I JUST WANT MY DINOSAUR BACK.
+One of the important characteristics of a grid system is its support across a range of tools and software, both in industry and academia. By standardizing on a definition of the grid and cell identifiers, it is easy to move data between systems and applications. For example, the FIRMS Explorer above was built using:
 
-   You cannot just Deno.exit(0) an entire runtime.
+- Geoparquet.io to aggregate the data: gpio add a5 input.parquet output.parquet --resolution 5
+- Portolan to host
+- a5-js and the A5Layer in deck.gl to visualize
 
-   STUPID FUCKING CLOUD NERDS.
+Along with a raft of implementations in popular systems, such as [DuckDB](https://query.farm/products/extensions/a5/), [R](https://belian-earth.github.io/a5R/dev/index.html), [QGIS](https://plugins.qgis.org/plugins/vgridtools/) and more, it is easier to build and experiment with A5 than ever. If you would like to get involved, or just have a question - feel free to join the [Slack channel](https://join.slack.com/t/a5-3ap4392/shared_invite/zt-35rpdc904-2vcsoikrJKFRJF7ncN1fmw)!
 
-   Ryan Dahl’s comment[6] on HackerNews gave me pause (emphasis mine):
+## Under the hood[​](https://a5geo.org/blog/2026/10/14/a5-v1#under-the-hood)
 
-   It’s a joint decision and I agree with it. I’m most invested in its
-   success and have put the most work into it - and I no longer think
-   it’s where I can do the most important work. There are some
-   good ideas in Deno and it’s well engineered - but it ultimately
-   is not solving big problems. It has been sucked into the
-   gravity well of node compatibility, which forces it to behave
-   exactly as Node does. Why reimplement Node? It works. Marginal
-   performance or UX or security benefits are not enough.
+Over the past 18 months, both A5's internals and its APIs have been refined.
 
-   …
+### Teohedral space-filling curve[​](https://a5geo.org/blog/2026/10/14/a5-v1#teohedral-space-filling-curve)
 
-   We’ll ship monthly releases for a year, and Deno stays
-   MIT-licensed. If people want to carry it forward, I’d like that.
+The key change that the majority of the other improvements flow from is the implementation (and, well, discovery!) of a new [teohedral](https://a5geo.org/docs/technical/teohedron) [space-filling curve](https://a5geo.org/examples/teohedral-curve), which defines the order in which the cells are indexed. The new curve passes around the whole world, without ever intersecting itself, while also grouping cells such that they form an (approximate) spatial hierarchy.
 
-   My brother in Christ. YOU reimplemented Node and now you’re bored? I
-   get it was done for adoption purposes but like, that’s a solvable
-   problem? Whatever, this ain’t my first rodeo[7].
+![The teohedral curve touring the 12 faces of the dodecahedron](https://a5geo.org/assets/images/teohedral-curve-94336f4a2b0f0afa694dec5e18a3a03b.jpg)
 
-   There’s bound to be other forks but this one’s mine; I’m calling it,
-   Ende (“end” in German). “Ende” is an anagram of “Deno” which is an
-   anagram of “Node” and it’ll do things differently:
+The fact that it doesn't self-intersect is crucial to some of the algorithms that can be built on top. For example, when filling a polygon with cells we can immediately deduce which cells are on the interior of the region without having to perform a costly flood fill. This works due to the boundary acting as a set of cutting points along the global space-filling curve - if we know these, then we can trivially fill in the cells in between.
 
-   — no more Node compatibility
-   — no more distractions, period; that means Deploy, KV, Jupyter, &c
-     are also getting the boot
+The benchmarks below are instructive:
 
-   The roadmap? Per-module permissions, sandboxes for untrusted code,
-   post-quantum crypto in Web Crypto, better binary output, &c. I depend
-   on Deno for all of my APIs and personal projects, and now am building
-   a serious business on it; EOL[8].
+![polygonToCells time against the number of cells in the result, for old and new A5, H3 and S2](https://a5geo.org/assets/images/polygon-perf-12f499eafdc2fcc0afaec4e206678834.jpg)
 
-   I’m aiming for a soft launch in December so I can work out production
-   kinks before a proper one. It’s gonna be quite the flex when Ende
-   development is happening on EOL. Anyhoo, placeholder site for Ende[9]
-   is up, subscribe to the mailing list if you want to be notified when
-   it’s “official” (proper marketing and documentation websites). EOL
-   also has a mailing list[8] if you want to know when the beta opens.
+*How these were measured: each point is one call filling a country outline (UK, France, Brazil, USA and Australia, from the A5 test fixtures) at one resolution, timed with the native libraries: A5 1.0.0 and 0.10.1 (Rust crates, rustc 1.87), H3 4.5.0 (the C library, via h3-py's NumPy API) and S2 (the C++ library, via the s2geometry 0.14.0 Python bindings; `S2RegionCoverer` with no cell limit, so it returns a compacted covering at the target level). Times are the fastest of repeated runs, or a single run for calls over 2 seconds, on an Apple M1 Pro. Each library was stopped once a call took longer than a minute (6 seconds for A5), or past a billion cells.*
 
-   I am very busy but excited. I wanted to build the Neue Internet[10]
-   after all, looks like I’m getting my chance. 🕸️
+Prior to v1, A5 polygon fills became impractically slow beyond a million cells. The same is true of [H3](https://h3geo.org/) today. By contrast, [S2](https://s2geometry.io/) is able to handle up to a billion cells without any issues, as is the new version of A5. It is no coincidence that S2 also uses a space-filling curve ([Hilbert](https://en.wikipedia.org/wiki/Hilbert_curve)) which **doesn't** self-intersect, while H3 index order has no such property.
 
-   EDIT: I’m also replacing SemVer with ChronVer[11].
+Similar algorithmic tricks can be used to speed up other operations, like intersections or area counts. For an interactive example of these operations, see the [Coverings](https://a5geo.org/examples/coverings) example.
+
+### Cell IDs[​](https://a5geo.org/blog/2026/10/14/a5-v1#cell-ids)
+
+A necessary consequence of changing the curve is that the cell IDs change. See the [Upgrade Guide](https://a5geo.org/docs/upgrade-guide) for migration instructions.
+
+## Thanks & looking forward[​](https://a5geo.org/blog/2026/10/14/a5-v1#thanks--looking-forward)
+
+It has been a challenge and a lot of fun to work on A5, and it has led to some great conversations with many smart people. A big thank you to all the people who have got involved, by building libraries on top of A5, reporting bugs or just spreading the word.
+
+I find the topic fascinating. I hope you find A5 useful in your work, and that the examples on the site help show how a DGGS is put together. I am currently working (with a few others) on a paper which will explain the design of A5 more rigorously as well as provide comparisons to other DGGS libraries.
+
+If you would like to get involved, join us on our [Slack channel](https://join.slack.com/t/a5-3ap4392/shared_invite/zt-35rpdc904-2vcsoikrJKFRJF7ncN1fmw), and if you build anything with A5, please share!
