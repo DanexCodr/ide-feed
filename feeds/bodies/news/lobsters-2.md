@@ -165,4 +165,4 @@ Joke aside, it’s pretty cool to have sci-fi style security modules baked into 
 
 Again, a lot of this was derived from [this gist](https://gist.github.com/arianvp/5f59f1783e3eaf1a2d4cd8e952bb4acf); highly recommend having a read and potentially asking questions in the discussion.
 
-*[Let me know](https://bsky.app/profile/nmattia.bsky.social)* if you enjoyed this article! You can also [subscribe](https://buttondown.com/nmattia) to receive updates.
+*[Let me know](https://bsky.app/profile/nmattia.bsky.social)*or*[join the discussion](https://lobste.rs/s/d7m5j1/setting_up_ssh_keys_on_macos_with_touch_id)* if you enjoyed this article! You can also [subscribe](https://buttondown.com/nmattia) to receive updates.

@@ -1,18 +1,105 @@
-Recently, while troubleshooting a [PATH](https://en.wikipedia.org/wiki/PATH_%28variable%29) issue, I noticed an entry for `/pkg/env/global/bin`. At first, I worried that something had gone horribly wrong. Turns out, this is part of macOS 27.0… though no one is sure what it’s for yet.
+On 13 October 2026, Fortinet published a security [advisory](https://fortiguard.fortinet.com/psirt/FG-IR-26-180) for a critical vulnerability affecting their FortiSIEM product. The vulnerability, CVE-2026-106173, allows for an arbitrary file write by abusing an issue in a gRPC service.
 
-First, some background. Since Mac OS X 10.5 in 2007, the OS has included a [`path_helper`](https://hea-www.harvard.edu/~fine/OSX/path_helper.html) utility. This reads entries from `/etc/paths` as well as from any files in the `/etc/paths.d` directory. While one could potentially take advantage of this system, I (and I’d guess most others) handle adding new PATH entries using the [`.zshrc` file](https://zsh.sourceforge.io/Doc/Release/Files.html#Startup_002fShutdown-Files), or similar. The `path_helper` utility seems to be primarily used by Apple.
+Horizon3 is no stranger to the FortiSIEM. We’ve disclosed several critical vulnerabilities through the years that you can catch up on:
 
-In macOS 10.15, an entry was added to `/etc/paths.d` to support the new location of the [`rvictl` utility](https://developer.apple.com/forums/thread/125402?answerId=392314022#392314022). In macOS 13.3, [Apple added some new entries](https://eclecticlight.co/2023/04/05/how-cryptexes-are-changing-macos-ventura/#comment-85119) to support [Cryptexes](https://eclecticlight.co/2023/04/05/how-cryptexes-are-changing-macos-ventura/). Now in macOS 27.0, there’s a new `10-pmk-global` file <sup>[1](https://anderegg.ca/2026/10/18/what-the-heck-is-pkg#fn:1)</sup> which adds `/pkg/env/global/bin` to the PATH list.
+1. CVE-2023-34992: Fortinet FortiSIEM Command Injection Deep-Dive
+2. CVE-2024-23108: Fortinet FortiSIEM 2nd Order Command Injection Deep-Dive
+3. CVE-2025-64155: Three Years of Remotely Rooting the Fortinet FortiSIEM
 
-I only started digging into things when I noticed that entry. I assumed something had gone awry. Then I saw that there was, indeed, a `/pkg` directory in the root of my filesystem. After freaking out slightly, I fell down this rabbit hole.
+All of our prior research has involved the same component, the phMonitor service which listens on port tcp/7900. This latest advisory details a new service that we had never looked at, a gRPC service on port tcp/27918. Given our familiarity and the intrigue of a new service to look at we dove in.
 
-In a post about how [macOS’s boot volume structure has been updated](https://eclecticlight.co/2026/09/19/macos-tahoe-26-4-changed-boot-volume-structure/), Howard Oakley explains that the `pkg` directory was added to the Data volume in macOS 26.4, but not added to the root of the Signed System Volume until 27.0. He also notes that [this is sort of a big deal](https://eclecticlight.co/2026/09/19/macos-tahoe-26-4-changed-boot-volume-structure/#comment-116877).
+## **Reaching the Vulnerable Service**
 
-The weird thing is, as far as I can tell, no one seems to know what this new directory is for! It’s odd that Apple would update their filesystem structure, add it to everyone’s PATH, and there not be some explicable reason.
+Looking at the listening services on the FortiSIEM, we find that phQueryMaster is bound to tcp/27918. The phQueryMaster service stands the gRPC server up in `grpcNotificationServer::run()`. The listen port comes from the command_port config value (7918), which is passed through `phSecureUtils::getGrpcPort()` and mapped to tcp/27918; the address is built as `[::]:27918`, so the service binds every interface.
 
-The `/pkg` directory contains four subdirectories: `env`, `etc`, `inv`, and `var`. Based on its name and those subdirectories, it’s possible this could be used for an upcoming first-party package management system — but this is a wild guess. Apple recently [took over the Swift Package Index](https://www.theregister.com/software/2026/06/25/apple-takes-over-swift-package-index-vows-to-remove-github-dependency/5262048), but this seems unrelated. I don’t know why you’d need a root-level directory to help with project-level dependencies. It’s also not clear what the “pmk” in `/etc/paths.d/10-pmk-global` refers to. <sup>[2](https://anderegg.ca/2026/10/18/what-the-heck-is-pkg#fn:2)</sup>
+```
+// grpcNotificationServer::run()  (libphGrpcServices.so)
+unsigned short port = mServerPort;                                 // command_port = 7918
+std::string addr = "[::]:" + phSecureUtils::getGrpcPort(port);     // [::]:27918
+grpc::SslServerCredentialsOptions sslOps;
+// sslOps.client_certificate_request stays 0 == GRPC_SSL_DONT_REQUEST_CLIENT_CERTIFICATE
+auto creds = grpc::SslServerCredentials(sslOps);               
+builder.AddListeningPort(addr, creds, 0);                    
+builder.RegisterService(&svc);
+builder.BuildAndStart();
+```
 
-Here’s hoping we get more details on this at some point. In the meantime, maybe these details will help prevent someone else from freaking out when they see this entry in their PATH.
+Sometimes, gRPC servers can require client certificates for authentication, but here there server sets that option to false. This means any remote client can connect to the gRPC service on port tcp/27918 unauthenticated and without presenting a client certificate to reach the vulnerable gRPC service.
 
-1. Here the “10” part of the filename is to help with priority. Files starting with lower numbers are added to the PATH first, and therefore have priority. [↩](https://anderegg.ca/2026/10/18/what-the-heck-is-pkg#fnref:1)
-2. User oefrha on Hacker News guessed that it might be “[Package Management Kit](https://news.ycombinator.com/item?id=50147115)”, but again… who knows. [↩](https://anderegg.ca/2026/10/18/what-the-heck-is-pkg#fnref:2)
+## **The Path to Arbitrary File Write**
+
+Now that we’ve found the vulnerable gRPC service, we inspect the available RPC methods and find `SendQueryResult`.
+
+```
+message QueryResultReq { bytes file_content = 1; }
+service phoenixSvc { rpc SendQueryResult(stream QueryResultReq) returns (PhoenixReply); }
+```
+
+`SendQueryResult`’s handler parses four values from the received message: `query-id`, `src-ip`, `period-start`, and `period-end`. The handler then constructs a file path with the lightly formatted `src-ip` and query-id.
+
+```
+// grpcNotificationService::SendQueryResult  (grpcNotificationService.cpp)
+replaceString(srcIp, ".", "_");                         
+std::string fileDir = "/query/result/" + queryId;       
+if (!phMiscUtils::DirExists(fileDir.c_str()))           
+    phMiscUtils::mkdir(fileDir.c_str());                
+```
+
+Bug #1 is that `fileDir` is built by string concatenation with an attacker controlled value, without any input validation. A `query-id` of `../../../../../tmp/x`  allows an attacker to traverse outside of the query directory. So an attacker has arbitrary directory control.
+
+The filename itself is also partially attacker controlled, `result-<srcIp>-0-0-<id>.dat`, and the streamed bytes that follow will be the files contents.
+
+```
+std::stringstream path;
+path << fileDir << "/result-" << srcIp << "-"
+     << periodStart << "-" << periodEnd << "-"
+     << mGetQueryResultUniqId() << ".dat";              
+std::ofstream output;
+output.open(path.str().c_str(), ios::binary|ios::out|ios::trunc);   
+while (reader->Read(&req))                              
+    output.write(req.file_content().data(), req.file_content().size());            
+```
+
+So ultimately, an unauthenticated attacker can write arbitrary data into an arbitrary directory, but with a limited filename. The minimal request is one gRPC `SendQueryResult` with this metadata:
+
+```
+query-id:     ../../../../../tmp/fortisiem-cve-2026-106173
+src-ip:       127.0.0.1
+period-start: 0
+period-end:   0
+```
+
+which creates `/tmp/fortisiem-cve-2026-106173/result-127_0_0_1-0-0-<id>.dat` containing the streamed bytes.
+
+## **Exact Filename Control**
+
+The path traversal lets an attacker choose the directory a file lands in, but not its exact name: the server always tacks on its own ending, `result-<src>-<start>-<end>-<id>.dat`, where `<id>` is a counter the server controls and the request can’t set. On its own, your stuck with a limited file write that isn’t so useful.
+
+That turns out not to matter, because of how the server copies the header values. It copies each value using the exact length the client declares, which lets an attacker embed a null byte (`\0`) in the middle of the query-id. For example: `.../some/target\0ignored`. When the server later hands that path to the operating system to open the file, the OS treats the null byte as the end of the string and silently discards everything after it, including the server’s own result-…-.dat ending. The write lands on the exact path that preceded the null byte. Pointed at an existing file this overwrites it in place, keeping the original owner and permissions; a second variant uses two requests to create a brand-new file with an exact name. Because normal tools like curl and standard gRPC libraries restrict putting null bytes in headers, we must manually assemble the gRPC message to include our null byte.
+
+Overwriting an existing file in place takes a single request whose metadata is:
+
+```
+query-id:     ../../../../../opt/charting/redishb.sh\0ignored
+src-ip:       127.0.0.1
+period-start: 0
+period-end:   0
+```
+
+## **The Path to Code Execution**
+
+As with previous vulnerabilities we’ve reported that enable arbitrary file write, we’re looking for files on the filesystem that allow us to gain code execution by overwriting them. There’s a multitude of services that ingest files through cron jobs on the FortiSIEM. One file that is recurrently executed to perform health checks on the redis service is `/opt/charting/redishb.sh`. This script is invoked every 60 seconds by a cron job and is writable by the admin user context we have.
+
+Putting it all together, to gain code execution we:
+
+1. Traverse the directory path
+2. Control the filename
+3. Overwrite a recurringly executed script
+
+![](https://horizon3.ai/wp-content/uploads/2026/10/image-15.png.webp)
+
+Our proof of concept can be found on our [GitHub](https://github.com/horizon3ai/CVE-2026-106173).
+
+## **Indicators of Compromise**
+
+We did not find any application logs that would explicitly reveal that this vulnerability was exploited. However, if the vulnerability is used to overwrite an existing script, one should carefully inspect the file write or modified timestamps, and inspect any that appear to not match the surrounding file timestamps.
