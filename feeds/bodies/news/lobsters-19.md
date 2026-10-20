@@ -1,181 +1,365 @@
-Welcome back to my "Hanami, Why?" series. If you missed it, be sure to read [Hanami, Why?: Class Action](https://aaronmallen.me/writing/hanami-why-class-action) before you start this issue. Today we are going to be covering Hanami's database layer. It is important to note the use of the phrase "database layer," as Hanami does not have a traditional "model" layer like Rails does. Once again, this series is called "Hanami, **Why?**" so just as we did last time, we will cover the basics at a high level and then dive into why things are the way they are. I will warn you that I am still actively forming opinions and learning about Hanami's database layer myself. There is not a day that goes by that [Adam Lassek](https://github.com/alassek) is not feeding me some random TIL about this subject. Shout out to the [Hanakai Discord](https://discord.com/invite/KFCxDmk3JQ); it is a cool place to pick up lots of weird tips and tricks. Let us just dive right in.
+How can we parse an IPv4 address with a throughput of 75 instructions in 15 CPU cycles, taking as low as ~3ns on an M6 processor?
 
-## Crash Course
+## Table Of Contents
 
-Hanami's database layer is composed of three primary parts: [Relations](https://hanakai.org/learn/hanami/v3.0/database/relations), [Repos](https://hanakai.org/learn/hanami/v3.0/database#repositories), and [Structs](https://hanakai.org/learn/hanami/v3.0/database#structs). Relations are essentially where you define an object's schema and relationships to other objects. They are also a great place to define scopes, or what Hanami calls [datasets](https://hanakai.org/learn/hanami/v3.0/database#datasets). Repos are a pretty straightforward representation of the [repository pattern](https://martinfowler.com/eaaCatalog/repository.html). Repos are actually totally optional in Hanami; you could very easily get by with just relations if you were so inclined. Repos do have the advantage of operating on multiple relations and I highly encourage their use. Lastly, structs are simple, frozen representations of your objects themselves. Structs are a place for you to define simple presentation logic for your objects. Let us look at an example of how you would go about utilizing Hanami's database layer.
+## Is This Post ...?
 
-```
-ROM::SQL.migration do
-  change do
-    create_table :users do
-      primary_key :id
-      column :email, :varchar, index: { unique: true }, null: false, size: 255
-      column :password_digest, null: false
-      column :first_name, :text
-      column :last_name, :text
-      column :created_at, :timestamptz, null: false, default: Sequel.function(:now)
-      column :updated_at, :timestamptz, null: false, default: Sequel.function(:now)
-    end
-  end
-end
-```
+I know what you're trying to figure out. No. This blog post is not AI generated.
 
-Here we have a pretty straightforward schema migration. I will not be diving into migrations very much as this is adequately covered in the [Hanami documentation](https://hanakai.org/learn/hanami/v3.0/database/migrations). I am simply including it here so that you can see the schema the `users` table has.
+With that out of the way ...
 
-```
-module MyApp
-  module Relations
-    class Users < DB::Relation
-      schema :users, infer: true do
-        attribute :email, Types::Normalized::EmailAddress
+## What Happened?
 
-        associations do
-          has_many :oauth_tokens
-        end
-      end
-    end
-  end
-end
-```
+As of writing this article, Swift doesn't have a unified or high quality platform-independent stack of basic networking types, with implementations being scattered across Apple's proprietary [Network framework](https://developer.apple.com/documentation/network) and the open-source [swift-nio](https://github.com/apple/swift-nio).
 
-Here we have our relation. It will infer its schema directly from the users table. We are overriding the `:email` attribute to be a normalized email address. Lastly, we are associating the relation with the `oauth_tokens` table with a `has_many` relationship. ROM, of course, also supports `belongs_to` and `has_one` relationships.
+That’s why lately I've been working on [swift-endpoint](https://github.com/swift-dns/swift-endpoint), parts of which are going to make it to Swift’s new [swift-networking-types](https://github.com/swiftlang/swift-networking-types).  
 
-Here we have our `UserRepo` with a few methods to help us find a user, and a method that allows us to create a user. You will notice we have direct access to both the `users` table and the `oauth_tokens` table in our repo.
+At a minimum [swift-networking-types](https://github.com/swiftlang/swift-networking-types) will provide similar functionality to [Go's net/netip](https://pkg.go.dev/net/netip), parts of [Rust's std::net](https://doc.rust-lang.org/std/net/index.html), and parts of [Boost's Asio](https://www.boost.org/doc/libs/latest/doc/html/boost_asio/reference.html) APIs.
 
-Finally, here we have our `User` struct with a couple of nice-to-have presentation logic methods. You will notice we can access the `email` and name fields directly without having to explicitly define them in our struct.
+As part of my work on swift-endpoint, I've been looking for elegant API shapes as well as performant implementations for IP address parsing and serializations, results of which are visible in the [Performance section](https://github.com/swift-dns/swift-endpoint#performance) of swift-endpoint's README, where the APIs are compared to Darwin and glibc's inet APIs as reference points.
 
-The idea here is that your repos are the access point to the data layer. All methods within the repo **should** return one of your structs. You do this by calling `to_a` on collections and `one` on individual item queries. The command in the `create` method will also return a `User` struct. That is pretty much the whole shebang; congratulations, you now know how to use Hanami's data layer. Let us look at a tiny example of its actual use for completeness.
+## Yet Another IPv4 Parser
 
-```
-module MyApp
-  module Operations
-    class CreateUser < Operation
-      include Deps["argon.hasher", "contracts.new_user_contract", "repos.user_repo"]
+There are already lots of high-performance implementations in this space. Many people have contributed to these implementations over the years, be it in form of research, smart bit hacks, or completely new implementations. Most of the research can be attributed to [Daniel Lemire](https://github.com/lemire) and [Wojciech Muła](https://github.com/WojciechMula), although many more have also been involved.
 
-      def call(params)
-        validated = step validate_params(params)
-        step validate_email_is_unique(validated[:email])
-        attributes = step build_payload(validated)
-        user_repo.create(**attributes)
-      end
+The majority of the existing IPv4 parsing implementations are pretty clever and have implemented different kinds of tricks, bit hacks, and vectorizations to achieve high performance.  
 
-      private
+This new algorithm would not be possible without their prior art.
 
-      def build_payload(params)
-        built = params.slice(:email, :first_name, :last_name)
-        built[:password_digest] = hasher.call(params[:password])
-        Success(built)
-      rescue Argon2::Error => e
-        Failure(e)
-      end
+However, the bulk of the top-performing implementations make assumptions and decisions that don't fit Swift:
 
-      def validate_email_is_unique(email)
-        return Success() if user_repo.find_by_email(email).nil?
+- An IPv4 address can be as short as 7 bytes (for 1.1.1.1) and as long as 15 bytes (for 255.255.255.255).
+  - Lots of the other implementations rely on the existence of an 8th null byte, or they need padding, or they require 16 bytes upfront as a contract.
+  - In context of the Swift language, this would be very unexpected. Contracts need to be enforced at API level. Null byte is not a thing outside interoperability with C/C++.
+- Some of the top-performing implementations use lookup tables.
+  - Benchmark results of implementations that use lookup tables assume that the L1 cache is already populated with the hot cache lines of those lookup tables. That's not always the case.
+  - In reality, the preference is to achieve maximum performance without lookup tables, hopefully matching or beating an implementation that uses lookup tables.
+  - Not using lookup tables typically means less binary size, less memory bandwidth usage, less reliance on memory latency or CPU cache statuses, thus more predictable performance.
+  - However, it's still hard to come up with metrics about when and where and how much to use lookup tables.
+    - In a lot of cases table lookups are actually worth it and can result in big performance wins.
+- SIMD instructions can differ a lot on different CPUs.
+  - In contrast, scalar implementations tend to be better supported by compilers and require little to no manual intrinsic function calls while being highly portable.
+  - This is not true about the highest performing vectorized codes which tend to use the latest and greatest instructions provided by a given CPU generation, therefore taking hits on portability.
+  - On the bright side it's also possible to write code that optimizers such as LLVM can typically resolve to well-performing auto-vectorized code, without getting deep into Instruction Set Architectures (ISAs) of different CPU generations or having to write multiple implementations to support different CPU generations.
+  - A good example of auto-vectorized code's performance wins is this PR to increase performance of swift-foundation's Base64 encoding by ~3 times. I plan to share my experience with auto-vectorization in another post.
 
-        Failure(:email_taken)
-      end
+Knowing all those, I was still in search of some better-fitting IP address parsing/serializing implementations.  
 
-      def validate_params(params)
-        result = new_user_contract.call(params)
-        result.success? ? Success(result.to_h[:user]) : Failure(result.errors.to_h)
-      end
-    end
-  end
-end
-```
+That's how I ended up thinking more about them, and eventually came up with a new idea for a new IPv4 parsing algorithm. One that also performs well.
 
-There you have it; notice we never reached directly for our relation. We interface purely through the repository layer. Again, this is totally optional and you are free to **just** use relations directly. We will talk about why I think that is a bad idea a little later in this issue.
+## A New IPv4 Parsing Algorithm
 
-## Advantages of the Repo Pattern
+Here are some IPv4 addresses that a correct algorithm would need to successfully parse, each containing *4 segments* separated by dots:
 
-I will not get into all of the various [f](https://ryanbigg.com/2024/12/scoping-an-active-record-join)[o](https://steveklabnik.com/writing/active-record-considered-harmful/)[o](https://calpaterson.com/activerecord.html)[t](https://damieng.com/blog/2007/activerecord-the-ugly-design-pattern/) [g](https://reinteractive.com/articles/ActiveRecord-callbacks-considered-harmful)[u](https://destroyallsoftware.com/blog/2011/announcing-do-not-want)[n](https://blog.appsignal.com/2018/04/24/active-record-performance-the-n-1-queries-antipattern.html)[s](https://piechowski.io/post/why-is-default-scope-bad-rails/) provided to you by ActiveRecord. Instead I will show you a very simple-to-understand example of a **huge** problem solved by the repository pattern.
+- 1.1.1.1
+- 192.168.1.1
+- 255.255.255.255
+- 127.0.0.1
+- 203.0.113.5
 
-Alright, we have a pretty simple controller here that determines the "freshness" of an issue. Here is the situation: Product has decided that relying on `created_at` for this determination is not working out. Instead they have decided they are going to run a background job every hour and update a new field on the issue called `fresh_status`. Guess what? You now have to update all three of these call sites for this change. Imagine if this were something with dozens or even hundreds of call sites; what a huge pain in the ass. Now I know what you are thinking: "This is stupid, just use scopes, problem solved." To which I 100% agree, because scopes in Rails **are** an implementation of the repository pattern! Hanami encourages you by default to use this pattern to save future you from present you. It is awesome.
+The keys to the algorithm are to enable high parallelism for the CPU so it can perform multiple calculations at once.
+In this implementation, we use the following 2 major techniques:
 
-So what does this look like in Hanami? Here is the same freshness logic living where it belongs, in a repo.
+The first key is unlocked by the fact that although we’re not sure about where exactly each segment is, we still know their whereabouts.  
 
-Your action asks for the repo and calls it. That is it.
+For example, in any correct IPv4 text, the first segment and its following dot must be in the first 4 characters. Be it a `1.` or a `192.` or a `127.`.  
 
-Now Product shows up with their shiny new `fresh_status` field. Here is the entire change.
+So theoretically, if we fetch the first 4 bytes, we already have the first IPv4 segment, just that it’s neither validated nor as a number just yet.
 
-One file. Your actions, your views, your mailers, and anything else calling `issue_repo.fresh` never know anything changed. You will also notice there is no `7.days.ago` here; Hanami does not ship with ActiveSupport, so we are doing a little plain Ruby math instead. The real win though is that nobody outside the repo even **has** `issues` to call `where` on, unless they go out of their way to ask for the relation in their `Deps`. The easy path to the database runs through a repo, so the knowledge of what "fresh" means lives in exactly one place, and it stays there. This is also why I said earlier that using relations directly is a bad idea. The moment you inject `relations.issues` into an action, you are right back to our `FreshnessController`, with the meaning of "fresh" scattered across every file that asked for it.
+The second key is unlocked by clever bit hacks.  
 
-## Passing Persistence
+We won't dive into SWAR in this post, but the bottom line is that today's processors usually come in 64-bit architectures.  
 
-There is another, sneakier problem with ActiveRecord, and it has nothing to do with how many call sites you have. Every time you hand someone an ActiveRecord object you hand them the **entire** persistence layer along with it. Take a look at this serializer.
+This means they have general-purpose registers that are 64 bits wide.  
 
-Here we have a serializer, whose only job is to turn an issue into JSON, writing to the database and quietly firing off a query for every comment. Nothing stopped it. The serializer was handed a live record, so it can save, update, destroy, and lazy load whatever it wants, and you will not find out until you are staring at your logs at 2 AM. Now let us look at the same thing in Hanami.
+One implication of such wide registers is that it makes little difference to the CPU if you're for example adding 2 `UInt8` (unsigned 8-bit integer) together, or 2 `UInt64`s.  
+
+So as an example, via SWAR techniques you can cram 8 `UInt8`s into one `UInt64` so next operations are performed only once on 1 `UInt64`, instead of 8 times on each of the `UInt8`s.  
+
+SWAR typically adds some overhead to the operation to ensure that, as an example the values don't overflow into each other. However it often results in noticeable performance wins anyways.
+
+We also know that a valid IPv4 text cannot be smaller than 7 characters.
+
+With those in mind, we admit the following facts about a valid IPv4 text:
+
+1. The 1st IP segment must be present in indices 0…2.
+2. The 4th IP segment must be present in indices 0…2 when reading backwards, from the end.
+3. The 2nd IP segment must be present in indices 2…6.
+4. The 3rd IP segment must be present in indices 2…6 when reading backwards.
+
+We'll implement the algorithm similar to the following code, exploiting the fact that numbers `0…9` correspond to ASCII codes `0x30` to `0x39`.
+
+- For implementation detail reasons, we're also intentionally fetching some dots instead of only caring about the digits.
+- We also XOR each window with a mask of 0x30 for each lane (here, a byte) which drops the 3 from numbers like 0x39.
+  - This has the effect of making it obvious that 0x39 is a 0x09 == 9, which will help in the parsing process.
+- loadUInt32(from:at:) loads 4 bytes of the from span into a 32-bit unsigned integer, starting from the index provided by at.
+  - Loading multiple bytes at once is typically more performant than loading bytes one by one.
 
 ```
-module MyApp
-  module Repos
-    class IssueRepo < DB::Repo
-      def find_with_comments(id)
-        issues.combine(:comments).by_pk(id).one
-      end
-    end
-  end
-end
+/// The amount of bytes that we've received to parse an IPv4 from.
+let count = span.count
+/// The shortest possible IPv4 address is "0.0.0.0" with 7 bytes.
+guard count >= 7 else { return false }
 
-issue = issue_repo.find_with_comments(id)
-issue.comments.map(&:body)
-issue.update(last_viewed_at: Time.now) # => ROM::Struct::MissingAttribute
+/// `0x30` == ASCII `0`
+let m30: UInt64 = 0x3030_3030_3030_3030
+let m30_u32: UInt32 = 0x3030_3030
+
+/// Read 1 window per segment, each also covering some dots around each segment.
+///
+/// XORing with `m30` turns the ASCII codes of `0`...`9` into the numbers `0x00`...`0x09`, and
+/// the ASCII code of `.` (`0x2E`) into `0x1E`. So among digits and dots, only the dots have
+/// their 5th bit (`0x10`) set. Invalid bytes are rejected later on.
+///
+/// Example for "192.168.1.98" (Notice little-endian byte-order):
+/// `window1`: bytes 0...3 ("192.") -> `0x1E_02_09_01`.
+/// `window2`: bytes 2...7 ("2.168.") -> `0x30_30_1E_08_06_01_1E_02` (in lanes 0...5).
+/// `window3`: bytes 5...11 ("68.1.98") -> `0x08_09_1E_01_1E_08_06_30` (in lanes 1...7).
+/// `window4`: bytes 8...11 ("1.98") -> `0x08_09_1E_01`.
+
+/// Reads the "192." part.
+/// We know `count >= 7` so this won't be an out-of-bounds read.
+let w1 = loadUInt32(from: span, at: 0)
+let window1 = w1 ^ m30_u32
+/// Reads the "2.168." part.
+/// With `count == 7` a read at byte 4 would go out of bounds, so it starts at byte 3.
+/// "2." from `w1` | "168." << 16 == "2.168.".
+let w2_p2 = loadUInt32(from: span, at: min(4, count &- 4))
+let window2 = (UInt64(w1 >> 16) | (UInt64(w2_p2) << 16)) ^ m30
+/// Similar to the `window1`, but read from the end.
+/// Reads the "1.98" part.
+let w4 = loadUInt32(from: span, at: count &- 4)
+let window4 = w4 ^ m30_u32
+/// Similar to the `window2`, but read from the end.
+/// Reads the "68.1" part, and `w4` adds the "1.98" part, so `window3` is "68.1.98".
+let w3_p1 = loadUInt32(from: span, at: count &- 7)
+let window3 = (UInt64(w3_p1) << 8) | (UInt64(w4) << 32) ^ m30
+
+/// ...
+
+/// Reads 4 bytes at `offset` as a `UInt32` with the byte at `offset` in the lowest lane.
+func loadUInt32(from span: Span<UInt8>, at offset: Int) -> UInt32 {
+    unsafe span.bytes.unsafeLoadUnaligned(
+        fromUncheckedByteOffset: offset,
+        as: UInt32.self
+    ).littleEndian
+}
 ```
 
-The repo decides **up front** what data gets loaded, and what comes back is a frozen struct. That struct cannot save itself, it cannot reach back into the database, and it certainly cannot go load more data behind your back. If you want to write something you have to go through a repo, and in Hanami that means you have to explicitly ask for one in your `Deps`. Your views, serializers, and mailers get data and nothing else. This is the whole point; the persistence layer stays in the persistence layer, and everything else gets to read.
+Now hold on a second. Allow me to not lose you. We will not dive too deep into the algorithm in this post.
 
-## What I Have Learned
+However, I'll continue to explain the algorithm a little bit more as well as the optimizations that were made.
 
-Unlike the last issue, where I gave you concrete things to do and things to avoid, we are going to do things slightly differently here. As I stated, I myself am still learning a lot about this aspect of Hanami applications every day. So instead of pretending to be some sort of authority on how you should structure this layer of your application, I would like to tell you a little bit about what I have learned, and some opinions I am holding **very** loosely at the moment. One of the primary friction points I have been experiencing in my adventures with Hanami is that I do not think I like the idea of exporting repositories across slices. Specifically, I am uncomfortable exporting repos that do mutations. I **strongly** feel that all mutations should go into operations. Unfortunately there is not currently a "read-only" abstraction in Hanami. Originally I experimented with query objects, but that felt awkward as nine times out of ten the query objects were just delegating to the repo. It was not a great abstraction, and it added unnecessary indirection. So what I ultimately decided to do is split my repos into two. One repo would **only** have read methods in it and it would be called `UserQueries`. The other repo would have all the `create`, `update`, and `delete` mutations and it would be called `UserMutations`. From there it is a matter of convention: `*_queries.rb` files are allowed to be exported and imported by other slices, `*_mutations.rb` are not. I even wrote a [cop](https://github.com/aaronmallen/rubocop-hanami) for this to enforce the convention. Now I am not sure if this is the way I will continue to do things going forward, but for now it seems to be working out pretty great. I have also been told that another approach to this problem is to simply duplicate the relation and struct code in both slice A and slice B and then write the specific repo methods needed for that particular slice. Again, Hanami gives you the freedom to choose how you want to structure your application.
+With the 4 windows above, what we'll need to do next is to find the position of the dots, strip the dots, and keep the digits.
 
-## Rough Edges
+However, in an IP address, there are only 3 dots (think: `1.1.1.1`).  
 
-I will admit coming from ActiveRecord straight into Sequel and ROM comes with a bit of a learning curve. There are **many** similarities; the query language does not feel foreign. However, there are many small differences as well that take time and toying to really figure out and harness. For example, instead of `MyModel.where(published: true).order(created_at: :desc)` you would need to do `my_model.where(published: true).order { created_at.desc }`. There are dozens of tiny differences in how Sequel does things compared to ActiveRecord. That being said, different does not mean **bad**. I have been able to overcome every obstacle I have run across thus far, and I have confidence you will too.
+The matter of fact is, we don't need to parse 4 windows to find 3 dots. We only need 3 windows for that.  
 
-One of the other things that bothers me is the concept of timestamps is not really baked into Hanami like they are with Rails. There is no `timestamps` shortcut to call in your migrations. There are some timestamp features baked into ROM, but they are not the best. To ensure that `updated_at` gets incremented you would need to do something like this:
-
-```
-user.changeset(:update, **attrs).map(:touch).commit
-```
-
-I have two major issues with this:
-
-1. If you forget to call map(:touch) in a mutation you are not incrementing your updated_at attribute.
-2. ROM hard codes the time that gets populated to Time.now, meaning the updated_at time is whatever your server time zone is set to.
-
-I tend to extend ROM with the following extensions:
+So an optimization that was made was to ignore `window3` and parse the other 3 windows and find all the 3 dots, and later simply load a more-restricted `window3` from memory considering we know it's before the 3rd dot (and after the 2nd):
 
 ```
-require "rom/changeset"  
-require "sequel"  
+let count = span.count
+let m30: UInt64 = 0x3030_3030_3030_3030
+let m30_u32: UInt32 = 0x3030_3030
 
-module MyApp  
-  module Extensions  
-    module ROM  
-      module Changeset  
-        module PipeRegistry  
-          def touch(data)  
-            Hash(updated_at: Sequel.function(:now)).merge(data)  
-          end  
-        end
-      end
-    end
-  end
-end  
+/// Example for "192.168.1.98" (Notice little-endian byte-order):
+/// `window1`: bytes 0...3 ("192.") -> `0x1E_02_09_01`.
+/// `window2`: bytes 2...7 ("2.168.") -> `0x30_30_1E_08_06_01_1E_02` (in lanes 0...5).
+/// `window4`: bytes 8...11 ("1.98") -> `0x08_09_1E_01`.
 
-ROM::Changeset::PipeRegistry.singleton_class.prepend(MyApp::Extensions::ROM::Changeset::PipeRegistry)
+let w1 = loadUInt32(from: span, at: 0)
+let window1 = w1 ^ m30_u32
+let w2_p2 = loadUInt32(from: span, at: min(4, count &- 4))
+let window2 = (UInt64(w1 >> 16) | (UInt64(w2_p2) << 16)) ^ m30
+let w4 = loadUInt32(from: span, at: count &- 4)
+let window4 = w4 ^ m30_u32
+
+/// ...
+
+/// The 3rd and last segment is between the 2nd and 3rd dots, which are both found by now.
+/// `thirdDotBitCount` is 4, 12 or 20, so this only reads within bytes `count - 7`...`count - 2`.
+/// `thirdDotBitCount >> 3` == `thirdDotBitCount / 8`.
+let w3_idx = count &- 7 &+ (thirdDotBitCount >> 3)
+/// Example for "192.168.1.98": bytes 6...9 ("8.1.") -> `0x1E_01_1E_08`.
+let w3 = loadUInt32(from: span, at: w3_idx)
+let window3 = w3 ^ m30_u32
+
+/// Later strip the remaining garbage from window3.
 ```
 
-This ensures that the timestamp is whatever the database time is set to (you could alternatively use `Time.now.utc`), and it ensures every update increments the `updated_at` timestamp. I do not view this as a bad thing; I view it as a testament to how easy it is to shape Hanami into what you want it to be.
+This helped the performance by a few cycles. However this was not the end.
 
-Alright, that is a wrap on Hanami's database layer. If there is one thing I hope you take away from this issue, it is that the split between relations, repos, and structs is there for a reason. Each piece has exactly one job: relations describe your data, repos decide how you get to it, and structs hand it to you without the ability to wander off and do something stupid with it. That split is what lets you change what "fresh" means in one file, and it is what keeps a serializer from writing to your database at 2 AM. As I said at the start, I am still learning about this layer every day, so if you have found a pattern that works better for you I would love to hear about it; come find me in the [Hanakai Discord](https://discord.com/invite/KFCxDmk3JQ). In the next issue we will be covering operations, the place where, as you may have guessed by now, I think all of your mutations belong. I hope to see you there!
+After more trials and back and forth with my LLM of choice, I settled on the following selection of window-finding algorithm as it resulted in the most performant implementation:
 
-Found a typo or want to argue about patterns? [Let me know](https://aaronmallen.me/contact).
+```
+let count = span.count
+let m30: UInt64 = 0x3030_3030_3030_3030
+let m30_u32: UInt32 = 0x3030_3030
 
-## Responses
+/// Example for "192.168.1.98" (Notice little-endian byte-order):
+/// `window1`: bytes 0...3 ("192.") -> `0x1E_02_09_01`.
+/// `window12`: bytes 0...7 ("192.168.") -> `0x1E_08_06_01_1E_02_09_01`.
+/// `window4`: bytes 8...11 ("1.98") -> `0x08_09_1E_01`.
+let w1 = loadUInt32(from: span, at: 0)
+let window1 = w1 ^ m30_u32
+let w2 = loadUInt32(from: span, at: (count >> 1) & 4)
+/// "192." | "168." << 32 == "192.168.".
+let window12 = (UInt64(w1) | (UInt64(w2) << 32)) ^ m30
+let w4 = loadUInt32(from: span, at: count &- 4)
+let window4 = w4 ^ m30_u32
 
-## Related
+/// Parse the 3rd segment from window3 later.
+```
 
-1. Hanami, Why?: Class ActionToday we are going to be diving into one of my absolute favorite abstractions in all of Hanami: Actions.Oct 12, 2026shares [hanakai](https://aaronmallen.me/writing/tags/hanakai) [hanami](https://aaronmallen.me/writing/tags/hanami) [ruby](https://aaronmallen.me/writing/tags/ruby)
-2. Hanami, Why?: Bits & BobsA tour of Hanami's foundational abstractions, dependency injection, providers, types, and contracts, with an honest look at the rough edges of each.Oct 2, 2026shares [hanakai](https://aaronmallen.me/writing/tags/hanakai) [hanami](https://aaronmallen.me/writing/tags/hanami) [ruby](https://aaronmallen.me/writing/tags/ruby)
-3. Hanami, Why?: IntroductionsI mentioned in my Hello, world! post that I built this site using Hanami. This site may seem simple on the surface; it is, after all, just a blog. However, the backend is packed with features that help me day to day. I have built a tool that lets me cross-post to both Bluesky and Mastodon. I have a private journal where I can keep notes throughout the day. There is a custom analytics engine to provide me with insights on how well my blog posts are doing. There is a messaging backend that lets readers reach me through my contact form without cluttering my inbox. I have also built a task manager that syncs with both Linear and GitHub Issues and helps me track what I need to do. Most importantly, I have built an activity feed that captures my GitHub commits, journal entries, blog posts, and tasks. It helps me answer the question "What did I do between ___ and ___ dates?", which, believe it or not, is hard for me to answer on my own, even for last week. The application is open source, and you can find it on GitHub.Sep 30, 2026shares [hanakai](https://aaronmallen.me/writing/tags/hanakai) [hanami](https://aaronmallen.me/writing/tags/hanami) [ruby](https://aaronmallen.me/writing/tags/ruby)
+This brought the whole implementation down to around 75 instructions and 15 cycles for a valid IPv4 text on an M6 processor.
+
+For the curious reader, the [final implementation is available here](https://github.com/swift-dns/swift-endpoint/blob/c030b6588540d577fbf86de19d4930008bd654b3/Sources/IPAddress/IPv4Address/String+IPv4Address.swift#L285-L490) and it contains enough documentation comments to be able to hopefully decipher it.  
+
+The implementation passes swift-endpoint's truly extensive test suite, as well as passing some fuzz-tests I've run on it.
+
+## How So Fast?
+
+Having 3 or 4 different windows that can be operated on simultaneously is of great importance to performance of the algorithm.  
+
+Modern processors have CPU cores where each core contains multiple Arithmetic Logic Units (ALUs). This means they can execute multiple arithmetic operations in a single cycle when given the opportunity. You can see where this is going.
+
+By having multiple different windows and having little sequential dependency between them, we enable our CPU cores to perform multiple calculations in each clock cycle, in what is called "Instruction-level parallelism". This is crucial to achieving maximum performance.  
+
+As mentioned, on my M6 processor this algorithm’s throughput is 75 instructions per 15 cycles for a single IP address. That's an average of 5 instructions in each cycle. A small part of that comes from the CPU executing multiple iterations of the benchmark loop simultaneously.
+
+As discussed in the previous section, SWAR techniques also help a ton in lowering the number of instructions required to parse an IPv4.  
+
+This is thanks to the fact that each digit in an IP segment's text is only 1 ASCII byte, but we know we can handle up to 8 ASCII bytes at once on a 64-bit processor.
+
+## Benchmark Results
+
+- The shapes columns refer to running the benchmarks against 4 million random valid IP addresses.
+  - 4 million is big enough that branch predictors of neither M6 nor AMD processors can keep up with, which would skew the results.
+- The real32 columns refer to running the benchmarks against a pre-determined set of 32 popular IPs.
+  - To confuse branch predictors the order is randomly driven using George Marsaglia's xorshift algorithms via a constant seed. Specifically 13/7/17 variant of xorshift64 as defined on the Wikipedia page.
+  - The RNG overhead is low and has not been deducted from the numbers.
+- While the performance can differ with different corpora of IPv4s, the top 5 rankings are not affected.
+
+```text
+127.0.0.1
+1.1.1.1
+8.8.8.8
+9.9.9.9
+255.255.255.255
+192.168.1.1
+10.0.0.1
+172.16.0.1
+100.64.0.1
+208.67.222.222
+185.199.108.153
+151.101.1.140
+104.16.132.229
+142.250.185.78
+13.107.42.14
+23.185.0.2
+0.0.0.0
+224.0.0.1
+169.254.169.254
+8.8.4.4
+1.0.0.1
+149.112.112.112
+208.67.220.220
+172.217.16.142
+140.82.121.4
+198.41.0.4
+192.33.4.12
+193.0.14.129
+199.7.83.42
+93.184.215.14
+20.190.160.14
+34.107.221.82
+```
+
+Here are the specifications of the benchmarking environments:
+
+| Hardware, OS | Toolchains |
+| --- | --- |
+| Apple M6, macOS 27 | Swift 6.4, Apple clang 21.0.0, libc++ 22.1.6, Rust 1.98.1, Go 1.27.2 |
+| AMD Zen 5, Ubuntu 24.04 | Swift 6.4, clang 21.0.0, glibc 2.39, libstdc++ 13.3; Rust 1.98.1, Zig 0.17.0, Go 1.27.2 |
+
+### Apple M6
+
+The implementations that use SSE were run using [sse2neon](https://github.com/DLTcollab/sse2neon). They are indicated in the table via `→ NEON`.
+
+Ratios are compared to swift-endpoint.
+
+| # | Implementation | shapes | ratio | # real32 | real32 | ratio |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | [simdzone sse_inet_aton](https://github.com/NLnetLabs/simdzone/blob/7f62ebcc77a67ad399f6eeb05865c33d1de65cc2/src/westmere/ip4.h#L118-L180) → NEON | 2.84 ns | 0.84x | 1 | 3.61 ns | 0.78x |
+| **2** | **[swift-endpoint](https://github.com/swift-dns/swift-endpoint/blob/c030b6588540d577fbf86de19d4930008bd654b3/Sources/IPAddress/IPv4Address/String+IPv4Address.swift#L285-L490)** | **3.36 ns** | **1.00x** | **2** | **4.62 ns** | **1.00x** |
+| 3 | [Muła v7](https://github.com/WojciechMula/toys/blob/15ba0102e17aece7a0e948a7f74171d293cd9d25/parseip4/sse_v7.cpp.inl) → NEON | 5.00 ns | 1.49x | 3 | 6.16 ns | 1.33x |
+| 4 | [Muła v5](https://github.com/WojciechMula/toys/blob/15ba0102e17aece7a0e948a7f74171d293cd9d25/parseip4/sse_v5.cpp.inl) → NEON | 5.47 ns | 1.63x | 4 | 6.88 ns | 1.49x |
+| 5 | [simdzone generic](https://github.com/NLnetLabs/simdzone/blob/7f62ebcc77a67ad399f6eeb05865c33d1de65cc2/src/generic/ip4.h#L12-L44) (arm64 path) | 6.24 ns | 1.86x | 5 | 7.99 ns | 1.73x |
+| 6 | [Muła v6](https://github.com/WojciechMula/toys/blob/15ba0102e17aece7a0e948a7f74171d293cd9d25/parseip4/sse_v6.cpp.inl) → NEON | 6.45 ns | 1.92x | 6 | 8.09 ns | 1.75x |
+| 7 | [Muła v8](https://github.com/WojciechMula/toys/blob/15ba0102e17aece7a0e948a7f74171d293cd9d25/parseip4/sse_v8.cpp.inl) → NEON | 7.18 ns | 2.13x | 7 | 8.94 ns | 1.94x |
+| 8 | [fast_float v8.3.2](https://github.com/fastfloat/fast_float/blob/v8.3.2/include/fast_float/ascii_number.h#L634-L765) ([Lemire 2025](https://github.com/lemire/Code-used-on-Daniel-Lemire-s-blog/blob/b50dc28111726ad342e9c20dbe5f9a0fef48c161/2025/12/27/benchmark_ip_parsing/benchmarks/benchmark.cpp#L134-L162)) | 13.09 ns | 3.89x | 17 | 15.04 ns | 3.26x |
+| 9 | [Muła v4](https://github.com/WojciechMula/toys/blob/15ba0102e17aece7a0e948a7f74171d293cd9d25/parseip4/sse_v4.cpp.inl) → NEON | 14.28 ns | 4.24x | 8 | 11.40 ns | 2.47x |
+| 10 | [Muła v3](https://github.com/WojciechMula/toys/blob/15ba0102e17aece7a0e948a7f74171d293cd9d25/parseip4/sse_v3.cpp.inl) → NEON | 14.78 ns | 4.39x | 9 | 12.12 ns | 2.62x |
+| 11 | [Lemire manual](https://github.com/lemire/Code-used-on-Daniel-Lemire-s-blog/blob/b50dc28111726ad342e9c20dbe5f9a0fef48c161/2025/12/27/benchmark_ip_parsing/benchmarks/benchmark.cpp#L98-L130) (unrolled) | 15.60 ns | 4.64x | 12 | 12.91 ns | 2.79x |
+| 12 | [ada try_parse_ipv4_fast](https://github.com/ada-url/ada/blob/473c293ee19accd1f1223d669d3285b9131408ef/include/ada/checkers-inl.h#L234-L248) (scalar path) | 15.64 ns | 4.65x | 10 | 12.85 ns | 2.78x |
+| 13 | [ada scalar](https://github.com/ada-url/ada/blob/473c293ee19accd1f1223d669d3285b9131408ef/include/ada/checkers-inl.h#L75-L125) | 15.68 ns | 4.66x | 11 | 12.87 ns | 2.79x |
+| 14 | [Muła v2](https://github.com/WojciechMula/toys/blob/15ba0102e17aece7a0e948a7f74171d293cd9d25/parseip4/sse_v2.cpp.inl) → NEON | 16.96 ns | 5.04x | 19 | 18.75 ns | 4.06x |
+| 15 | [Rust std](https://github.com/rust-lang/rust/blob/1.98.1/library/core/src/net/parser.rs#L152-L166) ([entry](https://github.com/rust-lang/rust/blob/1.98.1/library/core/src/net/parser.rs#L314-L343)) | 17.08 ns | 5.08x | 13 | 13.87 ns | 3.00x |
+| 16 | [Muła SWAR](https://github.com/WojciechMula/toys/blob/15ba0102e17aece7a0e948a7f74171d293cd9d25/parseip4/swar.cpp#L14-L274) | 17.85 ns | 5.31x | 14 | 13.94 ns | 3.02x |
+| 17 | [Lemire manual](https://github.com/lemire/Code-used-on-Daniel-Lemire-s-blog/blob/b50dc28111726ad342e9c20dbe5f9a0fef48c161/2025/12/27/benchmark_ip_parsing/benchmarks/benchmark.cpp#L69-L96) | 18.10 ns | 5.38x | 15 | 14.55 ns | 3.15x |
+| 18 | [Muła naive](https://github.com/WojciechMula/toys/blob/15ba0102e17aece7a0e948a7f74171d293cd9d25/parseip4/naive.cpp#L3-L122) | 18.34 ns | 5.45x | 16 | 14.94 ns | 3.23x |
+| 19 | [Muła v1](https://github.com/WojciechMula/toys/blob/15ba0102e17aece7a0e948a7f74171d293cd9d25/parseip4/sse.cpp#L5-L122) → NEON | 18.87 ns | 5.61x | 18 | 16.17 ns | 3.50x |
+| 20 | [Go net/netip](https://github.com/golang/go/blob/go1.27.2/src/net/netip/netip.go#L114-L202) | 22.82 ns | 6.78x | 20 | 19.45 ns | 4.21x |
+| 21 | [std::from_chars](https://github.com/llvm/llvm-project/blob/llvmorg-22.1.6/libcxx/include/__charconv/from_chars_integral.h#L97-L147) ([loop](https://github.com/lemire/Code-used-on-Daniel-Lemire-s-blog/blob/b50dc28111726ad342e9c20dbe5f9a0fef48c161/2025/12/27/benchmark_ip_parsing/benchmarks/benchmark.cpp#L134-L162)) | 25.61 ns | 7.61x | 21 | 19.46 ns | 4.21x |
+| 22 | [Apple inet_pton](https://github.com/apple-oss-distributions/Libc/blob/Libc-1752.120.2/net/inet_pton.c#L64-L170) | 33.99 ns | 10.10x | 22 | 27.29 ns | 5.91x |
+
+### AMD Zen 5
+
+Ratios are compared to swift-endpoint.
+
+| # | Implementation | shapes | ratio | # real32 | real32 | ratio |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | [simdzone sse_inet_aton](https://github.com/NLnetLabs/simdzone/blob/7f62ebcc77a67ad399f6eeb05865c33d1de65cc2/src/westmere/ip4.h#L118-L180) | 3.74 ns | 0.61x | 1 | 4.70 ns | 0.54x |
+| 2 | [Cesarano BMI2](https://github.com/GiuseppeCesarano/extractingcycles/blob/613bcea67f8ae568ddc6b1690a9b6e4f9a969fc7/content/blog/the-ipv4-parser-ai-couldnt-have-written/bmiParseIPV4.zig#L4-L193) (Zig) | 5.69 ns | 0.93x | 2 | 8.01 ns | 0.91x |
+| **3** | **[swift-endpoint](https://github.com/swift-dns/swift-endpoint/blob/c030b6588540d577fbf86de19d4930008bd654b3/Sources/IPAddress/IPv4Address/String+IPv4Address.swift#L285-L490)** | **6.12 ns** | **1.00x** | **3** | **8.77 ns** | **1.00x** |
+| 4 | [Muła v7](https://github.com/WojciechMula/toys/blob/15ba0102e17aece7a0e948a7f74171d293cd9d25/parseip4/sse_v7.cpp.inl) (SSE) | 6.60 ns | 1.08x | 4 | 9.01 ns | 1.03x |
+| 5 | [Muła v5](https://github.com/WojciechMula/toys/blob/15ba0102e17aece7a0e948a7f74171d293cd9d25/parseip4/sse_v5.cpp.inl) (SSE) | 7.33 ns | 1.20x | 5 | 10.05 ns | 1.15x |
+| 6 | [Muła v6](https://github.com/WojciechMula/toys/blob/15ba0102e17aece7a0e948a7f74171d293cd9d25/parseip4/sse_v6.cpp.inl) (SSE) | 8.45 ns | 1.38x | 6 | 11.67 ns | 1.33x |
+| 7 | [Muła v8](https://github.com/WojciechMula/toys/blob/15ba0102e17aece7a0e948a7f74171d293cd9d25/parseip4/sse_v8.cpp.inl) (SSE) | 9.39 ns | 1.53x | 7 | 12.95 ns | 1.48x |
+| 8 | [fast_float v8.3.2](https://github.com/fastfloat/fast_float/blob/v8.3.2/include/fast_float/ascii_number.h#L634-L765) ([Lemire 2025](https://github.com/lemire/Code-used-on-Daniel-Lemire-s-blog/blob/b50dc28111726ad342e9c20dbe5f9a0fef48c161/2025/12/27/benchmark_ip_parsing/benchmarks/benchmark.cpp#L134-L162)) | 21.51 ns | 3.51x | 18 | 26.08 ns | 2.97x |
+| 9 | [Muła v2](https://github.com/WojciechMula/toys/blob/15ba0102e17aece7a0e948a7f74171d293cd9d25/parseip4/sse_v2.cpp.inl) (SSE) | 22.69 ns | 3.71x | 17 | 25.91 ns | 2.95x |
+| 10 | [Muła v4](https://github.com/WojciechMula/toys/blob/15ba0102e17aece7a0e948a7f74171d293cd9d25/parseip4/sse_v4.cpp.inl) (SSE) | 23.26 ns | 3.80x | 8 | 19.82 ns | 2.26x |
+| 11 | [Muła v3](https://github.com/WojciechMula/toys/blob/15ba0102e17aece7a0e948a7f74171d293cd9d25/parseip4/sse_v3.cpp.inl) (SSE) | 24.93 ns | 4.07x | 9 | 21.43 ns | 2.44x |
+| 12 | [Lemire manual](https://github.com/lemire/Code-used-on-Daniel-Lemire-s-blog/blob/b50dc28111726ad342e9c20dbe5f9a0fef48c161/2025/12/27/benchmark_ip_parsing/benchmarks/benchmark.cpp#L98-L130) (unrolled) | 28.57 ns | 4.67x | 10 | 22.06 ns | 2.52x |
+| 13 | [ada scalar](https://github.com/ada-url/ada/blob/473c293ee19accd1f1223d669d3285b9131408ef/include/ada/checkers-inl.h#L75-L125) | 28.79 ns | 4.70x | 11 | 22.36 ns | 2.55x |
+| 14 | [ada try_parse_ipv4_fast](https://github.com/ada-url/ada/blob/473c293ee19accd1f1223d669d3285b9131408ef/include/ada/checkers-inl.h#L234-L248) (scalar path) | 29.11 ns | 4.75x | 12 | 22.46 ns | 2.56x |
+| 15 | [Rust std](https://github.com/rust-lang/rust/blob/1.98.1/library/core/src/net/parser.rs#L152-L166) ([entry](https://github.com/rust-lang/rust/blob/1.98.1/library/core/src/net/parser.rs#L314-L343)) | 29.33 ns | 4.79x | 14 | 24.61 ns | 2.81x |
+| 16 | [simdzone generic](https://github.com/NLnetLabs/simdzone/blob/7f62ebcc77a67ad399f6eeb05865c33d1de65cc2/src/generic/ip4.h#L12-L44) | 30.82 ns | 5.03x | 15 | 24.67 ns | 2.81x |
+| 17 | [Lemire manual](https://github.com/lemire/Code-used-on-Daniel-Lemire-s-blog/blob/b50dc28111726ad342e9c20dbe5f9a0fef48c161/2025/12/27/benchmark_ip_parsing/benchmarks/benchmark.cpp#L69-L96) | 31.27 ns | 5.11x | 13 | 24.14 ns | 2.75x |
+| 18 | [Muła SWAR](https://github.com/WojciechMula/toys/blob/15ba0102e17aece7a0e948a7f74171d293cd9d25/parseip4/swar.cpp#L14-L274) | 31.32 ns | 5.11x | 20 | 26.39 ns | 3.01x |
+| 19 | [Muła naive](https://github.com/WojciechMula/toys/blob/15ba0102e17aece7a0e948a7f74171d293cd9d25/parseip4/naive.cpp#L3-L122) | 32.12 ns | 5.25x | 16 | 24.83 ns | 2.83x |
+| 20 | [std::from_chars](https://github.com/gcc-mirror/gcc/blob/releases/gcc-13.3.0/libstdc++-v3/include/std/charconv#L523-L632) ([loop](https://github.com/lemire/Code-used-on-Daniel-Lemire-s-blog/blob/b50dc28111726ad342e9c20dbe5f9a0fef48c161/2025/12/27/benchmark_ip_parsing/benchmarks/benchmark.cpp#L134-L162)) | 32.23 ns | 5.26x | 19 | 26.12 ns | 2.98x |
+| 21 | [glibc 2.39 inet_pton](https://github.com/bminor/glibc/blob/glibc-2.39/resolv/inet_pton.c#L48-L122) | 35.25 ns | 5.76x | 21 | 27.04 ns | 3.08x |
+| 22 | [Muła v1](https://github.com/WojciechMula/toys/blob/15ba0102e17aece7a0e948a7f74171d293cd9d25/parseip4/sse.cpp#L5-L122) (SSE) | 35.84 ns | 5.85x | 22 | 29.78 ns | 3.40x |
+| 23 | [Go net/netip](https://github.com/golang/go/blob/go1.27.2/src/net/netip/netip.go#L114-L202) | 39.19 ns | 6.40x | 23 | 32.44 ns | 3.70x |
+
+### Conclusions
+
+- Daniel Lemire's sse_inet_aton implementation is very fast. But keep in mind it makes significant use of lookup tables and requires wide inputs by contract.
+- swift-endpoint's parser ranks 2nd on M6, and 3rd on AMD Zen 5.
+
+## That's It?
+
+This is the first post on my blog. I do realize there are some shortcomings.  
+
+Please let me know if you've noticed any ways to improve the blog, be it technical or non-technical.
+
+Currently I plan to take a shot at the following:
+
+- Publish a clean version of the source code of the benchmarks. Likely starting from some future post.
+- Run the x86_64 benchmarks on more modern processors.
+  - The benchmarking machines are not free so I'll have to find a cost-effective way to achieve that.
+- Provide easy "one-click" ways to run the benchmarks on your own AWS account on an ephemeral EC2 instance.
+- Make more improvements to the blog's UX without making it too complicated or unnecessarily shiny.
+  - Likely open-source the blog as well, including the infrastructure-related code.

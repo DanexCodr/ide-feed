@@ -143,11 +143,9 @@ shifting hack I read about online. It worked okay, but had some ‘rounding’ i
 with the background color making it look slightly different from the true background
 which is why for the final version I demoed for a grade used the real multiplication.
 
-- Asterix, dupicated for a demo, running on my custom FPGA based VGA driver. Using regular multiplication
+- Asterix, duplicated for a demo, running on my custom FPGA based VGA driver. Using regular multiplication
 - Hacky bit manipulation based alpha compositing
 - Basic boolean alpha channel mixing
 - Basic image rendering (no alpha channel compositing)
 
 One of my favorite labs in college so far has been my Digital Logic Design Lab. Two years ago the final few labs of the course involved building a VGA driver. While that might sound intimidating, it w...
-
-[Discuss on Hacker News](https://news.ycombinator.com/item?id=50168376)

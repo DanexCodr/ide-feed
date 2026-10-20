@@ -1,19 +1,69 @@
-**Microsoft No More:** European countries are increasing efforts to build sovereign digital infrastructure to replace Microsoft and other US-based solutions. The Dutch government is even working on its own Linux distribution because The Hague is reportedly tired of Washington's threats against EU-based institutions.
+October is here, and it’s almost time for Mastodon’s 5.0 release! We announced our plans for big changes [in an early preview](https://blog.joinmastodon.org/2026/08/5.0-laying-the-foundation/) back in August. In this companion article, we’re hoping to shed light on some of the decisions behind this major UI overhaul.
 
-The Dutch government is trying to solve its digital sovereignty problem with its own Linux operating system. A local source recently highlighted the development efforts being poured into [NixOS](https://tweakers.net/reviews/15334/nederland-maakt-soeverein-alternatief-voor-windows-en-office-op-basis-van-linux.html), a Linux distro that originated as a package manager created by Dutch developers. The idea is that US-based software solutions, most notably Microsoft's, would eventually be replaced by this new OS and open-source productivity solutions.
+Between the feedback we’ve gathered during Discovery Week, an event in which we spent a week doing surveys and workshop sessions with volunteers from the community, and Mastodon’s 10th anniversary coming up, we were determined to deliver something notable.
 
-[Nix](https://nixos.org/) is a package manager with a few peculiar features, including cross-platform compatibility and its own functional programming language for configuring Unix and Unix-like systems. The tool was first released in 2003, and NixOS debuted three years later. The Linux distro is built around Nix and is currently supported by the Dutch nonprofit organization NixOS Foundation.
+## What we were facing
 
-[![](https://www.techspot.com/images2/news/bigimage/2026/09/2026-09-29-image-25-j.webp)](https://www.techspot.com/images2/news/bigimage/2026/09/2026-09-29-image-25.jpg)
+### Invisible binds
 
-Nix and NixOS are the foundations of the Digitaal Autonome Werkomgeving Overheid (DAWO) project, which includes all the tools required to build a sovereign IT infrastructure. With DAWO, The Hague plans to provide government and public institutions with a custom operating system, productivity and office applications, cloud services, management tools, and everything in between.
+Working on Mastodon’s engineering team can sometimes feel like harvesting wheat one stalk at a time. We make a lot happen with limited resources–far more limited than most people realise–but there’s always more to do. There’s more tech and UX debt than is obvious to the naked eye, so something that seems simple on the outside may be often limited by backend constraints or architecture shifts that can’t easily be changed. So we had to make concessions about what we could realistically fit into our 5.0 plans, and leave some work for later.
 
-Serious efforts to build the DAWO-based sovereign infrastructure apparently began a few months ago, when Dutch authorities decided to standardize the creation of a national IT ecosystem. The project is focused on accessibility, because NixOS developers are not exactly enthusiastic proponents of heavily GUI-based computer interfaces.
+### Competing needs
 
-DAWO's first pilot programs have already been deployed in private and local environments, but the plan should eventually encompass all institutions in the Netherlands. Sovereignty efforts in the country apparently stalled for years, but the new US administration provided the right incentives to finally get the job done.
+What’s better for one person can be worse for another, and we’ve had to keep that in mind throughout the redesign. We’re acutely aware that such a divide is most pronounced between longstanding users and newcomers. Mastodon’s current UI is beloved by many longtime users, since it can be very powerful once you’ve learned its secrets and quirks. However, newcomers should be able to dive in without being overwhelmed. To keep the community fresh, alive and diverse, we need to break down the barriers to joining, so when you bring your friends, they can find their way around without a manual.
 
-![](https://www.techspot.com/images2/news/bigimage/2026/09/2026-09-29-image-16-j.webp)
+## What we believe in
 
-Washington authorities recently decided to target the Hague-based International Criminal Court (ICC) with sanctions, while Microsoft allegedly blocked the court's prosecutors from accessing its email and other crucial IT services. The ICC is already [replacing](https://www.techspot.com/news/110095-international-criminal-court-replacing-microsoft-office-sovereign-eu.html) Microsoft Office with an open-source alternative, as DAWO and NixOS are going to extend the sovereignty efforts even further.
+The redesign was grounded in these principles:
 
-Earlier this year, the Netherlands blocked an attempt by a US company to buy a crucial app used by [Dutch citizens](https://www.techspot.com/news/112552-netherlands-blocked-us-company-buying-app-dutch-citizens.html). Elsewhere in Europe, countries are [investing millions](https://www.techspot.com/news/113763-switzerland-paying-11-million-stop-using-outlook-teams.html) in massive conversion projects based on the same concept: replacing Windows, Microsoft, and most US software services with Linux, open-source software, or other custom solutions.
+**Clarity trumps convenience.** The most powerful interface can be useless if it’s too difficult to figure out. Making things more clear and obvious can result in more friction, and that can be necessary.
+
+**Leave room for what’s to come.** Navigation may feel emptier for now, and that is on purpose. We have lots of improvements planned that we need to leave space for, to avoid moving more elements around in the future.
+
+**Small improvements matter.** We might not be able to fix everything overnight, but we’ll continue to look for small but meaningful improvements to accessibility and usability.
+
+## What’s changing in 5.0
+
+Our previous blog post covers most of the big stuff: We’re moving away from the embedded composer and adopting a pop-out composer with new controls for visibility and other post settings. Navigation is simplified and organised in a more intuitive way and create space for future new features.
+
+In your feeds, the posts themselves have been rebuilt from the ground up, giving a fresh look to the places we all spend the most time. We’re also excited to roll out a few new colour themes, which took a truly monumental effort from our engineering team since the start of the year to tokenise our design system.
+
+The new design includes many small affordances, such as hiding a user’s boosts directly from the post menu, following and unfollowing hashtags right from the post, and hiding your own posts and boosts in your home feed.
+
+## Notable iterations (since the August blog post)
+
+Since our original announcement, we’ve iterated a lot on the feedback we’ve been receiving, so you’ll notice that the UI looks a bit different than what we’ve shown in that blog post. Here’s what’s changed:
+
+- From bottom right to bottom centre: The position of the composer in the bottom right was controversial. The biggest complaint was that the composer was so far away from the main navigation. However, keeping the composer embedded within the navigation is too limiting, bottom left docking would hide key navigational elements, and resorting to a modal would mean users could lose context of something they’re referencing or replying to. Until we can offer user settings for docking preferences, we’re adjusting to a bottom-centre placement–and the composer can be fully minimised without losing a draft in progress.
+- The ‘New post’ action has changed: It’s a more prominent button in the navigation, but moved further down to reduce the distance the mouse has to travel to reach the popout composer. The floating button on mobile launches the composer immediately instead of opening a sub-menu, because we received feedback that users expect to initiate the ‘New message’ action elsewhere.
+- Composer visibility settings are still contextual, but considerably simplified: We attempted to show some of the recipients in limited visibility posts, but it confused some users more than it clarified things. Instead of dynamically updating the visibility dropdown with mentioned names, we show a few preset labels that still accurately describe the audience.
+- ‘Sensitive’ content has been broken into two settings: Users have historically been able to blur media by adding a blank content warning to their post. This was a powerful yet misunderstood feature, and we’ve received feedback about it for quite some time. To keep the existing functionality but present it in a clearer way, sensitive media and content warnings are now separate, dedicated options inside the composer’s gear menu.
+- Quote settings have moved: You cannot change the visibility of a post after publishing it, but you can change its quote settings. We’re now grouping these settings differently to keep the ones that can be changed separate from the ones that cannot.
+
+## FAQ
+
+**How did you make sure these changes reflect the needs of actual Mastodon users?**
+
+We ran a week of surveys and workshop sessions with volunteers from the community to figure out what works for people and what doesn’t. We also monitored feedback from the initial blog post, then tested our prototype, first internally, then with users, gathering more feedback on our [new Discourse space](https://community.joinmastodon.org/) while iterating on the designs.
+
+**What about existing users having to re-learn the interface?**
+
+We understand that an interface you’ve been using for years changing under you can be frustrating. Whenever possible, we’ve based the redesign in existing UI patterns used frequently across the web, so that learning the new way would be easy. We are also communicating clearly about those changes through our blog and announcements to ensure that this transition is not a surprise and the reasons behind it are clearly laid out.
+
+Additionally, our decision to fill less space in the 5.0 interface is precisely so we can minimize jarring changes across future releases.
+
+**Why is everything so round?**
+
+We’re headed towards more roundness to invite a friendlier brand tone, and to make Mastodon feel more native within modern browsers (most of which have adopted a rounded aesthetic).
+
+**Can I offer feedback on the redesign?**
+
+We hope you do! Head to [our new Discourse forum](https://community.joinmastodon.org/). While we can’t immediately respond to every topic, we will be reading through each piece of feedback. Please remember to be civil even if you don’t like something: We are people too.
+
+If you are on mastodon.online or another server running nightly updates, you already have early access to the redesign. We are planning to enable this new design on [mastodon.social](http://mastodon.social) tomorrow, on the 20th October, and then release the first Mastodon 5.0 beta version so server administrators can try it out as well.
+
+What you share in our forum could help us make a few more improvements before 5.0 is officially released to the wider Mastodon universe in a few weeks.
+
+**What’s next?**
+
+There are essential pages that still desperately need an overhaul: Search, Settings, Messages, and Notifications, to name a few. It’s unlikely we’ll be able to redesign all of those in 5.1. We can say with certainty that the search & discovery experience will be a priority, though.
