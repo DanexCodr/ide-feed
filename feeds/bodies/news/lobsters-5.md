@@ -1,185 +1,201 @@
-Dr. Allen Vincent Hershey developed some of the first digital typefaces, described by simple sequences of straight line-segments. These were originally published in his 1967 report [*Calligraphy for Computers*](https://archive.org/details/hershey-calligraphy_for_computers/).
+For the past few years, all of the major browser vendors (Google, Apple, Microsoft, and Mozilla, along with Igalia and Bocoup) have been working together on [Interop(opens in new tab)](https://github.com/web-platform-tests/interop/blob/main/README.md), a project to improve universal browser support on web technologies. It’s been a *remarkably* successful effort; when a focus area gets added to Interop, it often winds up reaching near-100% support across all major browsers within a year. ✨
 
-The [hershey](http://beyondloom.com/decker/hershey.html) module for the [Decker](http://beyondloom.com/decker/index.html) ecosystem is concerned with laying out text using these typefaces. Decker’s scripting language, [Lil](http://beyondloom.com/tools/trylil.html), is of an unusual APL-influenced design. This article will explore Lil in the context of 2-dimensional vector graphics, expanding upon examples also discussed in the interactive documentation linked above.
+CSS Subgrid is a good example. Subgrid is a super-powerful extension to CSS Grid which enables [entirely new layouts](https://www.joshwcomeau.com/css/subgrid/). It was implemented in Firefox back in 2019, but there wasn’t much movement with other browsers for years. It got added to Interop 2023, and by the end of that year, it was widely available across all modern browsers:
 
-A *point* is an `(x,y)` pair of numbers describing rectangular coordinates on a *canvas*- a drawing surface. Points are represented in Lil as lists with a length of 2:
+As we reach the end of 2026, Interop 2027 is currently being planned, and the team at Mozilla has created a [ranking  system(opens in new tab)](https://interop-rank.fxdx.dev/) for us to upvote our most-requested features. They plan on using the ranking data to decide what to include for next year’s Interop!
 
-```
-point:(3,-5)
-```
+In this blog post, I want to dig into the top 10 features I voted for, to offer a bit of a preview of what CSS might look like within the next year. There will also be some little tips and tricks you can start using today!
 
-A *stroke* is a list of points representing a sequence of lines to draw on the canvas, and thus also a list of lists of numbers. Given a list of four points, the stroke connects the first point to the second, the second point to the third, and the third point to the fourth. If there are *N* points in a stroke, it describes *N-1* connected lines. We might also call a stroke a “polyline”:
+One of the most exciting ideas is the [proposal to add functions to  CSS(opens in new tab)](https://github.com/web-platform-tests/interop/issues/1357):
 
 ```
-stroke:((list 3,-5),(list 2,5),(list 0,3))
+/* Define a function: */
+@function --gradient-to-transparent(--color, --direction: bottom) {
+  result: linear-gradient(
+    to var(--direction),
+    var(--color),
+    transparent;
+  );
+}
+
+/* Invoke it: */
+.elem {
+  background: --gradient-to-transparent(red);
+}
+
+/* …which produces: */
+.elem {
+  background: linear-gradient(
+    to bottom,
+    red,
+    transparent;
+  );
+}
 ```
 
-A *path* is a list of strokes, and thus also a list of lists of points, and a list of lists of lists of numbers. A path can represent the strokes that make up a single shape- like the letter “A”- or a sequence of letters representing an entire word or sentence. The strokes within a path are *ragged*: they may vary in length.
+If you’re familiar with JavaScript, this should feel pretty familiar. We define new functions with `@function` and specify the returned value with `result`.
+
+There’s *so* much cool stuff we can do with this. Personally, the use case I’m most interested in is the ability to convert between polar and cartesian coordinates, a concept we use over and over in my [Whimsical Animations  course(opens in new tab)](https://whimsy.joshwcomeau.com/):
 
 ```
-path:(list (list 1,2),(list 3,4)),     (list (list 5,6),(list 7,8),(list 9,10))
+@function --translate-polar(--angle, --distance) {
+  result: translate(
+    calc(cos(var(--angle)) * var(--distance)),
+    calc(sin(var(--angle)) * var(--distance))
+  );
+}
+
+/* Move this element 100px at a 45° angle: */
+.particle {
+  transform: --translate-polar(45deg, 100px);
+}
 ```
 
-The [`hershey.textpath[]`](http://beyondloom.com/decker/hershey.html#hershey_textpath) function assembles a complex path based on a Lil string using the glyphs of a font, each of which is a simpler path:
+This feels pretty “science-fiction” to me, but it’s already implemented in Chromium browsers, and if it gets added to Interop 2027, I think there’s very good odds that it could become widely available sooner rather than later!
+
+In CSS, we can use the `border-radius` property to round off the edges of our DOM nodes to create rounded rectangles. This property effectively adds a quarter-circle to each corner, connecting the 4 straight sides.
+
+The `corner-shape` property is an exploration of *alternative ways* to connect the 4 sides of our DOM nodes. It provides a handful of new options:
+
+Result
+
+When I first heard about this property, I was most excited about `squircle`. If you’re not familiar, squircles are an alternative algorithm for generating rounded corners using superellipses. Apple has been making use of them for years because they produce smoother, gentler edges.
+
+That said, after messing around with `corner-shape` for a while, I find myself using `corner-shape: bevel` a ton. It’s great for creating video game / sci-fi UIs. Here’s a little preview of a side-project I’ve been working on, with *tons* of `corner-shape: bevel`:
+
+We’ve technically been able to do stuff like this with `clip-path` or masks, but unlike those features, `corner-shape` actually *changes the shape of the border-box*. This means that our borders, outlines, and box-shadows will correctly follow the altered corner shapes!
+
+And even though this property isn’t available in Firefox/Safari (as I write this in October 2026), I think it’s reasonable to start using it today. It’s a perfect progressive enhancement!
+
+In addition to `corner-shape`, there’s a separate proposal for [border-shape(opens in new tab)](https://github.com/web-platform-tests/interop/issues/1371), which is essentially a lower-level version that allows us to *draw the border ourselves.*
+
+I covered this property in depth in a [recent newsletter issue](https://www.joshwcomeau.com/email/2026-09-14-new-css-features/), so I won’t repeat myself too much here. To summarize, `border-shape` lets us create whatever border shape we want using straight lines, arcs, and Bézier curves.
+
+I used this property recently to draw this card with a big circular scoop at the top:
+
+Like `corner-shape`, this property changes the element’s actual border box, so borders/outlines/shadows will trace it correctly. I drew the shape I wanted and then added a white border and black outline to achieve the effect shown above!
+
+We can even animate between differnt border shapes, like I do in this clip:
+
+You can learn a bit more about this property in my [newsletter issue on the subject](https://www.joshwcomeau.com/email/2026-09-14-new-css-features/).
+
+I recently published a [blog post on Anchor Positioning](https://www.joshwcomeau.com/css/anchor-positioning/), one of the most exciting modern CSS features (which was actually prioritized in Interop 2026, and is now widely available!).
+
+The Anchor Positioning API allows us to anchor one element to another. For example, we might anchor a floating tooltip element to its trigger, so that no matter where that trigger is on the page, the tooltip will always be connected to it.
+
+If you’ve ever tried to solve this sort of problem yourself, you know it’s surprisingly tricky. For example, we might want our tooltip to float above the anchor, but what if the anchor is near the top of the viewport?
+
+The tooltip fits comfortably.
+
+The tooltip’s getting cut off!
+
+The original Anchor Positioning API gave us *most* of the tools needed to solve this problem easily in CSS. It allows us to specify *fallback* positions; if the target element doesn’t fit above the anchor, it can flip automatically to the bottom.
+
+**The only thing missing was the ability to tell whether or not the target had flipped.** We had no way to know, in CSS, whether the target element is currently sitting above or below the anchor, whether it’s using the default or fallback position. For tooltips, this is a problem because we typically want to add a little protrusion that points towards the anchor.
+
+The “Level 2” version of the Anchor Positioning API includes a new type of container query that allows us to check whether the target element is using a fallback position or not. You can learn more about it in my [Anchor Positioning blog post](https://www.joshwcomeau.com/css/anchor-positioning/#flipped-carets-with-anchored-container-queries-3), or check out the [Interop 2027  proposal(opens in new tab)](https://github.com/web-platform-tests/interop/issues/1363).
+
+So honestly, I had never heard of [this  proposal(opens in new tab)](https://github.com/web-platform-tests/interop/issues/1453), and as far as I can tell, it isn’t implemented in any browsers. It’s not even listed on caniuse, so I can’t display one of those little widgets!
+
+And yet, the moment I saw it, it became something I needed to have. 😂
+
+As you might know, the `inherit` keyword in CSS allows us to pass a value down from the parent, even if that property isn’t typically inherited:
+
+Result
+
+This is a useful little trick to reuse values, but I frequently wind up discovering that it doesn’t *quite* work. For example, suppose we have nested border radiuses (or is it radii?):
+
+Result
+
+In order for nested border radii to look correct, we need to reduce the amount of rounding on the inner radius. So I don’t *exactly* want to use the inherited value; I want to transform it.
+
+That's where the proposed `inherit()` function comes in. It will pluck the inherited value and allow us to modify it using `calc()`:
+
+Given how preliminary this feature is, I’d be a bit surprised if it makes the cut for Interop 2027. But I hope we do get this feature in the future! It seems super useful. 😄
+
+In my [blog post on scroll-driven animations](https://www.joshwcomeau.com/animation/scroll-driven-animations/), we explore how we can scrub through a keyframe animation by scrolling. For example, we can use it to fade an element in as it traverses the viewport:
+
+Scroll-driven animations were [part of Interop  2026(opens in new tab)](https://wpt.fyi/interop-2026?feature=interop-2026-scroll-driven-animations), and it’s been successfully implemented across all browsers. In addition to Scroll-*driven* animations, however, there’s a separate proposal for [scroll-*triggered* animations](https://github.com/web-platform-tests/interop/issues/1433).
+
+With scroll-triggered animations, the goal is to trigger a keyframe animation when the user scrolls to a specific point, like a proximity sensor going off. At that point, the animation runs normally over a specified duration.
+
+We can currently implement scroll-triggered animations using the `IntersectionObserver` API in JavaScript, but it’s kind of a pain. It’ll be super nice when we can use CSS for both scroll-driven and scroll-triggered animations, since they each have their own use cases.
+
+You can learn more about scroll-triggered animations in this [wonderful article by  Bramus(opens in new tab)](https://developer.chrome.com/blog/scroll-triggered-animations).
+
+I’m currently working on a **top-secret project** which involves a dynamic grid-based layout. Items are arranged very differently on desktop vs. mobile:
+
+This is one of the great things about responsive CSS, but it leads to an unfortunate side effect: tab order is always based on the *DOM order,* not the visual order. So, if someone uses assistive technologies to navigate between elements, that navigation order will always be the same, even as the layout changes dramatically depending on screen size.
+
+On desktop, the first visual item is that list of Redactedsounds on the left, but on mobile, the first item is that big red button. Whichever element comes first in the DOM will be the first item to receive focus, which will invariably be wrong for a percentage of our users.
+
+Thankfully, the new `reading-flow` property grants us a solution to this problem, and there’s a [proposal for Interop  2027(opens in new tab)](https://github.com/web-platform-tests/interop/issues/1349).
+
+The basic idea is that we can specify that the tab order should follow one of several visual orders:
 
 ```
-p:hershey.textpath[hf_futura "ABC"]
+.grid {
+  display: grid;
+  reading-flow: grid-rows;
+}
 ```
 
-Thus constructed, we can draw the text path to a canvas `c` using either an explicit `each` loop or the equivalent shorthand `@` operator. The Decker [canvas widget](http://beyondloom.com/decker/decker.html#canvasinterface) can draw strokes with the `canvas.line[]` function, given an appropriate list of lists of numbers:
+There are values for both CSS Grid and Flexbox, and if you need even more control, the `reading-order` property allows us to create a custom order, sorta like `tabIndex` in HTML.
 
-```
-each stroke in p c.line[stroke]endc.line @ p
-```
+This property has been championed by one of my personal heroes, Rachel Andrew. You can read more about it in [her blog post on *reading-flow*](https://developer.chrome.com/blog/reading-flow).
 
-Wherever possible, Decker’s scripting APIs are designed to work as *collective operations*, applying to a large data structure at once. Drawing a single straight line-segment is the *simple case* for a more general polyline-drawing operation. If `canvas.line[]` could only draw a single straight line-segment, we would have to explicitly manage the off-by-one relationship between the *N* points of a path and the *N-1* lines they represent. For example,
+## [Link to this heading](https://www.joshwcomeau.com/css/interop-2027/#eight-keyword-size-animations-with-interpolate-size-and-calc-size-8)8. Keyword size animations with `interpolate-size` and `calc-size()`
 
-```
-each stroke in p each point i in stroke  if i>0   canvas.line[stroke[i-1] point]  end endend
-```
+A long-standing pain point on the web has been the inability to animate between keyword values like `auto`. The `interpolate-size` property solves this problem, and there’s an [Interop 2027  proposal(opens in new tab)](https://github.com/web-platform-tests/interop/issues/1373) for it, alongside the related `calc-size()` function.
 
-A small ergonomic flaw like this would be magnified as it appeared throughout a program, obscuring the simplicity of the programmer’s actual intent.[<sup>1</sup>](https://beyondloom.com/blog/vectorgraphics.html#fn:1)
+The most common use case for this feature is to animate between `height: 0` and `height: auto`, for creating collapsible accordion-type UIs:
 
-Now that we can obtain and render interesting paths, let’s look at manipulating them.
+Result
 
-Combining paths is easy: Lil’s `,` operator concatenates lists. Concatenating a list of strokes and a list of strokes results in a list of strokes.
+The `interpolate-size` property is not yet supported in your browser. Here’s what it looks like in supported browsers:
 
-Scaling paths is more interesting. As [discussed previously](https://beyondloom.com/blog/conforming.html), many of Lil’s arithmetic operators will implicitly *conform* over nested listy structures. Multiplying a scalar number by a list of numbers *spreads* the multiplication to each element of the list, and the same process works recursively for nested lists. We can therefore uniformly scale points, strokes, or paths with simple multiplication[<sup>2</sup>](https://beyondloom.com/blog/vectorgraphics.html#fn:2):
+This is admittedly kind of a complex example, requiring other niche-but-well-supported CSS like `transition-behavior`. But the key thing is that `interpolate-size: allow-keywords` makes this sort of transition possible.
 
-```
-(11,22,33)*2# (22,44,66)((list 3,-5),(list 2,5),(list 0,3))*2# ((6,-10),(4,10),(0,6))
-```
+This proposal has been kicking around for a while now, and it’s been implemented in Chrome since 2024, so hopefully it makes it into Interop 2027!
 
-A non-uniform scale runs into trouble. We now want to multiply the x-coordinates of every point nested inside the path with a different value from the y-coordinates. If we multiply our path by a pair of numbers, the `*` operator doesn’t implicitly know that we want to “push” that conforming process down to the innermost pairs. When `*` is given lists to the left and to the right with different lengths, it treats the right list as if it were repeated or truncated to match the length of the left list:
+And even though it isn’t yet available in all browsers, we can start using it today as a progressive enhancement. Just be sure to gate the `transition` behind a `@supports` query, since otherwise a brief delay will be added to unsupported browsers.
 
-```
-(1,2,3,4)*(10,100)# (10,200,30,400)
-```
+One of the things that makes CSS Grid layout unique is that the grid children are positioned using rows/columns defined entirely in CSS. In every other layout mode, elements are positioned using other elements! In Table layout, for example, every grid cell has an associated `<td>` or `<th>` element.
 
-If we first *enclose* the right operand with `list`, `*` will repeat the element contained in that length-1 list and pair it up with each element of the left argument:
+There are a lot of upsides to CSS Grid, but one of the downsides is that it’s not as easy to add borders between grid cells. If a grid cell is empty, there’s no element to slap a `border: 1px solid` on!
 
-```
-(1,2,3,4)*list(10,100)# ((10,100),(20,200),(30,300),(40,400))
-```
+The [gap decorations  proposal(opens in new tab)](https://github.com/web-platform-tests/interop/issues/1374) introduces a new set of CSS properties that will allow us to use a border-like syntax on the grid itself. Check this out:
 
-For a path, we need to enclose the right operand twice: once to spread the scale to each stroke of the path, and then again to spread the scale to each point of the stroke:
+Result
 
-```
-p * list list scalex,scaley
-```
+The `rule` property is not yet supported in your browser. Here’s what it looks like in supported browsers:
 
-Scaling the x or y axis by a negative number will mirror a path horizontally or vertically, respectively:
+Like `border`, the `rule` property is a shorthand property that allows us to specify the width, color, and style (dashed/dotted/solid) of the line. We can also use `row-rule` and `column-rule` if we only want to draw lines between each row or column.
 
-```
-p * list list -1,1
-```
+Result
 
-Translating a path can use the same trick as scaling, but with `+` instead of `*`:
+When working with `position: sticky`, have you ever wished there was a way to know whether the element was currently “stuck” or not? For example, maybe you’ve wanted to change the background color of a sticky header when it becomes stuck to the top of the viewport.
 
-```
-p + list list transx,transy
-```
+This [proposal(opens in new tab)](https://github.com/web-platform-tests/interop/issues/1364) is for the implementation of a new type of container query, one that matches when a `position: sticky` element switches from its typical in-flow position to being anchored to the viewport. Check it out:
 
-To shear horizontally, we need to offset the x coordinate of every point in a path proportionally to the y-coordinate. We can use the `last` primitive to extract the y-coordinates of all the points in a path. The `@` operator allows us to “push” `last` down into the right operand. The `last` of a path is a stroke. The `last` of each stroke is a list of points. The `last` of each of each path is a list of lists of y-coordinates:
+Result
 
-```
-p: (list (list 1,2),(list 3,4)),(list (list 5,6),(list 7,8),(list 9,10))last p# ((5,6),(7,8),(9,10))last @ p# ((3,4),(9,10))last @ @ p# ((2,4),(6,8,10))
-```
+Here’s what this looks like, if this feature isn’t yet supported in your browser.
 
-Let’s call this kind of list of lists of scalars derived from the points in a path a *peel*.
+Interestingly, this new API isn’t *just* for sticky positioning; we can use it to query all sorts of scroll-related state. For example, we can tell whether a scroll container is scrolled to the top/bottom, which can be useful for showing those scroll-indicating gradients:
 
-To turn the y-coordinate peel back into a proper path, we can multiply each scalar by a pair, reusing our nonuniform scaling idiom:
+Result
 
-```
-(last @ @ p)*list list(10,0)# (((20,0),(40,0)),((60,0),(80,0),(100,0)))
-```
+If there's the ability to scroll up, `scrollable: top` matches, and so we reveal the pseudo-element floating over the top of the content. When scrolled all the way up, `scrollable: top` no longer applies, and so the gradient is hidden.
 
-Thus, for a complete horizontal shear:
+Here’s what this looks like in supported browsers:
 
-```
-p + (last @ @ p)*list list shearx,0
-```
+As we head into Interop’s 7th year, it's undeniable that the project has been a smashing success for the web. I’m so glad they keep building on this success!
 
-A vertical shear looks very similar:
+I know it’s kind of a weird time right now for web developers, and many of us are wondering whether we even need to care about this kind of stuff anymore. If we’re delegating all of our work to LLMs, do we still need to keep up with the latest-and-greatest CSS features?
 
-```
-p + (first @ @ p)*list list 0,sheary
-```
+**Personally, I think it’s more important than ever.** We can’t expect LLMs to use modern CSS features when so much of their training data is years old. Most of the features I’ve shared in this post can be used today as a progressive enhancement, and if history is any guide, many of them will soon be widely available.
 
-If you wanted to transpose a path, you could peel out the x and y coordinates separately and blend them back together using the same sort of idiom, but you could also use the `rev` (reverse) primitive directly to swap the elements of each point:
+If we want to build the best possible user experiences, we’ll need to guide our agents to take advantage of modern web features, which requires us to know about them! This is something I dug into in [a newsletter issue](https://www.joshwcomeau.com/email/wham-launch-005-elephant-2-p/) earlier this year: deep technical expertise remains *incredibly* worthwhile in the agentic era.
 
-```
-rev @ @ p
-```
-
-Transpositions aren’t often useful alone, but combining a mirror and a transpose produces a 90 degree rotation.
-
-A more general way to rotate a path is to take advantage of Lil’s `heading`, `mag`, and `unit` primitives.
-
-The `mag` primitive calculates the vector magnitude of a number or list of numbers. For a single number, this is the absolute value. For a pair of numbers- like a point- it gives the Euclidean distance between that point and the origin. It also has special conforming behavior: it descends recursively through nested lists until it arrives at a number or flat list of numbers. This behavior makes it perfect for producing a peel from a path:
-
-```
-p: (list (list 1,2),(list 3,4)),(list (list 5,6),(list 7,8),(list 9,10))mag p# ((2.236068,5),(7.81025,10.630146,13.453624))
-```
-
-The `heading` primitive conforms like `mag`, but produces a peel of angles (in radians) between the origin and each point:
-
-```
-heading p# ((1.107149,0.927295),(0.876058,0.851966,0.837981))
-```
-
-Used together, `mag` and `heading` decompose a path (in rectangular coordinates) into polar coordinates. The `unit` primitive converts a peel of angles as obtained from `heading` and produces a path where every point has *unit distance* from the origin (`mag` 1). For any path `p`[<sup>3</sup>](https://beyondloom.com/blog/vectorgraphics.html#fn:3),
-
-```
-p ~ (mag p)*unit heading p
-```
-
-A complete path rotation around the origin by `angle` radians is therefore:
-
-```
-(mag p)*unit angle+heading p
-```
-
-Primitives like `unit` also offer a loop-free way to construct various strokes like regular polygons, arcs, and ovals. Enclosing the result with `list` gives us a path:
-
-```
-on ngon sides radius do list radius*unit 2*pi*(range sides+1)/sidesend
-```
-
-This completes a set of Lil idioms for affine transformations of paths.
-
-What else can we do?
-
-If we start with a path that is centered about its origin, we could scale every point in the path by its own `mag`, producing a perspective distortion. Given a tween value `t` that varies between 0 and 1 and a few appropriately-chosen constants,
-
-```
-p*.3+(mag p)*.01*t
-```
-
-If we generate a stroke of random [-1,1] offsets, we could add it to every stroke in a path in order to create a rudimentary line-boil-like effect. The length of our random stroke doesn’t matter, since it will be truncated or extended automatically by `+`, but having roughly as many points as the maximum stroke in the path will make the results look a bit better. Let’s say 25 points:
-
-```
-p+list 2 window random[3 2*25]-1
-```
-
-Offsetting the points of a path by multiple offset sinusoids produces a different kind of wiggly effect, more like a flag flapping in the wind or the rippling surface of a liquid. To manipulate each axis separately, we’ll use a similar idiom to our shear effect. In this example `f` is a frame counter that continuously increments, like `sys.frame`:
-
-```
-px:first @ @ p((sin(f/4)+.20*px)*list list 1,0)+((sin(f/5)+.30*px)*list list 0,1)+p
-```
-
-Combine more sinusoids blended into both axes for a more chaotic, subtly richer effect:
-
-```
-px:first @ @ ppy:last  @ @ p((sin(f/4)+.20*px)*list list 1.5,0.6)+((sin(f/5)+.30*px)*list list 0.6,0.2)+((cos(f/7)+.05*py)*list list 0.0,1.2)+((cos(f/2)+.04*py)*list list 0.1,0.2)+p
-```
-
-These techniques are just scratching the surface of what’s possible in a few lines of Lil!
-
-Why not do some tinkering of your own with the examples in [the hershey module’s interactive docs](http://beyondloom.com/decker/hershey.html#path_wave)?
-
-[back](https://beyondloom.com/blog/index.html)
-
-1. Fencepost errors are a particularly odious class of programming mistake that APL–family languages often avoid by using abstract iteration patterns and a rich set of primitive operators instead of loop–carried indices. Lil can handle this specific situation without resorting to explicit list indexing by using `-2 window stroke` to slice the list `stroke` into overlapping length–2 “windows”, pairing up each point with its immediate successor. [↩︎](https://beyondloom.com/blog/vectorgraphics.html#fnref:1)
-2. If two paths *happen to have* an identical ragged structure, we can blend them with any of the primitive arithmetic operators at our disposal– `+`, `*`, `|` (max), `&` (min), etc. The same applies to strokes of the same length or any pair of points. [↩︎](https://beyondloom.com/blog/vectorgraphics.html#fnref:2)
-3. Modulo floating–point error, naturally. [↩︎](https://beyondloom.com/blog/vectorgraphics.html#fnref:3)
+Finally, I’d strongly encourage you to [rank your own top  choices(opens in new tab)](https://interop-rank.fxdx.dev/)! There’s a ton of great proposals in this list, including some exciting JavaScript APIs like Temporal which didn’t make sense to include in this blog post.

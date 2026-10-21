@@ -1,151 +1,69 @@
-One of my favorite labs in college so far has been my Digital Logic Design Lab.
-Two years ago the final few labs of the course involved building a VGA driver.
-While that might sound intimidating, it was a surprisingly attainable project.
-(Even if an inordinate amount of time was spent debugging)
+October is here, and it’s almost time for Mastodon’s 5.0 release! We announced our plans for big changes [in an early preview](https://blog.joinmastodon.org/2026/08/5.0-laying-the-foundation/) back in August. In this companion article, we’re hoping to shed light on some of the decisions behind this major UI overhaul.
 
-> Heads up! I spent a bunch of time making these visuals. The buttons with *red*
-> lights are interactive! Click them to change how the simulations behave.
+Between the feedback we’ve gathered during Discovery Week, an event in which we spent a week doing surveys and workshop sessions with volunteers from the community, and Mastodon’s 10th anniversary coming up, we were determined to deliver something notable.
 
-## What Is VGA?
+## What we were facing
 
-VGA(Video Graphics Array) is a display standard that came with the IBM PS/2 in
-1987. The protocol itself is quite reasonable, if you know how displays in that
-era worked. The display technology of the time was Cathode Ray Tubes (CRTs),
-which were large screens with curved glass that weighed over 80 lbs. The way
-those displays worked is they shot an electron beam out to a phosphorus layer
-that would scatter the electrons as visible light. Because it only used a single
-beam it had to draw pixel by pixel, unlike modern displays which display a whole
-frame at a time. Since the beam is swinging from line to line, electron beam
-needs time to actually swing both horizontally and vertically. The behavior of
-the swinging is controlled by the HSync and VSync signals.
+### Invisible binds
 
-What keeps the display fully filled is the persistence of vision that our eyes
-do. The following graphic is an approximation of how this would look like.
-In reality there would only be one pixel ‘on’ at a time, the brightness
-change here is just to illustrate the image on modern displays. If you
-want to see how this works in slow mo check out
-[this video from the Slow Mo Guys](https://www.youtube.com/watch?v=3BJU2drrtCM).
+Working on Mastodon’s engineering team can sometimes feel like harvesting wheat one stalk at a time. We make a lot happen with limited resources–far more limited than most people realise–but there’s always more to do. There’s more tech and UX debt than is obvious to the naked eye, so something that seems simple on the outside may be often limited by backend constraints or architecture shifts that can’t easily be changed. So we had to make concessions about what we could realistically fit into our 5.0 plans, and leave some work for later.
 
-## Implementation Approach
+### Competing needs
 
-| Screen Refresh Rate | Pixel Frequency |
-| --- | --- |
-| 60Hz | 25.175 MHz |
+What’s better for one person can be worse for another, and we’ve had to keep that in mind throughout the redesign. We’re acutely aware that such a divide is most pronounced between longstanding users and newcomers. Mastodon’s current UI is beloved by many longtime users, since it can be very powerful once you’ve learned its secrets and quirks. However, newcomers should be able to dive in without being overwhelmed. To keep the community fresh, alive and diverse, we need to break down the barriers to joining, so when you bring your friends, they can find their way around without a manual.
 
-According to tables from the incredible site
-[TinyVGA](https://web.archive.org/web/20250221215029/http://www.tinyvga.com/vga-timing/640x480@60Hz)
-we need approximately a `25` MHz clock to send all our pixels out in time. Luckily
-the FPGA that the course uses, [the DE10-lite from terasIC](https://www.terasic.com.tw/cgi-bin/page/archive.pl?Language=English&CategoryNo=234&No=1021),
-has a 50MHz clock we can reference as our clock in our design.
-Luckily because we control the HSync and VSync signals, our display can be re-synchronized to our nonstandard clock
-which alleviates the worry about our clock getting out of sync due to our clock not matching the `25.175` MHz exactly.
+## What we believe in
 
-One of the design recommendations we were given was designing a basic SystemVerilog
-module that would toggle a signal every other clock cycle, in essence a very
-crude clock divider. This simple trick gets us from a `50` MHz board clock
-to the `25` MHz VGA clock.
+The redesign was grounded in these principles:
 
-Unfortunately, we can not just display color information to the display all the
-time. Doing that on a real CRT could cause damage to the walls of the tube since
-you’d be shooting electrons at the walls of the panel.
+**Clarity trumps convenience.** The most powerful interface can be useless if it’s too difficult to figure out. Making things more clear and obvious can result in more friction, and that can be necessary.
 
-In order to keep track of when to enable or disable our display color signals and when
-to pull the HSync and VSync low, we need some counters to track where in a given
-frame we are.
+**Leave room for what’s to come.** Navigation may feel emptier for now, and that is on purpose. We have lots of improvements planned that we need to leave space for, to avoid moving more elements around in the future.
 
-| Scaline Part | Pixels |
-| --- | --- |
-| Visible area | 640 |
-| Front Porch | 16 |
-| Sync Pulse | 96 |
-| Back Porch | 16 |
+**Small improvements matter.** We might not be able to fix everything overnight, but we’ll continue to look for small but meaningful improvements to accessibility and usability.
 
-| Scaline Part | Pixels |
-| --- | --- |
-| Visible area | 480 |
-| Front Porch | 33 |
-| Sync Pulse | 2 |
-| Back Porch | 10 |
+## What’s changing in 5.0
 
-Again consulting our ’timing’ tables from TinyVGA, we can see that we need to
-count to 640 for the visible area horizontally, and another 48 + 96 + 16 = 160
-for the off-screen area. This makes a total of 800 ‘pixels’<sup>[1](https://lukaswerner.com/post/2026-10-20@bottom-up-vga#fn:1)</sup>, and fits
-comfortably in 10 bits. For the vertical area we need to count to 480 for the
-visible and 33 + 2 + 10 = 45 for the off-screen area, giving a total of 525
-‘pixels.’
+Our previous blog post covers most of the big stuff: We’re moving away from the embedded composer and adopting a pop-out composer with new controls for visibility and other post settings. Navigation is simplified and organised in a more intuitive way and create space for future new features.
 
-## Simulating
+In your feeds, the posts themselves have been rebuilt from the ground up, giving a fresh look to the places we all spend the most time. We’re also excited to roll out a few new colour themes, which took a truly monumental effort from our engineering team since the start of the year to tokenise our design system.
 
-The first module I started to work on was on a counting module as that is where
-the bulk of the logic sits. By using a parameterized design I was able to just make a single
-module that keeps an output line low for a certain number of cycles and high
-until it resets at another given reset count.
+The new design includes many small affordances, such as hiding a user’s boosts directly from the post menu, following and unfollowing hashtags right from the post, and hiding your own posts and boosts in your home feed.
 
-Now that it can count a whole frame we need to use these counts to figure out
-when we can display image data on the color lines. This is only during that
-display period, between 35 to 784 for the horizontal lines and 33 to 520 for
-the vertical lines. Now we just need to make sure that we don’t increment our
-vertical lines until we’ve got to the end of the horizontal line and viola! We
-have a thing that can count a whole frame and tell us when we are allowed to
-display.
+## Notable iterations (since the August blog post)
 
-Now comes the color display part. Because the DE10-lite board only has 10
-switches, and the full color spectrum of the VGA is 4,096 colors (3 colors with
-4 bits each, 12 total bits) we need to quickly map fewer switches to a broader
-range of color outputs. Using a mux and the following table we can map a larger
-portion of the color space for our limited inputs.
+Since our original announcement, we’ve iterated a lot on the feedback we’ve been receiving, so you’ll notice that the UI looks a bit different than what we’ve shown in that blog post. Here’s what’s changed:
 
-| Input | Output |
-| --- | --- |
-| 00 | 0000 |
-| 01 | 0101 |
-| 10 | 1010 |
-| 11 | 1111 |
+- From bottom right to bottom centre: The position of the composer in the bottom right was controversial. The biggest complaint was that the composer was so far away from the main navigation. However, keeping the composer embedded within the navigation is too limiting, bottom left docking would hide key navigational elements, and resorting to a modal would mean users could lose context of something they’re referencing or replying to. Until we can offer user settings for docking preferences, we’re adjusting to a bottom-centre placement–and the composer can be fully minimised without losing a draft in progress.
+- The ‘New post’ action has changed: It’s a more prominent button in the navigation, but moved further down to reduce the distance the mouse has to travel to reach the popout composer. The floating button on mobile launches the composer immediately instead of opening a sub-menu, because we received feedback that users expect to initiate the ‘New message’ action elsewhere.
+- Composer visibility settings are still contextual, but considerably simplified: We attempted to show some of the recipients in limited visibility posts, but it confused some users more than it clarified things. Instead of dynamically updating the visibility dropdown with mentioned names, we show a few preset labels that still accurately describe the audience.
+- ‘Sensitive’ content has been broken into two settings: Users have historically been able to blur media by adding a blank content warning to their post. This was a powerful yet misunderstood feature, and we’ve received feedback about it for quite some time. To keep the existing functionality but present it in a clearer way, sensitive media and content warnings are now separate, dedicated options inside the composer’s gear menu.
+- Quote settings have moved: You cannot change the visibility of a post after publishing it, but you can change its quote settings. We’re now grouping these settings differently to keep the ones that can be changed separate from the ones that cannot.
 
-At this point in the lab I estimate that I had spent well over 10+ hours working
-on getting the timings to be correct and going down a few wild goose chases
-that only proved that I had to rework parts of my design.
+## FAQ
 
-## It Works?! - Hardware
+**How did you make sure these changes reflect the needs of actual Mastodon users?**
 
-Simulating the driver only gets you so far, it is another thing to see the screen light up.
-A few simple pin assignments to the VGA port and hopefully everything is working properly.
+We ran a week of surveys and workshop sessions with volunteers from the community to figure out what works for people and what doesn’t. We also monitored feedback from the initial blog post, then tested our prototype, first internally, then with users, gathering more feedback on our [new Discourse space](https://community.joinmastodon.org/) while iterating on the designs.
 
-## Adding an Image
+**What about existing users having to re-learn the interface?**
 
-At this point this was the end of the first of the two labs for this project.
-The second lab was getting an image working on the screen instead of just color.
-The essence of the lab was loading the image the FPGA board’s ROM and displaying
-it when we decided, in my case in the top left of the screen.
+We understand that an interface you’ve been using for years changing under you can be frustrating. Whenever possible, we’ve based the redesign in existing UI patterns used frequently across the web, so that learning the new way would be easy. We are also communicating clearly about those changes through our blog and announcements to ensure that this transition is not a surprise and the reasons behind it are clearly laid out.
 
-In reality this involved creating a memory initialization file from the desired
-image, in my case Asterix from the [cartoon Asterix and Obelix](https://asterix.com/en/).
-Since the original program was written in python, and I had some dependency
-issues, I decided to [rewrite the program to Go](https://github.com/lukasmwerner/mif-maker)
-to have a better understanding of the file format, and make it more cross-platform
-in case other students were also having issues. (It also helped me get a job
-TA’ing for the course.)
+Additionally, our decision to fill less space in the 5.0 interface is precisely so we can minimize jarring changes across future releases.
 
-From then on it is fairly straightforward, our horizontal and vertical counters
-(used for HSync & VSync) are essentially our pixel counts, using a basic offset
-into ROM we can access our image instead of our color.
+**Why is everything so round?**
 
-Since I wanted to go for extra credit, I implemented transparency support using
-the transparency (alpha channel) data saved in the last byte in each pixel.
-There were three ways I tried to do this. The first was just for checking if a
-pixel was transparent and then only showing the image if it was fully opaque.
-This yielded a working, but blocky image as the edges of Asterix were blended
-with transparency. The next approaches were trying to get [alpha
-compositing](https://en.wikipedia.org/wiki/Alpha_compositing) to work. Alpha
-compositing requires multiplication to work, which I was told was expensive
-gates-wise so I initially opted to try to cheat my way around it using a bit
-shifting hack I read about online. It worked okay, but had some ‘rounding’ issues
-with the background color making it look slightly different from the true background
-which is why for the final version I demoed for a grade used the real multiplication.
+We’re headed towards more roundness to invite a friendlier brand tone, and to make Mastodon feel more native within modern browsers (most of which have adopted a rounded aesthetic).
 
-- Asterix, duplicated for a demo, running on my custom FPGA based VGA driver. Using regular multiplication
-- Hacky bit manipulation based alpha compositing
-- Basic boolean alpha channel mixing
-- Basic image rendering (no alpha channel compositing)
+**Can I offer feedback on the redesign?**
 
-One of my favorite labs in college so far has been my Digital Logic Design Lab. Two years ago the final few labs of the course involved building a VGA driver. While that might sound intimidating, it w...
+We hope you do! Head to [our new Discourse forum](https://community.joinmastodon.org/). While we can’t immediately respond to every topic, we will be reading through each piece of feedback. Please remember to be civil even if you don’t like something: We are people too.
+
+If you are on mastodon.online or another server running nightly updates, you already have early access to the redesign. We are planning to enable this new design on [mastodon.social](http://mastodon.social) tomorrow, on the 20th October, and then release the first Mastodon 5.0 beta version so server administrators can try it out as well.
+
+What you share in our forum could help us make a few more improvements before 5.0 is officially released to the wider Mastodon universe in a few weeks.
+
+**What’s next?**
+
+There are essential pages that still desperately need an overhaul: Search, Settings, Messages, and Notifications, to name a few. It’s unlikely we’ll be able to redesign all of those in 5.1. We can say with certainty that the search & discovery experience will be a priority, though.

@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-21T16:49:32Z",
+  "updated": "2026-10-21T21:23:32Z",
   "items": [
     {
       "id": "devto-4858196",
@@ -230,27 +230,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4840194",
-      "title": "Solodesk-Ai",
-      "desc": "By Shaurya Tiwari | 4 min read",
-      "tag": "tutorial",
-      "published": "2026-10-12T20:49:24Z",
-      "order": 20,
-      "url": "https://dev.to/dr5t/solodesk-ai-lpe",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fy11o4ykev6b1y23stmfi.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAABAED/8QAFgEBAQEAAAAAAAAAAAAAAAAAAgAB/9oADAMBAAIQAxAAAAESzpYhEY7f/8QAGBABAAMBAAAAAAAAAAAAAAAAAAECEDH/2gAIAQEAAQUCUX4hG//EABURAQEAAAAAAAAAAAAAAAAAAAAR/9oACAEDAQE/AVf/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAWEAADAAAAAAAAAAAAAAAAAAAAIFH/2gAIAQEABj8CI/8A/8QAGxAAAwACAwAAAAAAAAAAAAAAAAERITEQQYH/2gAIAQEAAT8hWxHN+iXXY+DqPBcDyf/aAAwDAQACAAMAAAAQ3J//xAAWEQEBAQAAAAAAAAAAAAAAAAAAETH/2gAIAQMBAT8QrT//xAAXEQADAQAAAAAAAAAAAAAAAAAAAREx/9oACAECAQE/ELEaj//EABsQAQACAwEBAAAAAAAAAAAAAAEAESExQVFx/9oACAEBAAE/EM/UJmFx6gqm9EMzeKkAr5DA3a3eoizTm+x9Az//2Q==",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4848909",
       "title": "Git, Docker, and IPFS All Hide the Same Beautiful Idea",
       "desc": "By James Anderson | 7 min read",
       "tag": "tutorial",
       "published": "2026-10-14T08:50:45Z",
-      "order": 21,
+      "order": 20,
       "url": "https://dev.to/james_anderson_h/git-docker-and-ipfs-all-hide-the-same-beautiful-idea-3j0",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Frjjnmpeah3gqjvc4u80m.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAAECBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHhZiUh/8QAFhABAQEAAAAAAAAAAAAAAAAAEQAg/9oACAEBAAEFAiN//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAGRABAAIDAAAAAAAAAAAAAAAAAQAxEBEg/9oACAEBAAE/IQJcQW41z//aAAwDAQACAAMAAAAQnX//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/ED//xAAdEAEAAQMFAAAAAAAAAAAAAAABABARITFRcZHR/9oACAEBAAE/EDK2Y2mpvAQMPsEl8Tqg2p//2Q==",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4840194",
+      "title": "Solodesk-Ai",
+      "desc": "By Shaurya Tiwari | 4 min read",
+      "tag": "tutorial",
+      "published": "2026-10-12T20:49:24Z",
+      "order": 21,
+      "url": "https://dev.to/dr5t/solodesk-ai-lpe",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fy11o4ykev6b1y23stmfi.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAABAED/8QAFgEBAQEAAAAAAAAAAAAAAAAAAgAB/9oADAMBAAIQAxAAAAESzpYhEY7f/8QAGBABAAMBAAAAAAAAAAAAAAAAAAECEDH/2gAIAQEAAQUCUX4hG//EABURAQEAAAAAAAAAAAAAAAAAAAAR/9oACAEDAQE/AVf/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAWEAADAAAAAAAAAAAAAAAAAAAAIFH/2gAIAQEABj8CI/8A/8QAGxAAAwACAwAAAAAAAAAAAAAAAAERITEQQYH/2gAIAQEAAT8hWxHN+iXXY+DqPBcDyf/aAAwDAQACAAMAAAAQ3J//xAAWEQEBAQAAAAAAAAAAAAAAAAAAETH/2gAIAQMBAT8QrT//xAAXEQADAQAAAAAAAAAAAAAAAAAAAREx/9oACAECAQE/ELEaj//EABsQAQACAwEBAAAAAAAAAAAAAAEAESExQVFx/9oACAEBAAE/EM/UJmFx6gqm9EMzeKkAr5DA3a3eoizTm+x9Az//2Q==",
       "color": "#3B49DF"
     },
     {
@@ -278,27 +278,15 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4813454",
-      "title": "What Agent Builders Can Borrow from OpenAI's Math Research",
-      "desc": "By Sergei Parfenov | 4 min read",
+      "id": "devto-4884560",
+      "title": "Where Do Your Users' Passwords Actually Live? Self-Hosted vs Managed Keycloak",
+      "desc": "By Hadil Ben Abdallah | 12 min read",
       "tag": "tutorial",
-      "published": "2026-10-07T16:52:57Z",
+      "published": "2026-10-21T09:06:20Z",
       "order": 24,
-      "url": "https://dev.to/p0rt/what-agent-builders-can-borrow-from-openais-math-research-53mn",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto/https%3A%2F%2Fsergei-parfenov.com%2Fassets%2Fcovers%2Fopenai-math-symptomato.webp",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwQB/8QAFQEBAQAAAAAAAAAAAAAAAAAAAQL/2gAMAwEAAhADEAAAAZlBqKA0yv/EABgQAAMBAQAAAAAAAAAAAAAAAAABAhEh/9oACAEBAAEFAiZKjlTgnhN8qmaz/8QAFREBAQAAAAAAAAAAAAAAAAAAAAL/2gAIAQMBAT8BQ//EABURAQEAAAAAAAAAAAAAAAAAAAAB/9oACAECAQE/AVf/xAAaEAABBQEAAAAAAAAAAAAAAAAxAAECEBEg/9oACAEBAAY/Asi6PAv/xAAbEAADAAMBAQAAAAAAAAAAAAAAAREhMVFBkf/aAAgBAQABPyF5dM4K00Yj5EZSsa+Bq1XpNfYWe9I//9oADAMBAAIAAwAAABDYT//EABcRAAMBAAAAAAAAAAAAAAAAAAABESH/2gAIAQMBAT8QmE1n/8QAFxEBAQEBAAAAAAAAAAAAAAAAAQARMf/aAAgBAgEBPxA7By//xAAdEAEAAgMBAAMAAAAAAAAAAAABABEhQVExYaHR/9oACAEBAAE/ECGTojB2BrdWj34sgyiUJq/K5EywnHIjpbaDslSvWGma5EJN5fuKCIbR3r9n/9k=",
-      "color": "#3B49DF"
-    },
-    {
-      "id": "devto-4812044",
-      "title": "I Turned 149k Messy Images into an Offline Recognition System",
-      "desc": "By Michellebuchiokonicha | 13 min read",
-      "tag": "tutorial",
-      "published": "2026-10-08T06:31:39Z",
-      "order": 25,
-      "url": "https://dev.to/michellebuchiokonicha/i-turned-149k-messy-images-into-an-offline-recognition-system-3cp3",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F1mh3tg2u6x2dj6vgt8b3.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAAEDAv/EABYBAQEBAAAAAAAAAAAAAAAAAAEAAv/aAAwDAQACEAMQAAABwnLJZEp//8QAGhAAAgIDAAAAAAAAAAAAAAAAAREAIQISMf/aAAgBAQABBQJwGqeZGscKfT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAWEQEBAQAAAAAAAAAAAAAAAAAAATH/2gAIAQIBAT8BlY//xAAXEAEAAwAAAAAAAAAAAAAAAAAQITFB/9oACAEBAAY/AmGsP//EABoQAAMBAQEBAAAAAAAAAAAAAAABESFBMVH/2gAIAQEAAT8hqdEtNXgvl6W02sUiwfc2DIK6RLh//9oADAMBAAIAAwAAABAe/wD/xAAXEQEBAQEAAAAAAAAAAAAAAAABABEh/9oACAEDAQE/EDpBt//EABcRAAMBAAAAAAAAAAAAAAAAAAARIQH/2gAIAQIBAT8QojVR/8QAHBABAQEBAAIDAAAAAAAAAAAAAREAIUFRMXGB/9oACAEBAAE/EFakPbdDjACNo+tBQPFfDkmEIHm4pkvNcY/Jf3XgGhi8vvS30g3/2Q==",
+      "url": "https://dev.to/hadil/where-do-your-users-passwords-actually-live-self-hosted-vs-managed-keycloak-97e",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fogku6cw7q1ps8kq6ooix.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAwEBAAAAAAAAAAAAAAAAAQIDAAT/xAAWAQEBAQAAAAAAAAAAAAAAAAAAAgP/2gAMAwEAAhADEAAAAeB02kUmQf/EABYQAAMAAAAAAAAAAAAAAAAAAAAgQf/aAAgBAQABBQIrf//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABYQAQEBAAAAAAAAAAAAAAAAAABBIP/aAAgBAQAGPwJE1//EABoQAAICAwAAAAAAAAAAAAAAAAABESEgMZH/2gAIAQEAAT8hQrhAm9cDx//aAAwDAQACAAMAAAAQ1U//xAAVEQEBAAAAAAAAAAAAAAAAAAAAAf/aAAgBAwEBPxCo/8QAFhEAAwAAAAAAAAAAAAAAAAAAAAER/9oACAECAQE/EFBw/8QAHRAAAwEAAQUAAAAAAAAAAAAAAAERITFRYXGBkf/aAAgBAQABPxB401N6qj6Ed4NKXF9DXc9KCeSIT8jd5Lkh/9k=",
       "color": "#3B49DF"
     },
     {
@@ -307,10 +295,22 @@
       "desc": "By Eyal Bukchin | 7 min read",
       "tag": "tutorial",
       "published": "2026-10-08T10:33:43Z",
-      "order": 26,
+      "order": 25,
       "url": "https://dev.to/metalbear/how-our-engineering-team-uses-ai-part-ii-meat-proxies-148g",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fmetalbear.com%2Fblog%2Fengineering-ai-use-part-2%2Fthumbnail.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAQMAAgT/xAAWAQEBAQAAAAAAAAAAAAAAAAABAAP/2gAMAwEAAhADEAAAAYDXYY/MS//EABoQAAIDAQEAAAAAAAAAAAAAAAECABEyEDH/2gAIAQEAAQUCbUEoAt7XE3//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAXEQEBAQEAAAAAAAAAAAAAAAABABEh/9oACAECAQE/AeyO3//EABcQAQEBAQAAAAAAAAAAAAAAAAEAECH/2gAIAQEABj8CdOTpf//EABsQAQACAgMAAAAAAAAAAAAAAAEAESFxEDGR/9oACAEBAAE/IV6S4Ry9EsJS0gvdw1BkW25//9oADAMBAAIAAwAAABC+f//EABYRAQEBAAAAAAAAAAAAAAAAAAARAf/aAAgBAwEBPxBcj//EABkRAAMAAwAAAAAAAAAAAAAAAAABESExQf/aAAgBAgEBPxBLnQ/Vwf/EABwQAQADAAIDAAAAAAAAAAAAAAEAESFRsTFhcf/aAAgBAQABPxCgPbthaXm9FnNwIjkLnnVa7gA3YKNqmUuEOv2f/9k=",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4812044",
+      "title": "I Turned 149k Messy Images into an Offline Recognition System",
+      "desc": "By Michellebuchiokonicha | 13 min read",
+      "tag": "tutorial",
+      "published": "2026-10-08T06:31:39Z",
+      "order": 26,
+      "url": "https://dev.to/michellebuchiokonicha/i-turned-149k-messy-images-into-an-offline-recognition-system-3cp3",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F1mh3tg2u6x2dj6vgt8b3.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAAEDAv/EABYBAQEBAAAAAAAAAAAAAAAAAAEAAv/aAAwDAQACEAMQAAABwnLJZEp//8QAGhAAAgIDAAAAAAAAAAAAAAAAAREAIQISMf/aAAgBAQABBQJwGqeZGscKfT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAWEQEBAQAAAAAAAAAAAAAAAAAAATH/2gAIAQIBAT8BlY//xAAXEAEAAwAAAAAAAAAAAAAAAAAQITFB/9oACAEBAAY/AmGsP//EABoQAAMBAQEBAAAAAAAAAAAAAAABESFBMVH/2gAIAQEAAT8hqdEtNXgvl6W02sUiwfc2DIK6RLh//9oADAMBAAIAAwAAABAe/wD/xAAXEQEBAQEAAAAAAAAAAAAAAAABABEh/9oACAEDAQE/EDpBt//EABcRAAMBAAAAAAAAAAAAAAAAAAARIQH/2gAIAQIBAT8QojVR/8QAHBABAQEBAAIDAAAAAAAAAAAAAREAIUFRMXGB/9oACAEBAAE/EFakPbdDjACNo+tBQPFfDkmEIHm4pkvNcY/Jf3XgGhi8vvS30g3/2Q==",
       "color": "#3B49DF"
     },
     {

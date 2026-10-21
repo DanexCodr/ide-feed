@@ -1,59 +1,151 @@
-Between September 9 and October 7, 2026, an unauthorized party used stolen service account credentials to access certain PingCAP internal systems, copy data, and obtain source code. PingCAP became aware of the incident on October 7 and began disabling the affected credentials the same day.
+One of my favorite labs in college so far has been my Digital Logic Design Lab.
+Two years ago the final few labs of the course involved building a VGA driver.
+While that might sound intimidating, it was a surprisingly attainable project.
+(Even if an inordinate amount of time was spent debugging)
 
-An external incident response firm reviewed PingCAP’s production systems and found no evidence that the attacker ran commands or maintained persistent access in the systems reviewed. That finding does not change the data exposure described below. **With support from outside counsel and third-party forensic specialists, there is no evidence that data stored in TiDB was impacted. We keep on investigating and will provide updates on any new findings.** As of October 14, all identified compromised credentials have been invalidated, and the identified unauthorized access paths have been blocked. The remaining investigation focuses on customer-specific impact and possible exploitation before remediation.
+> Heads up! I spent a bunch of time making these visuals. The buttons with *red*
+> lights are interactive! Click them to change how the simulations behave.
 
-## What This Means for Customer Data
+## What Is VGA?
 
-Based on our investigation with an external incident response firm, including a review of the exported records, the categories below describe the customer data identified as affected to date. These findings do not mean that every customer had every category of information exposed. We are determining the scope for each customer.
+VGA(Video Graphics Array) is a display standard that came with the IBM PS/2 in
+1987. The protocol itself is quite reasonable, if you know how displays in that
+era worked. The display technology of the time was Cathode Ray Tubes (CRTs),
+which were large screens with curved glass that weighed over 80 lbs. The way
+those displays worked is they shot an electron beam out to a phosphorus layer
+that would scatter the electrons as visible light. Because it only used a single
+beam it had to draw pixel by pixel, unlike modern displays which display a whole
+frame at a time. Since the beam is swinging from line to line, electron beam
+needs time to actually swing both horizontally and vertically. The behavior of
+the swinging is controlled by the HSync and VSync signals.
 
-Information
-What the Investigation Confirmed
-What Remains to Be Determined
+What keeps the display fully filled is the persistence of vision that our eyes
+do. The following graphic is an approximation of how this would look like.
+In reality there would only be one pixel ‘on’ at a time, the brightness
+change here is just to illustrate the image on modern displays. If you
+want to see how this works in slow mo check out
+[this video from the Slow Mo Guys](https://www.youtube.com/watch?v=3BJU2drrtCM).
 
-TiDB Cloud accounts and product use
-Exported records included user names and email addresses, organization and project associations, and SQL editor text and errors. Some records also contained organization, project, and cluster identifiers.
-Particular customers’ records.
+## Implementation Approach
 
-Business and billing information
-Exported records included customer contacts, contract terms, orders, pricing, payment terms, and billing configuration.
-The individual customer impact scope is to be determined. The findings do not mean every customer had every category of information exposed.
+| Screen Refresh Rate | Pixel Frequency |
+| --- | --- |
+| 60Hz | 25.175 MHz |
 
-Credentials
-An exported table contained encrypted TiDB Cloud API-key values. One investigator-owned value tested by the external firm could not be used directly as an API key.
-Whether other usable credentials were exposed. The attacker’s claims about credentials in support materials have not been verified.
+According to tables from the incredible site
+[TinyVGA](https://web.archive.org/web/20250221215029/http://www.tinyvga.com/vga-timing/640x480@60Hz)
+we need approximately a `25` MHz clock to send all our pixels out in time. Luckily
+the FPGA that the course uses, [the DE10-lite from terasIC](https://www.terasic.com.tw/cgi-bin/page/archive.pl?Language=English&CategoryNo=234&No=1021),
+has a 50MHz clock we can reference as our clock in our design.
+Luckily because we control the HSync and VSync signals, our display can be re-synchronized to our nonstandard clock
+which alleviates the worry about our clock getting out of sync due to our clock not matching the `25.175` MHz exactly.
 
-Customer clusters
-Investigators found no evidence that the attacker ran commands or maintained persistent access in the production systems they reviewed.
-This finding does not resolve the data exposure above. PingCAP is checking production logs for any exploitation of vulnerabilities before they were fixed.
+One of the design recommendations we were given was designing a basic SystemVerilog
+module that would toggle a signal every other clock cycle, in essence a very
+crude clock divider. This simple trick gets us from a `50` MHz board clock
+to the `25` MHz VGA clock.
 
-## Actions Completed by October 14
+Unfortunately, we can not just display color information to the display all the
+time. Doing that on a real CRT could cause damage to the walls of the tube since
+you’d be shooting electrons at the walls of the panel.
 
-Action
-Evidence and Outcome
+In order to keep track of when to enable or disable our display color signals and when
+to pull the HSync and VSync low, we need some counters to track where in a given
+frame we are.
 
-Restrict compromised access
-Beginning October 7, PingCAP disabled or revoked most affected accounts and credentials. By October 10, it had deleted additional compromised credentials and removed excessive permissions between cloud projects. As of October 14, all identified unauthorized access paths have been blocked.
+| Scaline Part | Pixels |
+| --- | --- |
+| Visible area | 640 |
+| Front Porch | 16 |
+| Sync Pulse | 96 |
+| Back Porch | 16 |
 
-Fix identified vulnerabilities
-The external firm reported four vulnerabilities on October 12 – 13. PingCAP fixed all four by October 14, and the firm retested each fix and confirmed that all four vulnerabilities had been remediated.
+| Scaline Part | Pixels |
+| --- | --- |
+| Visible area | 480 |
+| Front Porch | 33 |
+| Sync Pulse | 2 |
+| Back Porch | 10 |
 
-Improve visibility
-On October 10, PingCAP enabled additional cloud storage access logging in an affected project to improve visibility into future activity.
+Again consulting our ’timing’ tables from TinyVGA, we can see that we need to
+count to 640 for the visible area horizontally, and another 48 + 96 + 16 = 160
+for the off-screen area. This makes a total of 800 ‘pixels’<sup>[1](https://lukaswerner.com/post/2026-10-20@bottom-up-vga#fn:1)</sup>, and fits
+comfortably in 10 bits. For the vertical area we need to count to 480 for the
+visible and 33 + 2 + 10 = 45 for the off-screen area, giving a total of 525
+‘pixels.’
 
-## Work Continuing (Status as of October 19)
+## Simulating
 
-Priority
-Status as of October 19
+The first module I started to work on was on a counting module as that is where
+the bulk of the logic sits. By using a parameterized design I was able to just make a single
+module that keeps an output line low for a certain number of cycles and high
+until it resets at another given reset count.
 
-Establish customer-specific impact
-Review exported information to determine which customers and data types were affected.
+Now that it can count a whole frame we need to use these counts to figure out
+when we can display image data on the color lines. This is only during that
+display period, between 35 to 784 for the horizontal lines and 33 to 520 for
+the vertical lines. Now we just need to make sure that we don’t increment our
+vertical lines until we’ve got to the end of the horizontal line and viola! We
+have a thing that can count a whole frame and tell us when we are allowed to
+display.
 
-Complete the security review
-Check for earlier exploitation of the fixed vulnerabilities, determine whether any additional credentials were exposed, and assess remaining security findings.
+Now comes the color display part. Because the DE10-lite board only has 10
+switches, and the full color spectrum of the VGA is 4,096 colors (3 colors with
+4 bits each, 12 total bits) we need to quickly map fewer switches to a broader
+range of color outputs. Using a mux and the following table we can map a larger
+portion of the color space for our limited inputs.
 
-Strengthen defenses
-Expand credential rotation, access controls, code and secret scanning, audit logging, and alerts for unusual access and large data exports.
+| Input | Output |
+| --- | --- |
+| 00 | 0000 |
+| 01 | 0101 |
+| 10 | 1010 |
+| 11 | 1111 |
 
-## How We Will Keep You Informed
+At this point in the lab I estimate that I had spent well over 10+ hours working
+on getting the timings to be correct and going down a few wild goose chases
+that only proved that I had to rework parts of my design.
 
-We will notify affected customers directly once we have established customer-specific impact. For questions, contact [security@pingcap.com](mailto:security@pingcap.com).
+## It Works?! - Hardware
+
+Simulating the driver only gets you so far, it is another thing to see the screen light up.
+A few simple pin assignments to the VGA port and hopefully everything is working properly.
+
+## Adding an Image
+
+At this point this was the end of the first of the two labs for this project.
+The second lab was getting an image working on the screen instead of just color.
+The essence of the lab was loading the image the FPGA board’s ROM and displaying
+it when we decided, in my case in the top left of the screen.
+
+In reality this involved creating a memory initialization file from the desired
+image, in my case Asterix from the [cartoon Asterix and Obelix](https://asterix.com/en/).
+Since the original program was written in python, and I had some dependency
+issues, I decided to [rewrite the program to Go](https://github.com/lukasmwerner/mif-maker)
+to have a better understanding of the file format, and make it more cross-platform
+in case other students were also having issues. (It also helped me get a job
+TA’ing for the course.)
+
+From then on it is fairly straightforward, our horizontal and vertical counters
+(used for HSync & VSync) are essentially our pixel counts, using a basic offset
+into ROM we can access our image instead of our color.
+
+Since I wanted to go for extra credit, I implemented transparency support using
+the transparency (alpha channel) data saved in the last byte in each pixel.
+There were three ways I tried to do this. The first was just for checking if a
+pixel was transparent and then only showing the image if it was fully opaque.
+This yielded a working, but blocky image as the edges of Asterix were blended
+with transparency. The next approaches were trying to get [alpha
+compositing](https://en.wikipedia.org/wiki/Alpha_compositing) to work. Alpha
+compositing requires multiplication to work, which I was told was expensive
+gates-wise so I initially opted to try to cheat my way around it using a bit
+shifting hack I read about online. It worked okay, but had some ‘rounding’ issues
+with the background color making it look slightly different from the true background
+which is why for the final version I demoed for a grade used the real multiplication.
+
+- Asterix, duplicated for a demo, running on my custom FPGA based VGA driver. Using regular multiplication
+- Hacky bit manipulation based alpha compositing
+- Basic boolean alpha channel mixing
+- Basic image rendering (no alpha channel compositing)
+
+One of my favorite labs in college so far has been my Digital Logic Design Lab. Two years ago the final few labs of the course involved building a VGA driver. While that might sound intimidating, it w...

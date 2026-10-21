@@ -1,177 +1,100 @@
-Quick installer information for people familiar with OpenBSD, and the use of
-the "[disklabel](https://man.openbsd.org/disklabel.8) -E" command.
-If you are at all confused when installing OpenBSD, read the relevant
-INSTALL.* file as listed above!
+Unfortunately, accessibility is often an afterthought when designing a website. Maybe you came up with a color palette you’re happy with, but it doesn’t quite jive with the [WCAG 2 success criteria](https://www.w3.org/TR/WCAG21/#contrast-minimum) for contrast, or perhaps the animations on your website got a bit out of hand.
 
-OpenBSD/alpha:
+Fortunately, there are some newly supported but underutilized CSS media queries that can be leveraged to improve accessibility without having to scrap the design and starting over—by considering *user preferences*.
 
-If your machine can boot from CD, you can write *install80.iso* or
-*cd80.iso* to a CD and boot from it.
-Refer to INSTALL.alpha for more details.
+The user preferences that can be targeted with media queries control contrast, motion, color schemes and transparency. These can be configured in the accessibility or display settings of the operating system.
 
-OpenBSD/amd64:
+## [prefers-contrast](https://fleeb.ee/blog/improving-accessibility-with-css-media-queries/#prefers-contrast)
 
-If your machine can boot from CD, you can write *install80.iso* or
-*cd80.iso* to a CD and boot from it.
-You may need to adjust your BIOS options first.
+A good contrast ratio by default is always a nice thing to have, but it can sometimes be difficult to pull off while maintaining the desired aesthetic. By using `prefers-contrast` we can boost the contrast of our content for users who have expressed a preference for that while retaining the original style for the rest.
 
-If your machine can boot from USB, you can write *install80.img* or
-*miniroot80.img* to a USB stick and boot from it.
+```
+.blue {
+  color: rgb(117, 105, 255);
 
-If you can't boot from a CD, floppy disk, or USB,
-you can install across the network using PXE as described in the included
-INSTALL.amd64 document.
+  @media (prefers-contrast: more) {
+    color: rgb(44, 0, 255);
+  }
+}
+```
 
-If you are planning to dual boot OpenBSD with another OS, you will need to
-read INSTALL.amd64.
+To help identify contrast issues, a color can be clicked in the developer tools to show the contrast ratio between it and its background. The WCAG 2 recommends a minimum contrast ratio of **4.5** for small text and **3.0** for large text such as headers.
 
-OpenBSD/arm64:
+There’s no need to do this one by one: Most browsers come with tools that automatically list all contrast issues on a website.
 
-Depending on your hardware, you can write *install80.iso*
-or *cd80.iso* to a CD and boot from it, or write a system specific
-miniroot to an SD card and boot from it after connecting to the serial
-console.  Refer to INSTALL.armv64 for more details.
+## [prefers-reduced-motion](https://fleeb.ee/blog/improving-accessibility-with-css-media-queries/#prefers-reduced-motion)
 
-OpenBSD/armv7:
+Many users experience discomfort because of motion-based or blinking animation. If non-essential animations can be identified, it’s a good idea to disable (or *reduce*) them for people who prefer reduced motion.
 
-Write a system specific miniroot to an SD card and boot from it after connecting
-to the serial console.  Refer to INSTALL.armv7 for more details.
+One can also choose to obliterate all animation on their page using the following CSS:
 
-OpenBSD/hppa:
+```
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+```
 
-Boot over the network by following the instructions in INSTALL.hppa or the
-[hppa platform page](https://www.openbsd.org/hppa.html#install).
+It’s worth checking the resulting page for unintended side-effects after employing this method.
 
-OpenBSD/i386:
+## [prefers-color-scheme](https://fleeb.ee/blog/improving-accessibility-with-css-media-queries/#prefers-color-scheme)
 
-If your machine can boot from CD, you can write *install80.iso* or
-*cd80.iso* to a CD and boot from it.
-You may need to adjust your BIOS options first.
+If you haven’t been living under a rock, you’re probably familiar with the concept of light and dark modes. Designing two palettes is double the work, but for those who want to go the extra mile, there’s `prefers-color-scheme`:
 
-If your machine can boot from USB, you can write *install80.img* or
-*miniroot80.img* to a USB stick and boot from it.
+```
+:root {
+  --color-text: black;
+  --color-background: white;
+}
 
-If you can't boot from a CD, floppy disk, or USB,
-you can install across the network using PXE as described in
-the included INSTALL.i386 document.
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-text: white;
+    --color-background: black;
+  }
+}
 
-If you are planning on dual booting OpenBSD with another OS, you will need to
-read INSTALL.i386.
+.theme-aware-element {
+  color: var(--color-text);
+  background-color: var(--color-background);
+}
+```
 
-OpenBSD/landisk:
+A common pattern is to define CSS variables for your colors, and then use those variables everywhere so you only have to write one `prefers-color-scheme` query for the entire website. Easy.
 
-Write *miniroot80.img* to the start of the CF
-or disk, and boot normally.
+In fact, as of 2024 you can also use [`color-scheme`](https://developer.mozilla.org/en-US/docs/Web/CSS/color-scheme) and [`light-dark()`](https://developer.mozilla.org/en-US/docs/Web/CSS/color_value/light-dark) to achieve the same result:
 
-OpenBSD/luna88k:
+```
+:root {
+  color-scheme: light dark;
+  --color-text: light-dark(black, white);
+  --color-background: light-dark(white, black);
+}
 
-Copy 'boot' and 'bsd.rd' to a Mach or UniOS partition, and boot the bootloader
-from the PROM, and then bsd.rd from the bootloader.
-Refer to the instructions in INSTALL.luna88k for more details.
+.theme-aware-element {
+  color: var(--color-text);
+  background-color: var(--color-background);
+}
+```
 
-OpenBSD/macppc:
+`color-scheme` is handy because it helps the browser apply default colors that match the preferred color scheme for scrollbars, selections etc.
 
-Burn the *install80.iso* image from a mirror site to a CDROM,
-and power on your machine while holding down the *C* key until
-the display turns on and shows *OpenBSD/macppc boot*.
+## [prefers-reduced-transparency](https://fleeb.ee/blog/improving-accessibility-with-css-media-queries/#prefers-reduced-transparency)
 
-Alternatively, at the Open Firmware prompt, enter *boot cd:,ofwboot
-/8.0/macppc/bsd.rd*
-OpenBSD/octeon:
+This one is experimental and at the time of writing isn’t supported by Firefox or Safari out of the box. I’d advise to be conservative with translucency as long as that remains the case.
 
-After connecting a serial port, boot bsd.rd over the network via DHCP/tftp.
-Refer to the instructions in INSTALL.octeon for more details.
+```
+.translucent {
+  opacity: 0.6;
 
-OpenBSD/powerpc64:
+  @media (prefers-reduced-transparency) {
+    opacity: 1;
+  } 
+}
+```
 
-To install, write *install80.img* or *miniroot80.img* to a
-USB stick, plug it into the machine and choose the *OpenBSD
-install* menu item in Petitboot.
-Refer to the instructions in INSTALL.powerpc64 for more details.
+It’s important to recognize that while accessibility preferences are mostly binary on/off settings, the impairments individuals suffer from fall into a wider spectrum. It’s probably a good idea to design reasonably accessible interfaces as a starting point.
 
-OpenBSD/riscv64:
-
-To install, write *install80.img* or *miniroot80.img* to a
-USB stick, and boot with that drive plugged in.
-Make sure you also have the microSD card plugged in that shipped with the
-HiFive Unmatched board.
-Refer to the instructions in INSTALL.riscv64 for more details.
-
-OpenBSD/sparc64:
-
-Burn the image from a mirror site to a CDROM, boot from it, and type
-*boot cdrom*.
-
-If this doesn't work, or if you don't have a CDROM drive, you can write
-*floppy80.img* or *floppyB80.img*
-(depending on your machine) to a floppy and boot it with *boot
-floppy*. Refer to INSTALL.sparc64 for details.
-
-Make sure you use a properly formatted floppy with NO BAD BLOCKS or your install
-will most likely fail.
-
-You can also write *miniroot80.img* to the swap partition on
-the disk and boot with *boot disk:b*.
-
-If nothing works, you can boot over the network as described in INSTALL.sparc64.
-
-If you already have an OpenBSD 7.9 system, and do not want to reinstall,
-upgrade instructions and advice can be found in the
-[Upgrade Guide](https://www.openbsd.org/faq/upgrade80.html).
-
-`src.tar.gz` contains a source archive starting at `/usr/src`.
-This file contains everything you need except for the kernel sources,
-which are in a separate archive.
-To extract:
-
-# <kbd>mkdir -p /usr/src</kbd>
-# <kbd>cd /usr/src</kbd>
-# <kbd>tar xvfz /tmp/src.tar.gz</kbd>
-
-`sys.tar.gz` contains a source archive starting at `/usr/src/sys`.
-This file contains all the kernel sources you need to rebuild kernels.
-To extract:
-
-# <kbd>mkdir -p /usr/src/sys</kbd>
-# <kbd>cd /usr/src</kbd>
-# <kbd>tar xvfz /tmp/sys.tar.gz</kbd>
-
-Both of these trees are a regular CVS checkout.  Using these trees it
-is possible to get a head-start on using the anoncvs servers as
-described [here](https://www.openbsd.org/anoncvs.html).
-Using these files
-results in a much faster initial CVS update than you could expect from
-a fresh checkout of the full OpenBSD source tree.
-
-### Ports Tree
-
-A ports tree archive is also provided.  To extract:
-
-# <kbd>cd /usr</kbd>
-# <kbd>tar xvfz /tmp/ports.tar.gz</kbd>
-
-Go read the [ports](https://www.openbsd.org/faq/ports/index.html) page
-if you know nothing about ports
-at this point.  This text is not a manual of how to use ports.
-Rather, it is a set of notes meant to kickstart the user on the
-OpenBSD ports system.
-
-The *ports/* directory represents a CVS checkout of our ports.
-As with our complete source tree, our ports tree is available via
-[AnonCVS](https://www.openbsd.org/anoncvs.html).
-So, in order to keep up to date with the -stable branch, you must make
-the *ports/* tree available on a read-write medium and update the tree
-with a command like:
-
-# <kbd>cd /usr/ports</kbd>
-# <kbd>cvs -d anoncvs@server.openbsd.org:/cvs update -Pd -rOPENBSD_8_0</kbd>
-
-[Of course, you must replace the server name here with a nearby anoncvs
-server.]
-
-Note that most ports are available as packages on our mirrors. Updated
-ports for the 8.0 release will be made available if problems arise.
-
-If you're interested in seeing a port added, would like to help out, or just
-would like to know more, the mailing list
-[ports@openbsd.org](https://www.openbsd.org/mail.html) is a good place to know.
+These media queries are no silver bullet, but they can come in handy when you need some more flexibility in a pinch.

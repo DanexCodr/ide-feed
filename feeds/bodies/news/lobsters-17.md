@@ -1,100 +1,88 @@
-Unfortunately, accessibility is often an afterthought when designing a website. Maybe you came up with a color palette you’re happy with, but it doesn’t quite jive with the [WCAG 2 success criteria](https://www.w3.org/TR/WCAG21/#contrast-minimum) for contrast, or perhaps the animations on your website got a bit out of hand.
+Something funny happened a little while ago: I read about FreshRSS, and it
+sounded nice, so I *installed it on a server and started using it*. That would
+not have happened a year ago, but then again, a year ago I didn’t have any NixOS
+servers.
 
-Fortunately, there are some newly supported but underutilized CSS media queries that can be leveraged to improve accessibility without having to scrap the design and starting over—by considering *user preferences*.
+For the past few years, my rss feeds have lived locally on my phone only.
+There was a good idea behind that1<sup>1</sup> I can mostly take time to read when I’m
+away from my computer anyway., but it never quite worked in practice. For one,
+many things are easier to read on a larger screen. But it was also brittle to
+trust a phone app to manage the read/unread status of thousands of articles
+across a hundred feeds.2<sup>2</sup> In particular, when I switched to a different phone
+I could migrate all feeds to it, but the read/unread status was lost along the
+way. What I really wanted was a server-side feed aggregator. This is software
+that runs on a server, manages rss feeds, and then I can read the rss feeds
+either through a web interface, or through client applications. I’ve wanted that
+for a while, but I’ve never taken the step, because it would be yet another side
+project to maintain the deployment of.
 
-The user preferences that can be targeted with media queries control contrast, motion, color schemes and transparency. These can be configured in the accessibility or display settings of the operating system.
+But now, with some NixOS experience, adding a working FreshRSS configuration
+(including backups) took 9 lines of Nix code3<sup>3</sup> Plus a dozen more lines for the
+nginx reverse proxy configuration. It got a little complicated because I wanted
+to `proxy_pass` from a specific location block which required rewriting cookie
+paths. But that’s a me problem, not a NixOS problem.. That installation has
+just hands-off worked for the past few months. If or when that server breaks, I
+can spin up a new one running the exact same configuration, probably in
+something like 15 minutes. When we can do something like that, there is
+literally no reason to not just try the new software.
 
-## [prefers-contrast](https://fleeb.ee/blog/improving-accessibility-with-css-media-queries/#prefers-contrast)
+Contrast this against how FreshRSS is installed outside of NixOS. Then we’d
 
-A good contrast ratio by default is always a nice thing to have, but it can sometimes be difficult to pull off while maintaining the desired aesthetic. By using `prefers-contrast` we can boost the contrast of our content for users who have expressed a preference for that while retaining the original style for the rest.
+1. download and extract an archive to the right location;
+2. configure permissions according to instructions;
+3. install nginx and php-fpm with necessary extra dependencies to the server;
+4. configure php-fpm pools and make nginx pass requests through to php-fpm;
+5. set up Let’s Encrypt certificates;
+6. set up backups; and
+7. hopefully remember how to do all the above if something breaks and we need to reinstall FreshRSS on a new or upgraded server later.
 
-```
-.blue {
-  color: rgb(117, 105, 255);
+Of course, the FreshRSS project provides a container image which would shorten
+the process a little bit. It purports to set up Apache with mod_php and
+configure them the right way. Then we’d only need to configure backups, create a
+systemd service that runs the container, and manage nginx as a tls terminating
+reverse proxy in front of that, because the container image reasonably does not
+come with tls support. This is still stuff to remember, and there’s also no
+guarantee the same thing works six months down the line when reinstalling,
+unless we wrote down which exact container image we downloaded.4<sup>4</sup> It does not
+help to build the container image from source, because two builds from the same
+Dockerfile separated by time can result in rather different container images.
 
-  @media (prefers-contrast: more) {
-    color: rgb(44, 0, 255);
-  }
-}
-```
+I have mentioned before how much I dislike maintaining side projects. That
+includes my own code, but also self-hosted services developed by someone else.
+I’m okay with a few minutes of maintenance here and there, but having to
+schedule hours of uninterrupted work to upgrade something, or spending *any*
+amount of time at all on emergency maintenance, really kills my desire to work
+with computers.
 
-To help identify contrast issues, a color can be clicked in the developer tools to show the contrast ratio between it and its background. The WCAG 2 recommends a minimum contrast ratio of **4.5** for small text and **3.0** for large text such as headers.
+You’d think someone of my disposition would be deep into configuration
+management, container orchestration, or both, but no. I have made honest
+attempts with CFEngine, Ansible, podman, and k3s but none of them improved my
+installation/configuration/deployment experience significantly over (a)
+carefully writing things down, and sometimes (b) turning those careful notes
+into a shell script performing a sequence of `ssh` commands.5<sup>5</sup> Yes, this is
+essentially reinventing Ansible – but less brittle. It won’t break the next time
+someone glances sideways at `pip`. The drawback of the shell script is that it
+often ends up relying on assumptions that become invalid with time, or when it
+is used in a different environment. A NixOS configuration reads a lot like the
+careful instructions to myself, except they’re executable and they produce the
+same result every time.
 
-There’s no need to do this one by one: Most browsers come with tools that automatically list all contrast issues on a website.
+I can mostly take time to read when I’m
+away from my computer anyway.
 
-## [prefers-reduced-motion](https://fleeb.ee/blog/improving-accessibility-with-css-media-queries/#prefers-reduced-motion)
+In particular, when I switched to a different phone
+I could migrate all feeds to it, but the read/unread status was lost along the
+way.
 
-Many users experience discomfort because of motion-based or blinking animation. If non-essential animations can be identified, it’s a good idea to disable (or *reduce*) them for people who prefer reduced motion.
+Plus a dozen more lines for the
+nginx reverse proxy configuration. It got a little complicated because I wanted
+to `proxy_pass` from a specific location block which required rewriting cookie
+paths. But that’s a me problem, not a NixOS problem.
 
-One can also choose to obliterate all animation on their page using the following CSS:
+It does not
+help to build the container image from source, because two builds from the same
+Dockerfile separated by time can result in rather different container images.
 
-```
-@media (prefers-reduced-motion: reduce) {
-  * {
-    animation: none !important;
-    transition: none !important;
-  }
-}
-```
-
-It’s worth checking the resulting page for unintended side-effects after employing this method.
-
-## [prefers-color-scheme](https://fleeb.ee/blog/improving-accessibility-with-css-media-queries/#prefers-color-scheme)
-
-If you haven’t been living under a rock, you’re probably familiar with the concept of light and dark modes. Designing two palettes is double the work, but for those who want to go the extra mile, there’s `prefers-color-scheme`:
-
-```
-:root {
-  --color-text: black;
-  --color-background: white;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-text: white;
-    --color-background: black;
-  }
-}
-
-.theme-aware-element {
-  color: var(--color-text);
-  background-color: var(--color-background);
-}
-```
-
-A common pattern is to define CSS variables for your colors, and then use those variables everywhere so you only have to write one `prefers-color-scheme` query for the entire website. Easy.
-
-In fact, as of 2024 you can also use [`color-scheme`](https://developer.mozilla.org/en-US/docs/Web/CSS/color-scheme) and [`light-dark()`](https://developer.mozilla.org/en-US/docs/Web/CSS/color_value/light-dark) to achieve the same result:
-
-```
-:root {
-  color-scheme: light dark;
-  --color-text: light-dark(black, white);
-  --color-background: light-dark(white, black);
-}
-
-.theme-aware-element {
-  color: var(--color-text);
-  background-color: var(--color-background);
-}
-```
-
-`color-scheme` is handy because it helps the browser apply default colors that match the preferred color scheme for scrollbars, selections etc.
-
-## [prefers-reduced-transparency](https://fleeb.ee/blog/improving-accessibility-with-css-media-queries/#prefers-reduced-transparency)
-
-This one is experimental and at the time of writing isn’t supported by Firefox or Safari out of the box. I’d advise to be conservative with translucency as long as that remains the case.
-
-```
-.translucent {
-  opacity: 0.6;
-
-  @media (prefers-reduced-transparency) {
-    opacity: 1;
-  } 
-}
-```
-
-It’s important to recognize that while accessibility preferences are mostly binary on/off settings, the impairments individuals suffer from fall into a wider spectrum. It’s probably a good idea to design reasonably accessible interfaces as a starting point.
-
-These media queries are no silver bullet, but they can come in handy when you need some more flexibility in a pinch.
+Yes, this is
+essentially reinventing Ansible – but less brittle. It won’t break the next time
+someone glances sideways at `pip`.
