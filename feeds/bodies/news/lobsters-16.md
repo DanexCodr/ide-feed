@@ -1,69 +1,59 @@
-On September 30, 2026, the source for EDG's C++ front end went public, and The C++ Alliance became its nonprofit home. Same engine, same standards, professionally maintained, and open to contributions.
+Between September 9 and October 7, 2026, an unauthorized party used stolen service account credentials to access certain PingCAP internal systems, copy data, and obtain source code. PingCAP became aware of the incident on October 7 and began disabling the affected credentials the same day.
 
-**Continuity is the point.** This is a change of steward, not a change of course.
+An external incident response firm reviewed PingCAP’s production systems and found no evidence that the attacker ran commands or maintained persistent access in the systems reviewed. That finding does not change the data exposure described below. **With support from outside counsel and third-party forensic specialists, there is no evidence that data stored in TiDB was impacted. We keep on investigating and will provide updates on any new findings.** As of October 14, all identified compromised credentials have been invalidated, and the identified unauthorized access paths have been blocked. The remaining investigation focuses on customer-specific impact and possible exploitation before remediation.
 
-Part one
+## What This Means for Customer Data
 
-For thirty years, EDG's front end has powered C++ compilation across the industry as the only production-quality source-to-source engine of its kind.
+Based on our investigation with an external incident response firm, including a review of the exported records, the categories below describe the customer data identified as affected to date. These findings do not mean that every customer had every category of information exposed. We are determining the scope for each customer.
 
-Coming soon
+Information
+What the Investigation Confirmed
+What Remains to Be Determined
 
-This section will cover EDG's founding, the people behind it, the milestones of its front end, and the compilers and tools built on top of it. Have a piece of that history to share? [Open an issue](https://github.com/edgcpp/edgcpp.github.io/issues) on the site's repository.
+TiDB Cloud accounts and product use
+Exported records included user names and email addresses, organization and project associations, and SQL editor text and errors. Some records also contained organization, project, and cluster identifiers.
+Particular customers’ records.
 
-Part two
+Business and billing information
+Exported records included customer contacts, contract terms, orders, pricing, payment terms, and billing configuration.
+The individual customer impact scope is to be determined. The findings do not mean every customer had every category of information exposed.
 
-When the source went public on September 30, 2026, professional maintenance had to continue. EDG needed a new home that could do three things at once.
+Credentials
+An exported table contained encrypted TiDB Cloud API-key values. One investigator-owned value tested by the external firm could not be used directly as an API key.
+Whether other usable credentials were exposed. The attacker’s claims about credentials in support materials have not been verified.
 
-01
+Customer clusters
+Investigators found no evidence that the attacker ran commands or maintained persistent access in the production systems they reviewed.
+This finding does not resolve the data exposure above. PingCAP is checking production logs for any exploitation of vulnerabilities before they were fixed.
 
-### Fiscal sponsorship
+## Actions Completed by October 14
 
-Receive and manage donations on behalf of EDG.
+Action
+Evidence and Outcome
 
-02
+Restrict compromised access
+Beginning October 7, PingCAP disabled or revoked most affected accounts and credentials. By October 10, it had deleted additional compromised credentials and removed excessive permissions between cloud projects. As of October 14, all identified unauthorized access paths have been blocked.
 
-Sustain the engineering quality EDG users depend on.
+Fix identified vulnerabilities
+The external firm reported four vulnerabilities on October 12 – 13. PingCAP fixed all four by October 14, and the firm retested each fix and confirmed that all four vulnerabilities had been remediated.
 
-03
+Improve visibility
+On October 10, PingCAP enabled additional cloud storage access logging in an affected project to improve visibility into future activity.
 
-C++ compiler front-end knowledge, from the inside.
+## Work Continuing (Status as of October 19)
 
-The C++ Alliance is a nonprofit with proven fiscal-sponsorship infrastructure, C++ compiler engineers on staff, and deep roots in the C++ standards and Boost communities. It now serves as EDG's nonprofit home.
+Priority
+Status as of October 19
 
-How it works
+Establish customer-specific impact
+Review exported information to determine which customers and data types were affected.
 
-EDG now works like any other open source project: anyone can contribute, and everything that lands is available to everyone. Development follows three tracks: contributions from the user community, ongoing maintenance, and collectively funded features.
+Complete the security review
+Check for earlier exploitation of the fixed vulnerabilities, determine whether any additional credentials were exposed, and assess remaining security findings.
 
-Track 1
+Strengthen defenses
+Expand credential rotation, access controls, code and secret scanning, audit logging, and alerts for unusual access and large data exports.
 
-Bug fixes and new features from EDG users, submitted as pull requests. Reviewers, who are initially experienced EDG developers, evaluate the changes. Once approved, these changes are merged into the EDG codebase.
+## How We Will Keep You Informed
 
-Track 2
-
-Bug fixes and maintenance by the Alliance's EDG developers are published immediately.
-
-Track 3
-
-To support the EDG community, the Alliance will provide a way for larger features to be developed and funded by the community. In this way, organizations can support the development of larger features financially rather than committing their developers to the development of these features. Once a feature is funded, it is released to everyone at the same time.
-
-**One codebase, for everyone.** Whichever track a change arrives on, it lands in the same public repository at the same time. No one gets early access.
-
-The Fiscal Sponsorship Committee (FSC) oversees the process across all three tracks. It is chaired by John Spicer and will include volunteers from the EDG user community.
-
-Want a say in who sits on it? [See how to get involved](https://edgcpp.org/#next-steps).
-
-What this means for you
-
-The engine, the standards it implements, and the person you talk to stay the same. How the work is funded and where the code lives do not.
-
-| Area | Licensed model | Open source model |
-| --- | --- | --- |
-| Source code | Proprietary, available under license | Public, at [github.com/edgcpp/compiler](https://github.com/edgcpp/compiler) |
-| Funding | Annual license fees | Alliance development is funded by tax-deductible contributions from the community |
-| Development | The EDG team | EDG developers hired by The C++ Alliance, plus contributions from the EDG user community |
-| Point of contact | John Spicer | John Spicer, as Chair of the Fiscal Sponsorship Committee |
-| Lock-in | Not applicable | None. Exit at any time. |
-
-Get involved
-
-The source is now public. Here is where things stand, and how EDG users can take part.
+We will notify affected customers directly once we have established customer-specific impact. For questions, contact [security@pingcap.com](mailto:security@pingcap.com).

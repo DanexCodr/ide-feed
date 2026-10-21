@@ -119,5 +119,3 @@ I also suspect they deliberately launched their attack on a Friday, hoping that 
 The lesson is the same as always: extra security is a worthwhile investment.
     Disable password authentication in favor of ssh keys.
     I for one am going to buy myself some hardware keys today. :)
-
-[Discuss on Hacker News](https://news.ycombinator.com/item?id=50166257)

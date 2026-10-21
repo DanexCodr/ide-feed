@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-20T21:23:16Z",
+  "updated": "2026-10-21T11:22:43Z",
   "items": [
     {
       "id": "devto-4858196",
@@ -86,27 +86,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4852470",
-      "title": "Requests, Promises, Assertions, and Declarations: Rewriting Our AI Agent Workflow as a 1986 'Committed Speech' Machine",
-      "desc": "By Randal L. Schwartz | 26 min read",
-      "tag": "tutorial",
-      "published": "2026-10-14T19:53:12Z",
-      "order": 8,
-      "url": "https://dev.to/gde/requests-promises-assertions-and-declarations-rewriting-our-ai-agent-workflow-as-a-1986-4k4c",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F80k088q9sdie6yq9pbha.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAwEBAAAAAAAAAAAAAAAAAQIDAAT/xAAVAQEBAAAAAAAAAAAAAAAAAAABAP/aAAwDAQACEAMQAAAB5RMxVGyf/8QAGRAAAwADAAAAAAAAAAAAAAAAAAERECFC/9oACAEBAAEFAuSQbwijWv/EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABcQAAMBAAAAAAAAAAAAAAAAAAEQICH/2gAIAQEABj8CC2v/xAAaEAEBAAMBAQAAAAAAAAAAAAABABExUSFB/9oACAEBAAE/IUBPr7Yzqw6NllUDk0ZTu2C//9oADAMBAAIAAwAAABA/H//EABcRAAMBAAAAAAAAAAAAAAAAAAABESH/2gAIAQMBAT8QpiZ//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPxA//8QAHBABAAICAwEAAAAAAAAAAAAAAQARITFBUXFh/9oACAEBAAE/EEh1ughfi33KfoQl3QeRQONCYQ43UQtWu7hAwcP2f//Z",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4828206",
       "title": "Git Isn't a Diff Tracker: How Blobs, Trees, DAG Commits, and the Index Actually Work Under the Hood",
       "desc": "By S M Tahosin | 11 min read",
       "tag": "tutorial",
       "published": "2026-10-10T17:28:52Z",
-      "order": 9,
+      "order": 8,
       "url": "https://dev.to/smtahosin/git-isnt-a-diff-tracker-how-blobs-trees-dag-commits-and-the-index-actually-work-under-the-hood-19eo",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fi.imgur.com%2FR9pEpzM.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAQIAAwT/xAAVAQEBAAAAAAAAAAAAAAAAAAAAAf/aAAwDAQACEAMQAAAByhllD1w//8QAGxAAAgIDAQAAAAAAAAAAAAAAAAECEhEhIkH/2gAIAQEAAQUCS5GiM8HhYtr/xAAVEQEBAAAAAAAAAAAAAAAAAAABEP/aAAgBAwEBPwFn/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAGRAAAgMBAAAAAAAAAAAAAAAAADERICEy/9oACAEBAAY/ApzDkVEI/8QAHBAAAgMAAwEAAAAAAAAAAAAAAREAITFBUWGh/9oACAEBAAE/ITshQMFLviGQKgHIyx3AEdmBdfYmcPZpSf/aAAwDAQACAAMAAAAQP0//xAAXEQEBAQEAAAAAAAAAAAAAAAABADER/9oACAEDAQE/EAIcsy//xAAYEQACAwAAAAAAAAAAAAAAAAAAAREhMf/aAAgBAgEBPxBSi3p//8QAGxABAAMBAQEBAAAAAAAAAAAAAQARITFRQbH/2gAIAQEAAT8QWYgvab9gcaShrUs8vxRcap3RTzEP2b5L6XkFxtxyKHPxaZw6J0+T/9k=",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4852470",
+      "title": "Requests, Promises, Assertions, and Declarations: Rewriting Our AI Agent Workflow as a 1986 'Committed Speech' Machine",
+      "desc": "By Randal L. Schwartz | 26 min read",
+      "tag": "tutorial",
+      "published": "2026-10-14T19:53:12Z",
+      "order": 9,
+      "url": "https://dev.to/gde/requests-promises-assertions-and-declarations-rewriting-our-ai-agent-workflow-as-a-1986-4k4c",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F80k088q9sdie6yq9pbha.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAwEBAAAAAAAAAAAAAAAAAQIDAAT/xAAVAQEBAAAAAAAAAAAAAAAAAAABAP/aAAwDAQACEAMQAAAB5RMxVGyf/8QAGRAAAwADAAAAAAAAAAAAAAAAAAERECFC/9oACAEBAAEFAuSQbwijWv/EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABcQAAMBAAAAAAAAAAAAAAAAAAEQICH/2gAIAQEABj8CC2v/xAAaEAEBAAMBAQAAAAAAAAAAAAABABExUSFB/9oACAEBAAE/IUBPr7Yzqw6NllUDk0ZTu2C//9oADAMBAAIAAwAAABA/H//EABcRAAMBAAAAAAAAAAAAAAAAAAABESH/2gAIAQMBAT8QpiZ//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPxA//8QAHBABAAICAwEAAAAAAAAAAAAAAQARITFBUXFh/9oACAEBAAE/EEh1ughfi33KfoQl3QeRQONCYQ43UQtWu7hAwcP2f//Z",
       "color": "#3B49DF"
     },
     {
@@ -146,15 +146,15 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4809038",
-      "title": "Curiosity Over Comfort",
-      "desc": "By Marceli Pawliński | 4 min read",
+      "id": "devto-4875822",
+      "title": "Your agent's retry bug isn't an AI problem. It's a distributed-systems problem with an LLM on top.",
+      "desc": "By Dimitris Kyrkos  | 3 min read",
       "tag": "tutorial",
-      "published": "2026-10-06T21:47:16Z",
+      "published": "2026-10-19T06:42:45Z",
       "order": 13,
-      "url": "https://dev.to/marceli/curiosity-over-comfort-5cki",
-      "image": "https://media2.dev.to/dynamic/image/width=1200,height=627,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fywr6b45wz5youd97xwx7.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAARACADASIAAhEBAxEB/8QAGAAAAwEBAAAAAAAAAAAAAAAAAAECAwT/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAHsVsmtIKYAgP/EABsQAAICAwEAAAAAAAAAAAAAAAECABEQEiAi/9oACAEBAAEFAiqylgVZosNFgAMX64//xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAEDAQE/AR//xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAECAQE/AR//xAAdEAABBAIDAAAAAAAAAAAAAAAAAREzoRAxIDKR/9oACAEBAAY/Ao6I6I6OqeGlNYZuP//EAB8QAAIBAwUBAAAAAAAAAAAAAAERABAxgSAhQWFx8P/aAAgBAQABPyEApDhPiEIuA9CjgIBN3xDmyZo1wk3p/9oADAMBAAIAAwAAABDQSBz/xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAEDAQE/EB//xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAECAQE/EB//xAAeEAEAAgIBBQAAAAAAAAAAAAABABEhYTEQIFHB8f/aAAgBAQABPxCjPDSA14mMXB9KM5g+YlYEBo0tcy1vhV5e+iQuLRNdv//Z",
+      "url": "https://dev.to/cyclopt_dimitrisk/your-agents-retry-bug-isnt-an-ai-problem-its-a-distributed-systems-problem-with-an-llm-on-top-1i6k",
+      "image": "https://media2.dev.to/dynamic/image/width=1200,height=627,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fiqdssmxk1srgbl586mox.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAARACADASIAAhEBAxEB/8QAGAABAQEBAQAAAAAAAAAAAAAAAAEDAgT/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAH2TSmN1HYED//EABoQAAICAwAAAAAAAAAAAAAAAAABESICIEH/2gAIAQEAAQUCawRUoUGQQd0//8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAwEBPwEf/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAgEBPwEf/8QAHBAAAgICAwAAAAAAAAAAAAAAAAIyQREgIXGR/9oACAEBAAY/AoqQUipFSy/SzHPev//EAB4QAAIBAwUAAAAAAAAAAAAAAAERABAgsVGRwdHw/9oACAEBAAE/ISCxRL0TyUAZYIDPA0C67oChUgna/9oADAMBAAIAAwAAABAjgBz/xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAEDAQE/EB//xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAECAQE/EB//xAAgEAACAgEDBQAAAAAAAAAAAAABEQAhMSDB8EFRcaHR/9oACAEBAAE/EHth6gNoLxDT4UXG2hYkO00W0vUfkAgEm1ru+yx+zCiXBljOHp//2Q==",
       "color": "#3B49DF"
     },
     {
@@ -170,12 +170,24 @@
       "color": "#3B49DF"
     },
     {
+      "id": "devto-4884586",
+      "title": "Building an Open-Source Support Tool That Turns Your Docs into Reusable Knowledge",
+      "desc": "By Nathan Tarbert | 7 min read",
+      "tag": "tutorial",
+      "published": "2026-10-20T17:15:15Z",
+      "order": 15,
+      "url": "https://dev.to/nathan_tarbert/your-team-has-answered-this-before-im-building-a-tool-that-remembers-5604",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fl0qfhqjgbvaejbwbk7ct.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAwEBAAAAAAAAAAAAAAAAAAEDAgT/xAAVAQEBAAAAAAAAAAAAAAAAAAAAAf/aAAwDAQACEAMQAAAB7tAkXVn/xAAZEAACAwEAAAAAAAAAAAAAAAABAgAQEiD/2gAIAQEAAQUCrTQMxPH/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAaEAABBQEAAAAAAAAAAAAAAAABAAIQICEz/9oACAEBAAY/Ao5lawiv/8QAHRAAAwAABwAAAAAAAAAAAAAAAAERIDFRYXGBof/aAAgBAQABPyFt3L05GtuM7JhLrSb4P//aAAwDAQACAAMAAAAQd6//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAVEQEBAAAAAAAAAAAAAAAAAAAAEf/aAAgBAgEBPxBX/8QAHBABAAICAwEAAAAAAAAAAAAAAQARITFBUXFh/9oACAEBAAE/EBMLZgutL+QyCGhrTAbRthCbLbzECuV9lHUXFT//2Q==",
+      "color": "#3B49DF"
+    },
+    {
       "id": "devto-4796905",
       "title": "One `rm -f` Silently Disabled My Crash Detection",
       "desc": "By Debashish Ghosal | 6 min read",
       "tag": "tutorial",
       "published": "2026-10-12T05:46:00Z",
-      "order": 15,
+      "order": 16,
       "url": "https://dev.to/debashish_ghosal/one-rm-f-silently-disabled-my-crash-detection-4khl",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Frbltpi5u7jl4xusaf8ir.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwEA/8QAFgEBAQEAAAAAAAAAAAAAAAAAAQAD/9oADAMBAAIQAxAAAAEsd0Ug2P/EABgQAAMBAQAAAAAAAAAAAAAAAAAQEQEh/9oACAEBAAEFAsXFSlKf/8QAFREBAQAAAAAAAAAAAAAAAAAAABH/2gAIAQMBAT8BV//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABQQAQAAAAAAAAAAAAAAAAAAADD/2gAIAQEABj8CD//EABoQAQEBAAMBAAAAAAAAAAAAAAEAESFBUWH/2gAIAQEAAT8hw93Dr5Bj7IQ8h5a2Xf/aAAwDAQACAAMAAAAQBt//xAAYEQEBAAMAAAAAAAAAAAAAAAABABFBUf/aAAgBAwEBPxAR1Ycv/8QAFREBAQAAAAAAAAAAAAAAAAAAABH/2gAIAQIBAT8Qqv/EABwQAAIDAAMBAAAAAAAAAAAAAAERACExQXGRgf/aAAgBAQABPxAbB9CAWgA0YyZ7OLaLy42DjK+PYbDXUMJzyf/Z",
@@ -187,7 +199,7 @@
       "desc": "By Star | 1 min read",
       "tag": "tutorial",
       "published": "2026-10-19T19:09:31Z",
-      "order": 16,
+      "order": 17,
       "url": "https://dev.to/star123/hello-world-5425",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fjz6a1i7l0vobmtx0lt0p.jpg",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAAMAAAAAAAAAAAAAAAAAAgEDBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAD/9oADAMBAAIQAxAAAAHLNTpNkI//xAAaEAACAgMAAAAAAAAAAAAAAAABEQAxECFB/9oACAEBAAEFAlpHBITgo3z/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAXEAEAAwAAAAAAAAAAAAAAAAARABAg/9oACAEBAAY/AnLTP//EABsQAAMAAgMAAAAAAAAAAAAAAAABESExQXGR/9oACAEBAAE/IUyUU7G/ZR7TJcgvIxoJgP/aAAwDAQACAAMAAAAQNE//xAAYEQADAQEAAAAAAAAAAAAAAAAAAREhMf/aAAgBAwEBPxCTpEtP/8QAFxEBAAMAAAAAAAAAAAAAAAAAAAERcf/aAAgBAgEBPxDFy//EABsQAQADAQEBAQAAAAAAAAAAAAEAESExQXGB/9oACAEBAAE/EL2a8Jdsbxn2bUgD9CE6VXj7FynDkR6R4Ma4YBoaz//Z",
@@ -199,10 +211,22 @@
       "desc": "By luminousmen | 7 min read",
       "tag": "tutorial",
       "published": "2026-10-20T14:00:00Z",
-      "order": 17,
+      "order": 18,
       "url": "https://dev.to/luminousmen/i-miss-writing-code-5hla",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fq0tm4hjzry9uiz7nv0jq.jpg",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAABQME/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAH/2gAMAwEAAhADEAAAAU8FjYTuPvP/xAAbEAACAgMBAAAAAAAAAAAAAAAAAgMRARAhEv/aAAgBAQABBQIeTqyY1K/ksvsT2f/EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABkQAAMAAwAAAAAAAAAAAAAAAAAQEQEiUf/aAAgBAQAGPwI1y51w/8QAGxAAAgMBAQEAAAAAAAAAAAAAAAERITFBcYH/2gAIAQEAAT8hFNpH9ME+SaOoWC0KMO8dUWNeqo//2gAMAwEAAgADAAAAEAnv/8QAFREBAQAAAAAAAAAAAAAAAAAAABH/2gAIAQMBAT8QiP/EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QP//EABwQAQEBAAMAAwAAAAAAAAAAAAERACExQVFhkf/aAAgBAQABPxDcHJ3EH5qaQMPm+rhAJ06ORpVevMUkOvHumDLRNSZmyBwm/9k=",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4883684",
+      "title": "Processes vs Threads, as the Linux Kernel Sees Them",
+      "desc": "By Athreya aka Maneshwar | 10 min read",
+      "tag": "tutorial",
+      "published": "2026-10-20T20:59:17Z",
+      "order": 19,
+      "url": "https://dev.to/lovestaco/processes-vs-threads-as-the-linux-kernel-sees-them-55pk",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fmrj7b2o8jhlj5ub8mi0e.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAABQQD/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAH/2gAMAwEAAhADEAAAATED740MvgP/xAAcEAABAwUAAAAAAAAAAAAAAAADAAECEBMhIjL/2gAIAQEAAQUCQJaFeNqgsDJwv//EABURAQEAAAAAAAAAAAAAAAAAAAAB/9oACAEDAQE/AVf/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAaEAEAAQUAAAAAAAAAAAAAAAABABAREiCB/9oACAEBAAY/ApbHsQNGn//EABoQAQADAAMAAAAAAAAAAAAAAAEAEBEhQWH/2gAIAQEAAT8hiGDY0RMzq3yR56BX/9oADAMBAAIAAwAAABBcP//EABYRAQEBAAAAAAAAAAAAAAAAAAEAEf/aAAgBAwEBPxANhjf/xAAVEQEBAAAAAAAAAAAAAAAAAAAAAf/aAAgBAgEBPxCo/8QAHBABAQACAgMAAAAAAAAAAAAAAREAIRAxQZGx/9oACAEBAAE/EMZrduwi+CJiFIBU02do81wDR+5Iljn3x//Z",
       "color": "#3B49DF"
     },
     {
@@ -211,22 +235,10 @@
       "desc": "By Shaurya Tiwari | 4 min read",
       "tag": "tutorial",
       "published": "2026-10-12T20:49:24Z",
-      "order": 18,
+      "order": 20,
       "url": "https://dev.to/dr5t/solodesk-ai-lpe",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fy11o4ykev6b1y23stmfi.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAABAED/8QAFgEBAQEAAAAAAAAAAAAAAAAAAgAB/9oADAMBAAIQAxAAAAESzpYhEY7f/8QAGBABAAMBAAAAAAAAAAAAAAAAAAECEDH/2gAIAQEAAQUCUX4hG//EABURAQEAAAAAAAAAAAAAAAAAAAAR/9oACAEDAQE/AVf/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAWEAADAAAAAAAAAAAAAAAAAAAAIFH/2gAIAQEABj8CI/8A/8QAGxAAAwACAwAAAAAAAAAAAAAAAAERITEQQYH/2gAIAQEAAT8hWxHN+iXXY+DqPBcDyf/aAAwDAQACAAMAAAAQ3J//xAAWEQEBAQAAAAAAAAAAAAAAAAAAETH/2gAIAQMBAT8QrT//xAAXEQADAQAAAAAAAAAAAAAAAAAAAREx/9oACAECAQE/ELEaj//EABsQAQACAwEBAAAAAAAAAAAAAAEAESExQVFx/9oACAEBAAE/EM/UJmFx6gqm9EMzeKkAr5DA3a3eoizTm+x9Az//2Q==",
-      "color": "#3B49DF"
-    },
-    {
-      "id": "devto-4848909",
-      "title": "Git, Docker, and IPFS All Hide the Same Beautiful Idea",
-      "desc": "By James Anderson | 7 min read",
-      "tag": "tutorial",
-      "published": "2026-10-14T08:50:45Z",
-      "order": 19,
-      "url": "https://dev.to/james_anderson_h/git-docker-and-ipfs-all-hide-the-same-beautiful-idea-3j0",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Frjjnmpeah3gqjvc4u80m.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAAECBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHhZiUh/8QAFhABAQEAAAAAAAAAAAAAAAAAEQAg/9oACAEBAAEFAiN//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAGRABAAIDAAAAAAAAAAAAAAAAAQAxEBEg/9oACAEBAAE/IQJcQW41z//aAAwDAQACAAMAAAAQnX//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/ED//xAAdEAEAAQMFAAAAAAAAAAAAAAABABARITFRcZHR/9oACAEBAAE/EDK2Y2mpvAQMPsEl8Tqg2p//2Q==",
       "color": "#3B49DF"
     },
     {
@@ -235,22 +247,22 @@
       "desc": "By EffessDev | 3 min read",
       "tag": "tutorial",
       "published": "2026-10-12T14:44:25Z",
-      "order": 20,
+      "order": 21,
       "url": "https://dev.to/effessdev/i-was-chasing-the-job-market-one-comment-on-devto-made-me-rethink-everything-4h20",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fcphbk52yjayt0h7tak46.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwIE/8QAFgEBAQEAAAAAAAAAAAAAAAAAAAEC/9oADAMBAAIQAxAAAAEGFNy86Qf/xAAXEAEBAQEAAAAAAAAAAAAAAAABABEh/9oACAEBAAEFAgsAkty3o27f/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFREBAQAAAAAAAAAAAAAAAAAAABH/2gAIAQIBAT8Bqv/EABgQAAMBAQAAAAAAAAAAAAAAAAAQETEB/9oACAEBAAY/AtKtUIdP/8QAGhAAAwADAQAAAAAAAAAAAAAAAAERITFRQf/aAAgBAQABPyHshY5JVVEmX8GCxDZJvdjaODR//9oADAMBAAIAAwAAABAd7//EABgRAAMBAQAAAAAAAAAAAAAAAAABESEx/9oACAEDAQE/EJOi1w//xAAXEQADAQAAAAAAAAAAAAAAAAAAAREh/9oACAECAQE/EKWDg//EABsQAQEBAQEAAwAAAAAAAAAAAAERACFhMUFx/9oACAEBAAE/EBE6P3AE2LDuQJCXEmcPdZDoUhM9mJrx+stlgKHkyikX5ct3/9k=",
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4875822",
-      "title": "Your agent's retry bug isn't an AI problem. It's a distributed-systems problem with an LLM on top.",
-      "desc": "By Dimitris Kyrkos  | 3 min read",
+      "id": "devto-4848909",
+      "title": "Git, Docker, and IPFS All Hide the Same Beautiful Idea",
+      "desc": "By James Anderson | 7 min read",
       "tag": "tutorial",
-      "published": "2026-10-19T06:42:45Z",
-      "order": 21,
-      "url": "https://dev.to/cyclopt_dimitrisk/your-agents-retry-bug-isnt-an-ai-problem-its-a-distributed-systems-problem-with-an-llm-on-top-1i6k",
-      "image": "https://media2.dev.to/dynamic/image/width=1200,height=627,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fiqdssmxk1srgbl586mox.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAARACADASIAAhEBAxEB/8QAGAABAQEBAQAAAAAAAAAAAAAAAAEDAgT/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAH2TSmN1HYED//EABoQAAICAwAAAAAAAAAAAAAAAAABESICIEH/2gAIAQEAAQUCawRUoUGQQd0//8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAwEBPwEf/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAgEBPwEf/8QAHBAAAgICAwAAAAAAAAAAAAAAAAIyQREgIXGR/9oACAEBAAY/AoqQUipFSy/SzHPev//EAB4QAAIBAwUAAAAAAAAAAAAAAAERABAgsVGRwdHw/9oACAEBAAE/ISCxRL0TyUAZYIDPA0C67oChUgna/9oADAMBAAIAAwAAABAjgBz/xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAEDAQE/EB//xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAECAQE/EB//xAAgEAACAgEDBQAAAAAAAAAAAAABEQAhMSDB8EFRcaHR/9oACAEBAAE/EHth6gNoLxDT4UXG2hYkO00W0vUfkAgEm1ru+yx+zCiXBljOHp//2Q==",
+      "published": "2026-10-14T08:50:45Z",
+      "order": 22,
+      "url": "https://dev.to/james_anderson_h/git-docker-and-ipfs-all-hide-the-same-beautiful-idea-3j0",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Frjjnmpeah3gqjvc4u80m.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAAECBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHhZiUh/8QAFhABAQEAAAAAAAAAAAAAAAAAEQAg/9oACAEBAAEFAiN//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAGRABAAIDAAAAAAAAAAAAAAAAAQAxEBEg/9oACAEBAAE/IQJcQW41z//aAAwDAQACAAMAAAAQnX//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/ED//xAAdEAEAAQMFAAAAAAAAAAAAAAABABARITFRcZHR/9oACAEBAAE/EDK2Y2mpvAQMPsEl8Tqg2p//2Q==",
       "color": "#3B49DF"
     },
     {
@@ -259,7 +271,7 @@
       "desc": "By Randal L. Schwartz | 15 min read",
       "tag": "tutorial",
       "published": "2026-10-10T01:15:07Z",
-      "order": 22,
+      "order": 23,
       "url": "https://dev.to/gde/surviving-the-200k-token-lobotomy-how-unix-initd-and-memento-made-my-ai-coding-agent-immune-to-2f74",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fg7swfw5prf9o7zrcrnkn.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAQMCBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHnoNrKuT//xAAZEAEAAgMAAAAAAAAAAAAAAAABABAREkH/2gAIAQEAAQUCmkwFcW//xAAVEQEBAAAAAAAAAAAAAAAAAAAAEf/aAAgBAwEBPwGI/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAGBAAAgMAAAAAAAAAAAAAAAAAABARIFH/2gAIAQEABj8CW1g//8QAGRABAAMBAQAAAAAAAAAAAAAAAQARITGB/9oACAEBAAE/ITTjLVp6yk5aJRxhmORnrcF7c104T//aAAwDAQACAAMAAAAQpH//xAAVEQEBAAAAAAAAAAAAAAAAAAAAEf/aAAgBAwEBPxC1v//EABURAQEAAAAAAAAAAAAAAAAAAAAR/9oACAECAQE/EKr/xAAbEAEAAgMBAQAAAAAAAAAAAAABABEhMUGBUf/aAAgBAQABPxAZFD689lCAOiVAgtMjqmagR6G/YmhItkor1ncPhklauNNhDBP/2Q==",
@@ -271,34 +283,10 @@
       "desc": "By Sergei Parfenov | 4 min read",
       "tag": "tutorial",
       "published": "2026-10-07T16:52:57Z",
-      "order": 23,
+      "order": 24,
       "url": "https://dev.to/p0rt/what-agent-builders-can-borrow-from-openais-math-research-53mn",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto/https%3A%2F%2Fsergei-parfenov.com%2Fassets%2Fcovers%2Fopenai-math-symptomato.webp",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwQB/8QAFQEBAQAAAAAAAAAAAAAAAAAAAQL/2gAMAwEAAhADEAAAAZlBqKA0yv/EABgQAAMBAQAAAAAAAAAAAAAAAAABAhEh/9oACAEBAAEFAiZKjlTgnhN8qmaz/8QAFREBAQAAAAAAAAAAAAAAAAAAAAL/2gAIAQMBAT8BQ//EABURAQEAAAAAAAAAAAAAAAAAAAAB/9oACAECAQE/AVf/xAAaEAABBQEAAAAAAAAAAAAAAAAxAAECEBEg/9oACAEBAAY/Asi6PAv/xAAbEAADAAMBAQAAAAAAAAAAAAAAAREhMVFBkf/aAAgBAQABPyF5dM4K00Yj5EZSsa+Bq1XpNfYWe9I//9oADAMBAAIAAwAAABDYT//EABcRAAMBAAAAAAAAAAAAAAAAAAABESH/2gAIAQMBAT8QmE1n/8QAFxEBAQEBAAAAAAAAAAAAAAAAAQARMf/aAAgBAgEBPxA7By//xAAdEAEAAgMBAAMAAAAAAAAAAAABABEhQVExYaHR/9oACAEBAAE/ECGTojB2BrdWj34sgyiUJq/K5EywnHIjpbaDslSvWGma5EJN5fuKCIbR3r9n/9k=",
-      "color": "#3B49DF"
-    },
-    {
-      "id": "devto-4873311",
-      "title": "Stop Shipping Marketing Pages Like Product Features",
-      "desc": "By Hadil Ben Abdallah | 8 min read",
-      "tag": "tutorial",
-      "published": "2026-10-20T09:02:59Z",
-      "order": 24,
-      "url": "https://dev.to/yassersoliman/stop-shipping-marketing-pages-like-product-features-374d",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fxbjnocjbgfyj4qmc0nsj.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAQACBf/EABUBAQEAAAAAAAAAAAAAAAAAAAEA/9oADAMBAAIQAxAAAAHoGpCQv//EABcQAAMBAAAAAAAAAAAAAAAAAAARIDH/2gAIAQEAAQUCZtI//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAHBAAAwABBQAAAAAAAAAAAAAAAAERIRBBUXGh/9oACAEBAAE/Ia49O0EpuWKtwkJo0eHlH//aAAwDAQACAAMAAAAQRf8A/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPxA//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPxA//8QAGhABAQEAAwEAAAAAAAAAAAAAAQARITFBYf/aAAgBAQABPxB2QHEdAi+NmTrZCCB6uEeS8wQywiUROxNG/9k=",
-      "color": "#3B49DF"
-    },
-    {
-      "id": "devto-4812044",
-      "title": "I Turned 149k Messy Images into an Offline Recognition System",
-      "desc": "By Michellebuchiokonicha | 13 min read",
-      "tag": "tutorial",
-      "published": "2026-10-08T06:31:39Z",
-      "order": 25,
-      "url": "https://dev.to/michellebuchiokonicha/i-turned-149k-messy-images-into-an-offline-recognition-system-3cp3",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F1mh3tg2u6x2dj6vgt8b3.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAAEDAv/EABYBAQEBAAAAAAAAAAAAAAAAAAEAAv/aAAwDAQACEAMQAAABwnLJZEp//8QAGhAAAgIDAAAAAAAAAAAAAAAAAREAIQISMf/aAAgBAQABBQJwGqeZGscKfT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAWEQEBAQAAAAAAAAAAAAAAAAAAATH/2gAIAQIBAT8BlY//xAAXEAEAAwAAAAAAAAAAAAAAAAAQITFB/9oACAEBAAY/AmGsP//EABoQAAMBAQEBAAAAAAAAAAAAAAABESFBMVH/2gAIAQEAAT8hqdEtNXgvl6W02sUiwfc2DIK6RLh//9oADAMBAAIAAwAAABAe/wD/xAAXEQEBAQEAAAAAAAAAAAAAAAABABEh/9oACAEDAQE/EDpBt//EABcRAAMBAAAAAAAAAAAAAAAAAAARIQH/2gAIAQIBAT8QojVR/8QAHBABAQEBAAIDAAAAAAAAAAAAAREAIUFRMXGB/9oACAEBAAE/EFakPbdDjACNo+tBQPFfDkmEIHm4pkvNcY/Jf3XgGhi8vvS30g3/2Q==",
       "color": "#3B49DF"
     },
     {
@@ -307,10 +295,22 @@
       "desc": "By Eyal Bukchin | 7 min read",
       "tag": "tutorial",
       "published": "2026-10-08T10:33:43Z",
-      "order": 26,
+      "order": 25,
       "url": "https://dev.to/metalbear/how-our-engineering-team-uses-ai-part-ii-meat-proxies-148g",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fmetalbear.com%2Fblog%2Fengineering-ai-use-part-2%2Fthumbnail.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAQMAAgT/xAAWAQEBAQAAAAAAAAAAAAAAAAABAAP/2gAMAwEAAhADEAAAAYDXYY/MS//EABoQAAIDAQEAAAAAAAAAAAAAAAECABEyEDH/2gAIAQEAAQUCbUEoAt7XE3//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAXEQEBAQEAAAAAAAAAAAAAAAABABEh/9oACAECAQE/AeyO3//EABcQAQEBAQAAAAAAAAAAAAAAAAEAECH/2gAIAQEABj8CdOTpf//EABsQAQACAgMAAAAAAAAAAAAAAAEAESFxEDGR/9oACAEBAAE/IV6S4Ry9EsJS0gvdw1BkW25//9oADAMBAAIAAwAAABC+f//EABYRAQEBAAAAAAAAAAAAAAAAAAARAf/aAAgBAwEBPxBcj//EABkRAAMAAwAAAAAAAAAAAAAAAAABESExQf/aAAgBAgEBPxBLnQ/Vwf/EABwQAQADAAIDAAAAAAAAAAAAAAEAESFRsTFhcf/aAAgBAQABPxCgPbthaXm9FnNwIjkLnnVa7gA3YKNqmUuEOv2f/9k=",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4812044",
+      "title": "I Turned 149k Messy Images into an Offline Recognition System",
+      "desc": "By Michellebuchiokonicha | 13 min read",
+      "tag": "tutorial",
+      "published": "2026-10-08T06:31:39Z",
+      "order": 26,
+      "url": "https://dev.to/michellebuchiokonicha/i-turned-149k-messy-images-into-an-offline-recognition-system-3cp3",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F1mh3tg2u6x2dj6vgt8b3.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAAEDAv/EABYBAQEBAAAAAAAAAAAAAAAAAAEAAv/aAAwDAQACEAMQAAABwnLJZEp//8QAGhAAAgIDAAAAAAAAAAAAAAAAAREAIQISMf/aAAgBAQABBQJwGqeZGscKfT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAWEQEBAQAAAAAAAAAAAAAAAAAAATH/2gAIAQIBAT8BlY//xAAXEAEAAwAAAAAAAAAAAAAAAAAQITFB/9oACAEBAAY/AmGsP//EABoQAAMBAQEBAAAAAAAAAAAAAAABESFBMVH/2gAIAQEAAT8hqdEtNXgvl6W02sUiwfc2DIK6RLh//9oADAMBAAIAAwAAABAe/wD/xAAXEQEBAQEAAAAAAAAAAAAAAAABABEh/9oACAEDAQE/EDpBt//EABcRAAMBAAAAAAAAAAAAAAAAAAARIQH/2gAIAQIBAT8QojVR/8QAHBABAQEBAAIDAAAAAAAAAAAAAREAIUFRMXGB/9oACAEBAAE/EFakPbdDjACNo+tBQPFfDkmEIHm4pkvNcY/Jf3XgGhi8vvS30g3/2Q==",
       "color": "#3B49DF"
     },
     {
@@ -323,6 +323,18 @@
       "url": "https://dev.to/debashish_ghosal/the-bug-lives-at-the-seam-not-in-the-logic-48j4",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F4rowgtbldkbcwvfn8jee.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwIB/8QAFQEBAQAAAAAAAAAAAAAAAAAAAQD/2gAMAwEAAhADEAAAATokSy05/8QAGRABAQEAAwAAAAAAAAAAAAAAAQACEBES/9oACAEBAAEFAiOHqNXqdsrf/8QAFREBAQAAAAAAAAAAAAAAAAAAAAH/2gAIAQMBAT8BWv/EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABYQAAMAAAAAAAAAAAAAAAAAABAgMf/aAAgBAQAGPwJYf//EABkQAQEBAQEBAAAAAAAAAAAAAAERACExUf/aAAgBAQABPyGFynmWvk3bt0yIOPgGt4zI6t3/2gAMAwEAAgADAAAAEFw//8QAFhEBAQEAAAAAAAAAAAAAAAAAAAER/9oACAEDAQE/ENUf/8QAFhEBAQEAAAAAAAAAAAAAAAAAAAEh/9oACAECAQE/EIx//8QAGhABAQADAQEAAAAAAAAAAAAAAREAITFhUf/aAAgBAQABPxDjLPcRUhW4sVV1uHSlvb2Ysi9LpM5KX2bwkADwwynH/9k=",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4873311",
+      "title": "Stop Shipping Marketing Pages Like Product Features",
+      "desc": "By Hadil Ben Abdallah | 8 min read",
+      "tag": "tutorial",
+      "published": "2026-10-20T09:02:59Z",
+      "order": 24,
+      "url": "https://dev.to/yassersoliman/stop-shipping-marketing-pages-like-product-features-374d",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fxbjnocjbgfyj4qmc0nsj.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAQACBf/EABUBAQEAAAAAAAAAAAAAAAAAAAEA/9oADAMBAAIQAxAAAAHoGpCQv//EABcQAAMBAAAAAAAAAAAAAAAAAAARIDH/2gAIAQEAAQUCZtI//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAHBAAAwABBQAAAAAAAAAAAAAAAAERIRBBUXGh/9oACAEBAAE/Ia49O0EpuWKtwkJo0eHlH//aAAwDAQACAAMAAAAQRf8A/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPxA//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPxA//8QAGhABAQEAAwEAAAAAAAAAAAAAAQARITFBYf/aAAgBAQABPxB2QHEdAi+NmTrZCCB6uEeS8wQywiUROxNG/9k=",
       "color": "#3B49DF"
     },
     {

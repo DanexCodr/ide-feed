@@ -656,5 +656,3 @@ ethics policy](https://jepsen.io/analyses/ethics).*
 1. There are two unrelated orchestration systems with similar names: one from Microsoft, also named [Conductor](https://github.com/microsoft/conductor), and one called [Postgres Conductor](https://pg-conductor.dev/). There is also an unrelated [AI marketing service](https://www.conductor.com/) called Conductor.[↩︎](https://jepsen.io/analyses/orkes-conductor-5.3.2#fnref1)
 2. While operations within Conductor should see only a single successful task execution, tasks may have visible side effects on systems outside Conductor. Well-behaved tasks should therefore be idempotent and deterministic.[↩︎](https://jepsen.io/analyses/orkes-conductor-5.3.2#fnref2)
 3. We discovered this issue just as our work on Conductor was coming to a close; regrettably, we have not been able to test with other versions or narrow down the failure modes that might induce it.[↩︎](https://jepsen.io/analyses/orkes-conductor-5.3.2#fnref3)
-
-[Discuss on Hacker News](https://news.ycombinator.com/item?id=50165904)

@@ -1,177 +1,88 @@
-Quick installer information for people familiar with OpenBSD, and the use of
-the "[disklabel](https://man.openbsd.org/disklabel.8) -E" command.
-If you are at all confused when installing OpenBSD, read the relevant
-INSTALL.* file as listed above!
+Something funny happened a little while ago: I read about FreshRSS, and it
+sounded nice, so I *installed it on a server and started using it*. That would
+not have happened a year ago, but then again, a year ago I didn’t have any NixOS
+servers.
 
-OpenBSD/alpha:
+For the past few years, my rss feeds have lived locally on my phone only.
+There was a good idea behind that1<sup>1</sup> I can mostly take time to read when I’m
+away from my computer anyway., but it never quite worked in practice. For one,
+many things are easier to read on a larger screen. But it was also brittle to
+trust a phone app to manage the read/unread status of thousands of articles
+across a hundred feeds.2<sup>2</sup> In particular, when I switched to a different phone
+I could migrate all feeds to it, but the read/unread status was lost along the
+way. What I really wanted was a server-side feed aggregator. This is software
+that runs on a server, manages rss feeds, and then I can read the rss feeds
+either through a web interface, or through client applications. I’ve wanted that
+for a while, but I’ve never taken the step, because it would be yet another side
+project to maintain the deployment of.
 
-If your machine can boot from CD, you can write *install80.iso* or
-*cd80.iso* to a CD and boot from it.
-Refer to INSTALL.alpha for more details.
+But now, with some NixOS experience, adding a working FreshRSS configuration
+(including backups) took 9 lines of Nix code3<sup>3</sup> Plus a dozen more lines for the
+nginx reverse proxy configuration. It got a little complicated because I wanted
+to `proxy_pass` from a specific location block which required rewriting cookie
+paths. But that’s a me problem, not a NixOS problem.. That installation has
+just hands-off worked for the past few months. If or when that server breaks, I
+can spin up a new one running the exact same configuration, probably in
+something like 15 minutes. When we can do something like that, there is
+literally no reason to not just try the new software.
 
-OpenBSD/amd64:
+Contrast this against how FreshRSS is installed outside of NixOS. Then we’d
 
-If your machine can boot from CD, you can write *install80.iso* or
-*cd80.iso* to a CD and boot from it.
-You may need to adjust your BIOS options first.
+1. download and extract an archive to the right location;
+2. configure permissions according to instructions;
+3. install nginx and php-fpm with necessary extra dependencies to the server;
+4. configure php-fpm pools and make nginx pass requests through to php-fpm;
+5. set up Let’s Encrypt certificates;
+6. set up backups; and
+7. hopefully remember how to do all the above if something breaks and we need to reinstall FreshRSS on a new or upgraded server later.
 
-If your machine can boot from USB, you can write *install80.img* or
-*miniroot80.img* to a USB stick and boot from it.
+Of course, the FreshRSS project provides a container image which would shorten
+the process a little bit. It purports to set up Apache with mod_php and
+configure them the right way. Then we’d only need to configure backups, create a
+systemd service that runs the container, and manage nginx as a tls terminating
+reverse proxy in front of that, because the container image reasonably does not
+come with tls support. This is still stuff to remember, and there’s also no
+guarantee the same thing works six months down the line when reinstalling,
+unless we wrote down which exact container image we downloaded.4<sup>4</sup> It does not
+help to build the container image from source, because two builds from the same
+Dockerfile separated by time can result in rather different container images.
 
-If you can't boot from a CD, floppy disk, or USB,
-you can install across the network using PXE as described in the included
-INSTALL.amd64 document.
+I have mentioned before how much I dislike maintaining side projects. That
+includes my own code, but also self-hosted services developed by someone else.
+I’m okay with a few minutes of maintenance here and there, but having to
+schedule hours of uninterrupted work to upgrade something, or spending *any*
+amount of time at all on emergency maintenance, really kills my desire to work
+with computers.
 
-If you are planning to dual boot OpenBSD with another OS, you will need to
-read INSTALL.amd64.
+You’d think someone of my disposition would be deep into configuration
+management, container orchestration, or both, but no. I have made honest
+attempts with CFEngine, Ansible, podman, and k3s but none of them improved my
+installation/configuration/deployment experience significantly over (a)
+carefully writing things down, and sometimes (b) turning those careful notes
+into a shell script performing a sequence of `ssh` commands.5<sup>5</sup> Yes, this is
+essentially reinventing Ansible – but less brittle. It won’t break the next time
+someone glances sideways at `pip`. The drawback of the shell script is that it
+often ends up relying on assumptions that become invalid with time, or when it
+is used in a different environment. A NixOS configuration reads a lot like the
+careful instructions to myself, except they’re executable and they produce the
+same result every time.
 
-OpenBSD/arm64:
+I can mostly take time to read when I’m
+away from my computer anyway.
 
-Depending on your hardware, you can write *install80.iso*
-or *cd80.iso* to a CD and boot from it, or write a system specific
-miniroot to an SD card and boot from it after connecting to the serial
-console.  Refer to INSTALL.armv64 for more details.
+In particular, when I switched to a different phone
+I could migrate all feeds to it, but the read/unread status was lost along the
+way.
 
-OpenBSD/armv7:
+Plus a dozen more lines for the
+nginx reverse proxy configuration. It got a little complicated because I wanted
+to `proxy_pass` from a specific location block which required rewriting cookie
+paths. But that’s a me problem, not a NixOS problem.
 
-Write a system specific miniroot to an SD card and boot from it after connecting
-to the serial console.  Refer to INSTALL.armv7 for more details.
+It does not
+help to build the container image from source, because two builds from the same
+Dockerfile separated by time can result in rather different container images.
 
-OpenBSD/hppa:
-
-Boot over the network by following the instructions in INSTALL.hppa or the
-[hppa platform page](https://www.openbsd.org/hppa.html#install).
-
-OpenBSD/i386:
-
-If your machine can boot from CD, you can write *install80.iso* or
-*cd80.iso* to a CD and boot from it.
-You may need to adjust your BIOS options first.
-
-If your machine can boot from USB, you can write *install80.img* or
-*miniroot80.img* to a USB stick and boot from it.
-
-If you can't boot from a CD, floppy disk, or USB,
-you can install across the network using PXE as described in
-the included INSTALL.i386 document.
-
-If you are planning on dual booting OpenBSD with another OS, you will need to
-read INSTALL.i386.
-
-OpenBSD/landisk:
-
-Write *miniroot80.img* to the start of the CF
-or disk, and boot normally.
-
-OpenBSD/luna88k:
-
-Copy 'boot' and 'bsd.rd' to a Mach or UniOS partition, and boot the bootloader
-from the PROM, and then bsd.rd from the bootloader.
-Refer to the instructions in INSTALL.luna88k for more details.
-
-OpenBSD/macppc:
-
-Burn the *install80.iso* image from a mirror site to a CDROM,
-and power on your machine while holding down the *C* key until
-the display turns on and shows *OpenBSD/macppc boot*.
-
-Alternatively, at the Open Firmware prompt, enter *boot cd:,ofwboot
-/8.0/macppc/bsd.rd*
-OpenBSD/octeon:
-
-After connecting a serial port, boot bsd.rd over the network via DHCP/tftp.
-Refer to the instructions in INSTALL.octeon for more details.
-
-OpenBSD/powerpc64:
-
-To install, write *install80.img* or *miniroot80.img* to a
-USB stick, plug it into the machine and choose the *OpenBSD
-install* menu item in Petitboot.
-Refer to the instructions in INSTALL.powerpc64 for more details.
-
-OpenBSD/riscv64:
-
-To install, write *install80.img* or *miniroot80.img* to a
-USB stick, and boot with that drive plugged in.
-Make sure you also have the microSD card plugged in that shipped with the
-HiFive Unmatched board.
-Refer to the instructions in INSTALL.riscv64 for more details.
-
-OpenBSD/sparc64:
-
-Burn the image from a mirror site to a CDROM, boot from it, and type
-*boot cdrom*.
-
-If this doesn't work, or if you don't have a CDROM drive, you can write
-*floppy80.img* or *floppyB80.img*
-(depending on your machine) to a floppy and boot it with *boot
-floppy*. Refer to INSTALL.sparc64 for details.
-
-Make sure you use a properly formatted floppy with NO BAD BLOCKS or your install
-will most likely fail.
-
-You can also write *miniroot80.img* to the swap partition on
-the disk and boot with *boot disk:b*.
-
-If nothing works, you can boot over the network as described in INSTALL.sparc64.
-
-If you already have an OpenBSD 7.9 system, and do not want to reinstall,
-upgrade instructions and advice can be found in the
-[Upgrade Guide](https://www.openbsd.org/faq/upgrade80.html).
-
-`src.tar.gz` contains a source archive starting at `/usr/src`.
-This file contains everything you need except for the kernel sources,
-which are in a separate archive.
-To extract:
-
-# <kbd>mkdir -p /usr/src</kbd>
-# <kbd>cd /usr/src</kbd>
-# <kbd>tar xvfz /tmp/src.tar.gz</kbd>
-
-`sys.tar.gz` contains a source archive starting at `/usr/src/sys`.
-This file contains all the kernel sources you need to rebuild kernels.
-To extract:
-
-# <kbd>mkdir -p /usr/src/sys</kbd>
-# <kbd>cd /usr/src</kbd>
-# <kbd>tar xvfz /tmp/sys.tar.gz</kbd>
-
-Both of these trees are a regular CVS checkout.  Using these trees it
-is possible to get a head-start on using the anoncvs servers as
-described [here](https://www.openbsd.org/anoncvs.html).
-Using these files
-results in a much faster initial CVS update than you could expect from
-a fresh checkout of the full OpenBSD source tree.
-
-### Ports Tree
-
-A ports tree archive is also provided.  To extract:
-
-# <kbd>cd /usr</kbd>
-# <kbd>tar xvfz /tmp/ports.tar.gz</kbd>
-
-Go read the [ports](https://www.openbsd.org/faq/ports/index.html) page
-if you know nothing about ports
-at this point.  This text is not a manual of how to use ports.
-Rather, it is a set of notes meant to kickstart the user on the
-OpenBSD ports system.
-
-The *ports/* directory represents a CVS checkout of our ports.
-As with our complete source tree, our ports tree is available via
-[AnonCVS](https://www.openbsd.org/anoncvs.html).
-So, in order to keep up to date with the -stable branch, you must make
-the *ports/* tree available on a read-write medium and update the tree
-with a command like:
-
-# <kbd>cd /usr/ports</kbd>
-# <kbd>cvs -d anoncvs@server.openbsd.org:/cvs update -Pd -rOPENBSD_8_0</kbd>
-
-[Of course, you must replace the server name here with a nearby anoncvs
-server.]
-
-Note that most ports are available as packages on our mirrors. Updated
-ports for the 8.0 release will be made available if problems arise.
-
-If you're interested in seeing a port added, would like to help out, or just
-would like to know more, the mailing list
-[ports@openbsd.org](https://www.openbsd.org/mail.html) is a good place to know.
+Yes, this is
+essentially reinventing Ansible – but less brittle. It won’t break the next time
+someone glances sideways at `pip`.
