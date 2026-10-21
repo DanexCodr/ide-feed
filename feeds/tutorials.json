@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-21T11:22:43Z",
+  "updated": "2026-10-21T16:49:32Z",
   "items": [
     {
       "id": "devto-4858196",
@@ -50,15 +50,15 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4812559",
-      "title": "I Write on a 2006 iMac and Code on a $200 Laptop",
-      "desc": "By Mika Flowers | 4 min read",
+      "id": "devto-4825930",
+      "title": "In Ruby, Objects Don't Have Methods. How Method Lookup Actually Works.",
+      "desc": "By S M Tahosin | 7 min read",
       "tag": "tutorial",
-      "published": "2026-10-07T13:27:39Z",
+      "published": "2026-10-21T09:57:18Z",
       "order": 5,
-      "url": "https://dev.to/mikachu/i-write-on-a-2006-imac-and-code-on-a-200-laptop-9n4",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fa6s485r66rbdy2316p3r.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAwEBAAAAAAAAAAAAAAAAAAIDAQT/xAAWAQEBAQAAAAAAAAAAAAAAAAAAAgP/2gAMAwEAAhADEAAAAexJmdPsg//EABgQAAMBAQAAAAAAAAAAAAAAAAABERAx/9oACAEBAAEFAlwtxubT/8QAFREBAQAAAAAAAAAAAAAAAAAAEBH/2gAIAQMBAT8Bh//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABcQAAMBAAAAAAAAAAAAAAAAABARMSD/2gAIAQEABj8CEWKP/8QAGRAAAwEBAQAAAAAAAAAAAAAAAAERMUFx/9oACAEBAAE/IcBVOw2bYcG16VzRUJ8P/9oADAMBAAIAAwAAABCNP//EABYRAQEBAAAAAAAAAAAAAAAAAAEAEf/aAAgBAwEBPxATJhf/xAAWEQEBAQAAAAAAAAAAAAAAAAARAAH/2gAIAQIBAT8QSzW//8QAGhABAAMBAQEAAAAAAAAAAAAAAQARITFBYf/aAAgBAQABPxBVtFVWOMAEA5fv2VgfS4DXboX5BAdJ2oMqnL5DltzGf//Z",
+      "url": "https://dev.to/smtahosin/in-ruby-objects-dont-have-methods-how-method-lookup-actually-works-31g9",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fiili.io%2FnMfrPx1.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAgMAAQT/xAAVAQEBAAAAAAAAAAAAAAAAAAABAv/aAAwDAQACEAMQAAABxDZFDHLH/8QAGBAAAwEBAAAAAAAAAAAAAAAAABARITH/2gAIAQEAAQUCqhwqhN//xAAVEQEBAAAAAAAAAAAAAAAAAAAAEf/aAAgBAwEBPwGI/8QAFREBAQAAAAAAAAAAAAAAAAAAABH/2gAIAQIBAT8BV//EABgQAAIDAAAAAAAAAAAAAAAAAAAxECAh/9oACAEBAAY/AlOCp//EAB0QAAICAQUAAAAAAAAAAAAAAAABESExQVFxgZH/2gAIAQEAAT8hUdHaHGxxE5yLqwsMSt+Fsj//2gAMAwEAAgADAAAAECGP/8QAFxEAAwEAAAAAAAAAAAAAAAAAAAERMf/aAAgBAwEBPxCHjHB//8QAFhEAAwAAAAAAAAAAAAAAAAAAAAER/9oACAECAQE/EKxUf//EAB0QAQACAgMBAQAAAAAAAAAAAAEAETFBIVFhkcH/2gAIAQEAAT8Qo1Y+DNi/uIpLK8XnUexq8+wFAOMvUYWF/ko/I7bJVBXU/9k=",
       "color": "#3B49DF"
     },
     {
@@ -158,27 +158,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4845471",
-      "title": "I argued with AI until it apologized for calling my course \"AI Slop\"",
-      "desc": "By EffessDev | 3 min read",
-      "tag": "tutorial",
-      "published": "2026-10-14T11:31:46Z",
-      "order": 14,
-      "url": "https://dev.to/effessdev/i-argued-with-ai-until-it-apologized-for-calling-my-course-ai-slop-350d",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fsv9mqip5csydm4a6snax.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAwEAAv/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAENKvRKdf/EABoQAAICAwAAAAAAAAAAAAAAAAABAhARMUH/2gAIAQEAAQUC4qZgWhyP/8QAFREBAQAAAAAAAAAAAAAAAAAAARD/2gAIAQMBAT8BZ//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABYQAAMAAAAAAAAAAAAAAAAAAAAgMf/aAAgBAQAGPwJ4f//EABsQAAICAwEAAAAAAAAAAAAAAAABESEQQVFh/9oACAEBAAE/IWw/sI0LwpNlAlUvE//aAAwDAQACAAMAAAAQ3K//xAAWEQEBAQAAAAAAAAAAAAAAAAABABH/2gAIAQMBAT8QekJl/8QAFxEAAwEAAAAAAAAAAAAAAAAAAAEhEf/aAAgBAgEBPxDaNw//xAAbEAEBAQEBAQEBAAAAAAAAAAABEQAhMWFBUf/aAAgBAQABPxAOUVmjB4P5qJsGWT3I9/BmnRPN0e8+4FUZiVCL93//2Q==",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4884586",
       "title": "Building an Open-Source Support Tool That Turns Your Docs into Reusable Knowledge",
       "desc": "By Nathan Tarbert | 7 min read",
       "tag": "tutorial",
       "published": "2026-10-20T17:15:15Z",
-      "order": 15,
+      "order": 14,
       "url": "https://dev.to/nathan_tarbert/your-team-has-answered-this-before-im-building-a-tool-that-remembers-5604",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fl0qfhqjgbvaejbwbk7ct.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAwEBAAAAAAAAAAAAAAAAAAEDAgT/xAAVAQEBAAAAAAAAAAAAAAAAAAAAAf/aAAwDAQACEAMQAAAB7tAkXVn/xAAZEAACAwEAAAAAAAAAAAAAAAABAgAQEiD/2gAIAQEAAQUCrTQMxPH/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAaEAABBQEAAAAAAAAAAAAAAAABAAIQICEz/9oACAEBAAY/Ao5lawiv/8QAHRAAAwAABwAAAAAAAAAAAAAAAAERIDFRYXGBof/aAAgBAQABPyFt3L05GtuM7JhLrSb4P//aAAwDAQACAAMAAAAQd6//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAVEQEBAAAAAAAAAAAAAAAAAAAAEf/aAAgBAgEBPxBX/8QAHBABAAICAwEAAAAAAAAAAAAAAQARITFBUXFh/9oACAEBAAE/EBMLZgutL+QyCGhrTAbRthCbLbzECuV9lHUXFT//2Q==",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4845471",
+      "title": "I argued with AI until it apologized for calling my course \"AI Slop\"",
+      "desc": "By EffessDev | 3 min read",
+      "tag": "tutorial",
+      "published": "2026-10-14T11:31:46Z",
+      "order": 15,
+      "url": "https://dev.to/effessdev/i-argued-with-ai-until-it-apologized-for-calling-my-course-ai-slop-350d",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fsv9mqip5csydm4a6snax.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAwEAAv/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAENKvRKdf/EABoQAAICAwAAAAAAAAAAAAAAAAABAhARMUH/2gAIAQEAAQUC4qZgWhyP/8QAFREBAQAAAAAAAAAAAAAAAAAAARD/2gAIAQMBAT8BZ//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABYQAAMAAAAAAAAAAAAAAAAAAAAgMf/aAAgBAQAGPwJ4f//EABsQAAICAwEAAAAAAAAAAAAAAAABESEQQVFh/9oACAEBAAE/IWw/sI0LwpNlAlUvE//aAAwDAQACAAMAAAAQ3K//xAAWEQEBAQAAAAAAAAAAAAAAAAABABH/2gAIAQMBAT8QekJl/8QAFxEAAwEAAAAAAAAAAAAAAAAAAAEhEf/aAAgBAgEBPxDaNw//xAAbEAEBAQEBAQEBAAAAAAAAAAABEQAhMWFBUf/aAAgBAQABPxAOUVmjB4P5qJsGWT3I9/BmnRPN0e8+4FUZiVCL93//2Q==",
       "color": "#3B49DF"
     },
     {
@@ -242,27 +242,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4833419",
-      "title": "I was chasing the job market. One comment on DEV.to made me rethink everything",
-      "desc": "By EffessDev | 3 min read",
-      "tag": "tutorial",
-      "published": "2026-10-12T14:44:25Z",
-      "order": 21,
-      "url": "https://dev.to/effessdev/i-was-chasing-the-job-market-one-comment-on-devto-made-me-rethink-everything-4h20",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fcphbk52yjayt0h7tak46.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwIE/8QAFgEBAQEAAAAAAAAAAAAAAAAAAAEC/9oADAMBAAIQAxAAAAEGFNy86Qf/xAAXEAEBAQEAAAAAAAAAAAAAAAABABEh/9oACAEBAAEFAgsAkty3o27f/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFREBAQAAAAAAAAAAAAAAAAAAABH/2gAIAQIBAT8Bqv/EABgQAAMBAQAAAAAAAAAAAAAAAAAQETEB/9oACAEBAAY/AtKtUIdP/8QAGhAAAwADAQAAAAAAAAAAAAAAAAERITFRQf/aAAgBAQABPyHshY5JVVEmX8GCxDZJvdjaODR//9oADAMBAAIAAwAAABAd7//EABgRAAMBAQAAAAAAAAAAAAAAAAABESEx/9oACAEDAQE/EJOi1w//xAAXEQADAQAAAAAAAAAAAAAAAAAAAREh/9oACAECAQE/EKWDg//EABsQAQEBAQEAAwAAAAAAAAAAAAERACFhMUFx/9oACAEBAAE/EBE6P3AE2LDuQJCXEmcPdZDoUhM9mJrx+stlgKHkyikX5ct3/9k=",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4848909",
       "title": "Git, Docker, and IPFS All Hide the Same Beautiful Idea",
       "desc": "By James Anderson | 7 min read",
       "tag": "tutorial",
       "published": "2026-10-14T08:50:45Z",
-      "order": 22,
+      "order": 21,
       "url": "https://dev.to/james_anderson_h/git-docker-and-ipfs-all-hide-the-same-beautiful-idea-3j0",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Frjjnmpeah3gqjvc4u80m.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAAECBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHhZiUh/8QAFhABAQEAAAAAAAAAAAAAAAAAEQAg/9oACAEBAAEFAiN//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAGRABAAIDAAAAAAAAAAAAAAAAAQAxEBEg/9oACAEBAAE/IQJcQW41z//aAAwDAQACAAMAAAAQnX//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/ED//xAAdEAEAAQMFAAAAAAAAAAAAAAABABARITFRcZHR/9oACAEBAAE/EDK2Y2mpvAQMPsEl8Tqg2p//2Q==",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4833419",
+      "title": "I was chasing the job market. One comment on DEV.to made me rethink everything",
+      "desc": "By EffessDev | 3 min read",
+      "tag": "tutorial",
+      "published": "2026-10-12T14:44:25Z",
+      "order": 22,
+      "url": "https://dev.to/effessdev/i-was-chasing-the-job-market-one-comment-on-devto-made-me-rethink-everything-4h20",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fcphbk52yjayt0h7tak46.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwIE/8QAFgEBAQEAAAAAAAAAAAAAAAAAAAEC/9oADAMBAAIQAxAAAAEGFNy86Qf/xAAXEAEBAQEAAAAAAAAAAAAAAAABABEh/9oACAEBAAEFAgsAkty3o27f/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFREBAQAAAAAAAAAAAAAAAAAAABH/2gAIAQIBAT8Bqv/EABgQAAMBAQAAAAAAAAAAAAAAAAAQETEB/9oACAEBAAY/AtKtUIdP/8QAGhAAAwADAQAAAAAAAAAAAAAAAAERITFRQf/aAAgBAQABPyHshY5JVVEmX8GCxDZJvdjaODR//9oADAMBAAIAAwAAABAd7//EABgRAAMBAQAAAAAAAAAAAAAAAAABESEx/9oACAEDAQE/EJOi1w//xAAXEQADAQAAAAAAAAAAAAAAAAAAAREh/9oACAECAQE/EKWDg//EABsQAQEBAQEAAwAAAAAAAAAAAAERACFhMUFx/9oACAEBAAE/EBE6P3AE2LDuQJCXEmcPdZDoUhM9mJrx+stlgKHkyikX5ct3/9k=",
       "color": "#3B49DF"
     },
     {
@@ -290,27 +290,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4817363",
-      "title": "How Our Engineering Team Uses AI, Part II: Meat Proxies",
-      "desc": "By Eyal Bukchin | 7 min read",
-      "tag": "tutorial",
-      "published": "2026-10-08T10:33:43Z",
-      "order": 25,
-      "url": "https://dev.to/metalbear/how-our-engineering-team-uses-ai-part-ii-meat-proxies-148g",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fmetalbear.com%2Fblog%2Fengineering-ai-use-part-2%2Fthumbnail.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAQMAAgT/xAAWAQEBAQAAAAAAAAAAAAAAAAABAAP/2gAMAwEAAhADEAAAAYDXYY/MS//EABoQAAIDAQEAAAAAAAAAAAAAAAECABEyEDH/2gAIAQEAAQUCbUEoAt7XE3//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAXEQEBAQEAAAAAAAAAAAAAAAABABEh/9oACAECAQE/AeyO3//EABcQAQEBAQAAAAAAAAAAAAAAAAEAECH/2gAIAQEABj8CdOTpf//EABsQAQACAgMAAAAAAAAAAAAAAAEAESFxEDGR/9oACAEBAAE/IV6S4Ry9EsJS0gvdw1BkW25//9oADAMBAAIAAwAAABC+f//EABYRAQEBAAAAAAAAAAAAAAAAAAARAf/aAAgBAwEBPxBcj//EABkRAAMAAwAAAAAAAAAAAAAAAAABESExQf/aAAgBAgEBPxBLnQ/Vwf/EABwQAQADAAIDAAAAAAAAAAAAAAEAESFRsTFhcf/aAAgBAQABPxCgPbthaXm9FnNwIjkLnnVa7gA3YKNqmUuEOv2f/9k=",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4812044",
       "title": "I Turned 149k Messy Images into an Offline Recognition System",
       "desc": "By Michellebuchiokonicha | 13 min read",
       "tag": "tutorial",
       "published": "2026-10-08T06:31:39Z",
-      "order": 26,
+      "order": 25,
       "url": "https://dev.to/michellebuchiokonicha/i-turned-149k-messy-images-into-an-offline-recognition-system-3cp3",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F1mh3tg2u6x2dj6vgt8b3.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAAEDAv/EABYBAQEBAAAAAAAAAAAAAAAAAAEAAv/aAAwDAQACEAMQAAABwnLJZEp//8QAGhAAAgIDAAAAAAAAAAAAAAAAAREAIQISMf/aAAgBAQABBQJwGqeZGscKfT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAWEQEBAQAAAAAAAAAAAAAAAAAAATH/2gAIAQIBAT8BlY//xAAXEAEAAwAAAAAAAAAAAAAAAAAQITFB/9oACAEBAAY/AmGsP//EABoQAAMBAQEBAAAAAAAAAAAAAAABESFBMVH/2gAIAQEAAT8hqdEtNXgvl6W02sUiwfc2DIK6RLh//9oADAMBAAIAAwAAABAe/wD/xAAXEQEBAQEAAAAAAAAAAAAAAAABABEh/9oACAEDAQE/EDpBt//EABcRAAMBAAAAAAAAAAAAAAAAAAARIQH/2gAIAQIBAT8QojVR/8QAHBABAQEBAAIDAAAAAAAAAAAAAREAIUFRMXGB/9oACAEBAAE/EFakPbdDjACNo+tBQPFfDkmEIHm4pkvNcY/Jf3XgGhi8vvS30g3/2Q==",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4817363",
+      "title": "How Our Engineering Team Uses AI, Part II: Meat Proxies",
+      "desc": "By Eyal Bukchin | 7 min read",
+      "tag": "tutorial",
+      "published": "2026-10-08T10:33:43Z",
+      "order": 26,
+      "url": "https://dev.to/metalbear/how-our-engineering-team-uses-ai-part-ii-meat-proxies-148g",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fmetalbear.com%2Fblog%2Fengineering-ai-use-part-2%2Fthumbnail.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAQMAAgT/xAAWAQEBAQAAAAAAAAAAAAAAAAABAAP/2gAMAwEAAhADEAAAAYDXYY/MS//EABoQAAIDAQEAAAAAAAAAAAAAAAECABEyEDH/2gAIAQEAAQUCbUEoAt7XE3//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAXEQEBAQEAAAAAAAAAAAAAAAABABEh/9oACAECAQE/AeyO3//EABcQAQEBAQAAAAAAAAAAAAAAAAEAECH/2gAIAQEABj8CdOTpf//EABsQAQACAgMAAAAAAAAAAAAAAAEAESFxEDGR/9oACAEBAAE/IV6S4Ry9EsJS0gvdw1BkW25//9oADAMBAAIAAwAAABC+f//EABYRAQEBAAAAAAAAAAAAAAAAAAARAf/aAAgBAwEBPxBcj//EABkRAAMAAwAAAAAAAAAAAAAAAAABESExQf/aAAgBAgEBPxBLnQ/Vwf/EABwQAQADAAIDAAAAAAAAAAAAAAEAESFRsTFhcf/aAAgBAQABPxCgPbthaXm9FnNwIjkLnnVa7gA3YKNqmUuEOv2f/9k=",
       "color": "#3B49DF"
     },
     {
@@ -359,18 +359,6 @@
       "url": "https://dev.to/alexgeorgiev17/duckdb-20-alphas-triggers-cost-three-times-more-per-row-than-per-statement-13cj",
       "image": "https://media2.dev.to/dynamic/image/width=1200,height=627,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fqi39lvvoa59bvwejycxb.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAARACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAAIBAwT/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAHYtrFE6EHACAP/xAAbEAABBAMAAAAAAAAAAAAAAAABAAIRIhAgMf/aAAgBAQABBQIhoNVVQxHoxNtP/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAwEBPwEf/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAgEBPwEf/8QAGhAAAwEAAwAAAAAAAAAAAAAAAAIyERAgQf/aAAgBAQAGPwKVJUhSVPeczr//xAAfEAACAQMFAQAAAAAAAAAAAAABEQAhUYEQIDGx8dH/2gAIAQEAAT8hROqLzxeSAh+EqVYmkBXydLhw3t//2gAMAwEAAgADAAAAEENAHP/EABQRAQAAAAAAAAAAAAAAAAAAACD/2gAIAQMBAT8QH//EABQRAQAAAAAAAAAAAAAAAAAAACD/2gAIAQIBAT8QH//EACEQAQABAwIHAAAAAAAAAAAAAAERACExUWEQIEGBocHw/9oACAEBAAE/EI5dtkHqrMjfNqRiFvDoqKJ9MK+mKucIGUF5qIkHucFgnDsTbl//2Q==",
-      "color": "#3B49DF"
-    },
-    {
-      "id": "devto-4839843",
-      "title": "I Removed Passwords From My App. Here’s What the Login Flow Looks Like Now",
-      "desc": "By Hadil Ben Abdallah | 10 min read",
-      "tag": "tutorial",
-      "published": "2026-10-14T13:13:55Z",
-      "order": 28,
-      "url": "https://dev.to/hadil/i-removed-passwords-from-my-app-heres-what-the-login-flow-looks-like-now-51k9",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F59hogzzu95alwslfiqt3.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAgAE/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAL/2gAMAwEAAhADEAAAAcCNco0f/8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQABBQIP/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAGxAAAgEFAAAAAAAAAAAAAAAAAAERICExQZH/2gAIAQEAAT8hE50uE3wqv//aAAwDAQACAAMAAAAQU+//xAAVEQEBAAAAAAAAAAAAAAAAAAABEP/aAAgBAwEBPxBn/8QAFhEBAQEAAAAAAAAAAAAAAAAAAQAR/9oACAECAQE/EDJL/8QAGhAAAwEBAQEAAAAAAAAAAAAAAAERIVFBcf/aAAgBAQABPxBfKNaJ4T4340PvgnCmEP/Z",
       "color": "#3B49DF"
     }
   ]

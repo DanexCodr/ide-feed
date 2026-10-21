@@ -1,51 +1,121 @@
-The curl project has decided to alter its vulnerability disclosure program procedure and starting ***October 26 2026***, we insist that all vulnerability reports submitted to us that are deemed to be severity LOW or MEDIUM should instead be submitted as issues in [our GitHub repository](https://github.com/curl/curl).
+On Friday Oct 2, 09:35am, 333 infected exit nodes started a coordinated campaign to intercept SSH connections and gather as much unencrypted data as possible.
 
-Only vulnerabilities deemed to be HIGH or CRITICAL will be kept private in [the HackerOne tracker](https://hackerone.com/curl).
+To give you a sense of scale, all of Tor has around 3000 exit relays, so roughly 10% were under their control.
 
-Security researchers in doubt can still submit the issue on HackerOne and we can tell them what severity we deem it to be. Over the last few years, over 90% of all submissions could quickly be assessed to be less than HIGH.
+The attackers had gained access to the servers two months earlier, in August, and quietly deployed their Ebury 1.8.3 payload (an OpenSSH backdoor and credential stealer for Linux).
 
-Issues submitted to HackerOne we deem are LOW or MEDIUM will be requested to be resubmitted on GitHub and will be closed as informative on HackerOne (and publicly disclosed).
+## The Attack
 
-## Avalanche survival tricks
+The attack appears to have had two primary goals:
 
-This policy change is entirely triggered by the current avalanche of vulnerability reports that keep pouring in. We see no end to them and we do not anticipate this flood to decrease within the next several months.
+1. Gather as much unencrypted mail traffic as possible
+2. Intercept SSH connections (MITM)
 
-We are struggling as a project as all key maintainers feel strained, overloaded and brought to the brink of what we can muster. We *must* act to survive. This is our next step in a survival strategy. It might not be our last. We aim to not drown.
+By blocking certain ports, they made their exit nodes handle only unencrypted mail traffic.
+    An interesting writeup by one of the victims (a veteran Tor operator) goes into great detail about that:
+    [lists.torproject.org/mailman3](https://lists.torproject.org/mailman3/hyperkitty/list/tor-relays@lists.torproject.org/thread/QHRD6YOX6RZRDR7NCHNDO7GLCEA6VFM6/)
 
-## Public vs private
+In this post I'll focus on the second attack, the SSH MITM.
+    If you happen to get a circuit that exits over one of those 333 infected exit nodes, you won't notice anything at first.
+    Encrypted web traffic is forwarded as usual, but if you attempt an SSH connection over Port 22, you're unknowingly redirected to one of 12 SSH interception servers.
 
-By opening up the process we allow the whole world to participate. Both in the assessment and understanding of the report and claimed vulnerability, but also in the creating and writing the advisory and figuring out details of when the issues was introduced etc.
+That's exactly what happened to me on Friday morning.
+    My SSH connection got redirected, and I was greeted with this warning:
 
-Ideally we get better help to make sure the fix is the correct one, that it fixes the problem, and any other related problem that is similar and that it does not miss a related problem sitting next to this.
+```
 
-An obvious recent trend is that the moment we announce a new set of CVEs and their associated fixes, there is an army of AI-using researchers who throw all those at their models and harnesses to find similar mistakes or omissions in the fixes. By taking this process to the public all the way, ideally we get more help to do that scrutiny better *before* we ship releases.
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+IT IS POSSIBLE THAT SOMEONE IS DOING SOMETHING NASTY!
+Someone could be eavesdropping on you right now (man-in-the-middle attack)!
+It is also possible that a host key has just been changed.
+The fingerprint for the ED25519 key sent by the remote host is
+SHA256:6baCZCPsl+AfQuujUS81fMEE/C7UeJ+AwjrImqmDB3E.
+Please contact your system administrator.
+```
 
-We recognize that the amount of work needed per received vulnerability report does not shrink by doing them in public, but we think that we might share the burden among more people easier, and we hope that lessons and documentation  brought up in these discussions will be easier to spot and learn from.
+But if you ignore the warning and go ahead with the login, the attacker does three things:
 
-The open process can also allow distros and other users of curl to keep up with security fixes earlier and better.
+1. Steals your password
+2. Opens a connection to your server and observes each command you type (MITM)
+3. Opens a second connection to your server and infects it with Ebury
 
-## The risks
+## Getting them taken down
 
-Several people have suggested there is a risk that researchers mistakenly submit severity HIGH issues on GitHub  thinking they are LOW or MEDIUM. It is basically unheard of that a researcher would have *understated* a reported problem so I consider that a low risk scenario. Also: there was already before this a risk that someone would submit a vulnerability report in the public, it is not a new risk.
+On Friday evening I contacted the [Tor Project's network health team](https://community.torproject.org/relay/community-resources/bad-relays/) with my findings.
+    They confirmed this was something new and got to work by contacting the affected relay operators.
 
-Handling some vulnerabilities in the public of course makes the immediately available for both good and bad people. This policy will give bad people a slightly longer window of opportunity to exploit weaknesses at the expense of existing curl users. That is unfortunate but we see no way of avoiding this. We limit this practice to less than HIGH for this reason: at least these problems are not terrible.
+> *"We've not seen an attack like that before."*   
+>
+>     - Tor Network Health Team
 
-## Severity LOW
+1. Fri Oct 2: Interception started.
+2. Sun Oct 4: The Tor network health team made an announcement to the operators, who began shutting their exit nodes down.
+3. Sun Oct 4: The relays were marked BadExit, so clients would no longer use them to exit traffic.
+4. Mon Oct 5: The attackers restarted many of the relays, but since they were already flagged they could only serve as middle relays.
+5. Mon Oct 5: All infected servers were shut down, partly by the operators and partly by the attackers.
 
-We have discussed simply dismissing all severity LOW issues, but within the CVE program there is an appeals process and if we don’t hand out a CVE to an actual vulnerability, then someone else will do it. We thus cannot ignore true vulnerabilities, or they will come back to bite us nonetheless.
+In their announcement, the health team described the pattern:
 
-We *can* however resist and refuse silliness and I personally aim to deny and decline more vulnerabilities harder on the basis that they do not actually hurt any users or existing applications.
+> *"It seems the attacker is gaining access to Linux based hosts and when these machines are running non-exits they are editing the torrc file and turning them into exits to be able to carry out the SSH attack."*   
+>
+>     - Tor Network Health [in the announcement](https://lists.torproject.org/mailman3/hyperkitty/list/tor-relays@lists.torproject.org/thread/WOHPLKCSHYXFTBRZXDENDKJZMBMPLMG5/)
 
-## Crazy combos
+You can see the impact of those 333 exit nodes being shut down.
+    On [metrics.torproject.org](https://metrics.torproject.org/relayflags.html?start=2026-09-02&end=2026-10-19&flag=Exit) a clear dip is visible on October 4th and has not recovered since.
 
-A clear trend these days is that many newly reported vulnerabilities are figured out by AI models that create crazy sequences or option combinations that do something unexpected, but the sequence is something that aren’t likely to ever be used in the real world, or the unexpected that happens is something that occurs *every time* so applications  doing this would spot the problem immediately. I.e problems that have almost no risk to actually trigger in the real world. We save no users by insisting on doing the CVE dance for those issues. We only get work for ourselves and a whole world that has to act on them.
+*
+        Consider running a relay: [community.torproject.org/relay/setup/](https://community.torproject.org/relay/setup/)
+*
 
-## Flow control it
+## The technical part: how I found them
 
-There is an almost infinite number of combinations you can use libcurl’s many options, protocol mixes and flexible API to do things that might not be clearly documented and the AIs will continue to try them all and together with the humans driving these checks they are super eager to treat every minor discrepancy as a vulnerability. We can’t continue down this spiraling path with our sanity intact.
+In this part I'll go into detail about how I found all the infected exit nodes.
 
-We don’t have the bandwidth, manpower or even will to handle a never-ending vulnerability reporting stream at this pace. I believe few software projects can stand this kind of prolonged high volume deluge for extended periods. Something needs to give way.
+Using [exitmap](https://gitlab.torproject.org/tpo/network-health/exitmap), I built a simple script that did the following:
+    it pinned an exit node, then opened an SSH connection from my server A to my server B.
 
-## How to assign severity
+- Server A checked whether it received the correct SSH fingerprint from server B.
+- Server B checked whether the connection came from the pinned exit node or from one of the 12 SSH interception servers.
 
-We only use these for levels in the curl project: LOW, MEDIUM, HIGH and CRITICAL. Often we refer back to recently managed vulnerabilities to see how we judged them, but we also provide a [set of basic guidelines](https://curl.se/dev/vuln-disclosure.html#severity-levels). I’m sure we can also make them better and clearer.
+I ran the script against every single one of the ~3000 exit relays.
+    Around a dozen served a fake fingerprint, and over 300 didn't intercept anything but redirected through those same interception servers.
+    Redirecting alone was enough to confirm the exit was infected.
+
+In some further analysis I used [sshesame](https://github.com/jaksi/sshesame) as a honeypot.
+    Tricking the MITM into logging into the honeypot showed that they used paramiko (a Python SSH library) and also how they attempted to install Ebury using Perl.
+
+```
+
+> echo "U=$(id -u) S=$(command -v sudo >/dev/null 2>&1 && (sudo -n true 2>/dev/null && echo nopass || echo maybe) || echo none)"
+> sudo bash -c 'echo <base64> | base64 -d | perl'
+
+```
+
+Checking for permissions first, then executing a base64-encoded command.
+
+## Open Questions
+
+The biggest question is still how they got into all those servers in the first place.
+    One theory is that the hosting company itself was hacked
+    (discussed here: [lists.torproject.org](https://lists.torproject.org/mailman3/hyperkitty/list/tor-relays@lists.torproject.org/thread/RXWGWYYYKBDEBNXC2C3NYIQ2HHHWXL7O/)).
+    But that's just a theory floating around. In truth, no one really knows.
+
+Another is who's behind it.
+    The use of Ebury and the broad collection of unencrypted data point to a financially motivated crime group.
+    Though this too is just speculation.
+
+> *"Given how many servers had Ebury between 2009 and 2023 (400 000!) there are most likely other compromised Tor relays out there."*   
+>
+> - Marc-Etienne M. Léveillé
+> ([lists.torproject.org](https://lists.torproject.org/mailman3/hyperkitty/list/tor-relays@lists.torproject.org/thread/RXWGWYYYKBDEBNXC2C3NYIQ2HHHWXL7O/))
+
+I also suspect they deliberately launched their attack on a Friday, hoping that no one would want to ruin their weekend by responding.
+    All the more credit to the Tor Team for acting so quickly!
+
+## Takeaway
+
+The lesson is the same as always: extra security is a worthwhile investment.
+    Disable password authentication in favor of ssh keys.
+    I for one am going to buy myself some hardware keys today. :)

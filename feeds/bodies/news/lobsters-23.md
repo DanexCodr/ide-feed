@@ -1,100 +1,86 @@
-Unfortunately, accessibility is often an afterthought when designing a website. Maybe you came up with a color palette you’re happy with, but it doesn’t quite jive with the [WCAG 2 success criteria](https://www.w3.org/TR/WCAG21/#contrast-minimum) for contrast, or perhaps the animations on your website got a bit out of hand.
+Today we’re publishing [patching-bugs](https://github.com/trailofbits/skills/tree/main/plugins/patching-bugs) and [regression-hunt](https://github.com/trailofbits/skills/tree/main/plugins/regression-hunt), two plugins that let engineers delegate patch development and regression checks to agents. Our patching-bugs plugin reproduces reported bugs, develops fixes, and tests them. The regression-hunt plugin checks whether any changes break previously working and supported behavior. Engineers can direct the work and review their results; maintainers can supply their own security assumptions and patching requirements, so the agents work within the project’s rules.
 
-Fortunately, there are some newly supported but underutilized CSS media queries that can be leveraged to improve accessibility without having to scrap the design and starting over—by considering *user preferences*.
+We built patching-bugs and regression-hunt through [Patch the Planet](https://trailofbits.com/patch-the-planet/), our joint initiative with OpenAI, where we’ve co-authored hundreds of security patches for widely used open-source projects. Motivated by our major successes on projects like [Scapy](https://github.com/trailofbits/publications/blob/master/presentations/Auditing%20Scapy%20With%20Agents/README.md), our plugins draw on our analysis of merged patches and thousands of our engineers’ Codex sessions.
 
-The user preferences that can be targeted with media queries control contrast, motion, color schemes and transparency. These can be configured in the accessibility or display settings of the operating system.
+The plugins provide maintainers with a structured workflow, evidence, independent checks, and best practices to improve their patching hygiene. In our preliminary evaluations, regression-hunt produces 25% fewer false-positive findings than a baseline Codex agent prompted to “review the PR for regressions.”
 
-## [prefers-contrast](https://fleeb.ee/blog/improving-accessibility-with-css-media-queries/#prefers-contrast)
+## Standardizing the patching process
 
-A good contrast ratio by default is always a nice thing to have, but it can sometimes be difficult to pull off while maintaining the desired aesthetic. By using `prefers-contrast` we can boost the contrast of our content for users who have expressed a preference for that while retaining the original style for the rest.
+Our [September post](https://blog.trailofbits.com/2026/09/15/1passwords-ai-patching-benchmark-is-misleading/) reported regressions introduced by some of our Patch the Planet patches. Since then, we’ve reviewed every patch that a Trail of Bits engineer authored and maintainers merged upstream. The review confirmed 21 regressions from over 130 PRs merged: 16 functional, one performance, and four build/test. None broke a security protection.
 
-```
-.blue {
-  color: rgb(117, 105, 255);
+(“Regression” refers to a new defect introduced by a change that breaks previously correct and supported behavior along a path a real user or attacker can reach.)
 
-  @media (prefers-contrast: more) {
-    color: rgb(44, 0, 255);
-  }
-}
-```
+For each patch, an agent looked for potential regressions, confirmed each one with a proof-of-concept (PoC) run before and after the change, and then passed the results to an engineer for review.
 
-To help identify contrast issues, a color can be clicked in the developer tools to show the contrast ratio between it and its background. The WCAG 2 recommends a minimum contrast ratio of **4.5** for small text and **3.0** for large text such as headers.
+The review was noisy: today’s bug disclosures arrive at an unprecedented speed and scale, and for patching to keep pace, the industry needs to increase its signal-to-noise ratio. The 21 confirmed regressions were identified among 58 candidates in a single run (~36% precision). But because agents take many different approaches and reach different results, each run generates more candidates to manually sort through.
 
-There’s no need to do this one by one: Most browsers come with tools that automatically list all contrast issues on a website.
+That led us to two conclusions:
 
-## [prefers-reduced-motion](https://fleeb.ee/blog/improving-accessibility-with-css-media-queries/#prefers-reduced-motion)
+1. To introduce fewer regressions, we needed a standard way to write patches, with the same checks applied every time.
+2. To catch the regressions we still introduce, we needed a standard way to check for them, with written rules for what counts as a regression.
 
-Many users experience discomfort because of motion-based or blinking animation. If non-essential animations can be identified, it’s a good idea to disable (or *reduce*) them for people who prefer reduced motion.
+Standardizing both steps also makes every run repeatable and comparable. No fixed checklist will catch every regression, so we collect agent trajectories from our engineers’ patching sessions, and use the tasks that an earlier version failed to benchmark for the next one (figure 1).
 
-One can also choose to obliterate all animation on their page using the following CSS:
+## How we designed the plugins
 
-```
-@media (prefers-reduced-motion: reduce) {
-  * {
-    animation: none !important;
-    transition: none !important;
-  }
-}
-```
+We used two primary sources to guide the design of our plugins: a review of every patch we merged upstream and the thousands of Codex sessions our engineers used to write those patches.
 
-It’s worth checking the resulting page for unintended side-effects after employing this method.
+This led to four principles that shaped our patching-bugs and regression-hunt plugins:
 
-## [prefers-color-scheme](https://fleeb.ee/blog/improving-accessibility-with-css-media-queries/#prefers-color-scheme)
+1. Opinionated guidance in as few words as possible. We give the agent wide latitude and record only Trail of Bits’ judgment of what constitutes a good patch and a real regression. The goal is to direct the agent towards the desired result with the least possible guidance.
+2. Modular steps. You don’t have to run either plugin end-to-end, as both provide multiple skills that can be used in tandem or in isolation.
+3. Strict input and output schemas. Every step takes and returns a defined schema that includes the claim, the code revision, the required check, the raw evidence, and open questions. Fixed schemas reduce variability across runs and allow each step to verify the previous step’s work rather than trusting its summary.
+4. A live proof of concept for every claim. Every conclusion depends on a PoC run against a live deployment: a built, running instance of the project, reached through the interfaces a real user would use. When reproducing a bug, proving a fix, and confirming a regression, if a step can’t produce a live PoC, its result is inconclusive.
 
-If you haven’t been living under a rock, you’re probably familiar with the concept of light and dark modes. Designing two palettes is double the work, but for those who want to go the extra mile, there’s `prefers-color-scheme`:
+## regression-hunt reduces false positive rates
 
-```
-:root {
-  --color-text: black;
-  --color-background: white;
-}
+The regression-hunt plugin (Figure 2):
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-text: white;
-    --color-background: black;
-  }
-}
+1. Enumerates candidate regressions by tracing the changed code (the diff) through its callers to its real interfaces.
+2. Reproduces each candidate regression on a live deployment of the system.
+3. Replays the PoC on the live deployment on a fresh-context agent.
+4. Judges the results of all the previous steps to validate that the proof meets the requirements of a regression.
 
-.theme-aware-element {
-  color: var(--color-text);
-  background-color: var(--color-background);
-}
-```
+In addition to the four principles above, there are two core aspects that are critical to the plugin:
 
-A common pattern is to define CSS variables for your colors, and then use those variables everywhere so you only have to write one `prefers-color-scheme` query for the entire website. Easy.
+1. Defining a regression: The plugin has strong opinions about what a regression is and, more importantly, what a regression is NOT. The burden of proof is placed on the agent (specifically during the “adjudication agent” step) to prove that there is sufficient evidence to show that the suspected regression is not a false positive, an incomplete fix, a latent bug, a pre-existing bug, and so on. The plugin only reports a regression if all of these gates are passed.
+2. Incorporating a threat model: If a threat model is available, the orchestrator will intentionally pass this document as part of the global context for each individual agentic step. This is an attempt to require each step/agent to refer back to the threat model before reaching its conclusion.
 
-In fact, as of 2024 you can also use [`color-scheme`](https://developer.mozilla.org/en-US/docs/Web/CSS/color-scheme) and [`light-dark()`](https://developer.mozilla.org/en-US/docs/Web/CSS/color_value/light-dark) to achieve the same result:
+Our review of merged PRs yielded a set of 21 confirmed regressions that we could use to evaluate regression-hunt. We used the whole set to compare the plugin with a baseline Codex agent prompted to “review the PR for regressions.”
 
-```
-:root {
-  color-scheme: light dark;
-  --color-text: light-dark(black, white);
-  --color-background: light-dark(white, black);
-}
+Across those runs, regression-hunt produced 25% fewer false-positive findings than the baseline, with a 95% confidence interval of 14% to 38%. Its strict evidence requirements also left some known regressions classified as borderline: the plugin identified a possible regression but did not gather enough evidence to confirm it. Fewer false positives therefore came with a tradeoff in how many known regressions it could confidently report.
 
-.theme-aware-element {
-  color: var(--color-text);
-  background-color: var(--color-background);
-}
-```
+Next, we’ll investigate why these cases remained borderline and improve the plugin’s strategies for gathering evidence. Our goal is to confirm more real regressions while giving maintainers clearer information when the evidence remains inconclusive.
 
-`color-scheme` is handy because it helps the browser apply default colors that match the preferred color scheme for scrollbars, selections etc.
+## patching-bugs streamlines best practices from thousands of agent sessions
 
-## [prefers-reduced-transparency](https://fleeb.ee/blog/improving-accessibility-with-css-media-queries/#prefers-reduced-transparency)
+The patching-bugs plugin is a distillation of all the best practices we’ve identified by analyzing thousands of Codex sessions by Trail of Bits engineers (Figure 3). In addition to the more traditional capabilities (such as reproduction on live deployments and independent adversarial review), the plugin emphasizes:
 
-This one is experimental and at the time of writing isn’t supported by Firefox or Safari out of the box. I’d advise to be conservative with translucency as long as that remains the case.
+1. The three-arm proof: The proof runs the same reproduction against three specifications: the original code must fail, the patched code must pass, and a complete revert must fail again. Bringing the bug back by removing the patch provides stronger evidence that the patch—rather than an unrelated environment or test change—actually fixed the bug.
+2. Invariant-guided repair: The patch attempts to fix the underlying, violated security invariant rather than fix the specific bug. This helps generalize the patch for possible variants of the same bug class.
+3. Incorporates regression analysis: The plugin mandates that regression-hunt is run to ensure that any patch goes through the same standard pipeline to check for mistakes.
 
-```
-.translucent {
-  opacity: 0.6;
+## What’s next for the plugins
 
-  @media (prefers-reduced-transparency) {
-    opacity: 1;
-  } 
-}
-```
+Both patching-bugs and regression-hunt will continue to evolve. Our engineers are using them in their Patch the Planet work now, and we’re collecting data on how they’re being used, what works, and what doesn’t. That data, along with better evaluations, will shape the next version’s capabilities:
 
-It’s important to recognize that while accessibility preferences are mostly binary on/off settings, the impairments individuals suffer from fall into a wider spectrum. It’s probably a good idea to design reasonably accessible interfaces as a starting point.
+- Evaluate patching-bugs. We’re building an evaluation that measures whether the plugin’s patches fix the reported bug and its variants without introducing regressions.
+- Learn from agent traces. We’re analyzing the first batch of trace-level data from our engineers’ sessions. It will show whether Codex follows the rules and definitions required at each step, which steps it skips, and where its evidence is weakest.
+- Make the plugins more configurable. patching-bugs already reads a project’s own patching guidelines (more on that in a bit). Next, we want maintainers to be able to choose whether to minimize patch sets—or, when broader coverage is worth more false positives, to loosen regression-hunt’s rules to surface more candidates.
 
-These media queries are no silver bullet, but they can come in handy when you need some more flexibility in a pinch.
+These plugins encode best practices we’ve found for an agent to patch a bug properly, and they improve when you tell them how your project works.
+
+The plugins work best when you input two kinds of project knowledge:
+
+1. A `THREAT_MODEL.md`, which tells agents what counts as a vulnerability or a regression. The regression-hunt plugin passes it to every step, so each agent has to check its conclusions against the file. It should define the following: assets whose compromise matters, trust boundaries, access controls, supported configurations, specifications on what is or isn’t a vulnerability, and evidence required for a valid bug report (example).
+2. A `PATCHING_GUIDELINES.md` (or `AGENTS.md`), which tells agents and patching-bugs how your project wants fixes written. It should outline how to build and test the project, how big a fix should be, where a fix should go, how to present proposed changes, and what a regression test must show (example).
+
+For our Patch the Planet work with GPAC, our engineers wrote a [threat model and a project-specific patching skill](https://github.com/gpac/gpac/pull/3953) that captures how GPAC’s maintainers want bugs reproduced, what evidence a fix needs, and what a patch must preserve. [Liboqs](https://github.com/open-quantum-safe/liboqs/pull/2477) and [validator.js](https://github.com/validatorjs/validator.js/) have also published threat models in accordance with our guidance.
+
+The more comprehensive and specific these files are to your project, code conventions, and operating style, the better the output you’ll receive.
+
+## The industry needs to focus on patching
+
+As AI accelerates bug discovery, we need to turn those findings into reliable fixes just as quickly. Solutions need to balance speed and quality: an agent needs to understand a report, decide what needs to change, and check that a patch fixes the issue without introducing regressions. Our patching-bugs and regression-hunt plugins bring what we’ve learned from Patch the Planet into that workflow, helping maintainers move from a bug report to a patch they can confidently review and ship.
+
+Install [patching-bugs](https://github.com/trailofbits/skills/tree/main/plugins/patching-bugs) and [regression-hunt](https://github.com/trailofbits/skills/tree/main/plugins/regression-hunt), add a `THREAT_MODEL.md` and a `PATCHING_GUIDELINES.md` to your repository, and put them to work on your next bug report. Give the tools your project’s context so they can help you focus on the right fix and validate it faster. Then share your [feedback](https://github.com/trailofbits/skills/issues), including comments about where our defaults don’t fit your project. Those real-world cases will help us build the next version.

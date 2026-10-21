@@ -1,69 +1,185 @@
-October is here, and it’s almost time for Mastodon’s 5.0 release! We announced our plans for big changes [in an early preview](https://blog.joinmastodon.org/2026/08/5.0-laying-the-foundation/) back in August. In this companion article, we’re hoping to shed light on some of the decisions behind this major UI overhaul.
+Dr. Allen Vincent Hershey developed some of the first digital typefaces, described by simple sequences of straight line-segments. These were originally published in his 1967 report [*Calligraphy for Computers*](https://archive.org/details/hershey-calligraphy_for_computers/).
 
-Between the feedback we’ve gathered during Discovery Week, an event in which we spent a week doing surveys and workshop sessions with volunteers from the community, and Mastodon’s 10th anniversary coming up, we were determined to deliver something notable.
+The [hershey](http://beyondloom.com/decker/hershey.html) module for the [Decker](http://beyondloom.com/decker/index.html) ecosystem is concerned with laying out text using these typefaces. Decker’s scripting language, [Lil](http://beyondloom.com/tools/trylil.html), is of an unusual APL-influenced design. This article will explore Lil in the context of 2-dimensional vector graphics, expanding upon examples also discussed in the interactive documentation linked above.
 
-## What we were facing
+A *point* is an `(x,y)` pair of numbers describing rectangular coordinates on a *canvas*- a drawing surface. Points are represented in Lil as lists with a length of 2:
 
-### Invisible binds
+```
+point:(3,-5)
+```
 
-Working on Mastodon’s engineering team can sometimes feel like harvesting wheat one stalk at a time. We make a lot happen with limited resources–far more limited than most people realise–but there’s always more to do. There’s more tech and UX debt than is obvious to the naked eye, so something that seems simple on the outside may be often limited by backend constraints or architecture shifts that can’t easily be changed. So we had to make concessions about what we could realistically fit into our 5.0 plans, and leave some work for later.
+A *stroke* is a list of points representing a sequence of lines to draw on the canvas, and thus also a list of lists of numbers. Given a list of four points, the stroke connects the first point to the second, the second point to the third, and the third point to the fourth. If there are *N* points in a stroke, it describes *N-1* connected lines. We might also call a stroke a “polyline”:
 
-### Competing needs
+```
+stroke:((list 3,-5),(list 2,5),(list 0,3))
+```
 
-What’s better for one person can be worse for another, and we’ve had to keep that in mind throughout the redesign. We’re acutely aware that such a divide is most pronounced between longstanding users and newcomers. Mastodon’s current UI is beloved by many longtime users, since it can be very powerful once you’ve learned its secrets and quirks. However, newcomers should be able to dive in without being overwhelmed. To keep the community fresh, alive and diverse, we need to break down the barriers to joining, so when you bring your friends, they can find their way around without a manual.
+A *path* is a list of strokes, and thus also a list of lists of points, and a list of lists of lists of numbers. A path can represent the strokes that make up a single shape- like the letter “A”- or a sequence of letters representing an entire word or sentence. The strokes within a path are *ragged*: they may vary in length.
 
-## What we believe in
+```
+path:(list (list 1,2),(list 3,4)),     (list (list 5,6),(list 7,8),(list 9,10))
+```
 
-The redesign was grounded in these principles:
+The [`hershey.textpath[]`](http://beyondloom.com/decker/hershey.html#hershey_textpath) function assembles a complex path based on a Lil string using the glyphs of a font, each of which is a simpler path:
 
-**Clarity trumps convenience.** The most powerful interface can be useless if it’s too difficult to figure out. Making things more clear and obvious can result in more friction, and that can be necessary.
+```
+p:hershey.textpath[hf_futura "ABC"]
+```
 
-**Leave room for what’s to come.** Navigation may feel emptier for now, and that is on purpose. We have lots of improvements planned that we need to leave space for, to avoid moving more elements around in the future.
+Thus constructed, we can draw the text path to a canvas `c` using either an explicit `each` loop or the equivalent shorthand `@` operator. The Decker [canvas widget](http://beyondloom.com/decker/decker.html#canvasinterface) can draw strokes with the `canvas.line[]` function, given an appropriate list of lists of numbers:
 
-**Small improvements matter.** We might not be able to fix everything overnight, but we’ll continue to look for small but meaningful improvements to accessibility and usability.
+```
+each stroke in p c.line[stroke]endc.line @ p
+```
 
-## What’s changing in 5.0
+Wherever possible, Decker’s scripting APIs are designed to work as *collective operations*, applying to a large data structure at once. Drawing a single straight line-segment is the *simple case* for a more general polyline-drawing operation. If `canvas.line[]` could only draw a single straight line-segment, we would have to explicitly manage the off-by-one relationship between the *N* points of a path and the *N-1* lines they represent. For example,
 
-Our previous blog post covers most of the big stuff: We’re moving away from the embedded composer and adopting a pop-out composer with new controls for visibility and other post settings. Navigation is simplified and organised in a more intuitive way and create space for future new features.
+```
+each stroke in p each point i in stroke  if i>0   canvas.line[stroke[i-1] point]  end endend
+```
 
-In your feeds, the posts themselves have been rebuilt from the ground up, giving a fresh look to the places we all spend the most time. We’re also excited to roll out a few new colour themes, which took a truly monumental effort from our engineering team since the start of the year to tokenise our design system.
+A small ergonomic flaw like this would be magnified as it appeared throughout a program, obscuring the simplicity of the programmer’s actual intent.[<sup>1</sup>](https://beyondloom.com/blog/vectorgraphics.html#fn:1)
 
-The new design includes many small affordances, such as hiding a user’s boosts directly from the post menu, following and unfollowing hashtags right from the post, and hiding your own posts and boosts in your home feed.
+Now that we can obtain and render interesting paths, let’s look at manipulating them.
 
-## Notable iterations (since the August blog post)
+Combining paths is easy: Lil’s `,` operator concatenates lists. Concatenating a list of strokes and a list of strokes results in a list of strokes.
 
-Since our original announcement, we’ve iterated a lot on the feedback we’ve been receiving, so you’ll notice that the UI looks a bit different than what we’ve shown in that blog post. Here’s what’s changed:
+Scaling paths is more interesting. As [discussed previously](https://beyondloom.com/blog/conforming.html), many of Lil’s arithmetic operators will implicitly *conform* over nested listy structures. Multiplying a scalar number by a list of numbers *spreads* the multiplication to each element of the list, and the same process works recursively for nested lists. We can therefore uniformly scale points, strokes, or paths with simple multiplication[<sup>2</sup>](https://beyondloom.com/blog/vectorgraphics.html#fn:2):
 
-- From bottom right to bottom centre: The position of the composer in the bottom right was controversial. The biggest complaint was that the composer was so far away from the main navigation. However, keeping the composer embedded within the navigation is too limiting, bottom left docking would hide key navigational elements, and resorting to a modal would mean users could lose context of something they’re referencing or replying to. Until we can offer user settings for docking preferences, we’re adjusting to a bottom-centre placement–and the composer can be fully minimised without losing a draft in progress.
-- The ‘New post’ action has changed: It’s a more prominent button in the navigation, but moved further down to reduce the distance the mouse has to travel to reach the popout composer. The floating button on mobile launches the composer immediately instead of opening a sub-menu, because we received feedback that users expect to initiate the ‘New message’ action elsewhere.
-- Composer visibility settings are still contextual, but considerably simplified: We attempted to show some of the recipients in limited visibility posts, but it confused some users more than it clarified things. Instead of dynamically updating the visibility dropdown with mentioned names, we show a few preset labels that still accurately describe the audience.
-- ‘Sensitive’ content has been broken into two settings: Users have historically been able to blur media by adding a blank content warning to their post. This was a powerful yet misunderstood feature, and we’ve received feedback about it for quite some time. To keep the existing functionality but present it in a clearer way, sensitive media and content warnings are now separate, dedicated options inside the composer’s gear menu.
-- Quote settings have moved: You cannot change the visibility of a post after publishing it, but you can change its quote settings. We’re now grouping these settings differently to keep the ones that can be changed separate from the ones that cannot.
+```
+(11,22,33)*2# (22,44,66)((list 3,-5),(list 2,5),(list 0,3))*2# ((6,-10),(4,10),(0,6))
+```
 
-## FAQ
+A non-uniform scale runs into trouble. We now want to multiply the x-coordinates of every point nested inside the path with a different value from the y-coordinates. If we multiply our path by a pair of numbers, the `*` operator doesn’t implicitly know that we want to “push” that conforming process down to the innermost pairs. When `*` is given lists to the left and to the right with different lengths, it treats the right list as if it were repeated or truncated to match the length of the left list:
 
-**How did you make sure these changes reflect the needs of actual Mastodon users?**
+```
+(1,2,3,4)*(10,100)# (10,200,30,400)
+```
 
-We ran a week of surveys and workshop sessions with volunteers from the community to figure out what works for people and what doesn’t. We also monitored feedback from the initial blog post, then tested our prototype, first internally, then with users, gathering more feedback on our [new Discourse space](https://community.joinmastodon.org/) while iterating on the designs.
+If we first *enclose* the right operand with `list`, `*` will repeat the element contained in that length-1 list and pair it up with each element of the left argument:
 
-**What about existing users having to re-learn the interface?**
+```
+(1,2,3,4)*list(10,100)# ((10,100),(20,200),(30,300),(40,400))
+```
 
-We understand that an interface you’ve been using for years changing under you can be frustrating. Whenever possible, we’ve based the redesign in existing UI patterns used frequently across the web, so that learning the new way would be easy. We are also communicating clearly about those changes through our blog and announcements to ensure that this transition is not a surprise and the reasons behind it are clearly laid out.
+For a path, we need to enclose the right operand twice: once to spread the scale to each stroke of the path, and then again to spread the scale to each point of the stroke:
 
-Additionally, our decision to fill less space in the 5.0 interface is precisely so we can minimize jarring changes across future releases.
+```
+p * list list scalex,scaley
+```
 
-**Why is everything so round?**
+Scaling the x or y axis by a negative number will mirror a path horizontally or vertically, respectively:
 
-We’re headed towards more roundness to invite a friendlier brand tone, and to make Mastodon feel more native within modern browsers (most of which have adopted a rounded aesthetic).
+```
+p * list list -1,1
+```
 
-**Can I offer feedback on the redesign?**
+Translating a path can use the same trick as scaling, but with `+` instead of `*`:
 
-We hope you do! Head to [our new Discourse forum](https://community.joinmastodon.org/). While we can’t immediately respond to every topic, we will be reading through each piece of feedback. Please remember to be civil even if you don’t like something: We are people too.
+```
+p + list list transx,transy
+```
 
-If you are on mastodon.online or another server running nightly updates, you already have early access to the redesign. We are planning to enable this new design on [mastodon.social](http://mastodon.social) tomorrow, on the 20th October, and then release the first Mastodon 5.0 beta version so server administrators can try it out as well.
+To shear horizontally, we need to offset the x coordinate of every point in a path proportionally to the y-coordinate. We can use the `last` primitive to extract the y-coordinates of all the points in a path. The `@` operator allows us to “push” `last` down into the right operand. The `last` of a path is a stroke. The `last` of each stroke is a list of points. The `last` of each of each path is a list of lists of y-coordinates:
 
-What you share in our forum could help us make a few more improvements before 5.0 is officially released to the wider Mastodon universe in a few weeks.
+```
+p: (list (list 1,2),(list 3,4)),(list (list 5,6),(list 7,8),(list 9,10))last p# ((5,6),(7,8),(9,10))last @ p# ((3,4),(9,10))last @ @ p# ((2,4),(6,8,10))
+```
 
-**What’s next?**
+Let’s call this kind of list of lists of scalars derived from the points in a path a *peel*.
 
-There are essential pages that still desperately need an overhaul: Search, Settings, Messages, and Notifications, to name a few. It’s unlikely we’ll be able to redesign all of those in 5.1. We can say with certainty that the search & discovery experience will be a priority, though.
+To turn the y-coordinate peel back into a proper path, we can multiply each scalar by a pair, reusing our nonuniform scaling idiom:
+
+```
+(last @ @ p)*list list(10,0)# (((20,0),(40,0)),((60,0),(80,0),(100,0)))
+```
+
+Thus, for a complete horizontal shear:
+
+```
+p + (last @ @ p)*list list shearx,0
+```
+
+A vertical shear looks very similar:
+
+```
+p + (first @ @ p)*list list 0,sheary
+```
+
+If you wanted to transpose a path, you could peel out the x and y coordinates separately and blend them back together using the same sort of idiom, but you could also use the `rev` (reverse) primitive directly to swap the elements of each point:
+
+```
+rev @ @ p
+```
+
+Transpositions aren’t often useful alone, but combining a mirror and a transpose produces a 90 degree rotation.
+
+A more general way to rotate a path is to take advantage of Lil’s `heading`, `mag`, and `unit` primitives.
+
+The `mag` primitive calculates the vector magnitude of a number or list of numbers. For a single number, this is the absolute value. For a pair of numbers- like a point- it gives the Euclidean distance between that point and the origin. It also has special conforming behavior: it descends recursively through nested lists until it arrives at a number or flat list of numbers. This behavior makes it perfect for producing a peel from a path:
+
+```
+p: (list (list 1,2),(list 3,4)),(list (list 5,6),(list 7,8),(list 9,10))mag p# ((2.236068,5),(7.81025,10.630146,13.453624))
+```
+
+The `heading` primitive conforms like `mag`, but produces a peel of angles (in radians) between the origin and each point:
+
+```
+heading p# ((1.107149,0.927295),(0.876058,0.851966,0.837981))
+```
+
+Used together, `mag` and `heading` decompose a path (in rectangular coordinates) into polar coordinates. The `unit` primitive converts a peel of angles as obtained from `heading` and produces a path where every point has *unit distance* from the origin (`mag` 1). For any path `p`[<sup>3</sup>](https://beyondloom.com/blog/vectorgraphics.html#fn:3),
+
+```
+p ~ (mag p)*unit heading p
+```
+
+A complete path rotation around the origin by `angle` radians is therefore:
+
+```
+(mag p)*unit angle+heading p
+```
+
+Primitives like `unit` also offer a loop-free way to construct various strokes like regular polygons, arcs, and ovals. Enclosing the result with `list` gives us a path:
+
+```
+on ngon sides radius do list radius*unit 2*pi*(range sides+1)/sidesend
+```
+
+This completes a set of Lil idioms for affine transformations of paths.
+
+What else can we do?
+
+If we start with a path that is centered about its origin, we could scale every point in the path by its own `mag`, producing a perspective distortion. Given a tween value `t` that varies between 0 and 1 and a few appropriately-chosen constants,
+
+```
+p*.3+(mag p)*.01*t
+```
+
+If we generate a stroke of random [-1,1] offsets, we could add it to every stroke in a path in order to create a rudimentary line-boil-like effect. The length of our random stroke doesn’t matter, since it will be truncated or extended automatically by `+`, but having roughly as many points as the maximum stroke in the path will make the results look a bit better. Let’s say 25 points:
+
+```
+p+list 2 window random[3 2*25]-1
+```
+
+Offsetting the points of a path by multiple offset sinusoids produces a different kind of wiggly effect, more like a flag flapping in the wind or the rippling surface of a liquid. To manipulate each axis separately, we’ll use a similar idiom to our shear effect. In this example `f` is a frame counter that continuously increments, like `sys.frame`:
+
+```
+px:first @ @ p((sin(f/4)+.20*px)*list list 1,0)+((sin(f/5)+.30*px)*list list 0,1)+p
+```
+
+Combine more sinusoids blended into both axes for a more chaotic, subtly richer effect:
+
+```
+px:first @ @ ppy:last  @ @ p((sin(f/4)+.20*px)*list list 1.5,0.6)+((sin(f/5)+.30*px)*list list 0.6,0.2)+((cos(f/7)+.05*py)*list list 0.0,1.2)+((cos(f/2)+.04*py)*list list 0.1,0.2)+p
+```
+
+These techniques are just scratching the surface of what’s possible in a few lines of Lil!
+
+Why not do some tinkering of your own with the examples in [the hershey module’s interactive docs](http://beyondloom.com/decker/hershey.html#path_wave)?
+
+[back](https://beyondloom.com/blog/index.html)
+
+1. Fencepost errors are a particularly odious class of programming mistake that APL–family languages often avoid by using abstract iteration patterns and a rich set of primitive operators instead of loop–carried indices. Lil can handle this specific situation without resorting to explicit list indexing by using `-2 window stroke` to slice the list `stroke` into overlapping length–2 “windows”, pairing up each point with its immediate successor. [↩︎](https://beyondloom.com/blog/vectorgraphics.html#fnref:1)
+2. If two paths *happen to have* an identical ragged structure, we can blend them with any of the primitive arithmetic operators at our disposal– `+`, `*`, `|` (max), `&` (min), etc. The same applies to strokes of the same length or any pair of points. [↩︎](https://beyondloom.com/blog/vectorgraphics.html#fnref:2)
+3. Modulo floating–point error, naturally. [↩︎](https://beyondloom.com/blog/vectorgraphics.html#fnref:3)

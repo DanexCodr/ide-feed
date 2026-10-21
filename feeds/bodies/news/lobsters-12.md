@@ -1,177 +1,49 @@
-Quick installer information for people familiar with OpenBSD, and the use of
-the "[disklabel](https://man.openbsd.org/disklabel.8) -E" command.
-If you are at all confused when installing OpenBSD, read the relevant
-INSTALL.* file as listed above!
+This feature allows you to register multiple mappings in order to load
+local files through custom https:// URLs.
+This prevents having to spawn a HTTP server to test a web page.
+This makes it easy to test all Web APIs, including the ones being restricted
+to [Secure Contexts](https://developer.mozilla.org/en-US/docs/Web/Security/Defenses/Secure_Contexts) (i.e. using https).
+This also helps having many distinct origins (domain) for each experiment / project
+and have dedicated storage/cookies for each.
 
-OpenBSD/alpha:
+These mappings are only accessible from Firefox (this can’t be used by any other program,
+or malicious software on your computer/local network).
 
-If your machine can boot from CD, you can write *install80.iso* or
-*cd80.iso* to a CD and boot from it.
-Refer to INSTALL.alpha for more details.
+These mappings are only functional when DevTools are opened.
 
-OpenBSD/amd64:
+## How to use the “Local Mode”[](https://firefox-source-docs.mozilla.org/devtools-user/local_mode/index.html#how-to-use-the-local-mode)
 
-If your machine can boot from CD, you can write *install80.iso* or
-*cd80.iso* to a CD and boot from it.
-You may need to adjust your BIOS options first.
+This feature shipped in Firefox 153.
 
-If your machine can boot from USB, you can write *install80.img* or
-*miniroot80.img* to a USB stick and boot from it.
+You can register mappings from DevTools’ Options panel:
 
-If you can't boot from a CD, floppy disk, or USB,
-you can install across the network using PXE as described in the included
-INSTALL.amd64 document.
+From there you can register as many mappings as you need.
 
-If you are planning to dual boot OpenBSD with another OS, you will need to
-read INSTALL.amd64.
+Each mapping defines:
 
-OpenBSD/arm64:
+- the origin (domain) The custom origin to expose via https URL.
+- the local folder The local folder where to load files from.
 
-Depending on your hardware, you can write *install80.iso*
-or *cd80.iso* to a CD and boot from it, or write a system specific
-miniroot to an SD card and boot from it after connecting to the serial
-console.  Refer to INSTALL.armv64 for more details.
+On the screenshot, it loads `https://firefox.localhost` from `/home/alex/app`.
 
-OpenBSD/armv7:
+## Loading file URL notification[](https://firefox-source-docs.mozilla.org/devtools-user/local_mode/index.html#loading-file-url-notification)
 
-Write a system specific miniroot to an SD card and boot from it after connecting
-to the serial console.  Refer to INSTALL.armv7 for more details.
+When loading any file:// URL with DevTools opened, you should see the following notification
+at the top of DevTools:
 
-OpenBSD/hppa:
+The first action `Add To Settings` will bring you to the Options panel and register
+a new mapping for the loaded file URL.
 
-Boot over the network by following the instructions in INSTALL.hppa or the
-[hppa platform page](https://www.openbsd.org/hppa.html#install).
+The second action `Try it` will register a transient mapping to load the current file or folder
+from a https URL. The mapping will disappear as soon as you close DevTools or Firefox.
 
-OpenBSD/i386:
+## Manage mappings via preferences[](https://firefox-source-docs.mozilla.org/devtools-user/local_mode/index.html#manage-mappings-via-preferences)
 
-If your machine can boot from CD, you can write *install80.iso* or
-*cd80.iso* to a CD and boot from it.
-You may need to adjust your BIOS options first.
+Mappings can also be managed in about:config via preferences, so that you can easily import and transfer them
+between profiles, or via automation.
 
-If your machine can boot from USB, you can write *install80.img* or
-*miniroot80.img* to a USB stick and boot from it.
+Each mapping is defined by three preferences:
 
-If you can't boot from a CD, floppy disk, or USB,
-you can install across the network using PXE as described in
-the included INSTALL.i386 document.
-
-If you are planning on dual booting OpenBSD with another OS, you will need to
-read INSTALL.i386.
-
-OpenBSD/landisk:
-
-Write *miniroot80.img* to the start of the CF
-or disk, and boot normally.
-
-OpenBSD/luna88k:
-
-Copy 'boot' and 'bsd.rd' to a Mach or UniOS partition, and boot the bootloader
-from the PROM, and then bsd.rd from the bootloader.
-Refer to the instructions in INSTALL.luna88k for more details.
-
-OpenBSD/macppc:
-
-Burn the *install80.iso* image from a mirror site to a CDROM,
-and power on your machine while holding down the *C* key until
-the display turns on and shows *OpenBSD/macppc boot*.
-
-Alternatively, at the Open Firmware prompt, enter *boot cd:,ofwboot
-/8.0/macppc/bsd.rd*
-OpenBSD/octeon:
-
-After connecting a serial port, boot bsd.rd over the network via DHCP/tftp.
-Refer to the instructions in INSTALL.octeon for more details.
-
-OpenBSD/powerpc64:
-
-To install, write *install80.img* or *miniroot80.img* to a
-USB stick, plug it into the machine and choose the *OpenBSD
-install* menu item in Petitboot.
-Refer to the instructions in INSTALL.powerpc64 for more details.
-
-OpenBSD/riscv64:
-
-To install, write *install80.img* or *miniroot80.img* to a
-USB stick, and boot with that drive plugged in.
-Make sure you also have the microSD card plugged in that shipped with the
-HiFive Unmatched board.
-Refer to the instructions in INSTALL.riscv64 for more details.
-
-OpenBSD/sparc64:
-
-Burn the image from a mirror site to a CDROM, boot from it, and type
-*boot cdrom*.
-
-If this doesn't work, or if you don't have a CDROM drive, you can write
-*floppy80.img* or *floppyB80.img*
-(depending on your machine) to a floppy and boot it with *boot
-floppy*. Refer to INSTALL.sparc64 for details.
-
-Make sure you use a properly formatted floppy with NO BAD BLOCKS or your install
-will most likely fail.
-
-You can also write *miniroot80.img* to the swap partition on
-the disk and boot with *boot disk:b*.
-
-If nothing works, you can boot over the network as described in INSTALL.sparc64.
-
-If you already have an OpenBSD 7.9 system, and do not want to reinstall,
-upgrade instructions and advice can be found in the
-[Upgrade Guide](https://www.openbsd.org/faq/upgrade80.html).
-
-`src.tar.gz` contains a source archive starting at `/usr/src`.
-This file contains everything you need except for the kernel sources,
-which are in a separate archive.
-To extract:
-
-# <kbd>mkdir -p /usr/src</kbd>
-# <kbd>cd /usr/src</kbd>
-# <kbd>tar xvfz /tmp/src.tar.gz</kbd>
-
-`sys.tar.gz` contains a source archive starting at `/usr/src/sys`.
-This file contains all the kernel sources you need to rebuild kernels.
-To extract:
-
-# <kbd>mkdir -p /usr/src/sys</kbd>
-# <kbd>cd /usr/src</kbd>
-# <kbd>tar xvfz /tmp/sys.tar.gz</kbd>
-
-Both of these trees are a regular CVS checkout.  Using these trees it
-is possible to get a head-start on using the anoncvs servers as
-described [here](https://www.openbsd.org/anoncvs.html).
-Using these files
-results in a much faster initial CVS update than you could expect from
-a fresh checkout of the full OpenBSD source tree.
-
-### Ports Tree
-
-A ports tree archive is also provided.  To extract:
-
-# <kbd>cd /usr</kbd>
-# <kbd>tar xvfz /tmp/ports.tar.gz</kbd>
-
-Go read the [ports](https://www.openbsd.org/faq/ports/index.html) page
-if you know nothing about ports
-at this point.  This text is not a manual of how to use ports.
-Rather, it is a set of notes meant to kickstart the user on the
-OpenBSD ports system.
-
-The *ports/* directory represents a CVS checkout of our ports.
-As with our complete source tree, our ports tree is available via
-[AnonCVS](https://www.openbsd.org/anoncvs.html).
-So, in order to keep up to date with the -stable branch, you must make
-the *ports/* tree available on a read-write medium and update the tree
-with a command like:
-
-# <kbd>cd /usr/ports</kbd>
-# <kbd>cvs -d anoncvs@server.openbsd.org:/cvs update -Pd -rOPENBSD_8_0</kbd>
-
-[Of course, you must replace the server name here with a nearby anoncvs
-server.]
-
-Note that most ports are available as packages on our mirrors. Updated
-ports for the 8.0 release will be made available if problems arise.
-
-If you're interested in seeing a port added, would like to help out, or just
-would like to know more, the mailing list
-[ports@openbsd.org](https://www.openbsd.org/mail.html) is a good place to know.
+- `devtools.local-mode.mappings.${index}.origin`: string for the mapping’s origin. (e.g. “firefox.localhost”)
+- `devtools.local-mode.mappings.${index}.path`: string for the absolute path to local folder (e.g. “/home/hello-world”)
+- `devtools.local-mode.mappings.${index}.disabled`: optional boolean to disable this mapping and where `${index}` is an incremental integer counter to uniquely identify each mapping.

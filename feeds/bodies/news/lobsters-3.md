@@ -11,3 +11,5 @@ We are also updating the trusted certificate list in NSS ([NSS 3.131.1](https://
 Mozilla believes everyone has a fundamental right to security and privacy online. We remain committed to defending those rights and acting quickly to protect users.
 
 Transparency is essential to trust. We will share more information as soon as circumstances allow.
+
+**Update added October 21:** On Wednesday, October 21, at 08:29 UTC, we released an additional update for Firefox for Android ([158.0.2](https://www.firefox.com/en-US/firefox/android/158.0.2/releasenotes/)) to fix an issue where some clients were not applying changes to the bundled OneCRL blocklist immediately after startup.

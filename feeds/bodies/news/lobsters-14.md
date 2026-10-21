@@ -1,23 +1,75 @@
-Some time ago, I mentioned that [the `ud2` instruction was created to be an architecturally undefined instruction](https://devblogs.microsoft.com/oldnewthing/20260910-00/?p=112689). But why not just use an `int 6` instruction? It’s a two-byte instruction, just like `ud2`, and interrupt vector 6 is the invalid opcode vector, so a program could just invoke it manually and get whatever behavior the operating system assigns to an attempt to execute an invalid opcode.
+Updates are now available for the 26.x, 24.x, 22.x Node.js release lines for the
+following issues.
 
-Well, not exactly.
+This security release includes the following dependency updates to address public vulnerabilities:
 
-Architecturally, the invalid opcode is a *fault*, which means that the address of the faulting instruction is reported to the exception handler. On the other hand, the `int 6` is a *trap*, which means that the address of the instruction *after* the `int 6` is reported to the handler.
+- c-ares on 26.x, 24.x, 22.x
+- ca-cert (eMudhra Intermediate CA Compromise) on 26.x, 24.x, 22.x
+- OpenSSL on 24.x, 22.x
+- SQLite on 22.x
+- Undici on 26.x, 24.x, 22.x
 
-This distinction between faults and traps reflects how they are used. A fault represents an error that the kernel could attempt to repair and retry. For example, a page fault could be repaired by paging the memory in. An access violation could be repaired by changing the page protections. A trap reports an operation that has already occurred and gives you a chance to do some special work in response to it before resuming execution. In the case of a software interrupt, the handler wants to process whatever the interrupt means, and then resume execution with the next instruction.
+This vulnerability affects Node.js **26.x**, **24.x**, and **22.x**.
 
-Now, some faults are unlikely to be repaired, but reporting them as faults means that you have to take extra steps if you want to execute past them. If you just ignore the fault, the instruction restarts and faults again.
+Thank you, to hasanfleyah for reporting this vulnerability and thank you jasnell for fixing it.
 
-If you manually raise the `int 6` interrupt to simulate a #UD undefined instruction fault, the handler will think it’s dealing with a CPU-generated undefined instruction fault, so it expects the instruction pointer in the fault frame to point to the undefined instruction. But since `int` puts the address of the *next* instruction into the fault frame, the fault handler will look at the instruction and get confused as to why the invalid instruction fault was raised. “It says here that the faulting instruction is a `xor eax, eax`. That’s a perfectly legitimate instruction. Why did it fault?”
+This vulnerability affects Node.js **26.x** and **24.x**.
 
-One case for inspecting the faulting instruction is to emulate missing instructions on older processors.
+Thank you, to hasanfleyah for reporting this vulnerability and thank you jasnell for fixing it.
 
-Furthermore, in protected mode, you need to have permission to issue an `int 6`. The interrupt descriptor table describes what to do for each interrupt, as well as what CPU privilege level is permitted to invoke it explicitly. And to avoid exactly these types of problems where a user-mode program issues an `int 6` and confuses the #UD handler, all operating systems deny `int 6` privileges to user mode.
+This vulnerability affects Node.js **26.x**, **24.x**, and **22.x**.
 
-So even if you try to fake a #UD via an explicit `int 6`, it doesn’t work. To get the #UD undefined instruction fault, you have to issue an actual undefined instruction.
+Thank you, to anagnorisis2peripeteia for reporting this vulnerability and thank you mcollina for fixing it.
 
-- Code
+## [Node.js Brotli decoder out-of-bounds write permits remote code execution (CVE-2026-111497) - (high)](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases#nodejs-brotli-decoder-out-of-bounds-write-permits-remote-code-execution-cve-2026-111497---high)
 
-- ![](https://devblogs.microsoft.com/oldnewthing/wp-content/uploads/sites/38/letter-avatar/7536a4eba59f1e6c83a57eeed2fdbee9.svg) .comment-author .vcard <span class="author-name" <cite class="fn">Antonio Rodríguez</cite> </span> Antonio Rodríguez <time pubdate datetime="2026-10-21T02:18:51-07:00"> </time> 6 seconds ago 0 Copy link to comment by Antonio Rodríguez <a href="javascript:void(0)" title="Collapse this comment"> Collapse comment by Antonio Rodríguez </a> .comment-meta .commentmetadata It’s simpler than all this. If there is a documented way of doing something, don’t go and invent undocumented ways of doing the same. You’ll only confuse yourself, others, or the OS. [Log in to Vote or Reply](https://devblogs.microsoft.com/oldnewthing/wp-login.php?redirect_to=https%3A%2F%2Fdevblogs.microsoft.com%2Foldnewthing%2F20261019-00%2F%3Fp%3D112781%2F%23comments) #comment-##
-- ![](https://devblogs.microsoft.com/oldnewthing/wp-content/uploads/sites/38/nsl_avatars/944407f91adf344c1f10976b5a0c3328.webp) .comment-author .vcard <span class="author-name" <cite class="fn">BCS</cite> </span> BCS <time pubdate datetime="2026-10-19T21:55:15-07:00"> </time> October 19, 2026 0 Copy link to comment by BCS <a href="javascript:void(0)" title="Collapse this comment"> Collapse comment by BCS </a> .comment-meta .commentmetadata So what happens if code trys to run an `int 6` and it’s denied? I’m guessing it results in a fault, just not the right one? [Log in to Vote or Reply](https://devblogs.microsoft.com/oldnewthing/wp-login.php?redirect_to=https%3A%2F%2Fdevblogs.microsoft.com%2Foldnewthing%2F20261019-00%2F%3Fp%3D112781%2F%23comments) #comment-## .children
-  - ![](https://devblogs.microsoft.com/oldnewthing/wp-content/uploads/sites/38/nsl_avatars/777c212f14a64cf5b26d444562d40a50-96x96.png) .comment-author .vcard <span class="author-name" <cite class="fn">Csaba Varga</cite> </span> Csaba Varga <time pubdate datetime="2026-10-19T22:29:13-07:00"> </time> October 19, 2026 0 Copy link to comment by Csaba Varga <a href="javascript:void(0)" title="Collapse this comment"> Collapse comment by Csaba Varga </a> .comment-meta .commentmetadata It results in a general protection fault if I remember correctly. [Log in to Vote or Reply](https://devblogs.microsoft.com/oldnewthing/wp-login.php?redirect_to=https%3A%2F%2Fdevblogs.microsoft.com%2Foldnewthing%2F20261019-00%2F%3Fp%3D112781%2F%23comments) #comment-##
+A flaw in Node.js can cause Node.js Brotli decoder out-of-bounds write permits remote code execution.
+
+This vulnerability affects Node.js **26.x**, **24.x**, and **22.x**.
+
+Thank you, to mcollina for reporting this vulnerability and thank you aduh95 for fixing it.
+
+This vulnerability affects Node.js **26.x**, **24.x**, and **22.x**.
+
+Thank you, to hasanfleyah for reporting this vulnerability and thank you jasnell for fixing it.
+
+This vulnerability affects Node.js **26.x**, **24.x**, and **22.x**.
+
+Thank you, to br41ny for reporting this vulnerability and thank you mcollina for fixing it.
+
+This vulnerability affects Node.js **26.x**, **24.x**, and **22.x**.
+
+Thank you, to gesposito for reporting this vulnerability and thank you panva for fixing it.
+
+This vulnerability affects Node.js **26.x**.
+
+Thank you, to startimeash for reporting this vulnerability and thank you mcollina for fixing it.
+
+This vulnerability affects Node.js **26.x**.
+
+Thank you, to malikhamzaiqbal for reporting this vulnerability and thank you jasnell for fixing it.
+
+This vulnerability affects Node.js **26.x**, **24.x**, and **22.x**.
+
+Thank you, to 0xoroot for reporting this vulnerability and thank you RafaelGSS for fixing it.
+
+The Node.js project will release new versions of the 26.x, 24.x, 22.x
+releases lines on or shortly after, Wednesday, October 21, 2026 in order to address
+security vulnerabilities.
+
+The highest severity issue fixed in this release is HIGH.
+
+- The highest severity issue fixed in the 26.x release line is HIGH.
+- The highest severity issue fixed in the 24.x release line is HIGH.
+- The highest severity issue fixed in the 22.x release line is HIGH.
+
+It's important to note that End-of-Life versions are always affected when a security release occurs.
+To ensure your system's security, please use an up-to-date version as outlined in our
+[Release Schedule](https://github.com/nodejs/release#release-schedule).
+
+Releases will be available on, or shortly after, Wednesday, October 21, 2026.
+
+The current Node.js security policy can be found at [https://nodejs.org/en/security/](https://nodejs.org/en/security/).
+Please follow the process outlined in [https://github.com/nodejs/node/blob/master/SECURITY.md](https://github.com/nodejs/node/blob/master/SECURITY.md) if you wish to report a vulnerability in Node.js.
+
+Subscribe to the low-volume announcement-only nodejs-sec mailing list at [https://groups.google.com/forum/#!forum/nodejs-sec](https://groups.google.com/forum/#!forum/nodejs-sec) to stay up to date on security vulnerabilities and security-related releases of Node.js and the projects maintained in the nodejs GitHub organization.
