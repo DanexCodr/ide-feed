@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-22T16:49:23Z",
+  "updated": "2026-10-22T21:19:14Z",
   "items": [
     {
       "id": "devto-4858196",
@@ -26,12 +26,24 @@
       "color": "#3B49DF"
     },
     {
+      "id": "devto-4893750",
+      "title": "Don't Be a Proxy Between Me and Your AI",
+      "desc": "By Adam - The Developer ✨ | 7 min read",
+      "tag": "tutorial",
+      "published": "2026-10-22T04:31:09Z",
+      "order": 3,
+      "url": "https://dev.to/adamthedeveloper/dont-be-a-proxy-between-me-and-your-ai-mcn",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fobwbf432qy2unuy63rod.jpg",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAgMB/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEAMQAAABlEoFRh//xAAaEAADAAMBAAAAAAAAAAAAAAAAARECEBIx/9oACAEBAAEFAuitiZS3JvS9/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFRABAQAAAAAAAAAAAAAAAAAAIBH/2gAIAQEABj8CEH//xAAaEAADAAMBAAAAAAAAAAAAAAAAAREhQXFR/9oACAEBAAE/IXOcDu1R6F4KVohzSs7B9MGR/9oADAMBAAIAAwAAABClH//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QP//EABoQAQEBAQEBAQAAAAAAAAAAAAERADEhQXH/2gAIAQEAAT8QQqV52czCEHys8ncy1U/dUFW5YmcA3ro3qnFSVFkzRnw+b//Z",
+      "color": "#3B49DF"
+    },
+    {
       "id": "devto-4859158",
       "title": "What I Actually Learn When I Build With AI",
       "desc": "By Jessica Doering | 7 min read",
       "tag": "tutorial",
       "published": "2026-10-16T01:06:09Z",
-      "order": 3,
+      "order": 4,
       "url": "https://dev.to/sizzlebop/what-i-actually-learn-when-i-build-with-ai-1074",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F2atagf3xnyj2fwx6qtho.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAAIBAwT/xAAVAQEBAAAAAAAAAAAAAAAAAAAAAf/aAAwDAQACEAMQAAAByCizY6r/AP/EABsQAAMBAAMBAAAAAAAAAAAAAAECEQASITJB/9oACAEBAAEFAuXSyfVmAu8lVDZxD//EABURAQEAAAAAAAAAAAAAAAAAAAAR/9oACAEDAQE/AUf/xAAVEQEBAAAAAAAAAAAAAAAAAAAAEf/aAAgBAgEBPwFX/8QAFhABAQEAAAAAAAAAAAAAAAAAECFB/9oACAEBAAY/Amun/8QAHRABAAICAgMAAAAAAAAAAAAAAQARITFBYVGBkf/aAAgBAQABPyFshXEQtt7jblMq/EwDzKo7gmx7mqeJ/9oADAMBAAIAAwAAABAEz//EABcRAQADAAAAAAAAAAAAAAAAAAABESH/2gAIAQMBAT8QRTX/xAAXEQADAQAAAAAAAAAAAAAAAAAAAREh/9oACAECAQE/EGPEP//EABwQAQEAAgMBAQAAAAAAAAAAAAERADEhQWFRgf/aAAgBAQABPxBEsCDu3KMfYWsewtqeZwKTrBpGd/zOQFfDJl3Q7eWWBG7Of//Z",
@@ -43,22 +55,10 @@
       "desc": "By xulingfeng | 6 min read",
       "tag": "tutorial",
       "published": "2026-10-16T07:27:22Z",
-      "order": 4,
+      "order": 5,
       "url": "https://dev.to/xulingfeng/what-are-your-chances-of-surviving-resident-evil-based-on-your-tech-job-4b9o",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F179t5kb6wlcokai53ap9.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAgMAAQT/xAAVAQEBAAAAAAAAAAAAAAAAAAAAAf/aAAwDAQACEAMQAAABxkiI5dCf/8QAGBAAAgMAAAAAAAAAAAAAAAAAAAERIEH/2gAIAQEAAQUCyEO3/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFxAAAwEAAAAAAAAAAAAAAAAAACAxMv/aAAgBAQAGPwKmit//xAAbEAEAAgIDAAAAAAAAAAAAAAABABEhMRCB8f/aAAgBAQABPyEqjvD0Qg4b3G93Bl5l54//2gAMAwEAAgADAAAAEH5//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPxA//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPxA//8QAHBABAAICAwEAAAAAAAAAAAAAAQARITFBUXHw/9oACAEBAAE/EDaLDVxzlfPIDoC77R524a3KeB9Isv1Bqt3mKu2f/9k=",
-      "color": "#3B49DF"
-    },
-    {
-      "id": "devto-4893750",
-      "title": "Don't Be a Proxy Between Me and Your AI",
-      "desc": "By Adam - The Developer ✨ | 7 min read",
-      "tag": "tutorial",
-      "published": "2026-10-22T04:31:09Z",
-      "order": 5,
-      "url": "https://dev.to/adamthedeveloper/dont-be-a-proxy-between-me-and-your-ai-mcn",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fobwbf432qy2unuy63rod.jpg",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAgMB/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEAMQAAABlEoFRh//xAAaEAADAAMBAAAAAAAAAAAAAAAAARECEBIx/9oACAEBAAEFAuitiZS3JvS9/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFRABAQAAAAAAAAAAAAAAAAAAIBH/2gAIAQEABj8CEH//xAAaEAADAAMBAAAAAAAAAAAAAAAAAREhQXFR/9oACAEBAAE/IXOcDu1R6F4KVohzSs7B9MGR/9oADAMBAAIAAwAAABClH//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QP//EABoQAQEBAQEBAQAAAAAAAAAAAAERADEhQXH/2gAIAQEAAT8QQqV52czCEHys8ncy1U/dUFW5YmcA3ro3qnFSVFkzRnw+b//Z",
       "color": "#3B49DF"
     },
     {
@@ -86,12 +86,24 @@
       "color": "#3B49DF"
     },
     {
+      "id": "devto-4891584",
+      "title": "AI Made Coding Cheaper. So Why Is Building Software Still So Expensive?",
+      "desc": "By Harsh  | 4 min read",
+      "tag": "tutorial",
+      "published": "2026-10-21T19:42:55Z",
+      "order": 8,
+      "url": "https://dev.to/harsh2644/ai-made-coding-cheaper-so-why-is-building-software-still-so-expensive-59m",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F9oofpl3pmjs6z6obwdy3.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAgMEBf/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHnWgkvnQX/xAAYEAACAwAAAAAAAAAAAAAAAAABEQACEP/aAAgBAQABBQKBKxBrjjz/xAAYEQACAwAAAAAAAAAAAAAAAAAAARESMf/aAAgBAwEBPwGCqWH/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAWEAADAAAAAAAAAAAAAAAAAAAQIDH/2gAIAQEABj8CEb//xAAZEAEAAwEBAAAAAAAAAAAAAAABABARIVH/2gAIAQEAAT8hIx2dhzFvtqY6K//aAAwDAQACAAMAAAAQ/wCv/8QAFxEAAwEAAAAAAAAAAAAAAAAAAAERMf/aAAgBAwEBPxCHowP/xAAVEQEBAAAAAAAAAAAAAAAAAAABAP/aAAgBAgEBPxBYb//EABkQAQEBAQEBAAAAAAAAAAAAAAEAESExQf/aAAgBAQABPxCdN9Pch7IfRKWoWDsmHyW//9k=",
+      "color": "#3B49DF"
+    },
+    {
       "id": "devto-4835698",
       "title": "If You Never Do Anything Else to Fix Your Prompts, Do This One Thing",
       "desc": "By Randal L. Schwartz | 17 min read",
       "tag": "tutorial",
       "published": "2026-10-12T04:21:36Z",
-      "order": 8,
+      "order": 9,
       "url": "https://dev.to/gde/if-you-never-do-anything-else-to-fix-your-prompts-do-this-one-thing-3069",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F19w2sm4no5mtyl4ohrel.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwIB/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAL/2gAMAwEAAhADEAAAAQQUtsVB/8QAGBABAQEBAQAAAAAAAAAAAAAAAQAREiH/2gAIAQEAAQUCyDxJLWXDqVL/xAAVEQEBAAAAAAAAAAAAAAAAAAABAP/aAAgBAwEBPwEZb//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABYQAAMAAAAAAAAAAAAAAAAAABARIP/aAAgBAQAGPwKUf//EABkQAQEBAQEBAAAAAAAAAAAAAAEAETFBcf/aAAgBAQABPyEXpDpyMDCV8hns/wBHbWZM9v/aAAwDAQACAAMAAAAQEk//xAAVEQEBAAAAAAAAAAAAAAAAAAAAAf/aAAgBAwEBPxCCD//EABcRAAMBAAAAAAAAAAAAAAAAAAABIUH/2gAIAQIBAT8Qbhh//8QAGRABAAMBAQAAAAAAAAAAAAAAAQARIUEx/9oACAEBAAE/EBdJcmi9lBIjs0KEEHTGHpoMCF8Uu9ZQS2e1P//Z",
@@ -103,7 +115,7 @@
       "desc": "By S M Tahosin | 11 min read",
       "tag": "tutorial",
       "published": "2026-10-10T17:28:52Z",
-      "order": 9,
+      "order": 10,
       "url": "https://dev.to/smtahosin/git-isnt-a-diff-tracker-how-blobs-trees-dag-commits-and-the-index-actually-work-under-the-hood-19eo",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fi.imgur.com%2FR9pEpzM.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAQIAAwT/xAAVAQEBAAAAAAAAAAAAAAAAAAAAAf/aAAwDAQACEAMQAAAByhllD1w//8QAGxAAAgIDAQAAAAAAAAAAAAAAAAECEhEhIkH/2gAIAQEAAQUCS5GiM8HhYtr/xAAVEQEBAAAAAAAAAAAAAAAAAAABEP/aAAgBAwEBPwFn/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAGRAAAgMBAAAAAAAAAAAAAAAAADERICEy/9oACAEBAAY/ApzDkVEI/8QAHBAAAgMAAwEAAAAAAAAAAAAAAREAITFBUWGh/9oACAEBAAE/ITshQMFLviGQKgHIyx3AEdmBdfYmcPZpSf/aAAwDAQACAAMAAAAQP0//xAAXEQEBAQEAAAAAAAAAAAAAAAABADER/9oACAEDAQE/EAIcsy//xAAYEQACAwAAAAAAAAAAAAAAAAAAAREhMf/aAAgBAgEBPxBSi3p//8QAGxABAAMBAQEBAAAAAAAAAAAAAQARITFRQbH/2gAIAQEAAT8QWYgvab9gcaShrUs8vxRcap3RTzEP2b5L6XkFxtxyKHPxaZw6J0+T/9k=",
@@ -115,7 +127,7 @@
       "desc": "By Randal L. Schwartz | 26 min read",
       "tag": "tutorial",
       "published": "2026-10-14T19:53:12Z",
-      "order": 10,
+      "order": 11,
       "url": "https://dev.to/gde/requests-promises-assertions-and-declarations-rewriting-our-ai-agent-workflow-as-a-1986-4k4c",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F80k088q9sdie6yq9pbha.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAwEBAAAAAAAAAAAAAAAAAQIDAAT/xAAVAQEBAAAAAAAAAAAAAAAAAAABAP/aAAwDAQACEAMQAAAB5RMxVGyf/8QAGRAAAwADAAAAAAAAAAAAAAAAAAERECFC/9oACAEBAAEFAuSQbwijWv/EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABcQAAMBAAAAAAAAAAAAAAAAAAEQICH/2gAIAQEABj8CC2v/xAAaEAEBAAMBAQAAAAAAAAAAAAABABExUSFB/9oACAEBAAE/IUBPr7Yzqw6NllUDk0ZTu2C//9oADAMBAAIAAwAAABA/H//EABcRAAMBAAAAAAAAAAAAAAAAAAABESH/2gAIAQMBAT8QpiZ//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPxA//8QAHBABAAICAwEAAAAAAAAAAAAAAQARITFBUXFh/9oACAEBAAE/EEh1ughfi33KfoQl3QeRQONCYQ43UQtWu7hAwcP2f//Z",
@@ -127,7 +139,7 @@
       "desc": "By Nicholas Arcolano | 3 min read",
       "tag": "tutorial",
       "published": "2026-10-11T19:45:15Z",
-      "order": 11,
+      "order": 12,
       "url": "https://dev.to/dailycontext/its-not-the-model-its-you-1ngi",
       "image": "https://media2.dev.to/dynamic/image/width=1200,height=627,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fmx3l635656p6ocz76xow.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAARACADASIAAhEBAxEB/8QAGAAAAwEBAAAAAAAAAAAAAAAAAAECAwT/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAHtm6Mr1gpgCA//xAAcEAACAgIDAAAAAAAAAAAAAAAAAQIREBIgIkL/2gAIAQEAAQUC1iUikKMT0lWL7cP/xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAEDAQE/AR//xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAECAQE/AR//xAAcEAABBAMBAAAAAAAAAAAAAAAAAREyMxAgMZH/2gAIAQEABj8CghWVEE8OLlm1/8QAHhAAAgIBBQEAAAAAAAAAAAAAAREAMYEQICFRkfD/2gAIAQEAAT8hICnYE4a+CfICFhoggEuq4OgWdGsJN7f/2gAMAwEAAgADAAAAEHBIHP/EABQRAQAAAAAAAAAAAAAAAAAAACD/2gAIAQMBAT8QH//EABQRAQAAAAAAAAAAAAAAAAAAACD/2gAIAQIBAT8QH//EAB0QAQACAQUBAAAAAAAAAAAAAAEAESEQMUFRYSD/2gAIAQEAAT8Qcglbkh7ZupJrg7VUxaW8IshUs0erviXd9uG2iQuLwnnz/9k=",
@@ -139,22 +151,10 @@
       "desc": "By Dimitris Kyrkos  | 3 min read",
       "tag": "tutorial",
       "published": "2026-10-19T06:42:45Z",
-      "order": 12,
+      "order": 13,
       "url": "https://dev.to/cyclopt_dimitrisk/your-agents-retry-bug-isnt-an-ai-problem-its-a-distributed-systems-problem-with-an-llm-on-top-1i6k",
       "image": "https://media2.dev.to/dynamic/image/width=1200,height=627,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fiqdssmxk1srgbl586mox.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAARACADASIAAhEBAxEB/8QAGAABAQEBAQAAAAAAAAAAAAAAAAEDAgT/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAH2TSmN1HYED//EABoQAAICAwAAAAAAAAAAAAAAAAABESICIEH/2gAIAQEAAQUCawRUoUGQQd0//8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAwEBPwEf/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAgEBPwEf/8QAHBAAAgICAwAAAAAAAAAAAAAAAAIyQREgIXGR/9oACAEBAAY/AoqQUipFSy/SzHPev//EAB4QAAIBAwUAAAAAAAAAAAAAAAERABAgsVGRwdHw/9oACAEBAAE/ISCxRL0TyUAZYIDPA0C67oChUgna/9oADAMBAAIAAwAAABAjgBz/xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAEDAQE/EB//xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAECAQE/EB//xAAgEAACAgEDBQAAAAAAAAAAAAABEQAhMSDB8EFRcaHR/9oACAEBAAE/EHth6gNoLxDT4UXG2hYkO00W0vUfkAgEm1ru+yx+zCiXBljOHp//2Q==",
-      "color": "#3B49DF"
-    },
-    {
-      "id": "devto-4891584",
-      "title": "AI Made Coding Cheaper. So Why Is Building Software Still So Expensive?",
-      "desc": "By Harsh  | 4 min read",
-      "tag": "tutorial",
-      "published": "2026-10-21T19:42:55Z",
-      "order": 13,
-      "url": "https://dev.to/harsh2644/ai-made-coding-cheaper-so-why-is-building-software-still-so-expensive-59m",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F9oofpl3pmjs6z6obwdy3.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAgMEBf/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHnWgkvnQX/xAAYEAACAwAAAAAAAAAAAAAAAAABEQACEP/aAAgBAQABBQKBKxBrjjz/xAAYEQACAwAAAAAAAAAAAAAAAAAAARESMf/aAAgBAwEBPwGCqWH/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAWEAADAAAAAAAAAAAAAAAAAAAQIDH/2gAIAQEABj8CEb//xAAZEAEAAwEBAAAAAAAAAAAAAAABABARIVH/2gAIAQEAAT8hIx2dhzFvtqY6K//aAAwDAQACAAMAAAAQ/wCv/8QAFxEAAwEAAAAAAAAAAAAAAAAAAAERMf/aAAgBAwEBPxCHowP/xAAVEQEBAAAAAAAAAAAAAAAAAAABAP/aAAgBAgEBPxBYb//EABkQAQEBAQEBAAAAAAAAAAAAAAEAESExQf/aAAgBAQABPxCdN9Pch7IfRKWoWDsmHyW//9k=",
       "color": "#3B49DF"
     },
     {
@@ -230,27 +230,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4864681",
-      "title": "I Miss Writing Code",
-      "desc": "By luminousmen | 7 min read",
-      "tag": "tutorial",
-      "published": "2026-10-20T14:00:00Z",
-      "order": 20,
-      "url": "https://dev.to/luminousmen/i-miss-writing-code-5hla",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fq0tm4hjzry9uiz7nv0jq.jpg",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAABQME/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAH/2gAMAwEAAhADEAAAAU8FjYTuPvP/xAAbEAACAgMBAAAAAAAAAAAAAAAAAgMRARAhEv/aAAgBAQABBQIeTqyY1K/ksvsT2f/EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABkQAAMAAwAAAAAAAAAAAAAAAAAQEQEiUf/aAAgBAQAGPwI1y51w/8QAGxAAAgMBAQEAAAAAAAAAAAAAAAERITFBcYH/2gAIAQEAAT8hFNpH9ME+SaOoWC0KMO8dUWNeqo//2gAMAwEAAgADAAAAEAnv/8QAFREBAQAAAAAAAAAAAAAAAAAAABH/2gAIAQMBAT8QiP/EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QP//EABwQAQEBAAMAAwAAAAAAAAAAAAERACExQVFhkf/aAAgBAQABPxDcHJ3EH5qaQMPm+rhAJ06ORpVevMUkOvHumDLRNSZmyBwm/9k=",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4785053",
       "title": "The Bug Lives at the Seam, Not in the Logic",
       "desc": "By Debashish Ghosal | 4 min read",
       "tag": "tutorial",
       "published": "2026-10-16T02:16:00Z",
-      "order": 21,
+      "order": 20,
       "url": "https://dev.to/debashish_ghosal/the-bug-lives-at-the-seam-not-in-the-logic-48j4",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F4rowgtbldkbcwvfn8jee.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwIB/8QAFQEBAQAAAAAAAAAAAAAAAAAAAQD/2gAMAwEAAhADEAAAATokSy05/8QAGRABAQEAAwAAAAAAAAAAAAAAAQACEBES/9oACAEBAAEFAiOHqNXqdsrf/8QAFREBAQAAAAAAAAAAAAAAAAAAAAH/2gAIAQMBAT8BWv/EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABYQAAMAAAAAAAAAAAAAAAAAABAgMf/aAAgBAQAGPwJYf//EABkQAQEBAQEBAAAAAAAAAAAAAAERACExUf/aAAgBAQABPyGFynmWvk3bt0yIOPgGt4zI6t3/2gAMAwEAAgADAAAAEFw//8QAFhEBAQEAAAAAAAAAAAAAAAAAAAER/9oACAEDAQE/ENUf/8QAFhEBAQEAAAAAAAAAAAAAAAAAAAEh/9oACAECAQE/EIx//8QAGhABAQADAQEAAAAAAAAAAAAAAREAITFhUf/aAAgBAQABPxDjLPcRUhW4sVV1uHSlvb2Ysi9LpM5KX2bwkADwwynH/9k=",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4864681",
+      "title": "I Miss Writing Code",
+      "desc": "By luminousmen | 7 min read",
+      "tag": "tutorial",
+      "published": "2026-10-20T14:00:00Z",
+      "order": 21,
+      "url": "https://dev.to/luminousmen/i-miss-writing-code-5hla",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fq0tm4hjzry9uiz7nv0jq.jpg",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAABQME/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAH/2gAMAwEAAhADEAAAAU8FjYTuPvP/xAAbEAACAgMBAAAAAAAAAAAAAAAAAgMRARAhEv/aAAgBAQABBQIeTqyY1K/ksvsT2f/EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABkQAAMAAwAAAAAAAAAAAAAAAAAQEQEiUf/aAAgBAQAGPwI1y51w/8QAGxAAAgMBAQEAAAAAAAAAAAAAAAERITFBcYH/2gAIAQEAAT8hFNpH9ME+SaOoWC0KMO8dUWNeqo//2gAMAwEAAgADAAAAEAnv/8QAFREBAQAAAAAAAAAAAAAAAAAAABH/2gAIAQMBAT8QiP/EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QP//EABwQAQEBAAMAAwAAAAAAAAAAAAERACExQVFhkf/aAAgBAQABPxDcHJ3EH5qaQMPm+rhAJ06ORpVevMUkOvHumDLRNSZmyBwm/9k=",
       "color": "#3B49DF"
     },
     {

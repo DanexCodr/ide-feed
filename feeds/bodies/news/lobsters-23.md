@@ -1,207 +1,106 @@
-This guide adds EYG scripting to an Erlang application `my_counters`.
-Just want the code look at [example](https://eyg.run/examples/my_counters_erlang).
+In my various efforts to develop new programming languages, I’ve occasionally looked sidelong at linear types, as something that looks like it could be really useful if it wasn’t so incredibly cumbersome.
 
-Embedding EYG in Erlang gives you a scripting environment with tight controls over what can be accessed.
-With this control you can:
+And now some folks have come up with [a way to make them much easier to use](https://people.cs.nott.ac.uk/pszgmh/flow-typing.pdf)<sup>[[1]](https://jaredforsyth.com/posts/papers-we-love-lens-on-linearity/#fn1)</sup>! Or at least that’s the hope. This past week I’ve been trying to implement their execution model into [a new programming language](https://github.com/jaredly/laminar), to get a feel for what it’s like to actually use. Check out my [field notes](https://jaredforsyth.com/posts/lens-on-linearity-field-notes/), if you’re already familiar with the paper.
 
-- Expose scripting to the users, maybe for small queries or automations
-- Build a safer shell with predefined dev tasks
-- Provide a set of business logic functions to agents
+I’m going to quote the abstract in full, as it does a great job of introducing the paper:
 
-## Install dependencies
+> Linear type systems often suffer from a threading problem: if a value is used more than once, then it must be explicitly threaded through each usage. Existing solutions introduce extra language features to mitigate this, but at the cost of complicating the core language and its semantics. This article introduces flow typing, a new solution to the threading problem that avoids the need to extend the core language. Flow typing is based on the theory of lenses, a functional presentation of mutable references, in which lens terms mutate parts of a stateful typing context in a controlled way. Because this approach is purely functional, it can be implemented in a standard linear lambda calculus, providing flow typing with a simple and direct semantics.
 
-EYG's toolkit consists of a set of composable parts, for this guide install the following.
+Ok I’ll admit that there are a number of terms in there that likely aren’t totally familiar to the average programmer, and I also want to convince myself that I know what they mean, so let’s break things down a bit.
 
-## Run a pure program
+### [Linear type systems](https://jaredforsyth.com/posts/papers-we-love-lens-on-linearity/#Linear-type-systems)
 
-Below is the simplest Erlang module that will run EYG code.
+A type system is [“linear”](https://en.wikipedia.org/wiki/Substructural_type_system#Linear_type_systems) if *all values must be used exactly once*. You might be thinking (a) that sounds incredibly restrictive, I quite like using values multiple times, and (b) why would you even want that. I’ll speak to the second one first.
 
-```erlang
--module(my_counters_script).
+Some reasons a linear type system might be attractive:
 
--export([run/1]).
+Have you ever forgotten to close a file, and had a dangling file descriptor? Have you ever forgotten to free a pointer? To put it in web dev terms, what about failing to close a database connection, or to unsubscribe a listener?
 
-run(Code) when is_binary(Code) ->
-  case eyg@parser:all_from_string(Code) of
-    {ok, Source} -> 
-      Result = eyg@interpreter@expression:execute(Source, []),
-      Result;
-    {error, Reason} -> {error, Reason}
-  end.
+If a value (say a `DBConnection`) *must be used exactly once*, and the library offers you (a) functions that take the connection as an argument and then give it back to you in the return value, and (b) a `close()` function as the only way to “get rid of it”, then you suddently have a statically enforcable mechanism for ensuring you never forget to close a db connection.
+
+To make this concrete:
+
+```ts
+let run = () => {
+    let db = sqlite.open('./my.db');
+    let [db2, records] = sqlite.run_query(db, RECORD_QUERY);
+    save(records);
+    sqlite.close(db2);
+};
 ```
 
-Start an Erlang shell, with this module loaded, and run your first scripts.
+If the final `sqlite.close(db2)` line were missing (in a fictional javascript with a linear type system), you’d get a type error `db2 must be used exactly once, but was used 0 times`. (the `save` function is a stand-in for “doing something with the records we got from the db”)
 
-```
-(counters@MyComputer)1> my_counters_script:run(<<"!int_add(2, 1)">>).
-{ok,{integer,3}}
-```
+In such a system, you’re also statically disallowed from ignoring (or forgetting about) a return value.
 
-This is everything needed to run any self-contained, pure EYG program.
-We will add two affordances that make it easier to work with.
+Pure functional languages tend to achieve purity via immutability, to the extent that you’d be forgiven for thinking that it was a necessary component of having a pure language. “Pure” here meaning that “if you give a function the same input, it is always guaranteed to return the same output”<sup>[[2]](https://jaredforsyth.com/posts/papers-we-love-lens-on-linearity/#fn2)</sup>. A simple example of an impure function in javascript would be:
 
-First we will pretty print the errors.
-Each EYG package has its own pretty printing functions.
-The code below will handle formatting parser errors as well as runtime values and errors.
-The return value from this function is now a binary that can be presented to the user.
-
-```erlang
-run(Code) when is_binary(Code) ->
-  case eyg@parser:all_from_string(Code) of
-    {ok, Source} -> 
-      Result = eyg@interpreter@expression:execute(Source, []),
-      case Result of
-        {ok, Value} -> debug_interpreter_value(Value);
-        {error, Reason} -> debug_interpreter_error(Reason, Code)
-      end;
-    {error, Reason} -> debug_parser_error(Reason, Code)
-  end.
-
-debug_parser_error(Reason, Code) ->
-  eyg@parser:format_error(Reason, Code).
-
-debug_interpreter_value(Value) ->
-  eyg@interpreter@simple_debug:inspect(Value).
-
-debug_interpreter_error({Reason, Span, _, _}, Code) ->
-  eyg@parser:render_error(
-    eyg@interpreter@simple_debug:describe(Reason),
-    eyg@interpreter@simple_debug:hint(Reason),
-    Code,
-    Span
-  ).
+```js
+let lie = false;
+function addTwo(input) {
+    if (lie) return input + 3;
+    return input + 2;
+}
+console.log(addTwo(2)); // 4
+lie = true;
+console.log(addTwo(2)); // 5
 ```
 
-All the examples in this guide we are running from the erlang shell so it's convenient for our run function to accept charlists as well as binaries.
+This is a rather tame example of [action at a distance](https://en.wikipedia.org/wiki/Action_at_a_distance_%28computer_programming%29), an ill that pure functional programming saves you from.
 
-```erlang
-run(Code) when is_list(Code) ->
-    run(unicode:characters_to_binary(Code));
-run(Code) when is_binary(Code) ->
-  % existing body
+In Haskell or Elm, the above code is impossible to represent because you can’t “mutate the value that `lie` represents” after initializing the variable. All variables are immutable, giving you purity by construction.
+
+In a linear type system, by contrast, purity is achieved by *preventing any variable from having multiple observers*. Essentially, “if mutation happens but no-one else can observe it, does it make a sound?”<sup>[[3]](https://jaredforsyth.com/posts/papers-we-love-lens-on-linearity/#fn3)</sup> The above code would be disallowed because line 7 is a “second reference to the variable `lie`”, and therefore a type error.
+
+Rust is famous for its linear-inspired setup for mutable variables; if a variable is marked as mutable, there can only be one “accessor” (reader or writer) at a time. This allows them to have some pretty strong guarantees about safety, especially in the context of concurrency. However, they also want to be able to provide access-by-reference for mutable variables (as it would be terribly inconvenient to have to pass-by-value anything that’s mutable), which is accomplished via the infamous “borrow checker”. The linear-style requirements are represented by a system of “borrowing”, where the compiler needs to track which variables are “live” at any given point in the code, and ensure there’s only one live reference to a given value at a time. This is famously confusing and hard for people to learn. In spite of this, Rust is a wildly successful language.
+
+### [The Threading problem](https://jaredforsyth.com/posts/papers-we-love-lens-on-linearity/#The-Threading-problem)
+
+Let’s accept for the moment that a linear type system is desirable (or at least interesting), and circle back to the “terribly inconvenient to have to pass-by-value anything that’s mutable” issue. This is what Wilshaw & Hutton call the “threading problem”. I’ll demonstrate with some simple typescript code:
+
+```ts
+let person = new Person();
+setName(person, 'Lucretia');
+setAge(person, 51);
+setSummary(person, getSummary(person));
+display(person);
 ```
 
-Now a runtime errors prints useful output.
+We create an object, we mutate it with a couple of functions, and we display it.
 
-```
-(counters@MyComputer)1> io:put_chars(my_counters_script:run(<<"!int_add(2, foo)">>)).
-error: variable undefined: foo
-hint: check the variable name or add a `let` binding before it is used
+In typescript, we’re passing by reference, which is how `setName` etc. are able to affect our object. Passing by reference isn’t allowed in a linear type system (only one accessor is allowed per variable); so here’s what our code would look like with pass-by-value<sup>[[4]](https://jaredforsyth.com/posts/papers-we-love-lens-on-linearity/#fn4)</sup>:
 
- 1 | !int_add(2, foo)
-                 ^^^
-```
-
-## Effects
-
-EYG programs in this first runner cannot perform any side effect.
-This is already good enough for a configuration script but for anything more we need to add effects.
-Running a simple hello world currently fails.
-
-```eyg
-perform Log("Hello, world!")
+```ts
+let person = new Person();
+let person2 = setName(person, 'Lucretia');
+let person3 = setAge(person2, 51);
+let person4 = setSummary(person3, getSummary(person3));
+display(person4);
 ```
 
-```
-(counters@MyComputer)1> io:put_chars(my_counters_script:run(<<"perform Log(\"Hello, World!\")">>)).
-error: unhandled effect Log("Hello, World!")
-hint: handle this effect or run the program in a runtime that supports it
+And `setName` would have to change, from e.g. `(person, name) => {person.name = name}` to `(person, name) => ({...person, name})`.
 
- 1 | perform Log("Hello, World!")
-     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-```
+This is almost linear-valid, but on line 4 we’re using `person3` twice, which is illegal. We’d have to change it to this:
 
-Any error interpreting an EYG program returns the reason for the break and the full program state.
-An unhandled effect is one type of break.
-
-**For an explanation of what an algebraic effect is check out this [post](https://crowdhailer.me/2025-02-14/algebraic-effects-are-a-functional-approach-to-manage-side-effects/)**
-
-When execution stops at an unhandled effect, the Erlang host can implement it and resume the EYG program with the reply value.
-We update the `run` function so the initial result from executing the expression is passed to a `loop` function that will keep running the program for every break that can be handled.
-
-```erlang
-run(Code) when is_binary(Code) ->
-  Output = case eyg@parser:all_from_string(Code) of
-    {ok, Source} -> 
-      Result = loop(eyg@interpreter@expression:execute(Source, [])),
-      % same as before
+```ts
+let [person4, summary] = getSummary(person3);
+let person5 = setSummary(person4, summary);
+display(person5);
 ```
 
-The implementation of `loop` matches on an `unhandled_effect`.
-If the extrinsic implementation of the effect succeeds the loop recurses.
+Extremely cumbersome: we’re having to “thread” the `person` object into and out of every function that touches it.
 
-```erlang
--include_lib("eyg_interpreter/include/eyg@interpreter@break_UnhandledEffect.hrl").
--include_lib("eyg_interpreter/include/eyg@interpreter@value_String.hrl").
+### [Lenses](https://jaredforsyth.com/posts/papers-we-love-lens-on-linearity/#Lenses)
 
-loop({error, {#unhandled_effect{label = Label, value = Value}, Span, Env, Stack}}) ->
-  case extrinsic(Label, Value) of
-    {ok, Reply} ->
-      loop(eyg@interpreter@expression:resume(Reply, Env, Stack));
-    {error, Reason} ->
-      {error, {Reason, Span, Env, Stack}}
-  end;
-loop(Result) -> Result.
+My understanding of lenses is that they are a way to operate on (often in a functional/immutable way) a potentially deeply-nested subset of a given piece of data. Lodash’s `set` and `update` are related to this, and [ramda](https://ramdajs.com/docs/#lens) has explicit support for lenses.
 
-extrinsic(<<"Log">>, #string{value = String})->
-  io:put_chars(String),
-  {ok, eyg@interpreter@value:unit()};
-extrinsic(Label, Value) -> {error, #unhandled_effect{label = Label, value = Value}}.
-```
+The innovation of this paper is using some clever syntax sugar to give you the convenience of mutable references (potentially many layers deep into an object, that’s the lens part) while retaining the simplicity and purity of a traditional linear type system. This essentially gives you something akin to a borrow-checker, but with dramatically simpler semantics and implementation, enabling things like a formal proof that it works ;).
 
-Effects can be implemented at any level of abstraction.
-They can be core utilities like logging or more specific to the application.
-The counter example has additional utilities `Random` and `Now` as well as three effects for managing the counter application.
+The big question for me, though, is *what does this feel like to use?* How hard is it to actually implement in a language, and is the resulting code easy to write, read, and understand?
 
-## Type checking
+And so I’ve started [writing a language](https://github.com/jaredly/laminar) that attempts to implement their system of “flow typing”. [Here are my field notes](https://jaredforsyth.com/posts/lens-on-linearity-field-notes/).
 
-Before running an EYG we can check that it has no runtime errors.
-The type inferences is sound, any program that passes type checking has no runtime errors.
-An effect context is passed to type checking ensuring that a program has no errors including trying to call effects that are unavailable.
-
-In this type checking loop we start with a pure context and extend it with just the the `Log` effect.
-
-```erlang
-type_check(Source) ->
-  Infer = eyg@analysis@inference@levels_j@contextual,
-  Analysis = type_check_loop(Infer:check(inference_context(), Source)),
-  Infer:all_errors(Analysis).
-
-type_check_loop({done, Analysis}) -> Analysis;
-type_check_loop({lookup, _Reference, Resume}) -> type_check_loop(Resume({error, nil})).
-
-inference_context() ->
-  Infer = eyg@analysis@inference@levels_j@contextual,
-  Context0 = Infer:pure(),
-  Unit = eyg@analysis@type_@isomorphic:record([]),
-  Context1 = Infer:with_effect(Context0, <<"Log">>, string, Unit),
-  Context1.
-
-debug_type_error({Span, Reason}, Source) ->
-  eyg@parser:render_error(
-      eyg@analysis@type_@binding@debug:render_reason(Reason),
-      eyg@analysis@type_@binding@debug:hint(Reason),
-      Source,
-      Span
-  ).
-```
-
-Replace the successful parse branch in `run/1` with the following.
-If type checking succeeds, run the program; otherwise, return the formatted diagnostics.
-
-```erlang
-{ok, Source} ->
-  case type_check(Source) of
-    [] ->
-      Result = loop(eyg@interpreter@expression:execute(Source, [])),
-      case Result of
-        {ok, Value} -> debug_interpreter_value(Value);
-        {error, Reason} -> debug_interpreter_error(Reason, Code)
-      end;
-    Errors ->
-      unicode:characters_to_binary([[debug_type_error(Error, Code), "\n"] || Error <- Errors])
-  end;
-```
-
-You now have an EYG scripting environment that checks programs before running them and has the full power of Erlang available for implementing effects.
-To expose more of your application, add effect handlers and their corresponding types to the inference context.
+1. I got turned onto this paper by [this tweet](https://x.com/lexi_lambda/status/2109683868869480451) from [Alexis King](https://x.com/lexi_lambda) asking for people’s favorite PL papers this year. [↩︎](https://jaredforsyth.com/posts/papers-we-love-lens-on-linearity/#fnref1)
+2. Paraphrased [from wikipedia](https://en.wikipedia.org/wiki/Purely_functional_programming). This is of course only true within certain assumptions about the reliability of the underlying system; other actors on the same machine could corrupt your heap, or a cosmic ray could flip a bit, etc. [↩︎](https://jaredforsyth.com/posts/papers-we-love-lens-on-linearity/#fnref2)
+3. Clojure takes this approach with their transients, though of course there are not any kind of static guarantees that they are correctly used. [↩︎](https://jaredforsyth.com/posts/papers-we-love-lens-on-linearity/#fnref3)
+4. In truth, typescript is still doing pass-by-reference, but we’re treating the values /as if/ they were pass-by-value, by doing immutable updates. [↩︎](https://jaredforsyth.com/posts/papers-we-love-lens-on-linearity/#fnref4)

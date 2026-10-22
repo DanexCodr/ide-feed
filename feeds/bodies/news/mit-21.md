@@ -1,67 +1,65 @@
-Agentic workflows are artificial intelligence-powered software systems that chain together multiple models and external tools to tackle complicated tasks, like analyzing a video and answering questions about it.
+Over the past 80 years, America’s bold, sustained investment in scientific research, and the** **discoveries, ideas and innovations that flowed from it made America a world leader. The nation’s scientific leadership has been essential to our shared prosperity and national security, and delivered real benefits for all Americans.
 
-But the way these highly fragmented systems are designed and deployed often causes inefficiencies that can lead to wasted computation, energy, and cost.
+On June 16, *Scientific American* released a special section, “[The Young American Scientists](https://www.scientificamerican.com/report/young-american-scientists-2026/),” which celebrates early-career professionals actively engaged in scientific research, and features commentary from MIT faculty on why they continue to be so devoted to curiosity-driven science, demonstrating how their hard work and dedication make Americans safer, healthier, and more prosperous. Among the section’s profiles are many MIT faculty, students, and alumni, who share their advice for young scientists and their reasons for optimism in uncertain times.
 
-To improve efficiency, researchers from MIT and Microsoft developed an intelligent system that streamlines the process of designing agentic workflows and automatically optimizes how those workflows are implemented.
+[President Sally Kornbluth emphasizes](https://www.scientificamerican.com/article/sally-kornbluth/) the importance of curiosity-driven research, noting that discovery “is part of our American DNA and has yielded vast returns to the citizens of this country and the world.” She adds, “what’s needed is a rededication to public investment in American science. Even if I were not the leader of a premier scientific institution, this is what I’d say. Investing in American science is not a gamble; if you look back in time, there is no question about the benefits.”
 
-With this new method, a developer can describe what they want the agentic workflow to do in plain language, without needing to specify all the details of their application in advance.
+Adds [Institute Prof. Robert Langer](https://www.scientificamerican.com/article/robert-langer/): “What American science has done over the past 50, 100 years has been remarkable.”
 
-The system automatically figures out the best models and tools to use, as well as the ideal hardware configuration and computational resource allocation when the workflow is executed by a cloud provider.
+*Scientific American* notes that at MIT, that commitment to discovery is reflected in initiatives such as [Curiosity on a Mission](https://curiositymission.org/) and the [Generative AI Impact Consortium](https://news.mit.edu/2025/introducing-mit-generative-ai-impact-consortium-0203), which are aimed at finding “solutions to real-world problems in a way that is beneficial to society.” “On one hand, we’re at a time, technologically, where things could not be more exciting [and] our science [could not be] more cutting-edge. At the same time, we’ve never seen a situation where people felt so uncertain about the continuity of science funding, particularly when it comes to the basic discovery science that fuels the economy and will fuel societal impact a decade or two from now,” says Kornbluth.
 
-It adjusts those configurations on the fly based on each user’s priorities, such as minimizing costs or maximizing speed.
+**The first sparks**
 
-When tested on several agentic workloads, this new system reduced the number of computational units needed for deployment, significantly cutting energy requirements and costs compared to traditional approaches without hampering performance.
+Witnessing invention can spark a lifelong fascination with science. After the launch of Sputnik, the world’s first artificial satellite, Prof. Alan Lightman “became entranced with the idea of building a rocket” of his own. In his essay “[My childhood in science](https://www.scientificamerican.com/article/alan-lightman-on-his-childhood-in-science/),” Lightman describes how these early scientific memories and experiments have shaped him to be a well-rounded writer and physicist.
 
-“Agentic workflows are getting very complicated and quickly becoming the backbone of what cloud providers are doing. Energy usage is a huge concern, so we need to be very careful about how efficient these workflows are. It is very easy to over-allocate resources, wasting energy and money. Enabling a cloud provider to intelligently make these workflows more resource-optimal is a win for everyone involved,” says Gohar Chaudhry, an electrical engineering and computer science (EECS) graduate student and lead author of a [paper on this system](https://goharirfan.me/publications/murakkab_osdi_2026_paper.pdf).
+“Now more than ever, when much of the world, including the U.S., has lost its moral compass, leading to a dog-eat-dog mentality, we need science combined with literature, philosophy, history and art. We need to discover not only the physical world but also our own humanity,” writes Lightman.
 
-He is joined on the paper by Adam Belay, an associate professor of EECS and a member of the MIT Computer Science and Artificial Intelligence Laboratory; senior author Ricardo Bianchini, technical fellow and corporate vice president at Microsoft Azure; and others at Microsoft Azure. The paper will be presented at the USENIX Symposium on Operating Systems Design and Implementation.
+Likewise, [Prof. John Urschel](https://www.scientificamerican.com/article/john-urschel/), a former NFL player, emphasizes the importance of collaboration and having a wide range of interests.
 
-**A configuration conundrum**
+“A lot of good research happens when people can draw on tools, techniques and insights from different areas, disciplines and even fields. I hope we can encourage promising young scientists to establish strong, broad backgrounds and to communicate frequently with those outside their particular areas,” says Urschel.
 
-An agentic workflow is a system composed of several autonomous AI agents that collaboratively use various models and tools, like databases or Python programs, to dynamically complete a multi-step task, such data processing or code generation.
+**Invention and discovery**
 
-These workflows can serve as behind-the-scenes processes that power user-facing applications.
+*Scientific American *highlights students and alumni looking to better the world by doing everything from investigating neurological disease to securing our energy future.
 
-Typically, developers must hard-code all technical choices upfront. They need to define which AI agents, models, and tools to use, and the order in which to use them. They also must specify the hardware that runs the workflow and how to balance tradeoffs like speed versus cost.
+At MIT, [Visiting Scientist Alice Stanton](https://www.scientificamerican.com/article/alice-stanton/) developed miBrain, a 3D tissue model of the human brain, to help scientists develop personalized treatments for Alzheimer’s and Parkinson’s. Stanton has developed a miniature version of miBrain, a brain-on-a-chip, to better test therapeutics.
 
-This is especially challenging because agentic workflows bring together multiple black-box models and diverse tools, each with their own configuration options, which may be offered by different companies.
+Stanton notes “the road to effective treatments is long and bumpy,” compounded by cuts to federal funding. “When we have a loved one who gets sick, we want a treatment—we want something to cure them. It doesn’t come out of thin air,” she explains.
 
-If a new AI model is released that would improve the application’s accuracy or efficiency, the developer would need to start from scratch to implement it.
+[Bob Mumgaard](https://www.scientificamerican.com/article/bob-mumgaard/) PhD ‘08, CEO of Commonwealth Fusion Systems is working to commercialize fusion power. “Whether in areas such as fusion—or in drugs by design for diseases such as Alzheimer’s and Parkinson’s or in [the creation of] materials we never thought possible—our ability to use new tools to tackle some of these big, meaty problems is super exciting,” Mumgaard emphasizes.
 
-“Even if you wanted to do all this manually, it is unlikely that you’ll be able to configure the workflow optimally because the space of possible configurations is so large,” Chaudhry says.
+[Graduate student Alex Zhang](https://www.scientificamerican.com/article/alex-l-zhang/) tackles context rot: the phenomenon when AI language models degrade as they produce more information. To solve this issue, Zhang develops recursive language models (RLMs) that enable the model to work with itself to reevaluate reasoning.
 
-In addition, the cloud data center that deploys the application for customers can’t see inside the workflow to allocate its hardware resources in the most efficient manner at the time of the user’s request.
+“The types of research that I want to work on are things that I think should be shared for the benefit of people in general,” says Zhang.
 
-With this new system, called Murakkab (an Urdu word that means a composition of things), the researchers sought to optimize the entire agentic workflow process.
+**The benefits of scientific collaboration **
 
-**Dynamic decision-making**
+What happens when scientific disciplines join forces at MIT?
 
-First, Murakkab enables developers to create an agentic workflow by describing their intent for the application in high-level terms, rather than detailing how* *the many components of that workflow should be combined.
+[Prof. Emery Brown](https://www.scientificamerican.com/article/emery-brown/) highlighted the MIT [Health and Life Sciences Collaborative](https://heals.mit.edu/) (HEALS), noting that the effort brings together scientists and engineers from a variety of backgrounds to tackle the most pressing health challenges of our times.
 
-For instance, a developer might describe a video Q&A application that extracts key frames, generates a transcript, and then answers user queries about the video.
+Brown explains that with President Kornbluth’s support, HEALS encourages “faculty to look more deeply into solving health care problems. The enthusiasm for HEALS has been contagious across the campus.”
 
-“There are many ways to do this, and all these different models and tools have implications on how fast the application can finish the task,” he says.
+[MIT alumna Lucy Jones PhD ‘81](https://www.scientificamerican.com/article/lucy-jones/), who is known for her work advancing public safety during earthquakes and for developing the first American earthquake drill called the Great ShakeOut, shared the necessity of collaboration in developing scientific solutions for pressing real-world problems.
 
-Murakkab takes the developer’s straightforward specifications and automatically identifies the best existing models and tools to put together into the workflow.
+“Solutions have to be done in collaboration, which means spending time with policymakers,” says Jones.
 
-It also determines which components need to run sequentially and which can be run in parallel to boost performance.
+Jones also shares how scientific advances in computing have helped make Americans around the country safer when the ground starts to shake.
 
-“The platform makes configuration decisions dynamically over time, so if a new model or GPU accelerator comes out tomorrow, the developer doesn’t need to worry about that,” he says.
+“My first year in grad school, I was reading paper seismograms. Now everything is computerized. We used to do field deployments; now we have permanent networks. We’re starting to use fiber‑optic cables as seismometers,” says Jones. “Computers have changed everything, including science.”
 
-When the cloud provider deploys that application for a customer, Murakkab optimizes the workflow by configuring its components to meet the user’s constraints, such as prioritizing accuracy while meeting a latency requirement.
+**The state of American science **
 
-It adaptively identifies ideal hardware allocations and deployment schedules to maximize efficiency in real time, then generates a workflow that is ready for the cloud provider to execute.
+Within the profiles, interviewees were asked what needs to change in American science right now. Many expressed concerns with federal funding.
 
-“Our system also gives cloud providers visibility into multiple workloads, so the provider can share computational resources in the most efficient manner while satisfying the constraints of users,” he says.
+“I’m fortunate to work with extraordinary students and postdocs, but the infrastructure that lets them do their best work is under real stress: funding instability at the National Institutes of Health and the National Science Foundation, immigration uncertainty for international scientists and an erosion of public trust in expertise,” says [Prof. Feng Zhang](https://www.scientificamerican.com/article/feng-zhang/).
 
-When tested on diverse agentic workflows for video Q&A and code generation, Murakkab met user requirements while using only about 35 percent of the computation required by other methods. It consumed only about 27 percent as much energy for less than 25 percent of the cost.
+Zhang developed CRISPR-based genome editing tools, which could increase our understanding human diseases and lead to new treatments. “We can lose the lead rapidly if we do not protect our innovation ecosystem,” he says.
 
-The dynamic nature of Murakkab also enables users to balance tradeoffs. In one instance, the system lowered energy consumption of an agentic workflow by more than an order of magnitude with only about a 2 percent drop in accuracy for the customer.
+Positive developments include the progress [Prof. Alan Guth](https://www.scientificamerican.com/article/alan-guth/) has witnessed in cosmology.
 
-The system was also able to identify an unexpectedly ideal configuration for a model that selects video frames, optimizing performance for a video Q&A task. This type of optimization would be nearly impossible for a developer to do manually, Chaudhry says.
+“With new techniques, we’re able to unravel, to make sense out of, what we’re observing,” says Guth. “A lot of progress has been made on those lines, so in terms of the physics of the field, I think things are going great. But to me, the real problem is the prospects for future funding.”
 
-Next, the researchers plan to expand their system to more complex workflows and larger computing clusters while exploring opportunities to optimize new agentic applications.
+[Langer](https://www.scientificamerican.com/article/robert-langer/) shares his faith in the durability and strength of America’s science and innovation ecosystem.
 
-“There is a lot of potential to make these workflows more resource-optimal so they consume far less energy, but we need to be thinking about this at the scale of major cloud platforms,” says Chaudhry.
-
-This research was supported, in part, by the Semiconductor Research Corporation and the U.S. Defense Advanced Research Projects Agency.
+“I look at the history of American innovation and education over the past 250 years, and it’s been spectacular,” says Langer. “Plenty of times there’ve been setbacks. We’ve had world wars, you know, we’ve had depressions, and people keep persisting and keep learning. They keep discovering and they keep inventing. So that gives me a lot of cause for hope. This is not the worst time by any means.”

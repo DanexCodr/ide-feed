@@ -1,287 +1,127 @@
-The following subscription-only content has been made available to you 
-by an LWN subscriber.  Thousands of subscribers depend on LWN for the 
-best news from the Linux and free software communities.  If you enjoy this 
-article, please consider [subscribing to LWN](https://lwn.net/subscribe/).  Thank you
-for visiting LWN.net!
+After some 7 months of being ‘closed’ to new entrants, [Garmin has re-opened and revamped the Garmin Connect API developer program](https://developer.garmin.com/gc-developer-program/overview/), focused specifically on 3rd-party platforms that want to receive data files from Garmin devices via Garmin Connect, or send certain types of data to Garmin devices. Things like receiving your completed activities/workouts, sending routes/courses or structured workouts to Garmin devices, receiving general health/wellness data, and so on. All of these leverage the Garmin Connect API today, and have for many years.
 
-October 21, 2026
-This article was contributed by Tyler Langlois
+Before we get into the details of the new program, Garmin closed it to new applications back in March due to an overwhelming number of inbound applications. With the rise of AI-generated apps, Garmin went from a handful of (mostly legit) applications each week to a tsunami of new AI vibe-coded applications each day. Fun fact: Less than half of all applications that were requesting access even bothered to use it, once granted.
 
-[Nix flakes](https://wiki.nixos.org/wiki/Flakes) are an
-experimental feature of the [Nix package-management
-tool](https://wiki.nixos.org/wiki/Nix_(package_manager)) designed to build projects in a more self-contained and reproducible
-way. Despite the feature's experimental status, it has become increasingly
-popular for open-source projects to publish flake.nix files that offer
-predefined development environments and build automation even when those
-repositories may not offer an upstream package or module for the [NixOS Linux distribution](https://wiki.nixos.org/wiki/NixOS). Although
-Nix flakes have a complicated history, and the path for stabilization is
-uncertain, flakes can provide useful capabilities for projects that choose to
-include them.
-Why flakes?
-The promise of flakes is to provide reliable and reproducible methods for
-acquiring and building software. Let's say that an open-source project is trying
-to provide Linux users with an easy way to set up a development environment for its
-software. Distributions tend to have different versions of programming
-languages, libraries, etc. which means that a user on Debian 13 is going to have
-slightly different versions of software than a user on Fedora 45. Some
-dependencies may not be packaged for the distributions at all. This is a
-headache for everyone involved.
-Projects can avoid the headache by shipping a Nix flake that pins the
-versions of its dependencies and lets each user install the same software
-regardless of which distribution they are running. End users can reliably
-install dependencies, build projects, and run tests often just with a local (and
-properly configured) Nix installation and few (if any) other toolchain
-requirements.
-Flakes are written in the Nix [language](https://wiki.nixos.org/wiki/Nix_(language)) and are primarily
-used by the Nix package manager. While NixOS can
-use flakes via utilities like [nixos-rebuild](https://wiki.nixos.org/wiki/Nixos-rebuild),
-flakes function independently from NixOS. flake.nix files are at the
-core of how flakes work: these files contain [inputs](https://nix.dev/manual/nix/latest/command-ref/new-cli/nix3-flake.html#flake-inputs)
-that are defined as URL-like remote resources (typically software repositories) and [outputs](https://wiki.nixos.org/wiki/Flakes#Output_schema) that flake
-consumers can use, like packages or tests for those packages.
-A simple flake might look like the following snippet of Nix code:
+Of course, it’d be easy to blame vibe-coded AI apps for everything, but the reality was Garmin’s process was equally to blame. They treated every inbound request as if it were an enterprise-level company, rather than perhaps just a hobbyist developer or early-stage startup. That meant that everything from business case validation, policy validation, and such was all done at a level far beyond any other wearable in the space. Applications could take weeks to months (easily), compared with sometimes instant access to credentials from other companies like Polar, Wahoo, Suunto, and more. Garmin didn’t differentiate between the credential types: Everyone got the same full-fledged access, whether they really needed it or not.
 
-    {
-      inputs = {
-        nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-      };
+That changes today, with three distinct tiers that essentially allow an app to ‘grow’ from hobbyist level, to startup level, to full ‘enterprise’ level access with 24×7 support/etc. The first two tiers are free, and greatly expand access to individuals wanting instant access to Garmin’s platform, effectively creating an MCP level of sorts…minus actually creating an MCP.
 
-      outputs = { nixpkgs, ... }: {
-        packages.x86_64-linux.hello =
-          nixpkgs.legacyPackages.x86_64-linux.hello;
-      };
-    }
+With that, let’s dive into it.
 
-The legacyPackages name is a bit deceptive because its Nix packages
-are not literally legacy packages: the name is a compatibility shim to avoid a
-situation in which a command such as nix flake show might list more than
-100,000 packages in the terminal. When legacyPackages is used, instead
-of packages, the nix command will avoid listing all packages 
-when printing its values, as [documented
-upstream](https://github.com/NixOS/nixpkgs/blob/b2e41a5bd20d4114f27fe8d96e84db06b841d035/flake.nix#L47).
-Upon adding the input called nixpkgs to the flake.nix file,
-nix flake lock will create a flake.lock file that pins the
-nixpkgs input against the NixOS/nixpkgs repository at the
-commit referenced by the nixpkgs-unstable branch. Like a
-Cargo.lock file in a Rust project or a Gemfile.lock file in a
-Ruby project, the flake.lock JSON file anchors each input to a concrete
-upstream revision. Doing so permits the flake to consistently refer to its
-dependencies and reliably build its outputs with a known-compatible set of
-inputs.
- middle-ad 
-Locking a flake's inputs against the latest commit for a branch is one way to
-express an upstream reference, but the [flake
-reference format](https://nix.dev/manual/nix/latest/command-ref/new-cli/nix3-flake#flake-reference-attributes) permits a few additional strategies including a specific tag
-or other forms like absolute paths. A locked revision remains part of
-the repository and can be updated later with the nix flake update
-command (if the reference refers to a non-specific target like a branch name
-rather than a Git hash).
-The outputs attribute of a flake is written as a Nix function. When
-Nix processes a flake.nix file, the inputs are fetched and
-passed to the outputs function where it can actually use the concrete
-values from inputs like nixpkgs. In this case, the flake will simply provide the [hello](https://search.nixos.org/packages?channel=unstable#show=hello)
-package drawn from the nixpkgs-unstable branch.
-By default, Nix assumes that each reference under inputs itself
-contains its own flake.nix and, therefore, its own set of
-outputs. These are the values that are used as each input is referenced
-in the outputs function (like nixpkgs.legacyPackages in the
-example code).
-This example illustrates bundling a package into a Nix flake, but there are
-more top-level attributes that offer other uses when present in a flake's
-outputs. For example, devShells provides development
-environments pre-populated with libraries and environment variables, while
-nixosModules may be imported into a NixOS configuration for use in
-one's NixOS configuration. The nix command-line tool recognizes many
-attributes as part of a flake's schema, although the structure of a flake's
-outputs outside these conventional names is arbitrary.
-Locked inputs are one important trait of flakes, but another behavior
-that is arguably just as important is that flakes are evaluated in [pure
-evaluation mode](https://wiki.nixos.org/wiki/Flakes#Making_your_evaluations_pure), which means that external factors that may change the
-values that Nix computes are forbidden by default. For example,
-environment variables may not be read and network access is gated by checking
-downloaded artifacts with checksums. Although this behavior can be relaxed with
-the --impure flag, enforcing it adds to the reproducible quality of a
-flake.
-It should be noted that some features of Nix flakes are also addressed by
-other libraries or tooling. For example, locked dependencies (akin to a Nix
-flake input) can be achieved without the use of flakes with [niv](https://github.com/nmattia/niv#niv), a project
-that provides capabilities similar to a flake.lock file. Development
-shells are supported by existing, non-experimental commands with [shell.nix
-files](https://wiki.nixos.org/wiki/Development_environment_with_nix-shell). For many users, Nix flakes serve as a more general, unifying umbrella for
-useful concepts like inputs, lock files, and Nix commands.
-Flakes in the wild
-How does one use flake.nix when encountering these files in a source
-code repository? First, the nix utility must [be installed](https://nixos.org/download/#download-nix) and Nix flakes
-enabled before use: each nix command must include the
---experimental-features 'nix-command flakes' command-line option or the
-stanza experimental-features = nix-command flakes must be set in
-$HOME/.config/nix/nix.conf or /etc/nix/nix.conf per [the Nix flakes setup
-documentation](https://wiki.nixos.org/wiki/Flakes#Setup).
-Most nix operations that interact with flakes can do so via either a
-local checkout of a repository or with a [flake
-reference](https://nix.dev/manual/nix/latest/command-ref/new-cli/nix3-flake#url-like-syntax) (which can be any of the URL-like formats accepted under a flake's
-inputs attribute). The following command, for example, displays all the
-outputs available from the [Ghostty repository](https://github.com/ghostty-org/ghostty#----ghostty) for the [Ghostty](https://lwn.net/Articles/1004377/) terminal emulator:
+### **What Changes:**
 
-    nix flake show github:ghostty-org/ghostty
+![](https://media.dcrainmaker.com/images/2026/10/UntitledImage-11.png)
 
-In this example, the github:ghostty-org/ghostty flake reference is
-internally expanded into an upstream GitHub URL that fetches tarballs rather
-than cloning entire repositories. The following output from the nix flake
-show command has been trimmed down for readability:
+In short, Garmin Connect now has three different API levels, versions the previous level that required a bunch of paperwork and verifications. These three levels are now:
 
-    github:ghostty-org/ghostty/<hash-value>... 
-    ├───packages
-    │   └───x86_64-linux
-    │       └───ghostty: package 'ghostty-1.3.2-dev+3c1ef5b-nix'
-    ├───devShells
-    │   └───...
-    ├───checks
-    └───...
+**– Personal:** Designed for a single person to have access to their activity and health data via the Connect API  
 
-In addition to the ghostty package for the x86_64-linux
-architecture, there are other outputs like checks that define tests
-that may be run directly against the flake with commands like nix flake
-check.
-The devShells output is particularly useful. As a Zig-based project,
-Ghostty requires a compatible language toolchain for contributors to build and
-test the project. Manually installing zig is one option, but using the
-Nix flake development shell can make the process easier. Entering the
-development shell is done with the develop subcommand:
+**– Startup:** Designed for organizations that need to support up to 1,000 users, adds more API areas  
 
-    nix develop github:ghostty-org/ghostty
+**– Enterprise:** Everything above, plus more API areas, technical support, and historical data. Oh, and it costs money.
 
-After nix starts a shell with the environment populated from the
-flake.nix file, the zig command is available:
+All of this is best shown in the chart below, which I’ve copied from [Garmin’s Connect API site](https://developer.garmin.com/gc-developer-program/overview/), but we’ll keep it here for long-term historical reference. Cause, if we know anything from the past, it’ll probably change again.
 
-    $ zig version
-    0.16.0
+![](https://media.dcrainmaker.com/images/2026/10/GarminDeveloperAPI.png)
 
-This installation of zig is scoped only to Ghostty's development
-shell and is not installed system-wide (zig and its supporting
-libraries are installed into the [Nix store](https://nix.dev/manual/nix/latest/store/)). In addition to
-zig, all of the other dependencies relevant for development are added
-to the $PATH and necessary libraries are included as well. When part of a
-repository, flake.lock files ensure that downstream users of nix
-develop will end up with the same versions of all utilities and libraries
-as the original Nix flake author. Because the development shell is constructed
-from separate and distinct paths in the Nix store, multiple versions of the same
-toolchain can coexist on the same host without executables or shared libraries
-colliding.
-The same principles apply for any repository that provides a
-flake.nix, whether the project relies on C++, Rust, or any other language.
-The --command flag lets a command run within an indicated development
-shell non-interactively. [Niri](https://niri-wm.github.io/niri/) and
-[pandoc](https://pandoc.org/) are just a few of the many projects
-that provide flake.nix files and development shells that bundle each of
-their respective build environments:
+The key thing here is that both the Personal and Startup levels get both JSON summaries (which is what that means in this context), as well as full .FIT file with the activity data in it. Though, it does sound like Garmin is annoyingly stripping out some data they consider proprietary, whereas if you upload it manually from your watch/device, that data is there. I’m hoping they’ll change that, partially because it’s dumb, and partially because it just increases the ways things can go wrong and is overly complicated.
 
-    $ nix develop github:niri-wm/niri --command rustc --version
-    rustc 1.97.0 (2d8144b78 2026-07-07) (built from a source tarball)
-    $ nix develop github:jgm/pandoc --command ghc --version
-    The Glorious Glasgow Haskell Compilation System, version 9.10.3
+Still, I’m glad to see they’re offering the full .FIT file, as anything less would have mostly been useless when you start talking more interesting application ideas. Beyond that, you also get both general Health Data and Women’s Health Data JSON summaries (which is fine in this context, I think).
 
-In each of these cases, none of the cited toolchains were present beforehand
-on the host system. Each command and its associated libraries necessary for
-project compilation are provided entirely through the Nix flake development
-shell.
-A tumultuous history
-Shipping around locked dependencies and development shells are useful
-capabilities, so why do flakes remain an experimental feature gated behind
-additional configuration steps?
-Flakes were first introduced in July 2019 in [NixOS RFC 49](https://github.com/NixOS/rfcs/pull/49) by Eelco Dolstra,
-the original author of Nix. Throughout the year-long RFC process, development of
-the underlying plumbing for what would ultimately become Nix flakes continued in
-the [Nix GitHub repository](https://github.com/NixOS/nix).
-After a period of extended discussion, the proposal PR was closed [and the RFC
-withdrawn in July 2020](https://github.com/NixOS/rfcs/pull/49#event-3552993451) because of a failure to reach consensus for adoption. Concerns
-about scope, design, and other considerations remain visible in the (large)
-discussion thread attached to RFC 49 that eventually led to its closure.
-Since RFC 49 failed to pass, flakes were included in the [Nix 2.4
-release in 2021](https://nix.dev/manual/nix/latest/release-notes/rl-2.4.html) as an experimental feature. Nix flakes remained accessible
-only when explicitly enabled, and that requirement remains in place for the
-upstream Nix project. As we'll see later, this is one aspect of flake
-usage that has splintered across different implementations.
-Adoption
-In the years following the initial release, Nix flakes have been widely
-adopted. In the [2025 NixOS Community
-Survey](https://nixos.org/surveys/community/2025/), which drew input from nearly 3,400 Nix users, [78.9% of
-respondents reported using flakes](https://nixos.org/surveys/community/2025/#experimental_features). A [smaller
-random sampling of 300 repositories](https://gist.github.com/Mic92/48d72945d4c236e3a3403b9168312568), conducted by Nix maintainer Jörg
-Thalheim, across GitHub repositories with shell.nix or
-flake.nix files present found significant adoption over the traditional
-development shell method using shell.nix files.
-Community growth around Nix flakes without a formal plan laid out by an RFC
-has become somewhat of a sore spot in the Nix community. Contributors eager for
-the features within Nix flakes are frustrated at the ongoing
-experimental label, while some involved in the original RFC process
-remain dissatisfied with the expansive scope and design of Nix flakes that has
-arguably escaped the limited scope intended by attaching the
-experimental label.
-Contributor Graham Christensen [wrote](https://grahamc.com/blog/flakes-are-an-obviously-good-thing/) in
-2021: "I believe Flakes are astonishingly important and will be very
-powerful, but the RFC experience has turned so many people against it on
-principle." Jade, a contributor to the [Lix](https://lix.systems/) alternative to Nix
-[reflected on
-flakes](https://jade.fyi/blog/flakes-arent-real/) with a more hesitant tone: "Even assuming that flakes are good at
-macro-level composition, they often are accompanied by poor use of micro-level
-composition, which still is best done by using the old primitives.". Former
-contributor Samuel Dionne-Riel [opined](https://samuel.dionne-riel.com/blog/2023/09/06/flakes-is-an-experiment-that-did-too-much-at-once.html)
-that Nix flakes was an experiment that did too much at once, "and it sucks
-because so much of it is good, or are good [but] undercooked ideas".
-Despite these and other concerns, the use of flakes is widespread at this
-point; many third-party utilities work as expected with flakes regardless. In
-practice, the ways to use flakes via Nix have remained consistent in terms of
-their commands and configuration settings although there are no guarantees
-without the removal of the experimental label by maintainers.
-A future for flakes?
-The rift within the Nix community on the subject of flakes has become so wide
-that alternative implementations have cited their stance on flakes as a
-distinguishing characteristic. The Nix package manager (usually referred to as
-[CppNix](https://github.com/NixOS/nix) in reflection of its C++ code
-base) still marks the feature as experimental, but Lix has designated flakes as [a
-frozen feature slated for future extraction into a plugin](https://wiki.lix.systems/books/development/page/flakes-feature-freeze), while [Determinate Nix](https://determinate.systems/products/nix/) (a
-downstream distribution of CppNix) expressly [supports
-flakes](https://determinate.systems/blog/experimental-does-not-mean-unstable/) and has marked them as a stable feature enabled by default.
-As for Nix itself, [RFC
-136](https://github.com/NixOS/rfcs/blob/32c871cae67fec997c9af2bf15f4a9e41d885109/rfcs/0136-stabilize-incrementally.md#L60-L66) ("A plan to stabilize the new CLI and Flakes incrementally") lays out a
-path forward for Nix flakes to become a stable feature. It was [proposed](https://github.com/NixOS/rfcs/pull/136) in October 2022,
-and ultimately accepted in August 2023. There is a [flakes stabilization
-milestone](https://github.com/NixOS/nix/milestone/27) to track the work needed to remove the "experimental" label from
-flakes.
+The process to create a Personal API key takes a few seconds in total.
 
-Some work heralds potential breaking changes for flakes (such as [changing lock attributes](https://github.com/NixOS/nix/issues/8940)),
-while other plans offer less-visible but significant performance improvements
-such as "[lazy trees](https://github.com/NixOS/nix/pull/15711)" (to
-avoid spurious file copies to the Nix store). In addition to work on the flakes
-feature, the design of the newer command-line interface for nix
-will have to be stabilized before moving on to complete the implementation of
-flakes and mark them as a stable feature. There will need to be an additional
-RFC for the final design of flakes once that happens.
-The need to address command-line design stems from the fact that
-flake-related commands are often conflated with other Nix commands. For example,
-the experimental feature that provides alternative commands like [nix
-env shell](https://nix.dev/manual/nix/latest/command-ref/new-cli/nix3-env-shell) in contrast to [nix-shell](https://nix.dev/manual/nix/latest/command-ref/nix-shell.html)
-that often rely on flake-like semantics. As noted in the text of the RFC:
+![](https://media.dcrainmaker.com/images/2026/10/UntitledImage-12.png)
 
-There are many criticisms about Flakes. But one of them especially relevant to
-stabilizing is a perception that Flakes have encroached on other new features,
-in the sense that it ought to be possible to use those other features without
-Flakes but isn't in practice. For example, there is no reason in theory that
-pure evaluation of Nix expressions requires Flakes.
+I just did it again, end to end; maybe 8 seconds?
 
-Despite its criticisms, [the
-RFC expresses optimism](https://github.com/NixOS/rfcs/blob/32c871cae67fec997c9af2bf15f4a9e41d885109/rfcs/0136-stabilize-incrementally.md#alternatives) about the future of flakes:
+![](https://media.dcrainmaker.com/images/2026/10/UntitledImage-13.png)
 
-We could, of course, just "rip off the band-aid" and stabilize everything at
-once. The argument for that would be that enough time has passed and the
-concerns of (less numerous) long-time users are not important. But we think the
-plan here has little downsides; we can instead make everyone happy with only
-some delay. If that is true, why not do that instead!
+Meanwhile, stepping up to the ‘Starter’ level adds the Courses & Training API’s. These allow developers to *push*  routes/courses to Garmin Connect, which can in turn end up on your device. And the same is true for structured workouts. Think things like Strava and Komoot Routes use this for routes, and TrainingPeaks or Final Surge uses this to send planned workouts. It sounds like approvals for this tier should be virtually instant.
 
-Flakes remain an experimental feature of the nix command-line
-utility but development continues. There is no concrete target completion date
-for the stabilization effort, so when (or if) flakes will finally graduate into
-stable status remains unclear, but with a plan in place and their adoption still
-growing, Nix flakes are likely to appear more often across the software
-landscape.
+Which then takes us to the ‘Enterprise’ level, which adds the Golf API that does small ball things, as well as more notably, the Historical Data backfill. This means when someone connects a new account up to their app, it’ll allow the user to backfill a predefined amount of historical data, versus just data from that moment forward. Further, it provides technical support and allows for more than 1,000 users.
+
+But of course – there’s a catch. Once you hit that 1,000-user realm, you’re now in ‘pay-for-play’ land. Garmin is joining Whoop in charging a fee here. There’s essentially an initial $1,000 entry fee, which is a credit towards your monthly active user bill. That means as a company you’ll pay on a per-user basis, for “active monthly users” that are connected. That’s a big shift from the current ‘totally free’ realm that’s been the case for Garmin Connect since 2019, [when they dropped the previous $5,000 entry fee](https://www.dcrainmaker.com/2019/04/garmin-connect-announcements.html).
+
+Garmin is essentially saying they’re trying to recoup some of the costs of supporting the platform, while also being able to provide support at this higher tier. There’s also a reality here that many other companies are trying to build full businesses on the backs of Garmin’s platform (e.g. Bevel), and Garmin basically feels like if they want enterprise-level support, they should pay for it.
+
+So what does that ‘monthly active users’ fee cost? Well, that’s to be negotiated on a per-company basis. It sounds like what Strava or Komoot would pay is undoubtedly different than what a smaller company would pay. However, for funsies, you may not know that the [DCR Analyzer](http://www.dcrainmaker.com/analyzer) actually supports the Garmin Connect API today (along with Amazfit, COROS, Hammerhead, Polar, Suunto, Wahoo, Google Health, and Apple Health via HealthFit). So I asked what it’d cost us. We have roughly 20,000 total users, but a much smaller portion of those are monthly active users with Garmin Connections. While I can’t share the exact amount, it’s fair to say it falls within the rough category of ‘pennies on the dollar’.
+
+This brings the next question: when will companies start to pay this? By April 1st, 2027. Between now and then, Garmin will work with existing Garmin Connect API partners to sort out that financial piece. By default, though, all existing partners become ‘Enterprise’ automatically. Further, no existing partner has to pay the $1,000 Enterprise entry fee.
+
+I don’t love the idea of Garmin charging anything to access this data, and I largely feel like this should simply be the cost of doing business in 2026. If not, stick that cost into the marketing budget, because that’s what it is. It’s marketing for Garmin devices. Every single 3rd-party platform that integrates with Garmin is marketing for Garmin. That said, if I put on my DCR Analyzer hat, the cost here is pretty negligible – at least for one company. If a user wants to connect all of these platforms, then perhaps it’s slightly more notable, but even then, it still wouldn’t really matter to the bottom line.
+
+Oh, and for lack of a better place to stick it, the existing Garmin Connect IQ program remains free and unchanged (that’s for widgets/apps/etc. on Garmin devices).
+
+### **The Enterprise Competitive Landscape:**
+
+![](https://media.dcrainmaker.com/images/2026/10/IMG_4473.jpeg)
+
+So what does the ‘API’ competitive landscape look like? Well, it depends. There’s no real question here that Garmin provides the most robust API in terms of features (e.g., routes, structured workouts, completed activities, health data, women’s health, etc.). That part honestly isn’t really debatable – it’s factually true. Equally, while platforms like Apple provide free access, they don’t offer a web-based API to push data into Apple Health. Meaning, a partner *has* to develop an iOS app to push/pull it there. That’s why for the DCR Analyzer we use [HealthFit](https://apps.apple.com/us/app/healthfit/id1202650514)as our partner to pull data from Apple Health. The last thing I wanted to do was develop an app simply to get my Apple Fitness data; that solved our need.
+
+Anyways, as for other device platforms – like COROS, Suunto, Wahoo, Polar, Amazfit, etc. – all of them today provide some level of API, but whether or not they provide it for the end-user to do something is heavily mixed. For example, COROS rolled out their MCP access for free for all COROS users. And Suunto announced the same thing last week for some time in the future. Wahoo and Amazfit have programs for companies, but those aren’t really available for individuals. Suunto and Polar also have programs for companies too, and both of those are pretty easy to access. In fact, fun tidbit: Out of all the API partners we implemented for the DCR Analyzer, by far Polar was the fastest and easiest to do.
+
+Historically speaking, Whoop, for example, has charged for more detailed API access (such as the full workout files), while allowing free summary information. As an example, in the case of the DCR Analyzer, that’s not super useful, so we haven’t pursued it. Perhaps the pricing is reasonable; historically it hasn’t been.
+
+In fact, one thing that Whoop specifically does is charge for ‘aggregator’ type platforms, such as Terra. Generally speaking, when I talk to platforms/companies in the sports tech realm, most have a strong disdain for Terra. It’s mostly for two reasons. The first is that most companies have felt that Terra consistently misleads their customers into thinking they have legit partnerships with the big platforms, when historically speaking, many of those platforms had never even heard of Terra. Second, Terra wasn’t using proper APIs (e.g. OAuth) for many of the sites they accessed, which makes it a notable security concern for the platforms in question. This [14-month-old community support question](https://tryterra.co/community/garmin-connect) best exemplifies the issue in one efficient thread.
+
+We saw this play out recently when Terra got themselves in a pickle as Garmin shut off access to the API for them, until they followed the rules that had been in place for years. Terra responded by asking people to e-mail Garmin’s CEO directly (and provided his e-mail address). Likewise, I got flooded with e-mails as well.
+
+Still, Garmin’s shift here towards charging for API access will set a dangerous precedent for the industry. Especially for a company that bills itself as a (or the?) premium sports hardware provider. On the flip side, there’s simply no ignoring the flood of mostly AI apps that take up resources at Garmin and elsewhere to support. Heck, my inbox is flooded with these apps daily requesting reviews. It sounds like when Garmin shut off access to the API last spring, they were seeing inbound API requests at a daily scale that they’d previously only seen over a period of weeks. Simply put, there’s no good answer.
+
+### **Going Forward:**
+
+![](https://media.dcrainmaker.com/images/2026/10/IMG_7270.jpg)
+
+Ultimately, there’s sorta a few groups of winners and losers here. For hobbyists, this is a huge win. A massive one. This is the first time that Garmin has provided access (and instant access) to their API for individual users to grab and play with their own data without having to deal with manual .FIT file uploads/management. Likewise, those users can easily/instantly get into the ‘Startup’ category and do more things – all for free up to 1,000 users. So for companies trying to test out a theory, it’s all good news there.
+
+Where things get fuzzier is the bigger companies, though of course, 1,000 users is hardly ‘big’. Strava has 200 million users, for context. At least now the gates are back open again, and companies can start working their way through the process accordingly. It sounds like part of the goal here is that by offloading the lower-tier access, they can increase the response time for enterprise tiers, minimizing the delay to get through that paperwork approval pile. Plus, those bigger companies can get proper technical support too.
+
+Anyways, interesting times indeed.
+
+With that – thanks for reading!
+
+*P.S. – I found an old picture of Garmin’s Connect Developer Summit from 2019 when they first abolished the API fee. Seems appropriate here, even above.*
+
+### FOUND THIS POST USEFUL? SUPPORT THE SITE!
+
+Hopefully, you found this post useful. The website is really a labor of love, so please consider becoming a [DC RAINMAKER Supporter](https://www.dcrainmaker.com/support). This gets you an ad-free experience, and access to our (mostly) bi-monthly behind-the-scenes video series of “[Shed Talkin’](https://www.youtube.com/watch?v=-qbE3feTkds&t=1s)”.
+
+Otherwise, perhaps consider using the below link if [shopping on Amazon](https://www.amazon.com/gp/browse.html?rw_useCurrentProtocol=1&node=8916179011&linkCode=ll2&tag=dcr07-20&linkId=2cf083a39b98796644643a4089b57a7a&language=en_US&ref_=as_li_ss_tl). As an Amazon Associate, I earn from qualifying purchases. It doesn’t cost you anything extra, but your purchases help support this website a lot. It could simply be [buying toilet paper](https://amzn.to/3SEEIK9), or this [pizza oven](https://amzn.to/3SEMN1M) we use and love.
+
+1. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) [Z](https://trackmy.shoes/) .comment-author .vcard [October 21, 2026 at 12:02 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866559) #1 .comment-meta .commentmetadata I don’t understand the part about not having historical data, as I can fetch activity by ID. Do they mean not having some kind of bulk import? I have a shoe tracking app that syncs gear automatically from Garmin to Strava, but use unofficial APIs. Would be nice to use proper channels :) [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-## .children
+  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/55926d11e3304bc3d110cd3221a41438x116.png) [Ray Maker](http://www.dcrainmaker.com) .comment-author .vcard [October 21, 2026 at 12:22 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866565) #2 .comment-meta .commentmetadata The API being official, would be diferent than the unofficial piece that I presume you’re just using webhooks. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
+  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Walter .comment-author .vcard [October 21, 2026 at 3:51 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866673) #3 .comment-meta .commentmetadata Have you been able to find a way to get gear data from the Official API? [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
+  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) [Z](https://trackmy.shoes/) .comment-author .vcard [October 22, 2026 at 1:00 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866975) #4 .comment-meta .commentmetadata I will try today and get back to you [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
+  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) [Z](http://trackmy.shoes) .comment-author .vcard [October 22, 2026 at 4:06 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867032) #5 .comment-meta .commentmetadata – it seems there is internal gear ID in the FIT file. Message 526, field 0 – I cannot find official fetch gear endpoint So using JUST official API to manage gear is a no go. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
+2. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/7f8bcf17ae7c8c49b8e2a463b91c2ffex116.png) [Guillermo](https://www.giventotri.com) .comment-author .vcard [October 21, 2026 at 12:06 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866561) #6 .comment-meta .commentmetadata Do they have any plans to allow platforms to push completed activities to Garmin Connect in this new program? I keep hoping apps like FORM get access to push my completed swims there. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-## .children
+  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/55926d11e3304bc3d110cd3221a41438x116.png) [Ray Maker](http://www.dcrainmaker.com) .comment-author .vcard [October 21, 2026 at 12:23 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866566) #7 .comment-meta .commentmetadata No, that still remains no-go territory for Garmin, save for the handful of strategic partners that mostly came from many years ago (Zwift, TrainerRoad, and more recently Peloton). [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
+  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Nick Radov .comment-author .vcard [October 21, 2026 at 1:28 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866606) #8 .comment-meta .commentmetadata It’s not a great solution but in theory you could generate a .FIT file for your swim activity and copy it to a Garmin device via USB. Then the activity should automatically sync to Garmin Connect. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
+  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/7f8bcf17ae7c8c49b8e2a463b91c2ffex116.png) [Guillermo](https://www.giventotri.com) .comment-author .vcard [October 21, 2026 at 3:17 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866659) #9 .comment-meta .commentmetadata Yeah, I mean, there are ways around it, but it’s a hassle to import things manually into Garmin Connect and it means it isn’t actually the source of truth for my fitness data because it’s incomplete. I don’t really understand Garmin’s rationale for it. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
+  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Richards .comment-author .vcard [October 22, 2026 at 4:57 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867050) #10 .comment-meta .commentmetadata The rationale is so you buy their devices exclusively. What might happen is that some people, I include myself here, are turned off by it and take their data elsewhere and do not use connect. But likely garmin has data that tells them it helps sell more devices. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
+3. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) [Kyriakos](https://tryterra.co) .comment-author .vcard [October 21, 2026 at 12:38 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866575) #11 .comment-meta .commentmetadata Ray, this massively misrepresents Terra and what happened, but I am just going to assume you have good intentions and limited information Do you want to join me for a 30-minute live discussion so people can see everything and make their own judgment? [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-## .children
+  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/55926d11e3304bc3d110cd3221a41438x116.png) [Ray Maker](http://www.dcrainmaker.com) .comment-author .vcard [October 21, 2026 at 2:17 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866630) #12 .comment-meta .commentmetadata Hello. I don’t really see where/how having an open livestream discussion is going to be fruitful. For funsies, I just reached out to one of the companies on your list of 500 partners you have access to, asking what the current state was. I reached out to their lead partnership manager. Who in turn checked with the CTO as well as lead technical engineer. None of them have ever had any discussions with Terra, nor certainly any technical partnership or past/current implementation. They used a bunch of other words as well… Look, I think what you started with years ago as a place for startups to quickly gain access to what was fully walled gardens made sense, especially when you were leveraging API’s properly. But that’s not what’s going on today. Further, API’s are far more common today in wearables/fitness. Still, while I think there’s common good that can come from normalized data in a single repository that companies can access, the way this is currently implemented today simply isn’t that. Cheers [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
+  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) [Kyriakos](https://tryterra.co) .comment-author .vcard [October 21, 2026 at 3:18 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866660) #13 .comment-meta .commentmetadata The article and your response clearly misrepresents the facts and the livestream is meant to address this publicly, where you can bring your honest questions. I think good reporting is hearing both sides and reporting on them; otherwise, it’s a false narrative. Can you point me to the exact rules Terra didn’t follow in the Garmin case, since you mention them? The reality is that Terra lets customers move their health data wherever they choose because the data a device generates belongs to the users. We are always in an uphill battle with the big companies that benefit from the siloes, and I would assume you would also want to see your data not controlled by others. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
+  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/55926d11e3304bc3d110cd3221a41438x116.png) [Ray Maker](http://www.dcrainmaker.com) .comment-author .vcard [October 21, 2026 at 4:13 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866686) #14 .comment-meta .commentmetadata Sigh. Garmin’s Developer API terms prohibit licensees (Terra in this case, or the DCR Analyzer) from passing that content downstream to other entities. It also prohibits using the API for sub-licensing for monetary gain or otherwise, without written permission…and on and on. But of course, you know all this. As do your customers, back in September, when they were told by you to submit app details to stay compliant. Again, the developer agreement hadn’t changed in more years than I could count. Look, again, I think there are lots of interesting cases with above-board and proper OAuth authentication for middle-man data servicing. But as your own site specifies, you use Webhooks for many claimed partners (including many who have no idea that they’re supposedly a partner), and you’re polling constantly to check for that. That’s textbook definition of scraping. And we don’t even want to get into storing of user credentials. I don’t see much value in going back and forth on this. Ironically, in all the back-and-forth thus far, you haven’t refuted anything specific here. I promise, you’re really barking up the wrong tree here. You’re vastly underestimating how well I understand the technology at play here, and more critically – how many companies I’ve talked to (both ‘partner platforms’ and your actual paying customers that have reached out). [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
+  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Micko .comment-author .vcard [October 22, 2026 at 2:55 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867007) #15 .comment-meta .commentmetadata Well, you got him there. These companies are the main issue I think. They’ve been leeching and earning money from Garmin (and other companies) free API, while providing no real benefit, except easier integration (that is not impossible, just a bit harder) I really hope Garmin’s Enterprise access won’t be too expensive, since it would somewhat (for the lack of better word) kill my app. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
+  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Fit Observer .comment-author .vcard [October 22, 2026 at 4:49 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867047) #16 .comment-meta .commentmetadata You’re charging $500 a month for a product which is quite obviously not fit (pun intended) for purpose. Moreover, your X feed and customer handling is laughable at best. Watching you rile up Steven Scullion to rant about Garmin on his instagram account was hilarious. Even if he never mentioned Terra by name, we all knew who he meant. God only knows how you have managed to grow your company and employ Olympic athletes with your practices. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
+4. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Raimonds .comment-author .vcard [October 21, 2026 at 2:06 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866624) #17 .comment-meta .commentmetadata Interesting turn. Week ago I created (with AI help) script/app that downloads last activities from Garmin and uploads to runalyze because our friends in Garmin started to stripe some information from fit files they are sending out to runalyze. Reading about change I understand that fit files downloaded using GC API have the same data missing which is now missing in runalyze, that would be VO2Max for example. It would be great if anyone could confirm this. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
+5. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Pavel S .comment-author .vcard [October 21, 2026 at 4:15 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866687) #18 .comment-meta .commentmetadata Thanks for the good overview, as always. I’m wondering why Coros is always written in all caps. Do they force reviewers to write it that way, or what’s the reason? I get it when acronyms are written in all caps, like MCP, but Coros is nothing like that. It’s just a brand name. When reading a list of brands like “COROS, Suunto, Wahoo, Polar, Amazfit, etc.”, seeing one brand in all caps for no apparent reason is an eyesore to me and feels like a cheap marketing trick. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-## .children
+  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/55926d11e3304bc3d110cd3221a41438x116.png) [Ray Maker](http://www.dcrainmaker.com) .comment-author .vcard [October 21, 2026 at 4:21 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866690) #19 .comment-meta .commentmetadata I don’t know, it’s how they write their brand name, and while I don’t do fancy characters for model names like fēnix® – in the case of COROS, it just looks weird to anyone in sports tech if you write it Coros. Said differently, if I see a review/etc where someone writes it ‘Coros’, there’s a very strong chance that review is gonna suck, because they can’t at least spell the name of the company right. Just my two cents from writing the word COROS for over a decade…. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
+6. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) David Lusty .comment-author .vcard [October 21, 2026 at 4:34 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866700) #20 .comment-meta .commentmetadata Got to say I don’t mind this at all. Love free data, love user access to that data, love the innovation that comes from that. This allows ideas to be tested, good thing. It encourages innovation, good thing. It allows Garmin a revenue stream other than hardware. I’m on the fence there. They can’t keep pushing hardware change as the only way to make money. Fenix for example has peaked a while ago and some innovation targeting specific users is good but that’s not going to be enough income to keep Garmin alive. We all need them alive! Compare this to Apple. Most of us like Apple and tolerate their taking a cut of literally everything near their platform. If Apple can take multiple cuts when you order a pizza then realistically Garmin should be allowed to take a small cut when running their platform and providing data and value. If Garmin go all Apple on us and prioritise subscription revenue from all angles, they’re dead to me. It’s not their DNA though, they need to cover costs and need some revenue not directly hardware based. This seems reasonable to me so far. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
+7. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Tony West .comment-author .vcard [October 21, 2026 at 6:18 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866758) #21 .comment-meta .commentmetadata So this means I could sign up for a personal API key and point Claude at my data? Or would I need to pull my data down locally and use Claude with it from there? [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
+8. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Paul S. .comment-author .vcard [October 21, 2026 at 8:41 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866847) #22 .comment-meta .commentmetadata Could this be the reason that today’s outdoor ride doesn’t show in Zwift Companion? I don’t remember any problems from the time Zwift decided to give XP for outdoor rides until today. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
+9. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/ff93e4e7f8a26fa19f90143ff5f4a89ex116.png) Alex .comment-author .vcard [October 21, 2026 at 9:09 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866864) #23 .comment-meta .commentmetadata I built an open-source script that lets you download workout files using a private API key and sync them to other services. Currently, only Intervals.icu and EffortSignal are supported, but I’ll gradually add more. The script can run either locally or on Cloudflare Workers within the free tier limits. [link to github.com](https://github.com/azaitsev/gc2everywhere) [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
+10. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/65b5c4a96d430fa97d21195c4a27d977x116.png) Henrik Christensen .comment-author .vcard [October 22, 2026 at 3:06 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867009) #24 .comment-meta .commentmetadata So now we just need full and complete sync of all data between Connect and Apple Health :-) [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
+11. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Jesper (CPH DK) .comment-author .vcard [October 22, 2026 at 3:49 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867023) #25 .comment-meta .commentmetadata Maybe slightly off topic, but does anyone know of an app/www that can show ones health data with better graphs??? I’m especially dreaming of weight graph that span all the data, not just one year at a time. And also with better details and not the avg of several datapoints. Give me 3 and 12 month with all points [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-## .children
+  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) [Z](http://trackmy.shoes) .comment-author .vcard [October 22, 2026 at 4:07 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867033) #26 .comment-meta .commentmetadata Put this into Claude. Literally :) It will spit out a lot of slop, but it will work and give you what you want. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
+  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Ronald .comment-author .vcard [October 22, 2026 at 4:27 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867040) #27 .comment-meta .commentmetadata hi Jesper, check out [link to runalyze.com](https://runalyze.com/) i’m not using it for that purpose but it has the capabilities. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
+12. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) mat .comment-author .vcard [October 22, 2026 at 3:57 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867025) #28 .comment-meta .commentmetadata I know it’s not directly related to this (although perhaps?), but I’m looking for a solution to a problem: I have a tacx turbo trainer that connects to the garmin ecosystem, but switched my watch to suunto. I would like my tacx activities be visible in the suunto app not as manual added activities but proper trainings. Is that something that could potentially be done via APIs (on garmin and suunto side)? [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
+13. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) John Tomac .comment-author .vcard [October 22, 2026 at 5:25 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867055) #29 .comment-meta .commentmetadata If I understand you correctly, companies with more than 1,000 users, such as Intervals.icu, will have to pay starting in 2027, so Intervals will no longer be free for users if they don’t want to loose money. I’d like to see Training Peaks graph (ATL, CTL, TSB) available in Connect in the future, just like TSS and IF metrics, which we already have. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-## .children
+  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/55926d11e3304bc3d110cd3221a41438x116.png) [Ray Maker](http://www.dcrainmaker.com) .comment-author .vcard [October 22, 2026 at 5:52 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867059) #30 .comment-meta .commentmetadata Intervals has a premium tier already ($4/month) which, if we assume roughly single-digit pennies per user, would easily cover that. Now of course, for their free tier, yeah, they’re gonna have to think that through (which sucks). Depending on their user volume, they could see that as a marketing expense to upsell premium, but I don’tknow their financials. That’s just business ROI pieces there for them to sort out. I suspect some of these factors are why Garmin says the negotiation pieces are per-company, not just because of size, but intended use case. For example, a university or medical study trying to do something at scale might not pay anything. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
+  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/ff93e4e7f8a26fa19f90143ff5f4a89ex116.png) Alex .comment-author .vcard [October 22, 2026 at 6:34 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867071) #31 .comment-meta .commentmetadata I saw a Garmin ad where they were selling bundles that include CIRQA and some research software. Maybe they partnered with another company or acquired one for this. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
+  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) [Dom](http://runningbadger.blogspot.co.uk/) .comment-author .vcard [October 22, 2026 at 7:46 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867099) #32 .comment-meta .commentmetadata It’s going to be interesting for sites that have a free tier and a lot of people who connect their Garmin unit, use it for a bit, then abandon it but leave the connection running. I foresee culls of dormant users. Looking at my own list of connected sites, I think I should cull a few myself. One of them doesn’t even exist any more! [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
+  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/55926d11e3304bc3d110cd3221a41438x116.png) [Ray Maker](http://www.dcrainmaker.com) .comment-author .vcard [October 22, 2026 at 7:54 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867102) #33 .comment-meta .commentmetadata Yeah, I suspect dormant-type conditions will be the most logical path forward. Which, to be fair, is probably good for all involved anyway. Transfering tons of data around to platforms you never use is a waste. Like you, I’ve been meaning to do a cull of both my Strava & Garmin connections. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
+14. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) [Kevin F](https://www.fitfiletools.com) .comment-author .vcard [October 22, 2026 at 9:46 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867146) #34 .comment-meta .commentmetadata Thanks for the fantastic write-up! As a long-time hobbyist developer, I completely sympathize with the position that Garmin — and really any company offering public APIs — finds itself in during the post-Claude Code era. Platforms will either need to adapt their partner models or face the same fate GitHub did: widespread outages triggered by an explosion of “vibe-coded” API traffic. Garmin’s approach seems entirely reasonable. ps: I’m here for the Terra sub-thread! Spicy. Go get ’em, Ray! [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
+15. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Andy .comment-author .vcard [October 22, 2026 at 10:30 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867167) #35 .comment-meta .commentmetadata As an antitrust lawyer, I predict some arguments or complaints coming out of this. As you’ve previously identified, Garmin is like “all the data on Strava” (in short-hand) – whilst the devil is in the detail, it certainly seems arguable that Strava depends on Garmin API access – so what happens if they say they won’t pay? I don’t think Garmin can credibly pull access – it seems there’s a prima facie argument they are dominant in sports tech devices and data markets and so by withdrawing access upon which Strava is built for a refusal to pay risks being a potential abuse of dominance and/or the fees being charged risk being found to be excessive and unfair. Add in that Garmin’s downstream platform (TrainingPeaks) presumably won’t be paying those fees and you can argue that Garmin is favouring its downstream training platform and seeking to give it a competitive advantage over competitors (whether Strava or otherwise). There’s potentially a lot here for a would be complainant to challenge if Garmin do anything other than be pretty accommodating. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
+16. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) LoneLeaf .comment-author .vcard [October 22, 2026 at 12:41 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867219) #36 .comment-meta .commentmetadata Allowing historical data again is good news. I recently wanted to export hundreds of activities (to the orange platform…) via Tapiriik and learned that Garmin cut off historical access some time ago. Hopefully Garmin gives safety-oriented API users like MyBikeTraffic a decent deal. It sounds like the personal API key could streamline getting data into Golden Cheetah. I haven’t used in a long time but it used to require a manual login each time. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
+17. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Neil .comment-author .vcard [October 22, 2026 at 3:07 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867273) #37this must be the last one! .comment-meta .commentmetadata Shame that the Personal API key is read-only. I’ve been building a sync app with it, activities and FIT files pull down fine, but there’s no way to push or schedule workouts. The unofficial Python library can do both, because it uses the same endpoints Garmin Connect itself uses, but that means logging in with the user’s own credentials. I’d also say getting a Starter account isn’t trivial for hobbyist developers. From what I’ve read you may need a registered company, and because you’d be storing other people’s data you also have to take data protection seriously. In the UK/EU that means GDPR: registering with the Information Commissioner’s Office and paying the data protection fee, a published privacy notice, a lawful basis for processing, being able to handle access and deletion requests, proper security, and reporting breaches within 72 hours. That’s a lot of overhead for a side project that only wants access beyond the read only limits imposed by the personal account. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##

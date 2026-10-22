@@ -1,219 +1,33 @@
-On October 21, 2026, we released versions 19.5.1, 19.4.3, 19.3.6, 19.2.9, 19.1.9, 19.0.10, 18.11.13 for GitLab Community Edition (CE) and Enterprise Edition (EE).
+**PHP 8.5.12, 8.4.27, 8.3.36 and 8.2.35 fix two critical vulnerabilities that can allow unauthenticated remote code execution. All PHP users are strongly encouraged to update immediately.**
 
-These versions contain important bug and security fixes, and we strongly recommend that all self-managed GitLab installations be upgraded to
-one of these versions immediately. GitLab.com is already running the patched version. GitLab Dedicated tenants running 19.3.5-internal0 and 19.4.2-internal0 or later already include these fixes and do not need to take action.
+**Who is at risk:** all PHP installations serving web requests, including PHP-FPM, Apache with mod_php, php-cgi, FrankenPHP and LiteSpeed. We consider the risk highest for mod_php, with a demonstrated exploit where an unauthenticated request can trigger the attack before any application code runs.
 
-GitLab releases fixes for vulnerabilities in patch releases. There are two types of patch releases:
-scheduled releases and ad-hoc critical patches for high-severity vulnerabilities. Scheduled releases are released twice a month on the second and fourth Wednesdays.
-For more information, please visit our [releases handbook](https://handbook.gitlab.com/handbook/engineering/releases/) and [security FAQ](https://about.gitlab.com/security/faq/).
-You can see all of GitLab release blog posts [here](https://docs.gitlab.com/releases/).
+**The vulnerabilities:**
 
-For security fixes, the issues detailing each vulnerability are made public on our
-[issue tracker](https://gitlab.com/gitlab-org/gitlab/-/issues/?sort=created_date&state=closed&label_name%5B%5D=bug%3A%3Avulnerability&confidential=no&first_page_size=100)
-90 days after the release in which they were patched.
+- RCE via OOM corruption, CVE-2026-109618 (GHSA-w8hw-w9fx-j79w): out-of-memory handling can interrupt PHP while internal request data is only partially initialized. Request cleanup may then treat the invalid data as valid.
+- RCE via stale global state, CVE-2026-109619 (GHSA-6wmf-4rv5-p3rp): request-owned internal state can survive after its backing memory has been freed. A later request handled by the same worker may use that stale state before normal initialization resets it.
 
-We are committed to ensuring that all aspects of GitLab that are exposed to customers or that host customer data are held to
-the highest security standards. To maintain good security hygiene, it is highly recommended that all customers
-upgrade to the latest patch release for their supported version. You can read more
-[best practices in securing your GitLab instance](https://about.gitlab.com/blog/gitlab-instance-security-best-practices/) in our blog post.
+**How to update:**
 
-### Recommended Action
+- Update to PHP 8.5.12, 8.4.27, 8.3.36 or 8.2.35. Source downloads are on our downloads page. Windows source and binaries are on the same page.
+- Linux distributions and LTS vendors received the patches in advance, so check your vendor for updated packages.
+- PHP 8.1 and older no longer receive updates from the PHP project. Some distributions and LTS vendors provide backported fixes, so contact your vendor for details, or upgrade to a supported version.
+- If you rely on the volunteer-maintained rpms.remirepo.net, we urge you to switch to distribution packages or build from source, so you can immediately apply updates. The repo will not have updates today.
+- Given the severity of these vulnerabilities, the PHP security team provided minimal source-backports for PHP 7.4, PHP 8.0, and PHP 8.1 to help people building from source or without access to an LTS vendor.
 
-We **strongly recommend** that all installations running a version affected by the issues described below are **upgraded to the latest version as soon as possible**.
+**If you cannot update immediately:** while only an update is a complete solution, the following measures reduce exposure to specific attack paths but do not make an installation safe.
 
-When no specific deployment type (omnibus, source code, helm chart, etc.) of a product is mentioned, it means all types are affected.
+**RCE via OOM corruption (CVE-2026-109618):**
 
-## Security fixes
+- Set memory_limit=-1, preferably in a way applications can't override, such as php_admin_value in the FPM pool or Apache configuration, and check that no pool, directory or application setting puts a finite limit back. This removes the controllable PHP memory limit failure, but an underlying allocation failure can still reach the vulnerable path.
+- Set a low post_max_size. For applications that don't require file uploads, set post_max_size = 8M. If file uploads are necessary, set post_max_size = 32M. Keep upload_max_filesize below post_max_size. Consider enforcing limits at the web server or proxy level for decoded request size, input field count, multipart part count, header count, and nesting depth. These limits must also cover requests without a usable Content-Length.
+- Use a container or cgroup limit as an availability boundary, preferably with a policy that kills only the affected worker. Do not substitute RLIMIT_AS or RLIMIT_DATA, as these can cause the vulnerable allocation failure.
 
-### Table of security fixes
+**RCE via stale global state (CVE-2026-109619):**
 
-| Title | Severity |
-| --- | --- |
-| [Integer Overflow issue in Regular Expression Compiler impacts GitLab CE/EE](https://docs.gitlab.com/releases/patches/patch-release-gitlab-19-5-1-released/#cve-2026-110264---integer-overflow-issue-in-regular-expression-compiler-impacts-gitlab-ceee) | Critical |
-| [Improper Authentication issue in OmniAuth-to-LDAP auto-linking email lookup impacts GitLab CE/EE](https://docs.gitlab.com/releases/patches/patch-release-gitlab-19-5-1-released/#cve-2026-15723---improper-authentication-issue-in-omniauth-to-ldap-auto-linking-email-lookup-impacts-gitlab-ceee) | High |
-| [Cache Poisoning issue in OAuth/OIDC discovery endpoints impacts GitLab CE/EE](https://docs.gitlab.com/releases/patches/patch-release-gitlab-19-5-1-released/#cve-2026-112212---cache-poisoning-issue-in-oauthoidc-discovery-endpoints-impacts-gitlab-ceee) | High |
-| [Improper Access Control issue in GraphQL work item email address field impacts GitLab CE/EE](https://docs.gitlab.com/releases/patches/patch-release-gitlab-19-5-1-released/#cve-2026-12664---improper-access-control-issue-in-graphql-work-item-email-address-field-impacts-gitlab-ceee) | Medium |
-| [Incomplete enforcement of instance-wide SAML/LDAP membership lock allows unauthorized member additions in GitLab EE](https://docs.gitlab.com/releases/patches/patch-release-gitlab-19-5-1-released/#cve-2026-16255---incomplete-enforcement-of-instance-wide-samlldap-membership-lock-allows-unauthorized-member-additions-in-gitlab-ee) | Medium |
-| [Internal Credential Exposure issue in internal response headers impacts GitLab CE/EE](https://docs.gitlab.com/releases/patches/patch-release-gitlab-19-5-1-released/#cve-2026-105777---internal-credential-exposure-issue-in-internal-response-headers-impacts-gitlab-ceee) | Medium |
-| [Authorization Bypass Through User-Controlled Key issue in group milestones API impacts GitLab CE/EE](https://docs.gitlab.com/releases/patches/patch-release-gitlab-19-5-1-released/#cve-2026-13319---authorization-bypass-through-user-controlled-key-issue-in-group-milestones-api-impacts-gitlab-ceee) | Medium |
-| [Use of Less Trusted Source issue in AI Gateway feature enablement header impacts GitLab EE](https://docs.gitlab.com/releases/patches/patch-release-gitlab-19-5-1-released/#cve-2026-112378---use-of-less-trusted-source-issue-in-ai-gateway-feature-enablement-header-impacts-gitlab-ee) | Medium |
-| [Use of Cache Containing Sensitive Information issue in merge request title rendering impacts GitLab CE/EE](https://docs.gitlab.com/releases/patches/patch-release-gitlab-19-5-1-released/#cve-2026-105711---use-of-cache-containing-sensitive-information-issue-in-merge-request-title-rendering-impacts-gitlab-ceee) | Low |
-| [Improper Access Control issue in merge request approval policy enforcement impacts GitLab EE](https://docs.gitlab.com/releases/patches/patch-release-gitlab-19-5-1-released/#cve-2026-14288---improper-access-control-issue-in-merge-request-approval-policy-enforcement-impacts-gitlab-ee) | Low |
-| [Improper Cleanup on Thrown Exception issue in security findings impacts GitLab EE](https://docs.gitlab.com/releases/patches/patch-release-gitlab-19-5-1-released/#cve-2026-112326---improper-cleanup-on-thrown-exception-issue-in-security-findings-impacts-gitlab-ee) | Low |
-| [Improper Access Control issue in group Duo admin-lock enforcement for Amazon Q settings impacts GitLab EE](https://docs.gitlab.com/releases/patches/patch-release-gitlab-19-5-1-released/#cve-2026-103515---improper-access-control-issue-in-group-duo-admin-lock-enforcement-for-amazon-q-settings-impacts-gitlab-ee) | Low |
+- Set session.upload_progress.enabled=0 and restart every worker. Use php.ini, an FPM pool or server configuration that applies before request parsing. Do not rely on ini_set() or FPM .user.ini. This blocks the confirmed session paths but not other variants.
+- On PHP 8.5, set fatal_error_backtraces=0 and restart every worker. This blocks the confirmed fatal backtrace path only.
+- Remove invalid or deprecated settings applied per request that emit diagnostics before initialization. Hiding diagnostics with error_reporting, display_errors or @ does not help.
+- Fix attacker-reachable fatal errors and execution timeouts, including failures in callbacks, upload or import processing and cleanup.
 
-### [CVE-2026-110264](https://www.cve.org/CVERecord?id=CVE-2026-110264) - Integer Overflow issue in Regular Expression Compiler impacts GitLab CE/EE
-
-GitLab has remediated an issue that, under certain conditions, could have allowed an unauthenticated user to execute arbitrary code on the GitLab server due to integer overflow when compiling a specially crafted regular expression.
-
-In addition to our standard patch releases, we have backported this fix to GitLab CE/EE versions 18.11.13, 19.0.10, 19.1.9, and 19.2.9.
-
-**Impacted Versions:** GitLab CE/EE: all versions from 7.0 before 18.11.13, 19.0 before 19.0.10, 19.1 before 19.1.9, 19.2 before 19.2.9, 19.3 before 19.3.6, 19.4 before 19.4.3, and 19.5 before 19.5.1  
-**CVSS** 10.0 ([`CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H`](https://gitlab-com.gitlab.io/gl-security/product-security/appsec/cvss-calculator/explain#explain=CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H))
-
-Thanks [joaxcar](https://hackerone.com/joaxcar) for reporting this vulnerability through our HackerOne bug bounty program
-
-### Detecting [CVE-2026-110264](https://www.cve.org/CVERecord?id=CVE-2026-110264) Exploitation Attempts
-
-GitLab security has released two threat detections to support customers with self-managed instances, listed below. GitLab-managed infrastructure, including GitLab.com and GitLab Dedicated, remains patched.
-
-### [CVE-2026-15723](https://www.cve.org/CVERecord?id=CVE-2026-15723) - Improper Authentication issue in OmniAuth-to-LDAP auto-linking email lookup impacts GitLab CE/EE
-
-GitLab has remediated an issue that, when OmniAuth SAML and LDAP auto-linking were both enabled, an authenticated user could have taken over an existing LDAP-backed account without any interaction from the targeted user, due to improper input sanitization in the LDAP email lookup path used during OmniAuth identity linking.
-
-**Impacted Versions:** GitLab CE/EE: all versions from 10.1 before 19.3.6, 19.4 before 19.4.3, and 19.5 before 19.5.1  
-**CVSS** 8.2 ([`CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:C/C:H/I:H/A:N`](https://gitlab-com.gitlab.io/gl-security/product-security/appsec/cvss-calculator/explain#explain=CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:C/C:H/I:H/A:N))
-
-Thanks [stealthy](https://hackerone.com/stealthy) for reporting this vulnerability through our HackerOne bug bounty program
-
-### [CVE-2026-112212](https://www.cve.org/CVERecord?id=CVE-2026-112212) - Cache Poisoning issue in OAuth/OIDC discovery endpoints impacts GitLab CE/EE
-
-GitLab has remediated an issue that, under certain conditions, an unauthenticated user could have poisoned a shared cache’s OAuth/OIDC discovery document to redirect certain flows to an externally controlled server, due to improper trust of user-supplied values when constructing endpoint URLs in cached discovery responses.
-
-**Impacted Versions:** GitLab CE/EE: all versions from 18.3 before 19.3.6, 19.4 before 19.4.3, and 19.5 before 19.5.1  
-**CVSS** 7.5 ([`CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:C/C:H/I:L/A:L`](https://gitlab-com.gitlab.io/gl-security/product-security/appsec/cvss-calculator/explain#explain=CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:C/C:H/I:L/A:L))
-
-This vulnerability has been discovered internally by GitLab team member Peter Arts
-
-### [CVE-2026-12664](https://www.cve.org/CVERecord?id=CVE-2026-12664) - Improper Access Control issue in GraphQL work item email address field impacts GitLab CE/EE
-
-GitLab has remediated an issue that, under certain conditions, could have allowed an authenticated user with a read_api-scoped token to retrieve a project’s incoming email address and create work items, bypassing the token’s restrictions, due to insufficient scope enforcement on a GraphQL field.
-
-**Impacted Versions:** GitLab CE/EE: all versions from 18.2 before 19.3.6, 19.4 before 19.4.3, and 19.5 before 19.5.1  
-**CVSS** 6.8 ([`CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:U/C:H/I:H/A:N`](https://gitlab-com.gitlab.io/gl-security/product-security/appsec/cvss-calculator/explain#explain=CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:U/C:H/I:H/A:N))
-
-Thanks [go7f0](https://hackerone.com/go7f0) for reporting this vulnerability through our HackerOne bug bounty program
-
-### [CVE-2026-16255](https://www.cve.org/CVERecord?id=CVE-2026-16255) - Incomplete enforcement of instance-wide SAML/LDAP membership lock allows unauthorized member additions in GitLab EE
-
-GitLab has remediated an issue that, when the instance-wide SAML or LDAP membership lock was enabled, an authenticated user could have granted or accepted project and group membership outside the identity provider’s control, due to incomplete enforcement of the membership lock on requests created before the lock was enabled.
-
-**Impacted Versions:** GitLab EE: all versions from 12.0 before 19.3.6, 19.4 before 19.4.3, and 19.5 before 19.5.1  
-**CVSS** 5.9 ([`CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:U/C:H/I:L/A:N`](https://gitlab-com.gitlab.io/gl-security/product-security/appsec/cvss-calculator/explain#explain=CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:U/C:H/I:L/A:N))
-
-Thanks [3nvz](https://hackerone.com/3nvz) for reporting this vulnerability through our HackerOne bug bounty program
-
-### [CVE-2026-105777](https://www.cve.org/CVERecord?id=CVE-2026-105777) - Internal Credential Exposure issue in internal response headers impacts GitLab CE/EE
-
-GitLab has remediated an issue that, under certain conditions, an unauthenticated user could have retrieved sensitive internal server credentials due to improper filtering of internal response headers.
-
-**Impacted Versions:** GitLab CE/EE: all versions from 17.6.5 before 19.3.6, 19.4 before 19.4.3, and 19.5 before 19.5.1  
-**CVSS** 4.3 ([`CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:L/I:N/A:N`](https://gitlab-com.gitlab.io/gl-security/product-security/appsec/cvss-calculator/explain#explain=CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:L/I:N/A:N))
-
-Thanks [altair00](https://hackerone.com/altair00) for reporting this vulnerability through our HackerOne bug bounty program
-
-### [CVE-2026-13319](https://www.cve.org/CVERecord?id=CVE-2026-13319) - Authorization Bypass Through User-Controlled Key issue in group milestones API impacts GitLab CE/EE
-
-GitLab has remediated an issue that could have allowed an authenticated user to read milestone metadata, including titles, descriptions, and full project paths, from arbitrary private projects across the instance without any project membership, due to missing authorization checks on a user-supplied project filter parameter in the group milestones API.
-
-**Impacted Versions:** GitLab CE/EE: all versions from 15.10 before 19.3.6, 19.4 before 19.4.3, and 19.5 before 19.5.1  
-**CVSS** 4.3 ([`CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:L/I:N/A:N`](https://gitlab-com.gitlab.io/gl-security/product-security/appsec/cvss-calculator/explain#explain=CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:L/I:N/A:N))
-
-Thanks [a0xnirudh](https://hackerone.com/a0xnirudh) for reporting this vulnerability through our HackerOne bug bounty program
-
-### [CVE-2026-112378](https://www.cve.org/CVERecord?id=CVE-2026-112378) - Use of Less Trusted Source issue in AI Gateway feature enablement header impacts GitLab EE
-
-GitLab has remediated an issue that under certain conditions could have allowed an authenticated user to access paid AI features without a valid subscription due to insufficient server-side validation in billing eligibility checks.
-
-**Impacted Versions:** GitLab EE: all versions from 17.8 before 19.3.6, 19.4 before 19.4.3, and 19.5 before 19.5.1  
-**CVSS** 4.3 ([`CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:L/A:N`](https://gitlab-com.gitlab.io/gl-security/product-security/appsec/cvss-calculator/explain#explain=CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:L/A:N))
-
-This vulnerability has been discovered internally by GitLab team member Halil Coban
-
-### [CVE-2026-105711](https://www.cve.org/CVERecord?id=CVE-2026-105711) - Use of Cache Containing Sensitive Information issue in merge request title rendering impacts GitLab CE/EE
-
-GitLab has remediated an issue that, when a merge request in a public project referenced a confidential issue from a private project, an authenticated user with no project membership could have read the confidential issue’s title, due to a viewer-independent fragment cache key that incorrectly shared per-user-redacted rendered content across all users.
-
-**Impacted Versions:** GitLab CE/EE: all versions from 15.0 before 19.3.6, 19.4 before 19.4.3, and 19.5 before 19.5.1  
-**CVSS** 3.5 ([`CVSS:3.1/AV:N/AC:L/PR:L/UI:R/S:U/C:L/I:N/A:N`](https://gitlab-com.gitlab.io/gl-security/product-security/appsec/cvss-calculator/explain#explain=CVSS:3.1/AV:N/AC:L/PR:L/UI:R/S:U/C:L/I:N/A:N))
-
-Thanks [20kilograma](https://hackerone.com/20kilograma) for reporting this vulnerability through our HackerOne bug bounty program
-
-### [CVE-2026-14288](https://www.cve.org/CVERecord?id=CVE-2026-14288) - Improper Access Control issue in merge request approval policy enforcement impacts GitLab EE
-
-GitLab has remediated an issue that under certain conditions could have allowed an authenticated user to bypass a required merge request approval policy on a protected branch due to improper access control during approval rule synchronization.
-
-**Impacted Versions:** GitLab EE: all versions from 17.4 before 19.3.6, 19.4 before 19.4.3, and 19.5 before 19.5.1  
-**CVSS** 3.1 ([`CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:U/C:N/I:L/A:N`](https://gitlab-com.gitlab.io/gl-security/product-security/appsec/cvss-calculator/explain#explain=CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:U/C:N/I:L/A:N))
-
-Thanks [3nvz](https://hackerone.com/3nvz) for reporting this vulnerability through our HackerOne bug bounty program
-
-### [CVE-2026-112326](https://www.cve.org/CVERecord?id=CVE-2026-112326) - Improper Cleanup on Thrown Exception issue in security findings impacts GitLab EE
-
-GitLab has remediated an issue that, under certain conditions, could have allowed an authenticated user with read-only permissions to permanently delete existing vulnerability records due to improper cleanup logic that failed to distinguish between pre-existing records from newly created ones during error handling.
-
-**Impacted Versions:** GitLab EE: all versions from 17.8 before 19.3.6, 19.4 before 19.4.3, and 19.5 before 19.5.1  
-**CVSS** 3.1 ([`CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:U/C:N/I:L/A:N`](https://gitlab-com.gitlab.io/gl-security/product-security/appsec/cvss-calculator/explain#explain=CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:U/C:N/I:L/A:N))
-
-This vulnerability has been discovered internally by GitLab team member Gregory Havenga
-
-### [CVE-2026-103515](https://www.cve.org/CVERecord?id=CVE-2026-103515) - Improper Access Control issue in group Duo admin-lock enforcement for Amazon Q settings impacts GitLab EE
-
-GitLab has remediated an issue that, when an instance administrator locked a group’s Duo availability, an authenticated user with group Owner permissions could have re-enabled AI-backed data egress to a third-party service for that group and its descendant projects, due to insufficient granularity of the admin-lock enforcement controls.
-
-**Impacted Versions:** GitLab EE: all versions from 19.2 before 19.3.6, 19.4 before 19.4.3, and 19.5 before 19.5.1  
-**CVSS** 2.7 ([`CVSS:3.1/AV:N/AC:L/PR:H/UI:N/S:U/C:N/I:L/A:N`](https://gitlab-com.gitlab.io/gl-security/product-security/appsec/cvss-calculator/explain#explain=CVSS:3.1/AV:N/AC:L/PR:H/UI:N/S:U/C:N/I:L/A:N))
-
-Thanks [3nvz](https://hackerone.com/3nvz) for reporting this vulnerability through our HackerOne bug bounty program
-
-## Bug fixes
-
-### 19.5.1
-
-### 19.4.3
-
-### 19.3.6
-
-### 19.2.9
-
-### 19.1.9
-
-### 19.0.10
-
-- Increase staging and production upload timeout from 35m to 60m
-- [19.0] Add Ruby regexp repeat-range double-free patch for 3.3 and 3.4
-- [19.0] Add Ruby regexp repeat-range double-free patch for 3.3 and 3.4
-
-### 18.11.13
-
-- Increase staging and production upload timeout from 35m to 60m
-- Mattermost Security Updates August 13, 2026
-- [18.11] Add Ruby regexp repeat-range double-free patch for 3.3 and 3.4
-- [18.11] Add Ruby regexp repeat-range double-free patch for 3.3 and 3.4
-
-## Important notes on upgrading
-
-This patch includes database migrations that may impact your upgrade process.
-
-### Impact on your installation:
-
-- Single-node instances: This patch will cause downtime during the upgrade as migrations must complete before GitLab can start.
-- Multi-node instances: With proper zero-downtime upgrade procedures, this patch can be applied without downtime.
-
-### Regular migrations
-
-The following versions include regular migrations that run during the upgrade process:
-
-- 19.4.3
-- 19.3.6
-
-### Post-deploy migrations
-
-The following versions include post-deploy migrations that can run after the upgrade:
-
-- 19.4.3
-
-To learn more about the impact of upgrades on your installation, see:
-
-- Zero-downtime upgrades for multi-node deployments
-- Standard upgrades for single-node installations
-
-## Updating
-
-To update GitLab, see the [Update page](https://about.gitlab.com/update).
-To update GitLab Runner, see the [Updating the Runner page](https://docs.gitlab.com/runner/install/linux-repository.html#updating-the-runner).
-
-## Receive Patch Notifications
-
-To receive patch blog notifications delivered to your inbox, visit our [contact us](https://about.gitlab.com/company/contact/) page.
-To receive release notifications via RSS, subscribe to our [patch release RSS feed](https://docs.gitlab.com/releases/patch-releases.xml) or our [RSS feed for all releases](https://about.gitlab.com/all-releases.xml).
+The advisories linked above have the full technical details.

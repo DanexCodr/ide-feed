@@ -1,201 +1,287 @@
-For the past few years, all of the major browser vendors (Google, Apple, Microsoft, and Mozilla, along with Igalia and Bocoup) have been working together on [Interop(opens in new tab)](https://github.com/web-platform-tests/interop/blob/main/README.md), a project to improve universal browser support on web technologies. It’s been a *remarkably* successful effort; when a focus area gets added to Interop, it often winds up reaching near-100% support across all major browsers within a year. ✨
-
-CSS Subgrid is a good example. Subgrid is a super-powerful extension to CSS Grid which enables [entirely new layouts](https://www.joshwcomeau.com/css/subgrid/). It was implemented in Firefox back in 2019, but there wasn’t much movement with other browsers for years. It got added to Interop 2023, and by the end of that year, it was widely available across all modern browsers:
-
-As we reach the end of 2026, Interop 2027 is currently being planned, and the team at Mozilla has created a [ranking  system(opens in new tab)](https://interop-rank.fxdx.dev/) for us to upvote our most-requested features. They plan on using the ranking data to decide what to include for next year’s Interop!
-
-In this blog post, I want to dig into the top 10 features I voted for, to offer a bit of a preview of what CSS might look like within the next year. There will also be some little tips and tricks you can start using today!
-
-One of the most exciting ideas is the [proposal to add functions to  CSS(opens in new tab)](https://github.com/web-platform-tests/interop/issues/1357):
-
-```
-/* Define a function: */
-@function --gradient-to-transparent(--color, --direction: bottom) {
-  result: linear-gradient(
-    to var(--direction),
-    var(--color),
-    transparent;
-  );
-}
-
-/* Invoke it: */
-.elem {
-  background: --gradient-to-transparent(red);
-}
-
-/* …which produces: */
-.elem {
-  background: linear-gradient(
-    to bottom,
-    red,
-    transparent;
-  );
-}
-```
-
-If you’re familiar with JavaScript, this should feel pretty familiar. We define new functions with `@function` and specify the returned value with `result`.
-
-There’s *so* much cool stuff we can do with this. Personally, the use case I’m most interested in is the ability to convert between polar and cartesian coordinates, a concept we use over and over in my [Whimsical Animations  course(opens in new tab)](https://whimsy.joshwcomeau.com/):
-
-```
-@function --translate-polar(--angle, --distance) {
-  result: translate(
-    calc(cos(var(--angle)) * var(--distance)),
-    calc(sin(var(--angle)) * var(--distance))
-  );
-}
-
-/* Move this element 100px at a 45° angle: */
-.particle {
-  transform: --translate-polar(45deg, 100px);
-}
-```
-
-This feels pretty “science-fiction” to me, but it’s already implemented in Chromium browsers, and if it gets added to Interop 2027, I think there’s very good odds that it could become widely available sooner rather than later!
-
-In CSS, we can use the `border-radius` property to round off the edges of our DOM nodes to create rounded rectangles. This property effectively adds a quarter-circle to each corner, connecting the 4 straight sides.
-
-The `corner-shape` property is an exploration of *alternative ways* to connect the 4 sides of our DOM nodes. It provides a handful of new options:
-
-Result
-
-When I first heard about this property, I was most excited about `squircle`. If you’re not familiar, squircles are an alternative algorithm for generating rounded corners using superellipses. Apple has been making use of them for years because they produce smoother, gentler edges.
-
-That said, after messing around with `corner-shape` for a while, I find myself using `corner-shape: bevel` a ton. It’s great for creating video game / sci-fi UIs. Here’s a little preview of a side-project I’ve been working on, with *tons* of `corner-shape: bevel`:
-
-We’ve technically been able to do stuff like this with `clip-path` or masks, but unlike those features, `corner-shape` actually *changes the shape of the border-box*. This means that our borders, outlines, and box-shadows will correctly follow the altered corner shapes!
-
-And even though this property isn’t available in Firefox/Safari (as I write this in October 2026), I think it’s reasonable to start using it today. It’s a perfect progressive enhancement!
-
-In addition to `corner-shape`, there’s a separate proposal for [border-shape(opens in new tab)](https://github.com/web-platform-tests/interop/issues/1371), which is essentially a lower-level version that allows us to *draw the border ourselves.*
-
-I covered this property in depth in a [recent newsletter issue](https://www.joshwcomeau.com/email/2026-09-14-new-css-features/), so I won’t repeat myself too much here. To summarize, `border-shape` lets us create whatever border shape we want using straight lines, arcs, and Bézier curves.
-
-I used this property recently to draw this card with a big circular scoop at the top:
-
-Like `corner-shape`, this property changes the element’s actual border box, so borders/outlines/shadows will trace it correctly. I drew the shape I wanted and then added a white border and black outline to achieve the effect shown above!
-
-We can even animate between differnt border shapes, like I do in this clip:
-
-You can learn a bit more about this property in my [newsletter issue on the subject](https://www.joshwcomeau.com/email/2026-09-14-new-css-features/).
-
-I recently published a [blog post on Anchor Positioning](https://www.joshwcomeau.com/css/anchor-positioning/), one of the most exciting modern CSS features (which was actually prioritized in Interop 2026, and is now widely available!).
-
-The Anchor Positioning API allows us to anchor one element to another. For example, we might anchor a floating tooltip element to its trigger, so that no matter where that trigger is on the page, the tooltip will always be connected to it.
-
-If you’ve ever tried to solve this sort of problem yourself, you know it’s surprisingly tricky. For example, we might want our tooltip to float above the anchor, but what if the anchor is near the top of the viewport?
-
-The tooltip fits comfortably.
-
-The tooltip’s getting cut off!
-
-The original Anchor Positioning API gave us *most* of the tools needed to solve this problem easily in CSS. It allows us to specify *fallback* positions; if the target element doesn’t fit above the anchor, it can flip automatically to the bottom.
-
-**The only thing missing was the ability to tell whether or not the target had flipped.** We had no way to know, in CSS, whether the target element is currently sitting above or below the anchor, whether it’s using the default or fallback position. For tooltips, this is a problem because we typically want to add a little protrusion that points towards the anchor.
-
-The “Level 2” version of the Anchor Positioning API includes a new type of container query that allows us to check whether the target element is using a fallback position or not. You can learn more about it in my [Anchor Positioning blog post](https://www.joshwcomeau.com/css/anchor-positioning/#flipped-carets-with-anchored-container-queries-3), or check out the [Interop 2027  proposal(opens in new tab)](https://github.com/web-platform-tests/interop/issues/1363).
-
-So honestly, I had never heard of [this  proposal(opens in new tab)](https://github.com/web-platform-tests/interop/issues/1453), and as far as I can tell, it isn’t implemented in any browsers. It’s not even listed on caniuse, so I can’t display one of those little widgets!
-
-And yet, the moment I saw it, it became something I needed to have. 😂
-
-As you might know, the `inherit` keyword in CSS allows us to pass a value down from the parent, even if that property isn’t typically inherited:
-
-Result
-
-This is a useful little trick to reuse values, but I frequently wind up discovering that it doesn’t *quite* work. For example, suppose we have nested border radiuses (or is it radii?):
-
-Result
-
-In order for nested border radii to look correct, we need to reduce the amount of rounding on the inner radius. So I don’t *exactly* want to use the inherited value; I want to transform it.
-
-That's where the proposed `inherit()` function comes in. It will pluck the inherited value and allow us to modify it using `calc()`:
-
-Given how preliminary this feature is, I’d be a bit surprised if it makes the cut for Interop 2027. But I hope we do get this feature in the future! It seems super useful. 😄
-
-In my [blog post on scroll-driven animations](https://www.joshwcomeau.com/animation/scroll-driven-animations/), we explore how we can scrub through a keyframe animation by scrolling. For example, we can use it to fade an element in as it traverses the viewport:
-
-Scroll-driven animations were [part of Interop  2026(opens in new tab)](https://wpt.fyi/interop-2026?feature=interop-2026-scroll-driven-animations), and it’s been successfully implemented across all browsers. In addition to Scroll-*driven* animations, however, there’s a separate proposal for [scroll-*triggered* animations](https://github.com/web-platform-tests/interop/issues/1433).
-
-With scroll-triggered animations, the goal is to trigger a keyframe animation when the user scrolls to a specific point, like a proximity sensor going off. At that point, the animation runs normally over a specified duration.
-
-We can currently implement scroll-triggered animations using the `IntersectionObserver` API in JavaScript, but it’s kind of a pain. It’ll be super nice when we can use CSS for both scroll-driven and scroll-triggered animations, since they each have their own use cases.
-
-You can learn more about scroll-triggered animations in this [wonderful article by  Bramus(opens in new tab)](https://developer.chrome.com/blog/scroll-triggered-animations).
-
-I’m currently working on a **top-secret project** which involves a dynamic grid-based layout. Items are arranged very differently on desktop vs. mobile:
-
-This is one of the great things about responsive CSS, but it leads to an unfortunate side effect: tab order is always based on the *DOM order,* not the visual order. So, if someone uses assistive technologies to navigate between elements, that navigation order will always be the same, even as the layout changes dramatically depending on screen size.
-
-On desktop, the first visual item is that list of Redactedsounds on the left, but on mobile, the first item is that big red button. Whichever element comes first in the DOM will be the first item to receive focus, which will invariably be wrong for a percentage of our users.
-
-Thankfully, the new `reading-flow` property grants us a solution to this problem, and there’s a [proposal for Interop  2027(opens in new tab)](https://github.com/web-platform-tests/interop/issues/1349).
-
-The basic idea is that we can specify that the tab order should follow one of several visual orders:
-
-```
-.grid {
-  display: grid;
-  reading-flow: grid-rows;
-}
-```
-
-There are values for both CSS Grid and Flexbox, and if you need even more control, the `reading-order` property allows us to create a custom order, sorta like `tabIndex` in HTML.
-
-This property has been championed by one of my personal heroes, Rachel Andrew. You can read more about it in [her blog post on *reading-flow*](https://developer.chrome.com/blog/reading-flow).
-
-## [Link to this heading](https://www.joshwcomeau.com/css/interop-2027/#eight-keyword-size-animations-with-interpolate-size-and-calc-size-8)8. Keyword size animations with `interpolate-size` and `calc-size()`
-
-A long-standing pain point on the web has been the inability to animate between keyword values like `auto`. The `interpolate-size` property solves this problem, and there’s an [Interop 2027  proposal(opens in new tab)](https://github.com/web-platform-tests/interop/issues/1373) for it, alongside the related `calc-size()` function.
-
-The most common use case for this feature is to animate between `height: 0` and `height: auto`, for creating collapsible accordion-type UIs:
-
-Result
-
-The `interpolate-size` property is not yet supported in your browser. Here’s what it looks like in supported browsers:
-
-This is admittedly kind of a complex example, requiring other niche-but-well-supported CSS like `transition-behavior`. But the key thing is that `interpolate-size: allow-keywords` makes this sort of transition possible.
-
-This proposal has been kicking around for a while now, and it’s been implemented in Chrome since 2024, so hopefully it makes it into Interop 2027!
-
-And even though it isn’t yet available in all browsers, we can start using it today as a progressive enhancement. Just be sure to gate the `transition` behind a `@supports` query, since otherwise a brief delay will be added to unsupported browsers.
-
-One of the things that makes CSS Grid layout unique is that the grid children are positioned using rows/columns defined entirely in CSS. In every other layout mode, elements are positioned using other elements! In Table layout, for example, every grid cell has an associated `<td>` or `<th>` element.
-
-There are a lot of upsides to CSS Grid, but one of the downsides is that it’s not as easy to add borders between grid cells. If a grid cell is empty, there’s no element to slap a `border: 1px solid` on!
-
-The [gap decorations  proposal(opens in new tab)](https://github.com/web-platform-tests/interop/issues/1374) introduces a new set of CSS properties that will allow us to use a border-like syntax on the grid itself. Check this out:
-
-Result
-
-The `rule` property is not yet supported in your browser. Here’s what it looks like in supported browsers:
-
-Like `border`, the `rule` property is a shorthand property that allows us to specify the width, color, and style (dashed/dotted/solid) of the line. We can also use `row-rule` and `column-rule` if we only want to draw lines between each row or column.
-
-Result
-
-When working with `position: sticky`, have you ever wished there was a way to know whether the element was currently “stuck” or not? For example, maybe you’ve wanted to change the background color of a sticky header when it becomes stuck to the top of the viewport.
-
-This [proposal(opens in new tab)](https://github.com/web-platform-tests/interop/issues/1364) is for the implementation of a new type of container query, one that matches when a `position: sticky` element switches from its typical in-flow position to being anchored to the viewport. Check it out:
-
-Result
-
-Here’s what this looks like, if this feature isn’t yet supported in your browser.
-
-Interestingly, this new API isn’t *just* for sticky positioning; we can use it to query all sorts of scroll-related state. For example, we can tell whether a scroll container is scrolled to the top/bottom, which can be useful for showing those scroll-indicating gradients:
-
-Result
-
-If there's the ability to scroll up, `scrollable: top` matches, and so we reveal the pseudo-element floating over the top of the content. When scrolled all the way up, `scrollable: top` no longer applies, and so the gradient is hidden.
-
-Here’s what this looks like in supported browsers:
-
-As we head into Interop’s 7th year, it's undeniable that the project has been a smashing success for the web. I’m so glad they keep building on this success!
-
-I know it’s kind of a weird time right now for web developers, and many of us are wondering whether we even need to care about this kind of stuff anymore. If we’re delegating all of our work to LLMs, do we still need to keep up with the latest-and-greatest CSS features?
-
-**Personally, I think it’s more important than ever.** We can’t expect LLMs to use modern CSS features when so much of their training data is years old. Most of the features I’ve shared in this post can be used today as a progressive enhancement, and if history is any guide, many of them will soon be widely available.
-
-If we want to build the best possible user experiences, we’ll need to guide our agents to take advantage of modern web features, which requires us to know about them! This is something I dug into in [a newsletter issue](https://www.joshwcomeau.com/email/wham-launch-005-elephant-2-p/) earlier this year: deep technical expertise remains *incredibly* worthwhile in the agentic era.
-
-Finally, I’d strongly encourage you to [rank your own top  choices(opens in new tab)](https://interop-rank.fxdx.dev/)! There’s a ton of great proposals in this list, including some exciting JavaScript APIs like Temporal which didn’t make sense to include in this blog post.
+The following subscription-only content has been made available to you 
+by an LWN subscriber.  Thousands of subscribers depend on LWN for the 
+best news from the Linux and free software communities.  If you enjoy this 
+article, please consider [subscribing to LWN](https://lwn.net/subscribe/).  Thank you
+for visiting LWN.net!
+
+October 21, 2026
+This article was contributed by Tyler Langlois
+
+[Nix flakes](https://wiki.nixos.org/wiki/Flakes) are an
+experimental feature of the [Nix package-management
+tool](https://wiki.nixos.org/wiki/Nix_(package_manager)) designed to build projects in a more self-contained and reproducible
+way. Despite the feature's experimental status, it has become increasingly
+popular for open-source projects to publish flake.nix files that offer
+predefined development environments and build automation even when those
+repositories may not offer an upstream package or module for the [NixOS Linux distribution](https://wiki.nixos.org/wiki/NixOS). Although
+Nix flakes have a complicated history, and the path for stabilization is
+uncertain, flakes can provide useful capabilities for projects that choose to
+include them.
+Why flakes?
+The promise of flakes is to provide reliable and reproducible methods for
+acquiring and building software. Let's say that an open-source project is trying
+to provide Linux users with an easy way to set up a development environment for its
+software. Distributions tend to have different versions of programming
+languages, libraries, etc. which means that a user on Debian 13 is going to have
+slightly different versions of software than a user on Fedora 45. Some
+dependencies may not be packaged for the distributions at all. This is a
+headache for everyone involved.
+Projects can avoid the headache by shipping a Nix flake that pins the
+versions of its dependencies and lets each user install the same software
+regardless of which distribution they are running. End users can reliably
+install dependencies, build projects, and run tests often just with a local (and
+properly configured) Nix installation and few (if any) other toolchain
+requirements.
+Flakes are written in the Nix [language](https://wiki.nixos.org/wiki/Nix_(language)) and are primarily
+used by the Nix package manager. While NixOS can
+use flakes via utilities like [nixos-rebuild](https://wiki.nixos.org/wiki/Nixos-rebuild),
+flakes function independently from NixOS. flake.nix files are at the
+core of how flakes work: these files contain [inputs](https://nix.dev/manual/nix/latest/command-ref/new-cli/nix3-flake.html#flake-inputs)
+that are defined as URL-like remote resources (typically software repositories) and [outputs](https://wiki.nixos.org/wiki/Flakes#Output_schema) that flake
+consumers can use, like packages or tests for those packages.
+A simple flake might look like the following snippet of Nix code:
+
+    {
+      inputs = {
+        nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+      };
+
+      outputs = { nixpkgs, ... }: {
+        packages.x86_64-linux.hello =
+          nixpkgs.legacyPackages.x86_64-linux.hello;
+      };
+    }
+
+The legacyPackages name is a bit deceptive because its Nix packages
+are not literally legacy packages: the name is a compatibility shim to avoid a
+situation in which a command such as nix flake show might list more than
+100,000 packages in the terminal. When legacyPackages is used, instead
+of packages, the nix command will avoid listing all packages 
+when printing its values, as [documented
+upstream](https://github.com/NixOS/nixpkgs/blob/b2e41a5bd20d4114f27fe8d96e84db06b841d035/flake.nix#L47).
+Upon adding the input called nixpkgs to the flake.nix file,
+nix flake lock will create a flake.lock file that pins the
+nixpkgs input against the NixOS/nixpkgs repository at the
+commit referenced by the nixpkgs-unstable branch. Like a
+Cargo.lock file in a Rust project or a Gemfile.lock file in a
+Ruby project, the flake.lock JSON file anchors each input to a concrete
+upstream revision. Doing so permits the flake to consistently refer to its
+dependencies and reliably build its outputs with a known-compatible set of
+inputs.
+ middle-ad 
+Locking a flake's inputs against the latest commit for a branch is one way to
+express an upstream reference, but the [flake
+reference format](https://nix.dev/manual/nix/latest/command-ref/new-cli/nix3-flake#flake-reference-attributes) permits a few additional strategies including a specific tag
+or other forms like absolute paths. A locked revision remains part of
+the repository and can be updated later with the nix flake update
+command (if the reference refers to a non-specific target like a branch name
+rather than a Git hash).
+The outputs attribute of a flake is written as a Nix function. When
+Nix processes a flake.nix file, the inputs are fetched and
+passed to the outputs function where it can actually use the concrete
+values from inputs like nixpkgs. In this case, the flake will simply provide the [hello](https://search.nixos.org/packages?channel=unstable#show=hello)
+package drawn from the nixpkgs-unstable branch.
+By default, Nix assumes that each reference under inputs itself
+contains its own flake.nix and, therefore, its own set of
+outputs. These are the values that are used as each input is referenced
+in the outputs function (like nixpkgs.legacyPackages in the
+example code).
+This example illustrates bundling a package into a Nix flake, but there are
+more top-level attributes that offer other uses when present in a flake's
+outputs. For example, devShells provides development
+environments pre-populated with libraries and environment variables, while
+nixosModules may be imported into a NixOS configuration for use in
+one's NixOS configuration. The nix command-line tool recognizes many
+attributes as part of a flake's schema, although the structure of a flake's
+outputs outside these conventional names is arbitrary.
+Locked inputs are one important trait of flakes, but another behavior
+that is arguably just as important is that flakes are evaluated in [pure
+evaluation mode](https://wiki.nixos.org/wiki/Flakes#Making_your_evaluations_pure), which means that external factors that may change the
+values that Nix computes are forbidden by default. For example,
+environment variables may not be read and network access is gated by checking
+downloaded artifacts with checksums. Although this behavior can be relaxed with
+the --impure flag, enforcing it adds to the reproducible quality of a
+flake.
+It should be noted that some features of Nix flakes are also addressed by
+other libraries or tooling. For example, locked dependencies (akin to a Nix
+flake input) can be achieved without the use of flakes with [niv](https://github.com/nmattia/niv#niv), a project
+that provides capabilities similar to a flake.lock file. Development
+shells are supported by existing, non-experimental commands with [shell.nix
+files](https://wiki.nixos.org/wiki/Development_environment_with_nix-shell). For many users, Nix flakes serve as a more general, unifying umbrella for
+useful concepts like inputs, lock files, and Nix commands.
+Flakes in the wild
+How does one use flake.nix when encountering these files in a source
+code repository? First, the nix utility must [be installed](https://nixos.org/download/#download-nix) and Nix flakes
+enabled before use: each nix command must include the
+--experimental-features 'nix-command flakes' command-line option or the
+stanza experimental-features = nix-command flakes must be set in
+$HOME/.config/nix/nix.conf or /etc/nix/nix.conf per [the Nix flakes setup
+documentation](https://wiki.nixos.org/wiki/Flakes#Setup).
+Most nix operations that interact with flakes can do so via either a
+local checkout of a repository or with a [flake
+reference](https://nix.dev/manual/nix/latest/command-ref/new-cli/nix3-flake#url-like-syntax) (which can be any of the URL-like formats accepted under a flake's
+inputs attribute). The following command, for example, displays all the
+outputs available from the [Ghostty repository](https://github.com/ghostty-org/ghostty#----ghostty) for the [Ghostty](https://lwn.net/Articles/1004377/) terminal emulator:
+
+    nix flake show github:ghostty-org/ghostty
+
+In this example, the github:ghostty-org/ghostty flake reference is
+internally expanded into an upstream GitHub URL that fetches tarballs rather
+than cloning entire repositories. The following output from the nix flake
+show command has been trimmed down for readability:
+
+    github:ghostty-org/ghostty/<hash-value>... 
+    ├───packages
+    │   └───x86_64-linux
+    │       └───ghostty: package 'ghostty-1.3.2-dev+3c1ef5b-nix'
+    ├───devShells
+    │   └───...
+    ├───checks
+    └───...
+
+In addition to the ghostty package for the x86_64-linux
+architecture, there are other outputs like checks that define tests
+that may be run directly against the flake with commands like nix flake
+check.
+The devShells output is particularly useful. As a Zig-based project,
+Ghostty requires a compatible language toolchain for contributors to build and
+test the project. Manually installing zig is one option, but using the
+Nix flake development shell can make the process easier. Entering the
+development shell is done with the develop subcommand:
+
+    nix develop github:ghostty-org/ghostty
+
+After nix starts a shell with the environment populated from the
+flake.nix file, the zig command is available:
+
+    $ zig version
+    0.16.0
+
+This installation of zig is scoped only to Ghostty's development
+shell and is not installed system-wide (zig and its supporting
+libraries are installed into the [Nix store](https://nix.dev/manual/nix/latest/store/)). In addition to
+zig, all of the other dependencies relevant for development are added
+to the $PATH and necessary libraries are included as well. When part of a
+repository, flake.lock files ensure that downstream users of nix
+develop will end up with the same versions of all utilities and libraries
+as the original Nix flake author. Because the development shell is constructed
+from separate and distinct paths in the Nix store, multiple versions of the same
+toolchain can coexist on the same host without executables or shared libraries
+colliding.
+The same principles apply for any repository that provides a
+flake.nix, whether the project relies on C++, Rust, or any other language.
+The --command flag lets a command run within an indicated development
+shell non-interactively. [Niri](https://niri-wm.github.io/niri/) and
+[pandoc](https://pandoc.org/) are just a few of the many projects
+that provide flake.nix files and development shells that bundle each of
+their respective build environments:
+
+    $ nix develop github:niri-wm/niri --command rustc --version
+    rustc 1.97.0 (2d8144b78 2026-07-07) (built from a source tarball)
+    $ nix develop github:jgm/pandoc --command ghc --version
+    The Glorious Glasgow Haskell Compilation System, version 9.10.3
+
+In each of these cases, none of the cited toolchains were present beforehand
+on the host system. Each command and its associated libraries necessary for
+project compilation are provided entirely through the Nix flake development
+shell.
+A tumultuous history
+Shipping around locked dependencies and development shells are useful
+capabilities, so why do flakes remain an experimental feature gated behind
+additional configuration steps?
+Flakes were first introduced in July 2019 in [NixOS RFC 49](https://github.com/NixOS/rfcs/pull/49) by Eelco Dolstra,
+the original author of Nix. Throughout the year-long RFC process, development of
+the underlying plumbing for what would ultimately become Nix flakes continued in
+the [Nix GitHub repository](https://github.com/NixOS/nix).
+After a period of extended discussion, the proposal PR was closed [and the RFC
+withdrawn in July 2020](https://github.com/NixOS/rfcs/pull/49#event-3552993451) because of a failure to reach consensus for adoption. Concerns
+about scope, design, and other considerations remain visible in the (large)
+discussion thread attached to RFC 49 that eventually led to its closure.
+Since RFC 49 failed to pass, flakes were included in the [Nix 2.4
+release in 2021](https://nix.dev/manual/nix/latest/release-notes/rl-2.4.html) as an experimental feature. Nix flakes remained accessible
+only when explicitly enabled, and that requirement remains in place for the
+upstream Nix project. As we'll see later, this is one aspect of flake
+usage that has splintered across different implementations.
+Adoption
+In the years following the initial release, Nix flakes have been widely
+adopted. In the [2025 NixOS Community
+Survey](https://nixos.org/surveys/community/2025/), which drew input from nearly 3,400 Nix users, [78.9% of
+respondents reported using flakes](https://nixos.org/surveys/community/2025/#experimental_features). A [smaller
+random sampling of 300 repositories](https://gist.github.com/Mic92/48d72945d4c236e3a3403b9168312568), conducted by Nix maintainer Jörg
+Thalheim, across GitHub repositories with shell.nix or
+flake.nix files present found significant adoption over the traditional
+development shell method using shell.nix files.
+Community growth around Nix flakes without a formal plan laid out by an RFC
+has become somewhat of a sore spot in the Nix community. Contributors eager for
+the features within Nix flakes are frustrated at the ongoing
+experimental label, while some involved in the original RFC process
+remain dissatisfied with the expansive scope and design of Nix flakes that has
+arguably escaped the limited scope intended by attaching the
+experimental label.
+Contributor Graham Christensen [wrote](https://grahamc.com/blog/flakes-are-an-obviously-good-thing/) in
+2021: "I believe Flakes are astonishingly important and will be very
+powerful, but the RFC experience has turned so many people against it on
+principle." Jade, a contributor to the [Lix](https://lix.systems/) alternative to Nix
+[reflected on
+flakes](https://jade.fyi/blog/flakes-arent-real/) with a more hesitant tone: "Even assuming that flakes are good at
+macro-level composition, they often are accompanied by poor use of micro-level
+composition, which still is best done by using the old primitives.". Former
+contributor Samuel Dionne-Riel [opined](https://samuel.dionne-riel.com/blog/2023/09/06/flakes-is-an-experiment-that-did-too-much-at-once.html)
+that Nix flakes was an experiment that did too much at once, "and it sucks
+because so much of it is good, or are good [but] undercooked ideas".
+Despite these and other concerns, the use of flakes is widespread at this
+point; many third-party utilities work as expected with flakes regardless. In
+practice, the ways to use flakes via Nix have remained consistent in terms of
+their commands and configuration settings although there are no guarantees
+without the removal of the experimental label by maintainers.
+A future for flakes?
+The rift within the Nix community on the subject of flakes has become so wide
+that alternative implementations have cited their stance on flakes as a
+distinguishing characteristic. The Nix package manager (usually referred to as
+[CppNix](https://github.com/NixOS/nix) in reflection of its C++ code
+base) still marks the feature as experimental, but Lix has designated flakes as [a
+frozen feature slated for future extraction into a plugin](https://wiki.lix.systems/books/development/page/flakes-feature-freeze), while [Determinate Nix](https://determinate.systems/products/nix/) (a
+downstream distribution of CppNix) expressly [supports
+flakes](https://determinate.systems/blog/experimental-does-not-mean-unstable/) and has marked them as a stable feature enabled by default.
+As for Nix itself, [RFC
+136](https://github.com/NixOS/rfcs/blob/32c871cae67fec997c9af2bf15f4a9e41d885109/rfcs/0136-stabilize-incrementally.md#L60-L66) ("A plan to stabilize the new CLI and Flakes incrementally") lays out a
+path forward for Nix flakes to become a stable feature. It was [proposed](https://github.com/NixOS/rfcs/pull/136) in October 2022,
+and ultimately accepted in August 2023. There is a [flakes stabilization
+milestone](https://github.com/NixOS/nix/milestone/27) to track the work needed to remove the "experimental" label from
+flakes.
+
+Some work heralds potential breaking changes for flakes (such as [changing lock attributes](https://github.com/NixOS/nix/issues/8940)),
+while other plans offer less-visible but significant performance improvements
+such as "[lazy trees](https://github.com/NixOS/nix/pull/15711)" (to
+avoid spurious file copies to the Nix store). In addition to work on the flakes
+feature, the design of the newer command-line interface for nix
+will have to be stabilized before moving on to complete the implementation of
+flakes and mark them as a stable feature. There will need to be an additional
+RFC for the final design of flakes once that happens.
+The need to address command-line design stems from the fact that
+flake-related commands are often conflated with other Nix commands. For example,
+the experimental feature that provides alternative commands like [nix
+env shell](https://nix.dev/manual/nix/latest/command-ref/new-cli/nix3-env-shell) in contrast to [nix-shell](https://nix.dev/manual/nix/latest/command-ref/nix-shell.html)
+that often rely on flake-like semantics. As noted in the text of the RFC:
+
+There are many criticisms about Flakes. But one of them especially relevant to
+stabilizing is a perception that Flakes have encroached on other new features,
+in the sense that it ought to be possible to use those other features without
+Flakes but isn't in practice. For example, there is no reason in theory that
+pure evaluation of Nix expressions requires Flakes.
+
+Despite its criticisms, [the
+RFC expresses optimism](https://github.com/NixOS/rfcs/blob/32c871cae67fec997c9af2bf15f4a9e41d885109/rfcs/0136-stabilize-incrementally.md#alternatives) about the future of flakes:
+
+We could, of course, just "rip off the band-aid" and stabilize everything at
+once. The argument for that would be that enough time has passed and the
+concerns of (less numerous) long-time users are not important. But we think the
+plan here has little downsides; we can instead make everyone happy with only
+some delay. If that is true, why not do that instead!
+
+Flakes remain an experimental feature of the nix command-line
+utility but development continues. There is no concrete target completion date
+for the stabilization effort, so when (or if) flakes will finally graduate into
+stable status remains unclear, but with a plan in place and their adoption still
+growing, Nix flakes are likely to appear more often across the software
+landscape.
