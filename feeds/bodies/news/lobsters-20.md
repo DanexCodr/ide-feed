@@ -1,51 +1,106 @@
-The curl project has decided to alter its vulnerability disclosure program procedure and starting ***October 26 2026***, we insist that all vulnerability reports submitted to us that are deemed to be severity LOW or MEDIUM should instead be submitted as issues in [our GitHub repository](https://github.com/curl/curl).
+In my various efforts to develop new programming languages, I’ve occasionally looked sidelong at linear types, as something that looks like it could be really useful if it wasn’t so incredibly cumbersome.
 
-Only vulnerabilities deemed to be HIGH or CRITICAL will be kept private in [the HackerOne tracker](https://hackerone.com/curl).
+And now some folks have come up with [a way to make them much easier to use](https://people.cs.nott.ac.uk/pszgmh/flow-typing.pdf)<sup>[[1]](https://jaredforsyth.com/posts/papers-we-love-lens-on-linearity/#fn1)</sup>! Or at least that’s the hope. This past week I’ve been trying to implement their execution model into [a new programming language](https://github.com/jaredly/laminar), to get a feel for what it’s like to actually use. Check out my [field notes](https://jaredforsyth.com/posts/lens-on-linearity-field-notes/), if you’re already familiar with the paper.
 
-Security researchers in doubt can still submit the issue on HackerOne and we can tell them what severity we deem it to be. Over the last few years, over 90% of all submissions could quickly be assessed to be less than HIGH.
+I’m going to quote the abstract in full, as it does a great job of introducing the paper:
 
-Issues submitted to HackerOne we deem are LOW or MEDIUM will be requested to be resubmitted on GitHub and will be closed as informative on HackerOne (and publicly disclosed).
+> Linear type systems often suffer from a threading problem: if a value is used more than once, then it must be explicitly threaded through each usage. Existing solutions introduce extra language features to mitigate this, but at the cost of complicating the core language and its semantics. This article introduces flow typing, a new solution to the threading problem that avoids the need to extend the core language. Flow typing is based on the theory of lenses, a functional presentation of mutable references, in which lens terms mutate parts of a stateful typing context in a controlled way. Because this approach is purely functional, it can be implemented in a standard linear lambda calculus, providing flow typing with a simple and direct semantics.
 
-## Avalanche survival tricks
+Ok I’ll admit that there are a number of terms in there that likely aren’t totally familiar to the average programmer, and I also want to convince myself that I know what they mean, so let’s break things down a bit.
 
-This policy change is entirely triggered by the current avalanche of vulnerability reports that keep pouring in. We see no end to them and we do not anticipate this flood to decrease within the next several months.
+### [Linear type systems](https://jaredforsyth.com/posts/papers-we-love-lens-on-linearity/#Linear-type-systems)
 
-We are struggling as a project as all key maintainers feel strained, overloaded and brought to the brink of what we can muster. We *must* act to survive. This is our next step in a survival strategy. It might not be our last. We aim to not drown.
+A type system is [“linear”](https://en.wikipedia.org/wiki/Substructural_type_system#Linear_type_systems) if *all values must be used exactly once*. You might be thinking (a) that sounds incredibly restrictive, I quite like using values multiple times, and (b) why would you even want that. I’ll speak to the second one first.
 
-## Public vs private
+Some reasons a linear type system might be attractive:
 
-By opening up the process we allow the whole world to participate. Both in the assessment and understanding of the report and claimed vulnerability, but also in the creating and writing the advisory and figuring out details of when the issues was introduced etc.
+Have you ever forgotten to close a file, and had a dangling file descriptor? Have you ever forgotten to free a pointer? To put it in web dev terms, what about failing to close a database connection, or to unsubscribe a listener?
 
-Ideally we get better help to make sure the fix is the correct one, that it fixes the problem, and any other related problem that is similar and that it does not miss a related problem sitting next to this.
+If a value (say a `DBConnection`) *must be used exactly once*, and the library offers you (a) functions that take the connection as an argument and then give it back to you in the return value, and (b) a `close()` function as the only way to “get rid of it”, then you suddently have a statically enforcable mechanism for ensuring you never forget to close a db connection.
 
-An obvious recent trend is that the moment we announce a new set of CVEs and their associated fixes, there is an army of AI-using researchers who throw all those at their models and harnesses to find similar mistakes or omissions in the fixes. By taking this process to the public all the way, ideally we get more help to do that scrutiny better *before* we ship releases.
+To make this concrete:
 
-We recognize that the amount of work needed per received vulnerability report does not shrink by doing them in public, but we think that we might share the burden among more people easier, and we hope that lessons and documentation  brought up in these discussions will be easier to spot and learn from.
+```ts
+let run = () => {
+    let db = sqlite.open('./my.db');
+    let [db2, records] = sqlite.run_query(db, RECORD_QUERY);
+    save(records);
+    sqlite.close(db2);
+};
+```
 
-The open process can also allow distros and other users of curl to keep up with security fixes earlier and better.
+If the final `sqlite.close(db2)` line were missing (in a fictional javascript with a linear type system), you’d get a type error `db2 must be used exactly once, but was used 0 times`. (the `save` function is a stand-in for “doing something with the records we got from the db”)
 
-## The risks
+In such a system, you’re also statically disallowed from ignoring (or forgetting about) a return value.
 
-Several people have suggested there is a risk that researchers mistakenly submit severity HIGH issues on GitHub  thinking they are LOW or MEDIUM. It is basically unheard of that a researcher would have *understated* a reported problem so I consider that a low risk scenario. Also: there was already before this a risk that someone would submit a vulnerability report in the public, it is not a new risk.
+Pure functional languages tend to achieve purity via immutability, to the extent that you’d be forgiven for thinking that it was a necessary component of having a pure language. “Pure” here meaning that “if you give a function the same input, it is always guaranteed to return the same output”<sup>[[2]](https://jaredforsyth.com/posts/papers-we-love-lens-on-linearity/#fn2)</sup>. A simple example of an impure function in javascript would be:
 
-Handling some vulnerabilities in the public of course makes the immediately available for both good and bad people. This policy will give bad people a slightly longer window of opportunity to exploit weaknesses at the expense of existing curl users. That is unfortunate but we see no way of avoiding this. We limit this practice to less than HIGH for this reason: at least these problems are not terrible.
+```js
+let lie = false;
+function addTwo(input) {
+    if (lie) return input + 3;
+    return input + 2;
+}
+console.log(addTwo(2)); // 4
+lie = true;
+console.log(addTwo(2)); // 5
+```
 
-## Severity LOW
+This is a rather tame example of [action at a distance](https://en.wikipedia.org/wiki/Action_at_a_distance_%28computer_programming%29), an ill that pure functional programming saves you from.
 
-We have discussed simply dismissing all severity LOW issues, but within the CVE program there is an appeals process and if we don’t hand out a CVE to an actual vulnerability, then someone else will do it. We thus cannot ignore true vulnerabilities, or they will come back to bite us nonetheless.
+In Haskell or Elm, the above code is impossible to represent because you can’t “mutate the value that `lie` represents” after initializing the variable. All variables are immutable, giving you purity by construction.
 
-We *can* however resist and refuse silliness and I personally aim to deny and decline more vulnerabilities harder on the basis that they do not actually hurt any users or existing applications.
+In a linear type system, by contrast, purity is achieved by *preventing any variable from having multiple observers*. Essentially, “if mutation happens but no-one else can observe it, does it make a sound?”<sup>[[3]](https://jaredforsyth.com/posts/papers-we-love-lens-on-linearity/#fn3)</sup> The above code would be disallowed because line 7 is a “second reference to the variable `lie`”, and therefore a type error.
 
-## Crazy combos
+Rust is famous for its linear-inspired setup for mutable variables; if a variable is marked as mutable, there can only be one “accessor” (reader or writer) at a time. This allows them to have some pretty strong guarantees about safety, especially in the context of concurrency. However, they also want to be able to provide access-by-reference for mutable variables (as it would be terribly inconvenient to have to pass-by-value anything that’s mutable), which is accomplished via the infamous “borrow checker”. The linear-style requirements are represented by a system of “borrowing”, where the compiler needs to track which variables are “live” at any given point in the code, and ensure there’s only one live reference to a given value at a time. This is famously confusing and hard for people to learn. In spite of this, Rust is a wildly successful language.
 
-A clear trend these days is that many newly reported vulnerabilities are figured out by AI models that create crazy sequences or option combinations that do something unexpected, but the sequence is something that aren’t likely to ever be used in the real world, or the unexpected that happens is something that occurs *every time* so applications  doing this would spot the problem immediately. I.e problems that have almost no risk to actually trigger in the real world. We save no users by insisting on doing the CVE dance for those issues. We only get work for ourselves and a whole world that has to act on them.
+### [The Threading problem](https://jaredforsyth.com/posts/papers-we-love-lens-on-linearity/#The-Threading-problem)
 
-## Flow control it
+Let’s accept for the moment that a linear type system is desirable (or at least interesting), and circle back to the “terribly inconvenient to have to pass-by-value anything that’s mutable” issue. This is what Wilshaw & Hutton call the “threading problem”. I’ll demonstrate with some simple typescript code:
 
-There is an almost infinite number of combinations you can use libcurl’s many options, protocol mixes and flexible API to do things that might not be clearly documented and the AIs will continue to try them all and together with the humans driving these checks they are super eager to treat every minor discrepancy as a vulnerability. We can’t continue down this spiraling path with our sanity intact.
+```ts
+let person = new Person();
+setName(person, 'Lucretia');
+setAge(person, 51);
+setSummary(person, getSummary(person));
+display(person);
+```
 
-We don’t have the bandwidth, manpower or even will to handle a never-ending vulnerability reporting stream at this pace. I believe few software projects can stand this kind of prolonged high volume deluge for extended periods. Something needs to give way.
+We create an object, we mutate it with a couple of functions, and we display it.
 
-## How to assign severity
+In typescript, we’re passing by reference, which is how `setName` etc. are able to affect our object. Passing by reference isn’t allowed in a linear type system (only one accessor is allowed per variable); so here’s what our code would look like with pass-by-value<sup>[[4]](https://jaredforsyth.com/posts/papers-we-love-lens-on-linearity/#fn4)</sup>:
 
-We only use these for levels in the curl project: LOW, MEDIUM, HIGH and CRITICAL. Often we refer back to recently managed vulnerabilities to see how we judged them, but we also provide a [set of basic guidelines](https://curl.se/dev/vuln-disclosure.html#severity-levels). I’m sure we can also make them better and clearer.
+```ts
+let person = new Person();
+let person2 = setName(person, 'Lucretia');
+let person3 = setAge(person2, 51);
+let person4 = setSummary(person3, getSummary(person3));
+display(person4);
+```
+
+And `setName` would have to change, from e.g. `(person, name) => {person.name = name}` to `(person, name) => ({...person, name})`.
+
+This is almost linear-valid, but on line 4 we’re using `person3` twice, which is illegal. We’d have to change it to this:
+
+```ts
+let [person4, summary] = getSummary(person3);
+let person5 = setSummary(person4, summary);
+display(person5);
+```
+
+Extremely cumbersome: we’re having to “thread” the `person` object into and out of every function that touches it.
+
+### [Lenses](https://jaredforsyth.com/posts/papers-we-love-lens-on-linearity/#Lenses)
+
+My understanding of lenses is that they are a way to operate on (often in a functional/immutable way) a potentially deeply-nested subset of a given piece of data. Lodash’s `set` and `update` are related to this, and [ramda](https://ramdajs.com/docs/#lens) has explicit support for lenses.
+
+The innovation of this paper is using some clever syntax sugar to give you the convenience of mutable references (potentially many layers deep into an object, that’s the lens part) while retaining the simplicity and purity of a traditional linear type system. This essentially gives you something akin to a borrow-checker, but with dramatically simpler semantics and implementation, enabling things like a formal proof that it works ;).
+
+The big question for me, though, is *what does this feel like to use?* How hard is it to actually implement in a language, and is the resulting code easy to write, read, and understand?
+
+And so I’ve started [writing a language](https://github.com/jaredly/laminar) that attempts to implement their system of “flow typing”. [Here are my field notes](https://jaredforsyth.com/posts/lens-on-linearity-field-notes/).
+
+1. I got turned onto this paper by [this tweet](https://x.com/lexi_lambda/status/2109683868869480451) from [Alexis King](https://x.com/lexi_lambda) asking for people’s favorite PL papers this year. [↩︎](https://jaredforsyth.com/posts/papers-we-love-lens-on-linearity/#fnref1)
+2. Paraphrased [from wikipedia](https://en.wikipedia.org/wiki/Purely_functional_programming). This is of course only true within certain assumptions about the reliability of the underlying system; other actors on the same machine could corrupt your heap, or a cosmic ray could flip a bit, etc. [↩︎](https://jaredforsyth.com/posts/papers-we-love-lens-on-linearity/#fnref2)
+3. Clojure takes this approach with their transients, though of course there are not any kind of static guarantees that they are correctly used. [↩︎](https://jaredforsyth.com/posts/papers-we-love-lens-on-linearity/#fnref3)
+4. In truth, typescript is still doing pass-by-reference, but we’re treating the values /as if/ they were pass-by-value, by doing immutable updates. [↩︎](https://jaredforsyth.com/posts/papers-we-love-lens-on-linearity/#fnref4)

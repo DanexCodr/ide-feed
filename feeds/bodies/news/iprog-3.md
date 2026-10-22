@@ -1,13 +1,123 @@
-Combining the results of four surveys JetBrains reports on the current state of CI/CD and the impact that AI is having on CI/CD pipelines, JetBrains latest Developer Ecosystem Survey, which was completed by 21,946 respondents, revealed that 83% of those surveyed run CI/CD pipelines, ahead of containerization (50%) and infrastructure as code (39%), making it the most widely adopted DevOps practice by a wide margin: Respondents could chose multiple answers and the 2026 percentages are compared to those in 2025. AI-driven operations doubled from 7% to 14% between the two surveys and there was a reduction in the use of Containerization/Orchestration, from 58% to 50%; in Infrastructure as Code, from 43% to 43%; and GitOps from 29% to 23%. The proportion of respondents who reported using no DevOps practices at all was very small at 7%, although this was up from only 5% in 2025. Concluding that CI/CD: "is no longer a capability teams are deciding whether to adopt; it's infrastructure they already have" JetBrains explored its adoption further in its CI/CD Tools Adoption Survey 2026, which was completed by 598 respondents. This showed GitHub Actions to be the most popular, increasing from 41% in 2025 to 47% in 2026. JetBrains own Team City also showed increased adoption from 7% to 10%. Both GitLab CI and Jenkins, the 2nd and 3rd most popular tools, had each lost a couple of percentage points. JetBrains also discovered that 25% of organizations use two or more CI/CD tools simultaneously and 17% of organizations use three or more CI/CD tools. Another finding from the Developer Ecosystem Survey was that self-hosting is on the rise; 72.8% of respondents run their primary CI/CD system either on their own premises or on self-managed cloud infrastructure. On-premises installations alone 30.5% in 2026, the highest level in the five years covered by this question. Fully managed CI/CD services account for 24.4%. The major focus of the [State of CI/CD in 2026](<https://www.jetbrains.com/pages/state-of-cicd2026/>) report was the impact of AI on the CI/CD pipeline, with the headline finding: 
+Page 1 of 2Containers are functional systems, but they are first and foremost file systems. How do you get the files where you want them? This is the first exclusive extract from the newly-published: **  
+**
 
-  * **28% reach their CI/CD tool through MCP or agent skills**
+## Programmers Guide To Containers  
+with Docker and Visual Studio Code
 
-While almost half of the organizations surveyed in the State of CI/CD Tools Survey 2026 use AI somewhere in their CI/CD process, JetBrains found: _AI is much more likely to help developers understand, review, or fix what happens around a pipeline than to become another step inside it._ The most common applications are practical, targeted tasks such as code review, diagnosing failures, and writing or fixing tests. Only 8% report running AI steps directly inside builds. JetBrains also explored the barriers to integrating AI into the CI/CD pipeline:  Whereas in 2025, 60% said they did not see a clear use case or value for AI in CI/CD, this year, that figure has fallen to 27%. Those saying that no suitable AI functionality exists also dropped, from 14% to 8%. Lack of trust in AI has also dropped from 36% to 29% Among organizations not using AI in their CI/CD workflows, 47% say it is not a priority, 35% cite data privacy and IP concerns, 33% say their current setup works well enough without AI, and 32% point to cost. JetBrains also points out that company size makes a difference. While 52% of small companies say their current CI/CD approaches work well enough without AI, only 21% of large companies say the same.
+#### By Mike James
 
-#### More Information
+[](<https://www.amazon.com/dp/1871962684?_encoding=UTF8&qid=&sr=&linkCode=ll1&tag=iprog-20&linkId=13e3793e24ef8654297f065cab51686a&language=en_US&ref_=as_li_ss_tl>)
 
-[The State of CI/CD in 2026](<https://www.jetbrains.com/pages/state-of-cicd2026/>) [JetBrains Developer Ecosystem 2025](<https://devecosystem-2025.jetbrains.com/>)
+#### Contents****
 
-#### Related Articles
+  1. Chapter 1 Docker
+  2. Chapter 2 Why Containers?
+  3. Chapter 3 Getting Started With Docker  
+Extract 1: [Starting](<https://www.i-programmer.info/programming/241-devops/19178-programmers-guide-to-containers-starting.html>)
+  4. Chapter 4 Container As File System   
+Extract 1: [Container As File System 1](<https://www.i-programmer.info/programming/241-devops/19229-programmers-guide-to-containers-container-as-file-system.html>) ***NEW!!!
+  5. Chapter 5 Docker Compose for Build and Run
+  6. Chapter 6 Containers as Functions 
+  7. Chapter 7 Connecting To Containers
+  8. Chapter 8 A Web Server
+  9. Chapter 9 VS Code Containers
+  10. Chapter 10 Dev Containers
+  11. Appendix I Reset Docker 
+  12. Appendix II How Containers Work 
 
-[JetBrains Reveals Widespread Adoption of AI Coding Agents](<https://www.i-programmer.info/news/99-professional/19118-jetbrains-reveals-widespread-adoption-of-ai-coding-agents-.html>) [GitHub Actions Raises Checkout Security](<https://www.i-programmer.info/news/149-security/18969-github-actions-raises-checkout-security.html>) [GitLab 19.4 Adds Lower Cost Agentic Automation](<https://www.i-programmer.info/news/90-tools/19224-gitlab-194-adds-lower-cost-agentic-automation.html>) To be informed about new articles on I Programmer, sign up for our [weekly newsletter](<https://www.i-programmer.info/edit-profile.html?layout=form>),[ ](<https://s3.amazonaws.com/com.alexa.toolbar/atbp/hfdfGO/download/index.htm>)subscribe to the [RSS feed](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=3&format=raw>) and follow us on [Facebook](<http://www.facebook.com/pages/iProgrammer/127140977307932#%21/pages/iProgrammer/127140977307932?v=wall>) or [Linkedin](<http://www.linkedin.com/company/i-programmer>). [](<https://amzn.to/4iJFqTH>)
+<ASIN:B0HKY1GQ5K>
+
+## Container As File System
+
+A container has its own complete file system starting from / root. The most basic Linux container has a complete pseudo file system, i.e. folders and files which are created by the kernel. This represents a minimal file system that a running program would expect to be present. Our next task is to add to this to create a file system that the program needs to work. It is worth, even at this early stage, distinguishing between files that do not change as the program is run and those that are used by it to record state. The files that are essentially read-only are stored in the container and are the same each time the container is run. You can think of these as the runtime environment of the program. The files that you can think of as read/write hold the state of the system and in this case we most likely do want them to be updated each time the container is run – i.e. these files should be persistent and associated with the container.
+
+## Copy & Add
+
+At its most basic, a container is a private file system. The question is how do we get files and folders into it? The answer is that there are commands that we can include in the dockerfile that will copy files and folders from a variety of sources. The most basic is:
+
+    COPY [OPTIONS] <src> ... <dest>
+
+You can either use simple file specification or JSON to pass the parameters. The advantage of using the JSON format is that you can pass parameters that contain spaces. In general it is simpler to standardize on the JSON parameter format. If the source is a list of files, or uses the wildcard characters * and ?, then the destination has to be a folder and end with a slash, /. All of the files are copied to the folder. If the source is a directory then its contents, including subfolders, are copied, but the directory is not copied. If you want to copy a directory together with its contents, you have to specify the destination directory. For example:
+
+    COPY /mydir /mydir
+
+copies the contents of mydir to the folder /mydir in the image, creating a new folder if necessary. There are some useful options that control how the copy is performed: \--from Specifies where to copy from By default the source is assumed to be in the build context, see the next section, but it can also be specified to be another image, a previous stage (see Chapter 6), or a specific named context. \--chmod Sets destination file permissions \--chown Sets the owner of the destination file \--parents Automatically adds src parent folders to dest \--exclude Specifies a path to exclude from the copy. The ADD command does more or less the same thing as COPY but it has a larger range of supported sources. The COPY instruction just copies files on the host file system. The ADD command can download resources from the web or other remote sources:
+
+    ADD [OPTIONS] <src> ... <dest>
+
+If <src> is a local file or directory, the contents of the directory are copied to the specified destination. In this case ADD works like COPY. If <src> is a local tar archive, it is decompressed and extracted to the specified destination. If <src> is a URL, the contents of the URL are downloaded and placed at the specified destination. If <src> is a Git repository, the repository is cloned to the specified destination. The destination works in the same way as for COPY – if it ends with / then it is a directory, which will be created if it doesn’t exist. The OPTIONS are the same as for COPY with the following additions: \--keep-git-dir Keeps the top level git directory in dest \--checksum Specifies a checksum \--unpack Automatically unpacks tar archives A commonly used way of implementing the creation of an image is to take all of the files and folders needed and create a tar file that contains them. All of the files can then be added to an image using:
+
+    ADD --unpack=true 
+     https://mydomain.info/myfolder/archive.tar.gz /myfolder
+
+## Layers and Caching
+
+Docker uses layers to structure the building of the image. Each instruction in the dockerfile that modifies the file system constitutes a new layer. So if you have a dockerfile that reads:
+
+    FROM debian
+    COPY ["/MyData/MyText","/test1/"]
+    COPY ["/MyData/MyText","/test2/"]
+    COPY ["/MyData/MyText","/test3/"]
+
+then each COPY creates a new layer in the image. The final image is a collapsing of all of the layers into a single file system. If you build the image you will see:
+
+     => [1/4] FROM docker.io/library/debian:latest@sha256:34cd9e9fd437c0a095e  8.1s
+     => => resolve docker.io/library/debian:latest@sha256:34cd9e9fd437c0a095e  0.0s
+     => => sha256:1da3cb2f93f2ca3c5bdaf4c024a7f1ebd717938d2 49.31MB / 49.31MB  6.4s
+     => => extracting sha256:1da3cb2f93f2ca3c5bdaf4c024a7f1ebd717938d20c858e4  1.5s
+     => [internal] load build context                                          0.0s
+     => => transferring context: 82B                                           0.0s
+     => [2/4] COPY [/MyData/MyText,/test1/]                                    1.2s
+     => [3/4] COPY [/MyData/MyText,/test2/]                                    1.1s
+     => [4/4] COPY [/MyData/MyText,/test3/]  
+
+and each of the four steps is a layer which is cached independently. If you examine the cache:
+
+    docker builder du --verbose
+
+you will see an image for each of the steps:
+
+    ID:           3ebmxphtowsdznroeuynxtywf
+    Parents:
+     - uandxlnva11yfthf5u8f98g6q
+    Created at:   2026-08-21 16:55:51.564709281 +0000 UTC
+    Mutable:      false
+    Reclaimable:  true
+    Shared:       true
+    Size:         12.44kB
+    Description:  [4/4] COPY [/MyData/MyText,/test3/]
+    Usage count:  1
+    Last used:    47 seconds ago
+    Type:         regular  
+
+    ID:           uandxlnva11yfthf5u8f98g6q
+    Parents:
+     - vbkuuwzgmn5b3jkrc8msizl1i
+    Created at:   2026-08-21 16:55:50.280803168 +0000 UTC
+    Mutable:      false
+    Reclaimable:  true
+    Shared:       true
+    Size:         12.44kB
+    Description:  [3/4] COPY [/MyData/MyText,/test2/]
+    Usage count:  1
+    Last used:    47 seconds ago
+    Type:         regular  
+
+    ID:           vbkuuwzgmn5b3jkrc8msizl1i
+    Parents:
+     - rs53d36l8ikgpcbs88utz6qgr
+    Created at:   2026-08-21 16:55:49.106388609 +0000 UTC
+    Mutable:      false
+    Reclaimable:  true
+    Shared:       true
+    Size:         12.44kB
+    Description:  [2/4] COPY [/MyData/MyText,/test1/]
+    Usage count:  1
+    Last used:    47 seconds ago
+    Type:         regular
+
+These images are not part of the saved images, and they only exist in the cache. If you build the image a subsequent time, each step is examined and, if it hasn’t changed, then it is not executed. If a step has changed, then the cache from that step on is invalidated and it and subsequent steps are reimplemented, i.e. the cache isn’t used after the first changed step. Of course, there will be occasions when the step has changed but Docker has no way of knowing it. In such cases, you need to clear the cache:
+
+    docker image prune -a
+
+There is also an opportunity for some optimization. If you know that a particular operation changes frequently, then split it out as a separate step and put it late in the proceedings, so that when it does change it invalidates as little of the cache as possible.

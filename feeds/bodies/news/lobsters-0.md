@@ -1,33 +1,179 @@
-**PHP 8.5.12, 8.4.27, 8.3.36 and 8.2.35 fix two critical vulnerabilities that can allow unauthenticated remote code execution. All PHP users are strongly encouraged to update immediately.**
+most people(fairly) assume that this is just an alias, but this is
+not true! it’s a binary!
 
-**Who is at risk:** all PHP installations serving web requests, including PHP-FPM, Apache with mod_php, php-cgi, FrankenPHP and LiteSpeed. We consider the risk highest for mod_php, with a demonstrated exploit where an unauthenticated request can trigger the attack before any application code runs.
+```
+$ which gcc
+/usr/bin/gcc
+```
 
-**The vulnerabilities:**
+now, what *is* this binary? i naively assumed that it would
+just be shelling out to `clang` but it turns out the answer
+is more interesting than that.
 
-- RCE via OOM corruption, CVE-2026-109618 (GHSA-w8hw-w9fx-j79w): out-of-memory handling can interrupt PHP while internal request data is only partially initialized. Request cleanup may then treat the invalid data as valid.
-- RCE via stale global state, CVE-2026-109619 (GHSA-6wmf-4rv5-p3rp): request-owned internal state can survive after its backing memory has been freed. A later request handled by the same worker may use that stale state before normal initialization resets it.
+```
+int sub_1000006c4(int arg0, int arg1) {
+    r19 = arg1;
+    r20 = arg0;
+    if (*_mainExecutableToolName.once == -0x1) {
+            if (*(int8_t *)*_mainExecutableToolName.toolName == 0x63 && *(int8_t *)(*_mainExecutableToolName.toolName + 0x1) == 0x63 && *(int8_t *)(*_mainExecutableToolName.toolName + 0x2) == 0x0) {
+                    r21 = "clang";
+            }
+            else {
+                    if (strcmp(*_mainExecutableToolName.toolName, "llvm-gcc") == 0x0) {
+                            r21 = "clang";
+                    }
+                    else {
+                            r21 = *_mainExecutableToolName.toolName;
+                            if (strcmp(*_mainExecutableToolName.toolName, "c++") == 0x0 || strcmp(r21, "llvm-g++") == 0x0) {
+                                    r21 = "clang++";
+                            }
+                    }
+            }
+            xcselect_invoke_xcrun();
+    }
+    while (true) {
+            dispatch_once(_mainExecutableToolName.once, ___block_literal_global);
+            if (*(int8_t *)*_mainExecutableToolName.toolName == 0x63) {
+                    if (*(int8_t *)(*_mainExecutableToolName.toolName + 0x1) == 0x63) {
+                            if (*(int8_t *)(*_mainExecutableToolName.toolName + 0x2) != 0x0) {
+                                    if (strcmp(*_mainExecutableToolName.toolName, "llvm-gcc") == 0x0) {
+                                            r21 = "clang";
+                                    }
+                                    else {
+                                            if (strcmp(*_mainExecutableToolName.toolName, "c++") != 0x0) {
+                                                    r21 = *_mainExecutableToolName.toolName;
+                                                    if (strcmp(*_mainExecutableToolName.toolName, "llvm-g++") == 0x0) {
+                                                            r21 = "clang++";
+                                                    }
+                                            }
+                                            else {
+                                                    r21 = "clang++";
+                                            }
+                                    }
+                                    xcselect_invoke_xcrun();
+                            }
+                            else {
+                                    xcselect_invoke_xcrun();
+                            }
+                    }
+                    else {
+                            if (strcmp(*_mainExecutableToolName.toolName, "llvm-gcc") == 0x0) {
+                                    r21 = "clang";
+                            }
+                            else {
+                                    if (strcmp(*_mainExecutableToolName.toolName, "c++") != 0x0) {
+                                            r21 = *_mainExecutableToolName.toolName;
+                                            if (strcmp(*_mainExecutableToolName.toolName, "llvm-g++") == 0x0) {
+                                                    r21 = "clang++";
+                                            }
+                                    }
+                                    else {
+                                            r21 = "clang++";
+                                    }
+                            }
+                            xcselect_invoke_xcrun();
+                    }
+            }
+            else {
+                    if (strcmp(*_mainExecutableToolName.toolName, "llvm-gcc") == 0x0) {
+                            r21 = "clang";
+                    }
+                    else {
+                            if (strcmp(*_mainExecutableToolName.toolName, "c++") != 0x0) {
+                                    r21 = *_mainExecutableToolName.toolName;
+                                    if (strcmp(*_mainExecutableToolName.toolName, "llvm-g++") == 0x0) {
+                                            r21 = "clang++";
+                                    }
+                            }
+                            else {
+                                    r21 = "clang++";
+                            }
+                    }
+                    xcselect_invoke_xcrun();
+            }
+            continue;
+    }
+}
+```
 
-**How to update:**
+there’s some interesting stuff here(for example special logic for
+checking if it’s being run as c++ or llvm-gcc specifically), but the key
+thing we’re interested in is this line of code:
 
-- Update to PHP 8.5.12, 8.4.27, 8.3.36 or 8.2.35. Source downloads are on our downloads page. Windows source and binaries are on the same page.
-- Linux distributions and LTS vendors received the patches in advance, so check your vendor for updated packages.
-- PHP 8.1 and older no longer receive updates from the PHP project. Some distributions and LTS vendors provide backported fixes, so contact your vendor for details, or upgrade to a supported version.
-- If you rely on the volunteer-maintained rpms.remirepo.net, we urge you to switch to distribution packages or build from source, so you can immediately apply updates. The repo will not have updates today.
-- Given the severity of these vulnerabilities, the PHP security team provided minimal source-backports for PHP 7.4, PHP 8.0, and PHP 8.1 to help people building from source or without access to an LTS vendor.
+```
+xcselect_invoke_xcrun()
+```
 
-**If you cannot update immediately:** while only an update is a complete solution, the following measures reduce exposure to specific attack paths but do not make an installation safe.
+this is a function from libxcselect.dylib, but it’s basically the
+same thing as running `xcrun`.(fun fact: [the xcrun binary
+basically just calls this function](https://zoey-on-github.github.io/blog/images/Screenshot_2026-10-21_at_11.38.00_PM.png)) [if you
+disassemble any xcode-installed developer tool, you’ll see this exact
+same binary](https://zoey-on-github.github.io/blog/images/Screenshot_2026-10-21_at_12.57.05_PM.png),meaning all the developer tools that xcode-select
+installs on macOS are actually just being run through xcrun.[<sup>1</sup>](https://zoey-on-github.github.io/blog/macgcc.html#fn1)   
+ but that raises the important
+question: what does xcrun *do*? i’ve certainly never heard of it
+before this.  
+ well, checking [the
+manpage](https://keith.github.io/xcode-man-pages/xcrun.1.html) we can see that it calls developer tools from the developer
+tool directory. this gives us an important bit of info: the location of
+the *actual* gcc binary that’s being called. thankfully for us,
+there is a `--find` command that can give us exactly
+this.
 
-**RCE via OOM corruption (CVE-2026-109618):**
+```
+$ xcrun --find gcc
+/Library/Developer/CommandLineTools/usr/bin/gcc
+```
 
-- Set memory_limit=-1, preferably in a way applications can't override, such as php_admin_value in the FPM pool or Apache configuration, and check that no pool, directory or application setting puts a finite limit back. This removes the controllable PHP memory limit failure, but an underlying allocation failure can still reach the vulnerable path.
-- Set a low post_max_size. For applications that don't require file uploads, set post_max_size = 8M. If file uploads are necessary, set post_max_size = 32M. Keep upload_max_filesize below post_max_size. Consider enforcing limits at the web server or proxy level for decoded request size, input field count, multipart part count, header count, and nesting depth. These limits must also cover requests without a usable Content-Length.
-- Use a container or cgroup limit as an availability boundary, preferably with a policy that kills only the affected worker. Do not substitute RLIMIT_AS or RLIMIT_DATA, as these can cause the vulnerable allocation failure.
+looking in this directory, we can see that:  
+ c++, llvm-gcc,
+llvm-g++ aren’t in this directory, that’s why they’re hardcoded into the
+binary itself  
+ cc and clang++ are just alises to clang  
+ ![](https://zoey-on-github.github.io/blog/images/Screenshot_2026-10-21_at_1.11.00_PM.png) ![](https://zoey-on-github.github.io/blog/images/Screenshot_2026-10-21_at_1.11.10_PM.png)  
+ but most
+interestingly, g++ is an alias to an actual gcc binary that’s in the
+same directory:  
+ ![](https://zoey-on-github.github.io/blog/images/Screenshot_2026-10-21_at_11.54.47_PM.png)  
+ well, what
+does *that* gcc binary do, then?  
+ opening it in my
+disassembler, we see that it… shells out to xcrun and calls clang(or
+clang++ depending on how it’s called)
 
-**RCE via stale global state (CVE-2026-109619):**
+```
+int EntryPoint(int arg0, int arg1) {
+    r22 = arg1;
+    r21 = arg0;
+    asm { sbfiz      x8, x21, #0x3, #0x20 };
+    r0 = malloc(r8 + 0x10);
+    if (r0 == 0x0) {
+            err(0x47, r1);
+    }
+    r19 = r0;
+    *r0 = "/usr/bin/xcrun";
+    r23 = *r22;
+    r0 = strlen(r23);
+    if (*(int8_t *)(r23 + (r0 - 0x1 << r64)) == 0x2b && *(int8_t *)(r23 + (r0 - 0x2 << r64)) == 0x2b) {
+            r8 = "clang++";
+    }
+    else {
+            r8 = "clang";
+    }
+    r19[0x1] = r8;
+    if (r21 >= 0x2) {
+            asm { ubfiz      x2, x8, #0x3, #0x20 };
+            memcpy(r19 + 0x10, r22 + 0x8, r2);
+            r8 = r21;
+    }
+    else {
+            r8 = 0x1;
+    }
+    *(r19 + r8 * 0x8 + 0x8) = 0x0;
+    r0 = execv("/usr/bin/xcrun", r19);
+    err(0x47, r1);
+    return r0;
+}
+```
 
-- Set session.upload_progress.enabled=0 and restart every worker. Use php.ini, an FPM pool or server configuration that applies before request parsing. Do not rely on ini_set() or FPM .user.ini. This blocks the confirmed session paths but not other variants.
-- On PHP 8.5, set fatal_error_backtraces=0 and restart every worker. This blocks the confirmed fatal backtrace path only.
-- Remove invalid or deprecated settings applied per request that emit diagnostics before initialization. Hiding diagnostics with error_reporting, display_errors or @ does not help.
-- Fix attacker-reachable fatal errors and execution timeouts, including failures in callbacks, upload or import processing and cleanup.
-
-The advisories linked above have the full technical details.
+1. if you’re wondering *why* this is, my guess is because of SIP. /usr/bin is a protected directory on macOS and i assume apple can’t update it without requiring a restart, and you can update the xcode tools without having to restart your mac. as for why they dont just add the developer tools directory to path, my guess is that they want the freedom to change this directory whenever they want[↩︎](https://zoey-on-github.github.io/blog/macgcc.html#fnref1)

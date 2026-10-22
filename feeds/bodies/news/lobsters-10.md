@@ -1,185 +1,278 @@
-Dr. Allen Vincent Hershey developed some of the first digital typefaces, described by simple sequences of straight line-segments. These were originally published in his 1967 report [*Calligraphy for Computers*](https://archive.org/details/hershey-calligraphy_for_computers/).
+*TL;DR: The DuckDB team is happy to announce that today we're releasing DuckDB version 2.0.0 LTS, codenamed “Cinnamon Teal” (Spatula cyanoptera). This is our biggest feature release so far, and it ships a polished version of the Quack protocol, asynchronous I/O, a first-class `VARIANT` type, agent mode, triggers, an extensible SQL parser and much more, built from close to 20,000 commits since DuckDB 1.5.*
 
-The [hershey](http://beyondloom.com/decker/hershey.html) module for the [Decker](http://beyondloom.com/decker/index.html) ecosystem is concerned with laying out text using these typefaces. Decker’s scripting language, [Lil](http://beyondloom.com/tools/trylil.html), is of an unusual APL-influenced design. This article will explore Lil in the context of 2-dimensional vector graphics, expanding upon examples also discussed in the interactive documentation linked above.
+We are proud to release DuckDB 2.0.0, codenamed [“Cinnamon Teal”](https://shell.duckdb.org/#queries=v0,ATTACH-'https%3A%2F%2Fblobs.duckdb.org%2Fduck.db'-AS-duckdb~,CALL-duckdb.cinnamon_teal()~) after the [*Spatula cyanoptera*](https://en.wikipedia.org/wiki/Cinnamon_teal), a strikingly reddish-brown duck found in the western Americas.
 
-A *point* is an `(x,y)` pair of numbers describing rectangular coordinates on a *canvas*- a drawing surface. Points are represented in Lil as lists with a length of 2:
+While [DuckDB 1.0](https://duckdb.org/2024/06/03/announcing-duckdb-100.html) was all about stability and backward compatibility, DuckDB 2.0 is above all a feature release.
+In this blog post, we summarize the highlights and then walk through the breaking changes and how to migrate.
+We showcased many of the new features in [“A Preview of DuckDB v2.0”](https://duckdb.org/2026/08/17/duckdb-20-highlights.html), which covers each one in more depth.
+For the complete release notes, see the [release page on GitHub](https://github.com/duckdb/duckdb/releases/tag/v2.0.0).
 
-```
-point:(3,-5)
-```
+> Tip To install the new version, please visit the [installation page](https://duckdb.org/install/).
+> Some clients, such as the CLI and Python, are already available. Other client libraries (e.g., R and Rust) and some extensions can take a few days to release due to the extra changes and review rounds required.
 
-A *stroke* is a list of points representing a sequence of lines to draw on the canvas, and thus also a list of lists of numbers. Given a list of four points, the stroke connects the first point to the second, the second point to the third, and the third point to the fourth. If there are *N* points in a stroke, it describes *N-1* connected lines. We might also call a stroke a “polyline”:
+With this release, there are currently three DuckDB lines available.
+DuckDB 2.0 is a long-term support (LTS) release with support until at least October 2027.
+The previous LTS release, version 1.4, is still supported until November 17, 2026.
+To ensure a smooth transition and allow sufficient time for testing, we extended the support period of DuckDB 1.5 until March 2027, effectively also turning it into an LTS release.
+For details, see the [release calendar](https://duckdb.org/release_calendar.html#lts-releases).
 
-```
-stroke:((list 3,-5),(list 2,5),(list 0,3))
-```
+To find your way around the documentation for all of the new features, we also published a [“What's New in the Docs for 2.0”](https://duckdb.org/docs/2.0/whats_new_in_the_docs.html) page that links each feature below to its documentation.
 
-A *path* is a list of strokes, and thus also a list of lists of points, and a list of lists of lists of numbers. A path can represent the strokes that make up a single shape- like the letter “A”- or a sequence of letters representing an entire word or sentence. The strokes within a path are *ragged*: they may vary in length.
+DuckDB has been an in-process database since day one.
+In [DuckDB 1.5.3](https://duckdb.org/2026/05/20/announcing-duckdb-153.html), released in May, we introduced the Quack protocol that lets you run DuckDB in a traditional client-server setup, along with the [`quack` extension](https://duckdb.org/docs/2.0/core_extensions/quack.html), which implements DuckDB's native protocol, so any DuckDB process can [serve its databases](https://duckdb.org/docs/2.0/quack/overview.html#server-side-usage).
 
-```
-path:(list (list 1,2),(list 3,4)),     (list (list 5,6),(list 7,8),(list 9,10))
-```
-
-The [`hershey.textpath[]`](http://beyondloom.com/decker/hershey.html#hershey_textpath) function assembles a complex path based on a Lil string using the glyphs of a font, each of which is a simpler path:
-
-```
-p:hershey.textpath[hf_futura "ABC"]
-```
-
-Thus constructed, we can draw the text path to a canvas `c` using either an explicit `each` loop or the equivalent shorthand `@` operator. The Decker [canvas widget](http://beyondloom.com/decker/decker.html#canvasinterface) can draw strokes with the `canvas.line[]` function, given an appropriate list of lists of numbers:
+DuckDB 2.0.0 ships a polished version of the Quack protocol with substantial performance and stability improvements. It also introduces the new [`CONNECT` statement](https://duckdb.org/docs/2.0/sql/statements/connect.html) that allows attaching and switching to a remote database in a single command for better ergonomics:
 
 ```
-each stroke in p c.line[stroke]endc.line @ p
+CALL quack_serve(
+    token = 'my_token'
+);
+
+CREATE TABLE events
+    (date DATE, name VARCHAR);
+
+INSERT INTO events VALUES
+    ('2027-04-07',
+     'DuckCon #8');
 ```
 
-Wherever possible, Decker’s scripting APIs are designed to work as *collective operations*, applying to a large data structure at once. Drawing a single straight line-segment is the *simple case* for a more general polyline-drawing operation. If `canvas.line[]` could only draw a single straight line-segment, we would have to explicitly manage the off-by-one relationship between the *N* points of a path and the *N-1* lines they represent. For example,
-
 ```
-each stroke in p each point i in stroke  if i>0   canvas.line[stroke[i-1] point]  end endend
-```
+ATTACH 'quack:localhost'
+    AS qk (TOKEN 'my_token');
 
-A small ergonomic flaw like this would be magnified as it appeared throughout a program, obscuring the simplicity of the programmer’s actual intent.[<sup>1</sup>](https://beyondloom.com/blog/vectorgraphics.html#fn:1)
+CONNECT qk;
+SELECT * FROM events;
 
-Now that we can obtain and render interesting paths, let’s look at manipulating them.
-
-Combining paths is easy: Lil’s `,` operator concatenates lists. Concatenating a list of strokes and a list of strokes results in a list of strokes.
-
-Scaling paths is more interesting. As [discussed previously](https://beyondloom.com/blog/conforming.html), many of Lil’s arithmetic operators will implicitly *conform* over nested listy structures. Multiplying a scalar number by a list of numbers *spreads* the multiplication to each element of the list, and the same process works recursively for nested lists. We can therefore uniformly scale points, strokes, or paths with simple multiplication[<sup>2</sup>](https://beyondloom.com/blog/vectorgraphics.html#fn:2):
-
-```
-(11,22,33)*2# (22,44,66)((list 3,-5),(list 2,5),(list 0,3))*2# ((6,-10),(4,10),(0,6))
+┌────────────┬────────────┐
+│    date    │    name    │
+│    date    │  varchar   │
+├────────────┼────────────┤
+│ 2027-04-07 │ DuckCon #8 │
+└────────────┴────────────┘
 ```
 
-A non-uniform scale runs into trouble. We now want to multiply the x-coordinates of every point nested inside the path with a different value from the y-coordinates. If we multiply our path by a pair of numbers, the `*` operator doesn’t implicitly know that we want to “push” that conforming process down to the innermost pairs. When `*` is given lists to the left and to the right with different lengths, it treats the right list as if it were repeated or truncated to match the length of the left list:
+For simplicity, this example runs the server and the client on the same machine. By default, the server only listens on `localhost`. To accept connections from other machines, keep the server on `localhost` and put it behind a [TLS-terminating reverse proxy](https://duckdb.org/docs/2.0/quack/setup/reverse_proxy.html). The [`allow_other_hostname` option](https://duckdb.org/docs/2.0/quack/overview.html#starting-a-server), which exposes the server directly, is only meant for testing.
+
+The `CONNECT` statement is not limited to Quack: it points your session at [any remote database that supports it](https://duckdb.org/docs/2.0/sql/statements/connect.html#supported-databases), including PostgreSQL and MySQL. For these, the new remote pushdown optimizer ships queries directly to the remote server instead of pulling tables over the wire.
+
+The CLI also has shortcuts for setting up a Quack client-server pair: the new [`-serve` and `-connect` arguments](https://duckdb.org/docs/2.0/clients/cli/arguments.html#serving-and-connecting-to-remote-databases) start a Quack server or connect to one directly from the command line:
+
+## [Performance](https://duckdb.org/2026/10/21/announcing-duckdb-200.html#performance)
+
+### [Asynchronous I/O](https://duckdb.org/2026/10/21/announcing-duckdb-200.html#asynchronous-io)
+
+DuckDB 2.0 introduces [asynchronous I/O](https://duckdb.org/docs/2.0/data/io.html) for reading Parquet and CSV files, as well as [DuckDB's native storage format](https://duckdb.org/docs/2.0/internals/storage.html). The I/O layer now scales independently from the query processing layer, issuing reads in the background and keeping multiple requests in flight. This means far more parallelism for remote reads and dramatically faster queries on object storage such as [`s3://`](https://duckdb.org/docs/2.0/core_extensions/httpfs/s3api.html).
+
+We described the design in detail in a [dedicated blog post](https://duckdb.org/2026/07/31/asynchronous-io.html).
+In that post, we showed the network throughput over the course of a query with and without asynchronous I/O:
+
+![Network throughput](https://duckdb.org/images/blog/v20-release/sync-vs-async-network-throughput-light.svg)
+![Network throughput](https://duckdb.org/images/blog/v20-release/sync-vs-async-network-throughput-dark.svg)
+*Network throughput. Higher utilization and shorter runtime are better.*
+
+The [`VARIANT` type](https://duckdb.org/docs/2.0/sql/data_types/variant.html) stores semi-structured, schema-less data such as JSON while keeping the performance of columnar execution.
+So you can think of it as JSON on steroids: a `VARIANT` column can store differently shaped data in every row, but unlike JSON it is not a text format.
+
+[DuckDB 1.5 already introduced `VARIANT`](https://duckdb.org/2026/03/09/announcing-duckdb-150.html#variant-type), but DuckDB 2.0 fully integrates it. DuckDB 2.0 detects the common structure in your data and “shreds” it, so it compresses well and executes fast. The pipeline works end to end, from shredded execution straight out of storage to shredded `VARIANT` reading and writing for Parquet, backed by a family of [`variant_*` functions](https://duckdb.org/docs/2.0/sql/functions/variant.html). For example:
 
 ```
-(1,2,3,4)*(10,100)# (10,200,30,400)
+CREATE TABLE events (payload VARIANT);
+INSERT INTO events
+VALUES
+    ('{"user": {"id": 42, "tags": ["a", "b"]}}'::JSON::VARIANT),
+    ('{"event": "click", "x": 10, "y": 20}'::JSON::VARIANT);
+
+SELECT variant_type(payload), variant_keys(payload)
+FROM events;
 ```
 
-If we first *enclose* the right operand with `list`, `*` will repeat the element contained in that length-1 list and pair it up with each element of the left argument:
-
 ```
-(1,2,3,4)*list(10,100)# ((10,100),(20,200),(30,300),(40,400))
-```
-
-For a path, we need to enclose the right operand twice: once to spread the scale to each stroke of the path, and then again to spread the scale to each point of the stroke:
-
-```
-p * list list scalex,scaley
+┌───────────────────────┬───────────────────────┐
+│ variant_type(payload) │ variant_keys(payload) │
+│        varchar        │       varchar[]       │
+├───────────────────────┼───────────────────────┤
+│ OBJECT                │ [user]                │
+│ OBJECT                │ [event, x, y]         │
+└───────────────────────┴───────────────────────┘
 ```
 
-Scaling the x or y axis by a negative number will mirror a path horizontally or vertically, respectively:
+Coding agents such as Claude Code, Codex and Cursor increasingly drive the DuckDB CLI on their users' behalf. The 2.0 CLI detects when it is being run by an agent and switches to [agent mode](https://duckdb.org/2026/10/09/agent-mode.html): it prints compact Markdown tables instead of padded boxes, says clearly when a result was truncated, stops runaway queries early and reports errors as JSON.
+
+Long-running SQL queries report their expected cost prior to running, so the agent can decide whether to wait. In our experiments on TPC-H, agent mode cut the amount of DuckDB output the model had to read by 59%. You can turn it *on* for manual testing using the [`-agent` flag](https://duckdb.org/docs/2.0/clients/cli/agent_mode.html#activating-agent-mode) or instruct your agent to turn it *off* using the `-no-agent` flag.
+
+DuckDB has always used a parser derived from PostgreSQL's. In 2.0, our own modern, extensible [PEG-based parser](https://duckdb.org/2026/08/20/duckdb-20-peg-parser.html), which debuted as an opt-in feature in [DuckDB 1.5](https://duckdb.org/2026/03/09/announcing-duckdb-150.html#peg-parser), becomes the default. Extensions can now hook into the grammar itself (an idea we first explored in our [research on runtime-extensible parsers](https://duckdb.org/2024/11/22/runtime-extensible-parsers.html)), so expect extensions that expose entirely new SQL syntax. Error messages now come with precise source locations. For details, see the [PEG parser documentation](https://duckdb.org/docs/2.0/sql/peg_parser.html). The new parser is designed to be compatible with the old one, apart from a few deliberate changes listed in the [migration guide](https://duckdb.org/docs/2.0/operations_manual/migration.html#sql-parser). If you notice any other differences, please file an issue. In the meantime, you can switch back to the old parser using the [`legacy_parser` extension](https://duckdb.org/docs/2.0/core_extensions/legacy_parser.html) by running `SET enable_legacy_parser = true;`.
+
+The old parser had served DuckDB since its first commit in 2018. Its grammar was generated with YACC/Bison, which produces an LALR(1) parser, so as DuckSQL grew, even small additions could collide with existing rules and raise `shift/reduce` or `reduce/reduce` conflicts. A PEG grammar avoids this by trying alternatives in the order they are written, so adding syntax no longer risks breaking unrelated rules. Python itself moved to a PEG-based parser in [version 3.9](https://peps.python.org/pep-0617/) for the same flexibility.
+
+DuckDB 2.0 ships a revamped [C API v2](https://duckdb.org/docs/2.0/clients/c/overview.html#c-api-v2), which is considerably more powerful than its predecessor and exposes components such as file systems and table functions to extensions. Before marking it as stable, we would like to test it in the field, so please give it a try and [send us your feedback](https://github.com/duckdb/duckdb/discussions/27525)!
+
+You can also register and host your own trusted extension repositories, so an organization can host and sign its own extensions and have them install and load just like the built-in ones:
 
 ```
-p * list list -1,1
+SET allow_extension_repositories = 'allowed';
+
+CREATE EXTENSION REPOSITORY my_repo
+    WITH PREFIX 'https://extensions.example.org';
+
+INSTALL AND LOAD my_ext FROM my_repo;
 ```
 
-Translating a path can use the same trick as scaling, but with `+` instead of `*`:
+A repository is a name, a URL prefix and one or more RSA public keys that are trusted to sign the extensions served from it. The prefix can point at anything DuckDB can read: a local path, `https`, `s3`, you name it. At `CREATE` time, DuckDB fetches the repository's public keys and pins them into the repository definition, printing each key's SHA-256 fingerprint so you can compare it against one published out of band.
+
+This feature is still a work in progress and its syntax may change in future releases. For more details, see the [Extension Repositories page](https://duckdb.org/docs/2.0/extensions/extension_repositories.html).
+
+DuckDB's [core extensions](https://duckdb.org/docs/2.0/core_extensions/overview.html) are also shipping several new features, fixes and performance optimizations. These are too numerous to all list here, so we only highlight a few of them and will cover them in dedicated blog posts in the coming weeks:
+
+- We released DuckLake 1.1, including a new specification and reference implementation.
+- The Iceberg extension strives to become a feature-complete implementation. To this end, it adds REST catalog `ATTACH` options that derive a table's location from its namespace or load table metadata from the metadata-location file returned by the catalog. Further options control the URL prefix and the namespace separator.
+- The Delta extension can create Delta tables with CREATE TABLE (including partitioning and Delta table properties), supports time travel and improves VARIANT support.
+
+### [Triggers](https://duckdb.org/2026/10/21/announcing-duckdb-200.html#triggers)
+
+DuckDB 2.0 delivers triggers: the [`CREATE TRIGGER` statement](https://duckdb.org/docs/2.0/sql/statements/create_trigger.html) with `BEFORE` and `AFTER` triggers, `FOR EACH ROW` and `FOR EACH STATEMENT`, transition tables via `REFERENCING OLD/NEW TABLE`, multiple triggers per event, `RETURNING` on triggered tables and `DROP TRIGGER`. The classic use case is audit tables, where a trigger records what changed in response to a table modification. Some combinations, such as `BEFORE ... FOR EACH ROW` and `UPDATE ... FOR EACH ROW` triggers, are not yet supported; see the [limitations](https://duckdb.org/docs/2.0/sql/statements/create_trigger.html#limitations).
 
 ```
-p + list list transx,transy
+CREATE TRIGGER trg_audit
+    AFTER UPDATE ON target
+    REFERENCING
+        OLD TABLE AS o
+        NEW TABLE AS n
+    FOR EACH STATEMENT
+        INSERT INTO audit
+        SELECT n.id, o.val, n.val
+        FROM o JOIN n ON o.id = n.id;
 ```
 
-To shear horizontally, we need to offset the x coordinate of every point in a path proportionally to the y-coordinate. We can use the `last` primitive to extract the y-coordinates of all the points in a path. The `@` operator allows us to “push” `last` down into the right operand. The `last` of a path is a stroke. The `last` of each stroke is a list of points. The `last` of each of each path is a list of lists of y-coordinates:
+Triggers can also maintain materialized views incrementally! For example, to keep track of the average age of people per nationality in a table `age_statistics`, you can use two triggers – one for insert and another for delete operations – and store the sum and the count alongside the average.
 
 ```
-p: (list (list 1,2),(list 3,4)),(list (list 5,6),(list 7,8),(list 9,10))last p# ((5,6),(7,8),(9,10))last @ p# ((3,4),(9,10))last @ @ p# ((2,4),(6,8,10))
+CREATE TABLE people (name VARCHAR, nationality VARCHAR, age INTEGER);
+CREATE TABLE age_statistics (
+    nationality VARCHAR PRIMARY KEY,
+    sum_age INTEGER,
+    num_people INTEGER,
+    average_age DOUBLE
+);
 ```
 
-Let’s call this kind of list of lists of scalars derived from the points in a path a *peel*.
-
-To turn the y-coordinate peel back into a proper path, we can multiply each scalar by a pair, reusing our nonuniform scaling idiom:
+On insertion, we aggregate the new rows per nationality and merge them into `age_statistics`, adding a row for each new nationality:
 
 ```
-(last @ @ p)*list list(10,0)# (((20,0),(40,0)),((60,0),(80,0),(100,0)))
+CREATE TRIGGER people_insert
+    AFTER INSERT ON people
+    REFERENCING NEW TABLE AS n
+    FOR EACH STATEMENT
+        MERGE INTO age_statistics s
+        USING (
+            SELECT nationality, sum(age) AS sum_age, count(*) AS num_people
+            FROM n
+            GROUP BY nationality
+        ) d
+        ON s.nationality = d.nationality
+        WHEN MATCHED THEN UPDATE SET
+            sum_age = s.sum_age + d.sum_age,
+            num_people = s.num_people + d.num_people,
+            average_age = (s.sum_age + d.sum_age) / (s.num_people + d.num_people)
+        WHEN NOT MATCHED THEN INSERT
+            VALUES (d.nationality, d.sum_age, d.num_people, d.sum_age / d.num_people);
 ```
 
-Thus, for a complete horizontal shear:
+On deletion, we subtract the deleted rows and drop a nationality once its last person has left:
 
 ```
-p + (last @ @ p)*list list shearx,0
+CREATE TRIGGER people_delete
+    AFTER DELETE ON people
+    REFERENCING OLD TABLE AS o
+    FOR EACH STATEMENT
+        MERGE INTO age_statistics s
+        USING (
+            SELECT nationality, sum(age) AS sum_age, count(*) AS num_people
+            FROM o
+            GROUP BY nationality
+        ) d
+        ON s.nationality = d.nationality
+        WHEN MATCHED AND s.num_people = d.num_people THEN DELETE
+        WHEN MATCHED THEN UPDATE SET
+            sum_age = s.sum_age - d.sum_age,
+            num_people = s.num_people - d.num_people,
+            average_age = (s.sum_age - d.sum_age) / (s.num_people - d.num_people);
 ```
 
-A vertical shear looks very similar:
+Let's see people come and go:
 
 ```
-p + (first @ @ p)*list list 0,sheary
+INSERT INTO people VALUES
+    ('Alice', 'US', 34), ('Bram', 'NL', 27), ('Csilla', 'HU', 45),
+    ('Dave', 'US', 58), ('Eva', 'NL', 19), ('Femke', 'NL', 41);
+FROM age_statistics ORDER BY nationality;
 ```
 
-If you wanted to transpose a path, you could peel out the x and y coordinates separately and blend them back together using the same sort of idiom, but you could also use the `rev` (reverse) primitive directly to swap the elements of each point:
-
 ```
-rev @ @ p
-```
-
-Transpositions aren’t often useful alone, but combining a mirror and a transpose produces a 90 degree rotation.
-
-A more general way to rotate a path is to take advantage of Lil’s `heading`, `mag`, and `unit` primitives.
-
-The `mag` primitive calculates the vector magnitude of a number or list of numbers. For a single number, this is the absolute value. For a pair of numbers- like a point- it gives the Euclidean distance between that point and the origin. It also has special conforming behavior: it descends recursively through nested lists until it arrives at a number or flat list of numbers. This behavior makes it perfect for producing a peel from a path:
-
-```
-p: (list (list 1,2),(list 3,4)),(list (list 5,6),(list 7,8),(list 9,10))mag p# ((2.236068,5),(7.81025,10.630146,13.453624))
+┌─────────────┬─────────┬────────────┬─────────────┐
+│ nationality │ sum_age │ num_people │ average_age │
+│   varchar   │  int32  │   int32    │   double    │
+├─────────────┼─────────┼────────────┼─────────────┤
+│ HU          │      45 │          1 │        45.0 │
+│ NL          │      87 │          3 │        29.0 │
+│ US          │      92 │          2 │        46.0 │
+└─────────────┴─────────┴────────────┴─────────────┘
 ```
 
-The `heading` primitive conforms like `mag`, but produces a peel of angles (in radians) between the origin and each point:
-
 ```
-heading p# ((1.107149,0.927295),(0.876058,0.851966,0.837981))
-```
-
-Used together, `mag` and `heading` decompose a path (in rectangular coordinates) into polar coordinates. The `unit` primitive converts a peel of angles as obtained from `heading` and produces a path where every point has *unit distance* from the origin (`mag` 1). For any path `p`[<sup>3</sup>](https://beyondloom.com/blog/vectorgraphics.html#fn:3),
-
-```
-p ~ (mag p)*unit heading p
+DELETE FROM people WHERE name = 'Alice';
+DELETE FROM people WHERE nationality = 'HU';
+FROM age_statistics ORDER BY nationality;
 ```
 
-A complete path rotation around the origin by `angle` radians is therefore:
-
 ```
-(mag p)*unit angle+heading p
-```
-
-Primitives like `unit` also offer a loop-free way to construct various strokes like regular polygons, arcs, and ovals. Enclosing the result with `list` gives us a path:
-
-```
-on ngon sides radius do list radius*unit 2*pi*(range sides+1)/sidesend
+┌─────────────┬─────────┬────────────┬─────────────┐
+│ nationality │ sum_age │ num_people │ average_age │
+│   varchar   │  int32  │   int32    │   double    │
+├─────────────┼─────────┼────────────┼─────────────┤
+│ NL          │      87 │          3 │        29.0 │
+│ US          │      58 │          1 │        58.0 │
+└─────────────┴─────────┴────────────┴─────────────┘
 ```
 
-This completes a set of Lil idioms for affine transformations of paths.
+Triggers bring us one step closer to materialized views, a long-standing item in the [“future work” section of our roadmap](https://duckdb.org/roadmap.html#future-work).
 
-What else can we do?
+As always, DuckDB's [friendly SQL dialect](https://duckdb.org/docs/2.0/sql/dialect/friendly_sql.html) keeps growing. A few favorites from this release cycle:
 
-If we start with a path that is centered about its origin, we could scale every point in the path by its own `mag`, producing a perspective distortion. Given a tween value `t` that varies between 0 and 1 and a few appropriately-chosen constants,
+- The `$variable` shorthand lets you write $x in most places where an expression is allowed, instead of getvariable('x').
+- Data-modifying CTEs let you use INSERT, UPDATE, DELETE and COPY as pipeline steps.
+- `NEAREST` joins turn top-k similarity search into a join clause, handy for vector and embedding workloads.
+- Nested schemas allow schemas within schemas, e.g., CREATE SCHEMA finance.reports.
+- JSON mutation functions json_set, json_insert, json_replace and json_remove return modified copies of JSON documents (see also our blog post on JSON patches).
+
+There is more: DuckDB 2.0.0 supports the SQL-standard [`FETCH FIRST`](https://duckdb.org/docs/2.0/sql/query_syntax/limit.html#fetch-first) and allows [`UNNEST` in the `GROUP BY` clause](https://duckdb.org/docs/2.0/sql/query_syntax/groupby.html#grouping-by-unnest). It also ensures well-defined [`MERGE`](https://duckdb.org/docs/2.0/sql/statements/merge_into.html) and [`UPDATE ... FROM`](https://duckdb.org/docs/2.0/sql/statements/update.html) semantics for cases when multiple rows are matched.
+
+DuckDB 2.0 comes with a small set of breaking changes. For most users, upgrading is straightforward, but complex deployments running many DuckDB processes need more care. The storage format is the most likely source of problems: DuckDB versions before 2.0 cannot read database files created by DuckDB 2.0. DuckDB 2.0 can still read and write your existing database files, and these remain readable by older versions. We recommend testing 2.0.0 on a shadow system before switching production over. And, if your workload is mission-critical, you may want to wait for the first patch release, [coming in November](https://duckdb.org/release_calendar.html#upcoming-releases).
+
+For the full details, see the [migration guide](https://duckdb.org/docs/2.0/operations_manual/migration.html).
+
+Following DuckDB's long stint on C++11, DuckDB 2.0 now [requires a C++17 compiler](https://duckdb.org/docs/2.0/dev/building/overview.html#prerequisites).
+
+We also switched to Clang as the default compiler for our release builds. On Linux and macOS, both DuckDB and its core extensions are built with Clang. On Windows, the CLI is built with Clang, while most core extensions are still built with MSVC. We may move more Windows builds to Clang in the future, but this requires further changes.
+
+Timezone-aware timestamps, calendars and collations have always been powered by the ICU library. In 2.0, the ICU library is gone entirely: the [`icu` extension](https://duckdb.org/docs/2.0/core_extensions/icu.html) now implements timezones, calendars and collations itself, with the timezone data built directly from the IANA database and compressed down to around 45 kB.
+
+Everything keeps working exactly as before, and the native implementation is also faster. If you find any issues, please [let us know](https://github.com/duckdb/duckdb/issues)!
+
+#### [Lambda Syntax](https://duckdb.org/2026/10/21/announcing-duckdb-200.html#lambda-syntax)
+
+The old single-arrow lambda syntax (`x -> x + 1`) is now disabled by default. Use the Python-style syntax instead:
 
 ```
-p*.3+(mag p)*.01*t
+SELECT list_transform([1, 2, 3], lambda x: x + 1);
 ```
 
-If we generate a stroke of random [-1,1] offsets, we could add it to every stroke in a path in order to create a rudimentary line-boil-like effect. The length of our random stroke doesn’t matter, since it will be truncated or extended automatically by `+`, but having roughly as many points as the maximum stroke in the path will make the results look a bit better. Let’s say 25 points:
+You can temporarily re-enable the old syntax with `SET lambda_syntax = 'enable_single_arrow';`. Both the flag and the single-arrow syntax will be removed entirely in v2.1.
 
-```
-p+list 2 window random[3 2*25]-1
-```
+The [amalgamation build](https://duckdb.org/docs/1.4/dev/building/overview), which bundles DuckDB's entire source code into a single header and a single source file, is now deprecated. The amalgamation has grown too large to be realistically useful in most cases.
 
-Offsetting the points of a path by multiple offset sinusoids produces a different kind of wiggly effect, more like a flag flapping in the wind or the rippling surface of a liquid. To manipulate each axis separately, we’ll use a similar idiom to our shear effect. In this example `f` is a frame counter that continuously increments, like `sys.frame`:
+We are gradually phasing out `osx_amd64` from the list of fully supported [platforms](https://duckdb.org/docs/2.0/operations_manual/installing_duckdb/requirements.html#supported-platforms).
+For the time being, DuckDB and [core extensions](https://duckdb.org/docs/2.0/core_extensions/overview.html) are still built and supported, but [community extensions](https://duckdb.org/docs/2.0/extensions/community_extensions.html) are no longer built for this platform. DuckDB 2.1 will stop supporting `osx_amd64`.
 
-```
-px:first @ @ p((sin(f/4)+.20*px)*list list 1,0)+((sin(f/5)+.30*px)*list list 0,1)+p
-```
+These were a few highlights, but there are many more features and improvements in this release. There have been almost 20,000 commits by many contributors since DuckDB 1.5, shipping smaller features as well as performance and usability improvements. The full [release notes can be found on GitHub](https://github.com/duckdb/duckdb/releases/tag/v2.0.0).
 
-Combine more sinusoids blended into both axes for a more chaotic, subtly richer effect:
-
-```
-px:first @ @ ppy:last  @ @ p((sin(f/4)+.20*px)*list list 1.5,0.6)+((sin(f/5)+.30*px)*list list 0.6,0.2)+((cos(f/7)+.05*py)*list list 0.0,1.2)+((cos(f/2)+.04*py)*list list 0.1,0.2)+p
-```
-
-These techniques are just scratching the surface of what’s possible in a few lines of Lil!
-
-Why not do some tinkering of your own with the examples in [the hershey module’s interactive docs](http://beyondloom.com/decker/hershey.html#path_wave)?
-
-[back](https://beyondloom.com/blog/index.html)
-
-1. Fencepost errors are a particularly odious class of programming mistake that APL–family languages often avoid by using abstract iteration patterns and a rich set of primitive operators instead of loop–carried indices. Lil can handle this specific situation without resorting to explicit list indexing by using `-2 window stroke` to slice the list `stroke` into overlapping length–2 “windows”, pairing up each point with its immediate successor. [↩︎](https://beyondloom.com/blog/vectorgraphics.html#fnref:1)
-2. If two paths *happen to have* an identical ragged structure, we can blend them with any of the primitive arithmetic operators at our disposal– `+`, `*`, `|` (max), `&` (min), etc. The same applies to strokes of the same length or any pair of points. [↩︎](https://beyondloom.com/blog/vectorgraphics.html#fnref:2)
-3. Modulo floating–point error, naturally. [↩︎](https://beyondloom.com/blog/vectorgraphics.html#fnref:3)
+We would like to thank our community for the detailed issue reports and feedback that have driven this release, and our special thanks go to our contributors!

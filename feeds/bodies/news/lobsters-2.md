@@ -1,58 +1,49 @@
-During the Zig 0.17 development cycle, the [separation of maker process and configurer process](https://ziglang.org/download/0.17.0/release-notes.html#Separate-the-Maker-Process-from-the-Configurer-Process) has broken critical build system integration features in ZLS. Most of them have since been restored using the [build system protocol](https://ziglang.org/download/0.17.0/release-notes.html#Build-Server-Protocol) but various regressions remain that are anticipated to be resolved during the next release cycle.
+This feature allows you to register multiple mappings in order to load
+local files through custom https:// URLs.
+This prevents having to spawn a HTTP server to test a web page.
+This makes it easy to test all Web APIs, including the ones being restricted
+to [Secure Contexts](https://developer.mozilla.org/en-US/docs/Web/Security/Defenses/Secure_Contexts) (i.e. using https).
+This also helps having many distinct origins (domain) for each experiment / project
+and have dedicated storage/cookies for each.
 
-On the positive side, the new protocol lays the foundation for future improvements in ZLS and related tooling. Especially editors could utilize it to integrate unit testing, fuzzing, code coverage reports or debugging capabilities that are fully aware of the Zig build system.
+These mappings are only accessible from Firefox (this can’t be used by any other program,
+or malicious software on your computer/local network).
 
-All known regressions are tracked in [#3277](https://github.com/zigtools/zls/issues/3277) and listed below:
+These mappings are only functional when DevTools are opened.
 
-Type resolution for package imports in `build.zig` files have regressed.
+## How to use the “Local Mode”[](https://firefox-source-docs.mozilla.org/devtools-user/local_mode/index.html#how-to-use-the-local-mode)
 
-Upstream Zig Issue: [ziglang/zig#36387](https://codeberg.org/ziglang/zig/issues/36387)
+This feature shipped in Firefox 153.
 
-### Module `@import`s to exported modules without a compile step
+You can register mappings from DevTools’ Options panel:
 
-Type resolution for modules that are only exported using `b.addModule` but aren’t tied to a compile step have regressed.
+From there you can register as many mappings as you need.
 
-An `build.zig` file that would be affected:
+Each mapping defines:
 
-```
-const std = @import("std");
-pub fn build(b: *std.Build) void {
-    _ = b.addModule("foo", .{
-        .root_source_file = b.path("root.zig"),
-        .imports = &.{
-            .{ .name = "bar", .module = b.createModule(.{ .root_source_file = b.path("bar.zig") }) },
-        },
-    });
-}
-```
+- the origin (domain) The custom origin to expose via https URL.
+- the local folder The local folder where to load files from.
 
-In the above example, `@import("bar")` will not be resolved.
+On the screenshot, it loads `https://firefox.localhost` from `/home/alex/app`.
 
-Upstream Zig Issue: [ziglang/zig#36388](https://codeberg.org/ziglang/zig/issues/36388)
+## Loading file URL notification[](https://firefox-source-docs.mozilla.org/devtools-user/local_mode/index.html#loading-file-url-notification)
 
-### Build system protocol file watching doesn’t work on windows
+When loading any file:// URL with DevTools opened, you should see the following notification
+at the top of DevTools:
 
-File watching has regressed on windows due to a bug in the build system protocol. This does not affect the CLI when running `zig build --watch`.
+The first action `Add To Settings` will bring you to the Options panel and register
+a new mapping for the loaded file URL.
 
-ZLS does work around this issue by receiving file save events through the LSP protocol. File changes through external programs (e.g. version control) will not be detected.
+The second action `Try it` will register a transient mapping to load the current file or folder
+from a https URL. The mapping will disappear as soon as you close DevTools or Firefox.
 
-Upstream Zig Issue: [ziglang/zig#37236](https://codeberg.org/ziglang/zig/issues/37236)
+## Manage mappings via preferences[](https://firefox-source-docs.mozilla.org/devtools-user/local_mode/index.html#manage-mappings-via-preferences)
 
-## Contributors
+Mappings can also be managed in about:config via preferences, so that you can easily import and transfer them
+between profiles, or via automation.
 
-Here is a list of everyone who has made at least one contribution to this release of ZLS:
+Each mapping is defined by three preferences:
 
-- Techatrix
-- FnControlOption
-- psznm
-- xdBronch
-- Khang Nguyen Duy
-- Akhilesh Arora
-- James
-- Jassiel Ovando
-- fomgleb
-- l1yefeng
-
-## Sponsors
-
-We’d like to take a second to thank all our awesome [contributors](https://github.com/zigtools/zls/graphs/contributors) and donators/backers/sponsors; if you have time or money to spare, consider partaking in either of these options - they help keep ZLS awesome for everyone!
+- `devtools.local-mode.mappings.${index}.origin`: string for the mapping’s origin. (e.g. “firefox.localhost”)
+- `devtools.local-mode.mappings.${index}.path`: string for the absolute path to local folder (e.g. “/home/hello-world”)
+- `devtools.local-mode.mappings.${index}.disabled`: optional boolean to disable this mapping and where `${index}` is an incremental integer counter to uniquely identify each mapping.
