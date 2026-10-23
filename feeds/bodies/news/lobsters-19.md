@@ -1,184 +1,84 @@
-I often find myself writing (by which I mean generating) functions to convert enums to strings. A naïve implementation of such a function might look like:
+The other day I read this blog post about using arp-scan to list every device on the network in order to keep better track of devices and that's great, but we can go even further.
+
+The blog post I am talking about is Ben Calderon's post called [ARP! Tell your network to explain itself](https://benjcal.space/blog/arp-tell-your-network-to-explain-itself/).
+
+I too have too many devices on my network to keep track (it both serve some of my homelab stuff and some of my office stuff) and as such, I have used different approaches over the years.
+
+One of the early things I did was to give each device a meaningful hostname. Like "johnslaptop", "janesdesktop", "webserver", "storageserver", etc. But as you probably know, this quickly becomes problematic when you get more machines that does the same, so "webserver" turns into "oldwebserver" or you use "webserver1" and "webserver2" and then forget which is actually which. Also, when machines change hands, you have to rename them so "johnslaptop" now becomes "alexlaptop", etc.
+
+A better approach is to use a naming convention. This is especially useful if you run a large network with many devices, then you can use a scheme like "region.location.devicetype.unitnumber". On the homelab many people choose character names from one of their favorite movies or TV shows and use those as hostnames, like "homer", "marge", "bart", etc.
+
+The benefit of character names is that the name doesn't need to change if the device is used for something else or it changes hands. But the downside is that now it's even more difficult to remember what device does what.
+
+Also, in both cases, you cannot remember what IP address belongs to what machine.
+
+Using arp-scan in order to take advantage of the [Address Resolution Protocol](https://en.wikipedia.org/wiki/Address_Resolution_Protocol) (ARP) is a great way to determine which IPv4 devices are up and running on your network and it's much faster than scanning with nmap.
 
 ```
-const char* dxgi_format_to_string(unsigned x) {
-  switch (x) {
-  case  0: return "UNKNOWN";
-  case  1: return "R32G32B32A32_TYPELESS";
-  case  2: return "R32G32B32A32_FLOAT";
-  case  3: return "R32G32B32A32_UINT";
-  case  4: return "R32G32B32A32_SINT";
-  case  5: return "R32G32B32_TYPELESS";
-  case  6: return "R32G32B32_FLOAT";
-  case  7: return "R32G32B32_UINT";
-  case  8: return "R32G32B32_SINT";
-  case  9: return "R16G16B16A16_TYPELESS";
-  case 10: return "R16G16B16A16_FLOAT";
-  case 11: return "R16G16B16A16_UNORM";
-  case 12: return "R16G16B16A16_UINT";
-  case 13: return "R16G16B16A16_SNORM";
-  case 14: return "R16G16B16A16_SINT";
-  case 15: return "R32G32_TYPELESS";
-  case 16: return "R32G32_FLOAT";
-  case 17: return "R32G32_UINT";
-  case 18: return "R32G32_SINT";
-  case 19: return "R32G8X24_TYPELESS";
-  case 20: return "D32_FLOAT_S8X24_UINT";
-  case 21: return "R32_FLOAT_X8X24_TYPELESS";
-  case 22: return "X32_TYPELESS_G8X24_UINT";
-  default: return NULL;
-  }
+$ $ arp-scan 192.168.1.0/24
+Interface: eth0, type: EN10MB, MAC: 1g:36:4f:16:a2:3a, IPv4: 192.168.1.5
+Starting arp-scan 1.10.0 with 256 hosts (https://github.com/royhills/arp-scan)
+...
+192.168.1.5     b0:56:9a:e1:66:b9       Intel Corporate
+192.168.1.12    1a:83:04:16:d4:a3       (Unknown)
+192.168.1.23    30:ab:d6:d2:b3:36       ASUSTek COMPUTER INC.
+...
+
+15 packets received by filter, 0 packets dropped by kernel
+Ending arp-scan 1.10.0: 256 hosts scanned in 2.018 seconds (126.86 hosts/sec). 15 responded
+```
+
+If you're using IPv6 then arp-scan will not work as IPv6 uses [Neighbor Discovery Protocol](https://en.wikipedia.org/wiki/Neighbor_Discovery_Protocol) (NDP) rather than ARP, but I am sure you already know this if you have implemented IPv6 in your network.
+
+In the above result from arp-scan we get the IP address, the MAC address and sometimes, but only sometimes, the vendor of the NIC. Still, this is only really useful to tell me which devices are up and running, from the above I cannot determine what is what. Especially with the 192.168.1.12 one which doesn't list the vendor. And sometimes you have several machines using the same NIC vendor.
+
+DNS to the rescue!
+
+A really cool thing about using a DNS server on your network, even if you only have a limited amount of devices, is that you get a kind of centralized "database" which you can then setup with information about all the devices. If you also combine it with a DHCP server, you can easily match a specific IP address to a specific MAC address and that way always make sure that the same device automatically gets the same IP address and you don't have to manage that on each device.
+
+One minor downside to using DHCP and DNS is that if the server is down, perhaps because you're updating the operating system, your network is momentarily not working quite right, machines cannot get IP addresses assigned and you cannot use DNS to do lookup. However, you can mitigate that somewhat by only assigning static IP addresses to the very most important devices and then make sure the IP addresses match the ones you use in your DNS zones.
+
+However, the really cool thing is that you can use the [TXT record](https://en.wikipedia.org/wiki/TXT_record) to associate arbitrary text with a host!
+
+I the above case with 192.168.1.12, not only can I lookup the hostname of the device with `drill` or `dig`:
+
+```
+$ drill -x 192.168.1.12
+;; ANSWER SECTION:
+12.1.168.192.in-addr.arpa. 3600  IN      PTR     bart.home.arpa.
+```
+
+I can also get the very useful information from the TXT record I previously setup:
+
+```
+$ drill bart.home.arpa TXT
+;; ANSWER SECTION:
+bart.home.arpa.        3600    IN      TXT     "Johns Intel i7-7700 Acer laptop"
+```
+
+In my network I am using [OpenBSD as a router](https://unixdigest.com/openbsd-router-guide/) and I am combining [dhcpd](https://man.openbsd.org/dhcpd) with [unbound](https://nlnetlabs.nl/projects/unbound/about/), that way I only have to enter the IP address for a device in one place.
+
+So the section for the bart.home.arpa machine in `/etc/dhcpd` looks like this:
+
+```
+host bart.home.arpa {
+    fixed-address bart.home.arpa;
+    hardware ethernet 1a:83:04:16:d4:a3;
 }
 ```
 
-Compiling the above with a modern gcc at `-O0` or `-O1` gives some fairly horrible assembly code. Thankfully, at `-O2` and above, a modern gcc can rewrite it to something more along the lines of:
+Then in unbound I have the following:
 
 ```
-const char* dxgi_format_to_string(unsigned x) {
-  static const char* const cases[] = {
-    "UNKNOWN",
-    "R32G32B32A32_TYPELESS",
-    "R32G32B32A32_FLOAT",
-    "R32G32B32A32_UINT",
-    "R32G32B32A32_SINT",
-    "R32G32B32_TYPELESS",
-    "R32G32B32_FLOAT",
-    "R32G32B32_UINT",
-    "R32G32B32_SINT",
-    "R16G16B16A16_TYPELESS",
-    "R16G16B16A16_FLOAT",
-    "R16G16B16A16_UNORM",
-    "R16G16B16A16_UINT",
-    "R16G16B16A16_SNORM",
-    "R16G16B16A16_SINT",
-    "R32G32_TYPELESS",
-    "R32G32_FLOAT",
-    "R32G32_UINT",
-    "R32G32_SINT",
-    "R32G8X24_TYPELESS",
-    "D32_FLOAT_S8X24_UINT",
-    "R32_FLOAT_X8X24_TYPELESS",
-    "X32_TYPELESS_G8X24_UINT",
-  };
-  if (x > 22u) return NULL;
-  return cases[x];
-}
+local-data: "bart.home.arpa. IN A 192.168.1.12"
+local-data: 'bart.home.arpa. IN TXT "Johns Intel i7-7700 Acer laptop"'
+local-data-ptr: "192.168.1.12 bart.home.arpa"
 ```
 
-The assembly code for this is much nicer, although the table of pointers still takes up more space than I'd like (and that's before you account for each table entry needing a relocation entry...). It can be made smaller by concatenating all the strings together into a single contiguous piece of memory and then using a table of offsets into that memory, taking advantage of the fact that a relative offset can be much smaller than a pointer:
+You only have to make sure that dhcpd is started after unbound when the router boots. dhcpd uses the `fixed-address` field to query the DNS server (unbound in this case) for the IP address that belongs to that hostname in order to serve it to the device with the specific MAC address listed in the `hardware ethernet` field.
 
-```
-const char* dxgi_format_to_string(unsigned x) {
-  const char* cases =
-    /*  0*/ "UNKNOWN\0"
-    /*  8*/ "R32G32B32A32_TYPELESS\0"
-    /* 30*/ "R32G32B32A32_FLOAT\0"
-    /* 49*/ "R32G32B32A32_UINT\0"
-    /* 67*/ "R32G32B32A32_SINT\0"
-    /* 85*/ "R32G32B32_TYPELESS\0"
-    /*104*/ "R32G32B32_FLOAT\0"
-    /*120*/ "R32G32B32_UINT\0"
-    /*135*/ "R32G32B32_SINT\0"
-    /*150*/ "R16G16B16A16_TYPELESS\0"
-    /*172*/ "R16G16B16A16_FLOAT\0"
-    /*191*/ "R16G16B16A16_UNORM\0"
-    /*210*/ "R16G16B16A16_UINT\0"
-    /*228*/ "R16G16B16A16_SNORM\0"
-    /*247*/ "R16G16B16A16_SINT\0"
-    /*265*/ "R32G32_TYPELESS\0"
-    /*281*/ "R32G32_FLOAT\0"
-    /*294*/ "R32G32_UINT\0"
-    /*306*/ "R32G32_SINT\0"
-    /*318*/ "R32G8X24_TYPELESS\0"
-    /*336*/ "D32_FLOAT_S8X24_UINT\0"
-    /*357*/ "R32_FLOAT_X8X24_TYPELESS\0"
-    /*382*/ "X32_TYPELESS_G8X24_UINT";
-  static const uint16_t offsets[] = {
-      0,
-      8,
-     30,
-     49,
-     67,
-     85,
-    104,
-    120,
-    135,
-    150,
-    172,
-    191,
-    210,
-    228,
-    247,
-    265,
-    281,
-    294,
-    306,
-    318,
-    336,
-    357,
-    382,
-  };
-  if (x > 22u) return NULL;
-  return cases + offsets[x];
-}
-```
+You can do the same setup on something like a Raspberry Pi using almost any Linux distribution or BSD variant, or you can use something like like [Pi-hole](https://pi-hole.net/) with [Dnsmasq](https://thekelleys.org.uk/dnsmasq/doc.html), which has both DHCP and DNS build into one.
 
-This is pretty good, but the `offsets` table can be made even smaller. Consider the function `x ↦ offsets[x]`: it maps `0` to `0` and `22` to `382`, so one possible linear approximation of this could be `x ↦ x * int(round(382.0 / 22.0))`, also known as `x ↦ x * 17`. It is rarely the case that `x * 17` *exactly equals* `offsets[x]`, but the difference between `x * 17` and `offsets[x]` happens to always end up being in the range `[-9, +10]`. As such, the `offsets` table can be replaced with `x * 17` and a table of corrections, where the corrections table occupies less space than the original offsets table:
+Even if you decide to manually assign static IP address to all devices and not use DHCP at all, having a DNS server as a "database" with hostnames and additional information is really nice, you just have to make sure everything matches when you set it up.
 
-```
-const char* dxgi_format_to_string(unsigned x) {
-  const char* cases =
-    /*  0*/ "UNKNOWN\0"
-    /*  8*/ "R32G32B32A32_TYPELESS\0"
-    /* 30*/ "R32G32B32A32_FLOAT\0"
-    /* 49*/ "R32G32B32A32_UINT\0"
-    /* 67*/ "R32G32B32A32_SINT\0"
-    /* 85*/ "R32G32B32_TYPELESS\0"
-    /*104*/ "R32G32B32_FLOAT\0"
-    /*120*/ "R32G32B32_UINT\0"
-    /*135*/ "R32G32B32_SINT\0"
-    /*150*/ "R16G16B16A16_TYPELESS\0"
-    /*172*/ "R16G16B16A16_FLOAT\0"
-    /*191*/ "R16G16B16A16_UNORM\0"
-    /*210*/ "R16G16B16A16_UINT\0"
-    /*228*/ "R16G16B16A16_SNORM\0"
-    /*247*/ "R16G16B16A16_SINT\0"
-    /*265*/ "R32G32_TYPELESS\0"
-    /*281*/ "R32G32_FLOAT\0"
-    /*294*/ "R32G32_UINT\0"
-    /*306*/ "R32G32_SINT\0"
-    /*318*/ "R32G8X24_TYPELESS\0"
-    /*336*/ "D32_FLOAT_S8X24_UINT\0"
-    /*357*/ "R32_FLOAT_X8X24_TYPELESS\0"
-    /*382*/ "X32_TYPELESS_G8X24_UINT";
-  static const int8_t corrections[] = {
-     0,
-    -9,
-    -4,
-    -2,
-    -1,
-     0,
-     2,
-     1,
-    -1,
-    -3,
-     2,
-     4,
-     6,
-     7,
-     9,
-    10,
-     9,
-     5,
-     0,
-    -5,
-    -4,
-     0,
-     8,
-  };
-  if (x > 22u) return NULL;
-  return cases + ((long)(x * 17u) + corrections[x]);
-}
-```
-
-There's a general pattern here: an exact function can be computed via a fast but incorrect approximation followed by a table of corrections, and doing so can be profitable if this allows a smaller table than other approaches would require. This is not a novel idea, but it still needs repeating from time to time, even if only to remind compiler developers that there are still optimisations they're missing.
+Another major benefit from running a local recursive DNS resolver like unbound is that you become your own DNS provider and do not need your ISP, Google, Cloudflare or anyone else as a DNS provider. You can also block websites, like websites that serve ads or machines that are setup to collect telemetry.

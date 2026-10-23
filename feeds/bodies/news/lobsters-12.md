@@ -1,84 +1,179 @@
-The other day I read this blog post about using arp-scan to list every device on the network in order to keep better track of devices and that's great, but we can go even further.
-
-The blog post I am talking about is Ben Calderon's post called [ARP! Tell your network to explain itself](https://benjcal.space/blog/arp-tell-your-network-to-explain-itself/).
-
-I too have too many devices on my network to keep track (it both serve some of my homelab stuff and some of my office stuff) and as such, I have used different approaches over the years.
-
-One of the early things I did was to give each device a meaningful hostname. Like "johnslaptop", "janesdesktop", "webserver", "storageserver", etc. But as you probably know, this quickly becomes problematic when you get more machines that does the same, so "webserver" turns into "oldwebserver" or you use "webserver1" and "webserver2" and then forget which is actually which. Also, when machines change hands, you have to rename them so "johnslaptop" now becomes "alexlaptop", etc.
-
-A better approach is to use a naming convention. This is especially useful if you run a large network with many devices, then you can use a scheme like "region.location.devicetype.unitnumber". On the homelab many people choose character names from one of their favorite movies or TV shows and use those as hostnames, like "homer", "marge", "bart", etc.
-
-The benefit of character names is that the name doesn't need to change if the device is used for something else or it changes hands. But the downside is that now it's even more difficult to remember what device does what.
-
-Also, in both cases, you cannot remember what IP address belongs to what machine.
-
-Using arp-scan in order to take advantage of the [Address Resolution Protocol](https://en.wikipedia.org/wiki/Address_Resolution_Protocol) (ARP) is a great way to determine which IPv4 devices are up and running on your network and it's much faster than scanning with nmap.
+most people(fairly) assume that this is just an alias, but this is
+not true! it’s a binary!
 
 ```
-$ $ arp-scan 192.168.1.0/24
-Interface: eth0, type: EN10MB, MAC: 1g:36:4f:16:a2:3a, IPv4: 192.168.1.5
-Starting arp-scan 1.10.0 with 256 hosts (https://github.com/royhills/arp-scan)
-...
-192.168.1.5     b0:56:9a:e1:66:b9       Intel Corporate
-192.168.1.12    1a:83:04:16:d4:a3       (Unknown)
-192.168.1.23    30:ab:d6:d2:b3:36       ASUSTek COMPUTER INC.
-...
-
-15 packets received by filter, 0 packets dropped by kernel
-Ending arp-scan 1.10.0: 256 hosts scanned in 2.018 seconds (126.86 hosts/sec). 15 responded
+$ which gcc
+/usr/bin/gcc
 ```
 
-If you're using IPv6 then arp-scan will not work as IPv6 uses [Neighbor Discovery Protocol](https://en.wikipedia.org/wiki/Neighbor_Discovery_Protocol) (NDP) rather than ARP, but I am sure you already know this if you have implemented IPv6 in your network.
-
-In the above result from arp-scan we get the IP address, the MAC address and sometimes, but only sometimes, the vendor of the NIC. Still, this is only really useful to tell me which devices are up and running, from the above I cannot determine what is what. Especially with the 192.168.1.12 one which doesn't list the vendor. And sometimes you have several machines using the same NIC vendor.
-
-DNS to the rescue!
-
-A really cool thing about using a DNS server on your network, even if you only have a limited amount of devices, is that you get a kind of centralized "database" which you can then setup with information about all the devices. If you also combine it with a DHCP server, you can easily match a specific IP address to a specific MAC address and that way always make sure that the same device automatically gets the same IP address and you don't have to manage that on each device.
-
-One minor downside to using DHCP and DNS is that if the server is down, perhaps because you're updating the operating system, your network is momentarily not working quite right, machines cannot get IP addresses assigned and you cannot use DNS to do lookup. However, you can mitigate that somewhat by only assigning static IP addresses to the very most important devices and then make sure the IP addresses match the ones you use in your DNS zones.
-
-However, the really cool thing is that you can use the [TXT record](https://en.wikipedia.org/wiki/TXT_record) to associate arbitrary text with a host!
-
-I the above case with 192.168.1.12, not only can I lookup the hostname of the device with `drill` or `dig`:
+now, what *is* this binary? i naively assumed that it would
+just be shelling out to `clang` but it turns out the answer
+is more interesting than that.
 
 ```
-$ drill -x 192.168.1.12
-;; ANSWER SECTION:
-12.1.168.192.in-addr.arpa. 3600  IN      PTR     bart.home.arpa.
-```
-
-I can also get the very useful information from the TXT record I previously setup:
-
-```
-$ drill bart.home.arpa TXT
-;; ANSWER SECTION:
-bart.home.arpa.        3600    IN      TXT     "Johns Intel i7-7700 Acer laptop"
-```
-
-In my network I am using [OpenBSD as a router](https://unixdigest.com/openbsd-router-guide/) and I am combining [dhcpd](https://man.openbsd.org/dhcpd) with [unbound](https://nlnetlabs.nl/projects/unbound/about/), that way I only have to enter the IP address for a device in one place.
-
-So the section for the bart.home.arpa machine in `/etc/dhcpd` looks like this:
-
-```
-host bart.home.arpa {
-    fixed-address bart.home.arpa;
-    hardware ethernet 1a:83:04:16:d4:a3;
+int sub_1000006c4(int arg0, int arg1) {
+    r19 = arg1;
+    r20 = arg0;
+    if (*_mainExecutableToolName.once == -0x1) {
+            if (*(int8_t *)*_mainExecutableToolName.toolName == 0x63 && *(int8_t *)(*_mainExecutableToolName.toolName + 0x1) == 0x63 && *(int8_t *)(*_mainExecutableToolName.toolName + 0x2) == 0x0) {
+                    r21 = "clang";
+            }
+            else {
+                    if (strcmp(*_mainExecutableToolName.toolName, "llvm-gcc") == 0x0) {
+                            r21 = "clang";
+                    }
+                    else {
+                            r21 = *_mainExecutableToolName.toolName;
+                            if (strcmp(*_mainExecutableToolName.toolName, "c++") == 0x0 || strcmp(r21, "llvm-g++") == 0x0) {
+                                    r21 = "clang++";
+                            }
+                    }
+            }
+            xcselect_invoke_xcrun();
+    }
+    while (true) {
+            dispatch_once(_mainExecutableToolName.once, ___block_literal_global);
+            if (*(int8_t *)*_mainExecutableToolName.toolName == 0x63) {
+                    if (*(int8_t *)(*_mainExecutableToolName.toolName + 0x1) == 0x63) {
+                            if (*(int8_t *)(*_mainExecutableToolName.toolName + 0x2) != 0x0) {
+                                    if (strcmp(*_mainExecutableToolName.toolName, "llvm-gcc") == 0x0) {
+                                            r21 = "clang";
+                                    }
+                                    else {
+                                            if (strcmp(*_mainExecutableToolName.toolName, "c++") != 0x0) {
+                                                    r21 = *_mainExecutableToolName.toolName;
+                                                    if (strcmp(*_mainExecutableToolName.toolName, "llvm-g++") == 0x0) {
+                                                            r21 = "clang++";
+                                                    }
+                                            }
+                                            else {
+                                                    r21 = "clang++";
+                                            }
+                                    }
+                                    xcselect_invoke_xcrun();
+                            }
+                            else {
+                                    xcselect_invoke_xcrun();
+                            }
+                    }
+                    else {
+                            if (strcmp(*_mainExecutableToolName.toolName, "llvm-gcc") == 0x0) {
+                                    r21 = "clang";
+                            }
+                            else {
+                                    if (strcmp(*_mainExecutableToolName.toolName, "c++") != 0x0) {
+                                            r21 = *_mainExecutableToolName.toolName;
+                                            if (strcmp(*_mainExecutableToolName.toolName, "llvm-g++") == 0x0) {
+                                                    r21 = "clang++";
+                                            }
+                                    }
+                                    else {
+                                            r21 = "clang++";
+                                    }
+                            }
+                            xcselect_invoke_xcrun();
+                    }
+            }
+            else {
+                    if (strcmp(*_mainExecutableToolName.toolName, "llvm-gcc") == 0x0) {
+                            r21 = "clang";
+                    }
+                    else {
+                            if (strcmp(*_mainExecutableToolName.toolName, "c++") != 0x0) {
+                                    r21 = *_mainExecutableToolName.toolName;
+                                    if (strcmp(*_mainExecutableToolName.toolName, "llvm-g++") == 0x0) {
+                                            r21 = "clang++";
+                                    }
+                            }
+                            else {
+                                    r21 = "clang++";
+                            }
+                    }
+                    xcselect_invoke_xcrun();
+            }
+            continue;
+    }
 }
 ```
 
-Then in unbound I have the following:
+there’s some interesting stuff here(for example special logic for
+checking if it’s being run as c++ or llvm-gcc specifically), but the key
+thing we’re interested in is this line of code:
 
 ```
-local-data: "bart.home.arpa. IN A 192.168.1.12"
-local-data: 'bart.home.arpa. IN TXT "Johns Intel i7-7700 Acer laptop"'
-local-data-ptr: "192.168.1.12 bart.home.arpa"
+xcselect_invoke_xcrun()
 ```
 
-You only have to make sure that dhcpd is started after unbound when the router boots. dhcpd uses the `fixed-address` field to query the DNS server (unbound in this case) for the IP address that belongs to that hostname in order to serve it to the device with the specific MAC address listed in the `hardware ethernet` field.
+this is a function from libxcselect.dylib, but it’s basically the
+same thing as running `xcrun`.(fun fact: [the xcrun binary
+basically just calls this function](https://zoey-on-github.github.io/blog/images/Screenshot_2026-10-21_at_11.38.00_PM.png)) [if you
+disassemble any xcode-installed developer tool, you’ll see this exact
+same binary](https://zoey-on-github.github.io/blog/images/Screenshot_2026-10-21_at_12.57.05_PM.png),meaning all the developer tools that xcode-select
+installs on macOS are actually just being run through xcrun.[<sup>1</sup>](https://zoey-on-github.github.io/blog/macgcc.html#fn1)   
+ but that raises the important
+question: what does xcrun *do*? i’ve certainly never heard of it
+before this.  
+ well, checking [the
+manpage](https://keith.github.io/xcode-man-pages/xcrun.1.html) we can see that it calls developer tools from the developer
+tool directory. this gives us an important bit of info: the location of
+the *actual* gcc binary that’s being called. thankfully for us,
+there is a `--find` command that can give us exactly
+this.
 
-You can do the same setup on something like a Raspberry Pi using almost any Linux distribution or BSD variant, or you can use something like like [Pi-hole](https://pi-hole.net/) with [Dnsmasq](https://thekelleys.org.uk/dnsmasq/doc.html), which has both DHCP and DNS build into one.
+```
+$ xcrun --find gcc
+/Library/Developer/CommandLineTools/usr/bin/gcc
+```
 
-Even if you decide to manually assign static IP address to all devices and not use DHCP at all, having a DNS server as a "database" with hostnames and additional information is really nice, you just have to make sure everything matches when you set it up.
+looking in this directory, we can see that:  
+ c++, llvm-gcc,
+llvm-g++ aren’t in this directory, that’s why they’re hardcoded into the
+binary itself  
+ cc and clang++ are just alises to clang  
+ ![](https://zoey-on-github.github.io/blog/images/Screenshot_2026-10-21_at_1.11.00_PM.png) ![](https://zoey-on-github.github.io/blog/images/Screenshot_2026-10-21_at_1.11.10_PM.png)  
+ but most
+interestingly, g++ is an alias to an actual gcc binary that’s in the
+same directory:  
+ ![](https://zoey-on-github.github.io/blog/images/Screenshot_2026-10-21_at_11.54.47_PM.png)  
+ well, what
+does *that* gcc binary do, then?  
+ opening it in my
+disassembler, we see that it… shells out to xcrun and calls clang(or
+clang++ depending on how it’s called)
 
-Another major benefit from running a local recursive DNS resolver like unbound is that you become your own DNS provider and do not need your ISP, Google, Cloudflare or anyone else as a DNS provider. You can also block websites, like websites that serve ads or machines that are setup to collect telemetry.
+```
+int EntryPoint(int arg0, int arg1) {
+    r22 = arg1;
+    r21 = arg0;
+    asm { sbfiz      x8, x21, #0x3, #0x20 };
+    r0 = malloc(r8 + 0x10);
+    if (r0 == 0x0) {
+            err(0x47, r1);
+    }
+    r19 = r0;
+    *r0 = "/usr/bin/xcrun";
+    r23 = *r22;
+    r0 = strlen(r23);
+    if (*(int8_t *)(r23 + (r0 - 0x1 << r64)) == 0x2b && *(int8_t *)(r23 + (r0 - 0x2 << r64)) == 0x2b) {
+            r8 = "clang++";
+    }
+    else {
+            r8 = "clang";
+    }
+    r19[0x1] = r8;
+    if (r21 >= 0x2) {
+            asm { ubfiz      x2, x8, #0x3, #0x20 };
+            memcpy(r19 + 0x10, r22 + 0x8, r2);
+            r8 = r21;
+    }
+    else {
+            r8 = 0x1;
+    }
+    *(r19 + r8 * 0x8 + 0x8) = 0x0;
+    r0 = execv("/usr/bin/xcrun", r19);
+    err(0x47, r1);
+    return r0;
+}
+```
+
+1. if you’re wondering *why* this is, my guess is because of SIP. /usr/bin is a protected directory on macOS and i assume apple can’t update it without requiring a restart, and you can update the xcode tools without having to restart your mac. as for why they dont just add the developer tools directory to path, my guess is that they want the freedom to change this directory whenever they want[↩︎](https://zoey-on-github.github.io/blog/macgcc.html#fnref1)

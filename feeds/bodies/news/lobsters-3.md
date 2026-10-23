@@ -1,159 +1,39 @@
-here's something really cursed i made a while back. the goal here is to create a portable way to obtain the value of errno from outside of c, without using a wrapper function written in c.
+Many people [are saying](https://rustify.rs/articles/rails-world-2026-keynote-dhh-hey-rust-ai-agents) that AI will make software faster by rewriting it in faster languages, but this isn’t generally true. Most programs cannot be meaningfully sped up by rewriting them in C or Rust.
 
-        for those unaware, errno is defined as a macro, and its expansion is non-portable and usually comes with no stability guarantees. so if you're calling libc functions from some other language (such as hare, which i'll be using in this post), it's not possible to retrieve error values from them without relying on an implementation detail or writing a wrapper function in c which returns errno.
+How can this be true? Some languages are orders-of-magnitude faster than others: for instance, C can be fifty times [faster](https://news.ycombinator.com/item?id=9753366) than Python. Won’t rewriting my Python program in C thus make it fifty times faster? No, it won’t. Software performance is usually dominated by I/O, not the speed of the language. Where language speed matters, most slow languages already have popular libraries that allow them to unlock C-like speed. In general, performance is a matter of *design*, not of language choice.
 
-        ...unless you're willing to resort to some fucked up hacks, that is.
+### Most real programs are I/O-bound
 
-preamble
-`use io;
-use sys;
-use types::c;
+Consider a simple CRUD website with a database. For any given request, 50% of the request time<sup>[1](https://www.seangoedecke.com/software-is-slow-because-of-bad-design-not-slow-languages/#fn-1)</sup> might be spent querying the database: to fetch the current user, the record being asked for, any relevant user memberships or settings, and so on. Rewriting that website in C can only speed up that other 50%, which puts a hard ceiling on the improvements you can make<sup>[2](https://www.seangoedecke.com/software-is-slow-because-of-bad-design-not-slow-languages/#fn-2)</sup>. At best, you’ll make requests twice as fast (probably closer to 1.5x in practice). That’s not bad, but it’s nowhere near an order-of-magnitude speedup.
 
-@symbol("close") fn c_close(fd: int) int;
-@symbol("dup") fn c_dup(oldfd: int) int;
-@symbol("dup2") fn c_dup2(oldfd: int, newfd: int) int;
-@symbol("lseek") fn c_lseek(fd: int, offs: io::off, whence: int) io::off;
-@symbol("mkstemp") fn c_mkstemp(template: *c::char) int;
-@symbol("perror") fn c_perror(s: nullable *c::char) void;
-@symbol("read") fn c_read(fd: int, buf: *opaque, count: size) c::ssize;
-@symbol("strerror") fn c_strerror(errnum: int) *c::char;
-@symbol("unlink") fn c_unlink(path: *c::char) int;
-@symbol("write") fn c_write(fd: int, buf: *opaque, count: size) c::ssize;
+In other words, most real programs are “I/O-bound”: they spend most of their time waiting for data to be input or output somewhere, as opposed to “CPU-bound” programs that spend most of their time actively doing things. I/O-bound programs don’t just have to rely on a database. Often programs have to wait on some third-party API, or on writing or reading data to disk. You could speed the code in `curl` up by 100x and you probably wouldn’t even notice, because `curl` spends all of its time waiting on the network.
 
-def SEEK_SET = 0;
-def STDERR_FILENO = 2i;`
+What about work that is obviously not I/O-bound? For instance, wikis have to turn stored markdown into renderable HTML<sup>[3](https://www.seangoedecke.com/software-is-slow-because-of-bad-design-not-slow-languages/#fn-3)</sup>. Wouldn’t rewriting that in a faster language cause a massive speedup? It would! That’s why applications that do that use libraries like [cmark-gfm](https://github.com/github/cmark-gfm) that call out to fast languages for markdown rendering. In general, most slow languages can write very fast programs by invoking this kind of library. Python is famously a slow language, but it’s a competitive choice for CPU-bound workloads like machine learning and mathematics, because it has a [healthy](https://pytorch.org/) [set](https://www.tensorflow.org/) of libraries that let it offload these workloads to fast C code. If a Python program spends 80% of its time doing matrix multiplications on a GPU, you are very unlikely to be able to speed it up by rewriting it in C, because those matrix multiplications are already happening in tightly-optimized C or assembly code.
 
-there aren't any libc functions which return the value of errno. there are, however, functions which return a *string* that describes errno. so let's start there.
+Of course, some programs do in fact do a lot of CPU-bound work in slow languages. If a program has not had much engineering attention, there will probably be a lot of [low-hanging fruit](https://www.seangoedecke.com/low-hanging-fruit/). But these programs are often unimportant: if they were important, someone would have gone in and optimized them already, before AI made it (relatively) easy. That doesn’t mean it’s impossible to find a useful program to rewrite. Actual Computer recently [rewrote](https://github.com/actual-computer/toks) tiktoken in assembly, providing a significant<sup>[4](https://www.seangoedecke.com/software-is-slow-because-of-bad-design-not-slow-languages/#fn-4)</sup> speedup. However, you’re not going to revolutionize some field of computing like this. Even fast tokenization is only useful on the margins, because time spent in tokenization is a fraction of the time spent in inference.
 
-        `export type error = !str;`
-standard c defines two promising functions: `strerror` and `perror.` posix defines two more functions: `strerror_r` and `strerror_l`. unfortunately, the strerror functions all take in the error number as an argument. only `perror` reads from errno directly. `perror` prints an error string to stderr, so our goal now to is to somehow capture the error string from `perror`, without actually writing anything to stderr.
+Despite all this, I think most software is far slower than it could be. I’m optimistic about the potential (with or without AI) to significantly speed up commonly-used software. But I think most of these speedups will come from redesigning the program, not rewriting it in a faster language.
 
-        alright, so let's do it. during program initialization, i dup `STDERR_FILENO` (2), open a temporary file, and change `STDERR_FILENO` to refer to the temporary file:
+In a 2018 [post](https://bcantrill.dtrace.org/2018/09/18/falling-in-love-with-rust/), Bryan Cantrill described trying to rewrite a C program into Rust. It was difficult because the carefully-optimized design of the C program did not play well with the Rust borrow checker. Giving up, he simply wrote the program in Rust in the naive way, expecting a 20% slowdown or worse. Instead, it was 30% *faster*. The [reasons](https://bcantrill.dtrace.org/2018/09/28/the-relative-performance-of-c-and-rust/) boil down to Rust’s internal preference for a B-tree over a binary search tree, which happens to be a more cache-efficient data structure. So even in a largely CPU-bound workload, in the hands of someone very skilled at writing fast C, performance is dominated by design, not by language speed.
 
-        `let stderr = -1;
-let tmpfd = -1;
-let tmpname: [_]u8 = ['/', 't', 'm', 'p', '/', 'X', 'X', 'X', 'X', 'X', 'X', '\0'];
+This matches my own experience in higher-level languages. When I think of the significant speedups I’ve managed, they’re almost exclusively redesigns of the software to do less work:
 
-@init fn stderr_tmp() void = {
-	stderr = c_dup(STDERR_FILENO);
-	assert(stderr != -1);
-	tmpfd = c_mkstemp(&tmpname: *c::char);
-	assert(tmpfd != -1);
-	const n = c_dup2(tmpfd, STDERR_FILENO);
-	assert(n != -1);
-};
+- Caching a slow operation (typically an external API call)
+- Performing slow operations asynchronously, either in a background job or out of the request/response lifecycle
+- Performing operations in parallel instead of sequentially (sometimes breaking up large operations in order to do this)
+- Replacing a set of SQL queries with a single SQL query (fixing N+1 problems)
+- Replacing a slow SQL query with a fast SQL query
+- Skipping unnecessary slow operations (e.g. in a paginated view, only fetch ancillary data from entities that are on the current page)
 
-@fini fn stderr_tmp() void = {
-	if (tmpfd != -1) {
-		c_close(tmpfd);
-		c_unlink(&tmpname: *c::char);
-	};
-};`
-all low-level functions (libc wrappers or syscall wrappers) which may interact with stderr will silently adjust the fd from `STDERR_FILENO` to the dup'd stderr file descriptor if necessary. (i'll give an example later on, if you're confused by that.)
+All of these strategies are completely unrelated to how fast the language is. In fact, writing in a slow higher-level language can make it much easier to optimize the code, because you can see at a glance what the program is doing. If (for some reason) I had first rewritten the web server in assembly, I would have a much harder time noticing the N+1 query, or the fact that we could move an API call into a job, and so on.
 
-        when an error occurs, the below function is called to obtain the error string:
+Right now everyone is asking their AI agents to rewrite programs in Rust or C or assembly. This is fun, but it’s not a serious attempt at optimization. The set of programs that can be meaningfully sped up by this kind of rewrite is very narrow.
 
-        `fn get_errno() error = {
-	c_perror(null);
-	if (c_write(STDERR_FILENO, &0u8, 1) == -1) {
-		return "Unknown error";
-	};
+If you want to make everything faster with AI — and you should! — you ought instead to be asking your agent to profile programs, identify hotspots, and suggest ways to redesign what the program does. Occasionally you may run into a hotspot that is truly CPU-bound and cannot be refactored to do less work. In these rare cases, rewriting that section in a faster language will help. But simply rewriting from the start will be far less successful than most people imagine.
 
-	c_lseek(STDERR_FILENO, 0, SEEK_SET);
-	defer c_lseek(STDERR_FILENO, 0, SEEK_SET);
+There are many good reasons to rewrite software in a different language: portability, efficiency, maintainability, and so on. But in terms of raw *speed*, you’re better off focusing on the program’s design.
 
-	static let buf: [256]u8 = [0...];
-	const n = c_read(STDERR_FILENO, &buf, len(buf));
-	if (n == -1) {
-		return "Unknown error";
-	};
-
-	const n = c::strnlen(&buf: *c::char, n: size);
-	return *(&buf[..n]: *str);
-};`
-when `perror` is called, it writes to the temporary file. (`STDERR_FILENO` needs to refer to the temp file from the beginning because `dup2` may overwrite errno, so it can't be used right before calling `perror`). the message is then read back and returned.
-
-        so cool, we have an error message string. now let's use that to obtain the actual errno value.
-
-        `export type error = !str;
-export type errno = !int;`
-to do that, i'll write another initialization function to construct a table of error messages:
-
-        `let strerror_table: [256][256]u8 = [[0...]...];
-
-@init fn strerror_table() void = {
-	for (let i = 0; i < len(strerror_table): int; i += 1) {
-		const msg = c_strerror(i);
-		const n = c::strlen(msg);
-		strerror_table[i][..n] = (msg: *[*]u8)[..n];
-	};
-};`
-the above function copies the strings returned by `strerror` into `strerror_table`. if you're familiar with posix libc, you may be confused why i'm not using `strerror_r` here, since that function directly writes error messages into a user-supplied buffer.
-
-        the reason is really annoying: there's two versions of `strerror_r`! there's a non-standard GNU version which returns an error message directly but may use its own immutable static storage, and there's a POSIX version which always writes to the user-supplied buffer and returns `int`.
-
-        i want the POSIX version of course, but on glibc, the symbol "`strerror_r`" refers to the GNU version. the POSIX version uses the symbol "`__xpg_strerror_r`". but other posix-compliant libcs (such as musl and all the BSD libcs) only provide the POSIX version, under the symbol "`strerror_r`". fitting with the theme of this blog post, glibc makes it impossible to portably call the function i want without relying on an internal symbol name, which i really don't want to do (since that makes the code libc-dependent).
-
-        but anyways, now that the `strerror_table` is constructed, let's update the `errno()` function to use it:
-
-        `fn get_errno() error errno = {
-	c_perror(null);
-	if (c_write(STDERR_FILENO, &0u8, 1) == -1) {
-		return "Unknown error" -1;
-	};
-
-	c_lseek(STDERR_FILENO, 0, SEEK_SET);
-	defer c_lseek(STDERR_FILENO, 0, SEEK_SET);
-
-	static let buf: [256]u8 = [0...];
-	const n = c_read(STDERR_FILENO, &buf, len(buf));
-	if (n == -1) {
-		return "Unknown error" -1;
-	};
-
-	const n = c::strnlen(&buf: *c::char, n: size);
-	return *(&buf[..n]: *str);
-	if (n != 0) {
-		buf[n - 1] = '\0'; // strip trailing newline
-	};
-
-	for (let i = 0z; i < len(strerror_table); i += 1) {
-		if (c::strcmp(&buf: *c::char, &strerror_table[i]: *c::char) == 0) {
-			return i: errno;
-		};
-	};
-	return -1;
-};`
-btw, here's an example of what a libc wrapper of `write` looks like:
-
-        `export fn write(fd: int, buf: *opaque, count: size) (size | errno) = {
-	const fd = if (fd == STDERR_FILENO) stderr else fd;
-	const n = c_write(fd, buf, count);
-	if (n == -1) {
-		return get_errno();
-	};
-	return n: size;
-};`
-another fucked up hack to make it actually portable
-the original thing that actually caused me to make this was that i wanted to see if i could make a generic "posix" target for hare. like, if you have a posix system which hare doesn't natively support, you could compile for the "posix" target and link to the system libc and things would just Work. the errno stuff was just a fun detour from that (the generic posix version would just return an error string, since the actual error numbers aren't portable). but in this context, there's one problem with the errno stuff. you can see it in this snippet from `get_errno()`:
-
-        `c_lseek(STDERR_FILENO, 0, SEEK_SET);
-defer c_lseek(STDERR_FILENO, 0, SEEK_SET);`
-i define `SEEK_SET` as a constant earlier on:
-
-        `def SEEK_SET = 0;`
-this is usually true, but posix doesn't guarantee that `SEEK_SET` is 0! its value is completely implementation-defined. this is *yet another* place where it's not really possible to do stuff outside of c without relying on an "implementation detail".
-
-        (in practice i can't imagine any reason `SEEK_SET` *wouldn't* be 0, but unnecessary fucked up hacks are fun so for now let's just pretend that any of this actually matters)
-
-        it's actually possible to work around this! `lseek` returns the new offset after seeking. so we can call `lseek` with an arbitrary whence value, and use the return value to determine whether it did what we wanted. if not, just repeat with different whence values until it works!
-
-        `let i = 0;
-for (i <= 2; i += 1) {
-	if (c_lseek(STDERR_FILENO, 0, i) == 0) {
-		break;
-	};
-};
-assert(i <= 2);
-defer c_lseek(STDERR_FILENO, 0, i);`
-i just loop from 0 to 2, because i figure that it'll probably always be one of those values. but there's no reason higher values couldn't also be checked.
+1. This might seem ridiculously high (if you typically work with slow languages or CPU-bound workloads), or ridiculously low (if you don’t). In my experience it’s at least in the ballpark for interpreted languages. ↩
+2. This is formally called [Amdahl’s law](https://en.wikipedia.org/wiki/Amdahl%27s_law). ↩
+3. Why not just store the HTML? You can, but sometimes the content of the HTML differs per-user (and even if you store the HTML you have to convert it at least once). ↩
+4. They claim 4-23x faster than tiktoken and it was indeed ~5x faster on my laptop — though arguably this speedup comes from a redesign to avoid the dependency on regex, not on any intrinsic slowness of Rust with Python bindings. ↩

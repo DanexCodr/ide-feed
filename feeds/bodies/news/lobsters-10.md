@@ -1,114 +1,710 @@
-You can get a copy of the exploit from the [ns2jb](https://gitlab.com/pepsipu/ns2jb) repository.
+I have had more time recently to write code in Zig<sup>[[1]](https://www.axelmagn.com/blog/202610-zig-traits/#fn-zig-0.17)</sup>, and it has been
+good for my soul. I wanted to share some insights I have arrived at regarding
+abstractions in Zig, including some techniques that I have found useful but not
+seen employed more broadly.
 
-ns2jb is a software-only, tethered jailbreak for the Switch 2. It allows running arbitrary native code as any ordinary sysmodule, and as the built-in `fs` sysmodule. This lets us run homebrew, reverse engineer and mod Switch 2 games, back up save files off the Switch, and access most of the Switch 2’s peripherals through MMIO. To my knowledge, it’s the first such exploit for the Switch 2.
+Considerable<sup>[[2]](https://www.axelmagn.com/blog/202610-zig-traits/#fn-seguin2023)</sup> ink<sup>[[3]](https://www.axelmagn.com/blog/202610-zig-traits/#fn-figuratively)</sup> has<sup>[[4]](https://www.axelmagn.com/blog/202610-zig-traits/#fn-wong2025)</sup> been<sup>[[5]](https://www.axelmagn.com/blog/202610-zig-traits/#fn-mckay2025)</sup>
+spilled<sup>[[6]](https://www.axelmagn.com/blog/202610-zig-traits/#fn-cypert2026)</sup> on Zig Interfaces, and justifiably so. While not a language
+feature, interfaces are the de-facto way of implementing runtime polymorphism in
+Zig. Yet<sup>[[7]](https://www.axelmagn.com/blog/202610-zig-traits/#fn-kelley2021)</sup> more<sup>[[8]](https://www.axelmagn.com/blog/202610-zig-traits/#fn-redig2025)</sup> has been said about zig's comptime, and
+how it may be leveraged to avoid the performance woes of dynamic dispatch and
+write slick, data-oriented code.
 
-To demonstrate the capabilities of this jailbreak, Codex modded a Switch 2 exclusive, Mario Kart World. Thanks to my friends in [Dabney House](https://dabney.caltech.edu/) who helped me choose characters to add and playtest the game.
+To put it briefly, polymorphism in Zig is conventionally obtained in one of two
+ways:
 
-The very first thing I did was set up a harness around the Switch 1 and 2 so Codex could, ideally, jailbreak the Switch 2 without me:
+1. Dynamic Interfaces: Use opaque pointers, virtual tables, and dynamic dispatch to achieve runtime polymorphism.
+2. Comptime Duck Typing: Use type reflection, switch statements, and monomorphism at compile time to achieve static polymorhpism.
 
-Edit: Many people have been asking me if I actually used this prompt. No, it’s just a silly caption. I set a /goal for userland code execution, but that didn’t succeed. The jailbreak itself took substantial effort for ~2 weeks. The Mario Kart World, however, was entirely vibecoded in a day, and was just for fun.
+This state of affairs has proven to be quite effective so far, but it is not
+without its tradeoffs.
 
-The JetKVMs allow Codex to send controller inputs to the Switches over USB and receive video output over HDMI. We also need a way to press the power button—when the Switch 2 crashes, it needs a button press to restart.
+Interfaces offer the sort of type contracts that we are used to from other
+languages. A function that accepts an interface has a guarantee of its method
+signatures, but not its implementation. However because interfaces are, by
+design, modular at runtime, they also introduce a hard barrier for the compiler
+and thus a performance overhead. There is enough indirection that it often
+cannot effectively apply the optimizations that it would to monomorphic code.
 
-That’s what the Bluetooth light switch flicker from Amazon is for. When the lever comes down, it presses the power button. Once the power button is fully pressed, the rest of the lever’s torque lifts the mechanism.
+For cases of performance critical code, Zig code typically relies on comptime
+duck typing. A function argument is either `anytype` or parameterized by a type
+argument `T`, and the function implementation will either perform compile-time
+reflection or make assumptions about the type's methods that can be checked at
+compile-time. Implementations can then be monomorphised, similar to C++
+templating or C macros. This is slightly more safe than runtime duck typing,
+because any interface violations will be caught at compile time rather than
+runtime, but the caller and callee must still be careful to document and follow
+the contract of what types may be passed.
 
-WebKit is a popular target for console jailbreaks, so it’s unsurprising that Codex has picked it for initial code execution.
+If you are coming from another strongly typed language, you would be forgiven
+for finding this arrangement rather simplistic. This is perhaps by design
+-- Zig aims to be simple. However if you have grown accustomed to Rust's traits
+or Haskell typeclasses, there appears to be no ready equivalent in Zig.
 
-It claims to have “native control-flow hijack” by taking advantage of a WebKit n-day loaded via a custom Wi-Fi captive portal.
+I will argue that, with a little adaptation, it is perfectly possible to express
+similar abstractions over types in Zig userland. I would propose a new
+**convention** for defining compile-time type contracts as **Traits** in Zig. It
+doesn't require any libraries or machinery - in fact if fits remarkably well
+into vanilla Zig. It is inspired by the functional programming world in general,
+and OCaml in particular.
 
-We’d like to get code execution in microkernel services (or “sysmodules” on the Switch), so we can run homebrew, mod games, download saves, etc.
-Unfortunately, this approach of replacing one JavaScript function object with another doesn’t generalize beyond existing functions—we’d need a new way to make arbitrary IPC calls. That looks difficult.
+> **Definition:** a Trait is a compile-time struct which contains related
+> functions over a given type. <sup>[[9]](https://www.axelmagn.com/blog/202610-zig-traits/#fn-ocaml-inspired)</sup>
 
-Why?
-
-Codex has reset the goal to complete these steps. It’s a side bet; it may succeed<sup>[1](https://pepsipu.com/blog/2026-10-switch2-jailbreak-ns2jb/#user-content-fn-1)</sup>, but let’s be real: the accessibility of WebKit and the Nintendo BBP reward have probably incentivized many before me to look here<sup>[2](https://pepsipu.com/blog/2026-10-switch2-jailbreak-ns2jb/#user-content-fn-2)</sup>.
-
-While that runs, let’s explore other options.
-
-My idea was to target Switch 1 games, for two reasons:
-
-Maybe we can still get the upsides of the browser attack surface—orchestrating from JavaScript, using existing n-days, etc—while avoiding the downsides of WebKit mitigations by finding a Switch 1 game that embeds a browser? Something analogous to Electron, but for games, so we could pull off an exploit like this [Discord RCE](https://blog.electrovolt.io/posts/discord-rce/). I can’t disclose this approach’s findings publicly at the moment, but luckily, there are other Switch 1 games.
-
-In particular, I’m interested in [SmileBASIC](https://www.nintendo.com/us/store/products/smilebasic-4-switch/). This is because it’s been pwned before, in [smilehax](https://plutooo.github.io/smilehax), giving userspace code execution on the 3DS. It’s a giant C++ codebase; surely, if there was an exploitable memory corruption in the BASIC interpreter, there can be another.
-
-Codex found a useful 32-bit integer overflow in the interpreter. When removing items from an array, the interpreter checked `position + count <= array.length`, but the sum could wrap and become negative. To fill the gap created by removing elements, it’s supposed to shift the remaining elements left, like so:
+So as not to bury the lead, let me begin with a brief example of how we might
+define a trait for folding (reducing) on a type.
 
 ```
-memmove(
-    backing + position * 8,                  // start of the gap
-    backing + (position + count) * 8,        // elements after the gap
-    (length - position) * 8                  // bytes to copy
-);
+/// T forms a Reducer under an empty value and a combine operation
+fn Reducer(T: type) type {
+    return struct {
+        empty: T,
+        combine: fn (T, T) T,
+
+        fn reduce(self: @This(), xs: []const T) T {
+            var accum = self.empty;
+            for (xs) |x| accum = self.combine(accum, x);
+            return accum;
+        }
+    };
+}
+
+/// i32 forms a sum reducer under 0 and addition
+const sum_trait = impl(Reducer(i32), struct {
+    pub const empty = 0;
+    pub fn combine(x: T, y: T) T { return x + y; }
+});
+
+/// i32 forms a product reducer under 1 and multiplication
+const product_trait = impl(Reducer(i32), struct {
+    pub const empty = 1;
+    pub fn combine(x: T, y: T) T { return x * y; }
+});
+
+export fn run(buf: [*c]i32, n: usize) i32 {
+    const sum = sum_trait.reduce(buf[0..n]);
+    const product = product_trait.reduce(buf[0..n]);
+    return sum + product;
+}
 ```
 
-Say we have a string array `R` of length 4, and we run `REMOVE R,&H60000000,&H3FFFFFFF`. `position + count` wraps to `0x9fffffff`. As a negative signed 32-bit integer, it’s less than `array.length`. The multiplications by 8 also wrap, so we end up performing `memmove(backing, backing - 8, 32)`, pulling the previous 8 bytes into the array. The command does report an `Out of memory` error, but it doesn’t matter, since the copy has happened already.
+Ugh. Isn't that just buttery smooth?<sup>[[10]](https://www.axelmagn.com/blog/202610-zig-traits/#fn-so-good)</sup> The contract is clear, LSP
+autocompletion picks it up, the compiler even knows to inline it and unroll the
+loop.
 
-This is useful because the 8 bytes preceding any array in SmileBASIC contain a pointer to the array itself! After the `REMOVE`, operations on `R[0]` will treat the array backing as if it were a string.
+Traits are just bags of functions and types that tell the receiving function how
+to execute subtasks that it's not responsible for defining. They behave a lot
+like vtables, except that they are evaluated at comptime rather than runtime.
 
-Since a pointer occupies what would be the length field of `R[0]`, the string length is enormous, and we can perform reads and writes out of bounds. We read and write to memory by copying to and from substrings of `R[0]`.
+## Conventional Polymorphism vs Traits
 
-This was a Switch 1 game, so the SmileBASIC agent could work on the exploit on my Switch 1, while the WebKit agent worked on the Switch 2. After some time, it got ROP.
+To justify traits, let's take a tour through Zig polymorphism with a common
+motivating example: arithmetic operations. I've seen a few complaints over the
+years about how awkward is it to do math in Zig over user-defined types. In its
+pursuit of explicit control flow, Zig has eschewed operator overloading, and
+this can be jarring if you're coming from other typed languages.
 
-Okay, now we need to compromise a more privileged process. We’re interested in [ordinary sysmodules](https://switchbrew.org/wiki/Switch_System_Flaws#System_Modules) and [built-in sysmodules](https://switchbrew.org/wiki/Switch_System_Flaws#BootImagePackage_System_Modules).
+Let's imagine we have some user-defined types like `Rational` and `Complex`, and
+we want to define their basic arithmentic operations. We would probably end up
+with something like the following.
 
-Which sysmodule should we pursue? We don’t have their code, so it’s unclear which sysmodules have which privileges.
+```
+const Rational = struct {
+    numerator: i32,
+    denominator: i32,
 
-I gave a few Codex instances the goal of getting sysmodule code execution. Most chose to focus on [audio and ldn](https://switchbrew.org/wiki/Switch_System_Flaws). I think that’s because audio and ldn have had bugs on the Switch 2. Codex also looked at the [NV service](https://switchbrew.org/wiki/NV_services), probably because GPU drivers are generally fruitful?
+    fn add(lhs: Rational, rhs: Rational) Rational {...}
+    fn sub(lhs: Rational, rhs: Rational) Rational {...}
+    fn mul(lhs: Rational, rhs: Rational) Rational {...}
+    fn div(lhs: Rational, rhs: Rational) Rational {...}
+};
 
-In the meantime, I started looking at the [built-in `fs` sysmodule](https://switchbrew.org/wiki/Filesystem_services), because:
+const Complex = struct {
+    real: f32,
+    imaginary: f32,
 
-The first reason is the most attractive to me. Even if we can’t get a useful jailbreak from `fs`, we can at least decrypt some of the other sysmodules so Codex can find bugs in them.
-Other sysmodules like [`ldr`](https://switchbrew.org/wiki/Loader_services) and [`ro`](https://switchbrew.org/wiki/RO_services) look enticing because they have permission to map executable memory<sup>[3](https://pepsipu.com/blog/2026-10-switch2-jailbreak-ns2jb/#user-content-fn-3)</sup>, but they don’t have large attack surfaces, especially from SmileBASIC. We’ll come back to them later.
+    fn add(lhs: Complex, rhs: Complex) Complex {...}
+    fn sub(lhs: Complex, rhs: Complex) Complex {...}
+    fn mul(lhs: Complex, rhs: Complex) Complex {...}
+    fn div(lhs: Complex, rhs: Complex) Complex {...}
+};
+```
 
-An [IFileSystem handle](https://switchbrew.org/wiki/Filesystem_services#IFileSystem) has an IPC command, [GetEntryType](https://switchbrew.org/wiki/Filesystem_services#GetEntryType). This takes a path string, normalized with `Path::Normalize`.
+For the sake of having something to do with them, let's say that we want to
+compute the
+[Möbius transformation](https://en.wikipedia.org/wiki/M%C3%B6bius_transformation):
+`(a * x + b) / (c * x + d)`, which is useful for complex numbers as well as
+rationals. To keep things simple, we'll assume that all arguments to the
+function are of the same type.
 
-Paths containing a parent-directory component with a backslash, like `/..\`, call into a helper that allocates a temporary heap buffer of 0x301 bytes. Our path is copied in, but it can be larger than the buffer, causing a buffer overflow. lol
+### Comptime Duck Typing
 
-We’ll need a good victim allocation to overflow into. Codex found that the `BufferedStorage` object allocates a cache entry for its files. If that entry has its dirty bit set, reads and writes to the file follow a pointer to cached data.
-We can hijack that for arbitrary read/write<sup>[4](https://pepsipu.com/blog/2026-10-switch2-jailbreak-ns2jb/#user-content-fn-4)</sup>.
+If we were to implement the Mobius transformation naively, we could just use
+built-in operators.
 
-From here, I scanned through memory to find SmileBASIC’s connection object and set the [saved PID to 1](https://switchbrew.org/wiki/Filesystem_services#Permissions:~:text=If%20the%20processID%20is%20%3C%3D%206%20%28which%20happens%20only%20for%20built%2Din%20sysmodules%29%2C%20it%20will%20use%20a%20hardcoded%20registration%20data%2E%20The%20default%20mask%20in%20this%20case%20is%200x8000000000000000%2E).
-Now, my process has “FullPermission”, meaning I can perform privileged filesystem actions. I dumped internal storage and all ordinary sysmodule code, so Codex could perform offline analysis and I could understand where to go next.
+```
+fn mobius(T: type, x: T, a: T, b: T, c: T, d: T) T {
+    return (a * x + b) / (c * x + d);
+}
+```
 
-Homebrew and modding typically rely on executing our own native code. Looking at the dumps, the only ordinary sysmodule with permission to map executable code is [`ro`](https://switchbrew.org/wiki/RO_services). All these sysmodules have CFI, PAC, and XOM. The [interface](https://switchbrew.org/wiki/RO_services#ldr:ro,_ro:1) for the module seems pretty minimal too. It seemed more fruitful to pursue a logic bug than to look for memory corruption in `ro` directly.
+This would work fine, as long as the inputs were all floats of the same type.
+Division would break for integers, and of course it wouldn't work with our
+user-defined types, but it's a starting point.
 
-Let’s revisit that first point about `fs` serving decrypted code. This was useful for dumping the code for ordinary sysmodules. What’s the intended functionality of this interface? Loading programs?
+We could of course notice that both of our user-defined types have arithmetic
+functions with matching names and similar signatures, which would lend
+themselves to duck typing as well.
 
-Games and ordinary sysmodules are distributed as [Nintendo Content Archives](https://switchbrew.org/wiki/NCA), or NCAs, containing a filesystem image called ExeFS. This contains a file for the main executable, `main`, and program metadata, [`main.npdm`](https://switchbrew.org/wiki/NPDM).
+```
+fn mobius(T: type, x: T, a: T, b: T, c: T, d: T) T {
+    const numerator = a.mul(x).add(b);
+    const denominator = c.mul(x).add(d);
+    return numerator.div(denominator);
+}
+```
 
-To load a program, the built-in [`ldr` sysmodule](https://switchbrew.org/wiki/Loader_services) asks `fs` to open ExeFS, and `fs` replies with an IPC handle to the filesystem. `fs` also provides two pieces of cryptographic information about the NCA header: the header’s SHA-256 hash and the developer’s signature of that hash. The loader uses this information to perform two signature checks:
+This will work for our user-defined types, but obviously not with Zig's
+primitive types. We would have to wrap those in our own user-defined types with
+their own functions. More troublingly, this sort of ties us to a sort of
+object-oriented pattern: the de-facto way to obey this abstraction contract is
+to define methods on the struct.
 
-Seems cryptographically sound to me, because, in theory:
+The good news is that it's all monomorphised at compile time, allowing the
+compiler to simplify and inline these function calls.
 
-In practice, however, I’m doubtful of that last claim, because it’s the responsibility of the `fs` module to ensure the served filesystem matches the NCA header’s filesystem hash, and we have ARW in it.
+### Interfaces & VTables
 
-Indeed, with ARW, we can replace the ExeFS object behind the loader’s IPC handle with our own temporary filesystem. This filesystem still needs to serve a valid developer `main.npdm` for the loader’s first check, but the executable `main` itself can be arbitrary.
-The second check will pass because, by the time the loader opens the filesystem, `fs` has already submitted the valid NCA header hash and signature for the original filesystem.
+If we wanted this to work dynamically at runtime, we could perhaps declare a
+`Num` interface that uses a VTable and opaque pointer to dynamically dispatch
+these math operations.
 
-There are two writes we perform:
+```
+const Num = struct {
+    value: [32]u8,
+    vtable: *const VTable,
 
-These writes must happen after the loader requests the ExeFS filesystem but before `fs` processes the subsequent file requests. How do we ensure this?
+    const VTable = struct {
+        add: *const fn([*]u8, [*]u8) Num,
+        sub: *const fn([*]u8, [*]u8) Num,
+        mul: *const fn([*]u8, [*]u8) Num,
+        div: *const fn([*]u8, [*]u8) Num,
+    };
 
-The `fs` process maintains a list of its IPC connections. When a connection has a new IPC message, `fs` processes it.
-Using our arbitrary read/write, we can replace the handle `fs` waits on for the loader’s IPC connection with an event handle we control from SmileBASIC. That lets us control when `fs` processes a loader message.
+    fn add(lhs: Num, rhs: Num) Num { ... }
+    fn sub(lhs: Num, rhs: Num) Num { ... }
+    fn mul(lhs: Num, rhs: Num) Num { ... }
+    fn div(lhs: Num, rhs: Num) Num { ... }
 
-With this, we can execute arbitrary code as any program we have a `main.npdm` for!
+    fn mobius(x: Num, a: Num, b: Num, c: Num, d: Num) {
+        const numerator = a.mul(x).add(b);
+        const denominator = c.mul(x).add(d);
+        return numerator.div(denominator);
+    }
+}
+```
 
-What `main.npdm`s do we have? Well, all of them. With ARW, we can use to the loader’s `fsp-srv` connection to copy the NPDM of any ordinary sysmodule or game.
+We would then need to wire up `Complex` and `Rational` to expose
+`fn num(self: *Self) Num` (or some such) that wraps our arithmentic functions,
+which is a little too tedious to reproduce here, but it would work fine on the
+happy path. You would of course need to be a bit careful: there's nothing
+stopping you from mixing complex and rational numbers in your function calls,
+and this would lead to undefined behavior. You could probably add some saftey
+checks with a bit of overengineering, but we won't get into that here.
 
-We’ll use this capability to launch our own code using `ro`’s NPDM. As mentioned earlier, `ro`’s NPDM gives it permission to invoke kernel SVCs like `SetProcessMemoryPermission`, `MapProcessCodeMemory`, and `MapProcessMemory`. In this case, we’ll use `MapProcessMemory` to create a writeable view of `fs`’s existing code. We can also dump `fs`’s code by reading this view.
+Not only is this clunkier than comptime duck typing, it will also be slower. We
+are effectively demanding dynamic dispatch whenever we want to do a math
+operation, which will trip up the compiler and have a significant performance
+impact if we're doing a lot of math.
 
-These calls, however, require a `KProcess` handle to the process. To get a handle to `fs`, we’ll use our ARW to overwrite `IEventNotifier`’s 4-byte handle with `0xffff8001` and then call `GetEventHandle` from SmileBASIC. The kernel interprets this value to mean “the current process’s handle”, so SmileBASIC gets `fs`’s `KProcess` handle.
+### Traits
 
-We can then send this handle to our custom `ro` process, who patches `fs`’s code.
+When we define the mobius function, we really want to say "I don't know what
+type I'm dealing with, but it needs to have arithmetic operations." In this sort
+of case, I think it makes the most sense to just pass the functions it needs to
+use at compile-time. This would remove any ambiguity, at the cost of being
+rather explicit.
 
-Arbitrary code execution with any ordinary sysmodule’s permissions seems really powerful. We can investigate hardware without first exploiting each device’s driver. I’m hopeful this will help the homebrew community make progress toward CFW.
+```
+fn mobius(
+    comptime T: type,
+    comptime add: fn (T, T) T,
+    comptime mul: fn (T, T) T,
+    comptime div: fn (T, T) T,
+    x: T,
+    a: T,
+    b: T,
+    c: T,
+    d: T,
+) T {
+    const numerator = add(mul(a, x), b);
+    const denominator = add(mul(c, x), d);
+    return div(numerator, denominator);
+}
+```
 
-In the short term, there are a few next steps I think would be interesting:
+This is effectively compile-time dependency injection at a really fine-grained
+level. The signature is rather verbose, but there's actually a lot less
+boilerplate to write for `Complex` or `Rational` compared to runtime interfaces.
 
-For now, I’m excited to see all the upcoming Switch 2 homebrew, emulation, and modding.
+```
+mobius(Complex, Complex.add, Complex.mul, Complex.div, x, a, b, c, d);
+mobius(Real, Real.add, Real.mul, Real.div, x, a, b, c, d);
+```
 
-1. It did not succeed. [↩](https://pepsipu.com/blog/2026-10-switch2-jailbreak-ns2jb/#user-content-fnref-1)
-2. It’s not inherently bad to attempt a WebKit exploit. Once we have a bug in a sysmodule we know to be valuable, it might make sense to go back and try to exploit it in WebKit with a data-only attack. This is because WebKit is accessible offline, meaning Nintendo can’t withdraw it like an eShop title. However, at this stage of our research, it’s not worth the cost to our iteration speed. [↩](https://pepsipu.com/blog/2026-10-switch2-jailbreak-ns2jb/#user-content-fnref-2)
-3. I wonder if one day Nintendo will map ordinary sysmodules and even game code via encrypted blobs only the kernel or secure monitor can decrypt. Then, no userspace process could observe any code on the system—there can never be RX mappings in userspace. Even the loader module, which starts new processes, would ask a higher exception level to load encrypted blobs it supplies. There’d be tradeoffs, like games being unable to read their own code at runtime. However, Nintendo has already started removing dynamic code features, like the JIT sysmodule. I wonder if this is the direction the Switch is headed. Luckily, that day is not today. [↩](https://pepsipu.com/blog/2026-10-switch2-jailbreak-ns2jb/#user-content-fnref-3)
-4. Initially, Codex’s read/write primitive repeated the buffer overflow on the cache object each time it wanted to change the backing buffer pointer. This hurts stability, especially when following many pointers consecutively, since each change is a chance to crash the system. We can use a similar trick to the one [here](https://blog.pepsipu.com/posts/mujs-uiuctf#:~:text=RegExp%20controlling%20where%20DataView%20goes%2C%20while%20DataView%20does%20the%20work). We can use some overflows to point the first cache entry’s backing buffer pointer at another cache entry’s metadata. Then we can replace the second cache entry’s pointer without risking more overflows. [↩](https://pepsipu.com/blog/2026-10-switch2-jailbreak-ns2jb/#user-content-fnref-4)
+From here, it's not a huge leap to traits. We're effectively just cleaning up
+the function signature by gathering together the arithmetic functions into one
+struct.<sup>[[11]](https://www.axelmagn.com/blog/202610-zig-traits/#fn-num-is-simplified)</sup>
+
+```
+fn Num(T: type) type {
+    return struct {
+        add: fn (T, T) T,
+        sub: fn (T, T) T,
+        mul: fn (T, T) T,
+        div: fn (T, T) T,
+    };
+}
+
+fn mobius(T: type, num: Num(T), x: T, a: T, b: T, c: T, d: T) T {
+    const numerator = num.add(num.mul(a, x), b);
+    const denominator = num.add(num.mul(c, x), d);
+    return num.div(numerator, denominator);
+}
+```
+
+From here, I usually just declare the trait implementation as part of my type.
+
+```
+const Complex = struct {
+    // fields...
+    const num = Num(Complex) { .add = add, .sub = sub, .mul = mul, .div = div };
+    // functions (add, sub, mul, div...)
+};
+
+mobius(Complex, Complex.num, x, a, b, c, d);
+```
+
+What I really like about this approach is how flexible it is, while remaining
+very clear about the contract between the function and type. For example,
+imagine that we wanted to extend our definition of `Num` to the primitive types
+like `i32` and `f32`. There are a bunch of ways we could do this, but I would
+probably just define a function that produces something appropriate for integer
+and float types.
+
+```
+fn builtinNum(T: type) Num(T) {
+    const inner = struct {
+        fn add(lhs: T, rhs: T) T { return lhs + rhs; }
+        fn sub(lhs: T, rhs: T) T { return lhs - rhs; }
+        fn mul(lhs: T, rhs: T) T { return lhs * rhs; }
+    };
+    const div = switch (@typeInfo(T)) {
+        .int, .comptime_int => struct {
+            fn div(lhs: T, rhs: T) T { return @divTrunc(lhs, rhs); }
+        }.div,
+        .float, .comptime_float => struct {
+            fn div(lhs: T, rhs: T) T { return lhs / rhs; }
+        }.div,
+        else => @compileError("unsupported type: " ++ @typeName(T)),
+    };
+    return .{ .add = inner.add, .sub = inner.sub, .mul = inner.mul, .div = div };
+}
+
+mobius(f32, builtinNum(f32), x, a, b, c, d);
+```
+
+Traits are also transparent to the compiler, which will happily monomorphize and
+inline these functions. I prefer this over runtime polymorphism most of the
+time, especially in hot loops or for library functions that are unopinionated on
+data layout.
+
+### Limitations
+
+You'll notice that traits have to be explicitly conditioned on a known type.
+Unlike interfaces, there's no way to say "give me a number, I don't care what
+kind."  For some applications, it would be nice if we could have an associated
+type.
+
+```
+fn Iter(Elem: type) type {
+    return struct {
+        T: type,
+        next: fn (T) ?Elem,
+    };
+}
+```
+
+Unfortunately, the above isn't valid Zig, and it's unclear how that would even
+work at a language level.  Instead, traits insist that the types they are
+operating on are known in advance.
+
+```
+fn Iter(T: type, Elem: type) type {
+    return struct {
+        next: fn (T) ?Elem,
+    };
+}
+```
+
+I have not yet found an ergonomic way around this.  Traits do not play very
+well with type erasure.
+
+## Trait Helpers
+
+Before proceeding, I want to introduce some small helper functions that have
+streamlined how I work with traits.
+
+### impl
+
+If you adopt traits as a programming pattern and convention, you'll quickly end
+up defining functions and passing them around. You will have already noticed
+above that I define a lot of throwaway inner struct types, just so that I can
+pull functions out of them. This has led to the following convenience function
+for declaring trait implementations, which removes some of the boilerplate.
+
+```
+pub fn impl(comptime Trait: type, comptime Impl: type) Trait {
+    comptime {
+        var result: Trait = undefined;
+        for (@typeInfo(Trait).@"struct".field_names) |field_name| {
+            @field(result, field_name) = @field(Impl, field_name);
+        }
+        return result;
+    }
+}
+```
+
+I use this all over the place to derive trait implementations from anonymous
+structs. For example, we could use it to rewrite `builtinNum` to be a little
+more concise and functional. Note that the declarations need to be public for
+the type reflection to work.
+
+```
+fn builtinNum(T: type) Num(T) {
+    return impl(Num(T), struct {
+        pub fn add(lhs: T, rhs: T) T { return lhs + rhs; }
+        pub fn sub(lhs: T, rhs: T) T { return lhs - rhs; }
+        pub fn mul(lhs: T, rhs: T) T { return lhs * rhs; }
+
+        pub const div = switch (@typeInfo(T)) {
+            .int, .comptime_int => struct {
+                fn div(lhs: T, rhs: T) T { return @divTrunc(lhs, rhs); }
+            }.div,
+            .float, .comptime_float => struct {
+                fn div(lhs: T, rhs: T) T { return lhs / rhs; }
+            }.div,
+            else => @compileError("unsupported type: " ++ @typeName(T)),
+        };
+    });
+}
+```
+
+### getTrait
+
+Most of the time, I don't mind passing trait implementations around explicitly.
+I've gotten into the habit, and just don't find it to be that big of a deal.
+Trait functors make it pretty easy to reduce the boilerplate, and I like having
+explicit control over how things are implemented.
+
+However when I'm dealing with my own structs, 99% of the time the trait
+implementation I'm looking for is going to be declared as a const on the struct
+itself. I use the function below to to easily retrieve or construct the most
+common cases.
+
+```
+fn getTrait(Trait: type, Impl: type) Trait {
+    comptime {
+        // try to find the trait declared explicitly as a member
+        for (@typeInfo(Impl).@"struct".decl_names) |decl_name| {
+            if (@TypeOf(@field(Impl, decl_name)) == Trait) {
+                return @field(Impl, decl_name);
+            }
+        }
+        // otherwise throw an error
+        @compileError("trait " ++ @typeName(Trait) ++ " not found on " ++ @typeName(Impl));
+    }
+}
+```
+
+This is basically equivalent to saying "eh, it's duck typed. figure it out".
+Just because we *are* explicit, doesn't mean that we *can't* be lazy. If we want
+to take this full circle back to duck typing, we can even define trait functors
+that rely on `getTrait` to extract traits from the types they pass.
+
+```
+fn duckMobius(T: type) fn(T, T, T, T) T {
+    comptime {
+        const num = getTrait(Num(T), T);
+        return makeMobius(T, num);
+    }
+}
+```
+
+## Trait Functors
+
+With some helpers defined, let's return to the `Num` example.
+
+Traits in Zig resemble traits in Rust, typeclasses in Haskell, or modules in
+Ocaml. In Rust or Haskell, they would be resolved from a global registry managed
+by the compiler. This can feel very convenient, but it violates Zig's principle
+of explicit control flow. Rust and Haskell can require a fair bit of hunting for
+where a trait is defined, especially when something's wrong and the LSP isn't
+resolving it properly. It can also be a contributor to long compile times.
+Resolving a generic trait in these languages is often equivalent to evaluating a
+proof, and that can take time.
+
+Ocaml modules, however, work quite a bit like Zig traits: modules are
+first-class objects, and they are passed as arguments to the functions that
+consume them. There is no inference of what modules apply to a type - you locate
+them and pass them explicitly. If we were to define `Num` as a module, it might
+look something like the following.
+
+```
+(* signature *)
+module type NUM = sig
+  type t
+  val add : t -> t -> t
+  val sub : t -> t -> t
+  val mul : t -> t -> t
+  val div : t -> t -> t
+end
+
+(* Implementation on float *)
+module Float : NUM with type t = float = struct
+  type t = float
+  let add = ( +. )
+  let sub = ( -. )
+  let mul = ( *. )
+  let div = ( /. )
+end
+
+(* function *)
+let mobius (type a) (module N : NUM with type t = a) x a b c d =
+  let numerator = N.add (N.mul a x) b in
+  let denominator = N.add (N.mul c x) d in
+  N.div numerator denominator
+
+(* Usage *)
+let res = mobius (module Float) x a b c d)
+```
+
+Because modules in Ocaml are first-class values, they can actually take it a
+step further. Rather than defining `mobius` as written above, it is common in
+Ocaml to make use of "module functors", which are simply functions that take
+modules as arguments and return new modules. If we wanted to define `mobius` in
+terms of a given numeric type, we might instead write it:
+
+```
+(* MakeMobius receives a NUM module and returns a new module with mobius function *)
+module MakeMobius (N : NUM) = struct
+  let mobius x a b c d =
+    let numerator = N.add (N.mul a x) b in
+    let denominator = N.add (N.mul c x) d in
+    N.div numerator denominator
+end
+
+(* usage *)
+module FloatMobius = MakeMobius (Float)
+let res = FloatMobius.mobius x a b c d
+```
+
+This is effectively currying: we are applying the module arguments now, and the
+value arguments later. However it derives a mobius function that doesn't need to
+be taking a bunch of type arguments all the time, and that module can in turn be
+used in later constructions. This translates straightforwardly to Zig. If we
+wanted to adhere strictly to the traits pattern, it might look like the
+following.
+
+```
+fn Mobius(T: type) type {
+    return struct {
+        mobius: fn(T, T, T, T, T) T,
+    };
+}
+fn makeMobius(T: type, num: Num(T)) Mobius(T) {
+    return impl(Mobius(T), struct {
+        fn mobius(x: T, a: T, b: T, c: T, d: T) T {
+            const numerator = num.add(num.mul(a, x), b);
+            const denominator = num.add(num.mul(c, x), d);
+            return num.div(numerator, denominator);
+        }
+    });
+}
+const complex_mobius = MakeMobius(Complex, Complex.num);
+complex_mobius.mobius(x, a, b, c, d);
+```
+
+This works fine, but I think it's even simpler to move the functor into
+`Mobius(T)`:
+
+```
+fn Mobius(T: type) type {
+    return struct {
+        mobius: fn(T, T, T, T, T) T,
+
+        fn make(num: Num(T)) Mobius(T) {
+            return impl(Mobius(T), struct {
+                fn mobius(x: T, a: T, b: T, c: T, d: T) T {
+                    const numerator = num.add(num.mul(a, x), b);
+                    const denominator = num.add(num.mul(c, x), d);
+                    return num.div(numerator, denominator);
+                }
+            });
+        }
+    };
+}
+const complex_mobius = Mobius(Complex).make(Complex.num);
+complex_mobius.mobius(x, a, b, c, d);
+```
+
+However for single functions like this, unless I knew it would need to be
+consumed by another function as a trait, I would probably be tempted to just
+implement it as a type-curried function rather than a full-blown trait:
+
+```
+fn makeMobius(T: type, num: Num(T)) fn(T, T, T, T) T {
+    return struct {
+        fn mobius(x: T, a: T, b: T, c: T, d: T) T {
+            const numerator = num.add(num.mul(a, x), b);
+            const denominator = num.add(num.mul(c, x), d);
+            return num.div(numerator, denominator);
+        }
+    }.mobius;
+}
+
+const complexMobius = makeMobius(Complex, Complex.num);
+complexMobius(x, a, b, c, d);
+```
+
+The versatility of Zig's comptime makes all of these more or less equivalent to
+the compiler. It's just a stylistic choice, depending on what the situation
+calls for.
+
+Also, notice that technically we have already used trait functors when we
+defined `builtinNum`. It's not a deep, technical concept. It's just a function
+that constructs a trait implementation for you.
+
+## Useful Traits
+
+Having thoroughly introduced traits, let's talk about what we can do with them.
+
+In this section are a few traits that I find myself reaching for with enough
+regularity that I keep a file around containing them.  All of these are fairly
+humdrum (but wildly applicable) abstractions that I lifted wholecloth from
+other languages.
+
+### Into / From
+
+I need to convert one type into another all the freaking time.  Often there are
+multiple ways to do this, depending on how you want to interpret the upstream
+type.  I use `Into` and `From` to canonicalize methods for converting one type
+into another.
+
+```
+/// T can be converted into Out
+fn Into(T: type, Out: type) type {
+    return struct {
+        into: fn(T) Out,
+    };
+}
+
+/// T can be derived from In
+fn From(T: type, In: type) type {
+    return struct {
+        from: fn(In) T,
+    };
+}
+```
+
+### Index
+
+Sometimes, rather than iterating, we need keyed access to a value.  The
+container could be a slice or a hash table - we don't care.  For this, I use
+`Index`.
+
+```
+/// T forms an index over Key and Value
+fn Index(T: type, Key: type, Value: type) type {
+    return struct {
+        get: fn(T, Key) ?Value,
+    };
+}
+```
+
+### Iterator / Iterable
+
+Another common case: we have a function that iterates over a type, but we don't
+care what sort of iterable data structure we're going to be working with.  We
+usually need two traits: one for the `Iterable` collection, and another for the
+`Iterator`, which keeps track of our progress through the collection.
+
+```
+/// T can be used to iterate over Elem elements of type
+fn Iterator(T: type, Elem: type) type {
+    return struct {
+        next: fn(*T) ?Elem,
+    };
+}
+
+/// T can return an Iter iterator over Elem elements
+fn Iterable(T: Type, Elem: type, Iter: type) type {
+    return struct {
+        iter: fn(T) IterPair,
+        pub const IterPair = struct {impl: Iter, trait: Iterator(Iter, Elem)};
+    };
+}
+```
+
+You'll notice that this is a little awkward, because we don't usually care what
+the iterator implementation is.  It's probably just a usize index over an array
+or something.  It would be nice if we could just define `Iterable(T: type, Elem: type)`.  I've chosen to just let it be awkward.  It's usually not a big
+deal.
+
+## Words of Warning
+
+I really don't want you to walk away from this article thinking "I need to
+convert all my code to use traits".  Traits should not be thought of as a
+totalizing pattern.  The last thing I want is for Zig code to start looking
+like Rust or Haskell.
+
+Traits are a sometimes treat.  They are useful for functions that need
+abstractions inside of hot loops, where you know that you want monomorphization
+and static dispatch.  They can become legible building blocks for some neat
+metaprogramming tricks.  However most of the time I only reach for them in a
+pull-based manner: I have a function where it would be useful to consume a
+trait, because it's undecided on some implementation detail.
+
+Used improperly, traits can explode the size of your binary and actually make
+it slower.  Each function parameterized on comptime parameters gets its own
+templated assembly, and if you nest these a few layers deep, it's easy to end
+up with a combinatorial explosion.  This can thrash your CPU cache, and
+depending on the situation, easily be outperformed by dynamic dispatch and
+vtables.
+
+## Words of Encouragement
+
+Traits are ultimately handy and very powerful.  I wish I saw more codebases
+that made use of them, especially for abstraction inside of hot loops. I like
+that they are a design pattern more than a language feature, and this gives you
+a lot of explicit control over when and how you use them.  I was looking for a
+solution like this for a long time, and I'm glad I found it.
+
+I'm sure that other Zig users have stumbled onto this trick, but I have yet to
+see it in the wild.  I think that part of the reason is that it doesn't really
+lend itself to a library.  It's more of a convention that you can choose to
+use or ignore.
+
+My hope is that for someone reading, traits are the right tool for the job.
+
+1. Zig 0.17 at time of writing. [↩](https://www.axelmagn.com/blog/202610-zig-traits/#fr-zig-0.17-1)
+2. [Zig Interfaces](https://www.openmymind.net/Zig-Interfaces/) by Karl Seguin [↩](https://www.axelmagn.com/blog/202610-zig-traits/#fr-seguin2023-1)
+3. figuratively [↩](https://www.axelmagn.com/blog/202610-zig-traits/#fr-figuratively-1)
+4. [Zig Interface Revisited](https://williamw520.github.io/2025/07/13/zig-interface-revisited.html) by William Wong [↩](https://www.axelmagn.com/blog/202610-zig-traits/#fr-wong2025-1)
+5. [Inside Zig's new Writer](https://joegm.github.io/blog/inside-zigs-new-writer-interface/) by Joe McKay [↩](https://www.axelmagn.com/blog/202610-zig-traits/#fr-mckay2025-1)
+6. [Interfaces in Zig](https://www.bradcypert.com/interfaces-in-zig/) by Brad Cypert [↩](https://www.axelmagn.com/blog/202610-zig-traits/#fr-cypert2026-1)
+7. [A Practical Guide to Applying Data-Oriented Design](https://vimeo.com/649009599) by Andrew Kelley [↩](https://www.axelmagn.com/blog/202610-zig-traits/#fr-kelley2021-1)
+8. [Zig Comptime is Bonkers Good](https://www.scottredig.com/blog/bonkers_comptime/) by Scott Redit [↩](https://www.axelmagn.com/blog/202610-zig-traits/#fr-redig2025-1)
+9. "Traits" are directly inspired from OCaml modules, but the term "module" already refers to something else in Zig. [↩](https://www.axelmagn.com/blog/202610-zig-traits/#fr-ocaml-inspired-1)
+10. ![Feels Good](https://www.axelmagn.com/blog/202610-zig-traits/so_good.png) [↩](https://www.axelmagn.com/blog/202610-zig-traits/#fr-so-good-1)
+11. This is a pretty simplistic definition of a numeric trait. In practice, you would probably want to look into [std::ops](https://doc.rust-lang.org/std/ops/index.html) from Rust or [Num](https://hackage.haskell.org/package/base-4.17.0.0/docs/GHC-Num.html#t:Num) from Haskell. [↩](https://www.axelmagn.com/blog/202610-zig-traits/#fr-num-is-simplified-1)
