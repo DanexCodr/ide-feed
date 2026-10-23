@@ -1,443 +1,469 @@
-In many dynamically typed programming languages, objects look like a big ol’
-mapping of names to values. The languages encourage this flexibility. Consider
-for example Python:
+[Tov](https://tov.sh/?ref=blog.fyralabs.com) is a new programming language marketed to be "[a] programming language for coding agents. It reads like TypeScript and builds native binaries that beat Rust's."
+
+[Benchmarks in their Git repository](https://github.com/richiemcilroy/Tov/tree/c2048582de4e9468267f801313144d75c12e983f/bench?ref=blog.fyralabs.com) show that they perform better than Rust, in some cases over 10× better. However, they also briefly mentioned the internals of Tov:
+
+> Tov is a compiler. It checks the TypeScript your agent wrote, writes it out as C and hands that to clang, so what you ship is one native binary with nothing to install next to it.
+
+A sane engineer would immediately doubt the correctness of their benchmarks. Rust has pretty much the same performance as C, and if Tov transpiles to C, **saying Tov beats Rust is mostly equivalent to saying C beats C**. That's contradiction right there. Let's ignore the stats for `axum`, maybe `tokio` has some overhead, like *maybe*; but clearly there's no way you get 1.6× faster than Rust in `strings`. You have to be lying. That's what a sane engineer would normally think.
+
+In this blog post, we check 3 of their "inflated" benchmarks: `bigint_fib`, `dispatch`, and `map_insert`. We show that **these benchmarks are maliciously crafted to slow Rust down**. We have also benchmarked the improved Rust programs with their Tov programs to show that **Rust has equivalent or better performance than Tov**.
+
+## Set-ups
+
+`cargo build --release` was used to compile the Rust programs, and `tov build` (which defaults to `-O3`) was used to compile the Tov programs. Here are our setups:
+
+### "ram-buffet"
 
 ```
-class C:
-    def __init__(self):
-        self.a = 1
-        self.b = 2
+root@8b4fcd497f61
+-----------------
+OS: Ultramarine Linux 44 (Container Image) x86_64
+Host: PowerEdge R640
+Kernel: Linux 7.0.0-31-generic
+Uptime: 36 days, 20 hours, 43 mins
+Packages: 1046 (rpm)
+Shell: bash 5.3.9
+Display (VGA-1): 1024x768 [External]
+Cursor: Adwaita
+Terminal: /dev/pts/2
+CPU: Intel(R) Xeon(R) Platinum 8251C (48) @ 4.20 GHz
+GPU: Matrox Electronics Systems Ltd. Integrated Matrox G200eW3 Graphics Controller
+Memory: 22.03 GiB / 247.25 GiB (9%)
+Swap: Disabled
+Disk (/): 3.62 TiB / 6.98 TiB (52%) - overlay
+Local IP (eth0): [redacted]
+Locale: C
 ```
 
-Or Ruby:
+### "nukobook"
 
 ```
-class C
-  def initialize
-    @a = 1
-    @b = 2
-  end
-end
+mado@nukobook
+-------------
+OS: Ultramarine Linux 44 (Plasma Edition) x86_64
+Host: Vivobook_ASUSLaptop K5404VA_K5404VA (1.0)
+Kernel: Linux 7.2.9-cachyos1.fc44.x86_64
+Uptime: 3 days, 22 hours, 18 mins
+Packages: 14 (flatpak), 5804 (rpm)
+Shell: zsh 5.9
+Display (SDC416D): 2880x1800 in 14", 60 Hz [Built-in]
+Desktop Environment: KDE Plasma 6.7.5
+Window Manager: KWin (Wayland)
+WM Theme: Klassy
+Theme: Klassy (Dark) [Qt], Materia-dark [GTK2/3/4]
+Icons: breeze-dark [Qt], breeze-dark [GTK2/3/4]
+Font: FakePearl (10pt) [Qt], FakePearl (10pt) [GTK2/3/4]
+Cursor: 茜マウスポインタ (32px)
+Terminal: konsole 26.8.1
+Terminal Font: CaskaydiaCove Nerd Font (10.8pt)
+CPU: 13th Gen Intel(R) Core(TM) i9-13900H (12+8) @ 5.40 GHz
+GPU: Intel Iris Xe Graphics @ 1.50 GHz [Integrated]
+Memory: 5.81 GiB / 15.24 GiB (38%)
+Swap: 2.23 GiB / 16.00 GiB (14%)
+Disk (/): 699.66 GiB / 752.28 GiB (93%) - btrfs
+Local IP (wlo1): 10.7.7.163/17
+Battery (ASUS Battery): 58% [Discharging]
+Locale: en_US.UTF-8
 ```
 
-```
-let obj = {};
-obj.a = 1;
-obj.b = 2;
-```
-
-This might encourage the VM implementor to model object attributes using a hash
-table. Hash tables, after all, are very good at mapping names to values.
-
-Here is, by way of example, a Python sketch of what this object model looks
-like. Because it is a sketch, it uses `write_attr` and `read_attr` instead of
-the much more common syntax that your programming language comes with.
+### "makimaki"
 
 ```
-MISSING = object()
-
-class Instance:
-    def __init__(self):
-        # TODO: the rest of your object system
-        self.cls = ...
-        self._fields = {}
-
-    def read_attr(self, fieldname):
-        return self._fields.get(fieldname, MISSING)
-
-    def write_attr(self, fieldname, value):
-        self._fields[fieldname] = value
-
-obj = Instance()
-obj.write_attr("a", 1)
-obj.write_attr("b", 2)
-print(obj.read_attr("a") + obj.read_attr("b"))
+[tsuru@makimaki ~]$ fastfetch -l none
+tsuru@makimaki
+--------------
+OS: Fedora Linux 44 (Cloud Edition) x86_64
+Host: KVM/QEMU Standard PC (Q35 + ICH9, 2009) (pc-q35-11.0)
+Kernel: Linux 7.2.10-200.fc44.x86_64
+Uptime: 9 hours
+Packages: 927 (rpm)
+Shell: bash 5.3.9
+Display (Virtual-1): 1280x800
+Terminal: /dev/pts/0 10.2p1
+CPU: QEMU Virtual version 2.5+ (6) @ 2.39 GHz
+GPU: QEMU Virtual Video Controller
+Memory: 1.80 GiB / 11.60 GiB (16%)
+Swap: 868.00 KiB / 8.00 GiB (0%)
+Disk (/): 31.47 GiB / 139.90 GiB (22%) - btrfs
+Local IP (eth0): [redacted]
+Locale: en_US.UTF-8
 ```
 
-This has its benefits:
+# bigint_fib
 
-It also has its drawbacks:
+```rust
+// The 300,000th Fibonacci number by repeated addition on num-bigint.
+use num_bigint::BigUint;
+use num_traits::{One, Zero};
 
-This means that literally every operation `a.b` is doing hundreds or thousands
-of CPU instructions, including multiple dependent memory loads. This is *not
-good* for performance.
+const N: u32 = 300000;
 
-So runtime implementors tend to implement this thing called maps, or layouts,
-or shapes, or hidden classes, or structures, or probably a secret sixth name I
-don’t know about, which optimizes reading, writing, and storage of attributes.
-
-But what does this shape code look like? How does it actually help performance?
-A lot of big production runtimes have pretty hairy code with domain-specific
-edge cases so they may not help get a handle on the basics. And a lot of blog
-posts, while excellent high-level overviews, are lacking in implementation. So
-here we go once more, blogging where everyone else has already blogged before.
-With any luck, you should be able to write a page of code and hold the whole
-thing in your head at once.
-
-I decided to once more give CF Bolz-Tereick’s [A Simple Object
-Model](https://aosabook.org/en/500L/a-simple-object-model.html) the thorough
-read it deserves. In the past, I tried a couple times and bounced off of it
-because it models Python with reasonable fidelity and the Python object model
-is *really hairy*.
-
-But did I read it thoroughly this time? Well, no. This time I allowed myself to
-skim the class- and method-related parts and instead focus on the instance
-attribute and map parts. Inside CF’s post is the core of a very clean map
-system and I wanted to experiment with that, so I extracted it out.
-
-CF’s post starts off very similar to our own sketch, modeling objects as
-unordered maps of attributes. It also fills in some of the TODO stuff I left
-out earlier around classes. I’ll copy my reduced implementation of it here so
-you can take a gander:
-
-```
-# The base object model code:
-
-class Base:
-    def __init__(self, cls, fields):
-        self.cls = cls
-        self._fields = fields
-
-    def read_attr(self, fieldname):
-        return self._read_dict(fieldname)
-
-    def write_attr(self, fieldname, value):
-        return self._write_dict(fieldname, value)
-
-    def _read_dict(self, fieldname):
-        return self._fields.get(fieldname, MISSING)
-
-    def _write_dict(self, fieldname, value):
-        self._fields[fieldname] = value
-
-MISSING = object()
-
-class Instance(Base):
-    def __init__(self, cls: "Class"):
-        super().__init__(cls, {})
-
-class Class(Base):
-    def __init__(self, name, base_class, fields, metaclass):
-        super().__init__(metaclass, fields)
-        self.name = name
-        self.base_class = base_class
-
-OBJECT = Class(name="object", base_class=None, fields={}, metaclass=None)
-TYPE = Class(name="type", base_class=OBJECT, fields={}, metaclass=None)
-TYPE.cls = TYPE
-OBJECT.cls = TYPE
+fn main() {
+    let mut a = BigUint::zero();
+    let mut b = BigUint::one();
+    for _ in 0..N {
+        let t = &a + &b;
+        a = std::mem::replace(&mut b, t);
+    }
+    let s = a.to_string();
+    println!("fib({N}) has {} digits", s.len());
+    println!("first 20: {}", &s[..20]);
+    println!("last 20: {}", &s[s.len() - 20..]);
+}
 ```
 
-Which you can use like this (test code also taken from CF’s post):
+This was the Rust code used in Tov's benchmark. Their benchmarking results showed that Rust used 501 ms · 4.5 MB, while Tov used 168 ms · 3.1 MB. However, **we cannot reproduce their results on any of our setups**:
 
-```
-A = Class(name="A", base_class=OBJECT, fields={}, metaclass=TYPE)
-obj = Instance(A)
-obj.write_attr("a", 1)
-assert obj.read_attr("a") == 1
+```javascript
+[root@8b4fcd497f61 Tov]# hyperfine -w 10 -m 64 ./bigint_fib_tov ./bigint_fib
+Benchmark 1: ./bigint_fib_tov
+  Time (mean ± σ):     451.3 ms ±   3.2 ms    [User: 449.6 ms, System: 1.6 ms]
+  Range (min … max):   447.0 ms … 461.3 ms    64 runs
 
-obj.write_attr("b", 5)
-assert obj.read_attr("a") == 1
-assert obj.read_attr("b") == 5
+Benchmark 2: ./bigint_fib
+  Time (mean ± σ):     336.6 ms ±   6.1 ms    [User: 335.2 ms, System: 1.4 ms]
+  Range (min … max):   328.2 ms … 368.4 ms    64 runs
 
-obj.write_attr("a", 2)
-assert obj.read_attr("a") == 2
-assert obj.read_attr("b") == 5
-```
+  Warning: Statistical outliers were detected. Consider re-running this benchmark on a quiet system without any interferences from other programs. It might help to use the '--warmup' or '--prepare' options.
 
-There’s a bit of delegation going on in the `Base` class because the post
-already anticipates what we’re about to do: swap out the `Instance`
-implementation for `_read_dict` and `_write_dict` for better performance.
-
-OK, let’s add on this “map” data structure. The purpose of the map is to do
-three things:
-
-**For the former**, we can think of an object’s map field as an (database) index or
-a write-through cache. It is responsible for reflecting on the layout of a
-given object:
-
-You can ask the map questions like “what attributes does this object have?” and
-“where is attribute `a` relative to the start of the object?”
-
-Just looking at the diagram, it may seem silly: after all, we have exchanged
-one hash table for another. There’s one big difference, though, which is that
-in the shape model, we don’t *have* to always use the hash table. If we
-remember the offset since the last time we looked it up in the shape, we can
-re-use the offset. This mostly appears in an interpreter feature called an
-inline cache.
-
-This brings us to **the second bit**: if we have the offset into the object, we
-can read right off of it. No need to go do a second load from another region of
-memory. We have the object in hand and hopefully already in the cache.
-
-…At least, until the map *changes*. Then we can’t re-use the offset. Remember, these languages encourage this
-flexibility. An object could gain or lose an attribute at any time. What then?
-Ideally we have a very fast check that can tell us if the object’s in-memory
-layout changed.
-
-This brings us to **the third bit**. We need to be able to rely on the map to
-be immutable, up-to-date, and a stable identifier for a given in-memory layout.
-This way we can do a very quick check (“is the map the same as last read?”)
-before a load.
-
-This means that when we add a new attribute to an object, we need to give it a
-new map. Maps are actually *trees* (tries?) and are allocated like a persistent
-data structure. Every new object starts with an empty map. As the program adds
-attributes, it follows the edges in the tree to find or create its new map.
-
-I recommend reading [the section on
-maps](https://aosabook.org/en/500L/a-simple-object-model.html#instance-optimization)
-because it goes into a little more detail.
-
-Keeping all of that in mind, let’s take a look at CF’s Python implementation of
-objects-with-maps and also of maps themselves:
-
-```
-class Instance(Instance):
-    def __init__(self, cls: "Class"):
-        super().__init__(cls)
-        self.map = EMPTY_MAP
-        self.storage = []
-
-    def _read_dict(self, fieldname):
-        index = self.map.get_index(fieldname)
-        if index == -1:
-            return MISSING
-        return self.storage[index]
-
-    def _write_dict(self, fieldname, value):
-        index = self.map.get_index(fieldname)
-        if index != -1:
-            self.storage[index] = value
-        else:
-            new_map = self.map.next_map(fieldname)
-            self.storage.append(value)
-            self.map = new_map
-
-class Map:
-    def __init__(self, attrs):
-        self.attrs = attrs
-        self.next_maps = {}
-
-    def get_index(self, fieldname):
-        return self.attrs.get(fieldname, -1)
-
-    def next_map(self, fieldname):
-        assert fieldname not in self.attrs
-        if fieldname in self.next_maps:
-            return self.next_maps[fieldname]
-        attrs = self.attrs.copy()
-        attrs[fieldname] = len(attrs)
-        result = self.next_maps[fieldname] = Map(attrs)
-        return result
-
-EMPTY_MAP = Map({})
+Summary
+  ./bigint_fib ran
+    1.34 ± 0.03 times faster than ./bigint_fib_tov
 ```
 
-You may notice that the storage is not in-line, as I had originally promised.
-This is because we don’t have that kind of object layout control in Python.
-Attribute storage, when implemented in a language such as C++ or Rust, is
-typically in-line with the object header.
+```javascript
+sh-5.3$ hyperfine -w 10 ./bigint_fib_tov ./target/release/bigint_fib
+Benchmark 1: ./bigint_fib_tov
+  Time (mean ± σ):     260.5 ms ±  29.8 ms    [User: 258.4 ms, System: 1.3 ms]
+  Range (min … max):   242.5 ms … 335.1 ms    11 runs
 
-Ignoring that, though, we can see that the common case still seems to read and
-write attributes using string names. What gives? Well, let’s use the index
-storage as intended in an *inline cache*.
+  Warning: Statistical outliers were detected. Consider re-running this benchmark on a quiet system without any interferences from other programs. It might help to use the '--warmup' or '--prepare' options.
 
-## Inline caches
+Benchmark 2: ./target/release/bigint_fib
+  Time (mean ± σ):     285.2 ms ±  15.2 ms    [User: 283.8 ms, System: 0.7 ms]
+  Range (min … max):   276.2 ms … 326.0 ms    10 runs
 
-Let’s start by looking at the string attribute API. We’ll make a point class and
-read the `x` attribute. We’ll keep the attribute name constant since this is
-generally fixed in the program: `obj.x` normally looks like some bytecode
-`LOAD_ATTRIBUTE, "x"` where the name `x` is embedded in the bytecode somehow.
+  Warning: The first benchmarking run for this command was significantly slower than the rest (326.0 ms). This could be caused by (filesystem) caches that were not filled until after the first run. You are already using the '--warmup' option which helps to fill these caches before the actual benchmark. You can either try to increase the warmup count further or re-run this benchmark on a quiet system in case it was a random outlier. Alternatively, consider using the '--prepare' option to clear the caches before each timing run.
 
-This is important for the inline cache: varying the receiver is one thing but
-varying the name being looked up adds a lot more complexity. It’s doable but
-irritating.
-
-```
-Point = Class(name="Point", base_class=OBJECT, fields={}, metaclass=TYPE)
-P = Instance(Point)
-P.write_attr("x", 5)
-P.write_attr("y", 6)
-
-# String API :(
-P.read_attr("x")
-# Always looking up index :(
-P.read_attr("x")
-# Every time :(
-P.read_attr("x")
+Summary
+  ./bigint_fib_tov ran
+    1.09 ± 0.14 times faster than ./target/release/bigint_fib
 ```
 
-Then we will make a memory/speed trade-off. We will allocate space for the
-aforementioned *expected map* and the *cached index* mentioned earlier. This
-lets us do a really fast check followed by an indexed load in the (hopefully)
-common case.
+```javascript
+[tsuru@makimaki ~]$ hyperfine -w 10 ./bigint_fib_tov ./bigint_fib
+Benchmark 1: ./bigint_fib_tov
+  Time (mean ± σ):     621.5 ms ±   6.3 ms    [User: 616.2 ms, System: 1.8 ms]
+  Range (min … max):   614.8 ms … 632.2 ms    10 runs
 
-The logic is as follows:
+Benchmark 2: ./bigint_fib
+  Time (mean ± σ):     460.3 ms ±   3.4 ms    [User: 456.0 ms, System: 1.9 ms]
+  Range (min … max):   457.2 ms … 468.0 ms    10 runs
 
-If the attribute is missing, we don’t (for now?) cache the negative lookup.
-Hopefully this case is rare.
-
-```
-class InlineCache:
-    def __init__(self):
-        self.map = None
-        self.idx = None
-
-    def read(self, obj, fieldname):
-        obj_map = obj.map
-        if obj_map is self.map:
-            return obj.storage[self.idx]
-        index = obj_map.get_index(fieldname)
-        if index == -1:
-            return MISSING
-        self.map = obj_map
-        self.idx = index
-        return obj.storage[index]
-
-IC = InlineCache()
-# Looked up by string :(
-IC.read(P, "x")
-# Map hit! Looked up by index! :)
-IC.read(P, "x")
-# Map hit! Looked up by index! :)
-IC.read(P, "x")
+Summary
+  ./bigint_fib ran
+    1.35 ± 0.02 times faster than ./bigint_fib_tov
 ```
 
-You may note that I used `is` (pointer equality) instead of `==`
-(user-defined/deep equality). This is intentional! Because we are guaranteeing
-the maps are immutable, we don’t need to check equality on the fields of the
-map; just its pointer/numeric ID.
+# dispatch
 
-This `InlineCache` class is mostly just a “sketch” of what an inline cache
-does. It is an “interpreted IC”. This shape, if you make sure the fast path is
-inlined and the slow path is outlined, can help your interpreter a lot. It does
-definitely improve performance—I recommend benchmarking a silly little
-attribute lookup function—but most runtimes with inline caches also come with
-JIT compilers. These compilers try to remove the “interpreted”-ness of the
-inline cache implementation. See for example:
+```rust
+// Virtual method calls: an array of shapes of three classes, `area()` called 50M times.
 
-Another thing to notice is that **order matters**. Adding attributes in different
-orders (e.g. `a` then `b` vs `b` then `a`) will result in different shapes.
-Another frequent cause of this is conditionally storing attributes in
-initialization (e.g. `if cond: self.a = 1`).
+trait Shape {
+    fn area(&self) -> f64;
+}
 
-This shape and cache behavior is not really visible to the application
-programmer except in performance regressions<sup>[2](https://bernsteinbear.com/blog/object-shapes/#fn:attribute-order)</sup>, where either
-your inline caches will frequently miss or you will not have optimal
-(monomorphic) caches. This might not sound scary but the difference between a
-cache hit and a cache miss in a hot path could be 2x performance or more and is
-worth investigating in your application.
+struct Circle {
+    r: f64,
+}
+struct Rect {
+    w: f64,
+    h: f64,
+}
+struct Tri {
+    b: f64,
+    h: f64,
+}
 
-Also, **quantity matters**. VM implementors measured and determined that most
-objects are small (<20 ish fields). You may find that putting too many fields
-on an object leads to it getting penalized and put back in “hash table mode”.
-Ruby, for example, has some fixed number of in-object instance variables
-(attributes) before its shape becomes “complex”.
+impl Shape for Circle {
+    fn area(&self) -> f64 {
+        std::f64::consts::PI * self.r * self.r
+    }
+}
+impl Shape for Rect {
+    fn area(&self) -> f64 {
+        self.w * self.h
+    }
+}
+impl Shape for Tri {
+    fn area(&self) -> f64 {
+        0.5 * self.b * self.h
+    }
+}
 
-Last, notice that this cache is not specific to this object; any number of
-`Point` instances can get a cache hit. Actually, looking at it, an object need
-not even be a `Point`…
-
-What does it mean that two objects with different classes can have the same
-shape?
-
+fn main() {
+    let mut state: i64 = 42;
+    let mut shapes: Vec<Box<dyn Shape>> = Vec::new();
+    for _ in 0..1000 {
+        state = (state * 16807) % 2147483647;
+        let a = (state % 100) as f64 / 10.0 + 1.0;
+        state = (state * 16807) % 2147483647;
+        let b = (state % 100) as f64 / 10.0 + 1.0;
+        let kind = state % 3;
+        if kind == 0 {
+            shapes.push(Box::new(Circle { r: a }));
+        } else if kind == 1 {
+            shapes.push(Box::new(Rect { w: a, h: b }));
+        } else {
+            shapes.push(Box::new(Tri { b: a, h: b }));
+        }
+    }
+    let mut total = 0.0;
+    for _ in 0..50000 {
+        for s in &shapes {
+            total += s.area();
+        }
+    }
+    println!("{:.3}", total);
+}
 ```
-Foo = Class(name="Foo", base_class=OBJECT, fields={}, metaclass=TYPE)
-F = Instance(Foo)
-F.write_attr("x", 1)
-F.write_attr("y", 2)
 
-Bar = Class(name="Bar", base_class=OBJECT, fields={}, metaclass=TYPE)
-B = Instance(Bar)
-B.write_attr("x", 3)
-B.write_attr("y", 4)
+Rust was given a very large disadvantage: dynamic dispatching at `Vec<Box<dyn Shape>>`. We've created an improved version that does not use dynamic dispatching:
 
-# Same shape/map!
-assert F.map is B.map
-# But different class!
-assert F.cls != B.cls
+```rust
+use itertools::Itertools;
+const PI: f64 = std::f64::consts::PI;
+
+enum Shape {
+    Circle { r: f64 },
+    Rect { w: f64, h: f64 },
+    Tri { b: f64, h: f64 },
+}
+
+impl Shape {
+    #[inline(always)]
+    fn area(&self) -> f64 {
+        match self {
+            Shape::Circle { r } => PI * r * r,
+            Shape::Rect { w, h } => w * h,
+            Shape::Tri { b, h } => 0.5 * b * h,
+        }
+    }
+}
+
+fn main() {
+    let mut state: i64 = 42;
+    let shapes: [Shape; 1000] = (0..1000).map(|_| {
+        state = (state * 16807) % 2147483647;
+        let a = (state % 100) as f64 / 10.0 + 1.0;
+        state = (state * 16807) % 2147483647;
+        let b = (state % 100) as f64 / 10.0 + 1.0;
+        let kind = state % 3;
+
+        if kind == 0 {
+            Shape::Circle { r: a }
+        } else if kind == 1 {
+            Shape::Rect { w: a, h: b }
+        } else {
+            Shape::Tri { b: a, h: b }
+        }
+    }).collect_array().unwrap();
+
+    let mut total = 0.0;
+    for _ in 0..50000 {
+        for s in &shapes {
+            total += s.area();
+        }
+    }
+    println!("{:.3}", total);
+}
 ```
 
-For one, it means that the inline cache may have a higher hit rate. Instances
-of subclasses that share code, for example, may still count as *monomorphic* in
-the IC.
+We also used arrays instead of vectors because arrays were used in the C version. Here are the results:
 
-It also means that you can’t use the shape as a proxy for knowing about the
-class. If you have something like `attr_reader` in Ruby, where the VM generates
-a synthetic method just for looking up an instance variable, you need to do two
-things:
+```javascript
+[root@8b4fcd497f61 Tov]# hyperfine -w 10 -m 64 ./dispatch_tov ./dispatch ./better_dispatch
+Benchmark 1: ./dispatch_tov
+  Time (mean ± σ):      52.4 ms ±   1.3 ms    [User: 51.7 ms, System: 0.7 ms]
+  Range (min … max):    50.6 ms …  59.0 ms    64 runs
 
-This two-stage lookup adds both complexity and run-time overhead. If we
-specialized maps so that having a different class implied having a different
-map, we would be able to specialize that two-stage dispatch with just one field
-load.
+Benchmark 2: ./dispatch
+  Time (mean ± σ):     298.2 ms ±   4.1 ms    [User: 297.1 ms, System: 1.1 ms]
+  Range (min … max):   295.9 ms … 319.9 ms    64 runs
 
-This is kind of an interesting idea: what else can we specialize the map on?
+  Warning: Statistical outliers were detected. Consider re-running this benchmark on a quiet system without any interferences from other programs. It might help to use the '--warmup' or '--prepare' options.
 
-## Storage strategies
+Benchmark 3: ./better_dispatch
+  Time (mean ± σ):      48.8 ms ±   0.3 ms    [User: 48.0 ms, System: 0.8 ms]
+  Range (min … max):    48.3 ms …  49.6 ms    64 runs
 
-Perhaps unsurprisingly, CF Bolz-Tereick reappears with Lukas Diekmann and
-Laurence Tratt in [Storage Strategies for Collections in Dynamically Typed
-Languages](https://dl.acm.org/doi/pdf/10.1145/2544173.2509531) (PDF, 2013).
+Summary
+  ./better_dispatch ran
+    1.07 ± 0.03 times faster than ./dispatch_tov
+    6.12 ± 0.09 times faster than ./dispatch
+```
 
-The main idea is that some facts about objects (properties, attributes, har
-har) are both:
+```javascript
+sh-5.3$ hyperfine -w 10 -m 64 ./dispatch_tov ./target/release/dispatch ./target/release/better_dispatch
+Benchmark 1: ./dispatch_tov
+  Time (mean ± σ):      37.2 ms ±   2.2 ms    [User: 36.0 ms, System: 1.0 ms]
+  Range (min … max):    34.7 ms …  50.6 ms    79 runs
 
-Their treatment is for collections (for example, optimizing the common cases of
-an empty list, or a list of small integers, …). In addition to giving more
-information to the optimizer, it helps both reduce memory and reduce pointer
-chasing.
+  Warning: Statistical outliers were detected. Consider re-running this benchmark on a quiet system without any interferences from other programs. It might help to use the '--warmup' or '--prepare' options.
 
-This kind of thinking extends beyond collections: do you ever have objects
-where an attribute is always a certain type? Maybe your `Point` class always
-has floats in it? Consider, then, what I think of as CF’s follow-up paper, type
-freezing: [Type Freezing: Exploiting Attribute Type Monomorphism in Tracing JIT
-Compilers](https://dl.acm.org/doi/pdf/10.1145/3368826.3377907) (PDF, 2020)
+Benchmark 2: ./target/release/dispatch
+  Time (mean ± σ):      88.0 ms ±   6.0 ms    [User: 86.6 ms, System: 1.0 ms]
+  Range (min … max):    81.8 ms … 106.7 ms    64 runs
 
-This paper changes object maps from `{name: offset}` to `{name: (offset,
-type)}` to reduce guards. Then it goes further by even addressing nested
-attributes and their types. This nesting extension is mostly motivated by the
-meta-circularity of the implementation and would have less impact for a
-“normal” runtime.
+Benchmark 3: ./target/release/better_dispatch
+  Time (mean ± σ):      38.2 ms ±   2.3 ms    [User: 37.0 ms, System: 1.0 ms]
+  Range (min … max):    34.9 ms …  46.6 ms    79 runs
 
-See also:
+Summary
+  ./dispatch_tov ran
+    1.03 ± 0.09 times faster than ./target/release/better_dispatch
+    2.37 ± 0.21 times faster than ./target/release/dispatch
+```
 
-## Class versioning
+```javascript
+[tsuru@makimaki ~]$ hyperfine -w 10 ./dispatch ./dispatch_tov ./better_dispatch
+Benchmark 1: ./dispatch
+  Time (mean ± σ):     406.7 ms ±   2.2 ms    [User: 404.7 ms, System: 0.6 ms]
+  Range (min … max):   405.0 ms … 411.1 ms    10 runs
 
-You can make even stronger bets about classes. See for example the [PyPy blog
-class versioning
-section](https://pypy.org/posts/2011/03/controlling-tracing-of-interpreter-with_21-6524148550848694588.html#versioning-of-classes).
+Benchmark 2: ./dispatch_tov
+  Time (mean ± σ):      70.8 ms ±   0.8 ms    [User: 69.9 ms, System: 0.7 ms]
+  Range (min … max):    69.6 ms …  73.4 ms    41 runs
 
-I felt like this blog post would not be complete without a manual memory layout
-rehashing of CF’s article. It’s all well and good to write the Python but what
-do “real” runtimes look like?
+Benchmark 3: ./better_dispatch
+  Time (mean ± σ):      67.7 ms ±   2.2 ms    [User: 66.6 ms, System: 0.8 ms]
+  Range (min … max):    66.3 ms …  79.0 ms    43 runs
 
-Well, they have compact object headers that contain the shape/map and some
-other flag bits. They allocate their attributes inline with an object. And they
-probably also have an “overflow” slot for when their initial object sizing
-estimates were too small.
+  Warning: Statistical outliers were detected. Consider re-running this benchmark on a quiet system without any interferences from other programs. It might help to use the '--warmup' or '--prepare' options.
 
-So I made a very very small runtime in C++ that allocates objects and adds
-attributes and has a shape system. It is probably *riddled* with bugs. But it
-sketches the kind of memory layouts that underpin Skybison, V8, JSC, and so on.
+Summary
+  ./better_dispatch ran
+    1.05 ± 0.04 times faster than ./dispatch_tov
+    6.01 ± 0.20 times faster than ./dispatch
+```
 
-[Take a look](https://gist.github.com/tekknolagi/caf8462b75ac8ba7e33f6ade06b3f914).
+We believe Tov's developers intentionally used dynamic dispatching in order to slow down the performance significantly and create misleading results. The program / code between the original Rust version and the Tov version was highly inequivalent. Their benchmark and its results should be deemed invalid.
 
-It doesn’t have the overflow slot but it’s a decent sketch of the underlying
-model.
+# map_insert
 
-I fear I am running out of steam on this blog post but there is more to talk
-about. I originally wanted to go add object shapes to someone’s Lox interpreter
-and then add inline caches to the interpreter.
+```rust
+// Insert N string keys into a string -> int map, then look every key up again.
 
-Perhaps I will come back and update this post. Or perhaps you will write a
-sequel.
+use std::collections::HashMap;
 
-## Thank you
+fn main() {
+    let n: i64 = 2_000_000;
+    let mut m: HashMap<String, i64> = HashMap::new();
+    for i in 0..n {
+        m.insert(format!("k{i}"), i);
+    }
+    let mut sum: i64 = 0;
+    for i in 0..n {
+        sum += m[&format!("k{i}")];
+    }
+    println!("{} {}", m.len(), sum);
+}
+```
 
-Thank you to CF Bolz-Tereick, Nery Campusano, and Jacob Denbeaux for thoughtful
-feedback on this post.
+We believe Tov developers deliberately chose `std::collections::HashMap`, which is a hash map known to be slow since it is made to be resilient to HashDoS attacks. Usually in real-world situations where HashDoS is not a concern, the `ahash` library is used. Tov developers chose to use external libraries like `num_bigint` to their advantage while ignoring popular libraries like `ahash` that are commonly used and make more sense in this case.
 
-1. Or the following equivalents… `// Or function C() { this.a = 1; this.b = 2; } // Or class C { constructor() { this.a = 1; this.b = 2; } } ` [↩](https://bernsteinbear.com/blog/object-shapes/#fnref:js-synonyms)
-2. See [this Rails PR](https://github.com/rails/rails/pull/57020) by Hartley to make shapes more monomorphic. It was initially filed because ZJIT was not capable of handling shape polymorphic reads, but it helps other JITs stay monomorphic too. Also in this vein is [my PR to optcarrot](https://github.com/mame/optcarrot/pull/59). ZJIT now does much better with polymorphic shapes but this kind of stuff is generally important across languages and runtimes. Enough for people to do [large bodies](https://bernsteinbear.com/assets/img/optimization-coaching.pdf) (PDF) [of research](https://bernsteinbear.com/assets/img/optimization-coaching-js.pdf) (PDF) about intelligibly surfacing this kind of information to the application programmer. [↩](https://bernsteinbear.com/blog/object-shapes/#fnref:attribute-order)
+```rust
+use ahash::AHashMap;
+use std::fmt::Write;
+
+fn main() {
+    const n: usize = 2_000_000;
+
+    let keys: Vec<String> = (0..n).map(|i| {
+        let mut s = String::with_capacity(8);
+        write!(s, "k{i}").unwrap();
+        s
+    }).collect();
+
+    let m: AHashMap<&str, i64> = keys.iter().enumerate().map(|(i, k)| (&**k, i as i64)).collect();
+
+    let mut sum: i64 = 0;
+    for k in &keys {
+        sum += m[&**k];
+    }
+    println!("{} {}", m.len(), sum);
+}
+```
+
+```javascript
+[root@8b4fcd497f61 Tov]# hyperfine -w 10 ./map_insert_tov ./map_insert ./ahashmap_map_insert
+Benchmark 1: ./map_insert_tov
+  Time (mean ± σ):     600.9 ms ±  44.8 ms    [User: 528.0 ms, System: 72.7 ms]
+  Range (min … max):   560.8 ms … 719.6 ms    10 runs
+
+Benchmark 2: ./map_insert
+  Time (mean ± σ):      1.705 s ±  0.102 s    [User: 1.559 s, System: 0.145 s]
+  Range (min … max):    1.628 s …  1.972 s    10 runs
+
+Benchmark 3: ./ahashmap_map_insert
+  Time (mean ± σ):     482.5 ms ±  15.0 ms    [User: 387.5 ms, System: 94.7 ms]
+  Range (min … max):   470.2 ms … 523.0 ms    10 runs
+
+Summary
+  ./ahashmap_map_insert ran
+    1.25 ± 0.10 times faster than ./map_insert_tov
+    3.53 ± 0.24 times faster than ./map_insert
+```
+
+```javascript
+sh-5.3$ hyperfine -w 5 ./map_insert_tov ./target/release/{,ahashmap_}map_insert
+Benchmark 1: ./map_insert_tov
+  Time (mean ± σ):     411.1 ms ±  55.5 ms    [User: 393.8 ms, System: 14.5 ms]
+  Range (min … max):   360.8 ms … 519.0 ms    10 runs
+
+Benchmark 2: ./target/release/map_insert
+  Time (mean ± σ):     849.4 ms ±  62.0 ms    [User: 800.4 ms, System: 41.7 ms]
+  Range (min … max):   793.1 ms … 977.0 ms    10 runs
+
+Benchmark 3: ./target/release/ahashmap_map_insert
+  Time (mean ± σ):     210.2 ms ±  31.5 ms    [User: 178.5 ms, System: 28.6 ms]
+  Range (min … max):   184.0 ms … 277.0 ms    15 runs
+
+  Warning: Statistical outliers were detected. Consider re-running this benchmark on a quiet system without any interferences from other programs. It might help to use the '--warmup' or '--prepare' options.
+
+Summary
+  ./target/release/ahashmap_map_insert ran
+    1.96 ± 0.39 times faster than ./map_insert_tov
+    4.04 ± 0.67 times faster than ./target/release/map_insert
+```
+
+```javascript
+[tsuru@makimaki ~]$ hyperfine -w 5 ./map_insert_tov ./{,ahashmap_}map_insert
+Benchmark 1: ./map_insert_tov
+  Time (mean ± σ):     918.3 ms ±  56.6 ms    [User: 784.3 ms, System: 128.1 ms]
+  Range (min … max):   850.8 ms … 1006.4 ms    10 runs
+
+Benchmark 2: ./map_insert
+  Time (mean ± σ):      2.594 s ±  0.077 s    [User: 2.296 s, System: 0.282 s]
+  Range (min … max):    2.525 s …  2.769 s    10 runs
+
+Benchmark 3: ./ahashmap_map_insert
+  Time (mean ± σ):     767.8 ms ±  19.7 ms    [User: 605.5 ms, System: 157.3 ms]
+  Range (min … max):   734.4 ms … 802.9 ms    10 runs
+
+Summary
+  ./ahashmap_map_insert ran
+    1.20 ± 0.08 times faster than ./map_insert_tov
+    3.38 ± 0.13 times faster than ./map_insert
+```
+
+# Wrapping Up
+
+The point of Rust is not to write simple code and get the fastest binary; it shines in getting near-metal performance from the code you have written. You have a program in Tov that runs slow? Good luck speeding your code up. You have a program in Rust that runs slow? Rewrite the part of the code that causes the slowdown.
+
+Code in JavaScript or TypeScript are not supposed to perform well. JavaScript is single-threaded. The name implies it's a scripting language. It doesn't make sense to write programs using tools meant for running scripts in a browser if performance matters.
+
+Tov failed not because their transpiler isn't good enough, but rather due to its design. Tov's main website is reflecting its design flaw — it is impossible to get faster than Rust and C in any meaningful way, especially if Tov transpiles to C.
+
+Tov's idea of shipping JavaScript programs as native binaries is not new. If you are interested, I recommend [Porffor](https://porffor.dev/?ref=blog.fyralabs.com). Porffor compiles your JavaScript code to a native binary, and it passes over 95% of all tests in the official ECMAScript conformance suite. It's also available in Terra, by the way. Note that Porffor and Tov are not affiliated with Fyra Labs.

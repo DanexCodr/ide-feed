@@ -1,131 +1,243 @@
-One of eMudhra's certificate authority private keys is the number 4.
+In the theme of [NixOS enabling fearlessness](https://entropicthoughts.com/nixos-is-making-me-less-afraid), here’s a way I use Nix on *other*
+Linux distributions to sleep better at night: managing dependencies of simple
+scripts.
 
-Not a number that starts with 4, or the number 4 followed by a few hundred random digits, just, 4... Another one is 56, and another is 115. I know, because I recovered all of them from their public certificates on my laptop just now, and it took less than a second.
+This way of using Nix is for everyone, not just those willing to try NixOS.
+We’ll look at it first for a Python script, and then see how it can be adapted
+to any other language.
 
-![](https://storage.ghost.io/c/ee/88/ee889f88-37ef-43e5-9180-f9b88ee6261d/content/images/2026/10/Logo_of_eMudhra_-2026-.svg)
+I wanted to create a script that would read the verbatim content of my articles
+out loud to me with a synthesised voice.1<sup>1</sup> This is entirely separate from the
+recent ai narration experiment. Reading the article out loud is one of my
+self-editing steps, to detect flow problems and awkward phrasings. I’ve
+discovered that hearing someone else read the article is slightly more effective
+than reading it out loud myself, though both are useful. When I read it out loud
+myself, I tend to read what I intended to say, not the words that are actually
+on the page. One of the more convenient ways to do this is with Python, where
+I’ve heard good things about [Trafilatura](https://trafilatura.readthedocs.io/en/latest/) for extracting the contents out of a
+web page, filtering on types of content, etc.
 
-## What happened
+But Trafilatura is a third-party Python dependency. Those suck because they
+break your scripts when you so much as glance sideways at `pip`. The code also
+ended up depending on `aplay`, which is a system dependency, making it two
+different sources of future breakage. A couple of years ago, I would probably
+have judged that to be too much maintenance, so I wouldn’t have created the
+script. Fortunately, now I know about Nix.
 
-On Saturday 17th October a security researcher reported to Apple, Google, Microsoft, Mozilla and eMudhra that the private keys for eight eMudhra intermediate certificates were compromised. Chrome pushed a CRLSet update blocking them that evening and Mozilla blocked them in Firefox via OneCRL a few hours later. On Tuesday 20th, [Mozilla announced it publicly](https://groups.google.com/a/mozilla.org/g/dev-security-policy/c/0R3XLJL6FuE/m/Kp1v6CPuAAAJ?utm_source=scotthelme.co.uk) and shipped an NSS update removing the eMudhra root, and Chrome confirmed the root is going in Chrome Root Store v43.
-
-The eight intermediates are six TLS issuing CAs (DV, OV and EV, two generations each) and two code-signing CAs, all created in April 2025. Every one of them was also cross-signed by Sectigo's `AAA Certificate Services` root in May 2025.
-
-That's the "what", but it's the "how" that's the interesting part, and it was summed up in one line on the thread by Ian Carroll:
-
-> They are inherently weak single-byte keys that anyone can factor, and the issue cannot be contained.
-
-## What a private key actually is
-
-These are elliptic-curve keys on the P-384 curve. The private key is just a number, `d`. The public key, the thing that goes in the certificate for the world to see, is `d × G`, where `G` is a fixed point on the curve that everyone uses and "×" means adding `G` to itself `d` times using the curve's special arithmetic.
-
-Going forwards is easy, but going backwards, from the public key to `d`, is considered to be impractical. That's the entire security model, and it only holds if `d` is enormous. A P-384 private key should be a random 384-bit number, which gives you 2³⁸⁴ possibilities (or roughly 10¹¹⁵), so nobody is ever going to search that.
-
-eMudhra's keys look like this:
-
-```
-d = 0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004
-```
-
-A P-384 private key should look like this:
-
-```
-d = 0x48ac06790886c80c48d31691fd4c0fe9ce3207f9807f2fe571d6e4ec426d78644298fc53df2b92566970e757ac998c34
-```
-
-That's 47 bytes of zeros and then one byte, and all eight keys are like that. A single byte has 256 possible values, so the "search" is: compute `1 × G`, `2 × G`, `3 × G`, and stop when it matches the certificate, which is at most 255 steps.
-
-So the whole thing, every certificate those CAs could ever issue, every client that trusted them, rested on eight bits.
-
-## I checked
-
-Mozilla attached the affected certificates to their announcement, so I pulled all 16 (8 keys, each used in two issued certificates: once by eMudhra and once by Sectigo) and brute-forced them. Every single one fell over instantly, the six TLS values, and the two code-signing keys are just as weak:
-
-| Intermediate | Type | d |
-| --- | --- | --- |
-| EM DV TLS CA - G3B | TLS | 156 |
-| EM DV TLS CA - G3C | TLS | 230 |
-| EM EV TLS CA - G3B | TLS | 115 |
-| EM EV TLS CA - G3C | TLS | 56 |
-| EM OV TLS CA - G3B | TLS | 155 |
-| EM OV TLS CA - G3C | TLS | 4 |
-| EM OV CS CA - G3B | Code signing | 66 |
-| EM OV CS CA - G3C | Code signing | 237 |
-
-It's interesting that nothing about these certificates looks wrong. A public key derived from `d = 4` is a perfectly valid point on the curve, the encoding is fine, the curve is fine, every structural check passes. The only way to find out is to try.
-
-## Why "it cannot be contained"
-
-Normally when a CA key is compromised, someone stole it! There's a thief, there's a moment it happened, and you can at least reason about who now has access to that key.
-
-Here, nobody had to steal anything. The key was effectively public from the day the certificate existed. Anyone who looked at one of these certificates, at any point since April 2025, could have recovered the key in milliseconds on commodity hardware. That's a 17 month window and there is no way to know whether someone did.
-
-Chrome made the point that because Chrome enforces Certificate Transparency, and no TLS certificates chaining to these CAs ever showed up in CT, no forged certificate could have been trusted by default in Chrome. That's true and it's reassuring for browsers. CT detects mis-issuance though, it doesn't prevent it, and a lot of software doesn't check CT at all.
-
-## Who's exposed today
-
-Mainstream and updated browsers are likely absolutely fine. Chrome and Firefox block the intermediates directly and both require CT, and Safari requires CT too.
-
-Everything else is a different story, though. Most non-browser TLS clients (so basically everything else, with default settings), things like curl, Python, Node, Go, Java, git, package managers and every script and daemon you've got, do three things that matter here: they trust a CA bundle on disk, they don't check revocation by default, and they don't check CT. So the fact that eMudhra and Sectigo have revoked these intermediates doesn't help them at all. This is something that I find often when talking about TLS and PKI, understanding just how massive the client ecosystem is can be overlooked. We often focus on this in training when we look at modern solutions for revocation like CRLite, which works wonders on the desktop browsers, but does nothing for any other TLS client. Consider what needs its root store updating now, and this is just the tip of the iceberg:
-
-- curl | sh installers and self-updaters. Many tools install or update by downloading a script or binary over HTTPS with no signature check (rustup, nvm, Homebrew's installer, countless "install.sh" pages, IoT firmware updaters). A forged certificate here means running the attacker's code, often as root.
-- CI/CD pipelines. GitHub/GitLab runners, Jenkins and build containers fetch dependencies and push artifacts, while holding cloud keys, registry tokens and signing keys. They run on stale base images in shared networks, and they're all curl, Python, Go and Node underneath.
-- Server-to-server API calls. Payment providers, webhooks, OAuth token exchanges and cloud SDKs (AWS CLI and boto use their own certifi bundle; Terraform and kubectl use Go). These carry API secrets and customer data in headers.
-- IoT, embedded and OT devices. Cameras, routers, cars, medical devices, smart appliances, payment terminals and industrial controllers phoning home for commands and updates. Their bundles are frozen until 2039, which is the "cannot be contained" point made real.
-- Windows code signing. It isn't TLS, but it's the same flaw: Windows trusts the eMudhra CS root directly. Malware signed with EM OV CS CA - G3B/G3C looks like signed software from a real publisher to anything that doesn't check revocation.
-
-I tested this on my own machines using a local server and a certificate for `api.stripe.com`, a name that we can all likely agree is very high value. With default settings, curl said `SSL certificate verify ok`, Python completed the handshake, and Node said `authorized: true`. That was true on every Linux and macOS machine I tested. On Windows, CryptoAPI accepted the chain unless revocation checking was switched on, and even then only one of the two routes came back as revoked.
+We have a Python script, and we want to make it trivially runnable anywhere,
+without having to worry about dependencies. To get to that position, we first
+create a file called `flake.nix` in the same directory as the Python script, and
+we start to fill it in:
 
 ```
-scott@Middle-Earth:~$ curl -v --resolve api.stripe.com:18888:127.0.0.1 https://api.stripe.com:18888/
-* Added api.stripe.com:18888:127.0.0.1 to DNS cache
-* Hostname api.stripe.com was found in DNS cache
-*   Trying 127.0.0.1:18888...
-...snip...
-* Server certificate:
-*  subject: CN=api.stripe.com
-*  start date: Oct 20 18:39:57 2026 GMT
-*  expire date: Oct 21 18:44:57 2026 GMT
-*  subjectAltName: host "api.stripe.com" matched cert's "api.stripe.com"
-*  issuer: C=NL; O=eMudhra BV; CN=EM DV TLS CA - G3B
-*  SSL certificate verify ok.
-> GET / HTTP/1.1
-> Host: api.stripe.com:18888
-> User-Agent: curl/7.68.0
-> Accept: */*
->
-...snip...
-< HTTP/1.0 200 ok
-< Content-type: text/html
-<
-<HTML><BODY BGCOLOR="#ffffff">
-<pre>
-s_server -accept 127.0.0.1:18888 -cert /tmp/tmp.rBcIpjTbZV/leaf.pem -key /tmp/tmp.rBcIpjTbZV/leaf.key -cert_chain /home/scott/code/test/intermediate-sectigo.pem -www -quiet
-...snip...
-</pre></BODY></HTML>
-...snip...
-* Closing connection 0
-* TLSv1.3 (OUT), TLS alert, close notify (256):
-scott@Middle-Earth:~$
+{
+  # Pick the package versions of the most recent NixOS.
+  # Change these numbers to upgrade later if desired.
+  # If the upgrade breaks, it can be rolled back by
+  # decrementing these numbers again.
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
+
+  outputs = { nixpkgs, ... }:
+    let
+      # Generate outputs for both Intel and ARM. In this
+      # case, I do not include macOS among the supported
+      # systems because aplay is linux-only.
+      #
+      # This references "legacyPackages" which might sound
+      # odd, but in Nix flake contexts, the entire nixpkgs
+      # package set is called "legacy" because it uses an
+      # older structure for organisation.
+      forAllSystems = f: nixpkgs.lib.genAttrs
+        [ "x86_64-linux" "aarch64-linux" ]
+        (system: f nixpkgs.legacyPackages.${system});
+    in {
+      # The default entry point of a Nix flake are the
+      # derivations named "packages.<system>.default". Here
+      # they are defined for the two Linux architectures.
+      packages = forAllSystems (pkgs: {
+        default =
+          # Default package definition to be filled in!
+      });
+    };
+}
 ```
 
-You can put any other hostname you want in that certificate and you have everything you need to intercept that device's traffic, all you have to do is get on the network path.
+This outline is the same every time we use Nix to manage the dependencies of a
+program, regardless of language, choice of dependencies, etc. The specifics that
+differ are those in the definition of the `default` package.
 
-## What you should do now
+Since we have a Python script, we’ll use the `writePython3Bin` helper function
+to turn that into an executable with Nix-managed dependencies. It takes two
+arguments we need:
 
-It's fortunate that the steps required here aren't particularly complicated for the devices you can update, and the advice essentially boils down to 'update them'. The problem is the devices you can't update or update easily.
+- makeWrapperArgs replaces the main script with a small wrapper script that sets up the right environment and then execves into the main script. We will use it to set up the PATH variable to point at Nix-managed versions of system dependencies.2<sup>2</sup> This may be the most common way to use it, but it can be used to fix up the environment in any number of other ways. This means the Python script doesn’t have to be written with Nix-managed dependencies in mind. As far as the script cares, it thinks it’s running in a normal environment. But the commands it runs come from the Nix store, and are of the specific versions we requested.
+- libraries lets us specify which Python dependencies should be available to the Python interpreter when it runs our script.
 
-1. Update everything that ships a CA bundle: your OS ca-certificates package, certifi, Node, Homebrew, and rebuild your container images once the base images pick up the change.
-2. Devices you can't update are the hard part. Routers, printers, TVs, appliances with frozen firmware will trust these certificates until expiry, which is July 2039...
+Filling in the right values for these arguments, our `flake.nix` will look
+something like the following.
 
-Eight bits. For 17 whole months, that's all that stood between a huge amount of non-browser software and a forged certificate for any site blowing the security on all of your encrypted traffic.
+```
+{
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
 
-## Sources
+  outputs = { nixpkgs, ... }:
+    let
+      forAllSystems = f: nixpkgs.lib.genAttrs
+        [ "x86_64-linux" "aarch64-linux" ]
+        (system: f nixpkgs.legacyPackages.${system});
+    in {
+      packages = forAllSystems (pkgs: {
+        # Create executable from Python script.
+        default = pkgs.writers.writePython3Bin "readarticle" {
+          # Make system dependencies available.
+          makeWrapperArgs = [
+            "--prefix" "PATH" ":" (pkgs.lib.makeBinPath [
+              pkgs.alsa-utils
+            ])
+          ];
+          # Make libraries available.
+          libraries = [
+            pkgs.python3Packages.requests
+            pkgs.python3Packages.trafilatura
+          ];
+        } (builtins.readFile ./main.py);
+      });
+    };
+}
+```
 
-MDSP thread: [https://groups.google.com/a/mozilla.org/g/dev-security-policy/c/0R3XLJL6FuE/m/Kp1v6CPuAAAJ](https://groups.google.com/a/mozilla.org/g/dev-security-policy/c/0R3XLJL6FuE/m/Kp1v6CPuAAAJ?utm_source=scotthelme.co.uk)
+And that’s it. After this, we can run the script with `nix run .` and the first
+time we do it, Nix is going to set up all the dependencies and then run the
+script. On subsequent runs, Nix recognises that everything is in place and runs
+the script right away.3<sup>3</sup> Actually, the `writePython3Bin` function does one
+more thing: it runs the script through a linting pass. This can be disabled, but
+I generally like keeping the default behaviour. The corresponding writeBashBin
+it runs the script through ShellCheck and fails the build before running the
+script if it doesn’t ShellCheck cleanly. *That* is very valuable!
 
-Research announcement: [https://emudhra.we-have-a-problem.com/](https://emudhra.we-have-a-problem.com/?utm_source=scotthelme.co.uk)
+If we copy this script to another computer, it will continue to work exactly the
+same as on the first computer, because Nix will set up all the same dependencies
+the same way before running the script. If we forget about it and run it a year
+later, it will continue to run just the same as before, because the executable
+created by Nix refers to the exact same set of dependencies regardless of what
+else has changed on the system.
 
-**Update 20th Oct 2026 20:16 UTC**  
-Shortly after publishing, Mozilla made their incident ticket public: [https://bugzilla.mozilla.org/show_bug.cgi?id=2083449](https://bugzilla.mozilla.org/show_bug.cgi?id=2083449&ref=scotthelme.co.uk)
+I imagine that of those reading this article, a small crowd starts murmuring
+about `uv`. From what I understand, `uv` does take a lot of the headache out of
+managing Python dependencies.4<sup>4</sup> I don’t know, honestly. It came around after I
+stopped working professionally with Python, so learning and understanding it
+would happen in my limited spare time, and now that I have Nix, I think I have
+better things to learn and understand. But it is only for Python. *Nix works
+for any dependency, with any language.* If we have an R script we want to manage
+the dependencies for, we’d do the exact same thing and use `writeRscriptBin`
+instead.
 
-eMudhra have given their account of what happened on that ticket. It seems there was a bug in the script used during the ceremony, a second, weak key pair was created on the HSM, and having similar names a human error lead to the wrong keys being used for the CSR. Nothing in the text of my article above has changed as a result of this new information. I can also confirm that a simple prompt in an AI agent allowed me to recover the private keys of the CA. Claude was able to recover the private keys with a single prompt.
+The way to find the right helper function is by knowing that they are called
+*writers*, and then [searching Noogle for them](https://noogle.dev/q/?term=writers+python). By excluding the language from
+that search, we can see there are writers for other languages too, like C,
+JavaScript, Shell, Haskell, Perl, and more.
+
+But there’s no writer helper function specifically for Emacs Lisp. What if we
+have an Emacs Lisp script we want Nix to manage the dependencies of? Then we
+can still use the lower level `makeScriptWriter` function. Here’s a generic
+example of that:
+
+```
+default = pkgs.writers.makeScriptWriter
+  {
+    # System dependencies work the same as before.
+    makeWrapperArgs = [
+      "--prefix" "PATH" ":" (pkgs.lib.makeBinPath [
+        pkgs.some-package-with-executable
+      ])
+    ];
+
+    # Make sure the interpreter is produced with the
+    # necessary run-time dependencies. Most packaged
+    # scripting languages support the "withPackages"
+    # convention for this.
+    interpreter = "${(pkgs.interpreter.withPackages (ps: [
+      ps.dependency-1
+      ps.dependency-2
+    ]))}/bin/interpreter-binary";
+  }
+  "/bin/our-executable-name"
+  (builtins.readFile ./source-file-path);
+```
+
+For Emacs Lisp, the interpreter package we’d use would be Emacs. The output path
+(`/bin/our-executable-name`) is package relative, so we don’t have to worry
+about it clobbering the file system.
+
+Of course, we also have compiled languages, like Ada. Ada also doesn’t have a
+ready-made writer function, so we’d use the generic `makeBinWriter` helper,
+which takes a `compileScript` argument where we specify how to compile.
+
+```
+default = pkgs.writers.makeBinWriter
+  {
+    # System dependencies work the same again.
+    makeWrapperArgs = [
+      "--prefix" "PATH" ":" (pkgs.lib.makeBinPath [
+        pkgs.some-package-with-executable
+      ])
+    ];
+
+    # The compilation script can reference any compiler and
+    # any libraries in nixpkgs, and they will be managed by
+    # Nix during the build. Any runtime dependencies will be
+    # managed by Nix automatically too.
+    #
+    # The file we read with readFile is called $contentPath
+    # in this script, and the output must be written to the
+    # path in the $out variable.
+    compileScript = ''
+      ${pkgs.some-compiler}/bin/compiler-binary \
+        -o $out $contentPath
+    '';
+  }
+  "/bin/our-binary-name"
+  (builtins.readFile ./source-file-path);
+```
+
+Although this looks like deep, black magic, it’s not. What’s so neat about Nix
+is that it uses regular Unix paths, regular Unix environment variables, and
+content hashing to figure out what depends on what and whether an input has
+changed, necessitating rebuilding.
+
+The important question I haven’t yet answered is “How do you know all this?”
+
+I wish I could answer “I have read the documentation” but that’s not it. There
+are two parts to the knowledge, and the learning paths are different for them:
+
+- At its core, Nix-the-system is a simple machine that can be grasped in few hours of reading. Similarly, Nix-the-language is small enough to be learned in a day or two. Both of these can be learned from Eelco Dolstra’s PhD thesis, which is a pleasant read and highly recommended, even if you end up not using Nix.5<sup>5</sup> Though I have a hard time imagining how anyone could read the thesis and not end up with a desire to use Nix.
+- Then there’s the huge library of code called nixpkgs. That’s where we find the writers we’ve used in this article, and it’s not well documented anywhere. The way to learn how e.g. writers work is to read their source code. A lot of what’s in nixpkgs is only learnable by reading the code. That might not sound like a big deal, since Nix is a small and easy language. Unfortunately, plenty of what’s in nixpkgs depends on other things in nixpkgs, and it is common to pass named arguments implicitly through attribute sets (key–value dictionaries), so it’s not always obvious which things are actually passed down intentionally and which are not, nor how they are used. It’s easy to end up reading a lot of code.
+
+But as long as the scripts you write are in languages that already have writers
+in nixpkgs, you can mostly use the same template for all of them except replace
+the specific writer you use.
+
+This is entirely separate from the
+recent ai narration experiment. Reading the article out loud is one of my
+self-editing steps, to detect flow problems and awkward phrasings. I’ve
+discovered that hearing someone else read the article is slightly more effective
+than reading it out loud myself, though both are useful. When I read it out loud
+myself, I tend to read what I intended to say, not the words that are actually
+on the page.
+
+This may be the most common way to use it, but it can
+be used to fix up the environment in any number of other ways.
+
+Actually, the `writePython3Bin` function does one
+more thing: it runs the script through a linting pass. This can be disabled, but
+I generally like keeping the default behaviour. The corresponding writeBashBin
+it runs the script through ShellCheck and fails the build before running the
+script if it doesn’t ShellCheck cleanly. *That* is very valuable!
+
+I don’t know, honestly. It came around after I
+stopped working professionally with Python, so learning and understanding it
+would happen in my limited spare time, and now that I have Nix, I think I have
+better things to learn and understand.
+
+Though I have a hard time imagining how anyone could read the thesis
+and not end up with a desire to use Nix.

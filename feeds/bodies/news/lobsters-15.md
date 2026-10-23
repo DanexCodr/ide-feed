@@ -1,1055 +1,193 @@
-This document is a *style guide* for the usage of the Rust programming language
-at Google. In this context, “style” refers to more than just formatting; it
-includes guidance on API and implementation design.
+The last week has seen a flurry of severe and critical software vulnerabilities affecting thousands of major sites and sending people into a panic. What’s going on here, and what can we do about it?
 
-Rust is used in many places, including
-[google3](https://opensource.google/documentation/reference/glossary#google3),
-Android, ChromeOS, Fuchsia, and Chrome, and we’d like for Rust usage at Google
-to be consistent both within and across codebases. In addition to bringing
-consistency to our Rust code, style guidance also helps establish a standard of
-quality.
+## The bugs
 
-### Scope
+If we want to understand what’s going on in the world of software security at the moment, we need to understand what’s going on with all these bugs. I’m not a cybersecurity expert, so I’m going to link to external explanations instead of going into the gory technical details myself as these people are always going to do a better job at that.
 
-The current scope of authority of the rules outlined in this guide:
+### PHP2Shell – [CVE-2026-109618](https://www.cve.org/CVERecord?id=CVE-2026-109618) and [CVE-2026-109619](https://www.cve.org/CVERecord?id=CVE-2026-109619) (a.k.a. “the big one in the news”)
 
-By and large, we have this document for
-[the same reasons we have a C++ style guide](https://google.github.io/styleguide/cppguide.html#Goals).
+Two different security teams, one from California security company Calif (as part of OpenAI’s “Patch the Planet” program) and another from Israeli-U.S. cloud security company Wiz (they’re part of Google Cloud, apparently), both found these two Remote Code Execution (RCE) bugs in PHP. They were both using frontier AI models (a.k.a. LLMs, specifically GPT-5.6 Sol/Gemini 4 Argon) to find these vulnerabilities and build the exploits.
 
-Most style rules come from one or more of the goals listed below.
+Interestingly, one of the bugs (CVE-2026-109618) was [found by a security audit](https://thephp.foundation/blog/2026/10/21/todays-php-security-release-and-how-were-strengthening-php-security/#a-first-external-audit-and-increased-security-focus) the PHP Foundation did in 2024 (funded by the [Sovereign Tech Agency](https://en.wikipedia.org/wiki/Sovereign_Tech_Agency) which is coincidentally one of the most interesting things happening in the open source space at the moment) but they basically ignored it because they had bigger concerns and couldn’t agree on a fix. The reasoning behind it was that no-one could really figure out how to create an actual exploit based on the theoretical issue.
 
-We expect our code to be around for long periods of time, and we
-consider a little bit of extra effort applied during code writing to be
-worth it in the long run if the style rule improves readability.
+One thing LLMs are very good at is taking a theoretical security vulnerability, even if that vulnerability is a vague description of what the issue could be, and building it into a full exploit. This has become a major issue in recent months as any notice of a security patch will immediately result in people pointing their LLMs at the codebase, whereupon the agents can very quickly read through diffs until they find something that looks like a security patch, then go backwards to the vulnerability it covers, and follow this all the way to an exploit.
 
-Large-Scale Changes (LSCs)
-are common at Google, and consistency helps
-make LSCs easier to carry out.
+This happens so fast, in fact, that at this point I think it is a reasonable that the moment you announce a security patch should be taken as a last possible date that the full exploit is *not* being publicly or privately distributed.
 
-The broader Rust ecosystem already has a pretty good amount of consistency
-in style, and we should rely on that where possible to reduce surprise and make
-it less work to learn Google’s Rust style.
+This PHP2Shell (as it’s being marketed, vulnerabilities seem to come bundled with their own marketing departments now) is estimated to affect upwards of 70% of the internet, with thousands of websites from [Wikimedia Foundation](https://diff.wikimedia.org/2026/10/21/impact-of-php-vulnerabilities-on-wikimedia-tools-and-services/) to [DeviantArt](https://x.com/DeviantArt/status/2112874361824899085) to [much of the UK government and Japanese banking systems](https://www.independent.co.uk/tech/security/php-hack-cyber-attack-websites-down-b3071407.html) to [The Traitors BBC programme website](https://www.bbc.co.uk/news/live/ckgel5xp2xv9t?post=asset%3A65d8808b-d5fa-4ee3-aa16-42d183b15c95#post). Vulnerabilities do get found, but they don’t normally cause half the internet to shut their servers down, so what’s going on?
 
-Every Rust developer and reviewer at Google has to keep these style rules
-in mind: as such, we should be careful to include rules that have a tangible
-benefit.
+To understand this, let’s look at the [original post from the PHP Group](https://www.php.net/archive/2026.php#2026-10-20-1):
 
-There are many cases where reasonable people may disagree about a style, and
-we expect that disagreement to show up often on CLs. Having a style rule helps
-avoid having to rehash this each time. Rules in this category that do not have other
-benefits should be kept to a minimum.
+![Screenshot of the PHP announcement "Upcoming Critical PHP Security Release", dated 20 Oct 2026. It says the release is scheduled for Wednesday 21 October 2026 at 14:00 UTC, that it fixes two critical vulnerabilities rated CVSS v4.0 9.2, and that full details will be published with the release.](https://drew.silcock.dev/_astro/php-notice.ClEI-qpZ_Z1XKVaY.webp)
 
-Follow the official public Rust style rules to the extent they don’t conflict
-with this style guide.
+Someone called [petecooper](https://news.ycombinator.com/item?id=50193416) posted on [Hacker News](https://www.bleepingcomputer.com/news/security/php-warns-admins-of-two-critical-flaws-emergency-patches-coming-tomorrow/) [about the CVEs](https://news.ycombinator.com/item?id=50167754), apparently unaware that there even was an embargo. This (and other apparent leaks) prompted this hurried statement from the PHP Group and bringing the patch forward from Thursday 22nd to Wednesday 21st. However, the patch still wasn’t going to be available till the next day. This unintentional leak included CVSS scores of 10.0 (i.e. *bad*, although weirdly the actual scores were 9.2 instead).
 
-A “conflict” would be a case where this style guide suggests a pattern that is
-discouraged, or counter to the primary encouraged pattern in the Rust style
-guide.
+Pretty much immediately, this news spread like wildfire and people started panicking. Even though this was found by *“responsible security researchers”* at *“respectable companies”*, by the time the security patch actually got released, it was [already being exploited in the wild](https://ellio.tech/en/blog/php2shell-what-we-observed-and-what-to-do/)<sup>[1](https://drew.silcock.dev/blog/is-this-the-new-cyber-normal/#user-content-fn-already-exploited)</sup>. The PHP Foundation [blamed Calif and a company called Chainguard](https://thephp.foundation/blog/2026/10/21/todays-php-security-release-and-how-were-strengthening-php-security/#leak-and-disrupted-disclosure) by saying that Calif leaked a video of the exploit in action (with weird background music and a dancing anime girl) while Chainguard published fixes 6 hours before the embargo was due to lift, both allowing attackers to beat the systems administrators to the punch. The timeline is confusing, but it seems like multiple interconnected things have gone wrong here, all within the space of about 17 hours.
 
-Why does the guidance in this style guide deviate from regular Rust style rules?
+There’s been lots of [discussion](https://news.ycombinator.com/item?id=50188948) about whether AI really is the game changer that completely revolutionises computer security or not. The big AI companies (and they [are big](https://www.wheresyoured.at/ai-had-better-work-out/)) obviously want you to think that it is. [Some people](https://eliastaylor.com/noexploit/) argue that PHP2Shell is overblown because LLMs tend to be paranoid about vulnerabilities and come up with “exploits” that make bad assumptions (like that the server will run PHP code you upload yourself via some existing file inclusion vulnerability) or cheat in some way. As [LiveOverflow points out](https://www.youtube.com/watch?v=SP7y1h0laN0), LLMs make it very easy to create exploit slop that proves nothing and doesn’t work, but that doesn’t mean that the vulnerability isn’t real and easy to exploit using AI. You can have 10,000 bad slop exploits that don’t work but if there’s one that does, that’s all that matters. Maybe we just need to get used to wading through slop to find the important stuff now.
 
-Most style guides have three goals: consistency, readability, and encouraging
-good API design. Regardless of the specific choices made, it helps everyone to
-have these choices made beforehand to limit bikeshedding.
+[Others point out](https://news.ycombinator.com/item?id=50189820) that lots of governments ([UK](https://www.ncsc.gov.uk/news/critical-security-issue-affecting-php)<sup>[2](https://drew.silcock.dev/blog/is-this-the-new-cyber-normal/#user-content-fn-gov-disclaimer)</sup>, [EU](https://cert.europa.eu/publications/security-advisories/2026-018), [Japan](https://x.com/takaichi_sanae/status/2112890642590564386), [USA](https://www.cisa.gov/news-events/alerts/2026/10/21/critical-vulnerabilities-php-require-immediate-patching)) got overexcited and released urgent announcements saying everyone had to unplug their computers immediately, so people panicked. I think the reason everyone panicked is that everyone kind of knows that PHP is intensely insecure and they use it anyway, so they’re kind of primed for bad news and to overreact. Also, it actually is really quite bad, so maybe panicking is kind of the correct reaction?
 
-This style guide shares those goals, but it also has an additional goal not seen
-as often: smoothing the way for Large-Scale Changes (LSCs). Large codebases like
-many of the ones at Google occasionally need to run codebase-spanning
-refactorings that are assisted by tooling: for this to work well, the code
-should be something tooling has an easy time working with. Consistency helps for
-this, but so does having deliberate refactor-friendly patterns.
+The big takeaway for me from this is that – because of LLMs – the time from “hey I heard there’s a bad RCE in this project” to “there are sophisticated, automated, and concerted attacks using an exploit targeting this vulnerability” has gone from weeks/months to hours/minutes. The fact that there’s loads of non-working exploit slop just shows how genuine expertise is still required to make these things – if you don’t know what you’re looking at, you can’t tell whether the AI has cheated or made bad assumptions.
 
-When applying rules that relate to API design, you should distinguish two types
-of code:
+**Links:**
 
-For *library code*, style guide rules that concern API design are binding.
+- Hacker News: “Tell HN: 2x PHP RCE CVEs with CVSS 10.0 Incoming” (petecooper, 20 Oct 2026)
+- PHP2Shell – official website – why does every vulnerability need a name, slogan, and website now?
+- Wiz Research: “PHP2Shell: AI uncovers critical RCE vulnerabilities affecting 70% of the Internet” – these are one of the companies who found the bugs.
+- PHP News Archive: “Upcoming Critical PHP Security Release” (20 Oct 2026) – how The PHP Group announced the vulnerability. Note the timelines.
+- Wikipedia: PHP2Shell – not too detailed but at least they’re not trying to sell you anything.
+- AWS Security Blog: “Amazon Threat Intelligence identifies PHP2Shell exploitation prior to public disclosure in MadPot” – they are trying to sell you something, but they’re still doing some interesting analysis.
 
-For *application code*, the rules on API design are a strong recommendation. As
-you apply them, keep in mind that since application code is written to solve a
-specific problem, it should generally favor simplicity and directness over broad
-reusability. Avoid premature generalization and abstraction; focus on what is
-required to meet the immediate need.
+### eMudhra ([CVE-2026-111943](https://www.cve.org/CVERecord?id=CVE-2026-111943) for Golang response)
 
-## Code organization
+On the exact same day (20th October 2026), Mozilla announced that they were blocking 8 intermediate certificates signed by Indian certificate authority eMudhra. This happened after a pseudonymous security researcher known only as “Wayne” reported to several big tech firms (such as Mozilla, Apple, Google, Microsoft, etc.) that the certificate authority were using laughably poor quality private keys for their intermediate certificates. Where a secure key might be a 100 digit number, eMudhra were using keys like “115”, “56”, and “4”. They must’ve been following RFC 1149.5:
 
-*Terminology:*
+There are no indications that this was found or exploited using AI or LLMs, although researcher [Scott Helme](https://scotthelme.co.uk/eight-bits-of-trust-emudhras-ca-keys-cracked-in-milliseconds/) notes that given a single prompt, Claude was able to recover the private keys of the intermediate certs.
 
-- A *crate* is a unit of compilation. A crate always contains a nameless Rust module, the “root module”.
-- A Rust *module* is a unit of code organization within a crate. Rust modules are used to control visibility of names. Modules can be nested. They can also be used to split code across files and directories.
+At the time of writing (23rd Oct), eMudhra has [announced](https://emudhra.com/en/press-release/emudhra-to-exit-global-ssl-tls-certificate-business) that it will be retiring from the certificate authority space. In unrelated news, a farmer has announced that he has shut his stable door, following reports of an escaped horse.
 
-The following sections convey that in Chromium, it is preferable to **not** make
-use of all possibilities of splitting modules across files.
+**Links:**
 
-Prefer small crates in Chromium; ideally, but not necessarily, a single file
-(focusing on one abstraction). If your code can be split up into small crates,
-do so.
+- Mozilla Security Blog: “Protecting Firefox users following the compromise of eMudhra intermediate certificates”
+- Scott Helme: “Eight Bits of Trust; eMudhra’s CA keys cracked in milliseconds”
+- eMudhra press release: “eMudhra to Exit global SSL/TLS Certificate Business”
+- eMudhra Intermediate CA Compromise – research announcement and trust store checker
 
-A crate corresponds to a single `rust_static_library` (chrome) rule, which may
-contain one or more `.rs` files.
+The next day, cloud provider Railway announced that they found evidence that hackers had accessed and even decrypted environment variables from their platform, which often hold secrets such as database credentials, API keys, etc. In their statement, they said that they believed that this was part of a concerted effort aimed at compromising companies that provide AI inference.
 
-Additional considerations:
+What would the end goal be here? At the time of writing (23rd Oct), we have very little information to go on. Is this “unauthorized third party” (official announcements of “some randos got into our computers” always find a way to make it seem like a terms of service agreement, maybe that way they think people won’t pay attention to it) trying to spy on people using AI inference to see what they’re doing, even stealing new models or research? Or maybe they’re trying to build a network of compromised inference providers for their own nefarious generative AI purposes (like finding more PHP bugs).
 
-- The root module is allowed to `re-export` public APIs from `leaf submodules`, making submodules an implementation detail of the crate (as users don’t need to know about these submodules).
-- This rule about small crates applies equally to crates with and without submodules. First, evaluate whether the APIs need to be in the same crate, and only then consider whether submodules could help organize the APIs.
-- If you decide to use submodules, follow the [expected file structure](https://google.github.io/styleguide/rustguide.html#structure).
+**Links:**
 
-Larger crates are allowed when
-[trait impl coherence rules](https://smallcultfollowing.com/babysteps/blog/2015/01/14/little-orphan-impls/)
-force multiple types and traits to be included in one library, or if you’re
-building a large foundational library.
+- Railway Blog: “Security Disclosure: Wednesday October 21st”
+- Hacker News discussion of the Railway security disclosure
 
-Rationale
+### GitLab ([CVE-2026-97229](https://www.cve.org/CVERecord?id=CVE-2026-97229) and [CVE-2026-110264](https://www.cve.org/CVERecord?id=CVE-2026-110264))
 
-Fine-grained library targets are recommended in Chromium due to the massive size
-of our codebase, non-local effects of adding dependencies in the build graph,
-and to improve performance of parallel compilation and build caching.
+On 12th October 2026, [GitLab warned](https://www.bleepingcomputer.com/news/security/gitlab-warns-of-max-severity-rce-flaw-in-regex-compiler-engine/) of a [max severity bug](https://docs.gitlab.com/releases/patches/patch-release-gitlab-19-4-2-released/) in GitLab CI/CD’s regular expression parsing that could enable attackers to execute arbitrary code (another RCE) using a specially crafted regex. This is a CVSS score of 10.0 which is the maximum possible, meaning “this is pretty much as bad as they come”<sup>[3](https://drew.silcock.dev/blog/is-this-the-new-cyber-normal/#user-content-fn-cvss-types)</sup>. This was followed on 21st October 2026 by [yet another regex integer overflow RCE](https://docs.gitlab.com/releases/patches/patch-release-gitlab-19-5-1-released/), another 10.0.
 
-In Chromium `.rs` source files belonging to one `rust_library` (one Rust crate)
-must reside in a single directory.
+This follows hot on the heels of yet another 10.0 CVSS CVE from last month ([CVE-2026-85706](https://www.cve.org/CVERecord?id=CVE-2026-85706)), that time related to [path traversal](https://www.bleepingcomputer.com/news/security/gitlab-urges-users-to-patch-max-severity-path-traversal-flaw/). All three of these bugs were reported through GitLab’s HackerOne bug bounty program. When it became clear that LLMs could research vulnerabilities and write exploits, there was a lot of talk about shutting down bug bounty programs because they didn’t make sense anymore. I’m sure GitLab are glad they didn’t do that now.
 
-Don’t use subdirectories to organize files that belong to a single crate. If
-organizing one crate’s files into subdirectories feels necessary, this is a
-strong indication that the crate has grown [too large](https://google.github.io/styleguide/rustguide.html#small-crates) and should
-be split.
+Although GitLab is used very widely across academia, government, and private companies, this doesn’t seem to have got as much attention. CVEs in GitLab are obviously very serious, especially for private companies, as a lot of their vitally important intellectual property is stored in there, and having that leak could be disastrous. Often, companies put their GitLab instance behind a VPN/firewall so that they aren’t publicly accessible, which greatly reduces the risk associated with this. It’s also not entirely clear whether these CVEs require specific conditions like publicly accessible projects, user self-registration, etc. It does seem like [CVE-2026-110264](https://www.cve.org/CVERecord?id=CVE-2026-110264) requires at least one public project, but I can’t find any information on the conditions around the earlier CVE.
 
-This crate layout is intentionally different from the conventional Cargo
-directory structure typically used in open-source repositories.
+There’s no indication that these were discovered using AI or LLMs. They may have been, but there’s no reason at this point to think they were.
 
-Exception: Rust code in `//third_party` that is also built with
-[Cargo](https://doc.rust-lang.org/cargo/) should follow the conventional Cargo
-directory structure.
+**Links:**
 
-Rationale
+On 21st October, a bug in musl’s libc related to regex (libc has regex? Apparently…) was announced that leads to denial of service at least, if not code execution. As far as I can tell, this is entirely coincidental in timing and not related to the GitLab bugs, which both also seem to be integer overflows when parsing untrusted regular expressions, one reported on the exact same day. Who knew a regex engine was such a security issue – is regex the new font rendering? The GitLab bugs were both found by a Swede called [Johan Carlsson (joaxcar)](https://hackerone.com/joaxcar?type=user) while the musl bug was reported by [Julien Voisin](https://dustri.org/), a French self-proclaimed “open sourcerer”.
 
-The approach in Chromium is driven by the following factors:
+**Links:**
 
-When a `leaf module` has a primary user-defined item (e.g., `Foo`), the module
-should be named after that item (e.g., `mod foo` and `foo.rs`).
+- oss-security: “CVE-2026-107891: musl libc: multiple integer overflow in regcomp”
+- Lobsters discussion of the musl regcomp CVE
 
-Leaf modules that are not primarily about any particular abstraction can be
-named as desired.
+### LiteLLM
 
-Rationale
+Ah, hello my old friend LiteLLM. Proving that, when you’re made of metal and 200 feet tall, lightning can in fact strike twice. It’s not a good sign that when someone asks whether you’ve heard of the big 2026 LiteLLM compromise, you have to ask “which one?” In a piece of good fortune, the whole PHP2Shell and all the others have cannibalised much of the attention, meaning this isn’t getting quite the same traction as last time in March, despite being similarly bad.
 
-This makes it easy to identify the content/purpose of a source file or leaf
-module at a glance.
+This time, it’s a malicious version on the Python Package Index (PyPI) and Docker images. For those who don’t remember, LiteLLM had a [very similar thing](https://snyk.io/blog/poisoned-security-scanner-backdooring-litellm/) happen back in March, where a malicious package was uploaded to the litellm package on PyPI that used the [`.pth` files](https://www.trendmicro.com/en_gb/research/26/c/inside-litellm-supply-chain-compromise.html) to autoload malicious code (yeah, it was bad).
 
-The only items in non-leaf modules should be module declarations (not
-definitions) and `re-exports`.
+This compromise again took advantage of `.pth` files and this time also the `sitecutomize.py` file for autoloading malicious payloads, running in the preload step as soon as the Python interpreter starts up. According to the [analysis from Wiz](https://www.wiz.io/blog/litellm-compromised-steals-credentials), the payload has “strong indications of LLM-aided development” – things like overly verbose variable names, overly defensive error handling, brittle edge cases, and all the comments saying “this is where it really bites”, “it’s worth sitting with that”, “lean into that”, and “that stays yours” [repeatedly](https://claudisms.ai/)<sup>[4](https://drew.silcock.dev/blog/is-this-the-new-cyber-normal/#user-content-fn-not-claudisms)</sup>.
 
-Note that the definition of `leaf modules` allows the following sub-modules:
-`mod test` and cross-language binding modules like `#[cxx::bridge]`.
+According to LiteLLM, the incident occurred because the attacker had access to credentials for GitHub CLI which allowed them to run CI jobs. LiteLLM note that Claude Code will apparently sometimes embed a user’s GitHub CLI OAuth token into response bodies which could cause them to appear in LiteLLM logs.
 
-Exceptions:
+**Links:**
 
-Rationale
+- Wiz Blog: “LiteLLM Compromised, Steals Credentials”
+- LiteLLM: “Contained: Oct 21, 2026 LiteLLM release v1.107.0 Compromised”
+- Hacker News discussion: “Compromised LiteLLM 1.107.0 on PyPI Installs a Credential Stealer and Backdoor”
 
-This makes it easier to find things, and avoids mixing structure and contents.
+### PingCAP
 
-### Don’t use glob imports
+On October 19th 2026, an enterprise software company called “PingCAP” that develops a database called “TiDB” revealed “unauthorised access to PingCAP” with “no evidence that data stored in TiDB was impacted”. At the same time, a cyber extortion group called “FulcrumSec” (a.k.a. the “Threatspians”<sup>[5](https://drew.silcock.dev/blog/is-this-the-new-cyber-normal/#user-content-fn-crime-against-wordplay)</sup>) said they had exfiltrated 10.6 TB of data from PingCAP and publicly released a torrent with 200 GB of data, as a “stage one release” (you’ve gotta get people invested in the sequel).
 
-Don’t use glob imports, except in the following situations where you may
-optionally do so at your own discretion:
+They also posted full details of what they took and some of the excellent security practices of PingCAP, including *putting client AWS secret access keys inside Jira tickets* and *attaching massive unredacted logs to Jira tickets including OpenAI, Anthropic, Gemini, xAI API keys*. Yikes. If you’re willing to visit the cyber extortion group’s website, they do a pretty interesting write-up of it. Gone are the days of shoddy broken English back when the Russians had to write these things up without LLMs to do it for them and remind them of definite and indefinite articles.<sup>[6](https://drew.silcock.dev/blog/is-this-the-new-cyber-normal/#user-content-fn-clarify-russians)</sup>
 
-- use super::* for inline modules
-- use enum::* in method bodies of enums, and functions that are primarily dealing with that enum
-- pub use submodule::* for non-leaf modules
-- C++ interop: Since the same namespace (in C++) is a submodule in different Rust crates (in Rust), you may merge the namespaces into a private copy using glob imports. For example: `mod absl { pub use status::absl::*; pub use strings::absl::*; } ` In this hypothetical example, you can use `absl::Status` and `absl::StrCat` from Rust, the same way you would from C++, instead of spelling them as `status::absl::Status` and `strings::absl::StrCat`. This must only be used for merging C++ namespaces, and the resulting merged module must not be public.
+The good news for PingCAP is that not finding evidence of data extraction is actually incredibly easy. In fact, I’m doing it for thousands of companies right now, for free. I’m sure there’s a business proposal in there somewhere. All you have to do is not look (see also: U+1F648). To be fair, I think their argument is that no data *inside TiDB instances* was compromised. 10.6 TB seems like a lot of data if that’s the case. There’s clearly still tons of customer data.
 
-If using third-party crates that encourage a prelude, it is up to the reviewer’s
-discretion to allow it.
+**Links:**
 
-This also means that defining preludes should be avoided.
+- Hacker News discussion: “PingCap TiDB Leaks”
+- PingCAP: “October 2026 Security Incident Report: Unauthorized Access to PingCAP Cloud Resources” – PingCAP’s detailed and highly reliable analysis of the incident.
+- FulcrumSec: “The PingCAP TiDB Cloud Leaks” – heads up, this is the website of a known cyber extortion group. Don’t say I didn’t warn you. It is pretty interesting, though.
 
-Rationale
+Linux kernel development all happens through mailing lists. Naturally, some of those are about security sensitive things, so these are private. Over the night of 21st-22nd October 2026, the Zero Day Initiative (ZDI), a software vulnerability initiative owned by Trend Micro, reported a bunch of high severity (upwards of 9.0 CVSS) CVEs to the public mailing list, instead of the private one. Naturally, the assumption is that anyone with an LLM and a heart full of dreams will then be able to take those reports and turn them into active exploits within a matter of minutes. This isn’t quite as bad as that time [Pete Hegseth accidentally texted details of upcoming military strikes in Yemen to The Atlantic](https://www.theatlantic.com/politics/archive/2025/03/trump-administration-accidentally-texted-me-its-war-plans/682151/)<sup>[7](https://drew.silcock.dev/blog/is-this-the-new-cyber-normal/#user-content-fn-trump-people)</sup>, but it’s still interesting how seriously people take this now.
 
-Glob imports increase toil for code janitors running LSCs, and make it harder to
-know where a type comes from in contexts without xrefs.
+**Links:**
 
-### A `use` statement should import items from one module
+I think it’s fair to say these last few days have been abnormally active in terms of all of these cyber incidents and security disclosures. There are many commenters on the Hacker News discussions for these incidents that say that this is nothing and it’s only going to get worse. Honestly, I’ve not decided yet. To be honest, if you’d asked me 4 years ago how far LLMs would go, I’d never have guessed they’d get as good as they are right now. Even so, people do tend to get overexcited by these announcements and suggest that we are going to live in a world where no software is secure and everyone is vulnerable.
 
-This rule corresponds to the rustfmt setting `imports_granularity = Module`.
+It’s worth noting that while a lot of the online discussion around this focusses on AI and LLMs, only some of these disclosures were researched or created with LLMs. We don’t know about some of them like the PingCAP one, but there’s clear evidence that many criminal and state-sponsored groups are using AI to do more hacking and faster. Why wouldn’t they? It seems to be pretty good at it. Many of these vulnerabilities were good old fashioned software vulnerabilities found and written using human meat fingers, but the online conversation focusses on the exciting, scary new thing. Why wouldn’t it?
 
-Basically, there should not be any `::`’s inside the `{..}` block of a `use`
-statement. For example:
+You can see why organisations like NHS England decided to [take all of their open source code private](https://keepthingsopen.com/) (even though that was a silly decision). When these LLMs are so good that anyone can point their agent at some open source code and find tons of vulnerabilities, then write full exploits for them, that is concerning for many. So what’s the solution here?
 
-```
-use foo::Foo;
-use foo::bar::Bar;
-use foo::bar::Baz;
-```
+## What can we do about it?
 
-```
-use foo::Foo;
-use foo::bar::{Bar, Baz};
-```
+The NHS approach: **close source everything**. (A.k.a. the [Madagascar approach](https://knowyourmeme.com/memes/shut-down-everything))
 
-```
-use foo::{Foo, bar::Bar};
-```
+**Pros:**
 
-Import traits within function bodies, unless the trait’s methods are used
-extensively throughout the file.
+- Your code isn’t online anymore, so people can’t point their LLMs at it and do things like analyse every commit for security fixes, find tons of previously unknown critical bugs, etc.
 
-```
-fn foo(x: u8) {
-    // Import the trait within a function, not at the module scope.
-    use std::str::FromStr;
+**Cons:**
 
-    let string: String = x.parse();
-}
-```
+- The open source community and the future of computing are slightly worse off for every open source repository taken offline.
+- You can’t close source every codebase in the world – some things like programming languages (which are often the source of critical bugs) rely on open source to function. Making Python a closed source project would be catastrophic to the world of computing.
+- It’s only closed source until someone leaks it. And they probably will eventually. And when they do, you won’t have had the years of public scrutiny on the codebase that keeps it clean and secure in the first place.
+- Sometimes you use a programming language where this doesn’t really matter, like Python and Java where you can recover source code from bytecode.
+- LLMs can even reverse engineer compiled binaries pretty effectively.
+- If the code used to be online, that old version still is. You have to assume that someone will have it somewhere. Shellshock was in GNU Bash from 1989 until 2014 before it was fixed, and that’s one of the most widely used programs on the planet.
+- It makes me sad :(
 
-To use top-level functions defined in other modules or crates, import their
-module and call them with `modulename::functionname()`. For example:
+The AI-embracer approach: **if you can’t beat ‘em, join ‘em**. In other words, they can’t use LLMs to find vulnerabilities if we’ve already run our better LLMs on our code faster and with more money and better models.
 
-```
-use std::mem;
+**Pros:**
 
-let x = mem::transmute(y);
-```
+- Makes a few very wealthy tech CEOs very happy.
+- Will find tons of bugs.
 
-```
-use std::mem::transmute;
+**Cons:**
 
-let x = transmute(y);
-```
+- Makes a few very wealthy tech CEOs very happy.
+- Will find tons of bugs. (Someone is gonna have to fix those.)
+- Costs loads of money.
+- Even though AI makes it easier, it still requires expertise and deep technical knowledge to do this stuff properly (for now).
 
-Exceptions:
+The optimist approach: **universally better, standardised approaches to reporting, handling, and mitigating security vulnerabilities followed by all companies having top-notch security postures, well-understood risks, well-documented processes, and so on**.
 
-Rationale
+**Pros:**
 
-Many Rust codebases consistently keep a style such that unqualified lowercase
-names are assumed local, so `foo()` can be assumed to be from the same module.
-This rule largely exists to avoid reviewer disagreements, the benefit is mostly
-consistency and a minor edge on reading code without xrefs.
+- Lovely idea.
+- Why didn’t anyone else think of this?
+- Gee, we are so clever. Have we just solved this?
 
-By default, types and traits should be referenced in code without using their
-module path, e.g., code should use `Regex`, not `regex::Regex`, with a `use
-regex::Regex` at the top of the file or potentially in the relevant function.
+**Cons:**
 
-Exceptions:
+- We do not live in this world. We will never live in this world.
+- Did I mention this is actually quite hard? And possibly impossible?
+- Expensive.
 
-Rationale
+There are some easy wins we could get from this moving forwards, like “never announce details of a critical vulnerability before the patch is ready to install”, but in this case unintentional leaks meant everyone knew about the vulnerabilities even before the official announcement. Maybe even that’s asking too much. In this case, it was a series of mistakes from multiple people and companies that led to or accelerated the exploit being in active use hours before the patch was available, hence everyone taking their servers offline. AWS have since said they saw someone trying out this vulnerability from 17th October, before any of these leaks happened.
 
-This rule largely exists to avoid reviewer disagreements.
+Even something like minimum release age which gained popularity after [shalk/debug](https://www.sonatype.com/blog/npm-chalk-and-debug-packages-hit-in-software-supply-chain-attack), [Shai-Hulud](https://aws.amazon.com/blogs/security/defending-against-supply-chain-attacks-like-chalk-debug-and-the-shai-hulud-worm/), & March LiteLLM incidents, as it means big updates that fix widely exploited vulnerabilities don’t get patched for a few days, giving attackers ample time to hack you to pieces. At the very least, we could maybe do with some better client management to avoid everyone panicking and taking all their servers offline.
 
-### Use the appropriate formatting tool
+Maybe we just need to accept that if you expose something to the wider internet, it will get hacked, and plan accordingly. Maybe it’s our expectations that are at fault.
 
-Use the appropriate formatting tool (e.g., `git cl format` in Chromium).
+There’s definitely a story about AI and security here. It’s changing the world of software, and it’s not yet clear whether that’s for the better or the worse. Money has a way of warping truth like matter warps spacetime, and there’s enough money in AI to cause whatever the truth equivalent of a medium-sized black hole is. There’s an incredible amount of money being spent on AI and it all wants you to think that it’s going to change everything about your life, including software and security. That doesn’t mean it’s not true, of course.
 
-Configuration (for style guide authors)
+Some people say automated analysis tools led to loads of new bugs being found back in the ’10s, and now the same thing is happening again. It feels categorically different to me, but perhaps there will be an initial period of escalating bug reports before it all settles down and goes back to how it was. I suspect not. Some people say this is only happening because humans wrote all the dodgy code in the first place – once AI is writing all of the code to start with, there’ll be no vulnerabilities because LLMs are better at writing secure code than humans. I am not convinced by this argument.
 
-A codebase may choose to not apply the following `rustfmt` options if they care
-about building on stable and the option is unavailable on their stable Rust:
+While I’m not making many predictions about the future (because I don’t want to look like an idiot in 12 months’ time when I’m inevitably proven wrong), I will say that the software industry is going to change, and open source is going to change, and it is our collective responsibility as members of the software community to make sure that this change is for the benefit of all of us, not special interests and private corporations.
 
-- Maximum of 100 columns per line: [`max_width = 100`](https://rust-lang.github.io/rustfmt/?version=v1.6.0&search=#max_width)
-- Usage of lowercase alphabets in hex literals (`0xab123cdef` as opposed to `0xAB123CDEF`): [`hex_literal_case = Lower`](https://rust-lang.github.io/rustfmt/?version=v1.6.0&search=#hex_literal_case)
-- Macro matcher formatting: [`format_macro_matchers = true`](https://rust-lang.github.io/rustfmt/?version=v1.6.0&search=#format_macro_matchers)
-- Usage of escapes for invisible characters in literals. E.g., if you wish to have text containing a Zero-Width joiner, use `\u{200D}`.
+## Updates
 
-You may opt out of automatic formatting using `#[rustfmt::skip]`, but only in
-the following situations:
+This is a developing story – I’ll note any updates in here. I wrote this in somewhat of a hurry, so I may also make some incremental improvements to the wording and evidencing behind some bits.
 
-Important: Formatting should not be skipped for personal style choices.
-
-## Ownership and borrowing
-
-Prefer unique ownership and borrowing over `Rc` and `Arc` for managing memory.
-
-Exception:
-
-Rationale
-
-Generally, Rust allows representing object graphs without using shared ownership
-smart pointers. These pointers add runtime overhead and their own unique
-complexity. Engineers coming from other languages might tend to use `Rc` and
-`Arc` too quickly.
-
-Use `.clone()` when you genuinely need a deep copy of an object.
-
-Avoid using `.clone()` as a substitute for borrowing. Design code that works
-naturally with Rust’s ownership and borrowing rules. However, if the borrowing
-relationships become excessively complex, `.clone()` can be a pragmatic choice.
-
-Consider the performance needs of the code while choosing between cloning and
-borrowing.
-
-Note: This advice does not apply to cloning `Rc` or `Arc` pointers. Cloning
-reference-counted pointers does not create a deep copy, and is an expected way
-to use them.
-
-Rationale
-
-Deep copies can be expensive to make due to memory allocation and data copying.
-
-When functions accept borrowed, immutable data, use a reference type that
-affords the most flexibility. Pass references to the data itself instead of
-references to smart pointers, containers, or wrappers.
-
-| Use | Instead of | Why? |
-| --- | --- | --- |
-| `&T` | `&Box<T>` | Borrow the data inside the box |
-| `&[T]` | `&Vec<T>` | Accept any slice instead of specific containers |
-| `&str` | `&String` | Accept a string slice instead of references to owned strings |
-| `Option<&T>` | `&Option<T>` | Borrow the data inside the Option |
-
-Exceptions:
-
-For context, see Clippy lints
-[`borrowed_box`](https://rust-lang.github.io/rust-clippy/master/index.html#borrowed_box)
-and
-[ptr_arg](https://rust-lang.github.io/rust-clippy/master/index.html#ptr_arg).
-
-Rationale
-
-Accepting reference types that don’t mention specific smart pointers,
-containers, or wrappers makes functions more versatile and performant: callers
-can pass data held in a variety of ways without copying it first.
-
-Prefer returning iterators (either concrete types or `impl Iterator`) where
-possible over returning `Vec<T>`.
-
-Note: In application code, returning a `Vec<T>` is fine if it simplifies the
-code and if flexibility and performance advantages of iterators are not clearly
-needed.
-
-Exceptions:
-
-Rationale
-
-Highly reusable library code generally should strive to provide more flexible
-and performant APIs. Returning an iterator allows callers to choose how to
-consume the data: collect it into a vector, process it in a loop, or chain
-further iterator adapters. Some of these options allow users to avoid
-unnecessary allocations.
-
-In application code, the usage patterns for a function are often easier to
-predict. If it is clear that performance is not a concern, or that data would be
-collected into a vector anyway, returning a vector makes for a simpler API.
-
-Highly reusable library code should accept iterators or `impl IntoIterator` if
-it only needs to iterate over the input.
-
-Note: In application code, accepting a slice `&[T]` is fine if it simplifies the
-code and if flexibility and performance advantages of iterators are not clearly
-needed.
-
-Rationale
-
-Highly reusable library code generally should strive to provide more flexible
-and performant APIs. Functions that accept iterators offer callers:
-
-In application code, the usage patterns for a function are often easier to
-predict. If it is clear that performance is not a concern, or that callers would
-always have a vector anyway, accepting a slice makes for a simpler API.
-
-When designing library APIs that accept a `T` but users are likely to have
-various types, consider accepting `impl Into<T>` instead of `T` if **call-site
-ergonomics are paramount**.
-
-Tip: This should be balanced against code bloat concerns; it is not a
-requirement to use lots of `Into<T>` in your code.
-
-Note: Application code should almost never use `impl Into<T>` parameters.
-
-Rationale
-
-Using `impl Into<T>` allows a function to directly accept various arguments of
-various compatible types. For example, a function accepting `impl Into<String>`
-could be called with a `String` or a `&str` literal directly.
-
-The tradeoff here is balancing the convenience of avoiding a `.into()` at the
-callsite against the cost of generics (more complex API signature, increased
-code size, sometimes even type inference difficulties).
-
-### Prefer `enum` over `bool` in APIs
-
-Use `enum` function parameters instead of `bool` in cases where the purpose of
-the parameter is not obvious.
-
-If you do use `bool`, consider using an inline comment to document the purpose
-of the `bool` in an argument list.
-
-Choose the error reporting mechanism that fits your API contract: `Option`,
-`Result`, or `panic!`.
-
-**Use `Option` for simple failures** where the cause is obvious and the caller
-would not benefit from further details. This is best for standard, anticipated
-outcomes like a missing value or a parsing mismatch.
-
-```
-// Good: The cause of the failure is obvious (integer overflow). No further
-// details could be reasonably provided.
-fn checked_add(a: u32, b: u32) -> Option<u32> { ... }
-```
-
-**Use `Result` for recoverable failures where the caller needs context** to
-handle the error. These are often “unavoidable” errors caused by external
-factors (like I/O or network) that even correctly implemented code cannot
-prevent with checks ahead of time. Nevertheless, the caller can reasonably
-anticipate the kinds of errors (a file-related function can fail with an I/O
-error). The error details allow the caller to distinguish failure modes and
-recover appropriately.
-
-```
-// Good: The caller needs to know *why* it failed (NotFound vs PermissionDenied).
-fn open_file(path: &Path) -> Result<File, io::Error> { ... }
-```
-
-**Use `panic!` to report bugs and violated invariants.** These errors are
-avoidable: the program is missing a check, and is calling an operation without
-fulfilling a precondition. These defects must be fixed in the code, not handled
-at runtime, although coarse-grained recovery might be possible with
-`catch_unwind`.
-
-```
-// Good: Panics if the invariant (index must be in bounds) is violated.
-// This indicates a bug in the caller's logic.
-impl<T> MyVec<T> {
-    pub fn remove(&mut self, index: usize) -> T {
-        if index >= self.len() {
-            panic!("index out of bounds");
-        }
-        // ...
-    }
-}
-```
-
-Note: Some codebases may choose to avoid panics entirely, and require even
-broken invariants to be reported via `Result`.
-
-Exceptions:
-
-## Types
-
-Use a
-[newtype](https://doc.rust-lang.org/rust-by-example/generics/new_types.html)
-instead of a type alias in the following cases:
-
-Prefer types with named fields over tuples, as tuple indexes (`.0`, `.1`, …)
-quickly become confusing.
-
-Exceptions:
-
-## Traits
-
-As a general rule, low-level library code should anticipate users’ needs
-proactively, while application code should add trait impls as needed.
-
-If a method matches the purpose and behavior of a standard library trait,
-implement that trait. For example, instead of writing `fn from_str(&str) ->
-Self` on `Foo`, you should `impl FromStr for Foo`.
-
-It is acceptable to have both the method and the trait impl for discoverability
-reasons.
-
-For context, see Clippy lint
-[`should_implement_trait`](https://rust-lang.github.io/rust-clippy/master/index.html#should_implement_trait)
-([list of traits](https://github.com/rust-lang/rust-clippy/blob/928349795f9f28f54e69bd0f0ffeed33de5e272a/clippy_lints/src/methods/mod.rs#L3940-L3971)).
-
-Manual implementations should be avoided if they can be expressed as a
-`#[derive()]`.
-
-In libraries, prefer accepting generics (`T: Trait` or `impl Trait`) in function
-parameters over `dyn Trait`.
-
-Exceptions:
-
-Rationale
-
-Define a trait only for the following purposes:
-
-- To enable generic programming (to use `T: Trait` in constraints of generic functions and types).
-- To accept or return an `impl Trait` or `dyn Trait`.
-- To define an [extension trait](https://google.github.io/styleguide/rustguide.html#extension-traits) (but see also the caveats in the section on extension traits).
-
-In all other cases where you want to implement functionality for a type, use an
-[inherent implementation](https://doc.rust-lang.org/std/keyword.impl.html#inherent-implementations).
-
-Don’t use traits merely to organize code.
-
-### Extension traits
-
-An
-[extension trait](https://rust-lang.github.io/rfcs/0445-extension-trait-conventions.html)
-is a trait that adds methods to a type from a different crate.
-
-What differentiates an extension trait from other traits is that its sole
-purpose is to add methods to the type; it is not intended for use in generics
-(`T: Trait`, `impl Trait`) or dynamic dispatch (`dyn Trait`). To indicate this,
-the name of an extension trait should carry the suffix `~Ext` (for example,
-`ForeignTypeExt`).
-
-In general, the team that owns the original type should also own the extension
-trait.
-
-Exceptions:
-
-Note: This rule is specifically about extension traits. It is relatively common
-to define a trait as an input trait (e.g., `DateLike`) and implement it on a
-bunch of foreign types.
-
-Examples
-
-```
-extern crate foreign_crate;
-use foreign_crate::ForeignType;
-
-trait ForeignTypeExt {
-  fn additional_method(&self);
-}
-
-impl ForeignTypeExt for ForeignType {
-  fn additional_method(&self) { ... }
-}
-```
-
-It is also possible to define an extension trait for every type that implements
-some foreign trait. Effectively, this is equivalent to adding default methods to
-the foreign trait:
-
-```
-extern crate foreign_crate;
-use foreign_crate::ForeignTrait;
-
-trait ForeignTraitExt {
-  fn additional_method(&self);
-}
-
-impl<T: ForeignTrait> ForeignTraitExt for T {
-  fn additional_method(&self) { ... }
-}
-```
-
-Rationale
-
-When the same team owns the extension trait and the type being extended, this
-helps avoid method name conflicts between the base type and the extension trait
-or between two extension traits.
-
-- **Types with public fields**: Consider implementing traits implemented by all subfields.
-- **Error types**: Implement the `Copy` trait whenever possible. `Copy` types are simpler to manage and propagate because they can be passed by value without moving ownership. An example of a case where this is not possible is if the error must contain non-`Copy` fields like a `String`.
-- **`Copy`**: Implement whenever it is reasonably clear that the type will continue to be `Copy` in the future.
-- **`Clone`**: Most types should implement `Clone` unless they represent some external resource.
-- **`Default`**: Implement if the type implements `new()` or otherwise has a default state. For context, see Clippy lint [`new_without_default`](https://rust-lang.github.io/rust-clippy/master/index.html#new_without_default).
-- **`PartialEq`** / **`Eq`**: If you want users to use the `==` operator, prefer implementing `PartialEq` over `Eq`. When you do implement `Eq`, be aware of the additionally required reflexivity (details: https://doc.rust-lang.org/std/cmp/trait.Eq.html).
-- **`PartialOrd`** / **`Ord`**: If you want users to use the `<` or `>` operators, prefer implementing `PartialOrd` over `Ord`. When you do implement `Ord`, be aware that it requires total ordering (details: https://doc.rust-lang.org/std/cmp/trait.Ord.html).
-- **Map keys**
-  - If you think it is likely that a type will be used as a map key or otherwise cached, implement Hash and Eq.
-  - If, in addition, the type has a clear total ordering, implement Ord (and any traits it needs).
-
-### Pair important `From` impls with explicit constructor methods
-
-If a type has an important `From` impl that is expected to be one of the primary
-ways of constructing it, add an inherent `::new()`, `::new_from_foo()`¸ or
-`::from_foo()` method.
-
-Structs with all-public fields that are primarily used as a “bag of options” for
-a function should implement `Default`.
-
-Rationale
-
-This enables convenient use of struct update syntax (`Struct { a: 0,
-..Default::default()}` ).
-
-Never reach inside a poisoned mutex to get at its insides, no matter how
-tempting the use case may seem.
-
-### Don’t use `async` / `.await` [chrome]
-
-Don’t use `async` / `.await` in Chromium.
-
-In Chromium, prefer to use sequences instead of threads.
-
-Use Fuchsia’s mutex type, rather than one from `std::sync` or `parking_lot`.
-
-## Macros
-
-When considering how to express an API, prefer in order:
-
-- Regular Rust functions, types, traits, objects, and modules. (Avoid macros, code generation, and metaprogramming where possible).
-- `macro_rules!`-style macros.
-- Other code generation strategies (e.g. `genrule`)
-- `proc_macro` macros.
-
-When you decide to use a macro or code generation, please weigh the benefits
-against the costs:
-
-Rationale
-
-**Prefer non-macro facilities:** Macros can create dialects of the language that
-make it harder for engineers to work across the codebase. When a reader sees a
-usage of a macro, they can make fewer assumptions about that code than if it
-didn’t use a macro. Macros are harder to write correctly than regular Rust code.
-
-**Use `macro_rules!` for simple code generation:** Since Rust macros operate on
-the AST, they can be less fragile than textual code generation.
-
-## Naming
-
-### Naming methods
-
-Follow the Rust standard library style for naming methods. See also the guidance
-on
-[naming conventions](https://google.github.io/comprehensive-rust/idiomatic/foundations-api-design/predictable-api/naming-conventions.html)
-in the Comprehensive Rust course.
-
-Specific considerations:
-
-- Use prefixes such as as_...(), to_...(), or into_...() with the appropriate self convention. See also this section of the Rust API Guidelines and the Clippy lint `wrong_self_convention`.
-
-Lifetimes should have descriptive names, especially type lifetimes.
-
-Exceptions:
-
-Use a short name for your generic parameters (either single or multi character),
-related to the kind of thing they represent. Single-letter generics are okay,
-but the letter chosen should be somewhat indicative of the object type, ideally
-taken from the most important trait bound.
-
-`T` or `U` are fine when the generics are in a relatively unbound context; i.e.
-it is an API intended for use with most types, like `Vec<T>`.
-
-When naming an [extension trait](https://google.github.io/styleguide/rustguide.html#extension-traits), give the name an `~Ext`
-suffix (for example, `ForeignTypeExt`).
-
-### Naming initialization functions
-
-Follow these guidelines when naming initialization functions:
-
-- Constructors: Use `new()`, or `new_with_foo()` if there is more than one. If the constructor returns a `Result`, use `try_new()`.
-- Value-to-value conversions: Use `from_foo()` with an associated `From` impl. See [here](https://doc.rust-lang.org/std/convert/trait.From.html#when-to-implement-from) for details on when an operation can be considered to be a value-to-value conversion.
-
-Don’t use abbreviations (especially acronyms and initialisms) that someone
-outside your project is unlikely to know. Don’t abbreviate by deleting letters
-within a word.
-
-See also the
-[Google C++ Style Guide](https://google.github.io/styleguide/cppguide.html#General_Naming_Rules).
-
-Exceptions:
-
-Add documentation comments to public APIs, potentially using the `missing_doc`
-lint to help with this.
-
-Best practices for documentation comments:
-
-- Consider including examples: It is not necessary for every function to have examples, but enough functionality should be covered in examples *somewhere* to give an idea of how the crate works.
-- Always document panic cases for functions which may panic due to malformed input.
-- Clearly document invariants for unsafe functions and traits.
-- Use capitalization and punctuation.
-- Don’t explain the basics of the programming language. For example, don’t do the following: `struct MockFileSystem { ... } /// A mock implementation of the FileSystem trait, intended to be used in unit tests. impl FileSystem for MockFileSystem `
-
-Exceptions:
-
-- Comments should say something that the code does not already say. If there’s nothing insightful to say, it is better to omit the comment than to repeat the function name in a trivial way. For example, don’t do the following (it’s fine to `allow` the lint in that case): `/// Removes an element. pub fn remove_element() -> Element {} `
-- It is generally okay to omit documentation on individual enum variants, especially if their name is self-explanatory.
-
-**How to format documentation comments**
-
-Follow these guidelines when writing documentation comments:
-
-It is acceptable, and even encouraged, to mix doc comments (`///` and `//!`) and
-ordinary comments (`//`). If you have one thing you wish to document publicly,
-and another thing you want to note as an implementation comment, then use both!
-For example:
-
-```
-/// Finds the first `FooItem` with the given `name`, or `None` if not present.
-// TODO: crbug.com/12345 - `name` should be &str, not String.
-pub fn get_named(items: &[FooItem], name: String) -> Option<&FooItem> {...}
-```
-
-Rationale
-
-Many, though not all, languages have a different commenting convention (such as
-extra `*` characters) for doc comments as opposed to implementation comments.
-Rust and Python are notable for not just having different commenting
-conventions, but an actual different syntax entirely. This has concrete benefits
-to the Rust ecosystem:
-
-### Unsafe code
-
-Don’t write unsafe code unless there is no way to implement the same
-functionality with safe code.
-
-If you do have to write unsafe code:
-
-Don’t use unstable features.
-
-Exceptions:
-
-### Getters and setters
-
-Writing and naming getters and setters should follow these guidelines:
-
-- foo() for a getter that returns a T by value.
-- foo_mut() for a getter that returns a &mut T.
-- take_foo() for a getter that “clears” the value (by setting it to None or some other default state) and returns the old value.
-- set_foo() for a setter that takes a T by value.
-- with_foo() / with_mut_foo() for an accessor that operates via a closure (see details below). Such an accessor is invoked as object.with_foo(|foo| frob(foo)).
-- replace_foo() for a setter that returns the old value.
-
-Examples
-
-```
-impl Stuff {
-   fn foo(&self) -> &Foo { ...  }
-   fn foo_mut(&mut self) -> &mut Foo { ... }
-
-   /// Sets "baz" property to `None` and returns the old value.
-   fn take_baz(&mut self) -> Option<Baz> { ... }
-
-   fn set_foo(&mut self, foo: Foo) { ... }
-
-   /// Calls `f` with a borrow of the "bar" property.
-   /// Returns the return value of `f`.
-   fn with_bar<R>(&self, f: impl FnOnce(&Bar) -> R) -> R { ... }
-
-   /// Calls `f` with a mutable borrow of the "bar" property.
-   /// Returns the return value of `f`.
-   fn with_mut_bar<R>(&self, f: impl FnOnce(&mut i32) -> R) -> R { ... }
-
-   /// Sets "foo" property to `foo` and returns the old value.
-   fn replace_foo(&mut self, foo: Foo) -> Foo  { ... }
-}
-```
-
-Accessors that accept a closure (`.with_foo()`) are typically invoked as
-`object.with_foo(|foo| do_something_with(foo))`. They can be a good choice in
-the following situations:
-
-- When the property is contained in an interior mutability wrapper (e.g. `Mutex` or `RefCell`). These mechanisms need to constrain access to the property to a scope, and the closure provides this scope. This is usually preferable to directly returning the RAII object that implements the scope (e.g. `MutexGuard<T>`) because the latter would leak an implementation detail.
-- When follow-up work or validation is needed after a property is changed and a `set_foo()` accessor cannot be used (for example because the property’s type is expensive to clone or cannot be cloned at all).
-
-A `with_foo()` accessor will often allow the closure to return a value and
-forward it by returning it from `with_foo()`.
-
-If you need to provide two closure-accepting accessors, one for read-only access
-and one for mutable access, it is common to name them `with_foo()` and
-`with_mut_foo()`. Otherwise, `with_foo()` is often also used for mutating
-accessors.
-
-If you implement `len()`, also implement `is_empty()`. For context, see Clippy
-lint
-[`len_without_is_empty`](https://rust-lang.github.io/rust-clippy/master/index.html#len_without_is_empty).
-
-Treat items marked `#[doc(hidden)]` as private. Don’t access them unless you own
-the code.
-
-Mark a public function as `const` only if you expect it to remain `const` in the
-future (or can commit to helping clients migrate when it changes).
-
-Rationale
-
-It’s a breaking change to turn a `const` function into a regular function.
-
-Use operator overloads for their original mathematical/logical purpose, not just
-to make the code more concise (as “syntax sugar”).
-
-### Apply `#[non_exhaustive]` to publicly-exposed enums
-
-If an enum is part of a public API used by other teams, mark it
-`#[non_exhaustive]`.
-
-Exceptions:
-
-For context, see Clippy lint
-[`exhaustive_enums`](https://rust-lang.github.io/rust-clippy/master/index.html#exhaustive_enums).
-
-Rationale
-
-Marking an enum `#[non_exhaustive]` forces users to include a wildcard arm (`_
-=> ...`) in `match` statements. This ensures code continues to compile when new
-variants are added to the enum later.
-
-This rule is primarily important for enums used across team boundaries, because
-the scope of the breakage could be significant. Enums used only a small number
-of times can’t create a large breakage and thus may ignore this rule.
-
-Structs with public fields that are part of a public API used by other teams
-should be marked `#[non_exhaustive]`.
-
-Exceptions:
-
-Rationale
-
-Adding a new field (even a private one) to a struct with all public fields is a
-breaking change, because callers can no longer name all fields in a struct
-literal.
-
-A `#[non_exhaustive]` struct can’t be constructed with the struct literal
-syntax, except for the code in the same crate. This allows new private fields to
-be added without breaking users.
-
-This rule is primarily important for structs used across team boundaries,
-because the scope of the breakage could be significant. Structs used only a
-small number of times can’t create a large breakage and thus may ignore this
-rule.
-
-### `#[must_use]` on functions
-
-Use `#[must_use]` on functions in these cases:
-
-- The caller cannot use the function correctly if they ignore the return value. This includes pure functions (functions without side effects), such as `HashMap::get()`.
-- Any function whose return value represents an error or otherwise critical information about the function’s behavior. If the return type is already annotated `#[must_use]` (which is true of `Result`, for example), the function does not need to be annotated `#[must_use]`.
-
-### `#[must_use]` on types
-
-Use `#[must_use]` on types intended to be returned by functions that would
-otherwise be annotated `#[must_use]` according to the
-[rules above](https://google.github.io/styleguide/rustguide.html#must-use-on-functions).
-
-Examples:
-
-- The type is an error type (similar to `Result` or `StatusOr`).
-- The type represents a lazily evaluated computation. In other words, the function call doesn’t do anything by itself, and the return value needs to be accessed to cause some desired side effect.
-
-Do not cause code to run before `main()`, for example by using techniques such
-as the [ctor crate](https://docs.rs/ctor/latest/ctor/).
-
-Add enough explicit types so that someone familiar with the codebase can figure
-out what the inferred types are.
-
-Prefer to add the types to variable declarations, rather than as
-[turbofishes](https://doc.rust-lang.org/reference/glossary.html#turbofish). If
-the compiler forces you to add a turbofish, it is generally fine to add a `_`
-inference marker.
-
-Specific situations in which you should probably add types:
-
-Avoid potentially panicking operations when the input data guarantees they
-cannot panic. For example, instead of using `Option::unwrap` on a value known to
-be valid, use pattern matching to prove correctness to the compiler.
-
-```
-// Good: The match arm proves to the compiler that `x` is `Some`.
-// A panic is obviously not possible.
-if let Some(value) = option {
-    use_value(value);
-}
-```
-
-```
-// Bad: Correctness of `unwrap` relies on a runtime check that `option` is `Some`.
-if option.is_some() {
-    use_value(option.unwrap());
-}
-```
-
-### Prefer `expect` over `unwrap`
-
-If a panic is necessary because an invariant cannot be expressed in the type
-system, prefer `expect` over `unwrap` to document the reason.
-
-Prefer to list all enum variants in `match` statements over `non_exhaustive`
-enums.
-
-If you don’t care about specific variants, place them in the wildcard arm. If
-you *only* care about specific variants, use an `if let` or a `let … else {}`.
-
-Examples:
-
-```
-#[non_exhaustive]
-pub enum Shape {
-    Circle,
-    Square,
-    Triangle,
-}
-```
-
-```
-fn process_shape(shape: Shape) {
-  match shape {
-    Shape::Circle => println!("It's a circle"),
-    Shape::Square => println!("It's a square"),
-    // Triangle and any future variants don't require any actions.
-    Shape::Triangle | _ => {}
-  }
-}
-```
-
-```
-fn process_shape(shape: Shape) {
-  if let Shape::Circle = shape {
-    println!("It's a circle"),
-  }
-}
-```
-
-```
-fn process_shape(shape: Shape) {
-  match shape {
-    Shape::Circle => println!("It's a circle"),
-    _ => {}
-  }
-}
-```
-
-Exceptions:
-
-This is covered by the built-in lint `non_exhaustive_omitted_patterns` which you
-can enable on your code.
-
-While some assertions are self-explanatory, many benefit from additional context
-that clarifies why an assertion is expected to hold, or what caused it to be
-violated. Use the optional format string argument for `assert!` to convey this
-context.
-
-You should always consider adding context, but particularly in the following
-situations:
-
-Examples
-
-**Explaining why an assertion should hold**
-
-```
-    assert!(
-        values.is_sorted(),
-        "`values` is populated from a `PriorityQueue`, so we expect it to be sorted"
-    );
-```
-
-**Logging a value to clarify why the assertion failed**
-
-```
-assert!(refund > 0, "Refund must be positive, got {refund:?});
-```
-
-**Flagging misuse of an API**
-
-```
-impl Database {
-    ...
-
-    fn execute_query(&self, query: &str) {
-        assert!(self.stream.is_some(), "Call connect() before executing queries");
-    }
-
-    ...
-}
-```
-
-**Don’t use the context string merely to repeat the condition**
-
-```
-assert(!values.is_sorted(), "values should always be sorted");
-```
-
-Avoid using combinator chains in ways that hurt readability. Specifically:
-
-Combinators *are* preferable for shorter chains and for cases where the
-combinator itself provides a lot of logic that would otherwise have to be
-written out in the corresponding `for` loop.
-
-Examples
-
-**Complex combinator chains**
-
-Here’s an example of a combinator chain that is hard to read because it involves
-conditionals and mutates external state:
-
-```
-let mut error_count = 0;
-let _processed_items: Vec<_> = items
-    .into_iter()
-    .map(transformation_that_may_fail)
-    .map(|result| {
-        if result.is_err() {
-            error_count += 1;
-        }
-        result
-    })
-    .filter_map(Result::ok)
-    .collect();
-```
-
-The corresponding `for` loop is easier to read:
-
-```
-let mut error_count = 0;
-let mut processed_items = Vec::with_capacity(items.len());
-
-for item in items {
-    match transformation_that_may_fail(item) {
-        Ok(val) => processed_items.push(val),
-        Err(_) => error_count += 1,
-    }
-}
-```
-
-**Combinator chains in for loops**
-
-Avoid constructing a combinator chain in the header of a `for` loop:
-
-```
-for bug in bug_descriptions
-    .iter()
-    .filter_map(|description| parse_bug_description(description).ok())
-    .filter(|bug| bug.priority <= Priority::P1)
-{
-    assign_bug(bug);
-}
-```
-
-Instead, assign the combinator chain to a variable. This reduces clutter, and
-the variable name documents what the combinator chain does:
-
-```
-let urgent_bugs = bug_descriptions
-    .iter()
-    .filter_map(|description| parse_bug_description(description).ok())
-    .filter(|bug| bug.priority <= Priority::P1);
-
-for bug in urgent_bugs {
-    assign_bug(bug);
-}
-```
-
-**When to prefer a combinator chain**
-
-Here’s an example where a combinator chain is preferable:
-
-```
-let threshold_exceeded = values.iter().any(|&v| v > threshold);
-```
-
-The corresponding for loop is harder to read and reinvents the logic contained
-in `any()`:
-
-```
-let mut threshold_exceeded = false;
-for v in values {
-  if v > threshold {
-    threshold_exceeded = true;
-    break;
-  }
-}
-```
-
-Use of `panic::catch_unwind` is prohibited in first-party Rust code.
-
-Exceptions:
-
-- It is acceptable as a defense in depth mechanism as long as it is never relied upon for any properties. A codebase that is already attempting to avoid panics may choose to wrap critical entry points with a catch_unwind recovery mechanism just in case a panic slips through. Code authors must convince the reviewer that the codebase is doing most of what it can to avoid panics. This exception only applies to code that has the possibility of being run with panic=unwind (so this does not apply to Chrome, Android, Fuchsia).
-
-Rationale
-
-Rust code may be used in many environments, and `panic::catch_unwind` will only
-function correctly in environments with `panic=unwind`. While the final panic
-disposition of prod binaries has not yet been determined, Chrome, Android, and
-Fuchsia all require `panic=abort`.
-
-### Prefer `format!` / `write!` for concatenation and substitution
-
-Prefer `format!()` and `write!()` to other alternatives in the following
-situations:
-
-Rationale
-
-Most codebases use their own specific test framework rather than `#[test]`.
-
-- Chrome Use [rust_gtest_interop](https://source.chromium.org/chromium/chromium/src/+/main:testing/rust_gtest_interop/). This makes it possible to integrate Rust tests into C++ test binaries.
-- Fuchsia Use `#[fuchsia::test]`. See [here](https://fuchsia.dev/fuchsia-src/development/languages/rust/testing.md) for more details.
+1. There is some discussion and disagreement about whether any real, working attempts at exploiting this were made before the patch was released. [↩](https://drew.silcock.dev/blog/is-this-the-new-cyber-normal/#user-content-fnref-already-exploited)
+2. Disclaimer: I [kind of](https://en.wikipedia.org/wiki/Quango#United_Kingdom) work for the UK government. [↩](https://drew.silcock.dev/blog/is-this-the-new-cyber-normal/#user-content-fnref-gov-disclaimer)
+3. GitLab is using CVSS 3.1 while PHP is using CVSS 4.0 here, which means they’re following slightly different metrics to calculate the CVSS score, meaning you can’t directly compare them. [↩](https://drew.silcock.dev/blog/is-this-the-new-cyber-normal/#user-content-fnref-cvss-types)
+4. Ok, maybe not this last point. [↩](https://drew.silcock.dev/blog/is-this-the-new-cyber-normal/#user-content-fnref-not-claudisms)
+5. If these reprehensible criminals are ever brought to justice, I propose their longest sentence be for crimes against wordplay. Truly atrocious. [↩](https://drew.silcock.dev/blog/is-this-the-new-cyber-normal/#user-content-fnref-crime-against-wordplay)
+6. To clarify, there’s no evidence that this group are Russian hackers. They seem to be primarily financially motivated, so they could be from anywhere and everywhere. You get my point though – back in the day, you could tell the Russian phishing campaigns from their grammatical peculiarities. Nowadays it’s lost all of its charm, all because of AI. [↩](https://drew.silcock.dev/blog/is-this-the-new-cyber-normal/#user-content-fnref-clarify-russians)
+7. Fortunately, being the upstanding and trustworthy citizen that he is and someone who bases his administrative recruitment decisions on what’s best for the country as opposed to personal loyalty and piety to the president’s personal agenda of emolument, the president ensured that all [those](https://en.wikipedia.org/wiki/Mike_Waltz) [responsible](https://en.wikipedia.org/wiki/Pete_Hegseth) were swiftly [removed](https://en.wikipedia.org/wiki/United_States_Secretary_of_Defense) [from](https://en.wikipedia.org/wiki/List_of_ambassadors_of_the_United_States_to_the_United_Nations) his administration, never to be seen in Washington again. [↩](https://drew.silcock.dev/blog/is-this-the-new-cyber-normal/#user-content-fnref-trump-people)

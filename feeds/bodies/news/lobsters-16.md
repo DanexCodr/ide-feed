@@ -1,278 +1,128 @@
-*TL;DR: The DuckDB team is happy to announce that today we're releasing DuckDB version 2.0.0 LTS, codenamed “Cinnamon Teal” (Spatula cyanoptera). This is our biggest feature release so far, and it ships a polished version of the Quack protocol, asynchronous I/O, a first-class `VARIANT` type, agent mode, triggers, an extensible SQL parser and much more, built from close to 20,000 commits since DuckDB 1.5.*
+During the process of building [Marathon Recompiled](https://github.com/sonicnext-dev/MarathonRecomp), we’ve ended up digging deep into many of Sonic 06’s core systems, including the rendering. The appearance of 06’s various areas varies from pretty good, like in Crisis City, to utterly flat and depressing in Castle Town.
 
-We are proud to release DuckDB 2.0.0, codenamed [“Cinnamon Teal”](https://shell.duckdb.org/#queries=v0,ATTACH-'https%3A%2F%2Fblobs.duckdb.org%2Fduck.db'-AS-duckdb~,CALL-duckdb.cinnamon_teal()~) after the [*Spatula cyanoptera*](https://en.wikipedia.org/wiki/Cinnamon_teal), a strikingly reddish-brown duck found in the western Americas.
+*Crisis City has reflections, particle effects, dramatic lighting.*
 
-While [DuckDB 1.0](https://duckdb.org/2024/06/03/announcing-duckdb-100.html) was all about stability and backward compatibility, DuckDB 2.0 is above all a feature release.
-In this blog post, we summarize the highlights and then walk through the breaking changes and how to migrate.
-We showcased many of the new features in [“A Preview of DuckDB v2.0”](https://duckdb.org/2026/08/17/duckdb-20-highlights.html), which covers each one in more depth.
-For the complete release notes, see the [release page on GitHub](https://github.com/duckdb/duckdb/releases/tag/v2.0.0).
+*Castle Town just makes me sad.*
 
-> Tip To install the new version, please visit the [installation page](https://duckdb.org/install/).
-> Some clients, such as the CLI and Python, are already available. Other client libraries (e.g., R and Rust) and some extensions can take a few days to release due to the extra changes and review rounds required.
+It really makes you wonder what exactly went wrong? If you look at what limited footage we have of beta content, we can see many effects that aren’t present in the final game. Kingdom Valley had full bump maps, Castle Town had more complex geometry and plants, and New City’s collision implies a very different building layout at some point in development.
 
-With this release, there are currently three DuckDB lines available.
-DuckDB 2.0 is a long-term support (LTS) release with support until at least October 2027.
-The previous LTS release, version 1.4, is still supported until November 17, 2026.
-To ensure a smooth transition and allow sufficient time for testing, we extended the support period of DuckDB 1.5 until March 2027, effectively also turning it into an LTS release.
-For details, see the [release calendar](https://duckdb.org/release_calendar.html#lts-releases).
+It turns out, much of the cut content is actually still in the game, but is simply not enabled for performance reasons in vanilla. Even with the cut-back visuals, the game struggles to reach target FPS on real hardware. It’s not surprising that given the crunch Sonic Team were under to get the game out the door, these features were among the first to go.
 
-To find your way around the documentation for all of the new features, we also published a [“What's New in the Docs for 2.0”](https://duckdb.org/docs/2.0/whats_new_in_the_docs.html) page that links each feature below to its documentation.
+# Shaders
 
-DuckDB has been an in-process database since day one.
-In [DuckDB 1.5.3](https://duckdb.org/2026/05/20/announcing-duckdb-153.html), released in May, we introduced the Quack protocol that lets you run DuckDB in a traditional client-server setup, along with the [`quack` extension](https://duckdb.org/docs/2.0/core_extensions/quack.html), which implements DuckDB's native protocol, so any DuckDB process can [serve its databases](https://duckdb.org/docs/2.0/quack/overview.html#server-side-usage).
+How exactly were these features disabled, though? It comes down to the many different shader variants used throughout. Most things in Sonic 06 are rendered using either the `Terrain` or `Billboard` shaders (despite the name, `Billboard` is not actually billboard-ed). Both of these have many variants, each with different feature levels numbered 00-07. As a general rule, the higher the number, the better the feature set. These shaders have not been entirely decompiled yet, so I can’t account for every difference with 100% certainty, but here is a rough feature table for the `Billboard` variants. CSM here stands for cascaded shadow maps, the shadow technique used by 06.
 
-DuckDB 2.0.0 ships a polished version of the Quack protocol with substantial performance and stability improvements. It also introduces the new [`CONNECT` statement](https://duckdb.org/docs/2.0/sql/statements/connect.html) that allows attaching and switching to a remote database in a single command for better ergonomics:
+|  | Lighting | CSM | Point Lights | Dual-Texture Blend |
+| --- | --- | --- | --- | --- |
+| 00 | None | No | No | No |
+| 01 | Vertex | No | Yes | No |
+| 02 | Vertex | No | No | No |
+| 03 | Vertex | Yes | Yes | No |
+| 04 | Pixel | Yes | No | No |
+| 05 | Pixel | No | No | Yes |
+| 06 | Pixel | No | Yes | Yes |
+| 07 | Pixel | Yes | Yes | Yes |
 
-```
-CALL quack_serve(
-    token = 'my_token'
-);
+Want to take a guess as to which is the most used shader in the game? That’s right, `Billboard02`. Not quite the worst one, but definitely one of the worst. So yes, *the most used shader in the game* only has per-vertex lighting, no CSM support, and no point lights. If you’re wondering why so many things look so dull, this is why. Most of the game is not rendered with anything but the most basic albedo textures and ambient lighting.
 
-CREATE TABLE events
-    (date DATE, name VARCHAR);
+If you’re curious about how much each shader is used and where, I’ve made a [handy table](https://gist.github.com/IsaacMarovitz/6eb288fa79e7fd1cb5034300d6a33305), with descriptions of each shader available on [HedgeDocs](https://hedgedocs.com/index.php/Sonic_the_Hedgehog_(2006)_Shaders).
 
-INSERT INTO events VALUES
-    ('2027-04-07',
-     'DuckCon #8');
-```
+Unfortunately, because of the different I/O layouts between the variants, swapping them out is not as easy as you’d hope. My current attempts to do so have been largely unsuccessful, mostly just resulting in the various techniques breaking in one way or another. Additionally, the textures used for each material are defined in an object’s `.xno` file. It may be the case that some `.xno`s simply do not reference their other maps like normal and bump maps, despite them still being in the game files, and so swapping the shaders would not be enough.
 
-```
-ATTACH 'quack:localhost'
-    AS qk (TOKEN 'my_token');
+*Castle Town with Billboard07 shader. Shadows do not apply to buildings correctly.*
 
-CONNECT qk;
-SELECT * FROM events;
+# Shadow Maps
 
-┌────────────┬────────────┐
-│    date    │    name    │
-│    date    │  varchar   │
-├────────────┼────────────┤
-│ 2027-04-07 │ DuckCon #8 │
-└────────────┴────────────┘
-```
+So about those shadow maps, they’re not free from problems either. The game is set up for a maximum of 4 cascades. Each cascade is used for a portion of the view along the camera’s frustum, keeping the amount of pixels used to resolve shadows relatively consistent across distances. However, it seems CSM was also the target of some last-minute performance hack-n-slashing.
 
-For simplicity, this example runs the server and the client on the same machine. By default, the server only listens on `localhost`. To accept connections from other machines, keep the server on `localhost` and put it behind a [TLS-terminating reverse proxy](https://duckdb.org/docs/2.0/quack/setup/reverse_proxy.html). The [`allow_other_hostname` option](https://duckdb.org/docs/2.0/quack/overview.html#starting-a-server), which exposes the server directly, is only meant for testing.
+The level of cascades used is defined by `GenerateCSMLevels` and `GenerateCSMObjects`. `Levels` generally refers to terrain/static elements, while `Objects` refers to well… other objects. Most areas will use the full 4 cascades, except `twn_a` and a few test levels where `GenerateCSMLevels` is downgraded to 3 and `GenerateCSMObjects` to just 2, significantly shortening the distance shadows render at. Multiplayer has this reduced cascade count everywhere.
 
-The `CONNECT` statement is not limited to Quack: it points your session at [any remote database that supports it](https://duckdb.org/docs/2.0/sql/statements/connect.html#supported-databases), including PostgreSQL and MySQL. For these, the new remote pushdown optimizer ships queries directly to the remote server instead of pulling tables over the wire.
+Even when shadows do render correctly, they’re prone to severe shadow acne, a common artifact when using these sorts of techniques. This is usually resolved by adding a small epsilon value to shadow map samples, but Sonic Team didn’t do this, and I don’t have the knowledge of the shaders yet to attempt to add this.
 
-The CLI also has shortcuts for setting up a Quack client-server pair: the new [`-serve` and `-connect` arguments](https://duckdb.org/docs/2.0/clients/cli/arguments.html#serving-and-connecting-to-remote-databases) start a Quack server or connect to one directly from the command line:
+*Shadow acne on Sonic’s ear.*
 
-## [Performance](https://duckdb.org/2026/10/21/announcing-duckdb-200.html#performance)
+Shadows are also occasionally ill-defined in vanilla. Objects can set whether they contribute to shadow maps, and they sometimes get this wrong, leading to problems like Sonic’s Crisis City snowboard having no shadow, and Elise’s skirt missing a shadow in one of Sonic’s story cutscenes. These are not as easily patchable, as it would likely require direct edits to the objects themselves, or a complicated hook to find and correct objects in the render code itself.
 
-### [Asynchronous I/O](https://duckdb.org/2026/10/21/announcing-duckdb-200.html#asynchronous-io)
+# Point Lights
 
-DuckDB 2.0 introduces [asynchronous I/O](https://duckdb.org/docs/2.0/data/io.html) for reading Parquet and CSV files, as well as [DuckDB's native storage format](https://duckdb.org/docs/2.0/internals/storage.html). The I/O layer now scales independently from the query processing layer, issuing reads in the background and keeping multiple requests in flight. This means far more parallelism for remote reads and dramatically faster queries on object storage such as [`s3://`](https://duckdb.org/docs/2.0/core_extensions/httpfs/s3api.html).
-
-We described the design in detail in a [dedicated blog post](https://duckdb.org/2026/07/31/asynchronous-io.html).
-In that post, we showed the network throughput over the course of a query with and without asynchronous I/O:
-
-![Network throughput](https://duckdb.org/images/blog/v20-release/sync-vs-async-network-throughput-light.svg)
-![Network throughput](https://duckdb.org/images/blog/v20-release/sync-vs-async-network-throughput-dark.svg)
-*Network throughput. Higher utilization and shorter runtime are better.*
-
-The [`VARIANT` type](https://duckdb.org/docs/2.0/sql/data_types/variant.html) stores semi-structured, schema-less data such as JSON while keeping the performance of columnar execution.
-So you can think of it as JSON on steroids: a `VARIANT` column can store differently shaped data in every row, but unlike JSON it is not a text format.
-
-[DuckDB 1.5 already introduced `VARIANT`](https://duckdb.org/2026/03/09/announcing-duckdb-150.html#variant-type), but DuckDB 2.0 fully integrates it. DuckDB 2.0 detects the common structure in your data and “shreds” it, so it compresses well and executes fast. The pipeline works end to end, from shredded execution straight out of storage to shredded `VARIANT` reading and writing for Parquet, backed by a family of [`variant_*` functions](https://duckdb.org/docs/2.0/sql/functions/variant.html). For example:
+This is one of the sadder cuts in my opinion. For what it’s worth, Sonic 06 *in theory* has a pretty flexible lighting system. There’s a couple of fixed ambient lights defined for every object, and then several point lights. These are meant to provide additional small details for objects like torches, they don’t cast shadows, and are rather inexpensive to render.
 
 ```
-CREATE TABLE events (payload VARIANT);
-INSERT INTO events
-VALUES
-    ('{"user": {"id": 42, "tags": ["a", "b"]}}'::JSON::VARIANT),
-    ('{"event": "click", "x": 10, "y": 20}'::JSON::VARIANT);
+shared struct
+{
+    float4 Position;
+    float4 Color;
+    float4 Attenuation;
 
-SELECT variant_type(payload), variant_keys(payload)
-FROM events;
+} g_PointLights[2]
 ```
 
-```
-┌───────────────────────┬───────────────────────┐
-│ variant_type(payload) │ variant_keys(payload) │
-│        varchar        │       varchar[]       │
-├───────────────────────┼───────────────────────┤
-│ OBJECT                │ [user]                │
-│ OBJECT                │ [event, x, y]         │
-└───────────────────────┴───────────────────────┘
-```
+Sonic Team limited the number of point lights per-object to 2, that means at any given time, only 2 lights literally have the space in shader inputs to be rendered. Ordinarily, this sort of limitation would be fine, most forward renderers will have this kind of limit, so long as the designers remained cognisant of the limit when designing stages. Well, uh, they didn’t.
 
-Coding agents such as Claude Code, Codex and Cursor increasingly drive the DuckDB CLI on their users' behalf. The 2.0 CLI detects when it is being run by an agent and switches to [agent mode](https://duckdb.org/2026/10/09/agent-mode.html): it prints compact Markdown tables instead of padded boxes, says clearly when a result was truncated, stops runaway queries early and reports errors as JSON.
+Some stages like Kingdom Valley obey the limit pretty faithfully, and then stages like Flame Core and Dusty Desert utterly blow the limit out of the water, attempting to render 8+ lights per object. Needless to say, this doesn’t work out. The renderer gets confused, and lights will “fight” for priority, causing some to appear or disappear semi-randomly.
 
-Long-running SQL queries report their expected cost prior to running, so the agent can decide whether to wait. In our experiments on TPC-H, agent mode cut the amount of DuckDB output the model had to read by 59%. You can turn it *on* for manual testing using the [`-agent` flag](https://duckdb.org/docs/2.0/clients/cli/agent_mode.html#activating-agent-mode) or instruct your agent to turn it *off* using the `-no-agent` flag.
+*Overloaded point lights in Flame Core. Only lights on the left side of the path render.*
 
-DuckDB has always used a parser derived from PostgreSQL's. In 2.0, our own modern, extensible [PEG-based parser](https://duckdb.org/2026/08/20/duckdb-20-peg-parser.html), which debuted as an opt-in feature in [DuckDB 1.5](https://duckdb.org/2026/03/09/announcing-duckdb-150.html#peg-parser), becomes the default. Extensions can now hook into the grammar itself (an idea we first explored in our [research on runtime-extensible parsers](https://duckdb.org/2024/11/22/runtime-extensible-parsers.html)), so expect extensions that expose entirely new SQL syntax. Error messages now come with precise source locations. For details, see the [PEG parser documentation](https://duckdb.org/docs/2.0/sql/peg_parser.html). The new parser is designed to be compatible with the old one, apart from a few deliberate changes listed in the [migration guide](https://duckdb.org/docs/2.0/operations_manual/migration.html#sql-parser). If you notice any other differences, please file an issue. In the meantime, you can switch back to the old parser using the [`legacy_parser` extension](https://duckdb.org/docs/2.0/core_extensions/legacy_parser.html) by running `SET enable_legacy_parser = true;`.
+Sonic Team attempted to provide a general optimisation for point lights, and allocate them effectively to nearby objects, but something in this check went wrong. I suspect a combination of the limit being sharply lowered later in development, and the switching of many per-pixel lit objects to per-vertex, which can vastly alter the contribution area of a point light. The result is point lights rarely work at all in vanilla, even in stages that respect the limit.
 
-The old parser had served DuckDB since its first commit in 2018. Its grammar was generated with YACC/Bison, which produces an LALR(1) parser, so as DuckSQL grew, even small additions could collide with existing rules and raise `shift/reduce` or `reduce/reduce` conflicts. A PEG grammar avoids this by trying alternatives in the order they are written, so adding syntax no longer risks breaking unrelated rules. Python itself moved to a PEG-based parser in [version 3.9](https://peps.python.org/pep-0617/) for the same flexibility.
+In the recomp, we are able to patch out most of the optimisation that breaks them, allowing point lights to render much more stable than in vanilla, however we are *still* limited to the 2 light limit. The lighting calculations responsible for adding point light contribution are all unrolled/inlined in the final shader bytecode, which makes identifying and modifying this code tricky as it can look different from one shader to the next. This is an area I want to tackle in the future.
 
-DuckDB 2.0 ships a revamped [C API v2](https://duckdb.org/docs/2.0/clients/c/overview.html#c-api-v2), which is considerably more powerful than its predecessor and exposes components such as file systems and table functions to extensions. Before marking it as stable, we would like to test it in the field, so please give it a try and [send us your feedback](https://github.com/duckdb/duckdb/discussions/27525)!
+# Planar Reflections
 
-You can also register and host your own trusted extension repositories, so an organization can host and sign its own extensions and have them install and load just like the built-in ones:
+Did you know Sonic 06 had real-time planar reflections? Hint: We saw them earlier in Crisis City. I actually don’t have much to complain about here, generally they work really well and add a lot of realism to a scene. Of course, the resolution is severely limited in vanilla to 1/4 the resolution of the framebuffer, but that’s easily patched. There is one area where the game’s visuals get screwed over, and that’s in multiplayer.
+
+*Murky fixed cubemap reflection in Kingdom Valley.*
+
+To save having to render expensive planar reflections **twice** in multiplayer, Sonic Team opted to just remove them entirely and replace them with static cubemaps. The problem is these cubemaps are pretty meh. Kingdom Valley goes from looking awesome to more like a depressed swamp. Well no problem, we can just patch it in right? Unfortunately due to how the rendering code works this isn’t so easy.
+
+Sonic 06 uses Lua scripting to build the render graph, and different modes have different scripts. It’s a pretty cool and flexible system, when it works. As expected, singleplayer and multiplayer have their own render scripts, `render_gamemode.lua` and `render_gamemode_multi.lua` respectively.
 
 ```
-SET allow_extension_repositories = 'allowed';
-
-CREATE EXTENSION REPOSITORY my_repo
-    WITH PREFIX 'https://extensions.example.org';
-
-INSTALL AND LOAD my_ext FROM my_repo;
+function Build(_ARG_0_)
+  CreateCSM(_ARG_0_)
+  RenderCSM(_ARG_0_, GenerateCSMLevels, GenerateCSMObjects)
+  ApplySceneParams(_ARG_0_)
+  --
+  RenderReflection(_ARG_0_)
+  --
+  PrepareColorRender(_ARG_0_)
+  SetFrameBufferObjectOnce(_ARG_0_, "framebuffer0", "depthstencil", "all", 0, 0, 0, 0)
+  SetViewport(_ARG_0_, 0, 0, GetSurfaceWidth(_ARG_0_, "framebuffer0"), (GetSurfaceHeight(_ARG_0_, "framebuffer0")))
+  SetCurrentCamera(_ARG_0_, "main")
+  AutoSetAspect(_ARG_0_)
+  Zpass(_ARG_0_, "depthbuffer0", "depthstencil", "main")
+  RenderMain(_ARG_0_, "framebuffer0", "depthstencil")
+  PostColorRender(_ARG_0_)
+  Capture(_ARG_0_, "framebuffer0")
+  MakeBloom(_ARG_0_)
+  ApplyBloom(_ARG_0_)
+  SetCurrentCamera(_ARG_0_, "mainglare")
+  AutoSetAspect(_ARG_0_)
+  RenderWorld(_ARG_0_, "glare")
+  RenderPostprocess(_ARG_0_, "framebuffer0")
+  SetFrameBufferObject(_ARG_0_, "postprocess_output", "depthstencil", "none", 0, 0, 0, 0)
+  SetCurrentCamera(_ARG_0_, "mainafterpp")
+  AutoSetAspect(_ARG_0_)
+  RenderWorld(_ARG_0_, "afterpp", "all", "transparent")
+  SetFrameBufferObjectOnce(_ARG_0_, "backbuffer", "null", "color", 0, 0, 0, 0)
+  SetFrameBufferObject(_ARG_0_, "backbuffer", "null", "none", 0, 0, 0, 0)
+  ResetViewport(_ARG_0_)
+  if EnableRasterizeBlur then
+    RasterizeBurnoutBlur(_ARG_0_, "postprocess_output", "main", 1)
+  else
+    Rasterize(_ARG_0_, "postprocess_output")
+  end
+  RenderAfterPostprocess(_ARG_0_)
+  Render2D(_ARG_0_)
+end
 ```
 
-A repository is a name, a URL prefix and one or more RSA public keys that are trusted to sign the extensions served from it. The prefix can point at anything DuckDB can read: a local path, `https`, `s3`, you name it. At `CREATE` time, DuckDB fetches the repository's public keys and pins them into the repository definition, printing each key's SHA-256 fingerprint so you can compare it against one published out of band.
+In `render_gamemode.lua` we can see that crucial `RenderReflection()` call, which is unfortunately entirely absent from `render_gamemode_multi.lua`. As a result, attempting to enable the realtime reflections in multiplayer will just leave us with a black void rather than pretty reflections.
 
-This feature is still a work in progress and its syntax may change in future releases. For more details, see the [Extension Repositories page](https://duckdb.org/docs/2.0/extensions/extension_repositories.html).
+We can’t just swap out `render_gamemode_multi.lua` for `render_gamemode.lua` either. The multiplayer renderer has special steps for creating the split-screen, essentially two framebuffers, so for multiplayer to render correctly, the provided render graph needs to be able to render both framebuffers. *Even* if you modify the multiplayer renderer to have `RenderReflection`, it’s not set up to work in this split-screen environment, and will, again, not work as intended. As it stands this quickly becomes a rabbit hole that’s not easy to resolve. If in future we have an easier way to apply Lua patches, I may revisit this.
 
-DuckDB's [core extensions](https://duckdb.org/docs/2.0/core_extensions/overview.html) are also shipping several new features, fixes and performance optimizations. These are too numerous to all list here, so we only highlight a few of them and will cover them in dedicated blog posts in the coming weeks:
+Maybe. Several of these problems have been at least *partially* addressed, but I’ve yet to figure out the shader edits that would be needed to get us to that beta footage goodness. Some of these fixes are largely, out of scope for the recomp, but whether fixes make it or not, we’re still learning a ton about how this game works on the backend. That still directly contributes to future improvements and patches.
 
-- We released DuckLake 1.1, including a new specification and reference implementation.
-- The Iceberg extension strives to become a feature-complete implementation. To this end, it adds REST catalog `ATTACH` options that derive a table's location from its namespace or load table metadata from the metadata-location file returned by the catalog. Further options control the URL prefix and the namespace separator.
-- The Delta extension can create Delta tables with CREATE TABLE (including partitioning and Delta table properties), supports time travel and improves VARIANT support.
+This game has much, much more to give, and it’s honestly sad that Sonic Team were not given the time to finish it. There’s many things that I didn’t get in to in this article including the insanity of the character shader, or the lack of occlusion culling, but it’s long enough already. Have fun with this silly game and happy early 20th anniversary.
 
-### [Triggers](https://duckdb.org/2026/10/21/announcing-duckdb-200.html#triggers)
-
-DuckDB 2.0 delivers triggers: the [`CREATE TRIGGER` statement](https://duckdb.org/docs/2.0/sql/statements/create_trigger.html) with `BEFORE` and `AFTER` triggers, `FOR EACH ROW` and `FOR EACH STATEMENT`, transition tables via `REFERENCING OLD/NEW TABLE`, multiple triggers per event, `RETURNING` on triggered tables and `DROP TRIGGER`. The classic use case is audit tables, where a trigger records what changed in response to a table modification. Some combinations, such as `BEFORE ... FOR EACH ROW` and `UPDATE ... FOR EACH ROW` triggers, are not yet supported; see the [limitations](https://duckdb.org/docs/2.0/sql/statements/create_trigger.html#limitations).
-
-```
-CREATE TRIGGER trg_audit
-    AFTER UPDATE ON target
-    REFERENCING
-        OLD TABLE AS o
-        NEW TABLE AS n
-    FOR EACH STATEMENT
-        INSERT INTO audit
-        SELECT n.id, o.val, n.val
-        FROM o JOIN n ON o.id = n.id;
-```
-
-Triggers can also maintain materialized views incrementally! For example, to keep track of the average age of people per nationality in a table `age_statistics`, you can use two triggers – one for insert and another for delete operations – and store the sum and the count alongside the average.
-
-```
-CREATE TABLE people (name VARCHAR, nationality VARCHAR, age INTEGER);
-CREATE TABLE age_statistics (
-    nationality VARCHAR PRIMARY KEY,
-    sum_age INTEGER,
-    num_people INTEGER,
-    average_age DOUBLE
-);
-```
-
-On insertion, we aggregate the new rows per nationality and merge them into `age_statistics`, adding a row for each new nationality:
-
-```
-CREATE TRIGGER people_insert
-    AFTER INSERT ON people
-    REFERENCING NEW TABLE AS n
-    FOR EACH STATEMENT
-        MERGE INTO age_statistics s
-        USING (
-            SELECT nationality, sum(age) AS sum_age, count(*) AS num_people
-            FROM n
-            GROUP BY nationality
-        ) d
-        ON s.nationality = d.nationality
-        WHEN MATCHED THEN UPDATE SET
-            sum_age = s.sum_age + d.sum_age,
-            num_people = s.num_people + d.num_people,
-            average_age = (s.sum_age + d.sum_age) / (s.num_people + d.num_people)
-        WHEN NOT MATCHED THEN INSERT
-            VALUES (d.nationality, d.sum_age, d.num_people, d.sum_age / d.num_people);
-```
-
-On deletion, we subtract the deleted rows and drop a nationality once its last person has left:
-
-```
-CREATE TRIGGER people_delete
-    AFTER DELETE ON people
-    REFERENCING OLD TABLE AS o
-    FOR EACH STATEMENT
-        MERGE INTO age_statistics s
-        USING (
-            SELECT nationality, sum(age) AS sum_age, count(*) AS num_people
-            FROM o
-            GROUP BY nationality
-        ) d
-        ON s.nationality = d.nationality
-        WHEN MATCHED AND s.num_people = d.num_people THEN DELETE
-        WHEN MATCHED THEN UPDATE SET
-            sum_age = s.sum_age - d.sum_age,
-            num_people = s.num_people - d.num_people,
-            average_age = (s.sum_age - d.sum_age) / (s.num_people - d.num_people);
-```
-
-Let's see people come and go:
-
-```
-INSERT INTO people VALUES
-    ('Alice', 'US', 34), ('Bram', 'NL', 27), ('Csilla', 'HU', 45),
-    ('Dave', 'US', 58), ('Eva', 'NL', 19), ('Femke', 'NL', 41);
-FROM age_statistics ORDER BY nationality;
-```
-
-```
-┌─────────────┬─────────┬────────────┬─────────────┐
-│ nationality │ sum_age │ num_people │ average_age │
-│   varchar   │  int32  │   int32    │   double    │
-├─────────────┼─────────┼────────────┼─────────────┤
-│ HU          │      45 │          1 │        45.0 │
-│ NL          │      87 │          3 │        29.0 │
-│ US          │      92 │          2 │        46.0 │
-└─────────────┴─────────┴────────────┴─────────────┘
-```
-
-```
-DELETE FROM people WHERE name = 'Alice';
-DELETE FROM people WHERE nationality = 'HU';
-FROM age_statistics ORDER BY nationality;
-```
-
-```
-┌─────────────┬─────────┬────────────┬─────────────┐
-│ nationality │ sum_age │ num_people │ average_age │
-│   varchar   │  int32  │   int32    │   double    │
-├─────────────┼─────────┼────────────┼─────────────┤
-│ NL          │      87 │          3 │        29.0 │
-│ US          │      58 │          1 │        58.0 │
-└─────────────┴─────────┴────────────┴─────────────┘
-```
-
-Triggers bring us one step closer to materialized views, a long-standing item in the [“future work” section of our roadmap](https://duckdb.org/roadmap.html#future-work).
-
-As always, DuckDB's [friendly SQL dialect](https://duckdb.org/docs/2.0/sql/dialect/friendly_sql.html) keeps growing. A few favorites from this release cycle:
-
-- The `$variable` shorthand lets you write $x in most places where an expression is allowed, instead of getvariable('x').
-- Data-modifying CTEs let you use INSERT, UPDATE, DELETE and COPY as pipeline steps.
-- `NEAREST` joins turn top-k similarity search into a join clause, handy for vector and embedding workloads.
-- Nested schemas allow schemas within schemas, e.g., CREATE SCHEMA finance.reports.
-- JSON mutation functions json_set, json_insert, json_replace and json_remove return modified copies of JSON documents (see also our blog post on JSON patches).
-
-There is more: DuckDB 2.0.0 supports the SQL-standard [`FETCH FIRST`](https://duckdb.org/docs/2.0/sql/query_syntax/limit.html#fetch-first) and allows [`UNNEST` in the `GROUP BY` clause](https://duckdb.org/docs/2.0/sql/query_syntax/groupby.html#grouping-by-unnest). It also ensures well-defined [`MERGE`](https://duckdb.org/docs/2.0/sql/statements/merge_into.html) and [`UPDATE ... FROM`](https://duckdb.org/docs/2.0/sql/statements/update.html) semantics for cases when multiple rows are matched.
-
-DuckDB 2.0 comes with a small set of breaking changes. For most users, upgrading is straightforward, but complex deployments running many DuckDB processes need more care. The storage format is the most likely source of problems: DuckDB versions before 2.0 cannot read database files created by DuckDB 2.0. DuckDB 2.0 can still read and write your existing database files, and these remain readable by older versions. We recommend testing 2.0.0 on a shadow system before switching production over. And, if your workload is mission-critical, you may want to wait for the first patch release, [coming in November](https://duckdb.org/release_calendar.html#upcoming-releases).
-
-For the full details, see the [migration guide](https://duckdb.org/docs/2.0/operations_manual/migration.html).
-
-Following DuckDB's long stint on C++11, DuckDB 2.0 now [requires a C++17 compiler](https://duckdb.org/docs/2.0/dev/building/overview.html#prerequisites).
-
-We also switched to Clang as the default compiler for our release builds. On Linux and macOS, both DuckDB and its core extensions are built with Clang. On Windows, the CLI is built with Clang, while most core extensions are still built with MSVC. We may move more Windows builds to Clang in the future, but this requires further changes.
-
-Timezone-aware timestamps, calendars and collations have always been powered by the ICU library. In 2.0, the ICU library is gone entirely: the [`icu` extension](https://duckdb.org/docs/2.0/core_extensions/icu.html) now implements timezones, calendars and collations itself, with the timezone data built directly from the IANA database and compressed down to around 45 kB.
-
-Everything keeps working exactly as before, and the native implementation is also faster. If you find any issues, please [let us know](https://github.com/duckdb/duckdb/issues)!
-
-#### [Lambda Syntax](https://duckdb.org/2026/10/21/announcing-duckdb-200.html#lambda-syntax)
-
-The old single-arrow lambda syntax (`x -> x + 1`) is now disabled by default. Use the Python-style syntax instead:
-
-```
-SELECT list_transform([1, 2, 3], lambda x: x + 1);
-```
-
-You can temporarily re-enable the old syntax with `SET lambda_syntax = 'enable_single_arrow';`. Both the flag and the single-arrow syntax will be removed entirely in v2.1.
-
-The [amalgamation build](https://duckdb.org/docs/1.4/dev/building/overview), which bundles DuckDB's entire source code into a single header and a single source file, is now deprecated. The amalgamation has grown too large to be realistically useful in most cases.
-
-We are gradually phasing out `osx_amd64` from the list of fully supported [platforms](https://duckdb.org/docs/2.0/operations_manual/installing_duckdb/requirements.html#supported-platforms).
-For the time being, DuckDB and [core extensions](https://duckdb.org/docs/2.0/core_extensions/overview.html) are still built and supported, but [community extensions](https://duckdb.org/docs/2.0/extensions/community_extensions.html) are no longer built for this platform. DuckDB 2.1 will stop supporting `osx_amd64`.
-
-These were a few highlights, but there are many more features and improvements in this release. There have been almost 20,000 commits by many contributors since DuckDB 1.5, shipping smaller features as well as performance and usability improvements. The full [release notes can be found on GitHub](https://github.com/duckdb/duckdb/releases/tag/v2.0.0).
-
-We would like to thank our community for the detailed issue reports and feedback that have driven this release, and our special thanks go to our contributors!
+*Thank you to [Gordon Ramsay](https://gamebanana.com/members/1885816) for fact checking.*

@@ -1,709 +1,443 @@
-I have had more time recently to write code in Zig, and it has been good for my
-soul. I wanted to share some insights I have arrived at regarding abstractions
-in Zig, including some techniques that I have found useful but not seen employed
-more broadly.
-
-Considerable<sup>[[1]](https://www.axelmagn.com/blog/202610-zig-traits/#fn-seguin2023)</sup> ink<sup>[[2]](https://www.axelmagn.com/blog/202610-zig-traits/#fn-figuratively)</sup> has<sup>[[3]](https://www.axelmagn.com/blog/202610-zig-traits/#fn-wong2025)</sup> been<sup>[[4]](https://www.axelmagn.com/blog/202610-zig-traits/#fn-mckay2025)</sup>
-spilled<sup>[[5]](https://www.axelmagn.com/blog/202610-zig-traits/#fn-cypert2026)</sup> on Zig Interfaces, and justifiably so. While not a language
-feature, interfaces are the de-facto way of implementing runtime polymorphism in
-Zig. Yet<sup>[[6]](https://www.axelmagn.com/blog/202610-zig-traits/#fn-kelley2021)</sup> more<sup>[[7]](https://www.axelmagn.com/blog/202610-zig-traits/#fn-redig2025)</sup> has been said about zig's comptime, and
-how it may be leveraged to avoid the performance woes of dynamic dispatch and
-write slick, data-oriented code.
-
-To put it briefly, polymorphism in Zig is conventionally obtained in one of two
-ways:
-
-1. Dynamic Interfaces: Use opaque pointers, virtual tables, and dynamic dispatch to achieve runtime polymorphism.
-2. Comptime Duck Typing: Use type reflection, switch statements, and monomorphism at compile time to achieve static polymorhpism.
-
-This state of affairs has proven to be quite effective so far, but it is not
-without its tradeoffs.
-
-Interfaces offer the sort of type contracts that we are used to from other
-languages. A function that accepts an interface has a guarantee of its method
-signatures, but not its implementation. However because interfaces are, by
-design, modular at runtime, they also introduce a hard barrier for the compiler
-and thus a performance overhead. There is enough indirection that it often
-cannot effectively apply the optimizations that it would to monomorphic code.
-
-For cases of performance critical code, Zig code typically relies on comptime
-duck typing. A function argument is either `anytype` or parameterized by a type
-argument `T`, and the function implementation will either perform compile-time
-reflection or make assumptions about the type's methods that can be checked at
-compile-time. Implementations can then be monomorphised, similar to C++
-templating or C macros. This is slightly more safe than runtime duck typing,
-because any interface violations will be caught at compile time rather than
-runtime, but the caller and callee must still be careful to document and follow
-the contract of what types may be passed.
-
-If you are coming from another strongly typed language, you would be forgiven
-for finding this arrangement rather simplistic. This is perhaps by design
--- Zig aims to be simple. However if you have grown accustomed to Rust's traits
-or Haskell typeclasses, there appears to be no ready equivalent in Zig.
-
-I will argue that, with a little adaptation, it is perfectly possible to express
-similar abstractions over types in Zig userland. I would propose a new
-**convention** for defining compile-time type contracts as **Traits** in Zig. It
-doesn't require any libraries or machinery - in fact if fits remarkably well
-into vanilla Zig. It is inspired by the functional programming world in general,
-and OCaml in particular.
-
-> **Definition:** a Trait is a compile-time struct which contains related
-> functions over a given type. <sup>[[8]](https://www.axelmagn.com/blog/202610-zig-traits/#fn-ocaml-inspired)</sup>
-
-So as not to bury the lead, let me begin with a brief example of how we might
-define a trait for folding (reducing) on a type.
+In many dynamically typed programming languages, objects look like a big ol’
+mapping of names to values. The languages encourage this flexibility. Consider
+for example Python:
 
 ```
-/// T forms a Reducer under an empty value and a combine operation
-fn Reducer(T: type) type {
-    return struct {
-        empty: T,
-        combine: fn (T, T) T,
-
-        fn reduce(self: @This(), xs: []const T) T {
-            var accum = self.empty;
-            for (xs) |x| accum = self.combine(accum, x);
-            return accum;
-        }
-    };
-}
-
-/// i32 forms a sum reducer under 0 and addition
-const sum_trait = impl(Reducer(i32), struct {
-    pub const empty = 0;
-    pub fn combine(x: T, y: T) T { return x + y; }
-});
-
-/// i32 forms a product reducer under 1 and multiplication
-const product_trait = impl(Reducer(i32), struct {
-    pub const empty = 1;
-    pub fn combine(x: T, y: T) T { return x * y; }
-});
-
-export fn run(buf: [*c]i32, n: usize) i32 {
-    const sum = sum_trait.reduce(buf[0..n]);
-    const product = product_trait.reduce(buf[0..n]);
-    return sum + product;
-}
+class C:
+    def __init__(self):
+        self.a = 1
+        self.b = 2
 ```
 
-Ugh. Isn't that just buttery smooth?<sup>[[9]](https://www.axelmagn.com/blog/202610-zig-traits/#fn-so-good)</sup> The contract is clear, LSP
-autocompletion picks it up, the compiler even knows to inline it and unroll the
-loop.
-
-Traits are just bags of functions and types that tell the receiving function how
-to execute subtasks that it's not responsible for defining. They behave a lot
-like vtables, except that they are evaluated at comptime rather than runtime.
-
-## Conventional Polymorphism vs Traits
-
-To justify traits, let's take a tour through Zig polymorphism with a common
-motivating example: arithmetic operations. I've seen a few complaints over the
-years about how awkward is it to do math in Zig over user-defined types. In its
-pursuit of explicit control flow, Zig has eschewed operator overloading, and
-this can be jarring if you're coming from other typed languages.
-
-Let's imagine we have some user-defined types like `Rational` and `Complex`, and
-we want to define their basic arithmentic operations. We would probably end up
-with something like the following.
+Or Ruby:
 
 ```
-const Rational = struct {
-    numerator: i32,
-    denominator: i32,
-
-    fn add(lhs: Rational, rhs: Rational) Rational {...}
-    fn sub(lhs: Rational, rhs: Rational) Rational {...}
-    fn mul(lhs: Rational, rhs: Rational) Rational {...}
-    fn div(lhs: Rational, rhs: Rational) Rational {...}
-};
-
-const Complex = struct {
-    real: f32,
-    imaginary: f32,
-
-    fn add(lhs: Complex, rhs: Complex) Complex {...}
-    fn sub(lhs: Complex, rhs: Complex) Complex {...}
-    fn mul(lhs: Complex, rhs: Complex) Complex {...}
-    fn div(lhs: Complex, rhs: Complex) Complex {...}
-};
-```
-
-For the sake of having something to do with them, let's say that we want to
-compute the
-[Möbius transformation](https://en.wikipedia.org/wiki/M%C3%B6bius_transformation):
-`(a * x + b) / (c * x + d)`, which is useful for complex numbers as well as
-rationals. To keep things simple, we'll assume that all arguments to the
-function are of the same type.
-
-### Comptime Duck Typing
-
-If we were to implement the Mobius transformation naively, we could just use
-built-in operators.
-
-```
-fn mobius(T: type, x: T, a: T, b: T, c: T, d: T) T {
-    return (a * x + b) / (c * x + d);
-}
-```
-
-This would work fine, as long as the inputs were all floats of the same type.
-Division would break for integers, and of course it wouldn't work with our
-user-defined types, but it's a starting point.
-
-We could of course notice that both of our user-defined types have arithmetic
-functions with matching names and similar signatures, which would lend
-themselves to duck typing as well.
-
-```
-fn mobius(T: type, x: T, a: T, b: T, c: T, d: T) T {
-    const numerator = a.mul(x).add(b);
-    const denominator = c.mul(x).add(d);
-    return numerator.div(denominator);
-}
-```
-
-This will work for our user-defined types, but obviously not with Zig's
-primitive types. We would have to wrap those in our own user-defined types with
-their own functions. More troublingly, this sort of ties us to a sort of
-object-oriented pattern: the de-facto way to obey this abstraction contract is
-to define methods on the struct.
-
-The good news is that it's all monomorphised at compile time, allowing the
-compiler to simplify and inline these function calls.
-
-### Interfaces & VTables
-
-If we wanted this to work dynamically at runtime, we could perhaps declare a
-`Num` interface that uses a VTable and opaque pointer to dynamically dispatch
-these math operations.
-
-```
-const Num = struct {
-    value: [32]u8,
-    vtable: *const VTable,
-
-    const VTable = struct {
-        add: *const fn([*]u8, [*]u8) Num,
-        sub: *const fn([*]u8, [*]u8) Num,
-        mul: *const fn([*]u8, [*]u8) Num,
-        div: *const fn([*]u8, [*]u8) Num,
-    };
-
-    fn add(lhs: Num, rhs: Num) Num { ... }
-    fn sub(lhs: Num, rhs: Num) Num { ... }
-    fn mul(lhs: Num, rhs: Num) Num { ... }
-    fn div(lhs: Num, rhs: Num) Num { ... }
-
-    fn mobius(x: Num, a: Num, b: Num, c: Num, d: Num) {
-        const numerator = a.mul(x).add(b);
-        const denominator = c.mul(x).add(d);
-        return numerator.div(denominator);
-    }
-}
-```
-
-We would then need to wire up `Complex` and `Rational` to expose
-`fn num(self: *Self) Num` (or some such) that wraps our arithmentic functions,
-which is a little too tedious to reproduce here, but it would work fine on the
-happy path. You would of course need to be a bit careful: there's nothing
-stopping you from mixing complex and rational numbers in your function calls,
-and this would lead to undefined behavior. You could probably add some saftey
-checks with a bit of overengineering, but we won't get into that here.
-
-Not only is this clunkier than comptime duck typing, it will also be slower. We
-are effectively demanding dynamic dispatch whenever we want to do a math
-operation, which will trip up the compiler and have a significant performance
-impact if we're doing a lot of math.
-
-### Traits
-
-When we define the mobius function, we really want to say "I don't know what
-type I'm dealing with, but it needs to have arithmetic operations." In this sort
-of case, I think it makes the most sense to just pass the functions it needs to
-use at compile-time. This would remove any ambiguity, at the cost of being
-rather explicit.
-
-```
-fn mobius(
-    comptime T: type,
-    comptime add: fn (T, T) T,
-    comptime mul: fn (T, T) T,
-    comptime div: fn (T, T) T,
-    x: T,
-    a: T,
-    b: T,
-    c: T,
-    d: T,
-) T {
-    const numerator = add(mul(a, x), b);
-    const denominator = add(mul(c, x), d);
-    return div(numerator, denominator);
-}
-```
-
-This is effectively compile-time dependency injection at a really fine-grained
-level. The signature is rather verbose, but there's actually a lot less
-boilerplate to write for `Complex` or `Rational` compared to runtime interfaces.
-
-```
-mobius(Complex, Complex.add, Complex.mul, Complex.div, x, a, b, c, d);
-mobius(Real, Real.add, Real.mul, Real.div, x, a, b, c, d);
-```
-
-From here, it's not a huge leap to traits. We're effectively just cleaning up
-the function signature by gathering together the arithmetic functions into one
-struct.<sup>[[10]](https://www.axelmagn.com/blog/202610-zig-traits/#fn-num-is-simplified)</sup>
-
-```
-fn Num(T: type) type {
-    return struct {
-        add: fn (T, T) T,
-        sub: fn (T, T) T,
-        mul: fn (T, T) T,
-        div: fn (T, T) T,
-    };
-}
-
-fn mobius(T: type, num: Num(T), x: T, a: T, b: T, c: T, d: T) T {
-    const numerator = num.add(num.mul(a, x), b);
-    const denominator = num.add(num.mul(c, x), d);
-    return num.div(numerator, denominator);
-}
-```
-
-From here, I usually just declare the trait implementation as part of my type.
-
-```
-const Complex = struct {
-    // fields...
-    const num = Num(Complex) { .add = add, .sub = sub, .mul = mul, .div = div };
-    // functions (add, sub, mul, div...)
-};
-
-mobius(Complex, Complex.num, x, a, b, c, d);
-```
-
-What I really like about this approach is how flexible it is, while remaining
-very clear about the contract between the function and type. For example,
-imagine that we wanted to extend our definition of `Num` to the primitive types
-like `i32` and `f32`. There are a bunch of ways we could do this, but I would
-probably just define a function that produces something appropriate for integer
-and float types.
-
-```
-fn builtinNum(T: type) Num(T) {
-    const inner = struct {
-        fn add(lhs: T, rhs: T) T { return lhs + rhs; }
-        fn sub(lhs: T, rhs: T) T { return lhs - rhs; }
-        fn mul(lhs: T, rhs: T) T { return lhs * rhs; }
-    };
-    const div = switch (@typeInfo(T)) {
-        .int, .comptime_int => struct {
-            fn div(lhs: T, rhs: T) T { return @divTrunc(lhs, rhs); }
-        }.div,
-        .float, .comptime_float => struct {
-            fn div(lhs: T, rhs: T) T { return lhs / rhs; }
-        }.div,
-        else => @compileError("unsupported type: " ++ @typeName(T)),
-    };
-    return .{ .add = inner.add, .sub = inner.sub, .mul = inner.mul, .div = div };
-}
-
-mobius(f32, builtinNum(f32), x, a, b, c, d);
-```
-
-Traits are also transparent to the compiler, which will happily monomorphize and
-inline these functions. I prefer this over runtime polymorphism most of the
-time, especially in hot loops or for library functions that are unopinionated on
-data layout.
-
-### Limitations
-
-You'll notice that traits have to be explicitly conditioned on a known type.
-Unlike interfaces, there's no way to say "give me a number, I don't care what
-kind."  For some applications, it would be nice if we could have an associated
-type.
-
-```
-fn Iter(Elem: type) type {
-    return struct {
-        T: type,
-        next: fn (T) ?Elem,
-    };
-}
-```
-
-Unfortunately, the above isn't valid Zig, and it's unclear how that would even
-work at a language level.  Instead, traits insist that the types they are
-operating on are known in advance.
-
-```
-fn Iter(T: type, Elem: type) type {
-    return struct {
-        next: fn (T) ?Elem,
-    };
-}
-```
-
-I have not yet found an ergonomic way around this.  Traits do not play very
-well with type erasure.
-
-## Trait Helpers
-
-Before proceeding, I want to introduce some small helper functions that have
-streamlined how I work with traits.
-
-### impl
-
-If you adopt traits as a programming pattern and convention, you'll quickly end
-up defining functions and passing them around. You will have already noticed
-above that I define a lot of throwaway inner struct types, just so that I can
-pull functions out of them. This has led to the following convenience function
-for declaring trait implementations, which removes some of the boilerplate.
-
-```
-pub fn impl(comptime Trait: type, comptime Impl: type) Trait {
-    comptime {
-        var result: Trait = undefined;
-        for (@typeInfo(Trait).@"struct".field_names) |field_name| {
-            @field(result, field_name) = @field(Impl, field_name);
-        }
-        return result;
-    }
-}
-```
-
-I use this all over the place to derive trait implementations from anonymous
-structs. For example, we could use it to rewrite `builtinNum` to be a little
-more concise and functional. Note that the declarations need to be public for
-the type reflection to work.
-
-```
-fn builtinNum(T: type) Num(T) {
-    return impl(Num(T), struct {
-        pub fn add(lhs: T, rhs: T) T { return lhs + rhs; }
-        pub fn sub(lhs: T, rhs: T) T { return lhs - rhs; }
-        pub fn mul(lhs: T, rhs: T) T { return lhs * rhs; }
-
-        pub const div = switch (@typeInfo(T)) {
-            .int, .comptime_int => struct {
-                fn div(lhs: T, rhs: T) T { return @divTrunc(lhs, rhs); }
-            }.div,
-            .float, .comptime_float => struct {
-                fn div(lhs: T, rhs: T) T { return lhs / rhs; }
-            }.div,
-            else => @compileError("unsupported type: " ++ @typeName(T)),
-        };
-    });
-}
-```
-
-### getTrait
-
-Most of the time, I don't mind passing trait implementations around explicitly.
-I've gotten into the habit, and just don't find it to be that big of a deal.
-Trait functors make it pretty easy to reduce the boilerplate, and I like having
-explicit control over how things are implemented.
-
-However when I'm dealing with my own structs, 99% of the time the trait
-implementation I'm looking for is going to be declared as a const on the struct
-itself. I use the function below to to easily retrieve or construct the most
-common cases.
-
-```
-fn getTrait(Trait: type, Impl: type) Trait {
-    comptime {
-        // try to find the trait declared explicitly as a member
-        for (@typeInfo(Impl).@"struct".decl_names) |decl_name| {
-            if (@TypeOf(@field(Impl, decl_name)) == Trait) {
-                return @field(Impl, decl_name);
-            }
-        }
-        // otherwise throw an error
-        @compileError("trait " ++ @typeName(Trait) ++ " not found on " ++ @typeName(Impl));
-    }
-}
-```
-
-This is basically equivalent to saying "eh, it's duck typed. figure it out".
-Just because we *are* explicit, doesn't mean that we *can't* be lazy. If we want
-to take this full circle back to duck typing, we can even define trait functors
-that rely on `getTrait` to extract traits from the types they pass.
-
-```
-fn duckMobius(T: type) fn(T, T, T, T) T {
-    comptime {
-        const num = getTrait(Num(T), T);
-        return makeMobius(T, num);
-    }
-}
-```
-
-## Trait Functors
-
-With some helpers defined, let's return to the `Num` example.
-
-Traits in Zig resemble traits in Rust, typeclasses in Haskell, or modules in
-Ocaml. In Rust or Haskell, they would be resolved from a global registry managed
-by the compiler. This can feel very convenient, but it violates Zig's principle
-of explicit control flow. Rust and Haskell can require a fair bit of hunting for
-where a trait is defined, especially when something's wrong and the LSP isn't
-resolving it properly. It can also be a contributor to long compile times.
-Resolving a generic trait in these languages is often equivalent to evaluating a
-proof, and that can take time.
-
-Ocaml modules, however, work quite a bit like Zig traits: modules are
-first-class objects, and they are passed as arguments to the functions that
-consume them. There is no inference of what modules apply to a type - you locate
-them and pass them explicitly. If we were to define `Num` as a module, it might
-look something like the following.
-
-```
-(* signature *)
-module type NUM = sig
-  type t
-  val add : t -> t -> t
-  val sub : t -> t -> t
-  val mul : t -> t -> t
-  val div : t -> t -> t
+class C
+  def initialize
+    @a = 1
+    @b = 2
+  end
 end
-
-(* Implementation on float *)
-module Float : NUM with type t = float = struct
-  type t = float
-  let add = ( +. )
-  let sub = ( -. )
-  let mul = ( *. )
-  let div = ( /. )
-end
-
-(* function *)
-let mobius (type a) (module N : NUM with type t = a) x a b c d =
-  let numerator = N.add (N.mul a x) b in
-  let denominator = N.add (N.mul c x) d in
-  N.div numerator denominator
-
-(* Usage *)
-let res = mobius (module Float) x a b c d)
 ```
 
-Because modules in Ocaml are first-class values, they can actually take it a
-step further. Rather than defining `mobius` as written above, it is common in
-Ocaml to make use of "module functors", which are simply functions that take
-modules as arguments and return new modules. If we wanted to define `mobius` in
-terms of a given numeric type, we might instead write it:
-
 ```
-(* MakeMobius receives a NUM module and returns a new module with mobius function *)
-module MakeMobius (N : NUM) = struct
-  let mobius x a b c d =
-    let numerator = N.add (N.mul a x) b in
-    let denominator = N.add (N.mul c x) d in
-    N.div numerator denominator
-end
-
-(* usage *)
-module FloatMobius = MakeMobius (Float)
-let res = FloatMobius.mobius x a b c d
+let obj = {};
+obj.a = 1;
+obj.b = 2;
 ```
 
-This is effectively currying: we are applying the module arguments now, and the
-value arguments later. However it derives a mobius function that doesn't need to
-be taking a bunch of type arguments all the time, and that module can in turn be
-used in later constructions. This translates straightforwardly to Zig. If we
-wanted to adhere strictly to the traits pattern, it might look like the
-following.
+This might encourage the VM implementor to model object attributes using a hash
+table. Hash tables, after all, are very good at mapping names to values.
+
+Here is, by way of example, a Python sketch of what this object model looks
+like. Because it is a sketch, it uses `write_attr` and `read_attr` instead of
+the much more common syntax that your programming language comes with.
 
 ```
-fn Mobius(T: type) type {
-    return struct {
-        mobius: fn(T, T, T, T, T) T,
-    };
-}
-fn makeMobius(T: type, num: Num(T)) Mobius(T) {
-    return impl(Mobius(T), struct {
-        fn mobius(x: T, a: T, b: T, c: T, d: T) T {
-            const numerator = num.add(num.mul(a, x), b);
-            const denominator = num.add(num.mul(c, x), d);
-            return num.div(numerator, denominator);
-        }
-    });
-}
-const complex_mobius = MakeMobius(Complex, Complex.num);
-complex_mobius.mobius(x, a, b, c, d);
+MISSING = object()
+
+class Instance:
+    def __init__(self):
+        # TODO: the rest of your object system
+        self.cls = ...
+        self._fields = {}
+
+    def read_attr(self, fieldname):
+        return self._fields.get(fieldname, MISSING)
+
+    def write_attr(self, fieldname, value):
+        self._fields[fieldname] = value
+
+obj = Instance()
+obj.write_attr("a", 1)
+obj.write_attr("b", 2)
+print(obj.read_attr("a") + obj.read_attr("b"))
 ```
 
-This works fine, but I think it's even simpler to move the functor into
-`Mobius(T)`:
+This has its benefits:
+
+It also has its drawbacks:
+
+This means that literally every operation `a.b` is doing hundreds or thousands
+of CPU instructions, including multiple dependent memory loads. This is *not
+good* for performance.
+
+So runtime implementors tend to implement this thing called maps, or layouts,
+or shapes, or hidden classes, or structures, or probably a secret sixth name I
+don’t know about, which optimizes reading, writing, and storage of attributes.
+
+But what does this shape code look like? How does it actually help performance?
+A lot of big production runtimes have pretty hairy code with domain-specific
+edge cases so they may not help get a handle on the basics. And a lot of blog
+posts, while excellent high-level overviews, are lacking in implementation. So
+here we go once more, blogging where everyone else has already blogged before.
+With any luck, you should be able to write a page of code and hold the whole
+thing in your head at once.
+
+I decided to once more give CF Bolz-Tereick’s [A Simple Object
+Model](https://aosabook.org/en/500L/a-simple-object-model.html) the thorough
+read it deserves. In the past, I tried a couple times and bounced off of it
+because it models Python with reasonable fidelity and the Python object model
+is *really hairy*.
+
+But did I read it thoroughly this time? Well, no. This time I allowed myself to
+skim the class- and method-related parts and instead focus on the instance
+attribute and map parts. Inside CF’s post is the core of a very clean map
+system and I wanted to experiment with that, so I extracted it out.
+
+CF’s post starts off very similar to our own sketch, modeling objects as
+unordered maps of attributes. It also fills in some of the TODO stuff I left
+out earlier around classes. I’ll copy my reduced implementation of it here so
+you can take a gander:
 
 ```
-fn Mobius(T: type) type {
-    return struct {
-        mobius: fn(T, T, T, T, T) T,
+# The base object model code:
 
-        fn make(num: Num(T)) Mobius(T) {
-            return impl(Mobius(T), struct {
-                fn mobius(x: T, a: T, b: T, c: T, d: T) T {
-                    const numerator = num.add(num.mul(a, x), b);
-                    const denominator = num.add(num.mul(c, x), d);
-                    return num.div(numerator, denominator);
-                }
-            });
-        }
-    };
-}
-const complex_mobius = Mobius(Complex).make(Complex.num);
-complex_mobius.mobius(x, a, b, c, d);
+class Base:
+    def __init__(self, cls, fields):
+        self.cls = cls
+        self._fields = fields
+
+    def read_attr(self, fieldname):
+        return self._read_dict(fieldname)
+
+    def write_attr(self, fieldname, value):
+        return self._write_dict(fieldname, value)
+
+    def _read_dict(self, fieldname):
+        return self._fields.get(fieldname, MISSING)
+
+    def _write_dict(self, fieldname, value):
+        self._fields[fieldname] = value
+
+MISSING = object()
+
+class Instance(Base):
+    def __init__(self, cls: "Class"):
+        super().__init__(cls, {})
+
+class Class(Base):
+    def __init__(self, name, base_class, fields, metaclass):
+        super().__init__(metaclass, fields)
+        self.name = name
+        self.base_class = base_class
+
+OBJECT = Class(name="object", base_class=None, fields={}, metaclass=None)
+TYPE = Class(name="type", base_class=OBJECT, fields={}, metaclass=None)
+TYPE.cls = TYPE
+OBJECT.cls = TYPE
 ```
 
-However for single functions like this, unless I knew it would need to be
-consumed by another function as a trait, I would probably be tempted to just
-implement it as a type-curried function rather than a full-blown trait:
+Which you can use like this (test code also taken from CF’s post):
 
 ```
-fn makeMobius(T: type, num: Num(T)) fn(T, T, T, T) T {
-    return struct {
-        fn mobius(x: T, a: T, b: T, c: T, d: T) T {
-            const numerator = num.add(num.mul(a, x), b);
-            const denominator = num.add(num.mul(c, x), d);
-            return num.div(numerator, denominator);
-        }
-    }.mobius;
-}
+A = Class(name="A", base_class=OBJECT, fields={}, metaclass=TYPE)
+obj = Instance(A)
+obj.write_attr("a", 1)
+assert obj.read_attr("a") == 1
 
-const complexMobius = makeMobius(Complex, Complex.num);
-complexMobius(x, a, b, c, d);
+obj.write_attr("b", 5)
+assert obj.read_attr("a") == 1
+assert obj.read_attr("b") == 5
+
+obj.write_attr("a", 2)
+assert obj.read_attr("a") == 2
+assert obj.read_attr("b") == 5
 ```
 
-The versatility of Zig's comptime makes all of these more or less equivalent to
-the compiler. It's just a stylistic choice, depending on what the situation
-calls for.
+There’s a bit of delegation going on in the `Base` class because the post
+already anticipates what we’re about to do: swap out the `Instance`
+implementation for `_read_dict` and `_write_dict` for better performance.
 
-Also, notice that technically we have already used trait functors when we
-defined `builtinNum`. It's not a deep, technical concept. It's just a function
-that constructs a trait implementation for you.
+OK, let’s add on this “map” data structure. The purpose of the map is to do
+three things:
 
-## Useful Traits
+**For the former**, we can think of an object’s map field as an (database) index or
+a write-through cache. It is responsible for reflecting on the layout of a
+given object:
 
-Having thoroughly introduced traits, let's talk about what we can do with them.
+You can ask the map questions like “what attributes does this object have?” and
+“where is attribute `a` relative to the start of the object?”
 
-In this section are a few traits that I find myself reaching for with enough
-regularity that I keep a file around containing them.  All of these are fairly
-humdrum (but wildly applicable) abstractions that I lifted wholecloth from
-other languages.
+Just looking at the diagram, it may seem silly: after all, we have exchanged
+one hash table for another. There’s one big difference, though, which is that
+in the shape model, we don’t *have* to always use the hash table. If we
+remember the offset since the last time we looked it up in the shape, we can
+re-use the offset. This mostly appears in an interpreter feature called an
+inline cache.
 
-### Into / From
+This brings us to **the second bit**: if we have the offset into the object, we
+can read right off of it. No need to go do a second load from another region of
+memory. We have the object in hand and hopefully already in the cache.
 
-I need to convert one type into another all the freaking time.  Often there are
-multiple ways to do this, depending on how you want to interpret the upstream
-type.  I use `Into` and `From` to canonicalize methods for converting one type
-into another.
+…At least, until the map *changes*. Then we can’t re-use the offset. Remember, these languages encourage this
+flexibility. An object could gain or lose an attribute at any time. What then?
+Ideally we have a very fast check that can tell us if the object’s in-memory
+layout changed.
 
-```
-/// T can be converted into Out
-fn Into(T: type, Out: type) type {
-    return struct {
-        into: fn(T) Out,
-    };
-}
+This brings us to **the third bit**. We need to be able to rely on the map to
+be immutable, up-to-date, and a stable identifier for a given in-memory layout.
+This way we can do a very quick check (“is the map the same as last read?”)
+before a load.
 
-/// T can be derived from In
-fn From(T: type, In: type) type {
-    return struct {
-        from: fn(In) T,
-    };
-}
-```
+This means that when we add a new attribute to an object, we need to give it a
+new map. Maps are actually *trees* (tries?) and are allocated like a persistent
+data structure. Every new object starts with an empty map. As the program adds
+attributes, it follows the edges in the tree to find or create its new map.
 
-### Index
+I recommend reading [the section on
+maps](https://aosabook.org/en/500L/a-simple-object-model.html#instance-optimization)
+because it goes into a little more detail.
 
-Sometimes, rather than iterating, we need keyed access to a value.  The
-container could be a slice or a hash table - we don't care.  For this, I use
-`Index`.
-
-```
-/// T forms an index over Key and Value
-fn Index(T: type, Key: type, Value: type) type {
-    return struct {
-        get: fn(T, Key) ?Value,
-    };
-}
-```
-
-### Iterator / Iterable
-
-Another common case: we have a function that iterates over a type, but we don't
-care what sort of iterable data structure we're going to be working with.  We
-usually need two traits: one for the `Iterable` collection, and another for the
-`Iterator`, which keeps track of our progress through the collection.
+Keeping all of that in mind, let’s take a look at CF’s Python implementation of
+objects-with-maps and also of maps themselves:
 
 ```
-/// T can be used to iterate over Elem elements of type
-fn Iterator(T: type, Elem: type) type {
-    return struct {
-        next: fn(*T) ?Elem,
-    };
-}
+class Instance(Instance):
+    def __init__(self, cls: "Class"):
+        super().__init__(cls)
+        self.map = EMPTY_MAP
+        self.storage = []
 
-/// T can return an Iter iterator over Elem elements
-fn Iterable(T: Type, Elem: type, Iter: type) type {
-    return struct {
-        iter: fn(T) IterPair,
-        pub const IterPair = struct {impl: Iter, trait: Iterator(Iter, Elem)};
-    };
-}
+    def _read_dict(self, fieldname):
+        index = self.map.get_index(fieldname)
+        if index == -1:
+            return MISSING
+        return self.storage[index]
+
+    def _write_dict(self, fieldname, value):
+        index = self.map.get_index(fieldname)
+        if index != -1:
+            self.storage[index] = value
+        else:
+            new_map = self.map.next_map(fieldname)
+            self.storage.append(value)
+            self.map = new_map
+
+class Map:
+    def __init__(self, attrs):
+        self.attrs = attrs
+        self.next_maps = {}
+
+    def get_index(self, fieldname):
+        return self.attrs.get(fieldname, -1)
+
+    def next_map(self, fieldname):
+        assert fieldname not in self.attrs
+        if fieldname in self.next_maps:
+            return self.next_maps[fieldname]
+        attrs = self.attrs.copy()
+        attrs[fieldname] = len(attrs)
+        result = self.next_maps[fieldname] = Map(attrs)
+        return result
+
+EMPTY_MAP = Map({})
 ```
 
-You'll notice that this is a little awkward, because we don't usually care what
-the iterator implementation is.  It's probably just a usize index over an array
-or something.  It would be nice if we could just define `Iterable(T: type, Elem: type)`.  I've chosen to just let it be awkward.  It's usually not a big
-deal.
+You may notice that the storage is not in-line, as I had originally promised.
+This is because we don’t have that kind of object layout control in Python.
+Attribute storage, when implemented in a language such as C++ or Rust, is
+typically in-line with the object header.
 
-## Words of Warning
+Ignoring that, though, we can see that the common case still seems to read and
+write attributes using string names. What gives? Well, let’s use the index
+storage as intended in an *inline cache*.
 
-I really don't want you to walk away from this article thinking "I need to
-convert all my code to use traits".  Traits should not be thought of as a
-totalizing pattern.  The last thing I want is for Zig code to start looking
-like Rust or Haskell.
+## Inline caches
 
-Traits are a sometimes treat.  They are useful for functions that need
-abstractions inside of hot loops, where you know that you want monomorphization
-and static dispatch.  They can become legible building blocks for some neat
-metaprogramming tricks.  However most of the time I only reach for them in a
-pull-based manner: I have a function where it would be useful to consume a
-trait, because it's undecided on some implementation detail.
+Let’s start by looking at the string attribute API. We’ll make a point class and
+read the `x` attribute. We’ll keep the attribute name constant since this is
+generally fixed in the program: `obj.x` normally looks like some bytecode
+`LOAD_ATTRIBUTE, "x"` where the name `x` is embedded in the bytecode somehow.
 
-Used improperly, traits can explode the size of your binary and actually make
-it slower.  Each function parameterized on comptime parameters gets its own
-templated assembly, and if you nest these a few layers deep, it's easy to end
-up with a combinatorial explosion.  This can thrash your CPU cache, and
-depending on the situation, easily be outperformed by dynamic dispatch and
-vtables.
+This is important for the inline cache: varying the receiver is one thing but
+varying the name being looked up adds a lot more complexity. It’s doable but
+irritating.
 
-## Words of Encouragement
+```
+Point = Class(name="Point", base_class=OBJECT, fields={}, metaclass=TYPE)
+P = Instance(Point)
+P.write_attr("x", 5)
+P.write_attr("y", 6)
 
-Traits are ultimately handy and very powerful.  I wish I saw more codebases
-that made use of them, especially for abstraction inside of hot loops. I like
-that they are a design pattern more than a language feature, and this gives you
-a lot of explicit control over when and how you use them.  I was looking for a
-solution like this for a long time, and I'm glad I found it.
+# String API :(
+P.read_attr("x")
+# Always looking up index :(
+P.read_attr("x")
+# Every time :(
+P.read_attr("x")
+```
 
-I'm sure that other Zig users have stumbled onto this trick, but I have yet to
-see it in the wild.  I think that part of the reason is that it doesn't really
-lend itself to a library.  It's more of a convention that you can choose to
-use or ignore.
+Then we will make a memory/speed trade-off. We will allocate space for the
+aforementioned *expected map* and the *cached index* mentioned earlier. This
+lets us do a really fast check followed by an indexed load in the (hopefully)
+common case.
 
-My hope is that for someone reading, traits are the right tool for the job.
+The logic is as follows:
 
-1. [Zig Interfaces](https://www.openmymind.net/Zig-Interfaces/) by Karl Seguin [↩](https://www.axelmagn.com/blog/202610-zig-traits/#fr-seguin2023-1)
-2. figuratively [↩](https://www.axelmagn.com/blog/202610-zig-traits/#fr-figuratively-1)
-3. [Zig Interface Revisited](https://williamw520.github.io/2025/07/13/zig-interface-revisited.html) by William Wong [↩](https://www.axelmagn.com/blog/202610-zig-traits/#fr-wong2025-1)
-4. [Inside Zig's new Writer](https://joegm.github.io/blog/inside-zigs-new-writer-interface/) by Joe McKay [↩](https://www.axelmagn.com/blog/202610-zig-traits/#fr-mckay2025-1)
-5. [Interfaces in Zig](https://www.bradcypert.com/interfaces-in-zig/) by Brad Cypert [↩](https://www.axelmagn.com/blog/202610-zig-traits/#fr-cypert2026-1)
-6. [A Practical Guide to Applying Data-Oriented Design](https://vimeo.com/649009599) by Andrew Kelley [↩](https://www.axelmagn.com/blog/202610-zig-traits/#fr-kelley2021-1)
-7. [Zig Comptime is Bonkers Good](https://www.scottredig.com/blog/bonkers_comptime/) by Scott Redit [↩](https://www.axelmagn.com/blog/202610-zig-traits/#fr-redig2025-1)
-8. "Traits" are directly inspired from OCaml modules, but the term "module" already refers to something else in Zig. [↩](https://www.axelmagn.com/blog/202610-zig-traits/#fr-ocaml-inspired-1)
-9. ![Feels Good](https://www.axelmagn.com/blog/202610-zig-traits/so_good.png) [↩](https://www.axelmagn.com/blog/202610-zig-traits/#fr-so-good-1)
-10. This is a pretty simplistic definition of a numeric trait. In practice, you would probably want to look into [std::ops](https://doc.rust-lang.org/std/ops/index.html) from Rust or [Num](https://hackage.haskell.org/package/base-4.17.0.0/docs/GHC-Num.html#t:Num) from Haskell. [↩](https://www.axelmagn.com/blog/202610-zig-traits/#fr-num-is-simplified-1)
+If the attribute is missing, we don’t (for now?) cache the negative lookup.
+Hopefully this case is rare.
+
+```
+class InlineCache:
+    def __init__(self):
+        self.map = None
+        self.idx = None
+
+    def read(self, obj, fieldname):
+        obj_map = obj.map
+        if obj_map is self.map:
+            return obj.storage[self.idx]
+        index = obj_map.get_index(fieldname)
+        if index == -1:
+            return MISSING
+        self.map = obj_map
+        self.idx = index
+        return obj.storage[index]
+
+IC = InlineCache()
+# Looked up by string :(
+IC.read(P, "x")
+# Map hit! Looked up by index! :)
+IC.read(P, "x")
+# Map hit! Looked up by index! :)
+IC.read(P, "x")
+```
+
+You may note that I used `is` (pointer equality) instead of `==`
+(user-defined/deep equality). This is intentional! Because we are guaranteeing
+the maps are immutable, we don’t need to check equality on the fields of the
+map; just its pointer/numeric ID.
+
+This `InlineCache` class is mostly just a “sketch” of what an inline cache
+does. It is an “interpreted IC”. This shape, if you make sure the fast path is
+inlined and the slow path is outlined, can help your interpreter a lot. It does
+definitely improve performance—I recommend benchmarking a silly little
+attribute lookup function—but most runtimes with inline caches also come with
+JIT compilers. These compilers try to remove the “interpreted”-ness of the
+inline cache implementation. See for example:
+
+Another thing to notice is that **order matters**. Adding attributes in different
+orders (e.g. `a` then `b` vs `b` then `a`) will result in different shapes.
+Another frequent cause of this is conditionally storing attributes in
+initialization (e.g. `if cond: self.a = 1`).
+
+This shape and cache behavior is not really visible to the application
+programmer except in performance regressions<sup>[2](https://bernsteinbear.com/blog/object-shapes/#fn:attribute-order)</sup>, where either
+your inline caches will frequently miss or you will not have optimal
+(monomorphic) caches. This might not sound scary but the difference between a
+cache hit and a cache miss in a hot path could be 2x performance or more and is
+worth investigating in your application.
+
+Also, **quantity matters**. VM implementors measured and determined that most
+objects are small (<20 ish fields). You may find that putting too many fields
+on an object leads to it getting penalized and put back in “hash table mode”.
+Ruby, for example, has some fixed number of in-object instance variables
+(attributes) before its shape becomes “complex”.
+
+Last, notice that this cache is not specific to this object; any number of
+`Point` instances can get a cache hit. Actually, looking at it, an object need
+not even be a `Point`…
+
+What does it mean that two objects with different classes can have the same
+shape?
+
+```
+Foo = Class(name="Foo", base_class=OBJECT, fields={}, metaclass=TYPE)
+F = Instance(Foo)
+F.write_attr("x", 1)
+F.write_attr("y", 2)
+
+Bar = Class(name="Bar", base_class=OBJECT, fields={}, metaclass=TYPE)
+B = Instance(Bar)
+B.write_attr("x", 3)
+B.write_attr("y", 4)
+
+# Same shape/map!
+assert F.map is B.map
+# But different class!
+assert F.cls != B.cls
+```
+
+For one, it means that the inline cache may have a higher hit rate. Instances
+of subclasses that share code, for example, may still count as *monomorphic* in
+the IC.
+
+It also means that you can’t use the shape as a proxy for knowing about the
+class. If you have something like `attr_reader` in Ruby, where the VM generates
+a synthetic method just for looking up an instance variable, you need to do two
+things:
+
+This two-stage lookup adds both complexity and run-time overhead. If we
+specialized maps so that having a different class implied having a different
+map, we would be able to specialize that two-stage dispatch with just one field
+load.
+
+This is kind of an interesting idea: what else can we specialize the map on?
+
+## Storage strategies
+
+Perhaps unsurprisingly, CF Bolz-Tereick reappears with Lukas Diekmann and
+Laurence Tratt in [Storage Strategies for Collections in Dynamically Typed
+Languages](https://dl.acm.org/doi/pdf/10.1145/2544173.2509531) (PDF, 2013).
+
+The main idea is that some facts about objects (properties, attributes, har
+har) are both:
+
+Their treatment is for collections (for example, optimizing the common cases of
+an empty list, or a list of small integers, …). In addition to giving more
+information to the optimizer, it helps both reduce memory and reduce pointer
+chasing.
+
+This kind of thinking extends beyond collections: do you ever have objects
+where an attribute is always a certain type? Maybe your `Point` class always
+has floats in it? Consider, then, what I think of as CF’s follow-up paper, type
+freezing: [Type Freezing: Exploiting Attribute Type Monomorphism in Tracing JIT
+Compilers](https://dl.acm.org/doi/pdf/10.1145/3368826.3377907) (PDF, 2020)
+
+This paper changes object maps from `{name: offset}` to `{name: (offset,
+type)}` to reduce guards. Then it goes further by even addressing nested
+attributes and their types. This nesting extension is mostly motivated by the
+meta-circularity of the implementation and would have less impact for a
+“normal” runtime.
+
+See also:
+
+## Class versioning
+
+You can make even stronger bets about classes. See for example the [PyPy blog
+class versioning
+section](https://pypy.org/posts/2011/03/controlling-tracing-of-interpreter-with_21-6524148550848694588.html#versioning-of-classes).
+
+I felt like this blog post would not be complete without a manual memory layout
+rehashing of CF’s article. It’s all well and good to write the Python but what
+do “real” runtimes look like?
+
+Well, they have compact object headers that contain the shape/map and some
+other flag bits. They allocate their attributes inline with an object. And they
+probably also have an “overflow” slot for when their initial object sizing
+estimates were too small.
+
+So I made a very very small runtime in C++ that allocates objects and adds
+attributes and has a shape system. It is probably *riddled* with bugs. But it
+sketches the kind of memory layouts that underpin Skybison, V8, JSC, and so on.
+
+[Take a look](https://gist.github.com/tekknolagi/caf8462b75ac8ba7e33f6ade06b3f914).
+
+It doesn’t have the overflow slot but it’s a decent sketch of the underlying
+model.
+
+I fear I am running out of steam on this blog post but there is more to talk
+about. I originally wanted to go add object shapes to someone’s Lox interpreter
+and then add inline caches to the interpreter.
+
+Perhaps I will come back and update this post. Or perhaps you will write a
+sequel.
+
+## Thank you
+
+Thank you to CF Bolz-Tereick, Nery Campusano, and Jacob Denbeaux for thoughtful
+feedback on this post.
+
+1. Or the following equivalents… `// Or function C() { this.a = 1; this.b = 2; } // Or class C { constructor() { this.a = 1; this.b = 2; } } ` [↩](https://bernsteinbear.com/blog/object-shapes/#fnref:js-synonyms)
+2. See [this Rails PR](https://github.com/rails/rails/pull/57020) by Hartley to make shapes more monomorphic. It was initially filed because ZJIT was not capable of handling shape polymorphic reads, but it helps other JITs stay monomorphic too. Also in this vein is [my PR to optcarrot](https://github.com/mame/optcarrot/pull/59). ZJIT now does much better with polymorphic shapes but this kind of stuff is generally important across languages and runtimes. Enough for people to do [large bodies](https://bernsteinbear.com/assets/img/optimization-coaching.pdf) (PDF) [of research](https://bernsteinbear.com/assets/img/optimization-coaching-js.pdf) (PDF) about intelligibly surfacing this kind of information to the application programmer. [↩](https://bernsteinbear.com/blog/object-shapes/#fnref:attribute-order)

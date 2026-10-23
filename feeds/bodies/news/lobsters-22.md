@@ -1,128 +1,1055 @@
-After some 7 months of being ‘closed’ to new entrants, [Garmin has re-opened and revamped the Garmin Connect API developer program](https://developer.garmin.com/gc-developer-program/overview/), focused specifically on 3rd-party platforms that want to receive data files from Garmin devices via Garmin Connect, or send certain types of data to Garmin devices. Things like receiving your completed activities/workouts, sending routes/courses or structured workouts to Garmin devices, receiving general health/wellness data, and so on. All of these leverage the Garmin Connect API today, and have for many years.
+This document is a *style guide* for the usage of the Rust programming language
+at Google. In this context, “style” refers to more than just formatting; it
+includes guidance on API and implementation design.
 
-Before we get into the details of the new program, Garmin closed it to new applications back in March due to an overwhelming number of inbound applications. With the rise of AI-generated apps, Garmin went from a handful of (mostly legit) applications each week to a tsunami of new AI vibe-coded applications each day. Fun fact: Less than half of all applications that were requesting access even bothered to use it, once granted.
+Rust is used in many places, including
+[google3](https://opensource.google/documentation/reference/glossary#google3),
+Android, ChromeOS, Fuchsia, and Chrome, and we’d like for Rust usage at Google
+to be consistent both within and across codebases. In addition to bringing
+consistency to our Rust code, style guidance also helps establish a standard of
+quality.
 
-Of course, it’d be easy to blame vibe-coded AI apps for everything, but the reality was Garmin’s process was equally to blame. They treated every inbound request as if it were an enterprise-level company, rather than perhaps just a hobbyist developer or early-stage startup. That meant that everything from business case validation, policy validation, and such was all done at a level far beyond any other wearable in the space. Applications could take weeks to months (easily), compared with sometimes instant access to credentials from other companies like Polar, Wahoo, Suunto, and more. Garmin didn’t differentiate between the credential types: Everyone got the same full-fledged access, whether they really needed it or not.
+### Scope
 
-That changes today, with three distinct tiers that essentially allow an app to ‘grow’ from hobbyist level, to startup level, to full ‘enterprise’ level access with 24×7 support/etc. The first two tiers are free, and greatly expand access to individuals wanting instant access to Garmin’s platform, effectively creating an MCP level of sorts…minus actually creating an MCP.
+The current scope of authority of the rules outlined in this guide:
 
-With that, let’s dive into it.
+By and large, we have this document for
+[the same reasons we have a C++ style guide](https://google.github.io/styleguide/cppguide.html#Goals).
 
-### **What Changes:**
+Most style rules come from one or more of the goals listed below.
 
-![](https://media.dcrainmaker.com/images/2026/10/UntitledImage-11.png)
+We expect our code to be around for long periods of time, and we
+consider a little bit of extra effort applied during code writing to be
+worth it in the long run if the style rule improves readability.
 
-In short, Garmin Connect now has three different API levels, versions the previous level that required a bunch of paperwork and verifications. These three levels are now:
+Large-Scale Changes (LSCs)
+are common at Google, and consistency helps
+make LSCs easier to carry out.
 
-**– Personal:** Designed for a single person to have access to their activity and health data via the Connect API  
+The broader Rust ecosystem already has a pretty good amount of consistency
+in style, and we should rely on that where possible to reduce surprise and make
+it less work to learn Google’s Rust style.
 
-**– Startup:** Designed for organizations that need to support up to 1,000 users, adds more API areas  
+Every Rust developer and reviewer at Google has to keep these style rules
+in mind: as such, we should be careful to include rules that have a tangible
+benefit.
 
-**– Enterprise:** Everything above, plus more API areas, technical support, and historical data. Oh, and it costs money.
+There are many cases where reasonable people may disagree about a style, and
+we expect that disagreement to show up often on CLs. Having a style rule helps
+avoid having to rehash this each time. Rules in this category that do not have other
+benefits should be kept to a minimum.
 
-All of this is best shown in the chart below, which I’ve copied from [Garmin’s Connect API site](https://developer.garmin.com/gc-developer-program/overview/), but we’ll keep it here for long-term historical reference. Cause, if we know anything from the past, it’ll probably change again.
+Follow the official public Rust style rules to the extent they don’t conflict
+with this style guide.
 
-![](https://media.dcrainmaker.com/images/2026/10/GarminDeveloperAPI.png)
+A “conflict” would be a case where this style guide suggests a pattern that is
+discouraged, or counter to the primary encouraged pattern in the Rust style
+guide.
 
-The key thing here is that both the Personal and Startup levels get both JSON summaries (which is what that means in this context), as well as full .FIT file with the activity data in it. Though, it does sound like Garmin is annoyingly stripping out some data they consider proprietary, whereas if you upload it manually from your watch/device, that data is there. I’m hoping they’ll change that, partially because it’s dumb, and partially because it just increases the ways things can go wrong and is overly complicated.
+Why does the guidance in this style guide deviate from regular Rust style rules?
 
-Still, I’m glad to see they’re offering the full .FIT file, as anything less would have mostly been useless when you start talking more interesting application ideas. Beyond that, you also get both general Health Data and Women’s Health Data JSON summaries (which is fine in this context, I think).
+Most style guides have three goals: consistency, readability, and encouraging
+good API design. Regardless of the specific choices made, it helps everyone to
+have these choices made beforehand to limit bikeshedding.
 
-The process to create a Personal API key takes a few seconds in total.
+This style guide shares those goals, but it also has an additional goal not seen
+as often: smoothing the way for Large-Scale Changes (LSCs). Large codebases like
+many of the ones at Google occasionally need to run codebase-spanning
+refactorings that are assisted by tooling: for this to work well, the code
+should be something tooling has an easy time working with. Consistency helps for
+this, but so does having deliberate refactor-friendly patterns.
 
-![](https://media.dcrainmaker.com/images/2026/10/UntitledImage-12.png)
+When applying rules that relate to API design, you should distinguish two types
+of code:
 
-I just did it again, end to end; maybe 8 seconds?
+For *library code*, style guide rules that concern API design are binding.
 
-![](https://media.dcrainmaker.com/images/2026/10/UntitledImage-13.png)
+For *application code*, the rules on API design are a strong recommendation. As
+you apply them, keep in mind that since application code is written to solve a
+specific problem, it should generally favor simplicity and directness over broad
+reusability. Avoid premature generalization and abstraction; focus on what is
+required to meet the immediate need.
 
-Meanwhile, stepping up to the ‘Starter’ level adds the Courses & Training API’s. These allow developers to *push*  routes/courses to Garmin Connect, which can in turn end up on your device. And the same is true for structured workouts. Think things like Strava and Komoot Routes use this for routes, and TrainingPeaks or Final Surge uses this to send planned workouts. It sounds like approvals for this tier should be virtually instant.
+## Code organization
 
-Which then takes us to the ‘Enterprise’ level, which adds the Golf API that does small ball things, as well as more notably, the Historical Data backfill. This means when someone connects a new account up to their app, it’ll allow the user to backfill a predefined amount of historical data, versus just data from that moment forward. Further, it provides technical support and allows for more than 1,000 users.
+*Terminology:*
 
-But of course – there’s a catch. Once you hit that 1,000-user realm, you’re now in ‘pay-for-play’ land. Garmin is joining Whoop in charging a fee here. There’s essentially an initial $1,000 entry fee, which is a credit towards your monthly active user bill. That means as a company you’ll pay on a per-user basis, for “active monthly users” that are connected. That’s a big shift from the current ‘totally free’ realm that’s been the case for Garmin Connect since 2019, [when they dropped the previous $5,000 entry fee](https://www.dcrainmaker.com/2019/04/garmin-connect-announcements.html).
+- A *crate* is a unit of compilation. A crate always contains a nameless Rust module, the “root module”.
+- A Rust *module* is a unit of code organization within a crate. Rust modules are used to control visibility of names. Modules can be nested. They can also be used to split code across files and directories.
 
-Garmin is essentially saying they’re trying to recoup some of the costs of supporting the platform, while also being able to provide support at this higher tier. There’s also a reality here that many other companies are trying to build full businesses on the backs of Garmin’s platform (e.g. Bevel), and Garmin basically feels like if they want enterprise-level support, they should pay for it.
+The following sections convey that in Chromium, it is preferable to **not** make
+use of all possibilities of splitting modules across files.
 
-So what does that ‘monthly active users’ fee cost? Well, that’s to be negotiated on a per-company basis. It sounds like what Strava or Komoot would pay is undoubtedly different than what a smaller company would pay. However, for funsies, you may not know that the [DCR Analyzer](http://www.dcrainmaker.com/analyzer) actually supports the Garmin Connect API today (along with Amazfit, COROS, Hammerhead, Polar, Suunto, Wahoo, Google Health, and Apple Health via HealthFit). So I asked what it’d cost us. We have roughly 20,000 total users, but a much smaller portion of those are monthly active users with Garmin Connections. While I can’t share the exact amount, it’s fair to say it falls within the rough category of ‘pennies on the dollar’.
+Prefer small crates in Chromium; ideally, but not necessarily, a single file
+(focusing on one abstraction). If your code can be split up into small crates,
+do so.
 
-This brings the next question: when will companies start to pay this? By April 1st, 2027. Between now and then, Garmin will work with existing Garmin Connect API partners to sort out that financial piece. By default, though, all existing partners become ‘Enterprise’ automatically. Further, no existing partner has to pay the $1,000 Enterprise entry fee.
+A crate corresponds to a single `rust_static_library` (chrome) rule, which may
+contain one or more `.rs` files.
 
-I don’t love the idea of Garmin charging anything to access this data, and I largely feel like this should simply be the cost of doing business in 2026. If not, stick that cost into the marketing budget, because that’s what it is. It’s marketing for Garmin devices. Every single 3rd-party platform that integrates with Garmin is marketing for Garmin. That said, if I put on my DCR Analyzer hat, the cost here is pretty negligible – at least for one company. If a user wants to connect all of these platforms, then perhaps it’s slightly more notable, but even then, it still wouldn’t really matter to the bottom line.
+Additional considerations:
 
-Oh, and for lack of a better place to stick it, the existing Garmin Connect IQ program remains free and unchanged (that’s for widgets/apps/etc. on Garmin devices).
+- The root module is allowed to `re-export` public APIs from `leaf submodules`, making submodules an implementation detail of the crate (as users don’t need to know about these submodules).
+- This rule about small crates applies equally to crates with and without submodules. First, evaluate whether the APIs need to be in the same crate, and only then consider whether submodules could help organize the APIs.
+- If you decide to use submodules, follow the [expected file structure](https://google.github.io/styleguide/rustguide.html#structure).
 
-### **The Enterprise Competitive Landscape:**
+Larger crates are allowed when
+[trait impl coherence rules](https://smallcultfollowing.com/babysteps/blog/2015/01/14/little-orphan-impls/)
+force multiple types and traits to be included in one library, or if you’re
+building a large foundational library.
 
-![](https://media.dcrainmaker.com/images/2026/10/IMG_4473.jpeg)
+Rationale
 
-So what does the ‘API’ competitive landscape look like? Well, it depends. There’s no real question here that Garmin provides the most robust API in terms of features (e.g., routes, structured workouts, completed activities, health data, women’s health, etc.). That part honestly isn’t really debatable – it’s factually true. Equally, while platforms like Apple provide free access, they don’t offer a web-based API to push data into Apple Health. Meaning, a partner *has* to develop an iOS app to push/pull it there. That’s why for the DCR Analyzer we use [HealthFit](https://apps.apple.com/us/app/healthfit/id1202650514)as our partner to pull data from Apple Health. The last thing I wanted to do was develop an app simply to get my Apple Fitness data; that solved our need.
+Fine-grained library targets are recommended in Chromium due to the massive size
+of our codebase, non-local effects of adding dependencies in the build graph,
+and to improve performance of parallel compilation and build caching.
 
-Anyways, as for other device platforms – like COROS, Suunto, Wahoo, Polar, Amazfit, etc. – all of them today provide some level of API, but whether or not they provide it for the end-user to do something is heavily mixed. For example, COROS rolled out their MCP access for free for all COROS users. And Suunto announced the same thing last week for some time in the future. Wahoo and Amazfit have programs for companies, but those aren’t really available for individuals. Suunto and Polar also have programs for companies too, and both of those are pretty easy to access. In fact, fun tidbit: Out of all the API partners we implemented for the DCR Analyzer, by far Polar was the fastest and easiest to do.
+In Chromium `.rs` source files belonging to one `rust_library` (one Rust crate)
+must reside in a single directory.
 
-Historically speaking, Whoop, for example, has charged for more detailed API access (such as the full workout files), while allowing free summary information. As an example, in the case of the DCR Analyzer, that’s not super useful, so we haven’t pursued it. Perhaps the pricing is reasonable; historically it hasn’t been.
+Don’t use subdirectories to organize files that belong to a single crate. If
+organizing one crate’s files into subdirectories feels necessary, this is a
+strong indication that the crate has grown [too large](https://google.github.io/styleguide/rustguide.html#small-crates) and should
+be split.
 
-In fact, one thing that Whoop specifically does is charge for ‘aggregator’ type platforms, such as Terra. Generally speaking, when I talk to platforms/companies in the sports tech realm, most have a strong disdain for Terra. It’s mostly for two reasons. The first is that most companies have felt that Terra consistently misleads their customers into thinking they have legit partnerships with the big platforms, when historically speaking, many of those platforms had never even heard of Terra. Second, Terra wasn’t using proper APIs (e.g. OAuth) for many of the sites they accessed, which makes it a notable security concern for the platforms in question. This [14-month-old community support question](https://tryterra.co/community/garmin-connect) best exemplifies the issue in one efficient thread.
+This crate layout is intentionally different from the conventional Cargo
+directory structure typically used in open-source repositories.
 
-We saw this play out recently when Terra got themselves in a pickle as Garmin shut off access to the API for them, until they followed the rules that had been in place for years. Terra responded by asking people to e-mail Garmin’s CEO directly (and provided his e-mail address). Likewise, I got flooded with e-mails as well.
+Exception: Rust code in `//third_party` that is also built with
+[Cargo](https://doc.rust-lang.org/cargo/) should follow the conventional Cargo
+directory structure.
 
-Still, Garmin’s shift here towards charging for API access will set a dangerous precedent for the industry. Especially for a company that bills itself as a (or the?) premium sports hardware provider. On the flip side, there’s simply no ignoring the flood of mostly AI apps that take up resources at Garmin and elsewhere to support. Heck, my inbox is flooded with these apps daily requesting reviews. It sounds like when Garmin shut off access to the API last spring, they were seeing inbound API requests at a daily scale that they’d previously only seen over a period of weeks. Simply put, there’s no good answer.
+Rationale
 
-### **Going Forward:**
+The approach in Chromium is driven by the following factors:
 
-![](https://media.dcrainmaker.com/images/2026/10/IMG_7270.jpg)
+When a `leaf module` has a primary user-defined item (e.g., `Foo`), the module
+should be named after that item (e.g., `mod foo` and `foo.rs`).
 
-Ultimately, there’s sorta a few groups of winners and losers here. For hobbyists, this is a huge win. A massive one. This is the first time that Garmin has provided access (and instant access) to their API for individual users to grab and play with their own data without having to deal with manual .FIT file uploads/management. Likewise, those users can easily/instantly get into the ‘Startup’ category and do more things – all for free up to 1,000 users. So for companies trying to test out a theory, it’s all good news there.
+Leaf modules that are not primarily about any particular abstraction can be
+named as desired.
 
-Where things get fuzzier is the bigger companies, though of course, 1,000 users is hardly ‘big’. Strava has 200 million users, for context. At least now the gates are back open again, and companies can start working their way through the process accordingly. It sounds like part of the goal here is that by offloading the lower-tier access, they can increase the response time for enterprise tiers, minimizing the delay to get through that paperwork approval pile. Plus, those bigger companies can get proper technical support too.
+Rationale
 
-Anyways, interesting times indeed.
+This makes it easy to identify the content/purpose of a source file or leaf
+module at a glance.
 
-With that – thanks for reading!
+The only items in non-leaf modules should be module declarations (not
+definitions) and `re-exports`.
 
-*P.S. – I found an old picture of Garmin’s Connect Developer Summit from 2019 when they first abolished the API fee. Seems appropriate here, even above.*
+Note that the definition of `leaf modules` allows the following sub-modules:
+`mod test` and cross-language binding modules like `#[cxx::bridge]`.
 
-### FOUND THIS POST USEFUL? SUPPORT THE SITE!
+Exceptions:
 
-Hopefully, you found this post useful. The website is really a labor of love, so please consider becoming a [DC RAINMAKER Supporter](https://www.dcrainmaker.com/support). This gets you an ad-free experience, and access to our (mostly) bi-monthly behind-the-scenes video series of “[Shed Talkin’](https://www.youtube.com/watch?v=-qbE3feTkds&t=1s)”.
+Rationale
 
-Otherwise, perhaps consider using the below link if [shopping on Amazon](https://www.amazon.com/gp/browse.html?rw_useCurrentProtocol=1&node=8916179011&linkCode=ll2&tag=dcr07-20&linkId=2cf083a39b98796644643a4089b57a7a&language=en_US&ref_=as_li_ss_tl). As an Amazon Associate, I earn from qualifying purchases. It doesn’t cost you anything extra, but your purchases help support this website a lot. It could simply be [buying toilet paper](https://amzn.to/3SEEIK9), or this [pizza oven](https://amzn.to/3SEMN1M) we use and love.
+This makes it easier to find things, and avoids mixing structure and contents.
 
-1. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) [Z](https://trackmy.shoes/) .comment-author .vcard [October 21, 2026 at 12:02 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866559) #1 .comment-meta .commentmetadata I don’t understand the part about not having historical data, as I can fetch activity by ID. Do they mean not having some kind of bulk import? I have a shoe tracking app that syncs gear automatically from Garmin to Strava, but use unofficial APIs. Would be nice to use proper channels :) [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-## .children
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/55926d11e3304bc3d110cd3221a41438x116.png) [Ray Maker](http://www.dcrainmaker.com) .comment-author .vcard [October 21, 2026 at 12:22 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866565) #2 .comment-meta .commentmetadata The API being official, would be diferent than the unofficial piece that I presume you’re just using webhooks. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Walter .comment-author .vcard [October 21, 2026 at 3:51 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866673) #3 .comment-meta .commentmetadata Have you been able to find a way to get gear data from the Official API? [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) [Z](https://trackmy.shoes/) .comment-author .vcard [October 22, 2026 at 1:00 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866975) #4 .comment-meta .commentmetadata I will try today and get back to you [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) [Z](http://trackmy.shoes) .comment-author .vcard [October 22, 2026 at 4:06 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867032) #5 .comment-meta .commentmetadata – it seems there is internal gear ID in the FIT file. Message 526, field 0 – I cannot find official fetch gear endpoint So using JUST official API to manage gear is a no go. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-2. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/7f8bcf17ae7c8c49b8e2a463b91c2ffex116.png) [Guillermo](https://www.giventotri.com) .comment-author .vcard [October 21, 2026 at 12:06 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866561) #6 .comment-meta .commentmetadata Do they have any plans to allow platforms to push completed activities to Garmin Connect in this new program? I keep hoping apps like FORM get access to push my completed swims there. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-## .children
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/55926d11e3304bc3d110cd3221a41438x116.png) [Ray Maker](http://www.dcrainmaker.com) .comment-author .vcard [October 21, 2026 at 12:23 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866566) #7 .comment-meta .commentmetadata No, that still remains no-go territory for Garmin, save for the handful of strategic partners that mostly came from many years ago (Zwift, TrainerRoad, and more recently Peloton). [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Nick Radov .comment-author .vcard [October 21, 2026 at 1:28 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866606) #8 .comment-meta .commentmetadata It’s not a great solution but in theory you could generate a .FIT file for your swim activity and copy it to a Garmin device via USB. Then the activity should automatically sync to Garmin Connect. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/7f8bcf17ae7c8c49b8e2a463b91c2ffex116.png) [Guillermo](https://www.giventotri.com) .comment-author .vcard [October 21, 2026 at 3:17 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866659) #9 .comment-meta .commentmetadata Yeah, I mean, there are ways around it, but it’s a hassle to import things manually into Garmin Connect and it means it isn’t actually the source of truth for my fitness data because it’s incomplete. I don’t really understand Garmin’s rationale for it. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Richards .comment-author .vcard [October 22, 2026 at 4:57 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867050) #10 .comment-meta .commentmetadata The rationale is so you buy their devices exclusively. What might happen is that some people, I include myself here, are turned off by it and take their data elsewhere and do not use connect. But likely garmin has data that tells them it helps sell more devices. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-3. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) [Kyriakos](https://tryterra.co) .comment-author .vcard [October 21, 2026 at 12:38 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866575) #11 .comment-meta .commentmetadata Ray, this massively misrepresents Terra and what happened, but I am just going to assume you have good intentions and limited information Do you want to join me for a 30-minute live discussion so people can see everything and make their own judgment? [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-## .children
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/55926d11e3304bc3d110cd3221a41438x116.png) [Ray Maker](http://www.dcrainmaker.com) .comment-author .vcard [October 21, 2026 at 2:17 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866630) #12 .comment-meta .commentmetadata Hello. I don’t really see where/how having an open livestream discussion is going to be fruitful. For funsies, I just reached out to one of the companies on your list of 500 partners you have access to, asking what the current state was. I reached out to their lead partnership manager. Who in turn checked with the CTO as well as lead technical engineer. None of them have ever had any discussions with Terra, nor certainly any technical partnership or past/current implementation. They used a bunch of other words as well… Look, I think what you started with years ago as a place for startups to quickly gain access to what was fully walled gardens made sense, especially when you were leveraging API’s properly. But that’s not what’s going on today. Further, API’s are far more common today in wearables/fitness. Still, while I think there’s common good that can come from normalized data in a single repository that companies can access, the way this is currently implemented today simply isn’t that. Cheers [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) [Kyriakos](https://tryterra.co) .comment-author .vcard [October 21, 2026 at 3:18 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866660) #13 .comment-meta .commentmetadata The article and your response clearly misrepresents the facts and the livestream is meant to address this publicly, where you can bring your honest questions. I think good reporting is hearing both sides and reporting on them; otherwise, it’s a false narrative. Can you point me to the exact rules Terra didn’t follow in the Garmin case, since you mention them? The reality is that Terra lets customers move their health data wherever they choose because the data a device generates belongs to the users. We are always in an uphill battle with the big companies that benefit from the siloes, and I would assume you would also want to see your data not controlled by others. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/55926d11e3304bc3d110cd3221a41438x116.png) [Ray Maker](http://www.dcrainmaker.com) .comment-author .vcard [October 21, 2026 at 4:13 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866686) #14 .comment-meta .commentmetadata Sigh. Garmin’s Developer API terms prohibit licensees (Terra in this case, or the DCR Analyzer) from passing that content downstream to other entities. It also prohibits using the API for sub-licensing for monetary gain or otherwise, without written permission…and on and on. But of course, you know all this. As do your customers, back in September, when they were told by you to submit app details to stay compliant. Again, the developer agreement hadn’t changed in more years than I could count. Look, again, I think there are lots of interesting cases with above-board and proper OAuth authentication for middle-man data servicing. But as your own site specifies, you use Webhooks for many claimed partners (including many who have no idea that they’re supposedly a partner), and you’re polling constantly to check for that. That’s textbook definition of scraping. And we don’t even want to get into storing of user credentials. I don’t see much value in going back and forth on this. Ironically, in all the back-and-forth thus far, you haven’t refuted anything specific here. I promise, you’re really barking up the wrong tree here. You’re vastly underestimating how well I understand the technology at play here, and more critically – how many companies I’ve talked to (both ‘partner platforms’ and your actual paying customers that have reached out). [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Micko .comment-author .vcard [October 22, 2026 at 2:55 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867007) #15 .comment-meta .commentmetadata Well, you got him there. These companies are the main issue I think. They’ve been leeching and earning money from Garmin (and other companies) free API, while providing no real benefit, except easier integration (that is not impossible, just a bit harder) I really hope Garmin’s Enterprise access won’t be too expensive, since it would somewhat (for the lack of better word) kill my app. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Fit Observer .comment-author .vcard [October 22, 2026 at 4:49 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867047) #16 .comment-meta .commentmetadata You’re charging $500 a month for a product which is quite obviously not fit (pun intended) for purpose. Moreover, your X feed and customer handling is laughable at best. Watching you rile up Steven Scullion to rant about Garmin on his instagram account was hilarious. Even if he never mentioned Terra by name, we all knew who he meant. God only knows how you have managed to grow your company and employ Olympic athletes with your practices. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-4. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Raimonds .comment-author .vcard [October 21, 2026 at 2:06 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866624) #17 .comment-meta .commentmetadata Interesting turn. Week ago I created (with AI help) script/app that downloads last activities from Garmin and uploads to runalyze because our friends in Garmin started to stripe some information from fit files they are sending out to runalyze. Reading about change I understand that fit files downloaded using GC API have the same data missing which is now missing in runalyze, that would be VO2Max for example. It would be great if anyone could confirm this. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-5. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Pavel S .comment-author .vcard [October 21, 2026 at 4:15 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866687) #18 .comment-meta .commentmetadata Thanks for the good overview, as always. I’m wondering why Coros is always written in all caps. Do they force reviewers to write it that way, or what’s the reason? I get it when acronyms are written in all caps, like MCP, but Coros is nothing like that. It’s just a brand name. When reading a list of brands like “COROS, Suunto, Wahoo, Polar, Amazfit, etc.”, seeing one brand in all caps for no apparent reason is an eyesore to me and feels like a cheap marketing trick. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-## .children
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/55926d11e3304bc3d110cd3221a41438x116.png) [Ray Maker](http://www.dcrainmaker.com) .comment-author .vcard [October 21, 2026 at 4:21 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866690) #19 .comment-meta .commentmetadata I don’t know, it’s how they write their brand name, and while I don’t do fancy characters for model names like fēnix® – in the case of COROS, it just looks weird to anyone in sports tech if you write it Coros. Said differently, if I see a review/etc where someone writes it ‘Coros’, there’s a very strong chance that review is gonna suck, because they can’t at least spell the name of the company right. Just my two cents from writing the word COROS for over a decade…. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-6. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) David Lusty .comment-author .vcard [October 21, 2026 at 4:34 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866700) #20 .comment-meta .commentmetadata Got to say I don’t mind this at all. Love free data, love user access to that data, love the innovation that comes from that. This allows ideas to be tested, good thing. It encourages innovation, good thing. It allows Garmin a revenue stream other than hardware. I’m on the fence there. They can’t keep pushing hardware change as the only way to make money. Fenix for example has peaked a while ago and some innovation targeting specific users is good but that’s not going to be enough income to keep Garmin alive. We all need them alive! Compare this to Apple. Most of us like Apple and tolerate their taking a cut of literally everything near their platform. If Apple can take multiple cuts when you order a pizza then realistically Garmin should be allowed to take a small cut when running their platform and providing data and value. If Garmin go all Apple on us and prioritise subscription revenue from all angles, they’re dead to me. It’s not their DNA though, they need to cover costs and need some revenue not directly hardware based. This seems reasonable to me so far. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-7. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Tony West .comment-author .vcard [October 21, 2026 at 6:18 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866758) #21 .comment-meta .commentmetadata So this means I could sign up for a personal API key and point Claude at my data? Or would I need to pull my data down locally and use Claude with it from there? [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-8. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Paul S. .comment-author .vcard [October 21, 2026 at 8:41 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866847) #22 .comment-meta .commentmetadata Could this be the reason that today’s outdoor ride doesn’t show in Zwift Companion? I don’t remember any problems from the time Zwift decided to give XP for outdoor rides until today. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-9. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/ff93e4e7f8a26fa19f90143ff5f4a89ex116.png) Alex .comment-author .vcard [October 21, 2026 at 9:09 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866864) #23 .comment-meta .commentmetadata I built an open-source script that lets you download workout files using a private API key and sync them to other services. Currently, only Intervals.icu and EffortSignal are supported, but I’ll gradually add more. The script can run either locally or on Cloudflare Workers within the free tier limits. [link to github.com](https://github.com/azaitsev/gc2everywhere) [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-10. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/65b5c4a96d430fa97d21195c4a27d977x116.png) Henrik Christensen .comment-author .vcard [October 22, 2026 at 3:06 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867009) #24 .comment-meta .commentmetadata So now we just need full and complete sync of all data between Connect and Apple Health :-) [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-11. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Jesper (CPH DK) .comment-author .vcard [October 22, 2026 at 3:49 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867023) #25 .comment-meta .commentmetadata Maybe slightly off topic, but does anyone know of an app/www that can show ones health data with better graphs??? I’m especially dreaming of weight graph that span all the data, not just one year at a time. And also with better details and not the avg of several datapoints. Give me 3 and 12 month with all points [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-## .children
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) [Z](http://trackmy.shoes) .comment-author .vcard [October 22, 2026 at 4:07 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867033) #26 .comment-meta .commentmetadata Put this into Claude. Literally :) It will spit out a lot of slop, but it will work and give you what you want. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Ronald .comment-author .vcard [October 22, 2026 at 4:27 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867040) #27 .comment-meta .commentmetadata hi Jesper, check out [link to runalyze.com](https://runalyze.com/) i’m not using it for that purpose but it has the capabilities. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-12. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) mat .comment-author .vcard [October 22, 2026 at 3:57 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867025) #28 .comment-meta .commentmetadata I know it’s not directly related to this (although perhaps?), but I’m looking for a solution to a problem: I have a tacx turbo trainer that connects to the garmin ecosystem, but switched my watch to suunto. I would like my tacx activities be visible in the suunto app not as manual added activities but proper trainings. Is that something that could potentially be done via APIs (on garmin and suunto side)? [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-13. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) John Tomac .comment-author .vcard [October 22, 2026 at 5:25 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867055) #29 .comment-meta .commentmetadata If I understand you correctly, companies with more than 1,000 users, such as Intervals.icu, will have to pay starting in 2027, so Intervals will no longer be free for users if they don’t want to loose money. I’d like to see Training Peaks graph (ATL, CTL, TSB) available in Connect in the future, just like TSS and IF metrics, which we already have. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-## .children
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/55926d11e3304bc3d110cd3221a41438x116.png) [Ray Maker](http://www.dcrainmaker.com) .comment-author .vcard [October 22, 2026 at 5:52 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867059) #30 .comment-meta .commentmetadata Intervals has a premium tier already ($4/month) which, if we assume roughly single-digit pennies per user, would easily cover that. Now of course, for their free tier, yeah, they’re gonna have to think that through (which sucks). Depending on their user volume, they could see that as a marketing expense to upsell premium, but I don’tknow their financials. That’s just business ROI pieces there for them to sort out. I suspect some of these factors are why Garmin says the negotiation pieces are per-company, not just because of size, but intended use case. For example, a university or medical study trying to do something at scale might not pay anything. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/ff93e4e7f8a26fa19f90143ff5f4a89ex116.png) Alex .comment-author .vcard [October 22, 2026 at 6:34 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867071) #31 .comment-meta .commentmetadata I saw a Garmin ad where they were selling bundles that include CIRQA and some research software. Maybe they partnered with another company or acquired one for this. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) [Dom](http://runningbadger.blogspot.co.uk/) .comment-author .vcard [October 22, 2026 at 7:46 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867099) #32 .comment-meta .commentmetadata It’s going to be interesting for sites that have a free tier and a lot of people who connect their Garmin unit, use it for a bit, then abandon it but leave the connection running. I foresee culls of dormant users. Looking at my own list of connected sites, I think I should cull a few myself. One of them doesn’t even exist any more! [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/55926d11e3304bc3d110cd3221a41438x116.png) [Ray Maker](http://www.dcrainmaker.com) .comment-author .vcard [October 22, 2026 at 7:54 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867102) #33 .comment-meta .commentmetadata Yeah, I suspect dormant-type conditions will be the most logical path forward. Which, to be fair, is probably good for all involved anyway. Transfering tons of data around to platforms you never use is a waste. Like you, I’ve been meaning to do a cull of both my Strava & Garmin connections. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-14. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) [Kevin F](https://www.fitfiletools.com) .comment-author .vcard [October 22, 2026 at 9:46 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867146) #34 .comment-meta .commentmetadata Thanks for the fantastic write-up! As a long-time hobbyist developer, I completely sympathize with the position that Garmin — and really any company offering public APIs — finds itself in during the post-Claude Code era. Platforms will either need to adapt their partner models or face the same fate GitHub did: widespread outages triggered by an explosion of “vibe-coded” API traffic. Garmin’s approach seems entirely reasonable. ps: I’m here for the Terra sub-thread! Spicy. Go get ’em, Ray! [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-15. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Andy .comment-author .vcard [October 22, 2026 at 10:30 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867167) #35 .comment-meta .commentmetadata As an antitrust lawyer, I predict some arguments or complaints coming out of this. As you’ve previously identified, Garmin is like “all the data on Strava” (in short-hand) – whilst the devil is in the detail, it certainly seems arguable that Strava depends on Garmin API access – so what happens if they say they won’t pay? I don’t think Garmin can credibly pull access – it seems there’s a prima facie argument they are dominant in sports tech devices and data markets and so by withdrawing access upon which Strava is built for a refusal to pay risks being a potential abuse of dominance and/or the fees being charged risk being found to be excessive and unfair. Add in that Garmin’s downstream platform (TrainingPeaks) presumably won’t be paying those fees and you can argue that Garmin is favouring its downstream training platform and seeking to give it a competitive advantage over competitors (whether Strava or otherwise). There’s potentially a lot here for a would be complainant to challenge if Garmin do anything other than be pretty accommodating. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-16. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) LoneLeaf .comment-author .vcard [October 22, 2026 at 12:41 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867219) #36 .comment-meta .commentmetadata Allowing historical data again is good news. I recently wanted to export hundreds of activities (to the orange platform…) via Tapiriik and learned that Garmin cut off historical access some time ago. Hopefully Garmin gives safety-oriented API users like MyBikeTraffic a decent deal. It sounds like the personal API key could streamline getting data into Golden Cheetah. I haven’t used in a long time but it used to require a manual login each time. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-17. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Neil .comment-author .vcard [October 22, 2026 at 3:07 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867273) #37 .comment-meta .commentmetadata Shame that the Personal API key is read-only. I’ve been building a sync app with it, activities and FIT files pull down fine, but there’s no way to push or schedule workouts. The unofficial Python library can do both, because it uses the same endpoints Garmin Connect itself uses, but that means logging in with the user’s own credentials. I’d also say getting a Starter account isn’t trivial for hobbyist developers. From what I’ve read you may need a registered company, and because you’d be storing other people’s data you also have to take data protection seriously. In the UK/EU that means GDPR: registering with the Information Commissioner’s Office and paying the data protection fee, a published privacy notice, a lawful basis for processing, being able to handle access and deletion requests, proper security, and reporting breaches within 72 hours. That’s a lot of overhead for a side project that only wants access beyond the read only limits imposed by the personal account. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-18. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Mike .comment-author .vcard [October 22, 2026 at 5:30 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867320) #38this must be the last one! .comment-meta .commentmetadata is small ball a reference to hamish and andy?! [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
+### Don’t use glob imports
+
+Don’t use glob imports, except in the following situations where you may
+optionally do so at your own discretion:
+
+- use super::* for inline modules
+- use enum::* in method bodies of enums, and functions that are primarily dealing with that enum
+- pub use submodule::* for non-leaf modules
+- C++ interop: Since the same namespace (in C++) is a submodule in different Rust crates (in Rust), you may merge the namespaces into a private copy using glob imports. For example: `mod absl { pub use status::absl::*; pub use strings::absl::*; } ` In this hypothetical example, you can use `absl::Status` and `absl::StrCat` from Rust, the same way you would from C++, instead of spelling them as `status::absl::Status` and `strings::absl::StrCat`. This must only be used for merging C++ namespaces, and the resulting merged module must not be public.
+
+If using third-party crates that encourage a prelude, it is up to the reviewer’s
+discretion to allow it.
+
+This also means that defining preludes should be avoided.
+
+Rationale
+
+Glob imports increase toil for code janitors running LSCs, and make it harder to
+know where a type comes from in contexts without xrefs.
+
+### A `use` statement should import items from one module
+
+This rule corresponds to the rustfmt setting `imports_granularity = Module`.
+
+Basically, there should not be any `::`’s inside the `{..}` block of a `use`
+statement. For example:
+
+```
+use foo::Foo;
+use foo::bar::Bar;
+use foo::bar::Baz;
+```
+
+```
+use foo::Foo;
+use foo::bar::{Bar, Baz};
+```
+
+```
+use foo::{Foo, bar::Bar};
+```
+
+Import traits within function bodies, unless the trait’s methods are used
+extensively throughout the file.
+
+```
+fn foo(x: u8) {
+    // Import the trait within a function, not at the module scope.
+    use std::str::FromStr;
+
+    let string: String = x.parse();
+}
+```
+
+To use top-level functions defined in other modules or crates, import their
+module and call them with `modulename::functionname()`. For example:
+
+```
+use std::mem;
+
+let x = mem::transmute(y);
+```
+
+```
+use std::mem::transmute;
+
+let x = transmute(y);
+```
+
+Exceptions:
+
+Rationale
+
+Many Rust codebases consistently keep a style such that unqualified lowercase
+names are assumed local, so `foo()` can be assumed to be from the same module.
+This rule largely exists to avoid reviewer disagreements, the benefit is mostly
+consistency and a minor edge on reading code without xrefs.
+
+By default, types and traits should be referenced in code without using their
+module path, e.g., code should use `Regex`, not `regex::Regex`, with a `use
+regex::Regex` at the top of the file or potentially in the relevant function.
+
+Exceptions:
+
+Rationale
+
+This rule largely exists to avoid reviewer disagreements.
+
+### Use the appropriate formatting tool
+
+Use the appropriate formatting tool (e.g., `git cl format` in Chromium).
+
+Configuration (for style guide authors)
+
+A codebase may choose to not apply the following `rustfmt` options if they care
+about building on stable and the option is unavailable on their stable Rust:
+
+- Maximum of 100 columns per line: [`max_width = 100`](https://rust-lang.github.io/rustfmt/?version=v1.6.0&search=#max_width)
+- Usage of lowercase alphabets in hex literals (`0xab123cdef` as opposed to `0xAB123CDEF`): [`hex_literal_case = Lower`](https://rust-lang.github.io/rustfmt/?version=v1.6.0&search=#hex_literal_case)
+- Macro matcher formatting: [`format_macro_matchers = true`](https://rust-lang.github.io/rustfmt/?version=v1.6.0&search=#format_macro_matchers)
+- Usage of escapes for invisible characters in literals. E.g., if you wish to have text containing a Zero-Width joiner, use `\u{200D}`.
+
+You may opt out of automatic formatting using `#[rustfmt::skip]`, but only in
+the following situations:
+
+Important: Formatting should not be skipped for personal style choices.
+
+## Ownership and borrowing
+
+Prefer unique ownership and borrowing over `Rc` and `Arc` for managing memory.
+
+Exception:
+
+Rationale
+
+Generally, Rust allows representing object graphs without using shared ownership
+smart pointers. These pointers add runtime overhead and their own unique
+complexity. Engineers coming from other languages might tend to use `Rc` and
+`Arc` too quickly.
+
+Use `.clone()` when you genuinely need a deep copy of an object.
+
+Avoid using `.clone()` as a substitute for borrowing. Design code that works
+naturally with Rust’s ownership and borrowing rules. However, if the borrowing
+relationships become excessively complex, `.clone()` can be a pragmatic choice.
+
+Consider the performance needs of the code while choosing between cloning and
+borrowing.
+
+Note: This advice does not apply to cloning `Rc` or `Arc` pointers. Cloning
+reference-counted pointers does not create a deep copy, and is an expected way
+to use them.
+
+Rationale
+
+Deep copies can be expensive to make due to memory allocation and data copying.
+
+When functions accept borrowed, immutable data, use a reference type that
+affords the most flexibility. Pass references to the data itself instead of
+references to smart pointers, containers, or wrappers.
+
+| Use | Instead of | Why? |
+| --- | --- | --- |
+| `&T` | `&Box<T>` | Borrow the data inside the box |
+| `&[T]` | `&Vec<T>` | Accept any slice instead of specific containers |
+| `&str` | `&String` | Accept a string slice instead of references to owned strings |
+| `Option<&T>` | `&Option<T>` | Borrow the data inside the Option |
+
+Exceptions:
+
+For context, see Clippy lints
+[`borrowed_box`](https://rust-lang.github.io/rust-clippy/master/index.html#borrowed_box)
+and
+[ptr_arg](https://rust-lang.github.io/rust-clippy/master/index.html#ptr_arg).
+
+Rationale
+
+Accepting reference types that don’t mention specific smart pointers,
+containers, or wrappers makes functions more versatile and performant: callers
+can pass data held in a variety of ways without copying it first.
+
+Prefer returning iterators (either concrete types or `impl Iterator`) where
+possible over returning `Vec<T>`.
+
+Note: In application code, returning a `Vec<T>` is fine if it simplifies the
+code and if flexibility and performance advantages of iterators are not clearly
+needed.
+
+Exceptions:
+
+Rationale
+
+Highly reusable library code generally should strive to provide more flexible
+and performant APIs. Returning an iterator allows callers to choose how to
+consume the data: collect it into a vector, process it in a loop, or chain
+further iterator adapters. Some of these options allow users to avoid
+unnecessary allocations.
+
+In application code, the usage patterns for a function are often easier to
+predict. If it is clear that performance is not a concern, or that data would be
+collected into a vector anyway, returning a vector makes for a simpler API.
+
+Highly reusable library code should accept iterators or `impl IntoIterator` if
+it only needs to iterate over the input.
+
+Note: In application code, accepting a slice `&[T]` is fine if it simplifies the
+code and if flexibility and performance advantages of iterators are not clearly
+needed.
+
+Rationale
+
+Highly reusable library code generally should strive to provide more flexible
+and performant APIs. Functions that accept iterators offer callers:
+
+In application code, the usage patterns for a function are often easier to
+predict. If it is clear that performance is not a concern, or that callers would
+always have a vector anyway, accepting a slice makes for a simpler API.
+
+When designing library APIs that accept a `T` but users are likely to have
+various types, consider accepting `impl Into<T>` instead of `T` if **call-site
+ergonomics are paramount**.
+
+Tip: This should be balanced against code bloat concerns; it is not a
+requirement to use lots of `Into<T>` in your code.
+
+Note: Application code should almost never use `impl Into<T>` parameters.
+
+Rationale
+
+Using `impl Into<T>` allows a function to directly accept various arguments of
+various compatible types. For example, a function accepting `impl Into<String>`
+could be called with a `String` or a `&str` literal directly.
+
+The tradeoff here is balancing the convenience of avoiding a `.into()` at the
+callsite against the cost of generics (more complex API signature, increased
+code size, sometimes even type inference difficulties).
+
+### Prefer `enum` over `bool` in APIs
+
+Use `enum` function parameters instead of `bool` in cases where the purpose of
+the parameter is not obvious.
+
+If you do use `bool`, consider using an inline comment to document the purpose
+of the `bool` in an argument list.
+
+Choose the error reporting mechanism that fits your API contract: `Option`,
+`Result`, or `panic!`.
+
+**Use `Option` for simple failures** where the cause is obvious and the caller
+would not benefit from further details. This is best for standard, anticipated
+outcomes like a missing value or a parsing mismatch.
+
+```
+// Good: The cause of the failure is obvious (integer overflow). No further
+// details could be reasonably provided.
+fn checked_add(a: u32, b: u32) -> Option<u32> { ... }
+```
+
+**Use `Result` for recoverable failures where the caller needs context** to
+handle the error. These are often “unavoidable” errors caused by external
+factors (like I/O or network) that even correctly implemented code cannot
+prevent with checks ahead of time. Nevertheless, the caller can reasonably
+anticipate the kinds of errors (a file-related function can fail with an I/O
+error). The error details allow the caller to distinguish failure modes and
+recover appropriately.
+
+```
+// Good: The caller needs to know *why* it failed (NotFound vs PermissionDenied).
+fn open_file(path: &Path) -> Result<File, io::Error> { ... }
+```
+
+**Use `panic!` to report bugs and violated invariants.** These errors are
+avoidable: the program is missing a check, and is calling an operation without
+fulfilling a precondition. These defects must be fixed in the code, not handled
+at runtime, although coarse-grained recovery might be possible with
+`catch_unwind`.
+
+```
+// Good: Panics if the invariant (index must be in bounds) is violated.
+// This indicates a bug in the caller's logic.
+impl<T> MyVec<T> {
+    pub fn remove(&mut self, index: usize) -> T {
+        if index >= self.len() {
+            panic!("index out of bounds");
+        }
+        // ...
+    }
+}
+```
+
+Note: Some codebases may choose to avoid panics entirely, and require even
+broken invariants to be reported via `Result`.
+
+Exceptions:
+
+## Types
+
+Use a
+[newtype](https://doc.rust-lang.org/rust-by-example/generics/new_types.html)
+instead of a type alias in the following cases:
+
+Prefer types with named fields over tuples, as tuple indexes (`.0`, `.1`, …)
+quickly become confusing.
+
+Exceptions:
+
+## Traits
+
+As a general rule, low-level library code should anticipate users’ needs
+proactively, while application code should add trait impls as needed.
+
+If a method matches the purpose and behavior of a standard library trait,
+implement that trait. For example, instead of writing `fn from_str(&str) ->
+Self` on `Foo`, you should `impl FromStr for Foo`.
+
+It is acceptable to have both the method and the trait impl for discoverability
+reasons.
+
+For context, see Clippy lint
+[`should_implement_trait`](https://rust-lang.github.io/rust-clippy/master/index.html#should_implement_trait)
+([list of traits](https://github.com/rust-lang/rust-clippy/blob/928349795f9f28f54e69bd0f0ffeed33de5e272a/clippy_lints/src/methods/mod.rs#L3940-L3971)).
+
+Manual implementations should be avoided if they can be expressed as a
+`#[derive()]`.
+
+In libraries, prefer accepting generics (`T: Trait` or `impl Trait`) in function
+parameters over `dyn Trait`.
+
+Exceptions:
+
+Rationale
+
+Define a trait only for the following purposes:
+
+- To enable generic programming (to use `T: Trait` in constraints of generic functions and types).
+- To accept or return an `impl Trait` or `dyn Trait`.
+- To define an [extension trait](https://google.github.io/styleguide/rustguide.html#extension-traits) (but see also the caveats in the section on extension traits).
+
+In all other cases where you want to implement functionality for a type, use an
+[inherent implementation](https://doc.rust-lang.org/std/keyword.impl.html#inherent-implementations).
+
+Don’t use traits merely to organize code.
+
+### Extension traits
+
+An
+[extension trait](https://rust-lang.github.io/rfcs/0445-extension-trait-conventions.html)
+is a trait that adds methods to a type from a different crate.
+
+What differentiates an extension trait from other traits is that its sole
+purpose is to add methods to the type; it is not intended for use in generics
+(`T: Trait`, `impl Trait`) or dynamic dispatch (`dyn Trait`). To indicate this,
+the name of an extension trait should carry the suffix `~Ext` (for example,
+`ForeignTypeExt`).
+
+In general, the team that owns the original type should also own the extension
+trait.
+
+Exceptions:
+
+Note: This rule is specifically about extension traits. It is relatively common
+to define a trait as an input trait (e.g., `DateLike`) and implement it on a
+bunch of foreign types.
+
+Examples
+
+```
+extern crate foreign_crate;
+use foreign_crate::ForeignType;
+
+trait ForeignTypeExt {
+  fn additional_method(&self);
+}
+
+impl ForeignTypeExt for ForeignType {
+  fn additional_method(&self) { ... }
+}
+```
+
+It is also possible to define an extension trait for every type that implements
+some foreign trait. Effectively, this is equivalent to adding default methods to
+the foreign trait:
+
+```
+extern crate foreign_crate;
+use foreign_crate::ForeignTrait;
+
+trait ForeignTraitExt {
+  fn additional_method(&self);
+}
+
+impl<T: ForeignTrait> ForeignTraitExt for T {
+  fn additional_method(&self) { ... }
+}
+```
+
+Rationale
+
+When the same team owns the extension trait and the type being extended, this
+helps avoid method name conflicts between the base type and the extension trait
+or between two extension traits.
+
+- **Types with public fields**: Consider implementing traits implemented by all subfields.
+- **Error types**: Implement the `Copy` trait whenever possible. `Copy` types are simpler to manage and propagate because they can be passed by value without moving ownership. An example of a case where this is not possible is if the error must contain non-`Copy` fields like a `String`.
+- **`Copy`**: Implement whenever it is reasonably clear that the type will continue to be `Copy` in the future.
+- **`Clone`**: Most types should implement `Clone` unless they represent some external resource.
+- **`Default`**: Implement if the type implements `new()` or otherwise has a default state. For context, see Clippy lint [`new_without_default`](https://rust-lang.github.io/rust-clippy/master/index.html#new_without_default).
+- **`PartialEq`** / **`Eq`**: If you want users to use the `==` operator, prefer implementing `PartialEq` over `Eq`. When you do implement `Eq`, be aware of the additionally required reflexivity (details: https://doc.rust-lang.org/std/cmp/trait.Eq.html).
+- **`PartialOrd`** / **`Ord`**: If you want users to use the `<` or `>` operators, prefer implementing `PartialOrd` over `Ord`. When you do implement `Ord`, be aware that it requires total ordering (details: https://doc.rust-lang.org/std/cmp/trait.Ord.html).
+- **Map keys**
+  - If you think it is likely that a type will be used as a map key or otherwise cached, implement Hash and Eq.
+  - If, in addition, the type has a clear total ordering, implement Ord (and any traits it needs).
+
+### Pair important `From` impls with explicit constructor methods
+
+If a type has an important `From` impl that is expected to be one of the primary
+ways of constructing it, add an inherent `::new()`, `::new_from_foo()`¸ or
+`::from_foo()` method.
+
+Structs with all-public fields that are primarily used as a “bag of options” for
+a function should implement `Default`.
+
+Rationale
+
+This enables convenient use of struct update syntax (`Struct { a: 0,
+..Default::default()}` ).
+
+Never reach inside a poisoned mutex to get at its insides, no matter how
+tempting the use case may seem.
+
+### Don’t use `async` / `.await` [chrome]
+
+Don’t use `async` / `.await` in Chromium.
+
+In Chromium, prefer to use sequences instead of threads.
+
+Use Fuchsia’s mutex type, rather than one from `std::sync` or `parking_lot`.
+
+## Macros
+
+When considering how to express an API, prefer in order:
+
+- Regular Rust functions, types, traits, objects, and modules. (Avoid macros, code generation, and metaprogramming where possible).
+- `macro_rules!`-style macros.
+- Other code generation strategies (e.g. `genrule`)
+- `proc_macro` macros.
+
+When you decide to use a macro or code generation, please weigh the benefits
+against the costs:
+
+Rationale
+
+**Prefer non-macro facilities:** Macros can create dialects of the language that
+make it harder for engineers to work across the codebase. When a reader sees a
+usage of a macro, they can make fewer assumptions about that code than if it
+didn’t use a macro. Macros are harder to write correctly than regular Rust code.
+
+**Use `macro_rules!` for simple code generation:** Since Rust macros operate on
+the AST, they can be less fragile than textual code generation.
+
+## Naming
+
+### Naming methods
+
+Follow the Rust standard library style for naming methods. See also the guidance
+on
+[naming conventions](https://google.github.io/comprehensive-rust/idiomatic/foundations-api-design/predictable-api/naming-conventions.html)
+in the Comprehensive Rust course.
+
+Specific considerations:
+
+- Use prefixes such as as_...(), to_...(), or into_...() with the appropriate self convention. See also this section of the Rust API Guidelines and the Clippy lint `wrong_self_convention`.
+
+Lifetimes should have descriptive names, especially type lifetimes.
+
+Exceptions:
+
+Use a short name for your generic parameters (either single or multi character),
+related to the kind of thing they represent. Single-letter generics are okay,
+but the letter chosen should be somewhat indicative of the object type, ideally
+taken from the most important trait bound.
+
+`T` or `U` are fine when the generics are in a relatively unbound context; i.e.
+it is an API intended for use with most types, like `Vec<T>`.
+
+When naming an [extension trait](https://google.github.io/styleguide/rustguide.html#extension-traits), give the name an `~Ext`
+suffix (for example, `ForeignTypeExt`).
+
+### Naming initialization functions
+
+Follow these guidelines when naming initialization functions:
+
+- Constructors: Use `new()`, or `new_with_foo()` if there is more than one. If the constructor returns a `Result`, use `try_new()`.
+- Value-to-value conversions: Use `from_foo()` with an associated `From` impl. See [here](https://doc.rust-lang.org/std/convert/trait.From.html#when-to-implement-from) for details on when an operation can be considered to be a value-to-value conversion.
+
+Don’t use abbreviations (especially acronyms and initialisms) that someone
+outside your project is unlikely to know. Don’t abbreviate by deleting letters
+within a word.
+
+See also the
+[Google C++ Style Guide](https://google.github.io/styleguide/cppguide.html#General_Naming_Rules).
+
+Exceptions:
+
+Add documentation comments to public APIs, potentially using the `missing_doc`
+lint to help with this.
+
+Best practices for documentation comments:
+
+- Consider including examples: It is not necessary for every function to have examples, but enough functionality should be covered in examples *somewhere* to give an idea of how the crate works.
+- Always document panic cases for functions which may panic due to malformed input.
+- Clearly document invariants for unsafe functions and traits.
+- Use capitalization and punctuation.
+- Don’t explain the basics of the programming language. For example, don’t do the following: `struct MockFileSystem { ... } /// A mock implementation of the FileSystem trait, intended to be used in unit tests. impl FileSystem for MockFileSystem `
+
+Exceptions:
+
+- Comments should say something that the code does not already say. If there’s nothing insightful to say, it is better to omit the comment than to repeat the function name in a trivial way. For example, don’t do the following (it’s fine to `allow` the lint in that case): `/// Removes an element. pub fn remove_element() -> Element {} `
+- It is generally okay to omit documentation on individual enum variants, especially if their name is self-explanatory.
+
+**How to format documentation comments**
+
+Follow these guidelines when writing documentation comments:
+
+It is acceptable, and even encouraged, to mix doc comments (`///` and `//!`) and
+ordinary comments (`//`). If you have one thing you wish to document publicly,
+and another thing you want to note as an implementation comment, then use both!
+For example:
+
+```
+/// Finds the first `FooItem` with the given `name`, or `None` if not present.
+// TODO: crbug.com/12345 - `name` should be &str, not String.
+pub fn get_named(items: &[FooItem], name: String) -> Option<&FooItem> {...}
+```
+
+Rationale
+
+Many, though not all, languages have a different commenting convention (such as
+extra `*` characters) for doc comments as opposed to implementation comments.
+Rust and Python are notable for not just having different commenting
+conventions, but an actual different syntax entirely. This has concrete benefits
+to the Rust ecosystem:
+
+### Unsafe code
+
+Don’t write unsafe code unless there is no way to implement the same
+functionality with safe code.
+
+If you do have to write unsafe code:
+
+Don’t use unstable features.
+
+Exceptions:
+
+### Getters and setters
+
+Writing and naming getters and setters should follow these guidelines:
+
+- foo() for a getter that returns a T by value.
+- foo_mut() for a getter that returns a &mut T.
+- take_foo() for a getter that “clears” the value (by setting it to None or some other default state) and returns the old value.
+- set_foo() for a setter that takes a T by value.
+- with_foo() / with_mut_foo() for an accessor that operates via a closure (see details below). Such an accessor is invoked as object.with_foo(|foo| frob(foo)).
+- replace_foo() for a setter that returns the old value.
+
+Examples
+
+```
+impl Stuff {
+   fn foo(&self) -> &Foo { ...  }
+   fn foo_mut(&mut self) -> &mut Foo { ... }
+
+   /// Sets "baz" property to `None` and returns the old value.
+   fn take_baz(&mut self) -> Option<Baz> { ... }
+
+   fn set_foo(&mut self, foo: Foo) { ... }
+
+   /// Calls `f` with a borrow of the "bar" property.
+   /// Returns the return value of `f`.
+   fn with_bar<R>(&self, f: impl FnOnce(&Bar) -> R) -> R { ... }
+
+   /// Calls `f` with a mutable borrow of the "bar" property.
+   /// Returns the return value of `f`.
+   fn with_mut_bar<R>(&self, f: impl FnOnce(&mut i32) -> R) -> R { ... }
+
+   /// Sets "foo" property to `foo` and returns the old value.
+   fn replace_foo(&mut self, foo: Foo) -> Foo  { ... }
+}
+```
+
+Accessors that accept a closure (`.with_foo()`) are typically invoked as
+`object.with_foo(|foo| do_something_with(foo))`. They can be a good choice in
+the following situations:
+
+- When the property is contained in an interior mutability wrapper (e.g. `Mutex` or `RefCell`). These mechanisms need to constrain access to the property to a scope, and the closure provides this scope. This is usually preferable to directly returning the RAII object that implements the scope (e.g. `MutexGuard<T>`) because the latter would leak an implementation detail.
+- When follow-up work or validation is needed after a property is changed and a `set_foo()` accessor cannot be used (for example because the property’s type is expensive to clone or cannot be cloned at all).
+
+A `with_foo()` accessor will often allow the closure to return a value and
+forward it by returning it from `with_foo()`.
+
+If you need to provide two closure-accepting accessors, one for read-only access
+and one for mutable access, it is common to name them `with_foo()` and
+`with_mut_foo()`. Otherwise, `with_foo()` is often also used for mutating
+accessors.
+
+If you implement `len()`, also implement `is_empty()`. For context, see Clippy
+lint
+[`len_without_is_empty`](https://rust-lang.github.io/rust-clippy/master/index.html#len_without_is_empty).
+
+Treat items marked `#[doc(hidden)]` as private. Don’t access them unless you own
+the code.
+
+Mark a public function as `const` only if you expect it to remain `const` in the
+future (or can commit to helping clients migrate when it changes).
+
+Rationale
+
+It’s a breaking change to turn a `const` function into a regular function.
+
+Use operator overloads for their original mathematical/logical purpose, not just
+to make the code more concise (as “syntax sugar”).
+
+### Apply `#[non_exhaustive]` to publicly-exposed enums
+
+If an enum is part of a public API used by other teams, mark it
+`#[non_exhaustive]`.
+
+Exceptions:
+
+For context, see Clippy lint
+[`exhaustive_enums`](https://rust-lang.github.io/rust-clippy/master/index.html#exhaustive_enums).
+
+Rationale
+
+Marking an enum `#[non_exhaustive]` forces users to include a wildcard arm (`_
+=> ...`) in `match` statements. This ensures code continues to compile when new
+variants are added to the enum later.
+
+This rule is primarily important for enums used across team boundaries, because
+the scope of the breakage could be significant. Enums used only a small number
+of times can’t create a large breakage and thus may ignore this rule.
+
+Structs with public fields that are part of a public API used by other teams
+should be marked `#[non_exhaustive]`.
+
+Exceptions:
+
+Rationale
+
+Adding a new field (even a private one) to a struct with all public fields is a
+breaking change, because callers can no longer name all fields in a struct
+literal.
+
+A `#[non_exhaustive]` struct can’t be constructed with the struct literal
+syntax, except for the code in the same crate. This allows new private fields to
+be added without breaking users.
+
+This rule is primarily important for structs used across team boundaries,
+because the scope of the breakage could be significant. Structs used only a
+small number of times can’t create a large breakage and thus may ignore this
+rule.
+
+### `#[must_use]` on functions
+
+Use `#[must_use]` on functions in these cases:
+
+- The caller cannot use the function correctly if they ignore the return value. This includes pure functions (functions without side effects), such as `HashMap::get()`.
+- Any function whose return value represents an error or otherwise critical information about the function’s behavior. If the return type is already annotated `#[must_use]` (which is true of `Result`, for example), the function does not need to be annotated `#[must_use]`.
+
+### `#[must_use]` on types
+
+Use `#[must_use]` on types intended to be returned by functions that would
+otherwise be annotated `#[must_use]` according to the
+[rules above](https://google.github.io/styleguide/rustguide.html#must-use-on-functions).
+
+Examples:
+
+- The type is an error type (similar to `Result` or `StatusOr`).
+- The type represents a lazily evaluated computation. In other words, the function call doesn’t do anything by itself, and the return value needs to be accessed to cause some desired side effect.
+
+Do not cause code to run before `main()`, for example by using techniques such
+as the [ctor crate](https://docs.rs/ctor/latest/ctor/).
+
+Add enough explicit types so that someone familiar with the codebase can figure
+out what the inferred types are.
+
+Prefer to add the types to variable declarations, rather than as
+[turbofishes](https://doc.rust-lang.org/reference/glossary.html#turbofish). If
+the compiler forces you to add a turbofish, it is generally fine to add a `_`
+inference marker.
+
+Specific situations in which you should probably add types:
+
+Avoid potentially panicking operations when the input data guarantees they
+cannot panic. For example, instead of using `Option::unwrap` on a value known to
+be valid, use pattern matching to prove correctness to the compiler.
+
+```
+// Good: The match arm proves to the compiler that `x` is `Some`.
+// A panic is obviously not possible.
+if let Some(value) = option {
+    use_value(value);
+}
+```
+
+```
+// Bad: Correctness of `unwrap` relies on a runtime check that `option` is `Some`.
+if option.is_some() {
+    use_value(option.unwrap());
+}
+```
+
+### Prefer `expect` over `unwrap`
+
+If a panic is necessary because an invariant cannot be expressed in the type
+system, prefer `expect` over `unwrap` to document the reason.
+
+Prefer to list all enum variants in `match` statements over `non_exhaustive`
+enums.
+
+If you don’t care about specific variants, place them in the wildcard arm. If
+you *only* care about specific variants, use an `if let` or a `let … else {}`.
+
+Examples:
+
+```
+#[non_exhaustive]
+pub enum Shape {
+    Circle,
+    Square,
+    Triangle,
+}
+```
+
+```
+fn process_shape(shape: Shape) {
+  match shape {
+    Shape::Circle => println!("It's a circle"),
+    Shape::Square => println!("It's a square"),
+    // Triangle and any future variants don't require any actions.
+    Shape::Triangle | _ => {}
+  }
+}
+```
+
+```
+fn process_shape(shape: Shape) {
+  if let Shape::Circle = shape {
+    println!("It's a circle"),
+  }
+}
+```
+
+```
+fn process_shape(shape: Shape) {
+  match shape {
+    Shape::Circle => println!("It's a circle"),
+    _ => {}
+  }
+}
+```
+
+Exceptions:
+
+This is covered by the built-in lint `non_exhaustive_omitted_patterns` which you
+can enable on your code.
+
+While some assertions are self-explanatory, many benefit from additional context
+that clarifies why an assertion is expected to hold, or what caused it to be
+violated. Use the optional format string argument for `assert!` to convey this
+context.
+
+You should always consider adding context, but particularly in the following
+situations:
+
+Examples
+
+**Explaining why an assertion should hold**
+
+```
+    assert!(
+        values.is_sorted(),
+        "`values` is populated from a `PriorityQueue`, so we expect it to be sorted"
+    );
+```
+
+**Logging a value to clarify why the assertion failed**
+
+```
+assert!(refund > 0, "Refund must be positive, got {refund:?});
+```
+
+**Flagging misuse of an API**
+
+```
+impl Database {
+    ...
+
+    fn execute_query(&self, query: &str) {
+        assert!(self.stream.is_some(), "Call connect() before executing queries");
+    }
+
+    ...
+}
+```
+
+**Don’t use the context string merely to repeat the condition**
+
+```
+assert(!values.is_sorted(), "values should always be sorted");
+```
+
+Avoid using combinator chains in ways that hurt readability. Specifically:
+
+Combinators *are* preferable for shorter chains and for cases where the
+combinator itself provides a lot of logic that would otherwise have to be
+written out in the corresponding `for` loop.
+
+Examples
+
+**Complex combinator chains**
+
+Here’s an example of a combinator chain that is hard to read because it involves
+conditionals and mutates external state:
+
+```
+let mut error_count = 0;
+let _processed_items: Vec<_> = items
+    .into_iter()
+    .map(transformation_that_may_fail)
+    .map(|result| {
+        if result.is_err() {
+            error_count += 1;
+        }
+        result
+    })
+    .filter_map(Result::ok)
+    .collect();
+```
+
+The corresponding `for` loop is easier to read:
+
+```
+let mut error_count = 0;
+let mut processed_items = Vec::with_capacity(items.len());
+
+for item in items {
+    match transformation_that_may_fail(item) {
+        Ok(val) => processed_items.push(val),
+        Err(_) => error_count += 1,
+    }
+}
+```
+
+**Combinator chains in for loops**
+
+Avoid constructing a combinator chain in the header of a `for` loop:
+
+```
+for bug in bug_descriptions
+    .iter()
+    .filter_map(|description| parse_bug_description(description).ok())
+    .filter(|bug| bug.priority <= Priority::P1)
+{
+    assign_bug(bug);
+}
+```
+
+Instead, assign the combinator chain to a variable. This reduces clutter, and
+the variable name documents what the combinator chain does:
+
+```
+let urgent_bugs = bug_descriptions
+    .iter()
+    .filter_map(|description| parse_bug_description(description).ok())
+    .filter(|bug| bug.priority <= Priority::P1);
+
+for bug in urgent_bugs {
+    assign_bug(bug);
+}
+```
+
+**When to prefer a combinator chain**
+
+Here’s an example where a combinator chain is preferable:
+
+```
+let threshold_exceeded = values.iter().any(|&v| v > threshold);
+```
+
+The corresponding for loop is harder to read and reinvents the logic contained
+in `any()`:
+
+```
+let mut threshold_exceeded = false;
+for v in values {
+  if v > threshold {
+    threshold_exceeded = true;
+    break;
+  }
+}
+```
+
+Use of `panic::catch_unwind` is prohibited in first-party Rust code.
+
+Exceptions:
+
+- It is acceptable as a defense in depth mechanism as long as it is never relied upon for any properties. A codebase that is already attempting to avoid panics may choose to wrap critical entry points with a catch_unwind recovery mechanism just in case a panic slips through. Code authors must convince the reviewer that the codebase is doing most of what it can to avoid panics. This exception only applies to code that has the possibility of being run with panic=unwind (so this does not apply to Chrome, Android, Fuchsia).
+
+Rationale
+
+Rust code may be used in many environments, and `panic::catch_unwind` will only
+function correctly in environments with `panic=unwind`. While the final panic
+disposition of prod binaries has not yet been determined, Chrome, Android, and
+Fuchsia all require `panic=abort`.
+
+### Prefer `format!` / `write!` for concatenation and substitution
+
+Prefer `format!()` and `write!()` to other alternatives in the following
+situations:
+
+Rationale
+
+Most codebases use their own specific test framework rather than `#[test]`.
+
+- Chrome Use [rust_gtest_interop](https://source.chromium.org/chromium/chromium/src/+/main:testing/rust_gtest_interop/). This makes it possible to integrate Rust tests into C++ test binaries.
+- Fuchsia Use `#[fuchsia::test]`. See [here](https://fuchsia.dev/fuchsia-src/development/languages/rust/testing.md) for more details.

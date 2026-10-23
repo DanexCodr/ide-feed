@@ -1,159 +1,165 @@
-here's something really cursed i made a while back. the goal here is to create a portable way to obtain the value of errno from outside of c, without using a wrapper function written in c.
+But none of these properties are strictly held.
+Certain RFC compliant implementations of UUIDv7 violate these properties to extreme degrees.
+The only useful property UUIDv7 appears to strictly provide is uniqueness and therefore collision resistance.
+I’ve already discussed how
+[UUIDv7 IDs can be guessable](https://alexsci.com/blog/uuids-and-idor/),
+so this post explores the other properties.
 
-        for those unaware, errno is defined as a macro, and its expansion is non-portable and usually comes with no stability guarantees. so if you're calling libc functions from some other language (such as hare, which i'll be using in this post), it's not possible to retrieve error values from them without relying on an implementation detail or writing a wrapper function in c which returns errno.
+## Is the timestamp useful?
 
-        ...unless you're willing to resort to some fucked up hacks, that is.
+Superficially, it seems that embedding a timestamp in the ID can remove the need to track the creation time in a separate database column, providing marginally more efficient database operations.
+If you need to list things ordered by creation time very often, it’s useful if the primary index gives that behavior, removing the need for another index.
 
-preamble
-`use io;
-use sys;
-use types::c;
+Unfortunately, the timestamp embedded in a UUIDv7 ID may not relate to the object creation time.
+The Postgres [docs for `uuid_extract_timestamp`](https://alexsci.com/blog/uuidv7-is-weird/www.postgresql.org/docs/current/functions-uuid.html)
+helpfully warn that “the extracted timestamp is not necessarily exactly equal to the time the UUID was generated”.
 
-@symbol("close") fn c_close(fd: int) int;
-@symbol("dup") fn c_dup(oldfd: int) int;
-@symbol("dup2") fn c_dup2(oldfd: int, newfd: int) int;
-@symbol("lseek") fn c_lseek(fd: int, offs: io::off, whence: int) io::off;
-@symbol("mkstemp") fn c_mkstemp(template: *c::char) int;
-@symbol("perror") fn c_perror(s: nullable *c::char) void;
-@symbol("read") fn c_read(fd: int, buf: *opaque, count: size) c::ssize;
-@symbol("strerror") fn c_strerror(errnum: int) *c::char;
-@symbol("unlink") fn c_unlink(path: *c::char) int;
-@symbol("write") fn c_write(fd: int, buf: *opaque, count: size) c::ssize;
+[RFC 9562](https://www.rfc-editor.org/rfc/rfc9562.html)
+allows implementations to alter the timestamp field, using values that aren’t strictly derived from the system clock.
+This relates to the tension between UUID monotonicity and timestamp accuracy.
+In certain scenarios, the difference between the timestamp and the current time can be arbitrarily large.
 
-def SEEK_SET = 0;
-def STDERR_FILENO = 2i;`
+> Implementations MAY alter the actual timestamp. — [RFC 9562 §6.1](https://www.rfc-editor.org/rfc/rfc9562.html#name-timestamp-considerations)
 
-there aren't any libc functions which return the value of errno. there are, however, functions which return a *string* that describes errno. so let's start there.
+> This specification makes no requirement or guarantee about how close the clock value needs to be to the actual time. — [RFC 9562 §6.1](https://www.rfc-editor.org/rfc/rfc9562.html#name-timestamp-considerations)
 
-        `export type error = !str;`
-standard c defines two promising functions: `strerror` and `perror.` posix defines two more functions: `strerror_r` and `strerror_l`. unfortunately, the strerror functions all take in the error number as an argument. only `perror` reads from errno directly. `perror` prints an error string to stderr, so our goal now to is to somehow capture the error string from `perror`, without actually writing anything to stderr.
+> … implementations MAY increment the timestamp ahead of the actual time … — [RFC 9562 §6.2](https://www.rfc-editor.org/rfc/rfc9562.html#name-monotonicity-and-counters)
 
-        alright, so let's do it. during program initialization, i dup `STDERR_FILENO` (2), open a temporary file, and change `STDERR_FILENO` to refer to the temporary file:
+Incrementing the timestamp ahead of the system clock is an interesting problem.
+If the generator is seeing so much load that a counter field is regularly overflowing then the timestamp could accelerate into the future.
+Using a sufficiently large counter would be wise and the RFC says the minimum size SHOULD be 12 bits.
+A counter overflow would require a pretty aggressive creation rate, over 4,096 IDs per millisecond per node, which is beyond the limits of many systems.
+This overflow becomes relevant, however, if the timestamp freezes; which I’ll discuss in a later section.
 
-        `let stderr = -1;
-let tmpfd = -1;
-let tmpname: [_]u8 = ['/', 't', 'm', 'p', '/', 'X', 'X', 'X', 'X', 'X', 'X', '\0'];
+### Example: Python uuid.uuid7()
 
-@init fn stderr_tmp() void = {
-	stderr = c_dup(STDERR_FILENO);
-	assert(stderr != -1);
-	tmpfd = c_mkstemp(&tmpname: *c::char);
-	assert(tmpfd != -1);
-	const n = c_dup2(tmpfd, STDERR_FILENO);
-	assert(n != -1);
-};
+One prominent implementation that increments the timestamp is the Python standard library’s UUIDv7.
+The increment happens only in certain circumstances, like when the counter overflows.
+Unfortunately, the generator can get stuck in an increment cycle if the clock ever jumps backwards and the timestamp can race ahead of the system time by an arbitrarily large amount.
 
-@fini fn stderr_tmp() void = {
-	if (tmpfd != -1) {
-		c_close(tmpfd);
-		c_unlink(&tmpname: *c::char);
-	};
-};`
-all low-level functions (libc wrappers or syscall wrappers) which may interact with stderr will silently adjust the fd from `STDERR_FILENO` to the dup'd stderr file descriptor if necessary. (i'll give an example later on, if you're confused by that.)
+Here’s a simple example:
 
-        when an error occurs, the below function is called to obtain the error string:
+```
+import uuid
+from datetime import datetime
 
-        `fn get_errno() error = {
-	c_perror(null);
-	if (c_write(STDERR_FILENO, &0u8, 1) == -1) {
-		return "Unknown error";
-	};
+# Prime the generator with the current time
+t = uuid.uuid7().time
+now = datetime.now()
+delta = (datetime.fromtimestamp(t/1000) - now).total_seconds()
+print("Initial delta: ", delta)
+# Ask the user to change the time
+input("Set clock back one hour")
 
-	c_lseek(STDERR_FILENO, 0, SEEK_SET);
-	defer c_lseek(STDERR_FILENO, 0, SEEK_SET);
+while True:
+    for _ in range(100000):
+        uuid.uuid7()
+    t = uuid.uuid7().time
+    now = datetime.now()
+    delta = (datetime.fromtimestamp(t/1000) - now).total_seconds()
+    print("New delta: ", delta)
+```
 
-	static let buf: [256]u8 = [0...];
-	const n = c_read(STDERR_FILENO, &buf, len(buf));
-	if (n == -1) {
-		return "Unknown error";
-	};
+Which gives:
 
-	const n = c::strnlen(&buf: *c::char, n: size);
-	return *(&buf[..n]: *str);
-};`
-when `perror` is called, it writes to the temporary file. (`STDERR_FILENO` needs to refer to the temp file from the beginning because `dup2` may overwrite errno, so it can't be used right before calling `perror`). the message is then read back and returned.
+```
+$ uv run --python 3.14 main.py
+Initial delta:  -0.000748
+Set clock back one hour
+New delta:  3695.277581
+New delta:  3795.042411
+New delta:  3894.80756
+New delta:  3994.573106
+^C
+```
 
-        so cool, we have an error message string. now let's use that to obtain the actual errno value.
+We expect the difference to be 3600 seconds (one hour) as the implementation refuses to allow the embedded timestamp to jump backwards and we expect the difference to decrease as the system clock catches up to the frozen timestamp.
+But when the load is above one ID per millisecond the difference will increase without bound.
+At lower loads it will take longer for the system clock to catch the timestamp, but we don’t see the runaway effect.
 
-        `export type error = !str;
-export type errno = !int;`
-to do that, i'll write another initialization function to construct a table of error messages:
+The [related issue](https://github.com/python/cpython/issues/138862#issuecomment-4232986682)
+shows Python developers reasoning that this is consistent with the RFC, is consistent with other implementations, and that there isn’t “much we can do” on a “flawed system”.
+I think these points are correct as I see this same behavior in other implementations.
+Nevertheless, it would be helpful if existing UUIDv7 implementations could handle system clock jumps without runaway behavior.
+There are many real-world examples of clocks jumping backwards,
+[even decades out of sync](https://www.itnews.com.au/news/telstra-broke-its-network-with-undocumented-time-fix-627442) in time-sensitive environments.
 
-        `let strerror_table: [256][256]u8 = [[0...]...];
+## Is leaking a timestamp harmful?
 
-@init fn strerror_table() void = {
-	for (let i = 0; i < len(strerror_table): int; i += 1) {
-		const msg = c_strerror(i);
-		const n = c::strlen(msg);
-		strerror_table[i][..n] = (msg: *[*]u8)[..n];
-	};
-};`
-the above function copies the strings returned by `strerror` into `strerror_table`. if you're familiar with posix libc, you may be confused why i'm not using `strerror_r` here, since that function directly writes error messages into a user-supplied buffer.
+Embedding the timestamp in the ID means that you cannot share the ID without also sharing the timestamp.
 
-        the reason is really annoying: there's two versions of `strerror_r`! there's a non-standard GNU version which returns an error message directly but may use its own immutable static storage, and there's a POSIX version which always writes to the user-supplied buffer and returns `int`.
+It’s pretty difficult to think of an example where this really matters.
+One example could be a user profile page that doesn’t disclose when the account was created, but the UUIDv7 ID in the URL leaks the high-precision timestamp.
 
-        i want the POSIX version of course, but on glibc, the symbol "`strerror_r`" refers to the GNU version. the POSIX version uses the symbol "`__xpg_strerror_r`". but other posix-compliant libcs (such as musl and all the BSD libcs) only provide the POSIX version, under the symbol "`strerror_r`". fitting with the theme of this blog post, glibc makes it impossible to portably call the function i want without relying on an internal symbol name, which i really don't want to do (since that makes the code libc-dependent).
+This issue would typically be very low on my list of security concerns because I find much more severe problems when I do security assessments.
+Nevertheless, there are contexts where this matters and engineering resources would be focused on addressing it.
+If you’re in the latter camp, be wary of UUIDv7 leaking metadata.
 
-        but anyways, now that the `strerror_table` is constructed, let's update the `errno()` function to use it:
+## Are UUIDv7s monotonic?
 
-        `fn get_errno() error errno = {
-	c_perror(null);
-	if (c_write(STDERR_FILENO, &0u8, 1) == -1) {
-		return "Unknown error" -1;
-	};
+This section is even more pedantic, so skip ahead if you’ve had enough.
+Briefly: UUIDv7 IDs provide some sort of rough order, which may be suitable for your requirements.
 
-	c_lseek(STDERR_FILENO, 0, SEEK_SET);
-	defer c_lseek(STDERR_FILENO, 0, SEEK_SET);
+When I was reading the UUIDv7 RFC I was surprised to see it describing a method for creating IDs across different nodes that are monotonically ordered.
+This was
+[proven impossible back in the 1970s](https://en.wikipedia.org/wiki/Lamport_clock),
+and lead to the development of vector clocks and similar technology. At a high level, the problem is that system clocks cannot be synchronized to a suitable precision.
+Ordering things by timestamp only works if you know precisely what time it is.
+Any uncertainty in the time results in uncertainty of event ordering.
 
-	static let buf: [256]u8 = [0...];
-	const n = c_read(STDERR_FILENO, &buf, len(buf));
-	if (n == -1) {
-		return "Unknown error" -1;
-	};
+Succinctly: Timestamps are only time-ordered if you know what time it is and you don’t know what time it is.
 
-	const n = c::strnlen(&buf: *c::char, n: size);
-	return *(&buf[..n]: *str);
-	if (n != 0) {
-		buf[n - 1] = '\0'; // strip trailing newline
-	};
+For this reason, similar ID formats claim to be nearly sorted.
+It seems odd that UUIDv7 makes a stricter claim and does not deliver on them.
+At the very least, the
+[challenges of synchronizing clocks across systems](https://alexsci.com/blog/clock-skew/)
+make the millisecond and especially the sub-millisecond timestamps quite suspect.
 
-	for (let i = 0z; i < len(strerror_table); i += 1) {
-		if (c::strcmp(&buf: *c::char, &strerror_table[i]: *c::char) == 0) {
-			return i: errno;
-		};
-	};
-	return -1;
-};`
-btw, here's an example of what a libc wrapper of `write` looks like:
+But even on a single node, using a single implementation, UUIDv7 IDs are not strictly monotonic.
+The easiest way to get out-of-order UUIDv7 IDs is to use an implementation that uses a millisecond timestamp without a counter.
+This approach [trivially generates out-of-order IDs inside a small for loop](https://github.com/fboulnois/pg_uuidv7/issues/10).
 
-        `export fn write(fd: int, buf: *opaque, count: size) (size | errno) = {
-	const fd = if (fd == STDERR_FILENO) stderr else fd;
-	const n = c_write(fd, buf, count);
-	if (n == -1) {
-		return get_errno();
-	};
-	return n: size;
-};`
-another fucked up hack to make it actually portable
-the original thing that actually caused me to make this was that i wanted to see if i could make a generic "posix" target for hare. like, if you have a posix system which hare doesn't natively support, you could compile for the "posix" target and link to the system libc and things would just Work. the errno stuff was just a fun detour from that (the generic posix version would just return an error string, since the actual error numbers aren't portable). but in this context, there's one problem with the errno stuff. you can see it in this snippet from `get_errno()`:
+So no, there’s nothing in the UUIDv7 specification that would ensure the IDs are strictly monotonically increasing.
+Specific implementations may do better than others (with sub-millisecond timestamps, counters, well-synchronized clocks, etc), but we’ve known since the 1970s that this problem is not strictly solvable.
 
-        `c_lseek(STDERR_FILENO, 0, SEEK_SET);
-defer c_lseek(STDERR_FILENO, 0, SEEK_SET);`
-i define `SEEK_SET` as a constant earlier on:
+In UUIDv7’s favor, roughly ordered IDs are still quite useful.
+So don’t rip UUIDv7 out of your systems just yet.
+Just be wary of what assumptions you have.
 
-        `def SEEK_SET = 0;`
-this is usually true, but posix doesn't guarantee that `SEEK_SET` is 0! its value is completely implementation-defined. this is *yet another* place where it's not really possible to do stuff outside of c without relying on an "implementation detail".
+## Restarting a UUIDv7 generator
 
-        (in practice i can't imagine any reason `SEEK_SET` *wouldn't* be 0, but unnecessary fucked up hacks are fun so for now let's just pretend that any of this actually matters)
+The RFC has lots of discussion about the handling of clocks that jump backwards.
+Timestamps are only time-ordered if clocks tick forwards, so special care is needed.
 
-        it's actually possible to work around this! `lseek` returns the new offset after seeking. so we can call `lseek` with an arbitrary whence value, and use the return value to determine whether it did what we wanted. if not, just repeat with different whence values until it works!
+We’ve already discussed one mitigation: tracking the last generated timestamp to ensure that an earlier timestamp is never used.
+To do this safely you’ll need to write the last used timestamp to persistent storage, such that you can read it again after a system reboot or a process restart.
 
-        `let i = 0;
-for (i <= 2; i += 1) {
-	if (c_lseek(STDERR_FILENO, 0, i) == 0) {
-		break;
-	};
-};
-assert(i <= 2);
-defer c_lseek(STDERR_FILENO, 0, i);`
-i just loop from 0 to 2, because i figure that it'll probably always be one of those values. but there's no reason higher values couldn't also be checked.
+I’ve looked at several UUIDv7 implementations I couldn’t find one that writes timestamps to persistent storage.
+So implementers seems disinterested in addressing the issue and they generate out-of-order IDs when a process restart follows a clock jumping backwards.
+
+Looking at real-world clock synchronization problems, you’ll find many examples of
+[clocks getting set to future dates](https://arstechnica.com/security/2023/08/windows-feature-that-resets-system-clocks-based-on-random-data-is-wreaking-havoc/).
+When this happens, the backwards jump would align the timestamp to the actual time, but a last-used-timestamp guard would force timestamps to use keep using that incorrect timestamp until the system clock catches up.
+If the system clock takes a long time to catch up, you may start experiencing counter rollovers.
+
+## So what is UUIDv7?
+
+My mental model for UUIDv7 is that it’s a mash-up of a bunch of different ideas which implementations are free to choose as they see fit.
+There’s a wide variance of properties that UUIDv7 implementations can provide, with varying degrees of certainty they can successfully provide those properties.
+If you’re building your own implementation you can likely build something that has the properties you need.
+But most of us want to reach for an off-the-shelf version, especially when standard libraries provide an implementation, so we’re generally at the mercy of someone else’s implementation decisions.
+Implementations can change over time, making broad changes to their behavior while still being RFC compliant.
+Distributed systems may have multiple implementations across their subsystems, each with distinct properties.
+The only thing you can really expect is strong collision avoidance and ID uniqueness.
+
+Be sure to ask these questions when picking a UUIDv7 implementation:
+
+- Is the implementation compliant with the RFC?
+- What additional properties does this implementation guarantee?
+- Under what limits can those guarantees be met?
+- Are there any assumptions required for these properties to hold, such as having an accurate system clock?
+- Under what conditions will the implementation alter the timestamp?
+- How guessable are the generated IDs?
+
+Unfortunately, this sort of analysis is much more difficult than building an RFC compliant generator.
+Authors of UUIDv7 generators may not know the answers to these questions and may themselves be surprised that the RFC does handle this for them.
