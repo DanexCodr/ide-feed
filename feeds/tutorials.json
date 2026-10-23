@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-23T16:40:03Z",
+  "updated": "2026-10-23T21:08:28Z",
   "items": [
     {
       "id": "devto-4858196",
@@ -278,27 +278,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4840194",
-      "title": "Solodesk-Ai",
-      "desc": "By Shaurya Tiwari | 4 min read",
-      "tag": "tutorial",
-      "published": "2026-10-12T20:49:24Z",
-      "order": 24,
-      "url": "https://dev.to/dr5t/solodesk-ai-lpe",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fy11o4ykev6b1y23stmfi.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAABAED/8QAFgEBAQEAAAAAAAAAAAAAAAAAAgAB/9oADAMBAAIQAxAAAAESzpYhEY7f/8QAGBABAAMBAAAAAAAAAAAAAAAAAAECEDH/2gAIAQEAAQUCUX4hG//EABURAQEAAAAAAAAAAAAAAAAAAAAR/9oACAEDAQE/AVf/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAWEAADAAAAAAAAAAAAAAAAAAAAIFH/2gAIAQEABj8CI/8A/8QAGxAAAwACAwAAAAAAAAAAAAAAAAERITEQQYH/2gAIAQEAAT8hWxHN+iXXY+DqPBcDyf/aAAwDAQACAAMAAAAQ3J//xAAWEQEBAQAAAAAAAAAAAAAAAAAAETH/2gAIAQMBAT8QrT//xAAXEQADAQAAAAAAAAAAAAAAAAAAAREx/9oACAECAQE/ELEaj//EABsQAQACAwEBAAAAAAAAAAAAAAEAESExQVFx/9oACAEBAAE/EM/UJmFx6gqm9EMzeKkAr5DA3a3eoizTm+x9Az//2Q==",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4848909",
       "title": "Git, Docker, and IPFS All Hide the Same Beautiful Idea",
       "desc": "By James Anderson | 7 min read",
       "tag": "tutorial",
       "published": "2026-10-14T08:50:45Z",
-      "order": 25,
+      "order": 24,
       "url": "https://dev.to/james_anderson_h/git-docker-and-ipfs-all-hide-the-same-beautiful-idea-3j0",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Frjjnmpeah3gqjvc4u80m.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAAECBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHhZiUh/8QAFhABAQEAAAAAAAAAAAAAAAAAEQAg/9oACAEBAAEFAiN//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAGRABAAIDAAAAAAAAAAAAAAAAAQAxEBEg/9oACAEBAAE/IQJcQW41z//aAAwDAQACAAMAAAAQnX//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/ED//xAAdEAEAAQMFAAAAAAAAAAAAAAABABARITFRcZHR/9oACAEBAAE/EDK2Y2mpvAQMPsEl8Tqg2p//2Q==",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4840194",
+      "title": "Solodesk-Ai",
+      "desc": "By Shaurya Tiwari | 4 min read",
+      "tag": "tutorial",
+      "published": "2026-10-12T20:49:24Z",
+      "order": 25,
+      "url": "https://dev.to/dr5t/solodesk-ai-lpe",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fy11o4ykev6b1y23stmfi.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAABAED/8QAFgEBAQEAAAAAAAAAAAAAAAAAAgAB/9oADAMBAAIQAxAAAAESzpYhEY7f/8QAGBABAAMBAAAAAAAAAAAAAAAAAAECEDH/2gAIAQEAAQUCUX4hG//EABURAQEAAAAAAAAAAAAAAAAAAAAR/9oACAEDAQE/AVf/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAWEAADAAAAAAAAAAAAAAAAAAAAIFH/2gAIAQEABj8CI/8A/8QAGxAAAwACAwAAAAAAAAAAAAAAAAERITEQQYH/2gAIAQEAAT8hWxHN+iXXY+DqPBcDyf/aAAwDAQACAAMAAAAQ3J//xAAWEQEBAQAAAAAAAAAAAAAAAAAAETH/2gAIAQMBAT8QrT//xAAXEQADAQAAAAAAAAAAAAAAAAAAAREx/9oACAECAQE/ELEaj//EABsQAQACAwEBAAAAAAAAAAAAAAEAESExQVFx/9oACAEBAAE/EM/UJmFx6gqm9EMzeKkAr5DA3a3eoizTm+x9Az//2Q==",
       "color": "#3B49DF"
     },
     {
@@ -314,27 +314,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4839625",
-      "title": "Nothing Reported It",
-      "desc": "By Ken W Alger | 11 min read",
-      "tag": "tutorial",
-      "published": "2026-10-22T13:34:00Z",
-      "order": 27,
-      "url": "https://dev.to/kenwalger/nothing-reported-it-9ke",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fp0waeaiv76zg8lygmjra.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAAECBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHgQluS/wD/xAAWEAADAAAAAAAAAAAAAAAAAAAQESD/2gAIAQEAAQUCKn//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAUEAEAAAAAAAAAAAAAAAAAAAAw/9oACAEBAAY/Ag//xAAYEAADAQEAAAAAAAAAAAAAAAAAETEBIP/aAAgBAQABPyFCMpHP/9oADAMBAAIAAwAAABD8z//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QP//EABsQAAIDAAMAAAAAAAAAAAAAAAERADGBIEGh/9oACAEBAAE/EKt+QpZWQAUezseLj//Z",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4884560",
       "title": "Where Do Your Users' Passwords Actually Live? Self-Hosted vs Managed Keycloak",
       "desc": "By Hadil Ben Abdallah | 12 min read",
       "tag": "tutorial",
       "published": "2026-10-21T09:06:20Z",
-      "order": 26,
+      "order": 27,
       "url": "https://dev.to/hadil/where-do-your-users-passwords-actually-live-self-hosted-vs-managed-keycloak-97e",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fogku6cw7q1ps8kq6ooix.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAwEBAAAAAAAAAAAAAAAAAQIDAAT/xAAWAQEBAQAAAAAAAAAAAAAAAAAAAgP/2gAMAwEAAhADEAAAAeB02kUmQf/EABYQAAMAAAAAAAAAAAAAAAAAAAAgQf/aAAgBAQABBQIrf//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABYQAQEBAAAAAAAAAAAAAAAAAABBIP/aAAgBAQAGPwJE1//EABoQAAICAwAAAAAAAAAAAAAAAAABESEgMZH/2gAIAQEAAT8hQrhAm9cDx//aAAwDAQACAAMAAAAQ1U//xAAVEQEBAAAAAAAAAAAAAAAAAAAAAf/aAAgBAwEBPxCo/8QAFhEAAwAAAAAAAAAAAAAAAAAAAAER/9oACAECAQE/EFBw/8QAHRAAAwEAAQUAAAAAAAAAAAAAAAERITFRYXGBkf/aAAgBAQABPxB401N6qj6Ed4NKXF9DXc9KCeSIT8jd5Lkh/9k=",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4839625",
+      "title": "Nothing Reported It",
+      "desc": "By Ken W Alger | 11 min read",
+      "tag": "tutorial",
+      "published": "2026-10-22T13:34:00Z",
+      "order": 28,
+      "url": "https://dev.to/kenwalger/nothing-reported-it-9ke",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fp0waeaiv76zg8lygmjra.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAAECBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHgQluS/wD/xAAWEAADAAAAAAAAAAAAAAAAAAAQESD/2gAIAQEAAQUCKn//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAUEAEAAAAAAAAAAAAAAAAAAAAw/9oACAEBAAY/Ag//xAAYEAADAQEAAAAAAAAAAAAAAAAAETEBIP/aAAgBAQABPyFCMpHP/9oADAMBAAIAAwAAABD8z//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QP//EABsQAAIDAAMAAAAAAAAAAAAAAAERADGBIEGh/9oACAEBAAE/EKt+QpZWQAUezseLj//Z",
       "color": "#3B49DF"
     },
     {

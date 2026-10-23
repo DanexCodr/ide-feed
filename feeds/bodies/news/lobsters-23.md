@@ -1,58 +1,118 @@
-During the Zig 0.17 development cycle, the [separation of maker process and configurer process](https://ziglang.org/download/0.17.0/release-notes.html#Separate-the-Maker-Process-from-the-Configurer-Process) has broken critical build system integration features in ZLS. Most of them have since been restored using the [build system protocol](https://ziglang.org/download/0.17.0/release-notes.html#Build-Server-Protocol) but various regressions remain that are anticipated to be resolved during the next release cycle.
+Railway identified a security incident that ultimately led to unauthorized access to a subset of internal Railway systems. This is a follow up to the [initial security disclosure published on October 21st](https://blog.railway.com/p/security-disclosure-wednesday-october-21st). Our forensic investigation is still ongoing.
 
-On the positive side, the new protocol lays the foundation for future improvements in ZLS and related tooling. Especially editors could utilize it to integrate unit testing, fuzzing, code coverage reports or debugging capabilities that are fully aware of the Zig build system.
+Railway engaged external incident response experts and the authorities to assist in forensics.
 
-All known regressions are tracked in [#3277](https://github.com/zigtools/zls/issues/3277) and listed below:
+We will have a follow up to this document as the investigation concludes.
 
-Type resolution for package imports in `build.zig` files have regressed.
+## What happened
 
-Upstream Zig Issue: [ziglang/zig#36387](https://codeberg.org/ziglang/zig/issues/36387)
+At October 20th 19:53 UTC, Railway became aware of a sustained and targeted campaign to attack and breach our services. Early investigations tell us this attack was attempting to obtain AI provider API keys to perform distillation attacks.
 
-### Module `@import`s to exported modules without a compile step
+Initial evidence leads us to believe that the malicious actor had access to abliterated models and substantial compute resources which enabled them to perform highly sophisticated exploits against our infrastructure.
 
-Type resolution for modules that are only exported using `b.addModule` but aren’t tied to a compile step have regressed.
+Due to the ongoing investigation and to protect our customers, we are not yet able to share the specific details and scale of the exploits. We will aim to disclose this responsibly as we complete our investigation.
 
-An `build.zig` file that would be affected:
+We believe the attack timeline took place from October 20th 13:58 UTC to October 22nd 03:32 UTC. The final timestamp represents when we confirmed that the attacker no longer had access to any internal systems.
 
-```
-const std = @import("std");
-pub fn build(b: *std.Build) void {
-    _ = b.addModule("foo", .{
-        .root_source_file = b.path("root.zig"),
-        .imports = &.{
-            .{ .name = "bar", .module = b.createModule(.{ .root_source_file = b.path("bar.zig") }) },
-        },
-    });
-}
-```
+Railway began triaging the attack immediately upon detection. To prioritize the safety of our users, we disabled our build infrastructure. Additionally, we reported potentially impacted secrets to partner vendors. (More information in below sections)
 
-In the above example, `@import("bar")` will not be resolved.
+During that period of triage, customers experienced interrupted builds and deployments, as well as periods of dashboard, API, CLI, and support unavailability.
 
-Upstream Zig Issue: [ziglang/zig#36388](https://codeberg.org/ziglang/zig/issues/36388)
+After the attacker gained access to our systems, a subset of our customer base had their encrypted secrets exposed which required credential rotation. We recommend that all customers who signed up prior to October 21 rotate their keys stored on Railway. We have notified the customers that have been directly impacted.
 
-### Build system protocol file watching doesn’t work on windows
+Below is a timeline of events and facts as of October 22nd:
 
-File watching has regressed on windows due to a bug in the build system protocol. This does not affect the CLI when running `zig build --watch`.
+| Date | Time (UTC) | Event |
+| --- | --- | --- |
+| October 20 | 13:58 | Monitoring systems triggered a page to engineering on-call for abnormal system activity in the form of elevated latency. The on-call engineer began research into the suspicious activity. |
+| October 20 | 14:03–16:51 | Incident investigation led to Railway identifying this as an attempted escalation of privilege a hostile external party. Railway engineering identified potential privilege escalation in our build infrastructure by the attackers. As a result, a decision was made to halt build pipelines to prioritize user safety. |
+| October 20 | 17:03 | Railway declared an incident on status.railway.com. |
+| October 20 | 16:51–18:05 | Railway engineering team began deploying mitigations across the build systems, and restricted access to the affected infrastructure. |
+| October 20 | 18:05-19:53 | Railway engineering reported that the exploit has been remediated, and validated that the exploit could no longer be reproduced within Railway infrastructure. |
+| October 20 | 19:53 | Additional evidence was identified that the attacker could escalate their access, at higher scale, across multiple parts of the Railway system, in-parallel. |
+| October 20 | 19:59–20:56 | Additional monitoring and forensics were deployed to isolate blast radius as well as neutralize the attacker’s entrypoints/access. |
+| October 21 | 00:22–03:08 | Further monitoring and credential restrictions were introduced. Subsequent routes of access were identified. As a precaution, builds were halted again. |
+| October 21 | 04:24-05:23 | Continued forensic research identified the attacker was able to pull secrets, in encrypted format; however, at the time attacker was unable to decrypt said secrets. Identification of systems to revoke access began immediately. |
+| October 21 | 05:23–05:27 | Railway engineering revoked access to the identified systems and disabled non-essential internal systems to reduce further attack surface area. |
+| October 21 | 05:27—07:25 | At this point, the attacker accessed credentials to access our CI environment where the attacker was able to decrypt artifacts that held additional API access. |
+| October 21 | 7:25—09:18 | Railway engineering identified database evidence of an unauthorized query of encrypted environment variables, of which a subset were decrypted utilizing a combination of the compromised credentials. Note: Because the full keys were envelope encrypted, this query alone cannot identify specifically which keys in the affected customers project/service were affected. |
+| October 21st | 9:18-9:25 | Logs from the attackers payloads were read by Railway staff, highlighting the specific API key names they were searching for. |
+| October 21 | 09:25 | Based on the above, Railway notified vendors proactively about the surfaces that the attackers accessed. Vendors were requested to revoke all keys for their service; Railway provided all keys that they had registered on the platform for some services. |
+| October 21 | 09:28 | The public status page was updated to confirm dashboard, API, and CLI unavailability, new builds being disabled, and support tooling disruption. |
+| October 21 | 20:19–22:10 | Railway announced user session invalidation, published its security disclosure and customer guidance, and notified all users of internal and external credential rotation. |
+| October 22 | 03:32–06:29 | Railway engineering began to reinitialize internal systems with the minimal required dependencies, new credentials, and additional hardening. Enterprise and Pro builds were restored. |
+| October 22 | 17:00-22:49 | Railway reported full API restoration and normal Pro, Enterprise, Hobby, Trial, and Free deployments. Ancillary product features halted for security are being activated gradually. |
 
-ZLS does work around this issue by receiving file save events through the LSP protocol. File changes through external programs (e.g. version control) will not be detected.
+## Scale of impact
 
-Upstream Zig Issue: [ziglang/zig#37236](https://codeberg.org/ziglang/zig/issues/37236)
+Railway’s system is built so that if one set of keys is compromised, they should not compromise the entire system. As a result, we can validate that at most 1.85% of all workspaces had some environment variables potentially compromised. This represents, numerically, about 100,000 workspaces. Out of an abundance of caution, the moment we realized any keys may have been decrypted, we notified external providers up to "all of the keys we stored, for all users on Railway". As such, the amount of users who were affected by upstream provider reset requests was larger than 100k.
 
-## Contributors
+Railway is reaching out to the customers with definite impact. We are also proactively reaching out to customers who we consider high risk. Because we were unable to know which variables specifically were decrypted, we are reaching out to all users who, based on preliminary forensics of the attack pattern, we believe to be of high risk for targeting from the attacker. This number is greater than the 1.85% of workspaces.
 
-Here is a list of everyone who has made at least one contribution to this release of ZLS:
+Because the attacker was seeking AI credentials, forensics of the attacker’s behavior tell us that the attacker was looking for high value targets on the platform. We believe there are two buckets of risk:
 
-- Techatrix
-- FnControlOption
-- psznm
-- xdBronch
-- Khang Nguyen Duy
-- Akhilesh Arora
-- James
-- Jassiel Ovando
-- fomgleb
-- l1yefeng
+- Workspaces with a very large number of environment variables
+- Environments with a high amount of AI keys from vendors
 
-## Sponsors
+The attacker did not access Railway user accounts as part of this incident. While we are not ruling out that they accessed user source code, we will confirm at the the time of our final forensic investigation report.
 
-We’d like to take a second to thank all our awesome [contributors](https://github.com/zigtools/zls/graphs/contributors) and donators/backers/sponsors; if you have time or money to spare, consider partaking in either of these options - they help keep ZLS awesome for everyone!
+Railway proactively worked with GitHub, GitLab, Anthropic, OpenAI, OpenRouter, SpaceXSI, Stripe, and others to revoke the potentially compromised keys as soon as we knew they were accessed on October 21st at 09:25 UTC.
+
+Out of an abundance of caution, we provided vendors such as GitHub and SpaceXSI with all API keys that were present on the platform, regardless of whether those were known to be impacted. Users being notified by vendors about revocation does not imply that their credentials were impacted by the incident.
+
+While new builds and deployments were paused for all customers, all existing user deployments remained online and running. At time of writing, builds for all tiers are restored.
+
+## User remediations
+
+As indicated in the [security disclosure](https://blog.railway.com/p/security-disclosure-wednesday-october-21st) published on October 21st, we recommend all users revoke and reapply sensitive environment variables stored on Railway prior to this date. We are recommending this out of an abundance of caution.
+
+We’ve also published a [set of guides](https://blog.railway.com/engineering) to check for anomalous activity and credential rotation on various tools.
+
+![Security disclosure recommendations](https://cms.railway.com/media/5def32f2-c428-4644-b479-d3a8b1e6b824-image.png?w=1600&format=webp&q=90)
+
+*Security disclosure recommendations*
+
+While Railway knows what the intent of access was, it’s advisable for all customers to:
+
+- Remove public network access to databases
+- Rotate any sensitive variables and keys
+- Check your GitHub account audit logs and review all app access
+- Check audit logs within your registries such as Dockerhub
+
+If you have any questions, please email [support@railway.com](mailto:support@railway.com).
+
+## Railway actions taken
+
+With the increased level of pressure that vendors are facing due to new found cyber threats, Railway intends to meet the scale and moment of this new era to keep our customers safe.
+
+We continue to refine our platform and corporate security posture, taking all reasonable steps to mitigate attack vectors. Below is a list of what we have already done:
+
+- We shut down any potentially compromised internal tooling upon seeing suspicious activity.
+- We rolled all keys, and then rerolled them after validating that the intruder had been expropriated from the system.
+- We have engaged an external forensics company to further our understanding of the malicious actor.
+- We have rolled out a new generation of builder infrastructure, moving from our previous third generation isolated multi-tenant to our fourth generation single-tenant environments. Rollout was planned for next week, but was accelerated and completed due to this event.
+- We have rolled credentials for all storage buckets deployed on Railway.
+- We have rebuilt, from validated source, all tooling used to run Railway infrastructure, and validated that the same escalation patterns are not possible.
+- We have added functionality to mass revoke Railway application permissions whenever we suspect any suspicious activity.
+
+We performed other mitigations that we are choosing to not disclose at this time out of an abundance of caution in protecting the safety of our customers.
+
+Railway owns every layer from bare metal to the agent workflow for one reason: so builders on Railway can build their most ambitious products. This vision can only be achieved with an equivalent security posture matching that ambition. We will continue to operate in the same way we built our platform: carefully, in the open, and for the long run.
+
+## FAQ
+
+**Did customer applications go down?** No - running services stayed online throughout the incident. New builds and deployments were paused during triage to mitigate possible attack vectors. The first system we brought online was the ability to disable existing deployments.
+
+**Was my Railway account accessed?** No - individual accounts were not logged into. The attacker accessed Railway's internal systems and decrypted stored environment variables for a subset of workspaces. We did however revoke all Railway access tokens out of an abundance of caution.
+
+**Why did I get an email my keys got revoked by GitHub, GitLab, Anthropic, OpenAI, OpenRouter, SpaceXSI, Google, or Stripe?** Railway sent a list of potentially decrypted keys to providers as soon as we were aware of the incident on October 21st 09:35 UTC [prior to our public disclosure](https://blog.railway.com/p/security-disclosure-wednesday-october-21st), with a request to revoke them, to limit the potential impact for users. Some vendors requested all keys to be revoked.
+
+**Why did Railway not notify customers of potentially decrypted keys sooner?** At the time of discovery, the attack and incident mitigation was underway in-parallel. As mentioned, the moment any credentials were affected, we notified upstream providers. As the incident was on-going, we wanted to ensure the attacker was ejected from our running infrastructure before telling users to roll their credentials, to prevent the credentials from becoming immediately compromised again.
+
+**Is Railway safe to use now?** Yes. The Railway engineering team has redeployed and revalidated all impacted systems. At the time of writing, any functionality that remains offline will return in the coming days.
+
+**Why was I unable to deploy new changes?** To limit the scope of the attack, we intentionally stopped new builds to remediate and penetration test the impacted components of Railway infrastructure, while keeping user workloads running.
+
+**What did the attacker want?** Forensic investigation evidence indicates the attacker was likely looking for AI and platform API keys, for distilling model weights.
+
+**I re-logged in and didn’t see anything, why?** We rolled all GitHub App installations for Railway. If your GitHub account email is different than your Railway email, you may need to re-login using "Log in using email"

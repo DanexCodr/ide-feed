@@ -1,49 +1,19 @@
-This feature allows you to register multiple mappings in order to load
-local files through custom https:// URLs.
-This prevents having to spawn a HTTP server to test a web page.
-This makes it easy to test all Web APIs, including the ones being restricted
-to [Secure Contexts](https://developer.mozilla.org/en-US/docs/Web/Security/Defenses/Secure_Contexts) (i.e. using https).
-This also helps having many distinct origins (domain) for each experiment / project
-and have dedicated storage/cookies for each.
+> Abstract:Diffusion language models (DLMs) offer parallel sampling for faster generation than autoregressive models, an increasingly important advantage as inference becomes a dominant computational workload. However, DLMs degrade quickly with fewer sampling steps, process the full sequence at every step, and require many passes over the dataset to reach good quality. We introduce Next-Concept Modeling (NCM), a two-stage, coarse-to-fine framework: a multiscale residual VQ-VAE encodes text into a hierarchy of discrete codes, and a transformer generates one level at a time, predicting all codes within a level in parallel. At matched parameter scales, NCM achieves better generative perplexity than the strongest DLM baseline on LM1B while running $21\times$ faster. On OpenWebText, NCM is competitive with the strongest DLM while running $10\times$ faster; on XSum, it matches the strongest DLM's ROUGE-L while being $31\times$ faster. On the reasoning task of Sudoku, NCM outperforms autoregressive and diffusion baselines across all difficulty levels, using fewer function evaluations. On the reasoning task of Sudoku, NCM outperforms autoregressive and diffusion baselines across all difficulty levels, using fewer function evaluations.
 
-These mappings are only accessible from Firefox (this can’t be used by any other program,
-or malicious software on your computer/local network).
+### Current browse context:
 
-These mappings are only functional when DevTools are opened.
+# Bibliographic and Citation Tools
 
-## How to use the “Local Mode”[](https://firefox-source-docs.mozilla.org/devtools-user/local_mode/index.html#how-to-use-the-local-mode)
+# Code, Data and Media Associated with this Article
 
-This feature shipped in Firefox 153.
+# Demos
 
-You can register mappings from DevTools’ Options panel:
+# Recommenders and Search Tools
 
-From there you can register as many mappings as you need.
+# arXivLabs: experimental projects with community collaborators
 
-Each mapping defines:
+arXivLabs is a framework that allows collaborators to develop and share new arXiv features directly on our website.
 
-- the origin (domain) The custom origin to expose via https URL.
-- the local folder The local folder where to load files from.
+Both individuals and organizations that work with arXivLabs have embraced and accepted our values of openness, community, excellence, and user data privacy. arXiv is committed to these values and only works with partners that adhere to them.
 
-On the screenshot, it loads `https://firefox.localhost` from `/home/alex/app`.
-
-## Loading file URL notification[](https://firefox-source-docs.mozilla.org/devtools-user/local_mode/index.html#loading-file-url-notification)
-
-When loading any file:// URL with DevTools opened, you should see the following notification
-at the top of DevTools:
-
-The first action `Add To Settings` will bring you to the Options panel and register
-a new mapping for the loaded file URL.
-
-The second action `Try it` will register a transient mapping to load the current file or folder
-from a https URL. The mapping will disappear as soon as you close DevTools or Firefox.
-
-## Manage mappings via preferences[](https://firefox-source-docs.mozilla.org/devtools-user/local_mode/index.html#manage-mappings-via-preferences)
-
-Mappings can also be managed in about:config via preferences, so that you can easily import and transfer them
-between profiles, or via automation.
-
-Each mapping is defined by three preferences:
-
-- `devtools.local-mode.mappings.${index}.origin`: string for the mapping’s origin. (e.g. “firefox.localhost”)
-- `devtools.local-mode.mappings.${index}.path`: string for the absolute path to local folder (e.g. “/home/hello-world”)
-- `devtools.local-mode.mappings.${index}.disabled`: optional boolean to disable this mapping and where `${index}` is an incremental integer counter to uniquely identify each mapping.
+Have an idea for a project that will add value for arXiv's community? [**Learn more about arXivLabs**](https://info.arxiv.org/labs/index.html).

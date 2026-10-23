@@ -1,84 +1,43 @@
-The other day I read this blog post about using arp-scan to list every device on the network in order to keep better track of devices and that's great, but we can go even further.
+I've told this story many times over the years, usually with a beer in my hand, but for some reason I've not written it down before now. As a disclaimer, the events I'm about to describe happened twenty-five years ago, and I was a peripheral, if not entirely tangential, participant, so I'm probably going to get a few of them wrong.
 
-The blog post I am talking about is Ben Calderon's post called [ARP! Tell your network to explain itself](https://benjcal.space/blog/arp-tell-your-network-to-explain-itself/).
+## In the beginning was `cirrus.inf`
 
-I too have too many devices on my network to keep track (it both serve some of my homelab stuff and some of my office stuff) and as such, I have used different approaches over the years.
+The root Java package for Hibernate 1.0 was `cirrus.inf`. We’ll get to the `inf` in a moment, but first let’s start with the `cirrus`.
 
-One of the early things I did was to give each device a meaningful hostname. Like "johnslaptop", "janesdesktop", "webserver", "storageserver", etc. But as you probably know, this quickly becomes problematic when you get more machines that does the same, so "webserver" turns into "oldwebserver" or you use "webserver1" and "webserver2" and then forget which is actually which. Also, when machines change hands, you have to rename them so "johnslaptop" now becomes "alexlaptop", etc.
+Cirrus Technologies was a small IBM Business Partner. I think at its height it was about fifteen people. Four of them were called David, which embarrassingly meant the company had three more Davids than it had women. The company's core business, at least when I was there, was to get bigger companies to buy [Websphere, IBM's enterprise Java server platform](https://www.ibm.com/products/websphere-application-server), then sell them access to developers who know how Websphere worked.
 
-A better approach is to use a naming convention. This is especially useful if you run a large network with many devices, then you can use a scheme like "region.location.devicetype.unitnumber". On the homelab many people choose character names from one of their favorite movies or TV shows and use those as hostnames, like "homer", "marge", "bart", etc.
+Which is where I came in. These days we'd have been called something exciting like *Forward Deployed Engineers*, but back then we were just consultants.
 
-The benefit of character names is that the name doesn't need to change if the device is used for something else or it changes hands. But the downside is that now it's even more difficult to remember what device does what.
+In the early 2000s, needing some forward-facing programmers who lived closer to certain banks (as far as I remember), Cirrus opened a three-person office in Melbourne. Two of those people were Gavin King and Daniel Bradby, both very good programmers, but Gavin had that dangerous combination of being disturbingly intelligent, with absolute conviction of his own opinions, and annoyingly, was often right.
 
-Also, in both cases, you cannot remember what IP address belongs to what machine.
+## The Scottish Project
 
-Using arp-scan in order to take advantage of the [Address Resolution Protocol](https://en.wikipedia.org/wiki/Address_Resolution_Protocol) (ARP) is a great way to determine which IPv4 devices are up and running on your network and it's much faster than scanning with nmap.
+Around 2001, us front-loading developers at Cirrus were working doggedly on a project that was rapidly going wrong, and would continue to go wrong until we agreed that even saying its name was bad luck, deploying a Shakespearean euphemism: [The Scottish Project](https://en.wikipedia.org/wiki/The_Scottish_Play).
 
-```
-$ $ arp-scan 192.168.1.0/24
-Interface: eth0, type: EN10MB, MAC: 1g:36:4f:16:a2:3a, IPv4: 192.168.1.5
-Starting arp-scan 1.10.0 with 256 hosts (https://github.com/royhills/arp-scan)
-...
-192.168.1.5     b0:56:9a:e1:66:b9       Intel Corporate
-192.168.1.12    1a:83:04:16:d4:a3       (Unknown)
-192.168.1.23    30:ab:d6:d2:b3:36       ASUSTek COMPUTER INC.
-...
+There were many reasons this project was going off the rails, but the biggest problem was that back in 2001, server-side Java was an absolute pain in the arse to develop. This was the era of Servlets and JSPs. Struts 1.0 and “form beans” were considered state-of-the-art. And beneath them all like an unblinking Elder God slept the most terrifying of them all: Enterprise Java Beans.
 
-15 packets received by filter, 0 packets dropped by kernel
-Ending arp-scan 1.10.0: 256 hosts scanned in 2.018 seconds (126.86 hosts/sec). 15 responded
-```
+If you don't know what EJBs were, count yourself lucky. They were a brutally over-engineered component model for Java designed to sell expensive middleware like Websphere. To get an idea of what it was like, developing an EJB required you to write two different interfaces, and then an implementation *that did not implement either interface*. And then add a “deployment descriptor” that was, at least for the first few versions of the spec, vendor-specific (and in Websphere's case, *could only* be generated by IBM's [VisualAge for Java IDE](https://en.wikipedia.org/wiki/VisualAge)). And [it got worse from there](https://fishbowl.pastiche.org/2003/03/27/portableremoteobjectbiteme).
 
-If you're using IPv6 then arp-scan will not work as IPv6 uses [Neighbor Discovery Protocol](https://en.wikipedia.org/wiki/Neighbor_Discovery_Protocol) (NDP) rather than ARP, but I am sure you already know this if you have implemented IPv6 in your network.
+Fun fact, the earliest days of Jira development started off using EJBs. This lasted maybe a few weeks before Mike and Scott realised how much they sucked.
 
-In the above result from arp-scan we get the IP address, the MAC address and sometimes, but only sometimes, the vendor of the NIC. Still, this is only really useful to tell me which devices are up and running, from the above I cannot determine what is what. Especially with the 192.168.1.12 one which doesn't list the vendor. And sometimes you have several machines using the same NIC vendor.
+So Gavin, being Gavin, got hacking. Enter `cirrus.inf`. The `inf` stood for “infrastructure” and it was his valiant mostly solo attempt to make Enterprise Java suck slightly less. The first entry in the package had nothing to do with databases or persistence, or even EJBs. It was a lightweight replacement for Struts, an attempt to smooth some of the rough edges of web development. I have absolutely no recollection of how it worked, but my vague memory is that it took a bit of effort to get your head around conceptually, but once you had, it did the job.
 
-DNS to the rescue!
+## A meeting of minds
 
-A really cool thing about using a DNS server on your network, even if you only have a limited amount of devices, is that you get a kind of centralized "database" which you can then setup with information about all the devices. If you also combine it with a DHCP server, you can easily match a specific IP address to a specific MAC address and that way always make sure that the same device automatically gets the same IP address and you don't have to manage that on each device.
+With the Scottish Project staring in the face of a major missed deadline, the powers that be decided to fly the Melbourne contingent of the company to Sydney for two days of intense meetings deciding how to get things back on track. Number one issue on the agenda: what do we do about EJBs? On one hand they were slow to develop, painful to test, hard to maintain, a huge source of bugs, and offered very little actual utility to the project. On the other hand, they were the marquee feature and major selling point of the application server we had just sold to this customer, and hoped to sell to many others.
 
-One minor downside to using DHCP and DNS is that if the server is down, perhaps because you're updating the operating system, your network is momentarily not working quite right, machines cannot get IP addresses assigned and you cannot use DNS to do lookup. However, you can mitigate that somewhat by only assigning static IP addresses to the very most important devices and then make sure the IP addresses match the ones you use in your DNS zones.
+Opinions quickly divided into three camps. Management was conservative, and wanted to stay the course with the technology we had chosen. Most developers wanted to reduce our reliance on EJBs, maybe keeping session beans for transaction management and component discovery, but ditching entity beans (the strain of EJB used for managed object persistence) in favour of hand-written SQL.
 
-However, the really cool thing is that you can use the [TXT record](https://en.wikipedia.org/wiki/TXT_record) to associate arbitrary text with a host!
+The third camp was Gavin and Daniel. Gavin had a really cool idea for a persistence framework for Java, using concepts borrowed from successful Smalltalk frameworks, that could replace both entity beans *and* hand-written SQL with something demonstrably better.
 
-I the above case with 192.168.1.12, not only can I lookup the hostname of the device with `drill` or `dig`:
+After a long, long argument, we finally got management to compromise as far as option two, went to [The Establishment](https://merivale.com/venues/establishmentbar/), and drowned our sorrows. Gavin's persistence framework was a cool idea, it was acknowledged, but maybe not the right idea for this moment.
 
-```
-$ drill -x 192.168.1.12
-;; ANSWER SECTION:
-12.1.168.192.in-addr.arpa. 3600  IN      PTR     bart.home.arpa.
-```
+## Some of the best stories *start* with a hangover
 
-I can also get the very useful information from the TXT record I previously setup:
+The next day, with not much to do before getting on a plane back to Melbourne, Gavin sat down at a CRT monitor much like the one pictured above, and stubbornly laid down the first few classes of his persistence framework. Again to be clear here, my contribution to this project started and ended with him maybe bouncing a few ideas off me over beers, and me nodding and saying it sounded cool.
 
-```
-$ drill bart.home.arpa TXT
-;; ANSWER SECTION:
-bart.home.arpa.        3600    IN      TXT     "Johns Intel i7-7700 Acer laptop"
-```
+The Scottish Project continued on into disaster.
 
-In my network I am using [OpenBSD as a router](https://unixdigest.com/openbsd-router-guide/) and I am combining [dhcpd](https://man.openbsd.org/dhcpd) with [unbound](https://nlnetlabs.nl/projects/unbound/about/), that way I only have to enter the IP address for a device in one place.
+And then, a few months later, to everyone in Sydney's surprise, a new Java persistence library called Hibernate was released under the Lesser GNU Public License, with the package name `cirrus.inf`. There was a certain amount of grumbling from management about how this was allowed to happen, and why the company didn't get any credit for a project they did nothing to support, but as they say, the rest is history.
 
-So the section for the bart.home.arpa machine in `/etc/dhcpd` looks like this:
-
-```
-host bart.home.arpa {
-    fixed-address bart.home.arpa;
-    hardware ethernet 1a:83:04:16:d4:a3;
-}
-```
-
-Then in unbound I have the following:
-
-```
-local-data: "bart.home.arpa. IN A 192.168.1.12"
-local-data: 'bart.home.arpa. IN TXT "Johns Intel i7-7700 Acer laptop"'
-local-data-ptr: "192.168.1.12 bart.home.arpa"
-```
-
-You only have to make sure that dhcpd is started after unbound when the router boots. dhcpd uses the `fixed-address` field to query the DNS server (unbound in this case) for the IP address that belongs to that hostname in order to serve it to the device with the specific MAC address listed in the `hardware ethernet` field.
-
-You can do the same setup on something like a Raspberry Pi using almost any Linux distribution or BSD variant, or you can use something like like [Pi-hole](https://pi-hole.net/) with [Dnsmasq](https://thekelleys.org.uk/dnsmasq/doc.html), which has both DHCP and DNS build into one.
-
-Even if you decide to manually assign static IP address to all devices and not use DHCP at all, having a DNS server as a "database" with hostnames and additional information is really nice, you just have to make sure everything matches when you set it up.
-
-Another major benefit from running a local recursive DNS resolver like unbound is that you become your own DNS provider and do not need your ISP, Google, Cloudflare or anyone else as a DNS provider. You can also block websites, like websites that serve ads or machines that are setup to collect telemetry.
+The fantastic irony is that I didn't get to use Hibernate once during my remaining time at Cirrus: the first time I did more with it than the tutorial was after I moved to Atlassian and started working on Confluence.

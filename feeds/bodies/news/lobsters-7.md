@@ -159,5 +159,3 @@ This list is extracted from network metrics of an hour or so of typical usage. Q
 201647 — SI-nerGIE (GIE of Orano and Framatome) — Shared IT operations for both companies: data centres and local support.
 49920 — Flowbird (SAS) — Maker of parking meters and transit ticketing systems.
 20493 — Viparis Le Palais des Congrès de Paris (SA; 50/50 CCI Paris Île-de-France and Unibail-Rodamco-Westfield) — Operates the Palais des Congrès convention centre.
-
-[Discuss on Hacker News](https://news.ycombinator.com/item?id=50195959)

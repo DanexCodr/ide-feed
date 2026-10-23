@@ -1,165 +1,39 @@
-But none of these properties are strictly held.
-Certain RFC compliant implementations of UUIDv7 violate these properties to extreme degrees.
-The only useful property UUIDv7 appears to strictly provide is uniqueness and therefore collision resistance.
-I’ve already discussed how
-[UUIDv7 IDs can be guessable](https://alexsci.com/blog/uuids-and-idor/),
-so this post explores the other properties.
+Many people [are saying](https://rustify.rs/articles/rails-world-2026-keynote-dhh-hey-rust-ai-agents) that AI will make software faster by rewriting it in faster languages, but this isn’t generally true. Most programs cannot be meaningfully sped up by rewriting them in C or Rust.
 
-## Is the timestamp useful?
+How can this be true? Some languages are orders-of-magnitude faster than others: for instance, C can be fifty times [faster](https://news.ycombinator.com/item?id=9753366) than Python. Won’t rewriting my Python program in C thus make it fifty times faster? No, it won’t. Software performance is usually dominated by I/O, not the speed of the language. Where language speed matters, most slow languages already have popular libraries that allow them to unlock C-like speed. In general, performance is a matter of *design*, not of language choice.
 
-Superficially, it seems that embedding a timestamp in the ID can remove the need to track the creation time in a separate database column, providing marginally more efficient database operations.
-If you need to list things ordered by creation time very often, it’s useful if the primary index gives that behavior, removing the need for another index.
+### Most real programs are I/O-bound
 
-Unfortunately, the timestamp embedded in a UUIDv7 ID may not relate to the object creation time.
-The Postgres [docs for `uuid_extract_timestamp`](https://alexsci.com/blog/uuidv7-is-weird/www.postgresql.org/docs/current/functions-uuid.html)
-helpfully warn that “the extracted timestamp is not necessarily exactly equal to the time the UUID was generated”.
+Consider a simple CRUD website with a database. For any given request, 50% of the request time<sup>[1](https://www.seangoedecke.com/software-is-slow-because-of-bad-design-not-slow-languages/#fn-1)</sup> might be spent querying the database: to fetch the current user, the record being asked for, any relevant user memberships or settings, and so on. Rewriting that website in C can only speed up that other 50%, which puts a hard ceiling on the improvements you can make<sup>[2](https://www.seangoedecke.com/software-is-slow-because-of-bad-design-not-slow-languages/#fn-2)</sup>. At best, you’ll make requests twice as fast (probably closer to 1.5x in practice). That’s not bad, but it’s nowhere near an order-of-magnitude speedup.
 
-[RFC 9562](https://www.rfc-editor.org/rfc/rfc9562.html)
-allows implementations to alter the timestamp field, using values that aren’t strictly derived from the system clock.
-This relates to the tension between UUID monotonicity and timestamp accuracy.
-In certain scenarios, the difference between the timestamp and the current time can be arbitrarily large.
+In other words, most real programs are “I/O-bound”: they spend most of their time waiting for data to be input or output somewhere, as opposed to “CPU-bound” programs that spend most of their time actively doing things. I/O-bound programs don’t just have to rely on a database. Often programs have to wait on some third-party API, or on writing or reading data to disk. You could speed the code in `curl` up by 100x and you probably wouldn’t even notice, because `curl` spends all of its time waiting on the network.
 
-> Implementations MAY alter the actual timestamp. — [RFC 9562 §6.1](https://www.rfc-editor.org/rfc/rfc9562.html#name-timestamp-considerations)
+What about work that is obviously not I/O-bound? For instance, wikis have to turn stored markdown into renderable HTML<sup>[3](https://www.seangoedecke.com/software-is-slow-because-of-bad-design-not-slow-languages/#fn-3)</sup>. Wouldn’t rewriting that in a faster language cause a massive speedup? It would! That’s why applications that do that use libraries like [cmark-gfm](https://github.com/github/cmark-gfm) that call out to fast languages for markdown rendering. In general, most slow languages can write very fast programs by invoking this kind of library. Python is famously a slow language, but it’s a competitive choice for CPU-bound workloads like machine learning and mathematics, because it has a [healthy](https://pytorch.org/) [set](https://www.tensorflow.org/) of libraries that let it offload these workloads to fast C code. If a Python program spends 80% of its time doing matrix multiplications on a GPU, you are very unlikely to be able to speed it up by rewriting it in C, because those matrix multiplications are already happening in tightly-optimized C or assembly code.
 
-> This specification makes no requirement or guarantee about how close the clock value needs to be to the actual time. — [RFC 9562 §6.1](https://www.rfc-editor.org/rfc/rfc9562.html#name-timestamp-considerations)
+Of course, some programs do in fact do a lot of CPU-bound work in slow languages. If a program has not had much engineering attention, there will probably be a lot of [low-hanging fruit](https://www.seangoedecke.com/low-hanging-fruit/). But these programs are often unimportant: if they were important, someone would have gone in and optimized them already, before AI made it (relatively) easy. That doesn’t mean it’s impossible to find a useful program to rewrite. Actual Computer recently [rewrote](https://github.com/actual-computer/toks) tiktoken in assembly, providing a significant<sup>[4](https://www.seangoedecke.com/software-is-slow-because-of-bad-design-not-slow-languages/#fn-4)</sup> speedup. However, you’re not going to revolutionize some field of computing like this. Even fast tokenization is only useful on the margins, because time spent in tokenization is a fraction of the time spent in inference.
 
-> … implementations MAY increment the timestamp ahead of the actual time … — [RFC 9562 §6.2](https://www.rfc-editor.org/rfc/rfc9562.html#name-monotonicity-and-counters)
+Despite all this, I think most software is far slower than it could be. I’m optimistic about the potential (with or without AI) to significantly speed up commonly-used software. But I think most of these speedups will come from redesigning the program, not rewriting it in a faster language.
 
-Incrementing the timestamp ahead of the system clock is an interesting problem.
-If the generator is seeing so much load that a counter field is regularly overflowing then the timestamp could accelerate into the future.
-Using a sufficiently large counter would be wise and the RFC says the minimum size SHOULD be 12 bits.
-A counter overflow would require a pretty aggressive creation rate, over 4,096 IDs per millisecond per node, which is beyond the limits of many systems.
-This overflow becomes relevant, however, if the timestamp freezes; which I’ll discuss in a later section.
+In a 2018 [post](https://bcantrill.dtrace.org/2018/09/18/falling-in-love-with-rust/), Bryan Cantrill described trying to rewrite a C program into Rust. It was difficult because the carefully-optimized design of the C program did not play well with the Rust borrow checker. Giving up, he simply wrote the program in Rust in the naive way, expecting a 20% slowdown or worse. Instead, it was 30% *faster*. The [reasons](https://bcantrill.dtrace.org/2018/09/28/the-relative-performance-of-c-and-rust/) boil down to Rust’s internal preference for a B-tree over a binary search tree, which happens to be a more cache-efficient data structure. So even in a largely CPU-bound workload, in the hands of someone very skilled at writing fast C, performance is dominated by design, not by language speed.
 
-### Example: Python uuid.uuid7()
+This matches my own experience in higher-level languages. When I think of the significant speedups I’ve managed, they’re almost exclusively redesigns of the software to do less work:
 
-One prominent implementation that increments the timestamp is the Python standard library’s UUIDv7.
-The increment happens only in certain circumstances, like when the counter overflows.
-Unfortunately, the generator can get stuck in an increment cycle if the clock ever jumps backwards and the timestamp can race ahead of the system time by an arbitrarily large amount.
+- Caching a slow operation (typically an external API call)
+- Performing slow operations asynchronously, either in a background job or out of the request/response lifecycle
+- Performing operations in parallel instead of sequentially (sometimes breaking up large operations in order to do this)
+- Replacing a set of SQL queries with a single SQL query (fixing N+1 problems)
+- Replacing a slow SQL query with a fast SQL query
+- Skipping unnecessary slow operations (e.g. in a paginated view, only fetch ancillary data from entities that are on the current page)
 
-Here’s a simple example:
+All of these strategies are completely unrelated to how fast the language is. In fact, writing in a slow higher-level language can make it much easier to optimize the code, because you can see at a glance what the program is doing. If (for some reason) I had first rewritten the web server in assembly, I would have a much harder time noticing the N+1 query, or the fact that we could move an API call into a job, and so on.
 
-```
-import uuid
-from datetime import datetime
+Right now everyone is asking their AI agents to rewrite programs in Rust or C or assembly. This is fun, but it’s not a serious attempt at optimization. The set of programs that can be meaningfully sped up by this kind of rewrite is very narrow.
 
-# Prime the generator with the current time
-t = uuid.uuid7().time
-now = datetime.now()
-delta = (datetime.fromtimestamp(t/1000) - now).total_seconds()
-print("Initial delta: ", delta)
-# Ask the user to change the time
-input("Set clock back one hour")
+If you want to make everything faster with AI — and you should! — you ought instead to be asking your agent to profile programs, identify hotspots, and suggest ways to redesign what the program does. Occasionally you may run into a hotspot that is truly CPU-bound and cannot be refactored to do less work. In these rare cases, rewriting that section in a faster language will help. But simply rewriting from the start will be far less successful than most people imagine.
 
-while True:
-    for _ in range(100000):
-        uuid.uuid7()
-    t = uuid.uuid7().time
-    now = datetime.now()
-    delta = (datetime.fromtimestamp(t/1000) - now).total_seconds()
-    print("New delta: ", delta)
-```
+There are many good reasons to rewrite software in a different language: portability, efficiency, maintainability, and so on. But in terms of raw *speed*, you’re better off focusing on the program’s design.
 
-Which gives:
-
-```
-$ uv run --python 3.14 main.py
-Initial delta:  -0.000748
-Set clock back one hour
-New delta:  3695.277581
-New delta:  3795.042411
-New delta:  3894.80756
-New delta:  3994.573106
-^C
-```
-
-We expect the difference to be 3600 seconds (one hour) as the implementation refuses to allow the embedded timestamp to jump backwards and we expect the difference to decrease as the system clock catches up to the frozen timestamp.
-But when the load is above one ID per millisecond the difference will increase without bound.
-At lower loads it will take longer for the system clock to catch the timestamp, but we don’t see the runaway effect.
-
-The [related issue](https://github.com/python/cpython/issues/138862#issuecomment-4232986682)
-shows Python developers reasoning that this is consistent with the RFC, is consistent with other implementations, and that there isn’t “much we can do” on a “flawed system”.
-I think these points are correct as I see this same behavior in other implementations.
-Nevertheless, it would be helpful if existing UUIDv7 implementations could handle system clock jumps without runaway behavior.
-There are many real-world examples of clocks jumping backwards,
-[even decades out of sync](https://www.itnews.com.au/news/telstra-broke-its-network-with-undocumented-time-fix-627442) in time-sensitive environments.
-
-## Is leaking a timestamp harmful?
-
-Embedding the timestamp in the ID means that you cannot share the ID without also sharing the timestamp.
-
-It’s pretty difficult to think of an example where this really matters.
-One example could be a user profile page that doesn’t disclose when the account was created, but the UUIDv7 ID in the URL leaks the high-precision timestamp.
-
-This issue would typically be very low on my list of security concerns because I find much more severe problems when I do security assessments.
-Nevertheless, there are contexts where this matters and engineering resources would be focused on addressing it.
-If you’re in the latter camp, be wary of UUIDv7 leaking metadata.
-
-## Are UUIDv7s monotonic?
-
-This section is even more pedantic, so skip ahead if you’ve had enough.
-Briefly: UUIDv7 IDs provide some sort of rough order, which may be suitable for your requirements.
-
-When I was reading the UUIDv7 RFC I was surprised to see it describing a method for creating IDs across different nodes that are monotonically ordered.
-This was
-[proven impossible back in the 1970s](https://en.wikipedia.org/wiki/Lamport_clock),
-and lead to the development of vector clocks and similar technology. At a high level, the problem is that system clocks cannot be synchronized to a suitable precision.
-Ordering things by timestamp only works if you know precisely what time it is.
-Any uncertainty in the time results in uncertainty of event ordering.
-
-Succinctly: Timestamps are only time-ordered if you know what time it is and you don’t know what time it is.
-
-For this reason, similar ID formats claim to be nearly sorted.
-It seems odd that UUIDv7 makes a stricter claim and does not deliver on them.
-At the very least, the
-[challenges of synchronizing clocks across systems](https://alexsci.com/blog/clock-skew/)
-make the millisecond and especially the sub-millisecond timestamps quite suspect.
-
-But even on a single node, using a single implementation, UUIDv7 IDs are not strictly monotonic.
-The easiest way to get out-of-order UUIDv7 IDs is to use an implementation that uses a millisecond timestamp without a counter.
-This approach [trivially generates out-of-order IDs inside a small for loop](https://github.com/fboulnois/pg_uuidv7/issues/10).
-
-So no, there’s nothing in the UUIDv7 specification that would ensure the IDs are strictly monotonically increasing.
-Specific implementations may do better than others (with sub-millisecond timestamps, counters, well-synchronized clocks, etc), but we’ve known since the 1970s that this problem is not strictly solvable.
-
-In UUIDv7’s favor, roughly ordered IDs are still quite useful.
-So don’t rip UUIDv7 out of your systems just yet.
-Just be wary of what assumptions you have.
-
-## Restarting a UUIDv7 generator
-
-The RFC has lots of discussion about the handling of clocks that jump backwards.
-Timestamps are only time-ordered if clocks tick forwards, so special care is needed.
-
-We’ve already discussed one mitigation: tracking the last generated timestamp to ensure that an earlier timestamp is never used.
-To do this safely you’ll need to write the last used timestamp to persistent storage, such that you can read it again after a system reboot or a process restart.
-
-I’ve looked at several UUIDv7 implementations I couldn’t find one that writes timestamps to persistent storage.
-So implementers seems disinterested in addressing the issue and they generate out-of-order IDs when a process restart follows a clock jumping backwards.
-
-Looking at real-world clock synchronization problems, you’ll find many examples of
-[clocks getting set to future dates](https://arstechnica.com/security/2023/08/windows-feature-that-resets-system-clocks-based-on-random-data-is-wreaking-havoc/).
-When this happens, the backwards jump would align the timestamp to the actual time, but a last-used-timestamp guard would force timestamps to use keep using that incorrect timestamp until the system clock catches up.
-If the system clock takes a long time to catch up, you may start experiencing counter rollovers.
-
-## So what is UUIDv7?
-
-My mental model for UUIDv7 is that it’s a mash-up of a bunch of different ideas which implementations are free to choose as they see fit.
-There’s a wide variance of properties that UUIDv7 implementations can provide, with varying degrees of certainty they can successfully provide those properties.
-If you’re building your own implementation you can likely build something that has the properties you need.
-But most of us want to reach for an off-the-shelf version, especially when standard libraries provide an implementation, so we’re generally at the mercy of someone else’s implementation decisions.
-Implementations can change over time, making broad changes to their behavior while still being RFC compliant.
-Distributed systems may have multiple implementations across their subsystems, each with distinct properties.
-The only thing you can really expect is strong collision avoidance and ID uniqueness.
-
-Be sure to ask these questions when picking a UUIDv7 implementation:
-
-- Is the implementation compliant with the RFC?
-- What additional properties does this implementation guarantee?
-- Under what limits can those guarantees be met?
-- Are there any assumptions required for these properties to hold, such as having an accurate system clock?
-- Under what conditions will the implementation alter the timestamp?
-- How guessable are the generated IDs?
-
-Unfortunately, this sort of analysis is much more difficult than building an RFC compliant generator.
-Authors of UUIDv7 generators may not know the answers to these questions and may themselves be surprised that the RFC does handle this for them.
+1. This might seem ridiculously high (if you typically work with slow languages or CPU-bound workloads), or ridiculously low (if you don’t). In my experience it’s at least in the ballpark for interpreted languages. ↩
+2. This is formally called [Amdahl’s law](https://en.wikipedia.org/wiki/Amdahl%27s_law). ↩
+3. Why not just store the HTML? You can, but sometimes the content of the HTML differs per-user (and even if you store the HTML you have to convert it at least once). ↩
+4. They claim 4-23x faster than tiktoken and it was indeed ~5x faster on my laptop — though arguably this speedup comes from a redesign to avoid the dependency on regex, not on any intrinsic slowness of Rust with Python bindings. ↩

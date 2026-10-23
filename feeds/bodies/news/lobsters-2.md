@@ -1,83 +1,37 @@
-A link is just a button that takes you somewhere when you click it right?
+I decided to make my own container runtime for fun, and even though I’m still early on, I’ve learned that Docker is *weird*. Here’s some weird things I learned about Docker.
 
-```
+## Containers aren’t real
 
-<style>
-span {
-  text-decoration: underline;
-  color: #44EEEE;
-}
-</style>
-<span onclick="window.location='https://xkcd.com/'">100% legit link</span>
-```
+Unlike VMs, containers are just processes with special restrictions on them. Your kernel is still running that process! And if you know where to look, you can even find that process in /proc.
 
-100% legit link
+## Containers really aren’t real
 
-Except that's a pale, shallow imitation of a link.
-A real link can be:
+There’s not really a linux feature that’s just “containers” either. Instead, containers are really 5 different linux kernel features in trenchcoat.
 
-Opened in a new tab. (ctrl)
-... or a fresh window. (shift)
-... or saved as a file (alt).
-Copied as a URL (right click)
-Used with the keyboard (tab + enter)
-Seen by tools like search engines and screen readers.
-Hovered over to see the URL.
+Namespaces hide what the host and container can see, cgroups limit container resource usage, and there’s a whole bunch of networking magic I don’t understand that lets you isolate a container’s network.
 
- snip
+## Images are just folders
 
-... none of which work with a button.
+Images are just folders that Docker puts somewhere and then calls `chroot` (or `pivot_root`) to make that folder your container process’s new root directory. So if you run `docker run -it --rm ubuntu /bin/bash`, Docker is going to:
 
-*Another common offense* is to use a real link, but hook the click event to open a popup.
-However, with a real <a target="_blank"> link, I can:
+- Download the ubuntu image from Dockerhub.
+- Put that image somewhere.
+- Run /some/weird/docker/path/bin/bash
 
-See the loading progress...
-... or/and cancel it.
-... see descriptive error pages and retry if needed.
-Open multiple at once.
-Read the original page while it loads.
-Use my browser's tabs or/and window manager to organize them.
-Bookmark the page.
-Copy the URL and send it to a friend.
+## Go is kind of a terrible language for a container runtime
 
-... and above all, they are consistent:
+Docker’s container runtime, `runc`, is written in Go, and Go has some design choices that make it less suited for a container runtime. Go’s runtime is natively multi-threaded. That’s a really cool feature, but it leads to some challenges in `runc`.
 
-I've long lost count of how many times I've accidentally closed the whole site while trying to close a popup that was a little too convincing.
+Many of the Linux syscalls a container runtime needs to make have to be done in a single-threaded environment, so `runc` has [a crazy C module](https://github.com/opencontainers/runc/tree/main/libcontainer/nsenter) that runs before Go’s runtime initializes so it can run those syscalls.
 
-It's also extremely common to click a link with a slow connection, only to be greeted with perpetual spinner.
-I have no idea if anything is actually happening or how long it will take.
-Worse, it usually covers up the original page so I can't even read that!
+Go also doesn’t have fork! Fork only forks the main thread, so it’s kind of a footgun in a runtime like Go’s. But a container runtime really wants to fork, set up a bunch of restrictions, and then exec the process you actually put in `docker run`. To get around this, `runc` execs `/proc/self/exe` with a special command line arguement that identifies it as a child process to approximate a fork.
 
-*Browsers are good at links and loading pages: It's the whole point.*
+## Docker requires root!
 
-Don't use javascript buttons as links.
-Don't build your own loading animations.
-Link previews should open and close on hover, not on click.
-Don't open links in javascript popups: Use target="_blank" instead.
+This is pretty easy to miss if you, like me, run Docker in MacOS. Many of the Linux kernel APIs that container runtimes use require, or at least used to, to be run as root, so the Docker daemon usually runs as root. I can only imagine that container security is a very tough job.
 
-# *Other common problems*:
+This seems better these days. The big exception seems to be networking. If you’re running a rootless container runtime, it looks like it has to reimplement the whole networking stack in userspace to actually give you the same features!
 
-Infinite scrolling breaks ctrl-f, bookmarks, the home/end keys and often the back button.
+## Learning is fun!
 
-You can have a 100k of text on a page:
-Browsers will render partially downloaded HTML and the user won't even notice.
-Using a 5 MB javascript framework just do a worse job of downloading text is dumb.
-
-To optimize speed, it's best to minimize the total number of round trips.
-Just putting everything in a single TCP connection will always be better than breaking it up because of TCP's slow start algorithm.
-
-*Don't reimplement <details>* which will break search tools and screen readers.
-
-... but using fancy CSS to make it look nice is fine.
-
-*Don't roll your own date picker* (or any other built-in form inputs)
-
-This will always used the user's preferred date format, covert it to the standard yyyy-mm-dd, and works with the keyboard...
-also, it's one line of code that works with dark mode by default.
-
-# *Related*:
-
-Real links!
-
-- https://susam.net/do-not-roll-your-own.html: Don't Roll Your Own ...
-- /misc/13kb/: Why using a single big page can actually improve performance.
+I’ve only just started my own container runtime, and I already feel like I’ve learned so much about Docker. Writing your own version of a tool you use is a great way to learn about it!

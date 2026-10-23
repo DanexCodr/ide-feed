@@ -1,278 +1,351 @@
-*TL;DR: The DuckDB team is happy to announce that today we're releasing DuckDB version 2.0.0 LTS, codenamed “Cinnamon Teal” (Spatula cyanoptera). This is our biggest feature release so far, and it ships a polished version of the Quack protocol, asynchronous I/O, a first-class `VARIANT` type, agent mode, triggers, an extensible SQL parser and much more, built from close to 20,000 commits since DuckDB 1.5.*
+Big O notation is a lie. Well, okay, it's a simplification that lies by omission.
 
-We are proud to release DuckDB 2.0.0, codenamed [“Cinnamon Teal”](https://shell.duckdb.org/#queries=v0,ATTACH-'https%3A%2F%2Fblobs.duckdb.org%2Fduck.db'-AS-duckdb~,CALL-duckdb.cinnamon_teal()~) after the [*Spatula cyanoptera*](https://en.wikipedia.org/wiki/Cinnamon_teal), a strikingly reddish-brown duck found in the western Americas.
+Can O(√n) scale better than O(log n)? Can a disk-based algorithm outperform an in-RAM data structure? Yes, and yes.
 
-While [DuckDB 1.0](https://duckdb.org/2024/06/03/announcing-duckdb-100.html) was all about stability and backward compatibility, DuckDB 2.0 is above all a feature release.
-In this blog post, we summarize the highlights and then walk through the breaking changes and how to migrate.
-We showcased many of the new features in [“A Preview of DuckDB v2.0”](https://duckdb.org/2026/08/17/duckdb-20-highlights.html), which covers each one in more depth.
-For the complete release notes, see the [release page on GitHub](https://github.com/duckdb/duckdb/releases/tag/v2.0.0).
+![AVL in RAM vs DiskArray on disk](https://www.bitflux.ai/pics/memory_is_slow_part3/tldr.png)
 
-> Tip To install the new version, please visit the [installation page](https://duckdb.org/install/).
-> Some clients, such as the CLI and Python, are already available. Other client libraries (e.g., R and Rust) and some extensions can take a few days to release due to the extra changes and review rounds required.
+Scaled to 2 billion nodes, the AVL binary tree needs 144 GiB of RAM. DiskArray keeps its data on 8 NVMe drives and uses 264 MiB of RAM, but it's still faster at everything.
 
-With this release, there are currently three DuckDB lines available.
-DuckDB 2.0 is a long-term support (LTS) release with support until at least October 2027.
-The previous LTS release, version 1.4, is still supported until November 17, 2026.
-To ensure a smooth transition and allow sufficient time for testing, we extended the support period of DuckDB 1.5 until March 2027, effectively also turning it into an LTS release.
-For details, see the [release calendar](https://duckdb.org/release_calendar.html#lts-releases).
+## Why a Part 3
 
-To find your way around the documentation for all of the new features, we also published a [“What's New in the Docs for 2.0”](https://duckdb.org/docs/2.0/whats_new_in_the_docs.html) page that links each feature below to its documentation.
+[Part 1](https://www.bitflux.ai/blog/memory-is-slow-part1/) showed that computers are getting wider, not faster, and that PCIe bandwidth is outpacing DRAM bandwidth.
 
-DuckDB has been an in-process database since day one.
-In [DuckDB 1.5.3](https://duckdb.org/2026/05/20/announcing-duckdb-153.html), released in May, we introduced the Quack protocol that lets you run DuckDB in a traditional client-server setup, along with the [`quack` extension](https://duckdb.org/docs/2.0/core_extensions/quack.html), which implements DuckDB's native protocol, so any DuckDB process can [serve its databases](https://duckdb.org/docs/2.0/quack/overview.html#server-side-usage).
+[Part 2](https://www.bitflux.ai/blog/memory-is-slow-part2/) showed that streaming from disk can beat streaming from the page cache.
 
-DuckDB 2.0.0 ships a polished version of the Quack protocol with substantial performance and stability improvements. It also introduces the new [`CONNECT` statement](https://duckdb.org/docs/2.0/sql/statements/connect.html) that allows attaching and switching to a remote database in a single command for better ergonomics:
+[Part 2.5](https://www.bitflux.ai/blog/memory-is-slow-part2-5/) showed that with the right hardware and software, streaming from disk can beat a buffer in DRAM.
+So far I've shown how a sequential read from NVMe is fast, which is a cool trick but not controversial enough.
 
-```
-CALL quack_serve(
-    token = 'my_token'
-);
+I'm getting worried people still aren't getting the point.
 
-CREATE TABLE events
-    (date DATE, name VARCHAR);
+The point is that our intuitions about computer performance are all wrong.
 
-INSERT INTO events VALUES
-    ('2027-04-07',
-     'DuckCon #8');
-```
+So this time we're going to show how an on-disk data structure doing random reads and writes to disk is faster than an in-RAM data structure.  To make it worse, computer science textbook Big O notation says the on-disk algorithm is going to scale worse than the in-RAM algorithm.
 
-```
-ATTACH 'quack:localhost'
-    AS qk (TOKEN 'my_token');
+## The rig
 
-CONNECT qk;
-SELECT * FROM events;
+Same old used box as [Part 2.5](https://www.bitflux.ai/blog/memory-is-slow-part2-5/): a 24-core Xeon Platinum 8260 with 35.75 MiB of L3 and 192 GiB of DDR4, and 8 Samsung PM983 NVMe drives over NVMe-oF on four 100 Gb InfiniBand links.
 
-┌────────────┬────────────┐
-│    date    │    name    │
-│    date    │  varchar   │
-├────────────┼────────────┤
-│ 2027-04-07 │ DuckCon #8 │
-└────────────┴────────────┘
-```
+## The task
 
-For simplicity, this example runs the server and the client on the same machine. By default, the server only listens on `localhost`. To accept connections from other machines, keep the server on `localhost` and put it behind a [TLS-terminating reverse proxy](https://duckdb.org/docs/2.0/quack/setup/reverse_proxy.html). The [`allow_other_hostname` option](https://duckdb.org/docs/2.0/quack/overview.html#starting-a-server), which exposes the server directly, is only meant for testing.
+Keep a sorted set of 8-byte keys, and support four transactions on it:
 
-The `CONNECT` statement is not limited to Quack: it points your session at [any remote database that supports it](https://duckdb.org/docs/2.0/sql/statements/connect.html#supported-databases), including PostgreSQL and MySQL. For these, the new remote pushdown optimizer ships queries directly to the remote server instead of pulling tables over the wire.
+- search(key): is this key in the set?
+- at(i): what's the i-th smallest key? The median, the 99th percentile, page 3 of the results.
+- insert(key)
+- delete(key)
 
-The CLI also has shortcuts for setting up a Quack client-server pair: the new [`-serve` and `-connect` arguments](https://duckdb.org/docs/2.0/clients/cli/arguments.html#serving-and-connecting-to-remote-databases) start a Quack server or connect to one directly from the command line:
+That's the core of a database index, an order book, a leaderboard, a time-series store.
 
-## [Performance](https://duckdb.org/2026/10/21/announcing-duckdb-200.html#performance)
+### The sorted array
 
-### [Asynchronous I/O](https://duckdb.org/2026/10/21/announcing-duckdb-200.html#asynchronous-io)
+Let's walk through the algorithm selection by first principles and childlike wonder.
 
-DuckDB 2.0 introduces [asynchronous I/O](https://duckdb.org/docs/2.0/data/io.html) for reading Parquet and CSV files, as well as [DuckDB's native storage format](https://duckdb.org/docs/2.0/internals/storage.html). The I/O layer now scales independently from the query processing layer, issuing reads in the background and keeping multiple requests in flight. This means far more parallelism for remote reads and dramatically faster queries on object storage such as [`s3://`](https://duckdb.org/docs/2.0/core_extensions/httpfs/s3api.html).
+The simplest solution is an array of keys, kept in order.
 
-We described the design in detail in a [dedicated blog post](https://duckdb.org/2026/07/31/asynchronous-io.html).
-In that post, we showed the network throughput over the course of a query with and without asynchronous I/O:
+![Sorted array: search](https://www.bitflux.ai/pics/memory_is_slow_part3/sorted_search.png)
 
-![Network throughput](https://duckdb.org/images/blog/v20-release/sync-vs-async-network-throughput-light.svg)
-![Network throughput](https://duckdb.org/images/blog/v20-release/sync-vs-async-network-throughput-dark.svg)
-*Network throughput. Higher utilization and shorter runtime are better.*
+`search(key)` is a binary search. Look at the middle, throw away the half the key can't be in, and repeat. 16 keys take 3 or 4 hops. A billion takes about 30. O(log n).
 
-The [`VARIANT` type](https://duckdb.org/docs/2.0/sql/data_types/variant.html) stores semi-structured, schema-less data such as JSON while keeping the performance of columnar execution.
-So you can think of it as JSON on steroids: a `VARIANT` column can store differently shaped data in every row, but unlike JSON it is not a text format.
+![Sorted array: at](https://www.bitflux.ai/pics/memory_is_slow_part3/sorted_at.png)
 
-[DuckDB 1.5 already introduced `VARIANT`](https://duckdb.org/2026/03/09/announcing-duckdb-150.html#variant-type), but DuckDB 2.0 fully integrates it. DuckDB 2.0 detects the common structure in your data and “shreds” it, so it compresses well and executes fast. The pipeline works end to end, from shredded execution straight out of storage to shredded `VARIANT` reading and writing for Parquet, backed by a family of [`variant_*` functions](https://duckdb.org/docs/2.0/sql/functions/variant.html). For example:
+`at(i)` doesn't search at all. The i-th smallest key is just `array[i]`, at a fixed offset from the start. One access. O(1). You can't beat that.
 
-```
-CREATE TABLE events (payload VARIANT);
-INSERT INTO events
-VALUES
-    ('{"user": {"id": 42, "tags": ["a", "b"]}}'::JSON::VARIANT),
-    ('{"event": "click", "x": 10, "y": 20}'::JSON::VARIANT);
+Then you need to change it.
 
-SELECT variant_type(payload), variant_keys(payload)
-FROM events;
-```
+![Sorted array: insert](https://www.bitflux.ai/pics/memory_is_slow_part3/sorted_insert.png)
 
-```
-┌───────────────────────┬───────────────────────┐
-│ variant_type(payload) │ variant_keys(payload) │
-│        varchar        │       varchar[]       │
-├───────────────────────┼───────────────────────┤
-│ OBJECT                │ [user]                │
-│ OBJECT                │ [event, x, y]         │
-└───────────────────────┴───────────────────────┘
-```
-
-Coding agents such as Claude Code, Codex and Cursor increasingly drive the DuckDB CLI on their users' behalf. The 2.0 CLI detects when it is being run by an agent and switches to [agent mode](https://duckdb.org/2026/10/09/agent-mode.html): it prints compact Markdown tables instead of padded boxes, says clearly when a result was truncated, stops runaway queries early and reports errors as JSON.
-
-Long-running SQL queries report their expected cost prior to running, so the agent can decide whether to wait. In our experiments on TPC-H, agent mode cut the amount of DuckDB output the model had to read by 59%. You can turn it *on* for manual testing using the [`-agent` flag](https://duckdb.org/docs/2.0/clients/cli/agent_mode.html#activating-agent-mode) or instruct your agent to turn it *off* using the `-no-agent` flag.
-
-DuckDB has always used a parser derived from PostgreSQL's. In 2.0, our own modern, extensible [PEG-based parser](https://duckdb.org/2026/08/20/duckdb-20-peg-parser.html), which debuted as an opt-in feature in [DuckDB 1.5](https://duckdb.org/2026/03/09/announcing-duckdb-150.html#peg-parser), becomes the default. Extensions can now hook into the grammar itself (an idea we first explored in our [research on runtime-extensible parsers](https://duckdb.org/2024/11/22/runtime-extensible-parsers.html)), so expect extensions that expose entirely new SQL syntax. Error messages now come with precise source locations. For details, see the [PEG parser documentation](https://duckdb.org/docs/2.0/sql/peg_parser.html). The new parser is designed to be compatible with the old one, apart from a few deliberate changes listed in the [migration guide](https://duckdb.org/docs/2.0/operations_manual/migration.html#sql-parser). If you notice any other differences, please file an issue. In the meantime, you can switch back to the old parser using the [`legacy_parser` extension](https://duckdb.org/docs/2.0/core_extensions/legacy_parser.html) by running `SET enable_legacy_parser = true;`.
-
-The old parser had served DuckDB since its first commit in 2018. Its grammar was generated with YACC/Bison, which produces an LALR(1) parser, so as DuckSQL grew, even small additions could collide with existing rules and raise `shift/reduce` or `reduce/reduce` conflicts. A PEG grammar avoids this by trying alternatives in the order they are written, so adding syntax no longer risks breaking unrelated rules. Python itself moved to a PEG-based parser in [version 3.9](https://peps.python.org/pep-0617/) for the same flexibility.
-
-DuckDB 2.0 ships a revamped [C API v2](https://duckdb.org/docs/2.0/clients/c/overview.html#c-api-v2), which is considerably more powerful than its predecessor and exposes components such as file systems and table functions to extensions. Before marking it as stable, we would like to test it in the field, so please give it a try and [send us your feedback](https://github.com/duckdb/duckdb/discussions/27525)!
-
-You can also register and host your own trusted extension repositories, so an organization can host and sign its own extensions and have them install and load just like the built-in ones:
-
-```
-SET allow_extension_repositories = 'allowed';
-
-CREATE EXTENSION REPOSITORY my_repo
-    WITH PREFIX 'https://extensions.example.org';
-
-INSTALL AND LOAD my_ext FROM my_repo;
-```
-
-A repository is a name, a URL prefix and one or more RSA public keys that are trusted to sign the extensions served from it. The prefix can point at anything DuckDB can read: a local path, `https`, `s3`, you name it. At `CREATE` time, DuckDB fetches the repository's public keys and pins them into the repository definition, printing each key's SHA-256 fingerprint so you can compare it against one published out of band.
-
-This feature is still a work in progress and its syntax may change in future releases. For more details, see the [Extension Repositories page](https://duckdb.org/docs/2.0/extensions/extension_repositories.html).
-
-DuckDB's [core extensions](https://duckdb.org/docs/2.0/core_extensions/overview.html) are also shipping several new features, fixes and performance optimizations. These are too numerous to all list here, so we only highlight a few of them and will cover them in dedicated blog posts in the coming weeks:
-
-- We released DuckLake 1.1, including a new specification and reference implementation.
-- The Iceberg extension strives to become a feature-complete implementation. To this end, it adds REST catalog `ATTACH` options that derive a table's location from its namespace or load table metadata from the metadata-location file returned by the catalog. Further options control the URL prefix and the namespace separator.
-- The Delta extension can create Delta tables with CREATE TABLE (including partitioning and Delta table properties), supports time travel and improves VARIANT support.
-
-### [Triggers](https://duckdb.org/2026/10/21/announcing-duckdb-200.html#triggers)
-
-DuckDB 2.0 delivers triggers: the [`CREATE TRIGGER` statement](https://duckdb.org/docs/2.0/sql/statements/create_trigger.html) with `BEFORE` and `AFTER` triggers, `FOR EACH ROW` and `FOR EACH STATEMENT`, transition tables via `REFERENCING OLD/NEW TABLE`, multiple triggers per event, `RETURNING` on triggered tables and `DROP TRIGGER`. The classic use case is audit tables, where a trigger records what changed in response to a table modification. Some combinations, such as `BEFORE ... FOR EACH ROW` and `UPDATE ... FOR EACH ROW` triggers, are not yet supported; see the [limitations](https://duckdb.org/docs/2.0/sql/statements/create_trigger.html#limitations).
-
-```
-CREATE TRIGGER trg_audit
-    AFTER UPDATE ON target
-    REFERENCING
-        OLD TABLE AS o
-        NEW TABLE AS n
-    FOR EACH STATEMENT
-        INSERT INTO audit
-        SELECT n.id, o.val, n.val
-        FROM o JOIN n ON o.id = n.id;
-```
-
-Triggers can also maintain materialized views incrementally! For example, to keep track of the average age of people per nationality in a table `age_statistics`, you can use two triggers – one for insert and another for delete operations – and store the sum and the count alongside the average.
-
-```
-CREATE TABLE people (name VARCHAR, nationality VARCHAR, age INTEGER);
-CREATE TABLE age_statistics (
-    nationality VARCHAR PRIMARY KEY,
-    sum_age INTEGER,
-    num_people INTEGER,
-    average_age DOUBLE
-);
-```
-
-On insertion, we aggregate the new rows per nationality and merge them into `age_statistics`, adding a row for each new nationality:
-
-```
-CREATE TRIGGER people_insert
-    AFTER INSERT ON people
-    REFERENCING NEW TABLE AS n
-    FOR EACH STATEMENT
-        MERGE INTO age_statistics s
-        USING (
-            SELECT nationality, sum(age) AS sum_age, count(*) AS num_people
-            FROM n
-            GROUP BY nationality
-        ) d
-        ON s.nationality = d.nationality
-        WHEN MATCHED THEN UPDATE SET
-            sum_age = s.sum_age + d.sum_age,
-            num_people = s.num_people + d.num_people,
-            average_age = (s.sum_age + d.sum_age) / (s.num_people + d.num_people)
-        WHEN NOT MATCHED THEN INSERT
-            VALUES (d.nationality, d.sum_age, d.num_people, d.sum_age / d.num_people);
-```
-
-On deletion, we subtract the deleted rows and drop a nationality once its last person has left:
-
-```
-CREATE TRIGGER people_delete
-    AFTER DELETE ON people
-    REFERENCING OLD TABLE AS o
-    FOR EACH STATEMENT
-        MERGE INTO age_statistics s
-        USING (
-            SELECT nationality, sum(age) AS sum_age, count(*) AS num_people
-            FROM o
-            GROUP BY nationality
-        ) d
-        ON s.nationality = d.nationality
-        WHEN MATCHED AND s.num_people = d.num_people THEN DELETE
-        WHEN MATCHED THEN UPDATE SET
-            sum_age = s.sum_age - d.sum_age,
-            num_people = s.num_people - d.num_people,
-            average_age = (s.sum_age - d.sum_age) / (s.num_people - d.num_people);
-```
-
-Let's see people come and go:
-
-```
-INSERT INTO people VALUES
-    ('Alice', 'US', 34), ('Bram', 'NL', 27), ('Csilla', 'HU', 45),
-    ('Dave', 'US', 58), ('Eva', 'NL', 19), ('Femke', 'NL', 41);
-FROM age_statistics ORDER BY nationality;
-```
-
-```
-┌─────────────┬─────────┬────────────┬─────────────┐
-│ nationality │ sum_age │ num_people │ average_age │
-│   varchar   │  int32  │   int32    │   double    │
-├─────────────┼─────────┼────────────┼─────────────┤
-│ HU          │      45 │          1 │        45.0 │
-│ NL          │      87 │          3 │        29.0 │
-│ US          │      92 │          2 │        46.0 │
-└─────────────┴─────────┴────────────┴─────────────┘
-```
-
-```
-DELETE FROM people WHERE name = 'Alice';
-DELETE FROM people WHERE nationality = 'HU';
-FROM age_statistics ORDER BY nationality;
-```
-
-```
-┌─────────────┬─────────┬────────────┬─────────────┐
-│ nationality │ sum_age │ num_people │ average_age │
-│   varchar   │  int32  │   int32    │   double    │
-├─────────────┼─────────┼────────────┼─────────────┤
-│ NL          │      87 │          3 │        29.0 │
-│ US          │      58 │          1 │        58.0 │
-└─────────────┴─────────┴────────────┴─────────────┘
-```
-
-Triggers bring us one step closer to materialized views, a long-standing item in the [“future work” section of our roadmap](https://duckdb.org/roadmap.html#future-work).
-
-As always, DuckDB's [friendly SQL dialect](https://duckdb.org/docs/2.0/sql/dialect/friendly_sql.html) keeps growing. A few favorites from this release cycle:
-
-- The `$variable` shorthand lets you write $x in most places where an expression is allowed, instead of getvariable('x').
-- Data-modifying CTEs let you use INSERT, UPDATE, DELETE and COPY as pipeline steps.
-- `NEAREST` joins turn top-k similarity search into a join clause, handy for vector and embedding workloads.
-- Nested schemas allow schemas within schemas, e.g., CREATE SCHEMA finance.reports.
-- JSON mutation functions json_set, json_insert, json_replace and json_remove return modified copies of JSON documents (see also our blog post on JSON patches).
-
-There is more: DuckDB 2.0.0 supports the SQL-standard [`FETCH FIRST`](https://duckdb.org/docs/2.0/sql/query_syntax/limit.html#fetch-first) and allows [`UNNEST` in the `GROUP BY` clause](https://duckdb.org/docs/2.0/sql/query_syntax/groupby.html#grouping-by-unnest). It also ensures well-defined [`MERGE`](https://duckdb.org/docs/2.0/sql/statements/merge_into.html) and [`UPDATE ... FROM`](https://duckdb.org/docs/2.0/sql/statements/update.html) semantics for cases when multiple rows are matched.
-
-DuckDB 2.0 comes with a small set of breaking changes. For most users, upgrading is straightforward, but complex deployments running many DuckDB processes need more care. The storage format is the most likely source of problems: DuckDB versions before 2.0 cannot read database files created by DuckDB 2.0. DuckDB 2.0 can still read and write your existing database files, and these remain readable by older versions. We recommend testing 2.0.0 on a shadow system before switching production over. And, if your workload is mission-critical, you may want to wait for the first patch release, [coming in November](https://duckdb.org/release_calendar.html#upcoming-releases).
-
-For the full details, see the [migration guide](https://duckdb.org/docs/2.0/operations_manual/migration.html).
-
-Following DuckDB's long stint on C++11, DuckDB 2.0 now [requires a C++17 compiler](https://duckdb.org/docs/2.0/dev/building/overview.html#prerequisites).
-
-We also switched to Clang as the default compiler for our release builds. On Linux and macOS, both DuckDB and its core extensions are built with Clang. On Windows, the CLI is built with Clang, while most core extensions are still built with MSVC. We may move more Windows builds to Clang in the future, but this requires further changes.
-
-Timezone-aware timestamps, calendars and collations have always been powered by the ICU library. In 2.0, the ICU library is gone entirely: the [`icu` extension](https://duckdb.org/docs/2.0/core_extensions/icu.html) now implements timezones, calendars and collations itself, with the timezone data built directly from the IANA database and compressed down to around 45 kB.
-
-Everything keeps working exactly as before, and the native implementation is also faster. If you find any issues, please [let us know](https://github.com/duckdb/duckdb/issues)!
-
-#### [Lambda Syntax](https://duckdb.org/2026/10/21/announcing-duckdb-200.html#lambda-syntax)
-
-The old single-arrow lambda syntax (`x -> x + 1`) is now disabled by default. Use the Python-style syntax instead:
-
-```
-SELECT list_transform([1, 2, 3], lambda x: x + 1);
-```
-
-You can temporarily re-enable the old syntax with `SET lambda_syntax = 'enable_single_arrow';`. Both the flag and the single-arrow syntax will be removed entirely in v2.1.
-
-The [amalgamation build](https://duckdb.org/docs/1.4/dev/building/overview), which bundles DuckDB's entire source code into a single header and a single source file, is now deprecated. The amalgamation has grown too large to be realistically useful in most cases.
-
-We are gradually phasing out `osx_amd64` from the list of fully supported [platforms](https://duckdb.org/docs/2.0/operations_manual/installing_duckdb/requirements.html#supported-platforms).
-For the time being, DuckDB and [core extensions](https://duckdb.org/docs/2.0/core_extensions/overview.html) are still built and supported, but [community extensions](https://duckdb.org/docs/2.0/extensions/community_extensions.html) are no longer built for this platform. DuckDB 2.1 will stop supporting `osx_amd64`.
-
-These were a few highlights, but there are many more features and improvements in this release. There have been almost 20,000 commits by many contributors since DuckDB 1.5, shipping smaller features as well as performance and usability improvements. The full [release notes can be found on GitHub](https://github.com/duckdb/duckdb/releases/tag/v2.0.0).
-
-We would like to thank our community for the detailed issue reports and feedback that have driven this release, and our special thanks go to our contributors!
+To insert, you have to make room. Everything after the new key moves over one slot to open a gap, then the new key goes in the gap.
+
+![Sorted array: delete](https://www.bitflux.ai/pics/memory_is_slow_part3/sorted_delete.png)
+
+Delete is the same in reverse. Take the key out, then everything after it moves over to close the gap.
+
+Either way, on average, half the array moves, every single time. It's a `memmove`, about the most efficient thing a CPU can do with memory, but it's still O(n). At 4M nodes, every insert moves about 16 MiB. At a billion nodes it would be 4 GiB per insert. The array also has to be one contiguous block, so growing it means allocating a bigger one and copying everything over.
+
+|  | search() | at() | insert() | delete() |
+| --- | --- | --- | --- | --- |
+| Sorted Array | O(log n) | O(1) | O(n) | O(n) |
+
+### The linked list
+
+The textbook fix for "insert moves everything" is the linked list.
+
+![Linked list](https://www.bitflux.ai/pics/memory_is_slow_part3/linked_list.png)
+
+Each node holds a key and a pointer to the next node. To insert, you change two pointers. Nothing moves.
+
+But to insert 21 you first have to find where 21 goes, and the only way to find anything in a linked list is to start at the head and follow the pointers one at a time. Search is O(n). `at(i)` is O(n). Insert and delete are O(1) once you're in the right place, and O(n) to get there.
+
+|  | search() | at() | insert() | delete() |
+| --- | --- | --- | --- | --- |
+| Sorted Array | O(log n) | O(1) | O(n) | O(n) |
+| Linked List | O(n) | O(n) | O(n) | O(n) |
+
+Adding a node is cheap, but finding where to insert it is really expensive. So this doesn't solve our problem.
+
+### The binary tree
+
+Use the pointers to branch out instead of to line up, and you get a binary search tree.
+
+![Binary search tree](https://www.bitflux.ai/pics/memory_is_slow_part3/binary_tree.png)
+
+Smaller keys go left, bigger keys go right. Search walks down from the top, throwing away half the tree at each step, just like binary search on the sorted array. Insert walks down the same way and hangs the new node off the bottom, just like the linked list. Nothing moves. Keep a count of the nodes under each node and `at(i)` is a walk down too.
+
+On paper it's the best of both: log n for everything.
+
+### The AVL tree
+
+In practice a plain binary tree has a problem. Its shape depends on the order you insert things.
+Insert keys in sorted order and every new node goes to the right of the last one.  It would perform like a linked list.
+
+![Unbalanced tree vs AVL](https://www.bitflux.ai/pics/memory_is_slow_part3/avl.png)
+
+The AVL tree fixes this: after each insert or delete it checks the heights of the two sides and, if they're off by more than one, rotates a few nodes to rebalance. The tree stays about log₂ n deep no matter what.
+
+But this isn't free; there is overhead to implement the tree. Every node is its own allocation with a key, two pointers, a balance factor, and a count. That's a lot of bookkeeping for an 8-byte key: 72 bytes of RAM per key, where the sorted array needs 8. The biggest sorted array I ran, 4M nodes, is 32 MiB of RAM. The same 4M nodes in the AVL tree take 288 MiB. At 2G nodes the AVL tree used 144 GiB of RAM.
+
+|  | search() | at() | insert() | delete() | RAM per key | 2G nodes |
+| --- | --- | --- | --- | --- | --- | --- |
+| Sorted Array | O(log n) | O(1) | O(n) | O(n) | 8 B | 16 GiB |
+| AVL Tree | O(log n) | O(log n) | O(log n) | O(log n) | 72 B | 144 GiB |
+
+### Sorted array vs AVL
+
+Let's look at how things scale and compare that to Big O predictions.
+
+![Sorted array vs AVL from 2K to 4M nodes](https://www.bitflux.ai/pics/memory_is_slow_part3/classic.png)
+
+At first glance, it looks like Big O gets the ranking right.  The sorted array's performance for insert and delete falls off a cliff while the search and at() performance degrades more slowly.  The AVL tree performance degrades slowly as predicted.
+
+## DiskArray
+
+The AVL tree solves the insert and delete problem but costs a lot of overhead that shows up in search and at() performance as well as extra RAM. The sorted array has a lot going for it: everything is in order, in one place, with no pointers to chase and no overhead. Its only problem is that an insert has to move half the array. Let's try a more brute-force solution to insert and delete.
+
+If we cut the array into pieces we could contain the areas affected by inserts and deletes. Our DiskArray data structure splits the sorted keys into small extents. A small index says which extent holds which range of keys. To insert, find the extent with the index, then do a sorted-array insert inside that one extent. You only ever move part of the extent, never the whole list.
+
+Then, because we're making a point, we can put the extents on disk too.  That way we only need the index in RAM with a small buffer pool to handle the IO for in-flight and active extents.
+
+![DiskArray: the index in RAM, the extents on disk](https://www.bitflux.ai/pics/memory_is_slow_part3/diskarray.png)
+
+The design decisions:
+
+- An extent is one 4 KiB block. A convenient choice is 512 keys x 8 bytes. That's the unit an NVMe drive moves anyway, so a lookup or an insert is exactly one block read, or one read and one write.
+- Only the index lives in RAM. Per extent, the index keeps its smallest key, largest key, and count, in directory blocks of 4096 entries, with one small top-level array over the directory blocks. That's about 44 bytes of RAM for every 4 KiB of data. At 64G nodes the index is 7.5 GiB, for 512 GiB of keys. RAM goes to the part that's worth having in RAM.
+- Room to grow. Extents and directory blocks are left part empty, so most inserts don't split anything. When an extent does fill up and split, only the entries inside its own directory block shift, never the whole index.
+- Lots of transactions in flight. Transactions are queued 2048 at a time. Each is looked up in the index when it's queued, so the drives see thousands of 4 KiB reads at once, spread over 28 io_uring workers and 8 drives.
+
+### The Big O of DiskArray
+
+A textbook answer for this kind of structure depends on your assumptions.  Extent size is a variable parameter.  It could be as bad as O(√n) for insert and delete if we scale the extents with n. However, in practice, given the hardware constraints, I sized the extents to what the disks want and fixed them: 512-key extents because that's one 4 KiB disk block, 4096-entry directory blocks so a split only ever shifts a few tens of KiB. Most of the time an insert is effectively one 4 KiB read, one 4 KiB write, and a log n search of the index in RAM.  But occasionally it has to edit a directory block.  The extent, directory, and even I/O introduce constants that are significant factors in the math for the realistic scales we'll be working in.
+
+> **Full Disclosure:** if you look at the code you'll notice the top-level index that points to directory blocks is growing with n.  I planned to make that split into blocks as well, extents all the way up the tree.  But I didn't get around to it.  So *technically* there is a corner case that is O(n).  With my current settings a second tier would kick in at around 8G nodes. So in practice the O(n) means that, on average once every couple hundred thousand inserts, a directory block splits and the top level has to memmove() up to about 1.4 MiB and rebuild its count tree. That's noise next to the drive I/O.  If I did add a recursive index tree as planned, then I think we're officially just a B-tree variant and are for sure O(log n).
+
+To simplify, I'm just going to say as an algorithm it scales as bad as O(√n) and as good as O(log n).  If that's not a reasonable argument, I'm sorry.  I majored in Electrical Engineering, not Computer Science, so I don't know the theory as well as I do the reality.
+
+|  | search() | at() | insert() | delete() |
+| --- | --- | --- | --- | --- |
+| Sorted Array | O(log n) | O(1) | O(n) | O(n) |
+| AVL Tree | O(log n) | O(log n) | O(log n) | O(log n) |
+| DiskArray | O(log n) | O(log n) | O(√n) → O(log n) | O(√n) → O(log n) |
+
+Big O says AVL wins or at least ties.  In-RAM vs On-Disk says AVL wins.
+
+No way DiskArray wins, right?
+
+### AVL vs DiskArray
+
+I want to compare DiskArray to AVL in DRAM not L3.  512K nodes × 72 B is ~36 MiB which is the L3 size.  So we'll compare up to 512K nodes and more than 512K nodes in separate graphs.
+
+![AVL vs DiskArray while AVL fits in L3, 2K to 512K nodes](https://www.bitflux.ai/pics/memory_is_slow_part3/duel_cache.png)
+
+AVL wins everything here: about 10x faster on search at 2K nodes, still almost 2x at 512K. Every pointer hop is a cache hit, and cache hits are cheap. DiskArray is flat at around 2M searches/s, because it's paying for machinery it doesn't need yet: queues, workers, a buffer pool. Its data still fits in the 24 MiB buffer pool, so the drives aren't even being read.
+
+Nevertheless, even in cache, AVL performance is scaling down fast. Search goes from 19.6M/s at 2K nodes to 4.0M/s at 512K, about 5x slower.
+
+Now let's compare them as we scale past 512K nodes:
+
+![AVL vs DiskArray once AVL is in DRAM, 512K to 64G nodes](https://www.bitflux.ai/pics/memory_is_slow_part3/duel_dram.png)
+
+DiskArray scales far better than AVL.
+
+From 16M nodes up, the disk-based structure beats the in-RAM tree at everything, all the way to where AVL ran out of RAM at 2G nodes. DiskArray kept going to 64G.
+
+### How is DiskArray winning?
+
+Let's compare what happens during an insert() at 2G nodes.
+
+![Everything one insert touches at 2G nodes](https://www.bitflux.ai/pics/memory_is_slow_part3/insert_bytes.png)
+
+This doesn't help at first glance.  In fact it makes it look like DiskArray is doing way more work.
+
+It depends what you count, and every way of counting it is interesting.
+
+![Four ways to count one insert](https://www.bitflux.ai/pics/memory_is_slow_part3/counting.png)
+
+Two definitions run through all of this. **Used** is the bytes an algorithm deliberately reads, plus the bytes it deliberately writes. **Moved** is what the hardware actually transfers: DRAM and the L3/L2 caches move in 64-byte cache lines, so reading 8 bytes moves 64, and the drives move 4 KiB blocks. The drive traffic is measured. The rest is estimated from the data layouts.
+
+#### Bytes moved through DRAM: 0.77x
+
+- AVL, 5.8 KiB. Each of the ~31 levels on the way down pulls in two cache lines, the node and the key it points to: 62 lines, 3.9 KiB. On the way back up it dirties one line per ancestor updating counts and heights, and those 31 lines get written back: 1.9 KiB.
+- DiskArray, 4.5 KiB. About 15 lines for the index lookup and 9 for the binary search inside the block, 1.5 KiB. Then the shift: ~190 keys read and written, about 48 lines, 3.0 KiB.
+- DiskArray puts less through DRAM than AVL, even though it does more work, because its bytes are contiguous. AVL uses 17% of what it moves. DiskArray uses 73%.
+
+#### Everything moved, drives included: 2.1x
+
+- AVL, 5.8 KiB. All of it through DRAM.
+- DiskArray, 12.5 KiB. The 4.5 KiB through DRAM, plus a 4 KiB read from the drive and a 4 KiB write back to it. Both are measured: one of each per insert.
+- DiskArray moves twice the bytes per insert. And it still does twice the inserts.
+
+#### Bytes the algorithm actually uses: 3.3x
+
+- AVL, 1.0 KiB. On the way down, a child pointer, a key pointer and a key at each level: 744 B. On the way up, a count and a height in each ancestor: 279 B.
+- DiskArray, 3.3 KiB. About 250 B of index (~27 key comparisons and a few count updates), 72 B of probes inside the block, and the shift: ~190 keys read and written, 3.0 KiB.
+- DiskArray does more real work per insert. Shifting keys inside an extent is the job, and it's three times AVL's whole insert.
+
+#### What DiskArray has to handle: 4.9x
+
+- AVL, 1.0 KiB. The bytes it actually uses, from above.
+- DiskArray, 4.9 KiB. To change one 8-byte key it has to read, edit and write back a whole 4 KiB block, plus about 1 KiB of index lines to find it.
+- It looks wasteful. Nearly 5x the data, to change 8 bytes. It isn't, and the next section shows why.
+
+### Effective Bandwidths
+
+![What limits each insert at 2G nodes](https://www.bitflux.ai/pics/memory_is_slow_part3/effective.png)
+
+Inserts per second, times the data moved and used per insert, gives us the bandwidths. At 2G nodes:
+
+|  | Inserts/s | Time per insert | Data moved | Moved bandwidth | Data used | Used bandwidth | Limited by |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| AVL | 320K | 3.1 µs | 5.8 KiB | 1.8 GiB/s | 1.0 KiB | **312 MiB/s** | DRAM latency: ~62 reads, one after another, ~50 ns each |
+| DiskArray | 670K | 1.5 µs | 8 KiB, on the drives | 5.1 GiB/s | 3.3 KiB | **2.1 GiB/s** | NVMe bandwidth: a 4 KiB read and a 4 KiB write |
+
+DiskArray moves more data per insert than AVL, and it's faster on both counts. It moves the overhead faster: 5.1 GiB/s of traffic against AVL's 1.8, 2.9x. And it moves the data it actually needs faster: 2.1 GiB/s against 312 MiB/s, 6.9x. More bytes, moved faster, every way you count them.
+
+Every AVL insert waits on about 62 reads, one after another, and uses 1 KiB of the 5.8 KiB those reads drag in. That's 312 MiB/s of useful work. Higher bandwidth DRAM wouldn't help, because DRAM latency hasn't moved in 20 years.
+
+DiskArray is short of bandwidth. Its CPU work is about 0.3 µs per insert. The drives are the limit: from 32M to 1G nodes they hold at ~5.5 GiB/s, ~720K inserts/s. More drives, or faster ones, and it goes faster, until that 0.3 µs of CPU catches up at around 3M inserts/s.
+
+### How DiskArray pipelines the drives
+
+A drive round trip is about 87 µs. If DiskArray did one insert at a time, every insert would wait that long, twice, and it would manage a few thousand inserts/s. It does 670K. Here's how:
+
+![DiskArray's pipeline: an IO slot's life spans batches](https://www.bitflux.ai/pics/memory_is_slow_part3/disk_pipeline.png)
+
+DiskArray keeps 2048 transactions in flight, in two halves of 1024. One core does all the algorithm work and queuing; 28 io_uring workers just talk to the drives.
+
+1. Queue a half. Look up each transaction's extent in the index in RAM, 32 at a time, and start that group's 4 KiB reads right away. Each read lands in a free buffer in the 24 MiB pool.
+2. Run the other half. While those reads are in flight, work through the half queued last time, one insert at a time. Every block is already sitting in the buffer pool: search it, shift the keys. The block is now dirty, and it stays in the pool for now.
+3. Write back. Dirty blocks pile up. Once there are 1536 of them, a quarter of the 6144 buffers, the next queue step writes them all out alongside its reads. Each block goes to a fresh spot on the drive, copy-on-write, and its old spot is freed when the write lands. That hands the buffers back for the next round of reads. It works out to one 4 KiB write per insert, just never one at a time.
+4. Swap halves and repeat.
+
+### How does Big O miss this?
+
+Big O counts steps. It assumes every step costs the same. They don't, not even close.
+
+A billion L1 cache hits take about a second. A billion DRAM misses take a minute and a half, and a billion NVMe reads take a day. Big O counts every one of those as one step.  Also, when you parallelize, the timescale comes back down to earth.  So Big O notation is very limited in its predictive power in practice.  It defines the shape of the performance curve but not it's slope or magnitude.
+
+Let us observe the relative scaling performance these algorithms actually experience from 512K to 2G nodes.
+
+![How much slower from 512K to 2G nodes](https://www.bitflux.ai/pics/memory_is_slow_part3/growth.png)
+
+We can see AVL is scales much worse than Diskarrary even though Big O would make us think the opposite is true.
+
+I started at Intel doing flash memory out of college. In the early days of the technology, you could use very simple equations to predict the characteristics of a cell.  At some point, the cells shrank to where the number of electrons in a cell was something that had to be quantified and thought about.  Now, the equations have to start taking quantum effects into consideration.
+
+Big O in its most reductive form isn't going to tell you how things are going to perform in practical scales.  It didn't have to.  But as the performance characteristics of various elements of the system continue to diverge and become extreme I don't think the single n term O() is useful anymore.  I think it's time to start treating these equations and simulations more seriously and add in more nuanced effects.
+
+### The quantum effects
+
+Notice the curves aren't smooth log n curves. They have step functions where each step is something outgrowing hardware.
+
+- AVL search drops from 4.0M/s to 2.3M/s between 512K and 1M nodes, as the tree grows from 36 MiB to 72 MiB, out of the 35.75 MiB L3.
+- DiskArray insert halves, 1.6M/s to 830K/s, at 512K nodes, exactly where the drives start taking writes.
+- DiskArray search drops from 2.2M/s to 1.6M/s at 4M nodes, exactly where the drives start taking reads.
+
+Big O can't see any of these yet they have a huge impact on the practical scales we're dealing with.
+
+## You can do better than AVL
+
+Nobody uses an AVL tree for this. Here's what happens with the structures you'd actually reach for:
+
+- ART, an adaptive radix tree: walks the bits of the key instead of comparing.
+- B+tree: fat nodes with many keys each, so far fewer levels.
+- NextArray: DiskArray's in-RAM sibling. Same extents and index, but the extents are 1 KiB in RAM.
+
+### One at a time
+
+First, everything doing one transaction at a time, like AVL:
+
+![One at a time, in RAM, 4M to 64G nodes](https://www.bitflux.ai/pics/memory_is_slow_part3/field_plain.png)
+
+| 2G nodes, transactions/s | search | at() | insert | delete | RAM |
+| --- | --- | --- | --- | --- | --- |
+| AVL tree | 772K | 490K | 320K | 368K | 144 GiB |
+| ART | 2.90M | 253K | 3.12M | 2.45M | 146 GiB |
+| B+tree | 1.13M | 1.87M | 905K | 887K | 38 GiB |
+| NextArray | 1.52M | 6.06M | 1.29M | 1.26M | 33 GiB |
+| **DiskArray, on disk** | **1.08M** | **1.29M** | **670K** | **666K** | **264 MiB** |
+
+The better structures beat DiskArray, but not by as much as you'd think. B+tree ties it on search and beats it by 1.35x on insert. NextArray, DiskArray's own design kept in RAM, is 1.4x on search and 1.9x on insert.
+
+ART is the fastest at search and insert, about 3x and 5x, but its at() is the worst here: ART has no rank, so finding the i-th key means walking.  So it's not a great example.
+
+Still the best RAM structures aren't beating it by an order of magnitude.
+
+ART and AVL have too much overhead to scale beyond 2G on this hardware. Both cost about 72 bytes per 8-byte key, 146 and 144 GiB at 2G nodes, and the box only has 192 GiB (188 GiB usable). The next doubling would have needed nearly 300 GiB. B+tree and NextArray, at 17-21 bytes per key, made it to 8G. DiskArray, at about 0.1 bytes of RAM per key, went to 64G and could have kept going.
+
+### Pipelined
+
+Because DiskArray is pipelined it could have an advantage over the RAM structures.  So we'll pipeline them the same way, and pull all the tricks we can try with prefetching and optimizing code paths.
+
+![Pipelined, in RAM, 4M to 64G nodes](https://www.bitflux.ai/pics/memory_is_slow_part3/field_pipelined.png)
+
+| 2G nodes, transactions/s | search | at() | insert | delete | RAM |
+| --- | --- | --- | --- | --- | --- |
+| B+tree, pipelined | 5.03M | 4.33M | 2.74M | 2.79M | 41 GiB |
+| NextArray, pipelined | 6.45M | 6.06M | 4.02M | 4.07M | 33 GiB |
+| **DiskArray, on disk** | **1.08M** | **1.29M** | **670K** | **666K** | **264 MiB** |
+
+This is a different league. The pipelined structures beat DiskArray by 3-6x across the board, on the same single core. Pipelining NextArray took search from 1.52M/s to 6.45M/s and insert from 1.29M/s to 4.02M/s. B+tree went from 1.13M to 5.03M searches/s. The one thing it doesn't speed up is NextArray's at(), which was already a short walk of a small count tree: one at a time it's faster up to about 256M nodes, and past that the pipelined version only pulls slightly ahead.  Still not an order of magnitude.
+
+### What pipelining means for RAM
+
+Plain NextArray does one transaction at a time, like AVL. Each level of the index is a cache miss, and each miss waits on the one before it. The pipelined version is the same data structure, the same single thread, but it handles transactions in groups of 32:
+
+![One at a time vs pipelined](https://www.bitflux.ai/pics/memory_is_slow_part3/pipeline.png)
+
+1. Resolve the whole group one index level at a time. Issue the cache-line prefetches for level 1 of all 32 transactions, then level 2 for all 32, and so on. The misses for a level are in flight together, not one after another.
+2. Prefetch each transaction's slice of its extent a few transactions ahead.
+3. Execute them in order: the memmove, the count updates.
+
+A core can only keep about a dozen misses in flight, so it's not 32x, but it's 4x on search.
+
+NextArray was built for this. Every transaction follows the same short path: a few levels of a flat, sorted index, then one contiguous extent. That's easy to batch and easy to prefetch. A tree of individually allocated nodes isn't, because you can't know where the next node is until you've loaded this one.
+
+If this looks familiar, it should. It's DiskArray's pipeline, pointed at RAM instead of at the drives:
+
+|  | DiskArray, to the drives | Pipelined NextArray, to DRAM |
+| --- | --- | --- |
+| Group the transactions | 1024 per half, looked up 32 at a time | 32 at a time |
+| Work out what you'll need | look up the extent in the index | look up the next index level, then the extent |
+| Ask for all of it at once | a 4 KiB read per transaction, through io_uring | a 64-byte prefetch per transaction |
+| While it's in flight | run the other half | handle the rest of the group |
+| Where it lands | the buffer pool, in L3 | the cache |
+| Then | search, shift, write back | memmove, update counts |
+
+RAM stands for Random Access Memory, but it's not really random access anymore.  It's a block device with 64-byte blocks and 80-90 ns of latency, and you have to use it like one.
+
+To get even reasonable performance out of either memory or storage, you need to treat them as parallelized asynchronous block devices that feed the caches.
+
+## Recap
+
+- Design for hardware not theory.
+- Big O isn't that useful.
+- Parallelize and pipeline or perish.
+- Memory is slow, unless you treat it like a disk.
+
+## Next Time
+
+See me at [P99Conf.io](https://p99conf.io) 2026-10-22, register now.
+
+Can we improve memory-bound HPC workloads 2x, without memory?
