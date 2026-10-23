@@ -1,187 +1,287 @@
-One common criticism of immediate-mode UI is that it repeats work. The application reconstructs its description of the interface each frame, even though much of the interface may be unchanged. The apparent tradeoff is simplicity of the programming model at the cost of repeated work.
-
-I would like to show that this is not necessarily the case.
-
-One straightforward rebuttal is that modern computers are really fast. If rebuilding the UI takes a millisecond at most, how much should we care?
-
-And if you really dislike the idea of repeating work, then the simplest solution I can think of is to put your application to sleep when nothing is happening. This is what all immediate-mode desktop apps that I know of already do and is something that presumably suffices in many cases. It is also very easy to implement.
-
-The story could end there as far as I am concerned, but things become less clear when we consider power usage. You may want your application to run nicely on laptops, phones, and tablets without draining the battery more than necessary. Furthermore, modern displays tend to have high resolutions and high refresh rates, which exacerbate this problem.  
-A blinking cursor, a moving playhead, or an animated control can prevent the application from sleeping and keep the interface updating while almost everything else stays unchanged.
-
-At the same time, we want room to make visual design choices: translucent panels, animated controls, and dense layouts should all be things the renderer can accommodate.
-
-For Blick, we have a dense interface that contains thousands of such elements, both big and small. Rendering it shares the machine with media processing and other applications.
-
-The basic approach we ended up with is to attach a cache to the rendering side of that system. The UI can describe the whole interface again while the renderer retains the pixels it has already produced and repaints only the parts whose rendering inputs changed.
-
-**Reconstructing the UI and repainting its pixels are separate kinds of work.** An immediate-mode frontend can coexist with a renderer that remembers its previous output.
-
-That is what I would like to showcase here.
-
-We have some measurements to go with that. In a short scripted light-editing test on an unplugged M3 MacBook Pro, the macOS CPU and GPU power estimates together were about 20% lower with caching. I will get into what we can conclude from it below.
-
-This post focuses on the current Metal backend where specific measurements or examples are required. But all the same things apply to our other backends as well: how the cache works, and how a small rendering language interpreted on the GPU makes it possible.
-
-### Putting a cache behind the UI
-
-Imagine hovering over a button in a window. The button changes its color to indicate that it is hovered and clickable. Nothing else in the window changes. We may rebuild the UI tree and emit a stream of drawing commands for the whole window based on that tree, but most of those commands still describe the same things in the same places. It would be nice to keep the pixels we already have for those parts.
-
-To do this, the renderer, or the painter as we like to call it, splits the window into tiles and finds the commands that can affect each one. We calculate a hash from those commands, including their order, and compare it with the hash from the previous frame. If it matches, we keep the pixels. Otherwise, we paint that tile again.
-
-The nice thing about doing this in the renderer is that the UI system doesn't have to keep a separate list of changed widgets for it. We can work out what needs repainting from the drawing commands, even if the UI tree itself was rebuilt. And we can do it entirely on the GPU!
-
-Of course, rebuilding the tree, doing layout, and producing commands still cost something. Checking for changes also takes work. What matters is how those costs compare with the work we avoid. The measurements later in this post give us one concrete example.
-
-Let's first look at what we give the painter to work with.
-
-### A small rendering language
-
-By the time a command reaches the painter, layout has already happened. We know where the shapes go, what colors they have, where they should be clipped, and which textures they use.
-
-The painter doesn't need to know what a popup menu, a timeline, or an audio clip is. The application and UI system take care of that. The commands it understands are fairly basic:
-
-| Command family | What it expresses |
-| --- | --- |
-| Analytic shapes | Rectangles, circles, lines, triangles, rings, and diamonds |
-| Textured shapes | Images, glyph coverage, and results from other rendering passes |
-| Shape-group boundaries | Combine geometry, then apply a common appearance |
-| Alpha-barrier boundaries | Composite a collection of commands with a shared opacity |
-
-In the Metal backend, each GPU command takes up 64 bytes. They all have the same size, and the shader reads the fields it needs for the particular operation.
-
-I think of this as a small rendering language because some commands affect how we process the ones that follow. We can begin a group of shapes, for example, or start collecting drawing operations that should share one opacity value. I will get into both of those in a moment.
-
-So the shader looks a bit like a small interpreter. It walks through the commands and keeps a little state between them. The operations it knows about are all built into the shader.
-
-This also gives us some room to play with how the UI looks. We can build a shape from several pieces and outline the result, or fade a whole popup together. Those choices are expressed in the same command stream that we split into tile lists and check for changes. Let’s look at how we process that stream, and then at what these operations let us draw.
-
-### Giving each tile a smaller program
-
-We could simply run through every command for every pixel, but that would be a lot of unnecessary work. Most shapes only cover a small part of the window. We first want to find the commands that could matter at a particular location.
-
-This is where the tiles come in. We divide the output into a grid and process it using ordinary compute shaders. These tiles are just part of our own organization of the work.
-
-In a preprocessing pass, we work out the area each command can affect and record which coarse regions it overlaps. We store this in bitsets, where a set bit means that a command might matter in that region. Each fine tile then checks the candidates from its coarse region and collects the ones whose bounds overlap it.
-
-We have to keep the drawing order intact while doing this. With alpha blending, swapping two shapes can change the result. We want each tile to end up with a shorter list of commands that still produces the right image for that region.
-
-One detail that is easy to miss is that group boundaries need bounds too. A command that begins a group doesn't draw anything by itself, but leaving it out of a tile's list would change what happens to the shapes that follow. We need to include it wherever the group matters.
-
-Similarly, a glow or shadow can reach beyond the shape that produced it. Its bounds have to include that extra area, or we will miss pixels that need painting.
-
-### Painting a pixel
-
-Once we have a tile's list, each pixel walks through it from front to back.
-
-For an analytic shape, we evaluate a distance function at the pixel's position. This tells us where the pixel is relative to the shape's boundary, which we use to work out edge coverage, fills, and outlines. For textured shapes, we also sample the image or coverage data and blend the result into the pixel.
-
-Going from front to back has a useful property: once the result is fully opaque, anything behind it can no longer contribute. We can stop there, as long as we aren't inside a group or opacity operation that still needs finishing.
-
-The shader keeps the color and opacity it has accumulated so far in local state.  
-So we get to control both how we combine the shapes and when we have done enough work for a pixel.
-
-### Drawing several shapes as one
-
-Suppose we build an icon from a few overlapping shapes and want to put an outline around it. Outlining each shape separately would also draw the boundaries inside the icon. What we usually want is one outline around the combined shape.
-
-This is what shape groups are for. Inside a group, we combine the shapes' distance values. When we reach the end, we apply the fill and outline to the combined result.
-
-The UI can therefore assemble these visuals from existing shapes without us writing a special shader for each one. We can also use the group's geometry to draw a glow, inner glow, or shadow. Where we put those operations in the command stream determines how they blend with everything else.
-
-There is a small catch here: combining distance functions doesn't necessarily leave us with an exact signed distance everywhere. Smooth blends in particular need some care when we use the result to draw an outline.
-
-But the basic idea is quite convenient. We can change the shapes that make up an object and then give the whole thing a common appearance, using operations the painter already understands.
-
-### Fading a whole popup
-
-Another case where drawing everything independently doesn't quite work is fading a popup. Suppose it has an opaque background and opaque text, and we want the whole popup at 50% opacity. We need to draw the text over the background first, then fade the combined result.
-
-If we just give both elements 50% opacity, the background shows through the text. Where they overlap, the combined opacity is 75%. That is a different image from the one we wanted.
-
-We handle this with what we call alpha barriers. When we enter one, the painter saves the result it has accumulated so far and starts a separate result for the popup. At the end, it applies the popup's opacity and combines the two. From the UI side, we only need to specify the fade at the root of that subtree.  
-Credit goes to [Anton Mikhailov](https://x.com/antovsky) for giving us this idea.
-
-All of this happens in the pixel's local shader state. We don't need to allocate a separate offscreen texture for the popup.
-
-At the moment, we only support one active alpha barrier at a time, so they can't be nested. This also keeps the amount of state we carry around per pixel small.
-
-### What about waveforms and other special visuals?
-
-Blick has some things to draw that need more than shapes and colors. Audio waveforms and video gradients, for example, need access to media data. If we put all of that directly into the painter, it would have to know more and more about the application.
-
-In the Metal backend, we draw these in a separate effects pass and store the results in atlas textures. The painter then gets ordinary textured drawing commands for them. Glyphs also reach the painter as coverage in an atlas, although how we generate that coverage is a topic of its own.
-
-This lets us work on application effects without teaching the painter about their data. As far as the painter is concerned, it just needs to sample the resulting texture and blend it with the other shapes.
-
-We do have to distinguish between keeping space in an atlas and keeping the image stored there. Just because the allocation still exists doesn't mean its contents are up to date. The effects code tracks whether the content has been rendered and includes content revisions in the cache inputs where needed.
-
-### Can we keep these pixels?
-
-After binning, we have a list of the commands that matter to each tile. We can use that same list to decide whether we need to paint it again at all.
-
-That includes the operations we just looked at. A combined shape or a faded popup still comes down to commands and their inputs. Changing a group’s outline or a popup’s opacity needs to invalidate the affected tiles, just like changing a rectangle’s color. If those inputs stay the same, we can keep the finished pixels, including all that compositing work.
-
-The GPU calculates a hash from the tile's commands in drawing order. If it matches the hash from the previous frame, we leave that part of the UI texture alone. Otherwise, we append the tile to a list of work to do.
-
-The GPU also produces the count used to dispatch the paint pass. This means we can paint the changed tiles without first sending the list back to the CPU.
-
-We hash the command contents and their order. We are not comparing pixels to pixels. Different commands that happen to produce identical pixels can in theory cause us to repaint a tile unnecessarily.
-
-A rectangle can also stay in exactly the same place while the image inside it changes. We have to include texture-content changes and animation in the invalidation logic too. Just checking the geometry would miss those.
-
-Currently, we can skip work at two levels. First, we check whether the commands and their dependencies have changed, whether any effects need rendering, and whether the cache was explicitly invalidated. If none of those require work, we can skip the painter entirely. When it does run, the tile hashes still let us skip painting unchanged regions.
-
-There is also a fairly straightforward way to check whether we are keeping pixels that should have changed. We could replay the same UI interactions with caching enabled and disabled, capture the results at matching points, and compare the images. With the same inputs and animation times, both should produce the same image. The uncached renderer would give us a useful reference for catching stale pixels after things like scrolling, resizing, or changing a texture. We haven't automated those checks yet, but having that reference makes the caching behavior easier to test.
-
-This is the part I find useful for immediate-mode UI. We can describe the interface again and still keep much of what the renderer did last time. Layout, command generation, preprocessing, and presentation have their own costs, but we don't have to repaint everything just because we rebuilt the UI.
-
-### What does this cost us?
-
-Of course, all of this comes with some overhead. We are doing extra work to find out which work we can avoid.
-
-Binning and hashing take GPU time before we even start painting. Scrolling or animating large parts of the interface can change many tiles at once. If we have lots of translucent elements stacked on top of each other, we also get fewer opportunities to stop processing a pixel early. And the effects atlases need storage, tracking, and rendering work of their own.
-
-Our tile lists currently have a fixed capacity too. That limits how many commands can overlap in one place, including group and barrier commands. It is a constraint on what this implementation can handle, which matters alongside how fast it runs.
-
-To keep the bookkeeping reasonably small, we use SIMD-group operations to build the tile lists cooperatively, with temporary results in threadgroup memory. Compact commands and indices also help with how much data we need to move around. Whether that effort pays for itself still depends on what we are drawing.
-
-### How much does it save?
-
-To put some numbers behind this, we ran a scripted light-editing session on my M3 Pro MacBook Pro, unplugged, with the cache enabled and then with full repainting forced. It mixed pauses with playback, scrubbing, moving clips, and editing titles. Both versions could sleep when nothing was happening. The difference was whether we reused pixels when the application did update.
-
-Across two paired comparisons, macOS estimated average CPU + GPU power at **0.304 W with caching and 0.380 W with forced repainting**, about **20% lower**. Both pairs favored caching. These estimates cover the machine’s CPU and GPU, including other processes; they aren’t a measurement of the whole laptop or Blick alone.¹
-
-For the whole laptop, the cumulative battery telemetry suggests **3.44 W with caching versus 3.99 W with forced repainting**, about **14% less power**. Assuming 60 Wh of usable battery energy, that works out to **about 2.4 extra hours** if we kept doing this light-editing workload: roughly 17.4 hours instead of 15.1. That is a preliminary projection from a short test, rather than a measured battery rundown.
-
-We also painted roughly **94% fewer tiles** and spent **87% less GPU time in the painter**. That is a substantial amount of painting we avoided while running the same editing sequence.
-
-For me, this is useful evidence that the cache makes a practical difference even when both versions can idle. Longer measurements should help establish how well the battery-life projection holds up.
-
-### Where the ideas came from
-
-This design came from putting a few existing ideas together. I would like to give credit to the people whose work helped us get here.
-
-rxi's [Cached Software Rendering](https://rxi.github.io/cached_software_rendering.html) describes the caching idea very directly: collect drawing commands, hash them into a grid, and redraw the regions whose hashes changed. The application can describe everything again without having to track dirty regions itself. It is written about a software renderer, but the useful part for us was that separation between describing the UI and deciding which pixels need repainting.
-
-Gareth Thomas's [Compute-Based GPU Particle Systems](https://www.gdcvault.com/play/1020002/Advanced-Visual-Effects-with-DirectX), presented at GDC 2014 while at AMD, showed how tiled compute rendering could handle lots of overlapping, alpha-blended particles. The [GPU Particles sample](https://github.com/GPUOpen-LibrariesAndSDKs/GPUParticles11) includes the implementation. Particles might seem a bit far removed from UI, but the rendering problem has something in common: lots of shapes layered over the same pixels. This was an important inspiration for doing the painting and blending ourselves in a compute shader.
-
-Wessel Mast's [UIPainter: Tile-Based UI Rendering in One Draw Call](https://www.guerrilla-games.com/read/uipainter-tile-based-ui-rendering-in-one-draw-call), presented in 2024, brought tiled rendering and signed distance fields together for Guerrilla's Decima editor UI. That was the other major piece: use a spatial grid to narrow down which shapes each pixel needs to evaluate.
-
-Our approach combines these ideas on the GPU. The tiles give us both a way to make painting cheaper and a way to decide whether painting is needed at all. And, as mentioned in the popup example, [Anton Mikhailov](https://x.com/antovsky) gave us the idea for alpha barriers, letting us apply group opacity within the pixel's local shader state.
-
-### The takeaway
-
-The idea I hope is useful beyond Blick is fairly simple: you can put a rendering cache behind an immediate-mode UI. Rebuilding the description doesn't mean we have to throw away the pixels we already produced.
-
-In our case, the tile lists help in two ways. They give each pixel fewer commands to process, and they give us something to hash when deciding whether to keep the previous result. When we do need to paint, going from front to back also lets us stop once the remaining shapes can't contribute.
-
-That gives us a way to address some of the repeated work while keeping the immediate-mode programming model. The short light-editing experiment supports a CPU/GPU power benefit on this MacBook. I would still like to explore heavier workloads and other hardware to see how far that carries, and where the bookkeeping stops paying for itself.
-
-I also like the flexibility this gives us when building the UI. Shape groups let us assemble visuals from smaller pieces, and alpha barriers let us fade a collection of elements together. The command stream describes how to draw them; the tile lists tell us where those commands matter; and the cache lets us keep the result when the inputs haven’t changed.
-
-**¹ Measurement note.** Tested October 18, 2026 on an unplugged M3 Pro MacBook Pro at 60 Hz, roughly 50% brightness, and a 2400 × 1500 framebuffer. Four four-minute trials formed two paired comparisons, with both modes allowed to idle. CPU/GPU estimates use `powermetrics` over each trial's middle two minutes; painter work totals cover the full trials. This is a small, synthetic light-editing test.
-
-Whole-laptop power uses cumulative `AppleSmartBattery` telemetry whose accuracy we have not independently validated. The battery figures remain preliminary, and runtime assumes 60 Wh of usable energy rather than a measured rundown.
-
-*Cover image: NASA, Apollo Operations Handbook (1969).* [Source](https://www.nasa.gov/image-detail/ad019b/).
+The following subscription-only content has been made available to you 
+by an LWN subscriber.  Thousands of subscribers depend on LWN for the 
+best news from the Linux and free software communities.  If you enjoy this 
+article, please consider [subscribing to LWN](https://lwn.net/subscribe/).  Thank you
+for visiting LWN.net!
+
+October 21, 2026
+This article was contributed by Tyler Langlois
+
+[Nix flakes](https://wiki.nixos.org/wiki/Flakes) are an
+experimental feature of the [Nix package-management
+tool](https://wiki.nixos.org/wiki/Nix_(package_manager)) designed to build projects in a more self-contained and reproducible
+way. Despite the feature's experimental status, it has become increasingly
+popular for open-source projects to publish flake.nix files that offer
+predefined development environments and build automation even when those
+repositories may not offer an upstream package or module for the [NixOS Linux distribution](https://wiki.nixos.org/wiki/NixOS). Although
+Nix flakes have a complicated history, and the path for stabilization is
+uncertain, flakes can provide useful capabilities for projects that choose to
+include them.
+Why flakes?
+The promise of flakes is to provide reliable and reproducible methods for
+acquiring and building software. Let's say that an open-source project is trying
+to provide Linux users with an easy way to set up a development environment for its
+software. Distributions tend to have different versions of programming
+languages, libraries, etc. which means that a user on Debian 13 is going to have
+slightly different versions of software than a user on Fedora 45. Some
+dependencies may not be packaged for the distributions at all. This is a
+headache for everyone involved.
+Projects can avoid the headache by shipping a Nix flake that pins the
+versions of its dependencies and lets each user install the same software
+regardless of which distribution they are running. End users can reliably
+install dependencies, build projects, and run tests often just with a local (and
+properly configured) Nix installation and few (if any) other toolchain
+requirements.
+Flakes are written in the Nix [language](https://wiki.nixos.org/wiki/Nix_(language)) and are primarily
+used by the Nix package manager. While NixOS can
+use flakes via utilities like [nixos-rebuild](https://wiki.nixos.org/wiki/Nixos-rebuild),
+flakes function independently from NixOS. flake.nix files are at the
+core of how flakes work: these files contain [inputs](https://nix.dev/manual/nix/latest/command-ref/new-cli/nix3-flake.html#flake-inputs)
+that are defined as URL-like remote resources (typically software repositories) and [outputs](https://wiki.nixos.org/wiki/Flakes#Output_schema) that flake
+consumers can use, like packages or tests for those packages.
+A simple flake might look like the following snippet of Nix code:
+
+    {
+      inputs = {
+        nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+      };
+
+      outputs = { nixpkgs, ... }: {
+        packages.x86_64-linux.hello =
+          nixpkgs.legacyPackages.x86_64-linux.hello;
+      };
+    }
+
+The legacyPackages name is a bit deceptive because its Nix packages
+are not literally legacy packages: the name is a compatibility shim to avoid a
+situation in which a command such as nix flake show might list more than
+100,000 packages in the terminal. When legacyPackages is used, instead
+of packages, the nix command will avoid listing all packages 
+when printing its values, as [documented
+upstream](https://github.com/NixOS/nixpkgs/blob/b2e41a5bd20d4114f27fe8d96e84db06b841d035/flake.nix#L47).
+Upon adding the input called nixpkgs to the flake.nix file,
+nix flake lock will create a flake.lock file that pins the
+nixpkgs input against the NixOS/nixpkgs repository at the
+commit referenced by the nixpkgs-unstable branch. Like a
+Cargo.lock file in a Rust project or a Gemfile.lock file in a
+Ruby project, the flake.lock JSON file anchors each input to a concrete
+upstream revision. Doing so permits the flake to consistently refer to its
+dependencies and reliably build its outputs with a known-compatible set of
+inputs.
+ middle-ad 
+Locking a flake's inputs against the latest commit for a branch is one way to
+express an upstream reference, but the [flake
+reference format](https://nix.dev/manual/nix/latest/command-ref/new-cli/nix3-flake#flake-reference-attributes) permits a few additional strategies including a specific tag
+or other forms like absolute paths. A locked revision remains part of
+the repository and can be updated later with the nix flake update
+command (if the reference refers to a non-specific target like a branch name
+rather than a Git hash).
+The outputs attribute of a flake is written as a Nix function. When
+Nix processes a flake.nix file, the inputs are fetched and
+passed to the outputs function where it can actually use the concrete
+values from inputs like nixpkgs. In this case, the flake will simply provide the [hello](https://search.nixos.org/packages?channel=unstable#show=hello)
+package drawn from the nixpkgs-unstable branch.
+By default, Nix assumes that each reference under inputs itself
+contains its own flake.nix and, therefore, its own set of
+outputs. These are the values that are used as each input is referenced
+in the outputs function (like nixpkgs.legacyPackages in the
+example code).
+This example illustrates bundling a package into a Nix flake, but there are
+more top-level attributes that offer other uses when present in a flake's
+outputs. For example, devShells provides development
+environments pre-populated with libraries and environment variables, while
+nixosModules may be imported into a NixOS configuration for use in
+one's NixOS configuration. The nix command-line tool recognizes many
+attributes as part of a flake's schema, although the structure of a flake's
+outputs outside these conventional names is arbitrary.
+Locked inputs are one important trait of flakes, but another behavior
+that is arguably just as important is that flakes are evaluated in [pure
+evaluation mode](https://wiki.nixos.org/wiki/Flakes#Making_your_evaluations_pure), which means that external factors that may change the
+values that Nix computes are forbidden by default. For example,
+environment variables may not be read and network access is gated by checking
+downloaded artifacts with checksums. Although this behavior can be relaxed with
+the --impure flag, enforcing it adds to the reproducible quality of a
+flake.
+It should be noted that some features of Nix flakes are also addressed by
+other libraries or tooling. For example, locked dependencies (akin to a Nix
+flake input) can be achieved without the use of flakes with [niv](https://github.com/nmattia/niv#niv), a project
+that provides capabilities similar to a flake.lock file. Development
+shells are supported by existing, non-experimental commands with [shell.nix
+files](https://wiki.nixos.org/wiki/Development_environment_with_nix-shell). For many users, Nix flakes serve as a more general, unifying umbrella for
+useful concepts like inputs, lock files, and Nix commands.
+Flakes in the wild
+How does one use flake.nix when encountering these files in a source
+code repository? First, the nix utility must [be installed](https://nixos.org/download/#download-nix) and Nix flakes
+enabled before use: each nix command must include the
+--experimental-features 'nix-command flakes' command-line option or the
+stanza experimental-features = nix-command flakes must be set in
+$HOME/.config/nix/nix.conf or /etc/nix/nix.conf per [the Nix flakes setup
+documentation](https://wiki.nixos.org/wiki/Flakes#Setup).
+Most nix operations that interact with flakes can do so via either a
+local checkout of a repository or with a [flake
+reference](https://nix.dev/manual/nix/latest/command-ref/new-cli/nix3-flake#url-like-syntax) (which can be any of the URL-like formats accepted under a flake's
+inputs attribute). The following command, for example, displays all the
+outputs available from the [Ghostty repository](https://github.com/ghostty-org/ghostty#----ghostty) for the [Ghostty](https://lwn.net/Articles/1004377/) terminal emulator:
+
+    nix flake show github:ghostty-org/ghostty
+
+In this example, the github:ghostty-org/ghostty flake reference is
+internally expanded into an upstream GitHub URL that fetches tarballs rather
+than cloning entire repositories. The following output from the nix flake
+show command has been trimmed down for readability:
+
+    github:ghostty-org/ghostty/<hash-value>... 
+    ├───packages
+    │   └───x86_64-linux
+    │       └───ghostty: package 'ghostty-1.3.2-dev+3c1ef5b-nix'
+    ├───devShells
+    │   └───...
+    ├───checks
+    └───...
+
+In addition to the ghostty package for the x86_64-linux
+architecture, there are other outputs like checks that define tests
+that may be run directly against the flake with commands like nix flake
+check.
+The devShells output is particularly useful. As a Zig-based project,
+Ghostty requires a compatible language toolchain for contributors to build and
+test the project. Manually installing zig is one option, but using the
+Nix flake development shell can make the process easier. Entering the
+development shell is done with the develop subcommand:
+
+    nix develop github:ghostty-org/ghostty
+
+After nix starts a shell with the environment populated from the
+flake.nix file, the zig command is available:
+
+    $ zig version
+    0.16.0
+
+This installation of zig is scoped only to Ghostty's development
+shell and is not installed system-wide (zig and its supporting
+libraries are installed into the [Nix store](https://nix.dev/manual/nix/latest/store/)). In addition to
+zig, all of the other dependencies relevant for development are added
+to the $PATH and necessary libraries are included as well. When part of a
+repository, flake.lock files ensure that downstream users of nix
+develop will end up with the same versions of all utilities and libraries
+as the original Nix flake author. Because the development shell is constructed
+from separate and distinct paths in the Nix store, multiple versions of the same
+toolchain can coexist on the same host without executables or shared libraries
+colliding.
+The same principles apply for any repository that provides a
+flake.nix, whether the project relies on C++, Rust, or any other language.
+The --command flag lets a command run within an indicated development
+shell non-interactively. [Niri](https://niri-wm.github.io/niri/) and
+[pandoc](https://pandoc.org/) are just a few of the many projects
+that provide flake.nix files and development shells that bundle each of
+their respective build environments:
+
+    $ nix develop github:niri-wm/niri --command rustc --version
+    rustc 1.97.0 (2d8144b78 2026-07-07) (built from a source tarball)
+    $ nix develop github:jgm/pandoc --command ghc --version
+    The Glorious Glasgow Haskell Compilation System, version 9.10.3
+
+In each of these cases, none of the cited toolchains were present beforehand
+on the host system. Each command and its associated libraries necessary for
+project compilation are provided entirely through the Nix flake development
+shell.
+A tumultuous history
+Shipping around locked dependencies and development shells are useful
+capabilities, so why do flakes remain an experimental feature gated behind
+additional configuration steps?
+Flakes were first introduced in July 2019 in [NixOS RFC 49](https://github.com/NixOS/rfcs/pull/49) by Eelco Dolstra,
+the original author of Nix. Throughout the year-long RFC process, development of
+the underlying plumbing for what would ultimately become Nix flakes continued in
+the [Nix GitHub repository](https://github.com/NixOS/nix).
+After a period of extended discussion, the proposal PR was closed [and the RFC
+withdrawn in July 2020](https://github.com/NixOS/rfcs/pull/49#event-3552993451) because of a failure to reach consensus for adoption. Concerns
+about scope, design, and other considerations remain visible in the (large)
+discussion thread attached to RFC 49 that eventually led to its closure.
+Since RFC 49 failed to pass, flakes were included in the [Nix 2.4
+release in 2021](https://nix.dev/manual/nix/latest/release-notes/rl-2.4.html) as an experimental feature. Nix flakes remained accessible
+only when explicitly enabled, and that requirement remains in place for the
+upstream Nix project. As we'll see later, this is one aspect of flake
+usage that has splintered across different implementations.
+Adoption
+In the years following the initial release, Nix flakes have been widely
+adopted. In the [2025 NixOS Community
+Survey](https://nixos.org/surveys/community/2025/), which drew input from nearly 3,400 Nix users, [78.9% of
+respondents reported using flakes](https://nixos.org/surveys/community/2025/#experimental_features). A [smaller
+random sampling of 300 repositories](https://gist.github.com/Mic92/48d72945d4c236e3a3403b9168312568), conducted by Nix maintainer Jörg
+Thalheim, across GitHub repositories with shell.nix or
+flake.nix files present found significant adoption over the traditional
+development shell method using shell.nix files.
+Community growth around Nix flakes without a formal plan laid out by an RFC
+has become somewhat of a sore spot in the Nix community. Contributors eager for
+the features within Nix flakes are frustrated at the ongoing
+experimental label, while some involved in the original RFC process
+remain dissatisfied with the expansive scope and design of Nix flakes that has
+arguably escaped the limited scope intended by attaching the
+experimental label.
+Contributor Graham Christensen [wrote](https://grahamc.com/blog/flakes-are-an-obviously-good-thing/) in
+2021: "I believe Flakes are astonishingly important and will be very
+powerful, but the RFC experience has turned so many people against it on
+principle." Jade, a contributor to the [Lix](https://lix.systems/) alternative to Nix
+[reflected on
+flakes](https://jade.fyi/blog/flakes-arent-real/) with a more hesitant tone: "Even assuming that flakes are good at
+macro-level composition, they often are accompanied by poor use of micro-level
+composition, which still is best done by using the old primitives.". Former
+contributor Samuel Dionne-Riel [opined](https://samuel.dionne-riel.com/blog/2023/09/06/flakes-is-an-experiment-that-did-too-much-at-once.html)
+that Nix flakes was an experiment that did too much at once, "and it sucks
+because so much of it is good, or are good [but] undercooked ideas".
+Despite these and other concerns, the use of flakes is widespread at this
+point; many third-party utilities work as expected with flakes regardless. In
+practice, the ways to use flakes via Nix have remained consistent in terms of
+their commands and configuration settings although there are no guarantees
+without the removal of the experimental label by maintainers.
+A future for flakes?
+The rift within the Nix community on the subject of flakes has become so wide
+that alternative implementations have cited their stance on flakes as a
+distinguishing characteristic. The Nix package manager (usually referred to as
+[CppNix](https://github.com/NixOS/nix) in reflection of its C++ code
+base) still marks the feature as experimental, but Lix has designated flakes as [a
+frozen feature slated for future extraction into a plugin](https://wiki.lix.systems/books/development/page/flakes-feature-freeze), while [Determinate Nix](https://determinate.systems/products/nix/) (a
+downstream distribution of CppNix) expressly [supports
+flakes](https://determinate.systems/blog/experimental-does-not-mean-unstable/) and has marked them as a stable feature enabled by default.
+As for Nix itself, [RFC
+136](https://github.com/NixOS/rfcs/blob/32c871cae67fec997c9af2bf15f4a9e41d885109/rfcs/0136-stabilize-incrementally.md#L60-L66) ("A plan to stabilize the new CLI and Flakes incrementally") lays out a
+path forward for Nix flakes to become a stable feature. It was [proposed](https://github.com/NixOS/rfcs/pull/136) in October 2022,
+and ultimately accepted in August 2023. There is a [flakes stabilization
+milestone](https://github.com/NixOS/nix/milestone/27) to track the work needed to remove the "experimental" label from
+flakes.
+
+Some work heralds potential breaking changes for flakes (such as [changing lock attributes](https://github.com/NixOS/nix/issues/8940)),
+while other plans offer less-visible but significant performance improvements
+such as "[lazy trees](https://github.com/NixOS/nix/pull/15711)" (to
+avoid spurious file copies to the Nix store). In addition to work on the flakes
+feature, the design of the newer command-line interface for nix
+will have to be stabilized before moving on to complete the implementation of
+flakes and mark them as a stable feature. There will need to be an additional
+RFC for the final design of flakes once that happens.
+The need to address command-line design stems from the fact that
+flake-related commands are often conflated with other Nix commands. For example,
+the experimental feature that provides alternative commands like [nix
+env shell](https://nix.dev/manual/nix/latest/command-ref/new-cli/nix3-env-shell) in contrast to [nix-shell](https://nix.dev/manual/nix/latest/command-ref/nix-shell.html)
+that often rely on flake-like semantics. As noted in the text of the RFC:
+
+There are many criticisms about Flakes. But one of them especially relevant to
+stabilizing is a perception that Flakes have encroached on other new features,
+in the sense that it ought to be possible to use those other features without
+Flakes but isn't in practice. For example, there is no reason in theory that
+pure evaluation of Nix expressions requires Flakes.
+
+Despite its criticisms, [the
+RFC expresses optimism](https://github.com/NixOS/rfcs/blob/32c871cae67fec997c9af2bf15f4a9e41d885109/rfcs/0136-stabilize-incrementally.md#alternatives) about the future of flakes:
+
+We could, of course, just "rip off the band-aid" and stabilize everything at
+once. The argument for that would be that enough time has passed and the
+concerns of (less numerous) long-time users are not important. But we think the
+plan here has little downsides; we can instead make everyone happy with only
+some delay. If that is true, why not do that instead!
+
+Flakes remain an experimental feature of the nix command-line
+utility but development continues. There is no concrete target completion date
+for the stabilization effort, so when (or if) flakes will finally graduate into
+stable status remains unclear, but with a plan in place and their adoption still
+growing, Nix flakes are likely to appear more often across the software
+landscape.

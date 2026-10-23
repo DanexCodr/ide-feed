@@ -1,1055 +1,927 @@
-This document is a *style guide* for the usage of the Rust programming language
-at Google. In this context, “style” refers to more than just formatting; it
-includes guidance on API and implementation design.
+If carcinization happens when languages evolve to be more like Rust,
+then what do you call it when Rust evolves to be more like Java?
+Caffeination?
 
-Rust is used in many places, including
-[google3](https://opensource.google/documentation/reference/glossary#google3),
-Android, ChromeOS, Fuchsia, and Chrome, and we’d like for Rust usage at Google
-to be consistent both within and across codebases. In addition to bringing
-consistency to our Rust code, style guidance also helps establish a standard of
-quality.
+Over this summer, I’ve had a decent amount of time to kill. What better
+way to spend a beautiful hot summer than sitting inside, staring at core
+dumps in a supposedly memory-safe language? I built a garbage
+collector - in short, a piece of software that manages allocations for
+another, more exciting piece of software. The cool part: I made it in
+Rust, for Rust - a language designed to eliminate garbage collection and
+which provides few facilities for making it work properly. Not only
+that, I managed to make my garbage collector work with relatively few
+compromises, which I’ll describe in further detail lower down.
 
-### Scope
+If you don’t like reading, don’t care about the journey to implement it,
+or just want to get a sales pitch for the final result, check out the
+source code on GitHub
+[here](https://github.com/claytonwramsey/dumpster). You can also
+download it directly from
+[crates.io](https://crates.io/crates/dumpster).
 
-The current scope of authority of the rules outlined in this guide:
+## Background
 
-By and large, we have this document for
-[the same reasons we have a C++ style guide](https://google.github.io/styleguide/cppguide.html#Goals).
+If you’re familiar with the details of Rust and its standard library,
+feel free to skip this section.
 
-Most style rules come from one or more of the goals listed below.
+The core backing behind Rust’s memory model is *affine typing* and the
+*borrow checker*. Values may only be bound to one identifier at a time,
+and borrows (a.k.a. references) may not outlive the scope binding their
+referent.
 
-We expect our code to be around for long periods of time, and we
-consider a little bit of extra effort applied during code writing to be
-worth it in the long run if the style rule improves readability.
-
-Large-Scale Changes (LSCs)
-are common at Google, and consistency helps
-make LSCs easier to carry out.
-
-The broader Rust ecosystem already has a pretty good amount of consistency
-in style, and we should rely on that where possible to reduce surprise and make
-it less work to learn Google’s Rust style.
-
-Every Rust developer and reviewer at Google has to keep these style rules
-in mind: as such, we should be careful to include rules that have a tangible
-benefit.
-
-There are many cases where reasonable people may disagree about a style, and
-we expect that disagreement to show up often on CLs. Having a style rule helps
-avoid having to rehash this each time. Rules in this category that do not have other
-benefits should be kept to a minimum.
-
-Follow the official public Rust style rules to the extent they don’t conflict
-with this style guide.
-
-A “conflict” would be a case where this style guide suggests a pattern that is
-discouraged, or counter to the primary encouraged pattern in the Rust style
-guide.
-
-Why does the guidance in this style guide deviate from regular Rust style rules?
-
-Most style guides have three goals: consistency, readability, and encouraging
-good API design. Regardless of the specific choices made, it helps everyone to
-have these choices made beforehand to limit bikeshedding.
-
-This style guide shares those goals, but it also has an additional goal not seen
-as often: smoothing the way for Large-Scale Changes (LSCs). Large codebases like
-many of the ones at Google occasionally need to run codebase-spanning
-refactorings that are assisted by tooling: for this to work well, the code
-should be something tooling has an easy time working with. Consistency helps for
-this, but so does having deliberate refactor-friendly patterns.
-
-When applying rules that relate to API design, you should distinguish two types
-of code:
-
-For *library code*, style guide rules that concern API design are binding.
-
-For *application code*, the rules on API design are a strong recommendation. As
-you apply them, keep in mind that since application code is written to solve a
-specific problem, it should generally favor simplicity and directness over broad
-reusability. Avoid premature generalization and abstraction; focus on what is
-required to meet the immediate need.
-
-## Code organization
-
-*Terminology:*
-
-- A *crate* is a unit of compilation. A crate always contains a nameless Rust module, the “root module”.
-- A Rust *module* is a unit of code organization within a crate. Rust modules are used to control visibility of names. Modules can be nested. They can also be used to split code across files and directories.
-
-The following sections convey that in Chromium, it is preferable to **not** make
-use of all possibilities of splitting modules across files.
-
-Prefer small crates in Chromium; ideally, but not necessarily, a single file
-(focusing on one abstraction). If your code can be split up into small crates,
-do so.
-
-A crate corresponds to a single `rust_static_library` (chrome) rule, which may
-contain one or more `.rs` files.
-
-Additional considerations:
-
-- The root module is allowed to `re-export` public APIs from `leaf submodules`, making submodules an implementation detail of the crate (as users don’t need to know about these submodules).
-- This rule about small crates applies equally to crates with and without submodules. First, evaluate whether the APIs need to be in the same crate, and only then consider whether submodules could help organize the APIs.
-- If you decide to use submodules, follow the [expected file structure](https://google.github.io/styleguide/rustguide.html#structure).
-
-Larger crates are allowed when
-[trait impl coherence rules](https://smallcultfollowing.com/babysteps/blog/2015/01/14/little-orphan-impls/)
-force multiple types and traits to be included in one library, or if you’re
-building a large foundational library.
-
-Rationale
-
-Fine-grained library targets are recommended in Chromium due to the massive size
-of our codebase, non-local effects of adding dependencies in the build graph,
-and to improve performance of parallel compilation and build caching.
-
-In Chromium `.rs` source files belonging to one `rust_library` (one Rust crate)
-must reside in a single directory.
-
-Don’t use subdirectories to organize files that belong to a single crate. If
-organizing one crate’s files into subdirectories feels necessary, this is a
-strong indication that the crate has grown [too large](https://google.github.io/styleguide/rustguide.html#small-crates) and should
-be split.
-
-This crate layout is intentionally different from the conventional Cargo
-directory structure typically used in open-source repositories.
-
-Exception: Rust code in `//third_party` that is also built with
-[Cargo](https://doc.rust-lang.org/cargo/) should follow the conventional Cargo
-directory structure.
-
-Rationale
-
-The approach in Chromium is driven by the following factors:
-
-When a `leaf module` has a primary user-defined item (e.g., `Foo`), the module
-should be named after that item (e.g., `mod foo` and `foo.rs`).
-
-Leaf modules that are not primarily about any particular abstraction can be
-named as desired.
-
-Rationale
-
-This makes it easy to identify the content/purpose of a source file or leaf
-module at a glance.
-
-The only items in non-leaf modules should be module declarations (not
-definitions) and `re-exports`.
-
-Note that the definition of `leaf modules` allows the following sub-modules:
-`mod test` and cross-language binding modules like `#[cxx::bridge]`.
-
-Exceptions:
-
-Rationale
-
-This makes it easier to find things, and avoids mixing structure and contents.
-
-### Don’t use glob imports
-
-Don’t use glob imports, except in the following situations where you may
-optionally do so at your own discretion:
-
-- use super::* for inline modules
-- use enum::* in method bodies of enums, and functions that are primarily dealing with that enum
-- pub use submodule::* for non-leaf modules
-- C++ interop: Since the same namespace (in C++) is a submodule in different Rust crates (in Rust), you may merge the namespaces into a private copy using glob imports. For example: `mod absl { pub use status::absl::*; pub use strings::absl::*; } ` In this hypothetical example, you can use `absl::Status` and `absl::StrCat` from Rust, the same way you would from C++, instead of spelling them as `status::absl::Status` and `strings::absl::StrCat`. This must only be used for merging C++ namespaces, and the resulting merged module must not be public.
-
-If using third-party crates that encourage a prelude, it is up to the reviewer’s
-discretion to allow it.
-
-This also means that defining preludes should be avoided.
-
-Rationale
-
-Glob imports increase toil for code janitors running LSCs, and make it harder to
-know where a type comes from in contexts without xrefs.
-
-### A `use` statement should import items from one module
-
-This rule corresponds to the rustfmt setting `imports_granularity = Module`.
-
-Basically, there should not be any `::`’s inside the `{..}` block of a `use`
-statement. For example:
+For example, the following code is invalid:
 
 ```
-use foo::Foo;
-use foo::bar::Bar;
-use foo::bar::Baz;
+let x = vec![1, 2, 3];
+let y = x;
+println!("{x:?}"); // compile error - x has already been moved
 ```
 
-```
-use foo::Foo;
-use foo::bar::{Bar, Baz};
-```
+Normally, we work around this by borrowing against a binding, such as by
+making `y = &x` in the example above. However, we often need to share
+some heap-allocated value without knowing which binding will live the
+longest. The solution to this problem is shared ownership via garbage
+collection.
+
+Rust’s standard library offers two simple reference-counted garbage
+collectors: the single-threaded
+[`Rc`](https://doc.rust-lang.org/std/rc/) and its atomically-indexed
+counterpart [`Arc`](https://doc.rust-lang.org/std/sync/struct.Arc.html). They
+operate by maintaining a reference count in each heap allocation. Under
+most circumstances, these work great, but they can’t handle cyclic
+references. Combined with interior mutability, it’s trivial to refute
+them.
 
 ```
-use foo::{Foo, bar::Bar};
+use std::{cell::OnceCell, rc::Rc};
+struct Foo(OnceCell<Rc<Foo>>);
+
+let x = Rc::new(Foo(OnceCell::new()));
+x.0.set(Rc::clone(&x));
+// My foo has a reference to itself. It can never be freed!
 ```
 
-Import traits within function bodies, unless the trait’s methods are used
-extensively throughout the file.
+This is why people actually get paid money to build garbage collectors.
+If using a reference counter were all you needed, a number of people
+working at Oracle would be out of a job.
+
+## Battle plan
+
+We’d like to create some `Gc` data structure with a similar API to `Rc`
+and `Arc`, which can accept nearly any data type contained within, and
+still manage to detect and collect cycles.
+
+We have a few weapons at our disposal:
+
+- `Drop`: Every non-copiable data type in Rust can implement the Drop trait to ensure some code is called every time it is dropped. In our case, we can implement Drop for Gc to try to glean some knowledge about when an allocation becomes inaccessible.
+- Traits: We can construct some trait (in our case, let’s call it Collectable) as a mandatory requirement to be contained in a Gc. Creating this trait has some major downsides (libraries upstream of dumpster can’t implement it) but it’s a necessary evil.
+
+However, our formidable tools are matched by equally formidable
+challenges:
+
+- Undetectable moves. When a value is moved in Rust, there is no way to detect that fact from within that value. If we had some sort of trait like OnMove which could allow for a function to be called every time it had moved, we could use it to detect when a Gc moved inside another Gc, making it unrooted, and allowing us to create a simple mark-sweep collector. At this rate, though, we would just reinvent C++’s copy constructors.
+- Variable-sized data. I foolishly decided to make it so that Gc could store ?Sized types, which is more flexible for library users (enabling things like Gc<[T]>).
+- Type erasure. In a typical Rust program, generics are implemented via monomorphization, and no type information is retained at runtime. This makes it harder to clean up an allocation without prior context.
+
+With these two, relatively simple tools, we have enough to build a
+collector which can handle just about any data type inside.
+
+## My approach
+
+We need to detect whether a `Gc` is reachable without actually scanning
+the stack. I’ll start with a few definitions, using graph-theoretical
+language.
+
+It should be clear to see why these definitions are useful to us. We can
+imagine each node being one allocation, pretending that all data not
+indirected through a `Gc` is part of an imaginary allocation for the
+root. Additionally, each `Gc` acts as an edge connecting two
+allocations. If an allocation is accessible in the graph-theoretical
+sense, it’s still possible for a program to reach it, and if not, it’s
+safe to free that allocation. Note that the indegree of a node is
+precisely equal to the reference count of its corresponding allocation.
+
+I’ll roughly outline our approach to determining whether some node
+𝑛:≠𝑟 is accessible.
+
+Here’s a serpentine implementation in pseudocode, if that’s what you
+prefer.
 
 ```
-fn foo(x: u8) {
-    // Import the trait within a function, not at the module scope.
-    use std::str::FromStr;
+def is_accessible(n):
+    counts = {n: n.indegree()}
+    for (_, m) in n.edges():
+        dfs(m, counts)
 
-    let string: String = x.parse();
+    reachable = set()
+    for (a, count) in counts:
+        if count != 0:
+            mark(a, reachable)
+
+    return n in reachable
+
+def dfs(n, counts):
+    if n not in counts.keys():
+        counts[n] = n.indegree()
+        for (_, m) in n.edges():
+            dfs(m, counts)
+
+    counts[n] -= 1
+
+def mark(a, reachable):
+    if a not in reachable:
+        reachable.add(a)
+        for (_, b) in a.edges():
+            mark(b, reachable)
+```
+
+It should be pretty clear to see that `is_accessible` runs in
+𝑂(|𝑉|+|𝐸|) time.
+
+### Reference counting with extra steps
+
+Our single-threaded `Gc` will behave much like an `Rc`, but with some
+minor details changed.
+
+First, we define a `Gc` and the allocation it points to, a `GcBox`.
+
+```
+pub struct Gc<T: ?Sized> {
+    ptr: NonNull<GcBox<T>>
+}
+
+#[repr(C)]
+struct GcBox<T: ?Sized> {
+    ref_count: Cell<usize>,
+    value: T
 }
 ```
 
-To use top-level functions defined in other modules or crates, import their
-module and call them with `modulename::functionname()`. For example:
+We can then hook into the `Drop` behavior for our `Gc` to make it all
+work.
 
 ```
-use std::mem;
-
-let x = mem::transmute(y);
+impl<T: ?Sized> Drop for Gc<T> {
+    fn drop(&mut self) {
+        let box_ref = unsafe { self.ptr.as_ref() };
+        match box_ref.ref_count.get() {
+            0 => (),
+            n => {
+                box_ref.ref_count.set(n - 1);
+                if n == 1 || !is_accessible(box_ref) {
+                    box_ref.ref_count.set(0);
+                    unsafe {
+                        drop_in_place(addr_of_mut!(ptr.as_mut().value));
+                        dealloc(ptr.as_ptr().cast(), Layout::for_value(ptr.as_ref()));
+                    }
+                }
+            }
+        }
+    }
+}
 ```
 
+I, being very clever, decided to use a sentinel value of 0 for the
+reference count when an allocation is being cleaned up (to prevent
+spurious double-frees).
+
+However, this code has a problem - how the hell are we supposed to
+implement `is_accessible`?
+
+### Trait hackery
+
+Our pseudocode for `is_accessible` required us to be able to access the
+set of edges going out from a node. Doing so is kind of hard. If we were
+writing this in C, we would scan the allocation on the heap, looking for
+data that looked like they could be pointers into other allocations. In
+Rust, though, we can be a lot more precise by adding a small constraint
+to every garbage-collected type.
+
+If the garbage collector wasn’t enough, we’re bringing the visitor
+pattern over from Java. We force every garbage-collected value to
+implement the `Collectable` trait, which will delegate some `Visitor` to
+each of its garbage-collected fields.
+
 ```
-use std::mem::transmute;
+pub struct Gc<T: Collectable + ?Sized> {
+   // same as before ...
+}
 
-let x = transmute(y);
+pub trait Collectable {
+    fn accept<V: Visitor>(&self, visitor: &mut V);
+}
+
+pub trait Visitor {
+    fn visit_gc<T: Collectable + ?Sized>(&mut self, gc: &Gc<T>);
+}
 ```
 
-Exceptions:
+For example, an array might implement it by delegating to `accept` on
+each of its elements.
 
-Rationale
+```
+impl<T: Collectable> Collectable for [T] {
+    fn accept<V: Visitor>(&self, visitor: &mut V) {
+        self.iter().for_each(|elem| elem.accept(visitor));
+    }
+}
+```
 
-Many Rust codebases consistently keep a style such that unqualified lowercase
-names are assumed local, so `foo()` can be assumed to be from the same module.
-This rule largely exists to avoid reviewer disagreements, the benefit is mostly
-consistency and a minor edge on reading code without xrefs.
+We can now write code that finds the outgoing edges from each allocation
+by simply applying a visitor to the allocation. I ended up writing two
+visitors - one for the `dfs` step and one for the `mark` step.
 
-By default, types and traits should be referenced in code without using their
-module path, e.g., code should use `Regex`, not `regex::Regex`, with a `use
-regex::Regex` at the top of the file or potentially in the relevant function.
+I would have liked to make `Collectable` object-safe, but that would
+also require `Visitor` to be object safe. That, in turn, would cause
+every garbage collector to be coercible to `Gc<dyn Collectable>`, which
+would only be possible on nightly, making it impossible to write a
+stable crate.
 
-Exceptions:
+### Bulk dropping
 
-Rationale
+A cursory analysis of the implementation of `Drop` above shows that the
+call to `is_accessible` runs in linear time with respect to the total
+number of `Gc`s existing. You would be excused for thinking that `drop`,
+as written, runs in linear time. However, the call to `drop_in_place`
+could also result in another `Gc` being dropped, yielding a
+quadratic-time cleanup. This is unacceptable, especially since our first
+call to `is_accessible` actually did all the work of determining whether
+the allocations are reachable from the original one - if the original
+allocation being freed was inaccessible, any allocation referred to by
+it should also be inaccessible.
 
-This rule largely exists to avoid reviewer disagreements.
+We can save our time on marking by a pretty simple method: we’ll do one
+more pass through the reference graph, recording a pointer to each
+allocation to be destroyed and its implementation of `drop`. Then, once
+we’ve found every inaccessible allocation, we’ll drop them all in one
+quick go.
 
-### Use the appropriate formatting tool
+There’s one final problem, though: each `Gc` owned by a dropped value
+could itself try to manipulate the reference counts of its pointees,
+resulting in undefined behavior, or worse, slow code. However, all
+problems in computer science can be solved by adding more state or more
+indirection. We opt to solve it with extra state this time, creating a
+thread-local value called `COLLECTING`.
 
-Use the appropriate formatting tool (e.g., `git cl format` in Chromium).
+When we do a bulk-drop, we set `COLLECTING` to `true`. Then, when we
+call `drop` on a `Gc`, it checks the state of `COLLECTING`. If
+`COLLECTING` is true, the `Gc` does nothing when dropped (not even
+affecting its reference count). To handle outbound edges to
+still-accessible allocations, we add one more traversal before the final
+cleanup to handle outbound edges.
 
-Configuration (for style guide authors)
+Let’s take a look at what the code for that roughly looks like now.
 
-A codebase may choose to not apply the following `rustfmt` options if they care
-about building on stable and the option is unavailable on their stable Rust:
+```
+thread_local! {
+    static COLLECTING: Cell<bool> = Cell::new(false);
+}
 
-- Maximum of 100 columns per line: [`max_width = 100`](https://rust-lang.github.io/rustfmt/?version=v1.6.0&search=#max_width)
-- Usage of lowercase alphabets in hex literals (`0xab123cdef` as opposed to `0xAB123CDEF`): [`hex_literal_case = Lower`](https://rust-lang.github.io/rustfmt/?version=v1.6.0&search=#hex_literal_case)
-- Macro matcher formatting: [`format_macro_matchers = true`](https://rust-lang.github.io/rustfmt/?version=v1.6.0&search=#format_macro_matchers)
-- Usage of escapes for invisible characters in literals. E.g., if you wish to have text containing a Zero-Width joiner, use `\u{200D}`.
+impl<T: Collectable + ?Sized> Drop for Gc<T> {
+    fn drop(&mut self) {
+        if COLLECTING.with(Cell::get) { return; }
+        let box_ref = unsafe { self.ptr.as_ref() };
+        match box_ref.ref_count.get() {
+            0 => (),
+            1 => {
+                box_ref.ref_count.set(0);
+                unsafe {
+                    drop_in_place(addr_of_mut!(ptr.as_mut().value));
+                    dealloc(ptr.as_ptr().cast(), Layout::for_value(ptr.as_ref()));
+                }
+            }
+            n => {
+                box_ref.ref_count.set(n - 1);
+                unsafe { collect(self.ptr) };
+            }
+        }
+    }
+}
+```
 
-You may opt out of automatic formatting using `#[rustfmt::skip]`, but only in
-the following situations:
+`collect` is the function we’ll write to check if the allocation is
+accessible and perform a bulk cleanup if needed. There’s one more
+problem before we can implement `collect`, though: our psuedocode
+required us to be able to store each allocation as a key in `counts` and
+also to access the allocation’s neighbors. This means we have to use a
+little bit of type erasure to achieve our ends. I won’t go into too much
+detail, but we need to be able to do two things:
 
-Important: Formatting should not be skipped for personal style choices.
+- Store pointers to allocations as keys in a hash-map.
+- Reconstruct a stored pointer using type information to make it possible to do work.
 
-## Ownership and borrowing
+Due to the limitations of Rust, these are actually mutually exclusive.
+Because it’s undefined behavior (due to provenance issues) to compare
+the raw data in pointers, we can’t erase a pointer and then use it as a
+key in a hash-map. However, we can’t just get a pointer to the first
+byte of the allocation, because our allocation could be `?Sized`.
 
-Prefer unique ownership and borrowing over `Rc` and `Arc` for managing memory.
+As a result, my implementation actually has two different kinds of
+erased pointers: a thin pointer which can be used for comparisons and a
+fat pointer which can be used to reconstruct a pointer to any type.
 
-Exception:
+```
+struct AllocationId(NonNull<Cell<usize>>); // used as a key in hash-maps
+struct ErasedPtr([usize; 2]);              // used as a reconstructible pointer to the allocation
+```
 
-Rationale
+Then, all the functions which need to know the type information of the
+allocation (such as `dfs` and `mark`) can be stored opaquely as function
+pointers, and when called, they can “rehydrate” the `ErasedPtr` passed
+in with type information.
 
-Generally, Rust allows representing object graphs without using shared ownership
-smart pointers. These pointers add runtime overhead and their own unique
-complexity. Engineers coming from other languages might tend to use `Rc` and
-`Arc` too quickly.
+Below, I’ve included an example of how it can be used to implement
+`dfs`.
 
-Use `.clone()` when you genuinely need a deep copy of an object.
+```
+unsafe fn dfs<T: Collectable + ?Sized>(
+    ptr: ErasedPtr,
+    counts: &mut HashMap<AllocationId, usize>
+) {
+    struct DfsVisitor<'a> {
+       counts: &'a mut HashMap<AllocationId, usize>,
+    }
 
-Avoid using `.clone()` as a substitute for borrowing. Design code that works
-naturally with Rust’s ownership and borrowing rules. However, if the borrowing
-relationships become excessively complex, `.clone()` can be a pragmatic choice.
+    impl Visitor for DfsVisitor<'_> {
+        fn visit_gc<U>(&mut self, gc: &Gc<U>) {
+            let id = AllocationId::new(gc.ptr);
 
-Consider the performance needs of the code while choosing between cloning and
-borrowing.
+            if counts.insert(id, unsafe { gc.ptr.as_ref().ref_count.get() }) {
+                (**gc).accept(self);
+            }
 
-Note: This advice does not apply to cloning `Rc` or `Arc` pointers. Cloning
-reference-counted pointers does not create a deep copy, and is an expected way
-to use them.
+            *counts.get_mut(&id).unwrap() -= 1;
+        }
+    }
+    // pretend that `specify` converts the pointer back into NonNull<T>
+    let specified = ptr.specify::<T>();
+    specified.as_ref().accept(&mut DfsVisitor { counts });
+}
+```
 
-Rationale
+I won’t include the implementation of `collect` here because it’s
+lengthy and not even the final revision of the cleanup algorithm, but
+you can trust me that it works. After much gnashing of teeth and tearing
+of hair, this is finally enough to achieve bulk dropping, making calling
+`drop()` on a `Gc` a linear-time operation.
 
-Deep copies can be expensive to make due to memory allocation and data copying.
+### Amortizing
 
-When functions accept borrowed, immutable data, use a reference type that
-affords the most flexibility. Pass references to the data itself instead of
-references to smart pointers, containers, or wrappers.
+What’s that, you say? You need your reference operations to work in
+𝑂(1) time? Why are programmers these days so picky?
 
-| Use | Instead of | Why? |
+Luckily, it isn’t too hard to make our garbage-collection efforts
+terminate in average-case 𝑂(1) time. Instead of calling `collect`
+directly, we’ll just punt the allocation, which may be inaccessible,
+into a set of “dirty” allocations. In my code, I call that set a
+dumpster. Then, once every |𝐸| times an allocation is dropped, we’ll
+go through the whole dumpster and collect them all in 𝑂(|𝐸|) time.
+Amortized across all allocations, that’s technically 𝑂(1), enabled by
+the same accounting wizardry that makes array-backed lists useful and
+that caused the 2008 financial crisis.
+
+To save ourselves a little bit of work, whenever an allocation is
+accessed (such as by dereferencing or cloning), we can yank the
+allocation away from that same dirty set since it was just proven to be
+accessible.
+
+## Are we concurrent yet?
+
+So far, the garbage collector I’ve been outlining to you has been a
+single-threaded collector, which can only store thread-local
+garbage-collected values. I’m told that all code worth writing ends up
+being concurrent, so we have to do better than that. Lucky for us, this
+algorithm can be made to operate concurrently with little effort,
+assuming that only one thread collects at a time.
+
+However, even if only one thread is collecting, we can still run into
+some nasty concurrency issues. Let’s imagine that we have 2 allocations,
+𝑎 and 𝑏, plus the imaginary “root” allocation 𝑟, where 𝑎 can
+only be accessed from 𝑟 and 𝑏 can only be accessed from 𝑎.
+
+![image](https://claytonwramsey.com/blog/dumpster/chain2.dot.svg)
+
+![image](https://claytonwramsey.com/blog/dumpster/onecycle.dot.svg)
+
+Then, the depth-first search will return to 𝑎, decrement the number of
+unaccounted references, and assume that all incoming references to 𝑎
+and 𝑏 were totally accounted for (and therefore inaccessible). Then
+the garbage collector would happily destroy 𝑎 and 𝑏’s allocations,
+leaving a dangling reference to the heap, potentially causing a
+use-after-free or other gnarly memory errors.
+
+### Resolving concurrency
+
+The simplest solution to this concurrency issue is to just wrap
+everything in a big fat lock by forcing every single operation involving
+a `Gc` to acquire a single global mutex, preventing any sort of
+concurrency bugs at all. However, that’s ridiculously slow.
+
+We’d like to have an approach that only needs to achieve mutual
+exclusion over a small subset of all allocations if at all possible. To
+do so, let’s take a closer look at our concurrency problem: we can see
+that we only really get erroneous results when another thread mutates
+the subgraph 𝐻 as we interact with it. The solution is quite clever -
+we tag every `Gc` with a special number, which I’ll call a collecting
+tag.
+
+First, we’ll add a global atomic integer called the `COLLECTING_TAG`.
+
+```
+static COLLECTING_TAG: AtomicUsize = AtomicUsize::new(0);
+```
+
+Whenever we create or clone a new `Gc`, we’ll annotate it with the
+current value of `COLLECTING_TAG`.
+
+```
+// this new `Gc` type is intended to be `Sync`.
+
+pub struct Gc<T: Collectable + Send + Sync + ?Sized> {
+    ptr: NonNull<GcBox<T>>,
+    tag: AtomicUsize,
+}
+
+impl <T: Collectable + Send + Sync + ?Sized> Gc<T> {
+    pub fn new(x: T) -> Gc<T> {
+        // (other bookkeeping hidden)
+
+        Gc {
+            ptr: /* initialization of GcBox<T> */,
+            tag: COLLECTING_TAG.load(Ordering::Relaxed),
+        }
+    }
+}
+```
+
+Next, at the start of the collection process, we’ll increment the value
+of `COLLECTING_TAG` just before we call `dfs`.
+
+```
+fn collect() {
+    COLLECTING_TAG.fetch_add(1, Ordering::Relaxed);
+    // carry on with DFS and such
+}
+```
+
+Lastly, whenever we encounter a `Gc` during the `dfs` process, we’ll
+check its tag. If the tag is equal to the current value of
+`COLLECTING_TAG`, that means the `Gc` was created after `dfs` started.
+If so, then whatever spot we found the `Gc` in must have been
+accessible, and we can mark it as so. To prevent us from visiting the
+same edge twice (due to shenanigans), we’ll also update the tag on every
+edge we visit to the value of `COLLECTING_TAG`.
+
+Let’s return to our broken example to show how this modification fixes
+it. We return to our reference graph with 𝑎 pointing to 𝑏 and 𝑟
+pointing to 𝑎. Since every `Gc` must be annotated with a tag, let’s
+say they’re all tagged with 0.
+
+![](https://claytonwramsey.com/blog/dumpster/chain2labeled.dot.svg)
+
+Next, when `dfs` begins, `COLLECTING_TAG` is incremented to 1. As a
+result, the new reference created by a malicious thread must be tagged
+with 1.
+
+![](https://claytonwramsey.com/blog/dumpster/onecyclelabeled.dot.svg)
+
+Now, when `dfs` visits the edge pointing from 𝑏 to 𝑎, it sees that
+the reference is labeled with a tag of 1, and therefore both 𝑏 and 𝑎
+must be accessible - no accidental early deallocations here.
+
+### Moving in and out
+
+We might hope that tagging the pointers is sufficient to prevent all
+concurrency bugs. However, this is sadly not enough. To show why, we’ll
+begin with an example.
+
+First, let’s imagine an allocation called 𝑥, which contains two
+optional references to itself.
+
+```
+struct X {
+    x1: Mutex<Option<Gc<X>>>,
+    x2: Mutex<Option<Gc<X>>>,
+}
+```
+
+At the start of our example, there will be only one `Gc` pointing from
+inside 𝑥 to itself, and the other slot that can hold a `Gc` will be
+empty. 𝑥 is accessible directly from the root allocation 𝑟, and all
+existing references are tagged with 0. For the sake of clarity, I’ll
+draw the arrow representing the first slot in 𝑥 with a solid line and
+the second slot with a dashed line.
+
+![](https://claytonwramsey.com/blog/dumpster/dash0.dot.svg)
+
+Now, let’s have `dfs` begin, starting at 𝑥.
+
+1. We increment `COLLECTING_TAG` to 1.
+2. `dfs` records that 𝑥 has 2 unaccounted-for references at the start.
+3. `dfs` visits the 𝑥’s first slot and tags the currently-existing self reference in that slot. 𝑥 now has 1 unaccounted-for reference. ![image](https://claytonwramsey.com/blog/dumpster/dash1.dot.svg)
+4. A malicious thread intervenes, first moving the `Gc` from 𝑥’s first slot to 𝑟, then moving the original `Gc` which connected 𝑟 to 𝑥 into 𝑥’s second slot. `fn do_evil(r_to_x: Gc<X>) { let z = std::mem::take(&mut *r_to_x.x1.lock().unwrap()); *z.x2.lock().unwrap() = r_to_x; }` ![image](https://claytonwramsey.com/blog/dumpster/dash2.dot.svg)
+5. `dfs` continues, now visiting the second slot in 𝑥. Seeing another reference to 𝑥, we decrement the number of unaccounted-for references to 0.
+6. `dfs` found no ancestors of 𝑥 with unaccounted-for ancestors, so we free 𝑥. However, 𝑥 is still accessible!
+
+This problem stumped me for a decent while. It seems impossible to
+prevent other threads from do-si-do-ing every `Gc` pointing to an
+allocation in order to fool our search. Luckily, there is a way through.
+Since tagging every `Gc` worked out for us before, we’ll try tagging
+every allocation.
+
+```
+#[repr(C)]
+struct GcBox<T: Collectable + Send + Sync + ?Sized> {
+    ref_count: AtomicUsize,
+    tag: AtomicUsize,
+    value: T
+}
+```
+
+Next, every time a `Gc` is dereferenced, we’ll update the tag in the
+allocation to the current value of `COLLECTING_TAG`.
+
+```
+impl<T: Collectable + Send + Sync + ?Sized> std::ops::Deref for GcBox<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        let box_ref: &GcBox<T> = unsafe { self.ptr.as_ref() };
+        box_ref.tag.store(COLLECTING_TAG.load(Ordering::Acquire), Ordering::Release);
+        &box_ref.value
+    }
+}
+```
+
+Whenever `dfs` observes that the tag on an allocation is equal to
+`COLLECTING_TAG`, that means that the allocation was accessed, and
+therefore accessible. In order to shuffle references around in our above
+example, the malicious thread would have to dereference a `Gc`,
+notifying the search and preventing an early deallocation.
+
+In fact, this is enough to prove that `dfs` will *never* incorrectly
+mark an allocation as inaccessible, even under concurrent execution.
+This blog post is already rather long, so I’ll only provide a rough
+sketch of the proof.
+
+**Theorem: `dfs` will never erroneously mark an allocation as
+inaccessible.**
+
+Proof:
+
+1. If dfs encounters a Gc created after dfs begins, it will know that the referent is accessible.
+2. Due to (1), if dfs marked some allocation 𝑎 as inaccessible, it must have only visited Gcs pointing to 𝑎 which existed before dfs began.
+3. Weakening the statement from (2), if dfs marked some allocation 𝑎 as inaccessible, it must have only visited Gcs pointing to 𝑎 which existed when 𝑎’s reference count was recorded.
+4. dfs never visits a Gc while it points from the root allocation 𝑟 to any other allocation.
+5. dfs must visit every Gc which pointed to an allocation at the point when its reference count was recorded in order to mark it as inaccessible.
+6. Due to (4) and (5), if 𝑎 is marked as inaccesssible, any Gc which at any point connected 𝑟 to 𝑎 must have been moved to connect another node (not 𝑟) to 𝑎.
+7. Due to (6), there is no lifetime 'x which can borrow against a Gc pointing from 𝑟 to 𝑎 and last between when dfs first visits 𝑎 and when it last visits 𝑎.
+8. The final Gc to move into 𝑎 before dfs must have been moved while another borrow against a Gc pointing from 𝑟 to 𝑎 existed. Let the lifetime of that borrow be 'y.
+9. Because 'y lasts longer than the final move, 'y can be extended to last arbitrarily long, even until after dfs has finished visiting every Gc pointing to 𝑎.
+10. Due to (7), 'y must not have existed before dfs first visited 𝑎. Therefore, if 𝑎 is erroneously marked as inaccessible, a Gc pointing to 𝑎 must have been dereferenced to generate a borrow with lifetime 'y.
+11. If a Gc pointing to 𝑎 was dereferenced before the last time dfs visited a Gc pointing to 𝑎, then dfs would have observed that 𝑎’s tag had changed. Therefore, if an allocation was erroneously marked as inaccessible, it must have been marked as accessible. Therefore no allocations were ever erroneously marked as inacessible by dfs. QED.
+
+This proof is relatively handwavy, but it should be possible for an
+astute reader to fill in the details. I will leave it to such astute
+readers to prove the complementary proof to this; namely, that `dfs`
+will never erroneously mark an allocation as accessible.
+
+I also think that it’s really cool that the entire mechanism of the
+correctness of this approach is totally supported by Rust’s borrow
+checking semantics. It makes the whole thing feel like it fits right in.
+
+### It’s the weak ones that count
+
+There’s one more cause for memory safety issues from concurrency. If an
+allocation is freed because its reference count reached zero, it could
+still be accessible by another thread because it was stored in the
+global dumpster. We can’t guarantee that we’ve obliterated all
+references to that allocation from every other thread’s memory, so it
+seems like we’re hosed.
+
+However, there’s no problem in computer science that can’t be solved by
+adding more state. Taking a leaf from `Rc`’s book and adapting it
+liberally, we annotate each allocation with a “weak” reference count,
+which is the number of times it’s referenced by a dumpster or cleanup
+thread. We’ll rename our original reference count to be the strong count
+instead.
+
+```
+#[repr(C)]
+struct GcBox<T: Collectable + Send + Sync + ?Sized> {
+    strong: AtomicUsize,
+    weak: AtomicUsize,
+    tag: AtomicUsize,
+    value: T,
+}
+```
+
+Then, when dropping the last strong reference to a `Gc`, we first check
+that its weak reference count is nonzero before we can deallocate it. If
+not, it’s the cleanup threads’ problem to take care of it.
+
+Whenever an allocation is removed from a dumpster and about to be thrown
+away by a thread running a cleanup procedure, the thread decrements the
+weak count of the allocation and checks if both the weak and strong
+count have reached zero. If so, that thread can then safely destroy the
+allocation.
+
+### Deadlocked!
+
+Imagine that we want to create a `Gc<Mutex<()>>`, and then drop a `Gc`
+pointing to it while the `Mutex` is locked.
+
+```
+let gc1 = Gc::new(Mutex::new(()));
+let gc2 = gc1.clone();
+
+let guard = gc1.lock()?;
+drop(gc2); // suppose this triggers a cleanup
+drop(guard);
+```
+
+While traversing the reference graph, the `dfs` visitor would attempt to
+visit the mutex, lock it, and try to carry on. However, since the same
+thread that triggered the allocation still holds a guard to that mutex,
+the thread would deadlock disastrously. Lucky for us, we know that any
+allocation with a held mutex guard must still be accessible (due to
+`Mutex`’s excellent API), so we can be certain that if we fail to
+acquire a mutex, we have immediate proof that an allocation is
+accessible.
+
+To take advantage of that, we’ll make visiting a collectable type a
+fallible operation, and make it so that failing to acquire a lock also
+fails the visit.
+
+```
+pub trait Collectable {
+    fn accept<V: Visitor>(&self, visitor: &mut V) -> Result<(), ()>;
+}
+
+pub trait Visitor {
+    fn visit_gc<T: Collectable + ?Sized>(&mut self, gc: &Gc<T>) -> Result<(), ()>;
+}
+
+impl<T: Collectable + ?Sized> Collectable for Mutex<T> {
+    fn accept<V: Visitor>(&self, visitor: &mut V) -> Result<(), ()> {
+        // pretend poison errors don't exist
+        self.try_lock().map_err(|_| ())?.accept(visitor);
+        Ok(())
+    }
+}
+```
+
+### Sharing your dumpsters
+
+![A hand-drawn garbage truck in ink on a white background. It’s crudelydone, as if drawn by the sort of person who knows what perspective isbut doesn’t quite understand how itworks.](https://claytonwramsey.com/blog/dumpster/garbagetruck.jpg)
+
+You’ve made it this far into this (admittedly rather lengthy) post.
+Enjoy this hand-drawn picture by yours truly.
+
+When implementing this garbage collector, one of the biggest bottlenecks
+with concurrent performance is accessing the one, global dumpster every
+single time a `Gc` is dropped. If using a `Mutex<HashMap>`, this will
+remove nearly all parallelism from the whole system and make you wonder
+why you paid all that money for a 16-core computer.
+
+As a result, any sane person might lean for a concurrent hashmap. There
+are many Rust implementations - I tried
+[`chashmap`](https://gitlab.redox-os.org/redox-os/chashmap) but gave up
+on it due to a [rare panic
+bug](https://gitlab.redox-os.org/redox-os/chashmap/-/issues/3), and then
+I tried [`dashmap`](https://github.com/xacrimon/dashmap), which worked
+fine but was too slow as thread counts increased.
+
+The heart of the issue is that concurrently updating any data structure
+is going to be slow. Even so-called “concurrent” data structures which
+use clever sharded locks have this issue - there’s always some
+contention overhead. The best workaround to concurrency slowdowns is to
+just not do things concurrently. We can fix this by making every thread
+have its own dumpster, and then having a global collection of
+to-be-cleaned allocations which I’ll call the *garbage truck*. Whenever
+another allocation is marked dirty, we can check if this thread’s
+dumpster is full according to some heuristic, and if so, transfer all
+the allocations from this thread’s dumpster to the garbage truck. I’ve
+included some pseudocode for the whole process below.
+
+```
+dumpster = set() # local to this thread
+garbage_truck = mutex(set()) # global to all threads
+
+def mark_dirty(allocation):
+    dumpster.add(allocation)
+    if is_full(dumpster):
+        garbage_truck.lock()
+        for trash_bag in dumpster:
+            garbage_truck.add(trash_bag)
+        garbage_truck.unlock()
+        dumpster = set()
+```
+
+If `is_full` returns `true` rarely enough, there will be almost no
+contention over the garbage truck. This means that the concurrency
+overhead is vastly reduced and we get to pocket some great performance
+returns.
+
+## Okay, but how fast is it?
+
+In short, this garbage collector runs pretty fast!
+
+In the end, I made two different garbage collector implementations - one
+which is thread-local, saving us from all the concurrency headaches, and
+another thread-safe one that has all the bells and whistles at the cost
+of some performance. Borrowing from
+[`once_cell`](https://github.com/matklad/once_cell)’s API, the former
+lives in the `unsync` module of the crate and the latter in `sync`.
+
+Next, I collected all the garbage collectors I could find in order to
+compare them. I selected all the ones which had a similar API to
+`dumpster`, were published on [crates.io](https://crates.io), and
+actually worked.
+
+| Name | Concurrent? | Like `dumpster`? |
 | --- | --- | --- |
-| `&T` | `&Box<T>` | Borrow the data inside the box |
-| `&[T]` | `&Vec<T>` | Accept any slice instead of specific containers |
-| `&str` | `&String` | Accept a string slice instead of references to owned strings |
-| `Option<&T>` | `&Option<T>` | Borrow the data inside the Option |
+| `dumpster` (unsync) | ❌ | ✅ |
+| `dumpster` (sync) | ✅ | ✅ |
+| [`Rc`](https://doc.rust-lang.org/std/rc/struct.Rc.html) | ❌ | ✅ |
+| [`Arc`](https://doc.rust-lang.org/std/sync/struct.Arc.html) | ✅ | ✅ |
+| [`bacon-rajan-cc`](https://github.com/fitzgen/bacon-rajan-cc) | ❌ | ✅ |
+| [`cactusref`](https://github.com/artichoke/cactusref) | ❌ | ❌ |
+| [`elise`](https://github.com/wusyong/elise) | ✅ | ❌ |
+| [`gc`](https://github.com/Manishearth/rust-gc) | ❌ | ✅ |
+| [`gcmodule`](https://github.com/quark-zju/gcmodule) | yes, but with a different API | ✅ |
+| [`rcgc`](https://crates.io/crates/rcgc) | ❌ | ❌ |
+| [`shredder`](https://github.com/Others/shredder) | ✅ | ✅ |
+
+I excluded the ones that didn’t have a `dumpster`-like API because it
+would have been a pain to set up a benchmarking harness to handle them.
+If you feel this is poor diligence, you can go benchmark them yourself.
+I also included `Rc` and `Arc`, even though they don’t collect cycles,
+because they’re a decent baseline for the minimum performance of a
+garbage collector. During my research, I also found that
+`bacon-rajan-cc` doesn’t initiate collections of its own accord, so I
+added a version of each of `dumpster`’s garbage collectors which doesn’t
+automatically trigger collections in the spirit of competitive fairness.
+Those versions are labeled as “manual.” Lastly, I found that `gcmodule`
+simply stack-overflows and sometimes segfaults when facing extremely
+large collection loads, so I removed it from the benchmark set.
+
+As my benchmark, I decided to do the very simplest thing I could think
+of: have a bunch of allocations randomly add and remove references to
+each other in a loop, dropping and creating new allocations as well. To
+account for random noise, I ran 100 trials of each garbage collector
+doing 1 million operations. Each operation is either the creation of a
+reference or a deletion.
+
+First, I ran a benchmark of all the garbage collectors, measuring pure
+single-threaded performance. I’ve shown my benchmark results as a set of
+violin plots below, relating runtime to frequency.
+
+![A violin plot, titled “Single-threaded GC comparison.” The x-axis islabeled “Runtime for 1M ops (ms),” and the y-axis is labeled “Garbagecollector,” with various collectors labeled on the ticks. In order, thegarbage collectors on the y-axis are Arc, Rc, shredder, bacon-rajan-cc,gc, dumpster (sync/manual), dumpster (sync), dumpster (unsync/manual),and dumpster (unsync). The x-axis ranges from 0 ms to 4000 ms. All ofthe violins, except for shredder’s, are very near to the left side. Theviolin labeled “shredder” is far off to the right side, with a mean ofroughly 3700ms.](https://claytonwramsey.com/blog/dumpster/single_threaded.png)
+
+This plot doesn’t tell us much other than that `shredder` is slow. To
+take a closer look, let’s remove `shredder` from the list and see what
+we find.
+
+![The same violin plot as before, but now shredder’s violin and y-axislabel have been removed. The x-axis now varies from 40 to 160 ms. Theviolin labeled Rc is furthest to the left, followed by Arc,bacon-rajan-cc, dumpster (unsync), dumpster (unsync/manual), dumpster(sync/manual), gc, and finally dumpster(sync).](https://claytonwramsey.com/blog/dumpster/single_threaded_sans_shredder.png)
+
+`dumpster`’s unsync implementation is in a decent position, beat out
+only by the non-cycle-detecting allocators and `bacon-rajan-cc`.
+`bacon-rajan-cc` has very little overhead and is quite performant.
+
+I think there are two main reasons why the concurrent version of the
+garbage collector is much slower than the single-threaded one. First,
+moving allocations from a thread-local dumpster to the global garbage
+truck takes some time. Second, the `dfs` operation in a concurrent
+environment must record the current set of children of an allocation,
+typically in a separate heap-allocated structure, to prevent some
+concurrency bugs. It’s certainly possible to mitigate the losses from
+the first issue, but the second is harder to handle.
+
+My guess as to why the concurrent version is significantly slower when
+using automatic collection triggering is that it’s a consequence of my
+testing harness. Currently, it runs all the tests in a loop, so the
+single-threaded benchmark could run directly after the multi-threaded
+one and be forced to clean up some of its garbage.
+
+In any event, let’s move on to the results from the multi-threaded
+benchmark.
+
+![A scatter plot, titled “Parallel garbage collector scaling.” Thex-axis is labeled “Number of threads” and varies from 1 to 16. They-axis is labeled “Time for 1M ops (ms)” and varies from 0 to 3500. Onthe legend, there are four series: dumpster (sync), dumpster(sync/manual), shredder, and Arc. The points associated with shredder’sseries start out at 3500ms for 1 thread, scaling asymptotically down toroughly 1800ms at 6 threads. All other points are very close tozero.](https://claytonwramsey.com/blog/dumpster/scaling.png)
+
+The only other concurrent garbage collector available for me to test
+against was `shredder`, and it looks like it wasn’t much of a
+competition.
+
+![A scatter plot, titled “Parallel garbage collector scaling (sansshredder).” The x-axis remains the same as before, but now the y-axisonly goes up to 200ms. “shredder” has been removed from the legend, butotherwise it is the same as the previous image. The points associatedwith dumpster (sync) and dumpster (sync/manual) start out at roughly 80ms for 1 thread, jump up to about 110 ms for 2 threads, then decreaseasymptotically to around 70 ms for 16 threads. Meanwhile, the pointsassociated with Arc start out at roughly 70 ms for 1 thread and decreaseasymptotically with the thread count to around 25 ms for 15threads.](https://claytonwramsey.com/blog/dumpster/scaling_sans_shredder.png)
+
+`dumpster` doesn’t scale as smoothly as I’d like with thread count, but
+it’s a relief that performance does actually improve with thread count,
+except for the jump from one thread to two. I think being only 3x slower
+than Arc is a decent victory, especially for a project that I wasn’t
+paid any money to do. I’m not much of an expert at high-performance
+computing in concurrent situations, so trying to optimize this further
+would likely just be an adventure in trying random things and seeing if
+they yield an improvement. If anyone out there has clever ideas on how
+to optimize this approach, let me know! My email is on the “About” page.
+
+## Coda
+
+Over the last few months, I built a garbage collector for Rust from
+scratch. I implemented a novel (ish) algorithm of my own design, got it
+to work in both single-threaded and multi-threaded contexts, and showed
+that it was actually pretty performant.
+
+The implementation of this crate is now [up on
+crates.io](https://crates.io/crates/dumpster) and available for anyone
+to download. It’s licensed under the GNU GPLv3.
+
+Special thanks to [Wisha](https://wisha.page/),
+[Charlie](https://seniormars.com/), and
+[Shreyas](https://shreyasminocha.me/) for reviewing this post, fielding
+my bad questions, and putting up with me rambling about this for nearly
+two months straight.
+
+## Postscript
 
-Exceptions:
+I have a few things that I thought were interesting along the way but
+didn’t quite have a good spot to include in the story above, so they’ll
+all be mish-mashed in here.
 
-For context, see Clippy lints
-[`borrowed_box`](https://rust-lang.github.io/rust-clippy/master/index.html#borrowed_box)
-and
-[ptr_arg](https://rust-lang.github.io/rust-clippy/master/index.html#ptr_arg).
+### Ode to bad good ideas
 
-Rationale
+The final, polished solution you see in this blog post is actually quite
+far from my original idea. In particular, almost all of my first ideas
+for handling concurrency didn’t work. Here’s a quick roll of them all:
 
-Accepting reference types that don’t mention specific smart pointers,
-containers, or wrappers makes functions more versatile and performant: callers
-can pass data held in a variety of ways without copying it first.
+- Wrap a Mutex around every single allocation’s reference count and hold them while doing dfs
+- Save on space in Gcs by tagging only the lowest bit instead of adding an entire usize
+- Make everything enable dynamic dispatch so we can have real Java-like objects
+- Clean up allocations locally on every thread
+- Avoid directly dropping allocations and instead cleverly decrement their reference count
 
-Prefer returning iterators (either concrete types or `impl Iterator`) where
-possible over returning `Vec<T>`.
+### Cool nightly tricks
 
-Note: In application code, returning a `Vec<T>` is fine if it simplifies the
-code and if flexibility and performance advantages of iterators are not clearly
-needed.
+`Rc` and the other pointer types are somewhat “blessed” in that they can
+access nightly features from the Rust compiler and still be consumed by
+stable projects. `dumpster` has no such blessings.
 
-Exceptions:
-
-Rationale
+I would like to implement `CoerceUnsized` unconditionally for all my
+garbage collectors, but that’s simply not possible on stable yet.
 
-Highly reusable library code generally should strive to provide more flexible
-and performant APIs. Returning an iterator allows callers to choose how to
-consume the data: collect it into a vector, process it in a loop, or chain
-further iterator adapters. Some of these options allow users to avoid
-unnecessary allocations.
+Likewise, pending the implementation of strict provenance, there’s
+actually no way for a stable crate to manipulate the address portion of
+a fat pointer. This means that even if I found some space optimization
+using lower bit tagging, I wouldn’t be able to use it because it’s gated
+behind a nightly feature.
 
-In application code, the usage patterns for a function are often easier to
-predict. If it is clear that performance is not a concern, or that data would be
-collected into a vector anyway, returning a vector makes for a simpler API.
+### Another path to `Gc<dyn T>`
 
-Highly reusable library code should accept iterators or `impl IntoIterator` if
-it only needs to iterate over the input.
+Without the ability to coerce `Gc` as an unsized type, I can’t make
+`Collectable` object safe due to the function signature of `accept`,
+which forces `Visitor` to also be object-safe, forcing `visit`
+operations to also be object-safe.
 
-Note: In application code, accepting a slice `&[T]` is fine if it simplifies the
-code and if flexibility and performance advantages of iterators are not clearly
-needed.
+I’ve thought of a slightly different approach, though. We can make
+`Visitor` a single concrete type, and that makes `Collectable` trivially
+object-safe. The downside here is that I would then have to store all 5
+of my current visitor implementations in the same structure, and that
+loses a lot of my nice type safety features and adds a large runtime
+penalty. I’m not very happy with that idea, though.
 
-Rationale
+### Miri rules
 
-Highly reusable library code generally should strive to provide more flexible
-and performant APIs. Functions that accept iterators offer callers:
+I would probably not have been able to finish this project without
+[`cargo miri`](https://github.com/rust-lang/miri). If you haven’t heard
+of it, you should download it right now and run all of your Rust
+projects with it. It’s such a fantastic tool for debugging unsafe code
+that I wish I could have it in other languages, too - valgrind is a poor
+substitute for it when using C.
 
-In application code, the usage patterns for a function are often easier to
-predict. If it is clear that performance is not a concern, or that callers would
-always have a vector anyway, accepting a slice makes for a simpler API.
+### Testing and debugging
 
-When designing library APIs that accept a `T` but users are likely to have
-various types, consider accepting `impl Into<T>` instead of `T` if **call-site
-ergonomics are paramount**.
+Early on, I had just a few handwritten tests. The first reference graph
+that I found that gave me trouble looked like this:
 
-Tip: This should be balanced against code bloat concerns; it is not a
-requirement to use lots of `Into<T>` in your code.
+![](https://claytonwramsey.com/blog/dumpster/test4.dot.svg)
 
-Note: Application code should almost never use `impl Into<T>` parameters.
+However, once I had simple graphs with multiple cycles down, it was hard
+to come up with new tests. As a result, I resorted to fuzzing, using the
+same approach as my benchmark - randomly generating references and then
+seeing if they got cleaned up properly.
 
-Rationale
+Debugging the results of those fuzzed tests absolutely sucked, though.
+The experience of trying to find the source of an issue was awful, so I
+ended up having to make some (crude) tools to make the process easier.
+Eventually, I had settled on printing out the reference graph at choice
+times during the run of my tests and then visualizing them to get a good
+guess of what was wrong. However, when making the concurrent
+implementation, printing something can change the execution behavior of
+the program. Not only that, it’s not always obvious what the issue is. I
+had one bug which only occurred after several thousand operations had
+completed, resulting in reference graphs that looked like this:
 
-Using `impl Into<T>` allows a function to directly accept various arguments of
-various compatible types. For example, a function accepting `impl Into<String>`
-could be called with a `String` or a `&str` literal directly.
+![](https://claytonwramsey.com/blog/dumpster/evil.dot.svg)
 
-The tradeoff here is balancing the convenience of avoiding a `.into()` at the
-callsite against the cost of generics (more complex API signature, increased
-code size, sometimes even type inference difficulties).
-
-### Prefer `enum` over `bool` in APIs
-
-Use `enum` function parameters instead of `bool` in cases where the purpose of
-the parameter is not obvious.
-
-If you do use `bool`, consider using an inline comment to document the purpose
-of the `bool` in an argument list.
-
-Choose the error reporting mechanism that fits your API contract: `Option`,
-`Result`, or `panic!`.
-
-**Use `Option` for simple failures** where the cause is obvious and the caller
-would not benefit from further details. This is best for standard, anticipated
-outcomes like a missing value or a parsing mismatch.
-
-```
-// Good: The cause of the failure is obvious (integer overflow). No further
-// details could be reasonably provided.
-fn checked_add(a: u32, b: u32) -> Option<u32> { ... }
-```
-
-**Use `Result` for recoverable failures where the caller needs context** to
-handle the error. These are often “unavoidable” errors caused by external
-factors (like I/O or network) that even correctly implemented code cannot
-prevent with checks ahead of time. Nevertheless, the caller can reasonably
-anticipate the kinds of errors (a file-related function can fail with an I/O
-error). The error details allow the caller to distinguish failure modes and
-recover appropriately.
-
-```
-// Good: The caller needs to know *why* it failed (NotFound vs PermissionDenied).
-fn open_file(path: &Path) -> Result<File, io::Error> { ... }
-```
-
-**Use `panic!` to report bugs and violated invariants.** These errors are
-avoidable: the program is missing a check, and is calling an operation without
-fulfilling a precondition. These defects must be fixed in the code, not handled
-at runtime, although coarse-grained recovery might be possible with
-`catch_unwind`.
-
-```
-// Good: Panics if the invariant (index must be in bounds) is violated.
-// This indicates a bug in the caller's logic.
-impl<T> MyVec<T> {
-    pub fn remove(&mut self, index: usize) -> T {
-        if index >= self.len() {
-            panic!("index out of bounds");
-        }
-        // ...
-    }
-}
-```
-
-Note: Some codebases may choose to avoid panics entirely, and require even
-broken invariants to be reported via `Result`.
-
-Exceptions:
-
-## Types
-
-Use a
-[newtype](https://doc.rust-lang.org/rust-by-example/generics/new_types.html)
-instead of a type alias in the following cases:
-
-Prefer types with named fields over tuples, as tuple indexes (`.0`, `.1`, …)
-quickly become confusing.
-
-Exceptions:
-
-## Traits
-
-As a general rule, low-level library code should anticipate users’ needs
-proactively, while application code should add trait impls as needed.
-
-If a method matches the purpose and behavior of a standard library trait,
-implement that trait. For example, instead of writing `fn from_str(&str) ->
-Self` on `Foo`, you should `impl FromStr for Foo`.
-
-It is acceptable to have both the method and the trait impl for discoverability
-reasons.
-
-For context, see Clippy lint
-[`should_implement_trait`](https://rust-lang.github.io/rust-clippy/master/index.html#should_implement_trait)
-([list of traits](https://github.com/rust-lang/rust-clippy/blob/928349795f9f28f54e69bd0f0ffeed33de5e272a/clippy_lints/src/methods/mod.rs#L3940-L3971)).
-
-Manual implementations should be avoided if they can be expressed as a
-`#[derive()]`.
-
-In libraries, prefer accepting generics (`T: Trait` or `impl Trait`) in function
-parameters over `dyn Trait`.
-
-Exceptions:
-
-Rationale
-
-Define a trait only for the following purposes:
-
-- To enable generic programming (to use `T: Trait` in constraints of generic functions and types).
-- To accept or return an `impl Trait` or `dyn Trait`.
-- To define an [extension trait](https://google.github.io/styleguide/rustguide.html#extension-traits) (but see also the caveats in the section on extension traits).
-
-In all other cases where you want to implement functionality for a type, use an
-[inherent implementation](https://doc.rust-lang.org/std/keyword.impl.html#inherent-implementations).
-
-Don’t use traits merely to organize code.
-
-### Extension traits
-
-An
-[extension trait](https://rust-lang.github.io/rfcs/0445-extension-trait-conventions.html)
-is a trait that adds methods to a type from a different crate.
-
-What differentiates an extension trait from other traits is that its sole
-purpose is to add methods to the type; it is not intended for use in generics
-(`T: Trait`, `impl Trait`) or dynamic dispatch (`dyn Trait`). To indicate this,
-the name of an extension trait should carry the suffix `~Ext` (for example,
-`ForeignTypeExt`).
-
-In general, the team that owns the original type should also own the extension
-trait.
-
-Exceptions:
-
-Note: This rule is specifically about extension traits. It is relatively common
-to define a trait as an input trait (e.g., `DateLike`) and implement it on a
-bunch of foreign types.
-
-Examples
-
-```
-extern crate foreign_crate;
-use foreign_crate::ForeignType;
-
-trait ForeignTypeExt {
-  fn additional_method(&self);
-}
-
-impl ForeignTypeExt for ForeignType {
-  fn additional_method(&self) { ... }
-}
-```
-
-It is also possible to define an extension trait for every type that implements
-some foreign trait. Effectively, this is equivalent to adding default methods to
-the foreign trait:
-
-```
-extern crate foreign_crate;
-use foreign_crate::ForeignTrait;
-
-trait ForeignTraitExt {
-  fn additional_method(&self);
-}
-
-impl<T: ForeignTrait> ForeignTraitExt for T {
-  fn additional_method(&self) { ... }
-}
-```
-
-Rationale
-
-When the same team owns the extension trait and the type being extended, this
-helps avoid method name conflicts between the base type and the extension trait
-or between two extension traits.
-
-- **Types with public fields**: Consider implementing traits implemented by all subfields.
-- **Error types**: Implement the `Copy` trait whenever possible. `Copy` types are simpler to manage and propagate because they can be passed by value without moving ownership. An example of a case where this is not possible is if the error must contain non-`Copy` fields like a `String`.
-- **`Copy`**: Implement whenever it is reasonably clear that the type will continue to be `Copy` in the future.
-- **`Clone`**: Most types should implement `Clone` unless they represent some external resource.
-- **`Default`**: Implement if the type implements `new()` or otherwise has a default state. For context, see Clippy lint [`new_without_default`](https://rust-lang.github.io/rust-clippy/master/index.html#new_without_default).
-- **`PartialEq`** / **`Eq`**: If you want users to use the `==` operator, prefer implementing `PartialEq` over `Eq`. When you do implement `Eq`, be aware of the additionally required reflexivity (details: https://doc.rust-lang.org/std/cmp/trait.Eq.html).
-- **`PartialOrd`** / **`Ord`**: If you want users to use the `<` or `>` operators, prefer implementing `PartialOrd` over `Ord`. When you do implement `Ord`, be aware that it requires total ordering (details: https://doc.rust-lang.org/std/cmp/trait.Ord.html).
-- **Map keys**
-  - If you think it is likely that a type will be used as a map key or otherwise cached, implement Hash and Eq.
-  - If, in addition, the type has a clear total ordering, implement Ord (and any traits it needs).
-
-### Pair important `From` impls with explicit constructor methods
-
-If a type has an important `From` impl that is expected to be one of the primary
-ways of constructing it, add an inherent `::new()`, `::new_from_foo()`¸ or
-`::from_foo()` method.
-
-Structs with all-public fields that are primarily used as a “bag of options” for
-a function should implement `Default`.
-
-Rationale
-
-This enables convenient use of struct update syntax (`Struct { a: 0,
-..Default::default()}` ).
-
-Never reach inside a poisoned mutex to get at its insides, no matter how
-tempting the use case may seem.
-
-### Don’t use `async` / `.await` [chrome]
-
-Don’t use `async` / `.await` in Chromium.
-
-In Chromium, prefer to use sequences instead of threads.
-
-Use Fuchsia’s mutex type, rather than one from `std::sync` or `parking_lot`.
-
-## Macros
-
-When considering how to express an API, prefer in order:
-
-- Regular Rust functions, types, traits, objects, and modules. (Avoid macros, code generation, and metaprogramming where possible).
-- `macro_rules!`-style macros.
-- Other code generation strategies (e.g. `genrule`)
-- `proc_macro` macros.
-
-When you decide to use a macro or code generation, please weigh the benefits
-against the costs:
-
-Rationale
-
-**Prefer non-macro facilities:** Macros can create dialects of the language that
-make it harder for engineers to work across the codebase. When a reader sees a
-usage of a macro, they can make fewer assumptions about that code than if it
-didn’t use a macro. Macros are harder to write correctly than regular Rust code.
-
-**Use `macro_rules!` for simple code generation:** Since Rust macros operate on
-the AST, they can be less fragile than textual code generation.
-
-## Naming
-
-### Naming methods
-
-Follow the Rust standard library style for naming methods. See also the guidance
-on
-[naming conventions](https://google.github.io/comprehensive-rust/idiomatic/foundations-api-design/predictable-api/naming-conventions.html)
-in the Comprehensive Rust course.
-
-Specific considerations:
-
-- Use prefixes such as as_...(), to_...(), or into_...() with the appropriate self convention. See also this section of the Rust API Guidelines and the Clippy lint `wrong_self_convention`.
-
-Lifetimes should have descriptive names, especially type lifetimes.
-
-Exceptions:
-
-Use a short name for your generic parameters (either single or multi character),
-related to the kind of thing they represent. Single-letter generics are okay,
-but the letter chosen should be somewhat indicative of the object type, ideally
-taken from the most important trait bound.
-
-`T` or `U` are fine when the generics are in a relatively unbound context; i.e.
-it is an API intended for use with most types, like `Vec<T>`.
-
-When naming an [extension trait](https://google.github.io/styleguide/rustguide.html#extension-traits), give the name an `~Ext`
-suffix (for example, `ForeignTypeExt`).
-
-### Naming initialization functions
-
-Follow these guidelines when naming initialization functions:
-
-- Constructors: Use `new()`, or `new_with_foo()` if there is more than one. If the constructor returns a `Result`, use `try_new()`.
-- Value-to-value conversions: Use `from_foo()` with an associated `From` impl. See [here](https://doc.rust-lang.org/std/convert/trait.From.html#when-to-implement-from) for details on when an operation can be considered to be a value-to-value conversion.
-
-Don’t use abbreviations (especially acronyms and initialisms) that someone
-outside your project is unlikely to know. Don’t abbreviate by deleting letters
-within a word.
-
-See also the
-[Google C++ Style Guide](https://google.github.io/styleguide/cppguide.html#General_Naming_Rules).
-
-Exceptions:
-
-Add documentation comments to public APIs, potentially using the `missing_doc`
-lint to help with this.
-
-Best practices for documentation comments:
-
-- Consider including examples: It is not necessary for every function to have examples, but enough functionality should be covered in examples *somewhere* to give an idea of how the crate works.
-- Always document panic cases for functions which may panic due to malformed input.
-- Clearly document invariants for unsafe functions and traits.
-- Use capitalization and punctuation.
-- Don’t explain the basics of the programming language. For example, don’t do the following: `struct MockFileSystem { ... } /// A mock implementation of the FileSystem trait, intended to be used in unit tests. impl FileSystem for MockFileSystem `
-
-Exceptions:
-
-- Comments should say something that the code does not already say. If there’s nothing insightful to say, it is better to omit the comment than to repeat the function name in a trivial way. For example, don’t do the following (it’s fine to `allow` the lint in that case): `/// Removes an element. pub fn remove_element() -> Element {} `
-- It is generally okay to omit documentation on individual enum variants, especially if their name is self-explanatory.
-
-**How to format documentation comments**
-
-Follow these guidelines when writing documentation comments:
-
-It is acceptable, and even encouraged, to mix doc comments (`///` and `//!`) and
-ordinary comments (`//`). If you have one thing you wish to document publicly,
-and another thing you want to note as an implementation comment, then use both!
-For example:
-
-```
-/// Finds the first `FooItem` with the given `name`, or `None` if not present.
-// TODO: crbug.com/12345 - `name` should be &str, not String.
-pub fn get_named(items: &[FooItem], name: String) -> Option<&FooItem> {...}
-```
-
-Rationale
-
-Many, though not all, languages have a different commenting convention (such as
-extra `*` characters) for doc comments as opposed to implementation comments.
-Rust and Python are notable for not just having different commenting
-conventions, but an actual different syntax entirely. This has concrete benefits
-to the Rust ecosystem:
-
-### Unsafe code
-
-Don’t write unsafe code unless there is no way to implement the same
-functionality with safe code.
-
-If you do have to write unsafe code:
-
-Don’t use unstable features.
-
-Exceptions:
-
-### Getters and setters
-
-Writing and naming getters and setters should follow these guidelines:
-
-- foo() for a getter that returns a T by value.
-- foo_mut() for a getter that returns a &mut T.
-- take_foo() for a getter that “clears” the value (by setting it to None or some other default state) and returns the old value.
-- set_foo() for a setter that takes a T by value.
-- with_foo() / with_mut_foo() for an accessor that operates via a closure (see details below). Such an accessor is invoked as object.with_foo(|foo| frob(foo)).
-- replace_foo() for a setter that returns the old value.
-
-Examples
-
-```
-impl Stuff {
-   fn foo(&self) -> &Foo { ...  }
-   fn foo_mut(&mut self) -> &mut Foo { ... }
-
-   /// Sets "baz" property to `None` and returns the old value.
-   fn take_baz(&mut self) -> Option<Baz> { ... }
-
-   fn set_foo(&mut self, foo: Foo) { ... }
-
-   /// Calls `f` with a borrow of the "bar" property.
-   /// Returns the return value of `f`.
-   fn with_bar<R>(&self, f: impl FnOnce(&Bar) -> R) -> R { ... }
-
-   /// Calls `f` with a mutable borrow of the "bar" property.
-   /// Returns the return value of `f`.
-   fn with_mut_bar<R>(&self, f: impl FnOnce(&mut i32) -> R) -> R { ... }
-
-   /// Sets "foo" property to `foo` and returns the old value.
-   fn replace_foo(&mut self, foo: Foo) -> Foo  { ... }
-}
-```
-
-Accessors that accept a closure (`.with_foo()`) are typically invoked as
-`object.with_foo(|foo| do_something_with(foo))`. They can be a good choice in
-the following situations:
-
-- When the property is contained in an interior mutability wrapper (e.g. `Mutex` or `RefCell`). These mechanisms need to constrain access to the property to a scope, and the closure provides this scope. This is usually preferable to directly returning the RAII object that implements the scope (e.g. `MutexGuard<T>`) because the latter would leak an implementation detail.
-- When follow-up work or validation is needed after a property is changed and a `set_foo()` accessor cannot be used (for example because the property’s type is expensive to clone or cannot be cloned at all).
-
-A `with_foo()` accessor will often allow the closure to return a value and
-forward it by returning it from `with_foo()`.
-
-If you need to provide two closure-accepting accessors, one for read-only access
-and one for mutable access, it is common to name them `with_foo()` and
-`with_mut_foo()`. Otherwise, `with_foo()` is often also used for mutating
-accessors.
-
-If you implement `len()`, also implement `is_empty()`. For context, see Clippy
-lint
-[`len_without_is_empty`](https://rust-lang.github.io/rust-clippy/master/index.html#len_without_is_empty).
-
-Treat items marked `#[doc(hidden)]` as private. Don’t access them unless you own
-the code.
-
-Mark a public function as `const` only if you expect it to remain `const` in the
-future (or can commit to helping clients migrate when it changes).
-
-Rationale
-
-It’s a breaking change to turn a `const` function into a regular function.
-
-Use operator overloads for their original mathematical/logical purpose, not just
-to make the code more concise (as “syntax sugar”).
-
-### Apply `#[non_exhaustive]` to publicly-exposed enums
-
-If an enum is part of a public API used by other teams, mark it
-`#[non_exhaustive]`.
-
-Exceptions:
-
-For context, see Clippy lint
-[`exhaustive_enums`](https://rust-lang.github.io/rust-clippy/master/index.html#exhaustive_enums).
-
-Rationale
-
-Marking an enum `#[non_exhaustive]` forces users to include a wildcard arm (`_
-=> ...`) in `match` statements. This ensures code continues to compile when new
-variants are added to the enum later.
-
-This rule is primarily important for enums used across team boundaries, because
-the scope of the breakage could be significant. Enums used only a small number
-of times can’t create a large breakage and thus may ignore this rule.
-
-Structs with public fields that are part of a public API used by other teams
-should be marked `#[non_exhaustive]`.
-
-Exceptions:
-
-Rationale
-
-Adding a new field (even a private one) to a struct with all public fields is a
-breaking change, because callers can no longer name all fields in a struct
-literal.
-
-A `#[non_exhaustive]` struct can’t be constructed with the struct literal
-syntax, except for the code in the same crate. This allows new private fields to
-be added without breaking users.
-
-This rule is primarily important for structs used across team boundaries,
-because the scope of the breakage could be significant. Structs used only a
-small number of times can’t create a large breakage and thus may ignore this
-rule.
-
-### `#[must_use]` on functions
-
-Use `#[must_use]` on functions in these cases:
-
-- The caller cannot use the function correctly if they ignore the return value. This includes pure functions (functions without side effects), such as `HashMap::get()`.
-- Any function whose return value represents an error or otherwise critical information about the function’s behavior. If the return type is already annotated `#[must_use]` (which is true of `Result`, for example), the function does not need to be annotated `#[must_use]`.
-
-### `#[must_use]` on types
-
-Use `#[must_use]` on types intended to be returned by functions that would
-otherwise be annotated `#[must_use]` according to the
-[rules above](https://google.github.io/styleguide/rustguide.html#must-use-on-functions).
-
-Examples:
-
-- The type is an error type (similar to `Result` or `StatusOr`).
-- The type represents a lazily evaluated computation. In other words, the function call doesn’t do anything by itself, and the return value needs to be accessed to cause some desired side effect.
-
-Do not cause code to run before `main()`, for example by using techniques such
-as the [ctor crate](https://docs.rs/ctor/latest/ctor/).
-
-Add enough explicit types so that someone familiar with the codebase can figure
-out what the inferred types are.
-
-Prefer to add the types to variable declarations, rather than as
-[turbofishes](https://doc.rust-lang.org/reference/glossary.html#turbofish). If
-the compiler forces you to add a turbofish, it is generally fine to add a `_`
-inference marker.
-
-Specific situations in which you should probably add types:
-
-Avoid potentially panicking operations when the input data guarantees they
-cannot panic. For example, instead of using `Option::unwrap` on a value known to
-be valid, use pattern matching to prove correctness to the compiler.
-
-```
-// Good: The match arm proves to the compiler that `x` is `Some`.
-// A panic is obviously not possible.
-if let Some(value) = option {
-    use_value(value);
-}
-```
-
-```
-// Bad: Correctness of `unwrap` relies on a runtime check that `option` is `Some`.
-if option.is_some() {
-    use_value(option.unwrap());
-}
-```
-
-### Prefer `expect` over `unwrap`
-
-If a panic is necessary because an invariant cannot be expressed in the type
-system, prefer `expect` over `unwrap` to document the reason.
-
-Prefer to list all enum variants in `match` statements over `non_exhaustive`
-enums.
-
-If you don’t care about specific variants, place them in the wildcard arm. If
-you *only* care about specific variants, use an `if let` or a `let … else {}`.
-
-Examples:
-
-```
-#[non_exhaustive]
-pub enum Shape {
-    Circle,
-    Square,
-    Triangle,
-}
-```
-
-```
-fn process_shape(shape: Shape) {
-  match shape {
-    Shape::Circle => println!("It's a circle"),
-    Shape::Square => println!("It's a square"),
-    // Triangle and any future variants don't require any actions.
-    Shape::Triangle | _ => {}
-  }
-}
-```
-
-```
-fn process_shape(shape: Shape) {
-  if let Shape::Circle = shape {
-    println!("It's a circle"),
-  }
-}
-```
-
-```
-fn process_shape(shape: Shape) {
-  match shape {
-    Shape::Circle => println!("It's a circle"),
-    _ => {}
-  }
-}
-```
-
-Exceptions:
-
-This is covered by the built-in lint `non_exhaustive_omitted_patterns` which you
-can enable on your code.
-
-While some assertions are self-explanatory, many benefit from additional context
-that clarifies why an assertion is expected to hold, or what caused it to be
-violated. Use the optional format string argument for `assert!` to convey this
-context.
-
-You should always consider adding context, but particularly in the following
-situations:
-
-Examples
-
-**Explaining why an assertion should hold**
-
-```
-    assert!(
-        values.is_sorted(),
-        "`values` is populated from a `PriorityQueue`, so we expect it to be sorted"
-    );
-```
-
-**Logging a value to clarify why the assertion failed**
-
-```
-assert!(refund > 0, "Refund must be positive, got {refund:?});
-```
-
-**Flagging misuse of an API**
-
-```
-impl Database {
-    ...
-
-    fn execute_query(&self, query: &str) {
-        assert!(self.stream.is_some(), "Call connect() before executing queries");
-    }
-
-    ...
-}
-```
-
-**Don’t use the context string merely to repeat the condition**
-
-```
-assert(!values.is_sorted(), "values should always be sorted");
-```
-
-Avoid using combinator chains in ways that hurt readability. Specifically:
-
-Combinators *are* preferable for shorter chains and for cases where the
-combinator itself provides a lot of logic that would otherwise have to be
-written out in the corresponding `for` loop.
-
-Examples
-
-**Complex combinator chains**
-
-Here’s an example of a combinator chain that is hard to read because it involves
-conditionals and mutates external state:
-
-```
-let mut error_count = 0;
-let _processed_items: Vec<_> = items
-    .into_iter()
-    .map(transformation_that_may_fail)
-    .map(|result| {
-        if result.is_err() {
-            error_count += 1;
-        }
-        result
-    })
-    .filter_map(Result::ok)
-    .collect();
-```
-
-The corresponding `for` loop is easier to read:
-
-```
-let mut error_count = 0;
-let mut processed_items = Vec::with_capacity(items.len());
-
-for item in items {
-    match transformation_that_may_fail(item) {
-        Ok(val) => processed_items.push(val),
-        Err(_) => error_count += 1,
-    }
-}
-```
-
-**Combinator chains in for loops**
-
-Avoid constructing a combinator chain in the header of a `for` loop:
-
-```
-for bug in bug_descriptions
-    .iter()
-    .filter_map(|description| parse_bug_description(description).ok())
-    .filter(|bug| bug.priority <= Priority::P1)
-{
-    assign_bug(bug);
-}
-```
-
-Instead, assign the combinator chain to a variable. This reduces clutter, and
-the variable name documents what the combinator chain does:
-
-```
-let urgent_bugs = bug_descriptions
-    .iter()
-    .filter_map(|description| parse_bug_description(description).ok())
-    .filter(|bug| bug.priority <= Priority::P1);
-
-for bug in urgent_bugs {
-    assign_bug(bug);
-}
-```
-
-**When to prefer a combinator chain**
-
-Here’s an example where a combinator chain is preferable:
-
-```
-let threshold_exceeded = values.iter().any(|&v| v > threshold);
-```
-
-The corresponding for loop is harder to read and reinvents the logic contained
-in `any()`:
-
-```
-let mut threshold_exceeded = false;
-for v in values {
-  if v > threshold {
-    threshold_exceeded = true;
-    break;
-  }
-}
-```
-
-Use of `panic::catch_unwind` is prohibited in first-party Rust code.
-
-Exceptions:
-
-- It is acceptable as a defense in depth mechanism as long as it is never relied upon for any properties. A codebase that is already attempting to avoid panics may choose to wrap critical entry points with a catch_unwind recovery mechanism just in case a panic slips through. Code authors must convince the reviewer that the codebase is doing most of what it can to avoid panics. This exception only applies to code that has the possibility of being run with panic=unwind (so this does not apply to Chrome, Android, Fuchsia).
-
-Rationale
-
-Rust code may be used in many environments, and `panic::catch_unwind` will only
-function correctly in environments with `panic=unwind`. While the final panic
-disposition of prod binaries has not yet been determined, Chrome, Android, and
-Fuchsia all require `panic=abort`.
-
-### Prefer `format!` / `write!` for concatenation and substitution
-
-Prefer `format!()` and `write!()` to other alternatives in the following
-situations:
-
-Rationale
-
-Most codebases use their own specific test framework rather than `#[test]`.
-
-- Chrome Use [rust_gtest_interop](https://source.chromium.org/chromium/chromium/src/+/main:testing/rust_gtest_interop/). This makes it possible to integrate Rust tests into C++ test binaries.
-- Fuchsia Use `#[fuchsia::test]`. See [here](https://fuchsia.dev/fuchsia-src/development/languages/rust/testing.md) for more details.
+The graph above was made by fuzzing my garbage collector, using the same
+approach as my benchmarks.

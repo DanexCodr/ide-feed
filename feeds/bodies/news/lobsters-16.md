@@ -1,127 +1,278 @@
-After some 7 months of being ‘closed’ to new entrants, [Garmin has re-opened and revamped the Garmin Connect API developer program](https://developer.garmin.com/gc-developer-program/overview/), focused specifically on 3rd-party platforms that want to receive data files from Garmin devices via Garmin Connect, or send certain types of data to Garmin devices. Things like receiving your completed activities/workouts, sending routes/courses or structured workouts to Garmin devices, receiving general health/wellness data, and so on. All of these leverage the Garmin Connect API today, and have for many years.
+*TL;DR: The DuckDB team is happy to announce that today we're releasing DuckDB version 2.0.0 LTS, codenamed “Cinnamon Teal” (Spatula cyanoptera). This is our biggest feature release so far, and it ships a polished version of the Quack protocol, asynchronous I/O, a first-class `VARIANT` type, agent mode, triggers, an extensible SQL parser and much more, built from close to 20,000 commits since DuckDB 1.5.*
 
-Before we get into the details of the new program, Garmin closed it to new applications back in March due to an overwhelming number of inbound applications. With the rise of AI-generated apps, Garmin went from a handful of (mostly legit) applications each week to a tsunami of new AI vibe-coded applications each day. Fun fact: Less than half of all applications that were requesting access even bothered to use it, once granted.
+We are proud to release DuckDB 2.0.0, codenamed [“Cinnamon Teal”](https://shell.duckdb.org/#queries=v0,ATTACH-'https%3A%2F%2Fblobs.duckdb.org%2Fduck.db'-AS-duckdb~,CALL-duckdb.cinnamon_teal()~) after the [*Spatula cyanoptera*](https://en.wikipedia.org/wiki/Cinnamon_teal), a strikingly reddish-brown duck found in the western Americas.
 
-Of course, it’d be easy to blame vibe-coded AI apps for everything, but the reality was Garmin’s process was equally to blame. They treated every inbound request as if it were an enterprise-level company, rather than perhaps just a hobbyist developer or early-stage startup. That meant that everything from business case validation, policy validation, and such was all done at a level far beyond any other wearable in the space. Applications could take weeks to months (easily), compared with sometimes instant access to credentials from other companies like Polar, Wahoo, Suunto, and more. Garmin didn’t differentiate between the credential types: Everyone got the same full-fledged access, whether they really needed it or not.
+While [DuckDB 1.0](https://duckdb.org/2024/06/03/announcing-duckdb-100.html) was all about stability and backward compatibility, DuckDB 2.0 is above all a feature release.
+In this blog post, we summarize the highlights and then walk through the breaking changes and how to migrate.
+We showcased many of the new features in [“A Preview of DuckDB v2.0”](https://duckdb.org/2026/08/17/duckdb-20-highlights.html), which covers each one in more depth.
+For the complete release notes, see the [release page on GitHub](https://github.com/duckdb/duckdb/releases/tag/v2.0.0).
 
-That changes today, with three distinct tiers that essentially allow an app to ‘grow’ from hobbyist level, to startup level, to full ‘enterprise’ level access with 24×7 support/etc. The first two tiers are free, and greatly expand access to individuals wanting instant access to Garmin’s platform, effectively creating an MCP level of sorts…minus actually creating an MCP.
+> Tip To install the new version, please visit the [installation page](https://duckdb.org/install/).
+> Some clients, such as the CLI and Python, are already available. Other client libraries (e.g., R and Rust) and some extensions can take a few days to release due to the extra changes and review rounds required.
 
-With that, let’s dive into it.
+With this release, there are currently three DuckDB lines available.
+DuckDB 2.0 is a long-term support (LTS) release with support until at least October 2027.
+The previous LTS release, version 1.4, is still supported until November 17, 2026.
+To ensure a smooth transition and allow sufficient time for testing, we extended the support period of DuckDB 1.5 until March 2027, effectively also turning it into an LTS release.
+For details, see the [release calendar](https://duckdb.org/release_calendar.html#lts-releases).
 
-### **What Changes:**
+To find your way around the documentation for all of the new features, we also published a [“What's New in the Docs for 2.0”](https://duckdb.org/docs/2.0/whats_new_in_the_docs.html) page that links each feature below to its documentation.
 
-![](https://media.dcrainmaker.com/images/2026/10/UntitledImage-11.png)
+DuckDB has been an in-process database since day one.
+In [DuckDB 1.5.3](https://duckdb.org/2026/05/20/announcing-duckdb-153.html), released in May, we introduced the Quack protocol that lets you run DuckDB in a traditional client-server setup, along with the [`quack` extension](https://duckdb.org/docs/2.0/core_extensions/quack.html), which implements DuckDB's native protocol, so any DuckDB process can [serve its databases](https://duckdb.org/docs/2.0/quack/overview.html#server-side-usage).
 
-In short, Garmin Connect now has three different API levels, versions the previous level that required a bunch of paperwork and verifications. These three levels are now:
+DuckDB 2.0.0 ships a polished version of the Quack protocol with substantial performance and stability improvements. It also introduces the new [`CONNECT` statement](https://duckdb.org/docs/2.0/sql/statements/connect.html) that allows attaching and switching to a remote database in a single command for better ergonomics:
 
-**– Personal:** Designed for a single person to have access to their activity and health data via the Connect API  
+```
+CALL quack_serve(
+    token = 'my_token'
+);
 
-**– Startup:** Designed for organizations that need to support up to 1,000 users, adds more API areas  
+CREATE TABLE events
+    (date DATE, name VARCHAR);
 
-**– Enterprise:** Everything above, plus more API areas, technical support, and historical data. Oh, and it costs money.
+INSERT INTO events VALUES
+    ('2027-04-07',
+     'DuckCon #8');
+```
 
-All of this is best shown in the chart below, which I’ve copied from [Garmin’s Connect API site](https://developer.garmin.com/gc-developer-program/overview/), but we’ll keep it here for long-term historical reference. Cause, if we know anything from the past, it’ll probably change again.
+```
+ATTACH 'quack:localhost'
+    AS qk (TOKEN 'my_token');
 
-![](https://media.dcrainmaker.com/images/2026/10/GarminDeveloperAPI.png)
+CONNECT qk;
+SELECT * FROM events;
 
-The key thing here is that both the Personal and Startup levels get both JSON summaries (which is what that means in this context), as well as full .FIT file with the activity data in it. Though, it does sound like Garmin is annoyingly stripping out some data they consider proprietary, whereas if you upload it manually from your watch/device, that data is there. I’m hoping they’ll change that, partially because it’s dumb, and partially because it just increases the ways things can go wrong and is overly complicated.
+┌────────────┬────────────┐
+│    date    │    name    │
+│    date    │  varchar   │
+├────────────┼────────────┤
+│ 2027-04-07 │ DuckCon #8 │
+└────────────┴────────────┘
+```
 
-Still, I’m glad to see they’re offering the full .FIT file, as anything less would have mostly been useless when you start talking more interesting application ideas. Beyond that, you also get both general Health Data and Women’s Health Data JSON summaries (which is fine in this context, I think).
+For simplicity, this example runs the server and the client on the same machine. By default, the server only listens on `localhost`. To accept connections from other machines, keep the server on `localhost` and put it behind a [TLS-terminating reverse proxy](https://duckdb.org/docs/2.0/quack/setup/reverse_proxy.html). The [`allow_other_hostname` option](https://duckdb.org/docs/2.0/quack/overview.html#starting-a-server), which exposes the server directly, is only meant for testing.
 
-The process to create a Personal API key takes a few seconds in total.
+The `CONNECT` statement is not limited to Quack: it points your session at [any remote database that supports it](https://duckdb.org/docs/2.0/sql/statements/connect.html#supported-databases), including PostgreSQL and MySQL. For these, the new remote pushdown optimizer ships queries directly to the remote server instead of pulling tables over the wire.
 
-![](https://media.dcrainmaker.com/images/2026/10/UntitledImage-12.png)
+The CLI also has shortcuts for setting up a Quack client-server pair: the new [`-serve` and `-connect` arguments](https://duckdb.org/docs/2.0/clients/cli/arguments.html#serving-and-connecting-to-remote-databases) start a Quack server or connect to one directly from the command line:
 
-I just did it again, end to end; maybe 8 seconds?
+## [Performance](https://duckdb.org/2026/10/21/announcing-duckdb-200.html#performance)
 
-![](https://media.dcrainmaker.com/images/2026/10/UntitledImage-13.png)
+### [Asynchronous I/O](https://duckdb.org/2026/10/21/announcing-duckdb-200.html#asynchronous-io)
 
-Meanwhile, stepping up to the ‘Starter’ level adds the Courses & Training API’s. These allow developers to *push*  routes/courses to Garmin Connect, which can in turn end up on your device. And the same is true for structured workouts. Think things like Strava and Komoot Routes use this for routes, and TrainingPeaks or Final Surge uses this to send planned workouts. It sounds like approvals for this tier should be virtually instant.
+DuckDB 2.0 introduces [asynchronous I/O](https://duckdb.org/docs/2.0/data/io.html) for reading Parquet and CSV files, as well as [DuckDB's native storage format](https://duckdb.org/docs/2.0/internals/storage.html). The I/O layer now scales independently from the query processing layer, issuing reads in the background and keeping multiple requests in flight. This means far more parallelism for remote reads and dramatically faster queries on object storage such as [`s3://`](https://duckdb.org/docs/2.0/core_extensions/httpfs/s3api.html).
 
-Which then takes us to the ‘Enterprise’ level, which adds the Golf API that does small ball things, as well as more notably, the Historical Data backfill. This means when someone connects a new account up to their app, it’ll allow the user to backfill a predefined amount of historical data, versus just data from that moment forward. Further, it provides technical support and allows for more than 1,000 users.
+We described the design in detail in a [dedicated blog post](https://duckdb.org/2026/07/31/asynchronous-io.html).
+In that post, we showed the network throughput over the course of a query with and without asynchronous I/O:
 
-But of course – there’s a catch. Once you hit that 1,000-user realm, you’re now in ‘pay-for-play’ land. Garmin is joining Whoop in charging a fee here. There’s essentially an initial $1,000 entry fee, which is a credit towards your monthly active user bill. That means as a company you’ll pay on a per-user basis, for “active monthly users” that are connected. That’s a big shift from the current ‘totally free’ realm that’s been the case for Garmin Connect since 2019, [when they dropped the previous $5,000 entry fee](https://www.dcrainmaker.com/2019/04/garmin-connect-announcements.html).
+![Network throughput](https://duckdb.org/images/blog/v20-release/sync-vs-async-network-throughput-light.svg)
+![Network throughput](https://duckdb.org/images/blog/v20-release/sync-vs-async-network-throughput-dark.svg)
+*Network throughput. Higher utilization and shorter runtime are better.*
 
-Garmin is essentially saying they’re trying to recoup some of the costs of supporting the platform, while also being able to provide support at this higher tier. There’s also a reality here that many other companies are trying to build full businesses on the backs of Garmin’s platform (e.g. Bevel), and Garmin basically feels like if they want enterprise-level support, they should pay for it.
+The [`VARIANT` type](https://duckdb.org/docs/2.0/sql/data_types/variant.html) stores semi-structured, schema-less data such as JSON while keeping the performance of columnar execution.
+So you can think of it as JSON on steroids: a `VARIANT` column can store differently shaped data in every row, but unlike JSON it is not a text format.
 
-So what does that ‘monthly active users’ fee cost? Well, that’s to be negotiated on a per-company basis. It sounds like what Strava or Komoot would pay is undoubtedly different than what a smaller company would pay. However, for funsies, you may not know that the [DCR Analyzer](http://www.dcrainmaker.com/analyzer) actually supports the Garmin Connect API today (along with Amazfit, COROS, Hammerhead, Polar, Suunto, Wahoo, Google Health, and Apple Health via HealthFit). So I asked what it’d cost us. We have roughly 20,000 total users, but a much smaller portion of those are monthly active users with Garmin Connections. While I can’t share the exact amount, it’s fair to say it falls within the rough category of ‘pennies on the dollar’.
+[DuckDB 1.5 already introduced `VARIANT`](https://duckdb.org/2026/03/09/announcing-duckdb-150.html#variant-type), but DuckDB 2.0 fully integrates it. DuckDB 2.0 detects the common structure in your data and “shreds” it, so it compresses well and executes fast. The pipeline works end to end, from shredded execution straight out of storage to shredded `VARIANT` reading and writing for Parquet, backed by a family of [`variant_*` functions](https://duckdb.org/docs/2.0/sql/functions/variant.html). For example:
 
-This brings the next question: when will companies start to pay this? By April 1st, 2027. Between now and then, Garmin will work with existing Garmin Connect API partners to sort out that financial piece. By default, though, all existing partners become ‘Enterprise’ automatically. Further, no existing partner has to pay the $1,000 Enterprise entry fee.
+```
+CREATE TABLE events (payload VARIANT);
+INSERT INTO events
+VALUES
+    ('{"user": {"id": 42, "tags": ["a", "b"]}}'::JSON::VARIANT),
+    ('{"event": "click", "x": 10, "y": 20}'::JSON::VARIANT);
 
-I don’t love the idea of Garmin charging anything to access this data, and I largely feel like this should simply be the cost of doing business in 2026. If not, stick that cost into the marketing budget, because that’s what it is. It’s marketing for Garmin devices. Every single 3rd-party platform that integrates with Garmin is marketing for Garmin. That said, if I put on my DCR Analyzer hat, the cost here is pretty negligible – at least for one company. If a user wants to connect all of these platforms, then perhaps it’s slightly more notable, but even then, it still wouldn’t really matter to the bottom line.
+SELECT variant_type(payload), variant_keys(payload)
+FROM events;
+```
 
-Oh, and for lack of a better place to stick it, the existing Garmin Connect IQ program remains free and unchanged (that’s for widgets/apps/etc. on Garmin devices).
+```
+┌───────────────────────┬───────────────────────┐
+│ variant_type(payload) │ variant_keys(payload) │
+│        varchar        │       varchar[]       │
+├───────────────────────┼───────────────────────┤
+│ OBJECT                │ [user]                │
+│ OBJECT                │ [event, x, y]         │
+└───────────────────────┴───────────────────────┘
+```
 
-### **The Enterprise Competitive Landscape:**
+Coding agents such as Claude Code, Codex and Cursor increasingly drive the DuckDB CLI on their users' behalf. The 2.0 CLI detects when it is being run by an agent and switches to [agent mode](https://duckdb.org/2026/10/09/agent-mode.html): it prints compact Markdown tables instead of padded boxes, says clearly when a result was truncated, stops runaway queries early and reports errors as JSON.
 
-![](https://media.dcrainmaker.com/images/2026/10/IMG_4473.jpeg)
+Long-running SQL queries report their expected cost prior to running, so the agent can decide whether to wait. In our experiments on TPC-H, agent mode cut the amount of DuckDB output the model had to read by 59%. You can turn it *on* for manual testing using the [`-agent` flag](https://duckdb.org/docs/2.0/clients/cli/agent_mode.html#activating-agent-mode) or instruct your agent to turn it *off* using the `-no-agent` flag.
 
-So what does the ‘API’ competitive landscape look like? Well, it depends. There’s no real question here that Garmin provides the most robust API in terms of features (e.g., routes, structured workouts, completed activities, health data, women’s health, etc.). That part honestly isn’t really debatable – it’s factually true. Equally, while platforms like Apple provide free access, they don’t offer a web-based API to push data into Apple Health. Meaning, a partner *has* to develop an iOS app to push/pull it there. That’s why for the DCR Analyzer we use [HealthFit](https://apps.apple.com/us/app/healthfit/id1202650514)as our partner to pull data from Apple Health. The last thing I wanted to do was develop an app simply to get my Apple Fitness data; that solved our need.
+DuckDB has always used a parser derived from PostgreSQL's. In 2.0, our own modern, extensible [PEG-based parser](https://duckdb.org/2026/08/20/duckdb-20-peg-parser.html), which debuted as an opt-in feature in [DuckDB 1.5](https://duckdb.org/2026/03/09/announcing-duckdb-150.html#peg-parser), becomes the default. Extensions can now hook into the grammar itself (an idea we first explored in our [research on runtime-extensible parsers](https://duckdb.org/2024/11/22/runtime-extensible-parsers.html)), so expect extensions that expose entirely new SQL syntax. Error messages now come with precise source locations. For details, see the [PEG parser documentation](https://duckdb.org/docs/2.0/sql/peg_parser.html). The new parser is designed to be compatible with the old one, apart from a few deliberate changes listed in the [migration guide](https://duckdb.org/docs/2.0/operations_manual/migration.html#sql-parser). If you notice any other differences, please file an issue. In the meantime, you can switch back to the old parser using the [`legacy_parser` extension](https://duckdb.org/docs/2.0/core_extensions/legacy_parser.html) by running `SET enable_legacy_parser = true;`.
 
-Anyways, as for other device platforms – like COROS, Suunto, Wahoo, Polar, Amazfit, etc. – all of them today provide some level of API, but whether or not they provide it for the end-user to do something is heavily mixed. For example, COROS rolled out their MCP access for free for all COROS users. And Suunto announced the same thing last week for some time in the future. Wahoo and Amazfit have programs for companies, but those aren’t really available for individuals. Suunto and Polar also have programs for companies too, and both of those are pretty easy to access. In fact, fun tidbit: Out of all the API partners we implemented for the DCR Analyzer, by far Polar was the fastest and easiest to do.
+The old parser had served DuckDB since its first commit in 2018. Its grammar was generated with YACC/Bison, which produces an LALR(1) parser, so as DuckSQL grew, even small additions could collide with existing rules and raise `shift/reduce` or `reduce/reduce` conflicts. A PEG grammar avoids this by trying alternatives in the order they are written, so adding syntax no longer risks breaking unrelated rules. Python itself moved to a PEG-based parser in [version 3.9](https://peps.python.org/pep-0617/) for the same flexibility.
 
-Historically speaking, Whoop, for example, has charged for more detailed API access (such as the full workout files), while allowing free summary information. As an example, in the case of the DCR Analyzer, that’s not super useful, so we haven’t pursued it. Perhaps the pricing is reasonable; historically it hasn’t been.
+DuckDB 2.0 ships a revamped [C API v2](https://duckdb.org/docs/2.0/clients/c/overview.html#c-api-v2), which is considerably more powerful than its predecessor and exposes components such as file systems and table functions to extensions. Before marking it as stable, we would like to test it in the field, so please give it a try and [send us your feedback](https://github.com/duckdb/duckdb/discussions/27525)!
 
-In fact, one thing that Whoop specifically does is charge for ‘aggregator’ type platforms, such as Terra. Generally speaking, when I talk to platforms/companies in the sports tech realm, most have a strong disdain for Terra. It’s mostly for two reasons. The first is that most companies have felt that Terra consistently misleads their customers into thinking they have legit partnerships with the big platforms, when historically speaking, many of those platforms had never even heard of Terra. Second, Terra wasn’t using proper APIs (e.g. OAuth) for many of the sites they accessed, which makes it a notable security concern for the platforms in question. This [14-month-old community support question](https://tryterra.co/community/garmin-connect) best exemplifies the issue in one efficient thread.
+You can also register and host your own trusted extension repositories, so an organization can host and sign its own extensions and have them install and load just like the built-in ones:
 
-We saw this play out recently when Terra got themselves in a pickle as Garmin shut off access to the API for them, until they followed the rules that had been in place for years. Terra responded by asking people to e-mail Garmin’s CEO directly (and provided his e-mail address). Likewise, I got flooded with e-mails as well.
+```
+SET allow_extension_repositories = 'allowed';
 
-Still, Garmin’s shift here towards charging for API access will set a dangerous precedent for the industry. Especially for a company that bills itself as a (or the?) premium sports hardware provider. On the flip side, there’s simply no ignoring the flood of mostly AI apps that take up resources at Garmin and elsewhere to support. Heck, my inbox is flooded with these apps daily requesting reviews. It sounds like when Garmin shut off access to the API last spring, they were seeing inbound API requests at a daily scale that they’d previously only seen over a period of weeks. Simply put, there’s no good answer.
+CREATE EXTENSION REPOSITORY my_repo
+    WITH PREFIX 'https://extensions.example.org';
 
-### **Going Forward:**
+INSTALL AND LOAD my_ext FROM my_repo;
+```
 
-![](https://media.dcrainmaker.com/images/2026/10/IMG_7270.jpg)
+A repository is a name, a URL prefix and one or more RSA public keys that are trusted to sign the extensions served from it. The prefix can point at anything DuckDB can read: a local path, `https`, `s3`, you name it. At `CREATE` time, DuckDB fetches the repository's public keys and pins them into the repository definition, printing each key's SHA-256 fingerprint so you can compare it against one published out of band.
 
-Ultimately, there’s sorta a few groups of winners and losers here. For hobbyists, this is a huge win. A massive one. This is the first time that Garmin has provided access (and instant access) to their API for individual users to grab and play with their own data without having to deal with manual .FIT file uploads/management. Likewise, those users can easily/instantly get into the ‘Startup’ category and do more things – all for free up to 1,000 users. So for companies trying to test out a theory, it’s all good news there.
+This feature is still a work in progress and its syntax may change in future releases. For more details, see the [Extension Repositories page](https://duckdb.org/docs/2.0/extensions/extension_repositories.html).
 
-Where things get fuzzier is the bigger companies, though of course, 1,000 users is hardly ‘big’. Strava has 200 million users, for context. At least now the gates are back open again, and companies can start working their way through the process accordingly. It sounds like part of the goal here is that by offloading the lower-tier access, they can increase the response time for enterprise tiers, minimizing the delay to get through that paperwork approval pile. Plus, those bigger companies can get proper technical support too.
+DuckDB's [core extensions](https://duckdb.org/docs/2.0/core_extensions/overview.html) are also shipping several new features, fixes and performance optimizations. These are too numerous to all list here, so we only highlight a few of them and will cover them in dedicated blog posts in the coming weeks:
 
-Anyways, interesting times indeed.
+- We released DuckLake 1.1, including a new specification and reference implementation.
+- The Iceberg extension strives to become a feature-complete implementation. To this end, it adds REST catalog `ATTACH` options that derive a table's location from its namespace or load table metadata from the metadata-location file returned by the catalog. Further options control the URL prefix and the namespace separator.
+- The Delta extension can create Delta tables with CREATE TABLE (including partitioning and Delta table properties), supports time travel and improves VARIANT support.
 
-With that – thanks for reading!
+### [Triggers](https://duckdb.org/2026/10/21/announcing-duckdb-200.html#triggers)
 
-*P.S. – I found an old picture of Garmin’s Connect Developer Summit from 2019 when they first abolished the API fee. Seems appropriate here, even above.*
+DuckDB 2.0 delivers triggers: the [`CREATE TRIGGER` statement](https://duckdb.org/docs/2.0/sql/statements/create_trigger.html) with `BEFORE` and `AFTER` triggers, `FOR EACH ROW` and `FOR EACH STATEMENT`, transition tables via `REFERENCING OLD/NEW TABLE`, multiple triggers per event, `RETURNING` on triggered tables and `DROP TRIGGER`. The classic use case is audit tables, where a trigger records what changed in response to a table modification. Some combinations, such as `BEFORE ... FOR EACH ROW` and `UPDATE ... FOR EACH ROW` triggers, are not yet supported; see the [limitations](https://duckdb.org/docs/2.0/sql/statements/create_trigger.html#limitations).
 
-### FOUND THIS POST USEFUL? SUPPORT THE SITE!
+```
+CREATE TRIGGER trg_audit
+    AFTER UPDATE ON target
+    REFERENCING
+        OLD TABLE AS o
+        NEW TABLE AS n
+    FOR EACH STATEMENT
+        INSERT INTO audit
+        SELECT n.id, o.val, n.val
+        FROM o JOIN n ON o.id = n.id;
+```
 
-Hopefully, you found this post useful. The website is really a labor of love, so please consider becoming a [DC RAINMAKER Supporter](https://www.dcrainmaker.com/support). This gets you an ad-free experience, and access to our (mostly) bi-monthly behind-the-scenes video series of “[Shed Talkin’](https://www.youtube.com/watch?v=-qbE3feTkds&t=1s)”.
+Triggers can also maintain materialized views incrementally! For example, to keep track of the average age of people per nationality in a table `age_statistics`, you can use two triggers – one for insert and another for delete operations – and store the sum and the count alongside the average.
 
-Otherwise, perhaps consider using the below link if [shopping on Amazon](https://www.amazon.com/gp/browse.html?rw_useCurrentProtocol=1&node=8916179011&linkCode=ll2&tag=dcr07-20&linkId=2cf083a39b98796644643a4089b57a7a&language=en_US&ref_=as_li_ss_tl). As an Amazon Associate, I earn from qualifying purchases. It doesn’t cost you anything extra, but your purchases help support this website a lot. It could simply be [buying toilet paper](https://amzn.to/3SEEIK9), or this [pizza oven](https://amzn.to/3SEMN1M) we use and love.
+```
+CREATE TABLE people (name VARCHAR, nationality VARCHAR, age INTEGER);
+CREATE TABLE age_statistics (
+    nationality VARCHAR PRIMARY KEY,
+    sum_age INTEGER,
+    num_people INTEGER,
+    average_age DOUBLE
+);
+```
 
-1. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) [Z](https://trackmy.shoes/) .comment-author .vcard [October 21, 2026 at 12:02 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866559) #1 .comment-meta .commentmetadata I don’t understand the part about not having historical data, as I can fetch activity by ID. Do they mean not having some kind of bulk import? I have a shoe tracking app that syncs gear automatically from Garmin to Strava, but use unofficial APIs. Would be nice to use proper channels :) [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-## .children
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/55926d11e3304bc3d110cd3221a41438x116.png) [Ray Maker](http://www.dcrainmaker.com) .comment-author .vcard [October 21, 2026 at 12:22 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866565) #2 .comment-meta .commentmetadata The API being official, would be diferent than the unofficial piece that I presume you’re just using webhooks. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Walter .comment-author .vcard [October 21, 2026 at 3:51 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866673) #3 .comment-meta .commentmetadata Have you been able to find a way to get gear data from the Official API? [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) [Z](https://trackmy.shoes/) .comment-author .vcard [October 22, 2026 at 1:00 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866975) #4 .comment-meta .commentmetadata I will try today and get back to you [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) [Z](http://trackmy.shoes) .comment-author .vcard [October 22, 2026 at 4:06 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867032) #5 .comment-meta .commentmetadata – it seems there is internal gear ID in the FIT file. Message 526, field 0 – I cannot find official fetch gear endpoint So using JUST official API to manage gear is a no go. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-2. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/7f8bcf17ae7c8c49b8e2a463b91c2ffex116.png) [Guillermo](https://www.giventotri.com) .comment-author .vcard [October 21, 2026 at 12:06 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866561) #6 .comment-meta .commentmetadata Do they have any plans to allow platforms to push completed activities to Garmin Connect in this new program? I keep hoping apps like FORM get access to push my completed swims there. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-## .children
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/55926d11e3304bc3d110cd3221a41438x116.png) [Ray Maker](http://www.dcrainmaker.com) .comment-author .vcard [October 21, 2026 at 12:23 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866566) #7 .comment-meta .commentmetadata No, that still remains no-go territory for Garmin, save for the handful of strategic partners that mostly came from many years ago (Zwift, TrainerRoad, and more recently Peloton). [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Nick Radov .comment-author .vcard [October 21, 2026 at 1:28 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866606) #8 .comment-meta .commentmetadata It’s not a great solution but in theory you could generate a .FIT file for your swim activity and copy it to a Garmin device via USB. Then the activity should automatically sync to Garmin Connect. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/7f8bcf17ae7c8c49b8e2a463b91c2ffex116.png) [Guillermo](https://www.giventotri.com) .comment-author .vcard [October 21, 2026 at 3:17 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866659) #9 .comment-meta .commentmetadata Yeah, I mean, there are ways around it, but it’s a hassle to import things manually into Garmin Connect and it means it isn’t actually the source of truth for my fitness data because it’s incomplete. I don’t really understand Garmin’s rationale for it. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Richards .comment-author .vcard [October 22, 2026 at 4:57 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867050) #10 .comment-meta .commentmetadata The rationale is so you buy their devices exclusively. What might happen is that some people, I include myself here, are turned off by it and take their data elsewhere and do not use connect. But likely garmin has data that tells them it helps sell more devices. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-3. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) [Kyriakos](https://tryterra.co) .comment-author .vcard [October 21, 2026 at 12:38 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866575) #11 .comment-meta .commentmetadata Ray, this massively misrepresents Terra and what happened, but I am just going to assume you have good intentions and limited information Do you want to join me for a 30-minute live discussion so people can see everything and make their own judgment? [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-## .children
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/55926d11e3304bc3d110cd3221a41438x116.png) [Ray Maker](http://www.dcrainmaker.com) .comment-author .vcard [October 21, 2026 at 2:17 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866630) #12 .comment-meta .commentmetadata Hello. I don’t really see where/how having an open livestream discussion is going to be fruitful. For funsies, I just reached out to one of the companies on your list of 500 partners you have access to, asking what the current state was. I reached out to their lead partnership manager. Who in turn checked with the CTO as well as lead technical engineer. None of them have ever had any discussions with Terra, nor certainly any technical partnership or past/current implementation. They used a bunch of other words as well… Look, I think what you started with years ago as a place for startups to quickly gain access to what was fully walled gardens made sense, especially when you were leveraging API’s properly. But that’s not what’s going on today. Further, API’s are far more common today in wearables/fitness. Still, while I think there’s common good that can come from normalized data in a single repository that companies can access, the way this is currently implemented today simply isn’t that. Cheers [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) [Kyriakos](https://tryterra.co) .comment-author .vcard [October 21, 2026 at 3:18 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866660) #13 .comment-meta .commentmetadata The article and your response clearly misrepresents the facts and the livestream is meant to address this publicly, where you can bring your honest questions. I think good reporting is hearing both sides and reporting on them; otherwise, it’s a false narrative. Can you point me to the exact rules Terra didn’t follow in the Garmin case, since you mention them? The reality is that Terra lets customers move their health data wherever they choose because the data a device generates belongs to the users. We are always in an uphill battle with the big companies that benefit from the siloes, and I would assume you would also want to see your data not controlled by others. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/55926d11e3304bc3d110cd3221a41438x116.png) [Ray Maker](http://www.dcrainmaker.com) .comment-author .vcard [October 21, 2026 at 4:13 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866686) #14 .comment-meta .commentmetadata Sigh. Garmin’s Developer API terms prohibit licensees (Terra in this case, or the DCR Analyzer) from passing that content downstream to other entities. It also prohibits using the API for sub-licensing for monetary gain or otherwise, without written permission…and on and on. But of course, you know all this. As do your customers, back in September, when they were told by you to submit app details to stay compliant. Again, the developer agreement hadn’t changed in more years than I could count. Look, again, I think there are lots of interesting cases with above-board and proper OAuth authentication for middle-man data servicing. But as your own site specifies, you use Webhooks for many claimed partners (including many who have no idea that they’re supposedly a partner), and you’re polling constantly to check for that. That’s textbook definition of scraping. And we don’t even want to get into storing of user credentials. I don’t see much value in going back and forth on this. Ironically, in all the back-and-forth thus far, you haven’t refuted anything specific here. I promise, you’re really barking up the wrong tree here. You’re vastly underestimating how well I understand the technology at play here, and more critically – how many companies I’ve talked to (both ‘partner platforms’ and your actual paying customers that have reached out). [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Micko .comment-author .vcard [October 22, 2026 at 2:55 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867007) #15 .comment-meta .commentmetadata Well, you got him there. These companies are the main issue I think. They’ve been leeching and earning money from Garmin (and other companies) free API, while providing no real benefit, except easier integration (that is not impossible, just a bit harder) I really hope Garmin’s Enterprise access won’t be too expensive, since it would somewhat (for the lack of better word) kill my app. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Fit Observer .comment-author .vcard [October 22, 2026 at 4:49 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867047) #16 .comment-meta .commentmetadata You’re charging $500 a month for a product which is quite obviously not fit (pun intended) for purpose. Moreover, your X feed and customer handling is laughable at best. Watching you rile up Steven Scullion to rant about Garmin on his instagram account was hilarious. Even if he never mentioned Terra by name, we all knew who he meant. God only knows how you have managed to grow your company and employ Olympic athletes with your practices. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-4. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Raimonds .comment-author .vcard [October 21, 2026 at 2:06 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866624) #17 .comment-meta .commentmetadata Interesting turn. Week ago I created (with AI help) script/app that downloads last activities from Garmin and uploads to runalyze because our friends in Garmin started to stripe some information from fit files they are sending out to runalyze. Reading about change I understand that fit files downloaded using GC API have the same data missing which is now missing in runalyze, that would be VO2Max for example. It would be great if anyone could confirm this. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-5. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Pavel S .comment-author .vcard [October 21, 2026 at 4:15 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866687) #18 .comment-meta .commentmetadata Thanks for the good overview, as always. I’m wondering why Coros is always written in all caps. Do they force reviewers to write it that way, or what’s the reason? I get it when acronyms are written in all caps, like MCP, but Coros is nothing like that. It’s just a brand name. When reading a list of brands like “COROS, Suunto, Wahoo, Polar, Amazfit, etc.”, seeing one brand in all caps for no apparent reason is an eyesore to me and feels like a cheap marketing trick. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-## .children
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/55926d11e3304bc3d110cd3221a41438x116.png) [Ray Maker](http://www.dcrainmaker.com) .comment-author .vcard [October 21, 2026 at 4:21 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866690) #19 .comment-meta .commentmetadata I don’t know, it’s how they write their brand name, and while I don’t do fancy characters for model names like fēnix® – in the case of COROS, it just looks weird to anyone in sports tech if you write it Coros. Said differently, if I see a review/etc where someone writes it ‘Coros’, there’s a very strong chance that review is gonna suck, because they can’t at least spell the name of the company right. Just my two cents from writing the word COROS for over a decade…. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-6. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) David Lusty .comment-author .vcard [October 21, 2026 at 4:34 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866700) #20 .comment-meta .commentmetadata Got to say I don’t mind this at all. Love free data, love user access to that data, love the innovation that comes from that. This allows ideas to be tested, good thing. It encourages innovation, good thing. It allows Garmin a revenue stream other than hardware. I’m on the fence there. They can’t keep pushing hardware change as the only way to make money. Fenix for example has peaked a while ago and some innovation targeting specific users is good but that’s not going to be enough income to keep Garmin alive. We all need them alive! Compare this to Apple. Most of us like Apple and tolerate their taking a cut of literally everything near their platform. If Apple can take multiple cuts when you order a pizza then realistically Garmin should be allowed to take a small cut when running their platform and providing data and value. If Garmin go all Apple on us and prioritise subscription revenue from all angles, they’re dead to me. It’s not their DNA though, they need to cover costs and need some revenue not directly hardware based. This seems reasonable to me so far. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-7. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Tony West .comment-author .vcard [October 21, 2026 at 6:18 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866758) #21 .comment-meta .commentmetadata So this means I could sign up for a personal API key and point Claude at my data? Or would I need to pull my data down locally and use Claude with it from there? [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-8. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Paul S. .comment-author .vcard [October 21, 2026 at 8:41 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866847) #22 .comment-meta .commentmetadata Could this be the reason that today’s outdoor ride doesn’t show in Zwift Companion? I don’t remember any problems from the time Zwift decided to give XP for outdoor rides until today. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-9. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/ff93e4e7f8a26fa19f90143ff5f4a89ex116.png) Alex .comment-author .vcard [October 21, 2026 at 9:09 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4866864) #23 .comment-meta .commentmetadata I built an open-source script that lets you download workout files using a private API key and sync them to other services. Currently, only Intervals.icu and EffortSignal are supported, but I’ll gradually add more. The script can run either locally or on Cloudflare Workers within the free tier limits. [link to github.com](https://github.com/azaitsev/gc2everywhere) [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-10. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/65b5c4a96d430fa97d21195c4a27d977x116.png) Henrik Christensen .comment-author .vcard [October 22, 2026 at 3:06 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867009) #24 .comment-meta .commentmetadata So now we just need full and complete sync of all data between Connect and Apple Health :-) [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-11. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Jesper (CPH DK) .comment-author .vcard [October 22, 2026 at 3:49 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867023) #25 .comment-meta .commentmetadata Maybe slightly off topic, but does anyone know of an app/www that can show ones health data with better graphs??? I’m especially dreaming of weight graph that span all the data, not just one year at a time. And also with better details and not the avg of several datapoints. Give me 3 and 12 month with all points [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-## .children
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) [Z](http://trackmy.shoes) .comment-author .vcard [October 22, 2026 at 4:07 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867033) #26 .comment-meta .commentmetadata Put this into Claude. Literally :) It will spit out a lot of slop, but it will work and give you what you want. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Ronald .comment-author .vcard [October 22, 2026 at 4:27 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867040) #27 .comment-meta .commentmetadata hi Jesper, check out [link to runalyze.com](https://runalyze.com/) i’m not using it for that purpose but it has the capabilities. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-12. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) mat .comment-author .vcard [October 22, 2026 at 3:57 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867025) #28 .comment-meta .commentmetadata I know it’s not directly related to this (although perhaps?), but I’m looking for a solution to a problem: I have a tacx turbo trainer that connects to the garmin ecosystem, but switched my watch to suunto. I would like my tacx activities be visible in the suunto app not as manual added activities but proper trainings. Is that something that could potentially be done via APIs (on garmin and suunto side)? [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-13. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) John Tomac .comment-author .vcard [October 22, 2026 at 5:25 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867055) #29 .comment-meta .commentmetadata If I understand you correctly, companies with more than 1,000 users, such as Intervals.icu, will have to pay starting in 2027, so Intervals will no longer be free for users if they don’t want to loose money. I’d like to see Training Peaks graph (ATL, CTL, TSB) available in Connect in the future, just like TSS and IF metrics, which we already have. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-## .children
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/55926d11e3304bc3d110cd3221a41438x116.png) [Ray Maker](http://www.dcrainmaker.com) .comment-author .vcard [October 22, 2026 at 5:52 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867059) #30 .comment-meta .commentmetadata Intervals has a premium tier already ($4/month) which, if we assume roughly single-digit pennies per user, would easily cover that. Now of course, for their free tier, yeah, they’re gonna have to think that through (which sucks). Depending on their user volume, they could see that as a marketing expense to upsell premium, but I don’tknow their financials. That’s just business ROI pieces there for them to sort out. I suspect some of these factors are why Garmin says the negotiation pieces are per-company, not just because of size, but intended use case. For example, a university or medical study trying to do something at scale might not pay anything. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/ff93e4e7f8a26fa19f90143ff5f4a89ex116.png) Alex .comment-author .vcard [October 22, 2026 at 6:34 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867071) #31 .comment-meta .commentmetadata I saw a Garmin ad where they were selling bundles that include CIRQA and some research software. Maybe they partnered with another company or acquired one for this. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) [Dom](http://runningbadger.blogspot.co.uk/) .comment-author .vcard [October 22, 2026 at 7:46 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867099) #32 .comment-meta .commentmetadata It’s going to be interesting for sites that have a free tier and a lot of people who connect their Garmin unit, use it for a bit, then abandon it but leave the connection running. I foresee culls of dormant users. Looking at my own list of connected sites, I think I should cull a few myself. One of them doesn’t even exist any more! [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-  - ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/55926d11e3304bc3d110cd3221a41438x116.png) [Ray Maker](http://www.dcrainmaker.com) .comment-author .vcard [October 22, 2026 at 7:54 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867102) #33 .comment-meta .commentmetadata Yeah, I suspect dormant-type conditions will be the most logical path forward. Which, to be fair, is probably good for all involved anyway. Transfering tons of data around to platforms you never use is a waste. Like you, I’ve been meaning to do a cull of both my Strava & Garmin connections. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-14. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) [Kevin F](https://www.fitfiletools.com) .comment-author .vcard [October 22, 2026 at 9:46 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867146) #34 .comment-meta .commentmetadata Thanks for the fantastic write-up! As a long-time hobbyist developer, I completely sympathize with the position that Garmin — and really any company offering public APIs — finds itself in during the post-Claude Code era. Platforms will either need to adapt their partner models or face the same fate GitHub did: widespread outages triggered by an explosion of “vibe-coded” API traffic. Garmin’s approach seems entirely reasonable. ps: I’m here for the Terra sub-thread! Spicy. Go get ’em, Ray! [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-15. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Andy .comment-author .vcard [October 22, 2026 at 10:30 am](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867167) #35 .comment-meta .commentmetadata As an antitrust lawyer, I predict some arguments or complaints coming out of this. As you’ve previously identified, Garmin is like “all the data on Strava” (in short-hand) – whilst the devil is in the detail, it certainly seems arguable that Strava depends on Garmin API access – so what happens if they say they won’t pay? I don’t think Garmin can credibly pull access – it seems there’s a prima facie argument they are dominant in sports tech devices and data markets and so by withdrawing access upon which Strava is built for a refusal to pay risks being a potential abuse of dominance and/or the fees being charged risk being found to be excessive and unfair. Add in that Garmin’s downstream platform (TrainingPeaks) presumably won’t be paying those fees and you can argue that Garmin is favouring its downstream training platform and seeking to give it a competitive advantage over competitors (whether Strava or otherwise). There’s potentially a lot here for a would be complainant to challenge if Garmin do anything other than be pretty accommodating. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-16. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) LoneLeaf .comment-author .vcard [October 22, 2026 at 12:41 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867219) #36 .comment-meta .commentmetadata Allowing historical data again is good news. I recently wanted to export hundreds of activities (to the orange platform…) via Tapiriik and learned that Garmin cut off historical access some time ago. Hopefully Garmin gives safety-oriented API users like MyBikeTraffic a decent deal. It sounds like the personal API key could streamline getting data into Golden Cheetah. I haven’t used in a long time but it used to require a manual login each time. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
-17. ![](https://media.dcrainmaker.com/images/fv-gravatar-cache/mystery116.png) Neil .comment-author .vcard [October 22, 2026 at 3:07 pm](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#comment-4867273) #37this must be the last one! .comment-meta .commentmetadata Shame that the Personal API key is read-only. I’ve been building a sync app with it, activities and FIT files pull down fine, but there’s no way to push or schedule workouts. The unofficial Python library can do both, because it uses the same endpoints Garmin Connect itself uses, but that means logging in with the user’s own credentials. I’d also say getting a Starter account isn’t trivial for hobbyist developers. From what I’ve read you may need a registered company, and because you’d be storing other people’s data you also have to take data protection seriously. In the UK/EU that means GDPR: registering with the Information Commissioner’s Office and paying the data protection fee, a published privacy notice, a lawful basis for processing, being able to handle access and deletion requests, proper security, and reporting breaches within 72 hours. That’s a lot of overhead for a side project that only wants access beyond the read only limits imposed by the personal account. [Reply](https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html#respond) .reply #comment-##
+On insertion, we aggregate the new rows per nationality and merge them into `age_statistics`, adding a row for each new nationality:
+
+```
+CREATE TRIGGER people_insert
+    AFTER INSERT ON people
+    REFERENCING NEW TABLE AS n
+    FOR EACH STATEMENT
+        MERGE INTO age_statistics s
+        USING (
+            SELECT nationality, sum(age) AS sum_age, count(*) AS num_people
+            FROM n
+            GROUP BY nationality
+        ) d
+        ON s.nationality = d.nationality
+        WHEN MATCHED THEN UPDATE SET
+            sum_age = s.sum_age + d.sum_age,
+            num_people = s.num_people + d.num_people,
+            average_age = (s.sum_age + d.sum_age) / (s.num_people + d.num_people)
+        WHEN NOT MATCHED THEN INSERT
+            VALUES (d.nationality, d.sum_age, d.num_people, d.sum_age / d.num_people);
+```
+
+On deletion, we subtract the deleted rows and drop a nationality once its last person has left:
+
+```
+CREATE TRIGGER people_delete
+    AFTER DELETE ON people
+    REFERENCING OLD TABLE AS o
+    FOR EACH STATEMENT
+        MERGE INTO age_statistics s
+        USING (
+            SELECT nationality, sum(age) AS sum_age, count(*) AS num_people
+            FROM o
+            GROUP BY nationality
+        ) d
+        ON s.nationality = d.nationality
+        WHEN MATCHED AND s.num_people = d.num_people THEN DELETE
+        WHEN MATCHED THEN UPDATE SET
+            sum_age = s.sum_age - d.sum_age,
+            num_people = s.num_people - d.num_people,
+            average_age = (s.sum_age - d.sum_age) / (s.num_people - d.num_people);
+```
+
+Let's see people come and go:
+
+```
+INSERT INTO people VALUES
+    ('Alice', 'US', 34), ('Bram', 'NL', 27), ('Csilla', 'HU', 45),
+    ('Dave', 'US', 58), ('Eva', 'NL', 19), ('Femke', 'NL', 41);
+FROM age_statistics ORDER BY nationality;
+```
+
+```
+┌─────────────┬─────────┬────────────┬─────────────┐
+│ nationality │ sum_age │ num_people │ average_age │
+│   varchar   │  int32  │   int32    │   double    │
+├─────────────┼─────────┼────────────┼─────────────┤
+│ HU          │      45 │          1 │        45.0 │
+│ NL          │      87 │          3 │        29.0 │
+│ US          │      92 │          2 │        46.0 │
+└─────────────┴─────────┴────────────┴─────────────┘
+```
+
+```
+DELETE FROM people WHERE name = 'Alice';
+DELETE FROM people WHERE nationality = 'HU';
+FROM age_statistics ORDER BY nationality;
+```
+
+```
+┌─────────────┬─────────┬────────────┬─────────────┐
+│ nationality │ sum_age │ num_people │ average_age │
+│   varchar   │  int32  │   int32    │   double    │
+├─────────────┼─────────┼────────────┼─────────────┤
+│ NL          │      87 │          3 │        29.0 │
+│ US          │      58 │          1 │        58.0 │
+└─────────────┴─────────┴────────────┴─────────────┘
+```
+
+Triggers bring us one step closer to materialized views, a long-standing item in the [“future work” section of our roadmap](https://duckdb.org/roadmap.html#future-work).
+
+As always, DuckDB's [friendly SQL dialect](https://duckdb.org/docs/2.0/sql/dialect/friendly_sql.html) keeps growing. A few favorites from this release cycle:
+
+- The `$variable` shorthand lets you write $x in most places where an expression is allowed, instead of getvariable('x').
+- Data-modifying CTEs let you use INSERT, UPDATE, DELETE and COPY as pipeline steps.
+- `NEAREST` joins turn top-k similarity search into a join clause, handy for vector and embedding workloads.
+- Nested schemas allow schemas within schemas, e.g., CREATE SCHEMA finance.reports.
+- JSON mutation functions json_set, json_insert, json_replace and json_remove return modified copies of JSON documents (see also our blog post on JSON patches).
+
+There is more: DuckDB 2.0.0 supports the SQL-standard [`FETCH FIRST`](https://duckdb.org/docs/2.0/sql/query_syntax/limit.html#fetch-first) and allows [`UNNEST` in the `GROUP BY` clause](https://duckdb.org/docs/2.0/sql/query_syntax/groupby.html#grouping-by-unnest). It also ensures well-defined [`MERGE`](https://duckdb.org/docs/2.0/sql/statements/merge_into.html) and [`UPDATE ... FROM`](https://duckdb.org/docs/2.0/sql/statements/update.html) semantics for cases when multiple rows are matched.
+
+DuckDB 2.0 comes with a small set of breaking changes. For most users, upgrading is straightforward, but complex deployments running many DuckDB processes need more care. The storage format is the most likely source of problems: DuckDB versions before 2.0 cannot read database files created by DuckDB 2.0. DuckDB 2.0 can still read and write your existing database files, and these remain readable by older versions. We recommend testing 2.0.0 on a shadow system before switching production over. And, if your workload is mission-critical, you may want to wait for the first patch release, [coming in November](https://duckdb.org/release_calendar.html#upcoming-releases).
+
+For the full details, see the [migration guide](https://duckdb.org/docs/2.0/operations_manual/migration.html).
+
+Following DuckDB's long stint on C++11, DuckDB 2.0 now [requires a C++17 compiler](https://duckdb.org/docs/2.0/dev/building/overview.html#prerequisites).
+
+We also switched to Clang as the default compiler for our release builds. On Linux and macOS, both DuckDB and its core extensions are built with Clang. On Windows, the CLI is built with Clang, while most core extensions are still built with MSVC. We may move more Windows builds to Clang in the future, but this requires further changes.
+
+Timezone-aware timestamps, calendars and collations have always been powered by the ICU library. In 2.0, the ICU library is gone entirely: the [`icu` extension](https://duckdb.org/docs/2.0/core_extensions/icu.html) now implements timezones, calendars and collations itself, with the timezone data built directly from the IANA database and compressed down to around 45 kB.
+
+Everything keeps working exactly as before, and the native implementation is also faster. If you find any issues, please [let us know](https://github.com/duckdb/duckdb/issues)!
+
+#### [Lambda Syntax](https://duckdb.org/2026/10/21/announcing-duckdb-200.html#lambda-syntax)
+
+The old single-arrow lambda syntax (`x -> x + 1`) is now disabled by default. Use the Python-style syntax instead:
+
+```
+SELECT list_transform([1, 2, 3], lambda x: x + 1);
+```
+
+You can temporarily re-enable the old syntax with `SET lambda_syntax = 'enable_single_arrow';`. Both the flag and the single-arrow syntax will be removed entirely in v2.1.
+
+The [amalgamation build](https://duckdb.org/docs/1.4/dev/building/overview), which bundles DuckDB's entire source code into a single header and a single source file, is now deprecated. The amalgamation has grown too large to be realistically useful in most cases.
+
+We are gradually phasing out `osx_amd64` from the list of fully supported [platforms](https://duckdb.org/docs/2.0/operations_manual/installing_duckdb/requirements.html#supported-platforms).
+For the time being, DuckDB and [core extensions](https://duckdb.org/docs/2.0/core_extensions/overview.html) are still built and supported, but [community extensions](https://duckdb.org/docs/2.0/extensions/community_extensions.html) are no longer built for this platform. DuckDB 2.1 will stop supporting `osx_amd64`.
+
+These were a few highlights, but there are many more features and improvements in this release. There have been almost 20,000 commits by many contributors since DuckDB 1.5, shipping smaller features as well as performance and usability improvements. The full [release notes can be found on GitHub](https://github.com/duckdb/duckdb/releases/tag/v2.0.0).
+
+We would like to thank our community for the detailed issue reports and feedback that have driven this release, and our special thanks go to our contributors!

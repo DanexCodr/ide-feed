@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-22T21:19:14Z",
+  "updated": "2026-10-23T03:49:38Z",
   "items": [
     {
       "id": "devto-4858196",
@@ -74,27 +74,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4827496",
-      "title": "What Do You Drink While You Work?",
-      "desc": "By xulingfeng | 2 min read",
-      "tag": "tutorial",
-      "published": "2026-10-10T09:07:47Z",
-      "order": 7,
-      "url": "https://dev.to/xulingfeng/what-do-you-drink-while-you-work-17bm",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fsqu8mmyyofvus7v3q4ep.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAQIEA//EABYBAQEBAAAAAAAAAAAAAAAAAAABAv/aAAwDAQACEAMQAAABonpGbk7Of//EABkQAAMBAQEAAAAAAAAAAAAAAAABIRECEv/aAAgBAQABBQL0da2ngnHCEMP/xAAVEQEBAAAAAAAAAAAAAAAAAAAAAf/aAAgBAwEBPwFI/8QAFREBAQAAAAAAAAAAAAAAAAAAAQD/2gAIAQIBAT8BGW//xAAZEAACAwEAAAAAAAAAAAAAAAAAARARMUH/2gAIAQEABj8CaUdsVlmGR//EABwQAAMAAgMBAAAAAAAAAAAAAAABESExEEFRYf/aAAgBAQABPyHdjKHtTEQ19hikvRFQqTgNlnHh/9oADAMBAAIAAwAAABA6v//EABYRAQEBAAAAAAAAAAAAAAAAAAABYf/aAAgBAwEBPxCxg//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QA//EABsQAQADAAMBAAAAAAAAAAAAAAEAESExQVGB/9oACAEBAAE/EHDHVO4+eYYjzA7ICWc4rPsTUSFld+9wqXsa5v2IWA8gKhD1GyYHQ8n/2Q==",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4891584",
       "title": "AI Made Coding Cheaper. So Why Is Building Software Still So Expensive?",
       "desc": "By Harsh  | 4 min read",
       "tag": "tutorial",
       "published": "2026-10-21T19:42:55Z",
-      "order": 8,
+      "order": 7,
       "url": "https://dev.to/harsh2644/ai-made-coding-cheaper-so-why-is-building-software-still-so-expensive-59m",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F9oofpl3pmjs6z6obwdy3.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAgMEBf/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHnWgkvnQX/xAAYEAACAwAAAAAAAAAAAAAAAAABEQACEP/aAAgBAQABBQKBKxBrjjz/xAAYEQACAwAAAAAAAAAAAAAAAAAAARESMf/aAAgBAwEBPwGCqWH/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAWEAADAAAAAAAAAAAAAAAAAAAQIDH/2gAIAQEABj8CEb//xAAZEAEAAwEBAAAAAAAAAAAAAAABABARIVH/2gAIAQEAAT8hIx2dhzFvtqY6K//aAAwDAQACAAMAAAAQ/wCv/8QAFxEAAwEAAAAAAAAAAAAAAAAAAAERMf/aAAgBAwEBPxCHowP/xAAVEQEBAAAAAAAAAAAAAAAAAAABAP/aAAgBAgEBPxBYb//EABkQAQEBAQEBAAAAAAAAAAAAAAEAESExQf/aAAgBAQABPxCdN9Pch7IfRKWoWDsmHyW//9k=",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4827496",
+      "title": "What Do You Drink While You Work?",
+      "desc": "By xulingfeng | 2 min read",
+      "tag": "tutorial",
+      "published": "2026-10-10T09:07:47Z",
+      "order": 8,
+      "url": "https://dev.to/xulingfeng/what-do-you-drink-while-you-work-17bm",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fsqu8mmyyofvus7v3q4ep.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAQIEA//EABYBAQEBAAAAAAAAAAAAAAAAAAABAv/aAAwDAQACEAMQAAABonpGbk7Of//EABkQAAMBAQEAAAAAAAAAAAAAAAABIRECEv/aAAgBAQABBQL0da2ngnHCEMP/xAAVEQEBAAAAAAAAAAAAAAAAAAAAAf/aAAgBAwEBPwFI/8QAFREBAQAAAAAAAAAAAAAAAAAAAQD/2gAIAQIBAT8BGW//xAAZEAACAwEAAAAAAAAAAAAAAAAAARARMUH/2gAIAQEABj8CaUdsVlmGR//EABwQAAMAAgMBAAAAAAAAAAAAAAABESExEEFRYf/aAAgBAQABPyHdjKHtTEQ19hikvRFQqTgNlnHh/9oADAMBAAIAAwAAABA6v//EABYRAQEBAAAAAAAAAAAAAAAAAAABYf/aAAgBAwEBPxCxg//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QA//EABsQAQADAAMBAAAAAAAAAAAAAAEAESExQVGB/9oACAEBAAE/EHDHVO4+eYYjzA7ICWc4rPsTUSFld+9wqXsa5v2IWA8gKhD1GyYHQ8n/2Q==",
       "color": "#3B49DF"
     },
     {
