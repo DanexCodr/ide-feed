@@ -1,443 +1,118 @@
-In many dynamically typed programming languages, objects look like a big ol’
-mapping of names to values. The languages encourage this flexibility. Consider
-for example Python:
-
-```
-class C:
-    def __init__(self):
-        self.a = 1
-        self.b = 2
-```
-
-Or Ruby:
-
-```
-class C
-  def initialize
-    @a = 1
-    @b = 2
-  end
-end
-```
-
-```
-let obj = {};
-obj.a = 1;
-obj.b = 2;
-```
-
-This might encourage the VM implementor to model object attributes using a hash
-table. Hash tables, after all, are very good at mapping names to values.
-
-Here is, by way of example, a Python sketch of what this object model looks
-like. Because it is a sketch, it uses `write_attr` and `read_attr` instead of
-the much more common syntax that your programming language comes with.
-
-```
-MISSING = object()
-
-class Instance:
-    def __init__(self):
-        # TODO: the rest of your object system
-        self.cls = ...
-        self._fields = {}
-
-    def read_attr(self, fieldname):
-        return self._fields.get(fieldname, MISSING)
-
-    def write_attr(self, fieldname, value):
-        self._fields[fieldname] = value
-
-obj = Instance()
-obj.write_attr("a", 1)
-obj.write_attr("b", 2)
-print(obj.read_attr("a") + obj.read_attr("b"))
-```
-
-This has its benefits:
-
-It also has its drawbacks:
-
-This means that literally every operation `a.b` is doing hundreds or thousands
-of CPU instructions, including multiple dependent memory loads. This is *not
-good* for performance.
-
-So runtime implementors tend to implement this thing called maps, or layouts,
-or shapes, or hidden classes, or structures, or probably a secret sixth name I
-don’t know about, which optimizes reading, writing, and storage of attributes.
-
-But what does this shape code look like? How does it actually help performance?
-A lot of big production runtimes have pretty hairy code with domain-specific
-edge cases so they may not help get a handle on the basics. And a lot of blog
-posts, while excellent high-level overviews, are lacking in implementation. So
-here we go once more, blogging where everyone else has already blogged before.
-With any luck, you should be able to write a page of code and hold the whole
-thing in your head at once.
-
-I decided to once more give CF Bolz-Tereick’s [A Simple Object
-Model](https://aosabook.org/en/500L/a-simple-object-model.html) the thorough
-read it deserves. In the past, I tried a couple times and bounced off of it
-because it models Python with reasonable fidelity and the Python object model
-is *really hairy*.
-
-But did I read it thoroughly this time? Well, no. This time I allowed myself to
-skim the class- and method-related parts and instead focus on the instance
-attribute and map parts. Inside CF’s post is the core of a very clean map
-system and I wanted to experiment with that, so I extracted it out.
-
-CF’s post starts off very similar to our own sketch, modeling objects as
-unordered maps of attributes. It also fills in some of the TODO stuff I left
-out earlier around classes. I’ll copy my reduced implementation of it here so
-you can take a gander:
-
-```
-# The base object model code:
-
-class Base:
-    def __init__(self, cls, fields):
-        self.cls = cls
-        self._fields = fields
-
-    def read_attr(self, fieldname):
-        return self._read_dict(fieldname)
-
-    def write_attr(self, fieldname, value):
-        return self._write_dict(fieldname, value)
-
-    def _read_dict(self, fieldname):
-        return self._fields.get(fieldname, MISSING)
-
-    def _write_dict(self, fieldname, value):
-        self._fields[fieldname] = value
-
-MISSING = object()
-
-class Instance(Base):
-    def __init__(self, cls: "Class"):
-        super().__init__(cls, {})
-
-class Class(Base):
-    def __init__(self, name, base_class, fields, metaclass):
-        super().__init__(metaclass, fields)
-        self.name = name
-        self.base_class = base_class
-
-OBJECT = Class(name="object", base_class=None, fields={}, metaclass=None)
-TYPE = Class(name="type", base_class=OBJECT, fields={}, metaclass=None)
-TYPE.cls = TYPE
-OBJECT.cls = TYPE
-```
-
-Which you can use like this (test code also taken from CF’s post):
-
-```
-A = Class(name="A", base_class=OBJECT, fields={}, metaclass=TYPE)
-obj = Instance(A)
-obj.write_attr("a", 1)
-assert obj.read_attr("a") == 1
-
-obj.write_attr("b", 5)
-assert obj.read_attr("a") == 1
-assert obj.read_attr("b") == 5
-
-obj.write_attr("a", 2)
-assert obj.read_attr("a") == 2
-assert obj.read_attr("b") == 5
-```
-
-There’s a bit of delegation going on in the `Base` class because the post
-already anticipates what we’re about to do: swap out the `Instance`
-implementation for `_read_dict` and `_write_dict` for better performance.
-
-OK, let’s add on this “map” data structure. The purpose of the map is to do
-three things:
-
-**For the former**, we can think of an object’s map field as an (database) index or
-a write-through cache. It is responsible for reflecting on the layout of a
-given object:
-
-You can ask the map questions like “what attributes does this object have?” and
-“where is attribute `a` relative to the start of the object?”
-
-Just looking at the diagram, it may seem silly: after all, we have exchanged
-one hash table for another. There’s one big difference, though, which is that
-in the shape model, we don’t *have* to always use the hash table. If we
-remember the offset since the last time we looked it up in the shape, we can
-re-use the offset. This mostly appears in an interpreter feature called an
-inline cache.
-
-This brings us to **the second bit**: if we have the offset into the object, we
-can read right off of it. No need to go do a second load from another region of
-memory. We have the object in hand and hopefully already in the cache.
-
-…At least, until the map *changes*. Then we can’t re-use the offset. Remember, these languages encourage this
-flexibility. An object could gain or lose an attribute at any time. What then?
-Ideally we have a very fast check that can tell us if the object’s in-memory
-layout changed.
-
-This brings us to **the third bit**. We need to be able to rely on the map to
-be immutable, up-to-date, and a stable identifier for a given in-memory layout.
-This way we can do a very quick check (“is the map the same as last read?”)
-before a load.
-
-This means that when we add a new attribute to an object, we need to give it a
-new map. Maps are actually *trees* (tries?) and are allocated like a persistent
-data structure. Every new object starts with an empty map. As the program adds
-attributes, it follows the edges in the tree to find or create its new map.
-
-I recommend reading [the section on
-maps](https://aosabook.org/en/500L/a-simple-object-model.html#instance-optimization)
-because it goes into a little more detail.
-
-Keeping all of that in mind, let’s take a look at CF’s Python implementation of
-objects-with-maps and also of maps themselves:
-
-```
-class Instance(Instance):
-    def __init__(self, cls: "Class"):
-        super().__init__(cls)
-        self.map = EMPTY_MAP
-        self.storage = []
-
-    def _read_dict(self, fieldname):
-        index = self.map.get_index(fieldname)
-        if index == -1:
-            return MISSING
-        return self.storage[index]
-
-    def _write_dict(self, fieldname, value):
-        index = self.map.get_index(fieldname)
-        if index != -1:
-            self.storage[index] = value
-        else:
-            new_map = self.map.next_map(fieldname)
-            self.storage.append(value)
-            self.map = new_map
-
-class Map:
-    def __init__(self, attrs):
-        self.attrs = attrs
-        self.next_maps = {}
-
-    def get_index(self, fieldname):
-        return self.attrs.get(fieldname, -1)
-
-    def next_map(self, fieldname):
-        assert fieldname not in self.attrs
-        if fieldname in self.next_maps:
-            return self.next_maps[fieldname]
-        attrs = self.attrs.copy()
-        attrs[fieldname] = len(attrs)
-        result = self.next_maps[fieldname] = Map(attrs)
-        return result
-
-EMPTY_MAP = Map({})
-```
-
-You may notice that the storage is not in-line, as I had originally promised.
-This is because we don’t have that kind of object layout control in Python.
-Attribute storage, when implemented in a language such as C++ or Rust, is
-typically in-line with the object header.
-
-Ignoring that, though, we can see that the common case still seems to read and
-write attributes using string names. What gives? Well, let’s use the index
-storage as intended in an *inline cache*.
-
-## Inline caches
-
-Let’s start by looking at the string attribute API. We’ll make a point class and
-read the `x` attribute. We’ll keep the attribute name constant since this is
-generally fixed in the program: `obj.x` normally looks like some bytecode
-`LOAD_ATTRIBUTE, "x"` where the name `x` is embedded in the bytecode somehow.
-
-This is important for the inline cache: varying the receiver is one thing but
-varying the name being looked up adds a lot more complexity. It’s doable but
-irritating.
-
-```
-Point = Class(name="Point", base_class=OBJECT, fields={}, metaclass=TYPE)
-P = Instance(Point)
-P.write_attr("x", 5)
-P.write_attr("y", 6)
-
-# String API :(
-P.read_attr("x")
-# Always looking up index :(
-P.read_attr("x")
-# Every time :(
-P.read_attr("x")
-```
-
-Then we will make a memory/speed trade-off. We will allocate space for the
-aforementioned *expected map* and the *cached index* mentioned earlier. This
-lets us do a really fast check followed by an indexed load in the (hopefully)
-common case.
-
-The logic is as follows:
-
-If the attribute is missing, we don’t (for now?) cache the negative lookup.
-Hopefully this case is rare.
-
-```
-class InlineCache:
-    def __init__(self):
-        self.map = None
-        self.idx = None
-
-    def read(self, obj, fieldname):
-        obj_map = obj.map
-        if obj_map is self.map:
-            return obj.storage[self.idx]
-        index = obj_map.get_index(fieldname)
-        if index == -1:
-            return MISSING
-        self.map = obj_map
-        self.idx = index
-        return obj.storage[index]
-
-IC = InlineCache()
-# Looked up by string :(
-IC.read(P, "x")
-# Map hit! Looked up by index! :)
-IC.read(P, "x")
-# Map hit! Looked up by index! :)
-IC.read(P, "x")
-```
-
-You may note that I used `is` (pointer equality) instead of `==`
-(user-defined/deep equality). This is intentional! Because we are guaranteeing
-the maps are immutable, we don’t need to check equality on the fields of the
-map; just its pointer/numeric ID.
-
-This `InlineCache` class is mostly just a “sketch” of what an inline cache
-does. It is an “interpreted IC”. This shape, if you make sure the fast path is
-inlined and the slow path is outlined, can help your interpreter a lot. It does
-definitely improve performance—I recommend benchmarking a silly little
-attribute lookup function—but most runtimes with inline caches also come with
-JIT compilers. These compilers try to remove the “interpreted”-ness of the
-inline cache implementation. See for example:
-
-Another thing to notice is that **order matters**. Adding attributes in different
-orders (e.g. `a` then `b` vs `b` then `a`) will result in different shapes.
-Another frequent cause of this is conditionally storing attributes in
-initialization (e.g. `if cond: self.a = 1`).
-
-This shape and cache behavior is not really visible to the application
-programmer except in performance regressions<sup>[2](https://bernsteinbear.com/blog/object-shapes/#fn:attribute-order)</sup>, where either
-your inline caches will frequently miss or you will not have optimal
-(monomorphic) caches. This might not sound scary but the difference between a
-cache hit and a cache miss in a hot path could be 2x performance or more and is
-worth investigating in your application.
-
-Also, **quantity matters**. VM implementors measured and determined that most
-objects are small (<20 ish fields). You may find that putting too many fields
-on an object leads to it getting penalized and put back in “hash table mode”.
-Ruby, for example, has some fixed number of in-object instance variables
-(attributes) before its shape becomes “complex”.
-
-Last, notice that this cache is not specific to this object; any number of
-`Point` instances can get a cache hit. Actually, looking at it, an object need
-not even be a `Point`…
-
-What does it mean that two objects with different classes can have the same
-shape?
-
-```
-Foo = Class(name="Foo", base_class=OBJECT, fields={}, metaclass=TYPE)
-F = Instance(Foo)
-F.write_attr("x", 1)
-F.write_attr("y", 2)
-
-Bar = Class(name="Bar", base_class=OBJECT, fields={}, metaclass=TYPE)
-B = Instance(Bar)
-B.write_attr("x", 3)
-B.write_attr("y", 4)
-
-# Same shape/map!
-assert F.map is B.map
-# But different class!
-assert F.cls != B.cls
-```
-
-For one, it means that the inline cache may have a higher hit rate. Instances
-of subclasses that share code, for example, may still count as *monomorphic* in
-the IC.
-
-It also means that you can’t use the shape as a proxy for knowing about the
-class. If you have something like `attr_reader` in Ruby, where the VM generates
-a synthetic method just for looking up an instance variable, you need to do two
-things:
-
-This two-stage lookup adds both complexity and run-time overhead. If we
-specialized maps so that having a different class implied having a different
-map, we would be able to specialize that two-stage dispatch with just one field
-load.
-
-This is kind of an interesting idea: what else can we specialize the map on?
-
-## Storage strategies
-
-Perhaps unsurprisingly, CF Bolz-Tereick reappears with Lukas Diekmann and
-Laurence Tratt in [Storage Strategies for Collections in Dynamically Typed
-Languages](https://dl.acm.org/doi/pdf/10.1145/2544173.2509531) (PDF, 2013).
-
-The main idea is that some facts about objects (properties, attributes, har
-har) are both:
-
-Their treatment is for collections (for example, optimizing the common cases of
-an empty list, or a list of small integers, …). In addition to giving more
-information to the optimizer, it helps both reduce memory and reduce pointer
-chasing.
-
-This kind of thinking extends beyond collections: do you ever have objects
-where an attribute is always a certain type? Maybe your `Point` class always
-has floats in it? Consider, then, what I think of as CF’s follow-up paper, type
-freezing: [Type Freezing: Exploiting Attribute Type Monomorphism in Tracing JIT
-Compilers](https://dl.acm.org/doi/pdf/10.1145/3368826.3377907) (PDF, 2020)
-
-This paper changes object maps from `{name: offset}` to `{name: (offset,
-type)}` to reduce guards. Then it goes further by even addressing nested
-attributes and their types. This nesting extension is mostly motivated by the
-meta-circularity of the implementation and would have less impact for a
-“normal” runtime.
-
-See also:
-
-## Class versioning
-
-You can make even stronger bets about classes. See for example the [PyPy blog
-class versioning
-section](https://pypy.org/posts/2011/03/controlling-tracing-of-interpreter-with_21-6524148550848694588.html#versioning-of-classes).
-
-I felt like this blog post would not be complete without a manual memory layout
-rehashing of CF’s article. It’s all well and good to write the Python but what
-do “real” runtimes look like?
-
-Well, they have compact object headers that contain the shape/map and some
-other flag bits. They allocate their attributes inline with an object. And they
-probably also have an “overflow” slot for when their initial object sizing
-estimates were too small.
-
-So I made a very very small runtime in C++ that allocates objects and adds
-attributes and has a shape system. It is probably *riddled* with bugs. But it
-sketches the kind of memory layouts that underpin Skybison, V8, JSC, and so on.
-
-[Take a look](https://gist.github.com/tekknolagi/caf8462b75ac8ba7e33f6ade06b3f914).
-
-It doesn’t have the overflow slot but it’s a decent sketch of the underlying
-model.
-
-I fear I am running out of steam on this blog post but there is more to talk
-about. I originally wanted to go add object shapes to someone’s Lox interpreter
-and then add inline caches to the interpreter.
-
-Perhaps I will come back and update this post. Or perhaps you will write a
-sequel.
-
-## Thank you
-
-Thank you to CF Bolz-Tereick, Nery Campusano, and Jacob Denbeaux for thoughtful
-feedback on this post.
-
-1. Or the following equivalents… `// Or function C() { this.a = 1; this.b = 2; } // Or class C { constructor() { this.a = 1; this.b = 2; } } ` [↩](https://bernsteinbear.com/blog/object-shapes/#fnref:js-synonyms)
-2. See [this Rails PR](https://github.com/rails/rails/pull/57020) by Hartley to make shapes more monomorphic. It was initially filed because ZJIT was not capable of handling shape polymorphic reads, but it helps other JITs stay monomorphic too. Also in this vein is [my PR to optcarrot](https://github.com/mame/optcarrot/pull/59). ZJIT now does much better with polymorphic shapes but this kind of stuff is generally important across languages and runtimes. Enough for people to do [large bodies](https://bernsteinbear.com/assets/img/optimization-coaching.pdf) (PDF) [of research](https://bernsteinbear.com/assets/img/optimization-coaching-js.pdf) (PDF) about intelligibly surfacing this kind of information to the application programmer. [↩](https://bernsteinbear.com/blog/object-shapes/#fnref:attribute-order)
+Railway identified a security incident that ultimately led to unauthorized access to a subset of internal Railway systems. This is a follow up to the [initial security disclosure published on October 21st](https://blog.railway.com/p/security-disclosure-wednesday-october-21st). Our forensic investigation is still ongoing.
+
+Railway engaged external incident response experts and the authorities to assist in forensics.
+
+We will have a follow up to this document as the investigation concludes.
+
+## What happened
+
+At October 20th 19:53 UTC, Railway became aware of a sustained and targeted campaign to attack and breach our services. Early investigations tell us this attack was attempting to obtain AI provider API keys to perform distillation attacks.
+
+Initial evidence leads us to believe that the malicious actor had access to abliterated models and substantial compute resources which enabled them to perform highly sophisticated exploits against our infrastructure.
+
+Due to the ongoing investigation and to protect our customers, we are not yet able to share the specific details and scale of the exploits. We will aim to disclose this responsibly as we complete our investigation.
+
+We believe the attack timeline took place from October 20th 13:58 UTC to October 22nd 03:32 UTC. The final timestamp represents when we confirmed that the attacker no longer had access to any internal systems.
+
+Railway began triaging the attack immediately upon detection. To prioritize the safety of our users, we disabled our build infrastructure. Additionally, we reported potentially impacted secrets to partner vendors. (More information in below sections)
+
+During that period of triage, customers experienced interrupted builds and deployments, as well as periods of dashboard, API, CLI, and support unavailability.
+
+After the attacker gained access to our systems, a subset of our customer base had their encrypted secrets exposed which required credential rotation. We recommend that all customers who signed up prior to October 21 rotate their keys stored on Railway. We have notified the customers that have been directly impacted.
+
+Below is a timeline of events and facts as of October 22nd:
+
+| Date | Time (UTC) | Event |
+| --- | --- | --- |
+| October 20 | 13:58 | Monitoring systems triggered a page to engineering on-call for abnormal system activity in the form of elevated latency. The on-call engineer began research into the suspicious activity. |
+| October 20 | 14:03–16:51 | Incident investigation led to Railway identifying this as an attempted escalation of privilege a hostile external party. Railway engineering identified potential privilege escalation in our build infrastructure by the attackers. As a result, a decision was made to halt build pipelines to prioritize user safety. |
+| October 20 | 17:03 | Railway declared an incident on status.railway.com. |
+| October 20 | 16:51–18:05 | Railway engineering team began deploying mitigations across the build systems, and restricted access to the affected infrastructure. |
+| October 20 | 18:05-19:53 | Railway engineering reported that the exploit has been remediated, and validated that the exploit could no longer be reproduced within Railway infrastructure. |
+| October 20 | 19:53 | Additional evidence was identified that the attacker could escalate their access, at higher scale, across multiple parts of the Railway system, in-parallel. |
+| October 20 | 19:59–20:56 | Additional monitoring and forensics were deployed to isolate blast radius as well as neutralize the attacker’s entrypoints/access. |
+| October 21 | 00:22–03:08 | Further monitoring and credential restrictions were introduced. Subsequent routes of access were identified. As a precaution, builds were halted again. |
+| October 21 | 04:24-05:23 | Continued forensic research identified the attacker was able to pull secrets, in encrypted format; however, at the time attacker was unable to decrypt said secrets. Identification of systems to revoke access began immediately. |
+| October 21 | 05:23–05:27 | Railway engineering revoked access to the identified systems and disabled non-essential internal systems to reduce further attack surface area. |
+| October 21 | 05:27—07:25 | At this point, the attacker accessed credentials to access our CI environment where the attacker was able to decrypt artifacts that held additional API access. |
+| October 21 | 7:25—09:18 | Railway engineering identified database evidence of an unauthorized query of encrypted environment variables, of which a subset were decrypted utilizing a combination of the compromised credentials. Note: Because the full keys were envelope encrypted, this query alone cannot identify specifically which keys in the affected customers project/service were affected. |
+| October 21st | 9:18-9:25 | Logs from the attackers payloads were read by Railway staff, highlighting the specific API key names they were searching for. |
+| October 21 | 09:25 | Based on the above, Railway notified vendors proactively about the surfaces that the attackers accessed. Vendors were requested to revoke all keys for their service; Railway provided all keys that they had registered on the platform for some services. |
+| October 21 | 09:28 | The public status page was updated to confirm dashboard, API, and CLI unavailability, new builds being disabled, and support tooling disruption. |
+| October 21 | 20:19–22:10 | Railway announced user session invalidation, published its security disclosure and customer guidance, and notified all users of internal and external credential rotation. |
+| October 22 | 03:32–06:29 | Railway engineering began to reinitialize internal systems with the minimal required dependencies, new credentials, and additional hardening. Enterprise and Pro builds were restored. |
+| October 22 | 17:00-22:49 | Railway reported full API restoration and normal Pro, Enterprise, Hobby, Trial, and Free deployments. Ancillary product features halted for security are being activated gradually. |
+
+## Scale of impact
+
+Railway’s system is built so that if one set of keys is compromised, they should not compromise the entire system. As a result, we can validate that at most 1.85% of all workspaces had some environment variables potentially compromised. This represents, numerically, about 100,000 workspaces. Out of an abundance of caution, the moment we realized any keys may have been decrypted, we notified external providers up to "all of the keys we stored, for all users on Railway". As such, the amount of users who were affected by upstream provider reset requests was larger than 100k.
+
+Railway is reaching out to the customers with definite impact. We are also proactively reaching out to customers who we consider high risk. Because we were unable to know which variables specifically were decrypted, we are reaching out to all users who, based on preliminary forensics of the attack pattern, we believe to be of high risk for targeting from the attacker. This number is greater than the 1.85% of workspaces.
+
+Because the attacker was seeking AI credentials, forensics of the attacker’s behavior tell us that the attacker was looking for high value targets on the platform. We believe there are two buckets of risk:
+
+- Workspaces with a very large number of environment variables
+- Environments with a high amount of AI keys from vendors
+
+The attacker did not access Railway user accounts as part of this incident. While we are not ruling out that they accessed user source code, we will confirm at the the time of our final forensic investigation report.
+
+Railway proactively worked with GitHub, GitLab, Anthropic, OpenAI, OpenRouter, SpaceXSI, Stripe, and others to revoke the potentially compromised keys as soon as we knew they were accessed on October 21st at 09:25 UTC.
+
+Out of an abundance of caution, we provided vendors such as GitHub and SpaceXSI with all API keys that were present on the platform, regardless of whether those were known to be impacted. Users being notified by vendors about revocation does not imply that their credentials were impacted by the incident.
+
+While new builds and deployments were paused for all customers, all existing user deployments remained online and running. At time of writing, builds for all tiers are restored.
+
+## User remediations
+
+As indicated in the [security disclosure](https://blog.railway.com/p/security-disclosure-wednesday-october-21st) published on October 21st, we recommend all users revoke and reapply sensitive environment variables stored on Railway prior to this date. We are recommending this out of an abundance of caution.
+
+We’ve also published a [set of guides](https://blog.railway.com/engineering) to check for anomalous activity and credential rotation on various tools.
+
+![Security disclosure recommendations](https://cms.railway.com/media/5def32f2-c428-4644-b479-d3a8b1e6b824-image.png?w=1600&format=webp&q=90)
+
+*Security disclosure recommendations*
+
+While Railway knows what the intent of access was, it’s advisable for all customers to:
+
+- Remove public network access to databases
+- Rotate any sensitive variables and keys
+- Check your GitHub account audit logs and review all app access
+- Check audit logs within your registries such as Dockerhub
+
+If you have any questions, please email [support@railway.com](mailto:support@railway.com).
+
+## Railway actions taken
+
+With the increased level of pressure that vendors are facing due to new found cyber threats, Railway intends to meet the scale and moment of this new era to keep our customers safe.
+
+We continue to refine our platform and corporate security posture, taking all reasonable steps to mitigate attack vectors. Below is a list of what we have already done:
+
+- We shut down any potentially compromised internal tooling upon seeing suspicious activity.
+- We rolled all keys, and then rerolled them after validating that the intruder had been expropriated from the system.
+- We have engaged an external forensics company to further our understanding of the malicious actor.
+- We have rolled out a new generation of builder infrastructure, moving from our previous third generation isolated multi-tenant to our fourth generation single-tenant environments. Rollout was planned for next week, but was accelerated and completed due to this event.
+- We have rolled credentials for all storage buckets deployed on Railway.
+- We have rebuilt, from validated source, all tooling used to run Railway infrastructure, and validated that the same escalation patterns are not possible.
+- We have added functionality to mass revoke Railway application permissions whenever we suspect any suspicious activity.
+
+We performed other mitigations that we are choosing to not disclose at this time out of an abundance of caution in protecting the safety of our customers.
+
+Railway owns every layer from bare metal to the agent workflow for one reason: so builders on Railway can build their most ambitious products. This vision can only be achieved with an equivalent security posture matching that ambition. We will continue to operate in the same way we built our platform: carefully, in the open, and for the long run.
+
+## FAQ
+
+**Did customer applications go down?** No - running services stayed online throughout the incident. New builds and deployments were paused during triage to mitigate possible attack vectors. The first system we brought online was the ability to disable existing deployments.
+
+**Was my Railway account accessed?** No - individual accounts were not logged into. The attacker accessed Railway's internal systems and decrypted stored environment variables for a subset of workspaces. We did however revoke all Railway access tokens out of an abundance of caution.
+
+**Why did I get an email my keys got revoked by GitHub, GitLab, Anthropic, OpenAI, OpenRouter, SpaceXSI, Google, or Stripe?** Railway sent a list of potentially decrypted keys to providers as soon as we were aware of the incident on October 21st 09:35 UTC [prior to our public disclosure](https://blog.railway.com/p/security-disclosure-wednesday-october-21st), with a request to revoke them, to limit the potential impact for users. Some vendors requested all keys to be revoked.
+
+**Why did Railway not notify customers of potentially decrypted keys sooner?** At the time of discovery, the attack and incident mitigation was underway in-parallel. As mentioned, the moment any credentials were affected, we notified upstream providers. As the incident was on-going, we wanted to ensure the attacker was ejected from our running infrastructure before telling users to roll their credentials, to prevent the credentials from becoming immediately compromised again.
+
+**Is Railway safe to use now?** Yes. The Railway engineering team has redeployed and revalidated all impacted systems. At the time of writing, any functionality that remains offline will return in the coming days.
+
+**Why was I unable to deploy new changes?** To limit the scope of the attack, we intentionally stopped new builds to remediate and penetration test the impacted components of Railway infrastructure, while keeping user workloads running.
+
+**What did the attacker want?** Forensic investigation evidence indicates the attacker was likely looking for AI and platform API keys, for distilling model weights.
+
+**I re-logged in and didn’t see anything, why?** We rolled all GitHub App installations for Railway. If your GitHub account email is different than your Railway email, you may need to re-login using "Log in using email"

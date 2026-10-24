@@ -1,81 +1,159 @@
-I’ve been slowly turning [my Emacs config](https://codeberg.org/jjba23/heks-emacs) into something I actually *enjoy* using, not just something that works, and folding was the last place where that wasn’t true.
+here's something really cursed i made a while back. the goal here is to create a portable way to obtain the value of errno from outside of c, without using a wrapper function written in c.
 
-Every mode had its own idea of what folding is: `treesit-fold` in Tree-sitter modes, Hideshow in the Lisp-ish ones, Outline in everything that resembles text, Org with its own invisible text that no one else’s commands can undo.
+        for those unaware, errno is defined as a macro, and its expansion is non-portable and usually comes with no stability guarantees. so if you're calling libc functions from some other language (such as hare, which i'll be using in this post), it's not possible to retrieve error values from them without relying on an implementation detail or writing a wrapper function in c which returns errno.
 
-So every buffer had different keys, a different look, and worst of all  different *performance* characteristics. Folding a big file sometimes felt like holding my breath.
+        ...unless you're willing to resort to some fucked up hacks, that is.
 
-I’m running Emacs 32.0.50 from `master` (built from source, as one does), and it’s finally one system.
+preamble
+`use io;
+use sys;
+use types::c;
 
-![](https://jointhefreeworld.org/static-assets/heks/screen-2026-10-23-16-17-32.png)
+@symbol("close") fn c_close(fd: int) int;
+@symbol("dup") fn c_dup(oldfd: int) int;
+@symbol("dup2") fn c_dup2(oldfd: int, newfd: int) int;
+@symbol("lseek") fn c_lseek(fd: int, offs: io::off, whence: int) io::off;
+@symbol("mkstemp") fn c_mkstemp(template: *c::char) int;
+@symbol("perror") fn c_perror(s: nullable *c::char) void;
+@symbol("read") fn c_read(fd: int, buf: *opaque, count: size) c::ssize;
+@symbol("strerror") fn c_strerror(errnum: int) *c::char;
+@symbol("unlink") fn c_unlink(path: *c::char) int;
+@symbol("write") fn c_write(fd: int, buf: *opaque, count: size) c::ssize;
 
-## kirigami is the piece I didn’t know I needed [#](https://jointhefreeworld.org/blog/articles/emacs/emacs-folding-kirigami/#kirigami-is-the-piece-i-didnrsquot-know-i-needed)
+def SEEK_SET = 0;
+def STDERR_FILENO = 2i;`
 
-[kirigami](https://github.com/jamescherti/kirigami.el) doesn’t fold anything itself. It *dispatches*: it keeps a list of folding engines, checks which one is actually active in the buffer, and forwards to it. Tree-sitter, Hideshow, Outline, Org, Vdiff — all behind one interface.
+there aren't any libc functions which return the value of errno. there are, however, functions which return a *string* that describes errno. so let's start there.
 
-So on top of it I put one set of keys, the same in a Kotlin buffer, YAML, a Scheme or ELisp buffer and an Org file:
+        `export type error = !str;`
+standard c defines two promising functions: `strerror` and `perror.` posix defines two more functions: `strerror_r` and `strerror_l`. unfortunately, the strerror functions all take in the error number as an argument. only `perror` reads from errno directly. `perror` prints an error string to stderr, so our goal now to is to somehow capture the error string from `perror`, without actually writing anything to stderr.
 
-| Key | Does |
-| --- | --- |
-| `C-c v c` | close this fold |
-| `C-c v C` | close every fold |
-| `C-c v o` | open this fold |
-| `C-c v O` | open this fold and everything under it |
-| `C-c v r` | reveal everything |
-| `C-c v t` | toggle the fold at point |
+        alright, so let's do it. during program initialization, i dup `STDERR_FILENO` (2), open a temporary file, and change `STDERR_FILENO` to refer to the temporary file:
 
-That sounds small. It is not small. The number of times a day I used to think “wait, what does TAB do in this mode again” is now zero, and the muscle memory transfers across an entire polyglot config.
+        `let stderr = -1;
+let tmpfd = -1;
+let tmpname: [_]u8 = ['/', 't', 'm', 'p', '/', 'X', 'X', 'X', 'X', 'X', 'X', '\0'];
 
-One wrinkle worth mentioning: kirigami answers with the *first* engine in its list whose mode is on, and `outline-minor-mode` is on in nearly every buffer I have. In the buffers where I deliberately turned on Hideshow — Scheme, for instance — that choice has to win, otherwise `C-c v c` folds “headings” a Scheme file doesn’t have. So I reorder `kirigami-fold-list` to put Hideshow first instead of rewriting it; engines kirigami adds later still get used wherever Hideshow is off.
+@init fn stderr_tmp() void = {
+	stderr = c_dup(STDERR_FILENO);
+	assert(stderr != -1);
+	tmpfd = c_mkstemp(&tmpname: *c::char);
+	assert(tmpfd != -1);
+	const n = c_dup2(tmpfd, STDERR_FILENO);
+	assert(n != -1);
+};
 
-## Tree-sitter folding, with guides that are actually lines [#](https://jointhefreeworld.org/blog/articles/emacs/emacs-folding-kirigami/#tree-sitter-folding-with-guides-that-are-actually-lines)
+@fini fn stderr_tmp() void = {
+	if (tmpfd != -1) {
+		c_close(tmpfd);
+		c_unlink(&tmpname: *c::char);
+	};
+};`
+all low-level functions (libc wrappers or syscall wrappers) which may interact with stderr will silently adjust the fd from `STDERR_FILENO` to the dup'd stderr file descriptor if necessary. (i'll give an example later on, if you're confused by that.)
 
-Most of my programming buffers are `*-ts-mode`, so `treesit-fold` does the work there — bash, C, C++, CMake, CSS, Dockerfile, Elixir, Go, HTML, Java, JS/TS/TSX, JSON, Kotlin, Lua, Nix, PHP, Python, Ruby, Rust, Scala, TOML, YAML. Line counts are shown inline, which I find genuinely useful when deciding whether to open a fold.
+        when an error occurs, the below function is called to obtain the error string:
 
-The indicators took the most fiddling. `treesit-fold-indicators` draws a block’s guide with a bitmap 23 rows tall, centered in the line beside it. A line in my config is 29 pixels — the font’s 23 plus six of `line-spacing` — so every row of the guide was a 23-pixel dash with three pixels of nothing above and below it. A folded block looked like a *dotted* line running down the fringe. Not subtle, just wrong.
+        `fn get_errno() error = {
+	c_perror(null);
+	if (c_write(STDERR_FILENO, &0u8, 1) == -1) {
+		return "Unknown error";
+	};
 
-There’s no setting for that, so I replaced the bitmaps: a single-row bitmap that `define-fringe-bitmap` repeats down however tall the line is (no spacing can introduce a gap), plus a `+=/`-= box and an end-elbow cut to the exact height of a line, so the guide runs from the marker into the row below and turns toward the text where the block ends. It’s an advice on the function that builds the string for each line. It looks like a bracket now, not a perforation.
+	c_lseek(STDERR_FILENO, 0, SEEK_SET);
+	defer c_lseek(STDERR_FILENO, 0, SEEK_SET);
 
-And the colour: the indicators inherited `shadow`, which most themes make as bright as a comment. Fine for one marker on one line, wrong for a marker on *every* line of a block — the grey became a rule drawn through the code. They’re now `shadow` blended 50% toward the theme’s background, recomputed on every theme and scale change, so it fades correctly on light themes too and no theme needs a special entry.
+	static let buf: [256]u8 = [0...];
+	const n = c_read(STDERR_FILENO, &buf, len(buf));
+	if (n == -1) {
+		return "Unknown error";
+	};
 
-## Hideshow earns its keep [#](https://jointhefreeworld.org/blog/articles/emacs/emacs-folding-kirigami/#hideshow-earns-its-keep)
+	const n = c::strnlen(&buf: *c::char, n: size);
+	return *(&buf[..n]: *str);
+};`
+when `perror` is called, it writes to the temporary file. (`STDERR_FILENO` needs to refer to the temp file from the beginning because `dup2` may overwrite errno, so it can't be used right before calling `perror`). the message is then read back and returned.
 
-Not everything has a grammar, and I’m not going to pretend otherwise:
+        so cool, we have an error message string. now let's use that to obtain the actual errno value.
 
-- Scheme — my Emacs build has no Scheme grammar, so Scheme buffers use Hideshow with hs-block-start-regexp set to "^(" and hs-forward-sexp-function set to forward-sexp. A Scheme file is a sequence of top-level forms, so each definition is a fold, and collapsing the one you’re inside works from anywhere within it. That’s the behaviour I wanted from the start and Hideshow doesn’t guess it by default.
-- Emacs Lisp — the prog-mode fallback, same keys.
-- XML — folds from start tag to end tag using nxml-scan-element-forward, skipping <?xml ?>, comments, DOCTYPE and self-closing elements.
-- YAML (the non-Tree-sitter mode) — indentation-based blocks with a small forward-sexp of my own that walks to the end of the indented block.
+        `export type error = !str;
+export type errno = !int;`
+to do that, i'll write another initialization function to construct a table of error messages:
 
-Hideshow’s own fringe indicators (`hs-show-indicators` + `hs-indicator-type 'fringe`) are on in all of these, so it doesn’t feel like a downgrade from the Tree-sitter buffers.
+        `let strerror_table: [256][256]u8 = [[0...]...];
 
-The rule I enforce per buffer is **exactly one set of indicators**: Tree-sitter buffers get `treesit-fold` and Hideshow is turned off; Hideshow buffers get Hideshow and Outline’s clickable buttons are turned off so the two don’t double up; outline-only buffers (Markdown, diff) keep the buttons. Nobody ends up with two markers per block.
+@init fn strerror_table() void = {
+	for (let i = 0; i < len(strerror_table): int; i += 1) {
+		const msg = c_strerror(i);
+		const n = c::strlen(msg);
+		strerror_table[i][..n] = (msg: *[*]u8)[..n];
+	};
+};`
+the above function copies the strings returned by `strerror` into `strerror_table`. if you're familiar with posix libc, you may be confused why i'm not using `strerror_r` here, since that function directly writes error messages into a user-supplied buffer.
 
-## Org, which needed its own everything [#](https://jointhefreeworld.org/blog/articles/emacs/emacs-folding-kirigami/#org-which-needed-its-own-everything)
+        the reason is really annoying: there's two versions of `strerror_r`! there's a non-standard GNU version which returns an error message directly but may use its own immutable static storage, and there's a POSIX version which always writes to the user-supplied buffer and returns `int`.
 
-Org folds with text properties, not overlays, so neither Tree-sitter nor Hideshow nor Outline’s buttons can draw a marker for it. So I wrote its own indicators: a fringe triangle pointing down for an open heading, right for a folded one, clickable with `mouse-1` to toggle exactly like `TAB`. Folding itself is untouched — `TAB`, `S-TAB` and the `C-c v` keys all still work.
+        i want the POSIX version of course, but on glibc, the symbol "`strerror_r`" refers to the GNU version. the POSIX version uses the symbol "`__xpg_strerror_r`". but other posix-compliant libcs (such as musl and all the BSD libcs) only provide the POSIX version, under the symbol "`strerror_r`". fitting with the theme of this blog post, glibc makes it impossible to portably call the function i want without relying on an internal symbol name, which i really don't want to do (since that makes the code libc-dependent).
 
-The performance part is where the real win is. A naive “redraw indicators after every command” implementation is a disaster in a large file, because it re-searches the buffer and rebuilds every overlay on every pause. Mine is driven by the text instead:
+        but anyways, now that the `strerror_table` is constructed, let's update the `errno()` function to use it:
 
-- if buffer-chars-modified-tick didn’t change, only the indicators that are on screen are redrawn — off-screen headings can wait until they’re scrolled to;
-- if it changed and the change was recorded, only the dirty region is rebuilt;
-- if it changed with no recorded change, only then is the whole buffer rebuilt.
+        `fn get_errno() error errno = {
+	c_perror(null);
+	if (c_write(STDERR_FILENO, &0u8, 1) == -1) {
+		return "Unknown error" -1;
+	};
 
-Folding changes text properties rather than characters, so folding alone takes the cheap path. Fold state is read back from Org on each redraw rather than remembered, so external folding can never leave a stale marker.
+	c_lseek(STDERR_FILENO, 0, SEEK_SET);
+	defer c_lseek(STDERR_FILENO, 0, SEEK_SET);
 
-Two config choices matter just as much: `org-fold-core-style` is `text-properties` (so a visibility cycle doesn’t re-parse the file), `org-element-use-cache` is on, and Org starts with `showeverything` — which is both what I want (a note is read, not consulted) and the cheaper state, because it skips the visibility passes that walk every heading on open. I also removed a `org-restart-font-lock` that was re-fontifying the whole buffer a second time on open; JIT-lock handles what’s on screen.
+	static let buf: [256]u8 = [0...];
+	const n = c_read(STDERR_FILENO, &buf, len(buf));
+	if (n == -1) {
+		return "Unknown error" -1;
+	};
 
-## It feels smooth, and that’s the whole point [#](https://jointhefreeworld.org/blog/articles/emacs/emacs-folding-kirigami/#it-feels-smooth-and-thatrsquos-the-whole-point)
+	const n = c::strnlen(&buf: *c::char, n: size);
+	return *(&buf[..n]: *str);
+	if (n != 0) {
+		buf[n - 1] = '\0'; // strip trailing newline
+	};
 
-The end result is that folding is *boring* now. `C-c v c` in Kotlin, Scheme, Elisp, Org, XML, YAML, Markdown. Guides that look like brackets. Indicators quiet enough to ignore until you need them. No pause on a 3000-line Org file. No two competing markers.
+	for (let i = 0z; i < len(strerror_table); i += 1) {
+		if (c::strcmp(&buf: *c::char, &strerror_table[i]: *c::char) == 0) {
+			return i: errno;
+		};
+	};
+	return -1;
+};`
+btw, here's an example of what a libc wrapper of `write` looks like:
 
-It honestly changes how much I collapse and expand while reading code. I used to avoid folding because it felt fiddly; now it’s free and mouse friendly.
+        `export fn write(fd: int, buf: *opaque, count: size) (size | errno) = {
+	const fd = if (fd == STDERR_FILENO) stderr else fd;
+	const n = c_write(fd, buf, count);
+	if (n == -1) {
+		return get_errno();
+	};
+	return n: size;
+};`
+another fucked up hack to make it actually portable
+the original thing that actually caused me to make this was that i wanted to see if i could make a generic "posix" target for hare. like, if you have a posix system which hare doesn't natively support, you could compile for the "posix" target and link to the system libc and things would just Work. the errno stuff was just a fun detour from that (the generic posix version would just return an error string, since the actual error numbers aren't portable). but in this context, there's one problem with the errno stuff. you can see it in this snippet from `get_errno()`:
 
-If you want to read the actual code: it’s in [dev-folding.el](https://codeberg.org/jjba23/heks-emacs/src/branch/trunk/src/modules/dev-folding.el) for the engines and indicators, the `heks/fold-*` wrappers in `heks-emacs.el` for the keys, and the Org indicators live in `org.el`. Everything is GPL-3.0, and it’s tested: `maak verify` asserts a fold actually covers a whole definition and that the documented keys are bound, and `maak keys` fails on a key that does two jobs or names a command that doesn’t exist.
+        `c_lseek(STDERR_FILENO, 0, SEEK_SET);
+defer c_lseek(STDERR_FILENO, 0, SEEK_SET);`
+i define `SEEK_SET` as a constant earlier on:
 
-Happy to answer questions about any of it, especially if you’ve fought the `treesit-fold-indicators` bitmaps yourself, because that one cost me an evening and I’d love to know if there’s a cleaner way.
+        `def SEEK_SET = 0;`
+this is usually true, but posix doesn't guarantee that `SEEK_SET` is 0! its value is completely implementation-defined. this is *yet another* place where it's not really possible to do stuff outside of c without relying on an "implementation detail".
 
-1. kirigami is the piece I didn’t know I needed
-2. Tree-sitter folding, with guides that are actually lines
-3. Hideshow earns its keep
-4. Org, which needed its own everything
-5. It feels smooth, and that’s the whole point
+        (in practice i can't imagine any reason `SEEK_SET` *wouldn't* be 0, but unnecessary fucked up hacks are fun so for now let's just pretend that any of this actually matters)
+
+        it's actually possible to work around this! `lseek` returns the new offset after seeking. so we can call `lseek` with an arbitrary whence value, and use the return value to determine whether it did what we wanted. if not, just repeat with different whence values until it works!
+
+        `let i = 0;
+for (i <= 2; i += 1) {
+	if (c_lseek(STDERR_FILENO, 0, i) == 0) {
+		break;
+	};
+};
+assert(i <= 2);
+defer c_lseek(STDERR_FILENO, 0, i);`
+i just loop from 0 to 2, because i figure that it'll probably always be one of those values. but there's no reason higher values couldn't also be checked.

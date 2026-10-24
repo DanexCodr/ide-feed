@@ -1,161 +1,469 @@
-Starting November 24, Quad9 will no longer be able to offer its free cyberprotection service to users located in France.
+[Tov](https://tov.sh/?ref=blog.fyralabs.com) is a new programming language marketed to be "[a] programming language for coding agents. It reads like TypeScript and builds native binaries that beat Rust's."
 
-The French courts yesterday handed down an [unfavorable ruling](https://quad9.net/uploads/20261021_-_Jugement_selon_la_PAF.PDF) against Quad9 in a major case that undermines the transparency and stability of the internet. This decision in favor of beIN forces Quad9 to block the recursive DNS resolution for a number of domain names for users located in France.
+[Benchmarks in their Git repository](https://github.com/richiemcilroy/Tov/tree/c2048582de4e9468267f801313144d75c12e983f/bench?ref=blog.fyralabs.com) show that they perform better than Rust, in some cases over 10× better. However, they also briefly mentioned the internals of Tov:
 
-The good news is the court significantly reduced the financial penalty, from €580,000 to €1,000 per day. However, for Quad9, this has never been just a financial issue: it is a matter of principle.
+> Tov is a compiler. It checks the TypeScript your agent wrote, writes it out as C and hands that to clang, so what you ship is one native binary with nothing to install next to it.
 
-We cannot comply with this ruling over the long term while remaining faithful to our mission to protect your privacy, defend you against cyber threats, and preserve the integrity of the internet. For us, recursive DNS resolution is a neutral and passive service. We categorically refuse to alter or lie to you about the DNS responses you receive in a way that opposes your expectations.
+A sane engineer would immediately doubt the correctness of their benchmarks. Rust has pretty much the same performance as C, and if Tov transpiles to C, **saying Tov beats Rust is mostly equivalent to saying C beats C**. That's contradiction right there. Let's ignore the stats for `axum`, maybe `tokio` has some overhead, like *maybe*; but clearly there's no way you get 1.6× faster than Rust in `strings`. You have to be lying. That's what a sane engineer would normally think.
 
-This ruling forces an untenable position upon us. Compliance is technically unfeasible, and implementation directly contradicts our mandate to serve the public. As a result, we have made the difficult decision **to withdraw Quad9 services from France as of Tuesday, November 24.** We deeply regret that French internet users will be left without an alternative that can adequately protect their cybersecurity while remaining compliant with European privacy law.
+In this blog post, we check 3 of their "inflated" benchmarks: `bigint_fib`, `dispatch`, and `map_insert`. We show that **these benchmarks are maliciously crafted to slow Rust down**. We have also benchmarked the improved Rust programs with their Tov programs to show that **Rust has equivalent or better performance than Tov**.
 
-## Background
+## Set-ups
 
-beIN, a Qatari company with offices in France, previously sought to force Quad9 to block resolution for a set of domain names they assert are participating in copyright infringement of its audiovisual rights on sports event broadcasts. Quad9 has no association with these domain names, nor with the operators of the websites. The French courts have fundamentally misunderstood the working of the internet and the role of the domain name system and have allowed a financial penalty to apply to Quad9 if we do not block DNS responses to users in France.
+`cargo build --release` was used to compile the Rust programs, and `tov build` (which defaults to `-O3`) was used to compile the Tov programs. Here are our setups:
 
-Quad9 is a Swiss public-benefit, nonprofit foundation established for the explicit purpose of protecting the cybersecurity of internet users. We charge nothing for our service and serve all people and organizations which seek to improve the security and privacy of their internet use. Our core values are to make privacy, security, and integrity available to all internet users, and our mission is to universally apply these guiding principles to recursive DNS resolution services in order to serve end users.
+### "ram-buffet"
 
-We want to be very clear: we do not condone content piracy. Quad9 exists to create a safer, more trustworthy internet experience for end users. We offer global blocking as an option for malicious cyberactivity against users worldwide. We do not block content, and we give users the choice to use our threat blocking services, or not, based on their interests and needs. Content piracy needs to be dealt with at the source: the place where the infringing content is published. Forcing uninvolved third parties to break the fundamental operating principles of the internet to benefit individual parties to the detriment of the global internet-using public is misguided, counter-productive, and distracts from actual solutions addressing the hosting of the content directly, or the market pressures which cause piracy to exist in the first place. Not only are DNS recursive resolvers, like Quad9, the wrong actors to address piracy, but applying legal pressure to Quad9 will also have vast unintended consequences harming the cybersecurity of hundreds of millions of innocent internet users.
+```
+root@8b4fcd497f61
+-----------------
+OS: Ultramarine Linux 44 (Container Image) x86_64
+Host: PowerEdge R640
+Kernel: Linux 7.0.0-31-generic
+Uptime: 36 days, 20 hours, 43 mins
+Packages: 1046 (rpm)
+Shell: bash 5.3.9
+Display (VGA-1): 1024x768 [External]
+Cursor: Adwaita
+Terminal: /dev/pts/2
+CPU: Intel(R) Xeon(R) Platinum 8251C (48) @ 4.20 GHz
+GPU: Matrox Electronics Systems Ltd. Integrated Matrox G200eW3 Graphics Controller
+Memory: 22.03 GiB / 247.25 GiB (9%)
+Swap: Disabled
+Disk (/): 3.62 TiB / 6.98 TiB (52%) - overlay
+Local IP (eth0): [redacted]
+Locale: C
+```
 
-For Quad9, complying with this ruling is impossible. We have no database of users associating them with jurisdictions. Our service is free to the public and does not require sign-up or proof of identity. Recursive DNS is so fundamental to the underlying operation of the internet that there is no method to map users’ jurisdictions reliably, nor do we think there should be a way to force users to identify themselves before they can connect to the internet. Our core goals – privacy of user data and honesty of responses - are directly opposed to the methods necessary to implement the blocking this court ruling would require us to perform. There is no way we can determine which users this ruling applies to – we have no list of French users, because we do not keep dossiers of our users at all.
+### "nukobook"
 
-If we do not comply, we will face a daily penalty of 1.000 euros until the blocking concludes on November 14 (i.e., 24.000 euros) not including our legal defense. Quad9 cannot survive the accumulation of penalties yet to be assessed in 20 other pending cases, nor those of future cases similar to the one brought by beIN. Inaction is, therefore, not an option to challenge this decision.
+```
+mado@nukobook
+-------------
+OS: Ultramarine Linux 44 (Plasma Edition) x86_64
+Host: Vivobook_ASUSLaptop K5404VA_K5404VA (1.0)
+Kernel: Linux 7.2.9-cachyos1.fc44.x86_64
+Uptime: 3 days, 22 hours, 18 mins
+Packages: 14 (flatpak), 5804 (rpm)
+Shell: zsh 5.9
+Display (SDC416D): 2880x1800 in 14", 60 Hz [Built-in]
+Desktop Environment: KDE Plasma 6.7.5
+Window Manager: KWin (Wayland)
+WM Theme: Klassy
+Theme: Klassy (Dark) [Qt], Materia-dark [GTK2/3/4]
+Icons: breeze-dark [Qt], breeze-dark [GTK2/3/4]
+Font: FakePearl (10pt) [Qt], FakePearl (10pt) [GTK2/3/4]
+Cursor: 茜マウスポインタ (32px)
+Terminal: konsole 26.8.1
+Terminal Font: CaskaydiaCove Nerd Font (10.8pt)
+CPU: 13th Gen Intel(R) Core(TM) i9-13900H (12+8) @ 5.40 GHz
+GPU: Intel Iris Xe Graphics @ 1.50 GHz [Integrated]
+Memory: 5.81 GiB / 15.24 GiB (38%)
+Swap: 2.23 GiB / 16.00 GiB (14%)
+Disk (/): 699.66 GiB / 752.28 GiB (93%) - btrfs
+Local IP (wlo1): 10.7.7.163/17
+Battery (ASUS Battery): 58% [Discharging]
+Locale: en_US.UTF-8
+```
 
-## Can Quad9 just comply via global blocking?
+### "makimaki"
 
-We could add these names to our global malicious domain blocking database, which is what we use to provide internet users with malware and phishing protection. This is a single, monolithic set of names applied to all users of our protective services (9.9.9.9 & secondaries) globally but not to our nonprotective services (9.9.9.10 & secondaries). Blocking these names for all users globally would satisfy the requirements of the court.
+```
+[tsuru@makimaki ~]$ fastfetch -l none
+tsuru@makimaki
+--------------
+OS: Fedora Linux 44 (Cloud Edition) x86_64
+Host: KVM/QEMU Standard PC (Q35 + ICH9, 2009) (pc-q35-11.0)
+Kernel: Linux 7.2.10-200.fc44.x86_64
+Uptime: 9 hours
+Packages: 927 (rpm)
+Shell: bash 5.3.9
+Display (Virtual-1): 1280x800
+Terminal: /dev/pts/0 10.2p1
+CPU: QEMU Virtual version 2.5+ (6) @ 2.39 GHz
+GPU: QEMU Virtual Video Controller
+Memory: 1.80 GiB / 11.60 GiB (16%)
+Swap: 868.00 KiB / 8.00 GiB (0%)
+Disk (/): 31.47 GiB / 139.90 GiB (22%) - btrfs
+Local IP (eth0): [redacted]
+Locale: en_US.UTF-8
+```
 
-However, this would have the “extraterritorial” effect of applying French legal decisions to every internet user worldwide, when they are meant to solely apply to France, for the commercial benefit of a single private, foreign-owned company. We suspect if other nations wished to impose their national legislation within France, there would be a strong reaction from French users and authorities. The converse is equally true: the findings of a French court are not applicable to the rest of the world. Such a system would set a precedent that any nation could impose their laws, morals, economic demands, or social constructs upon any other nation by the means of blocking DNS names, and thus blocking communication and content.
+# bigint_fib
 
-Therefore, this global blocking method is entirely unworkable for us as a solution to be compliant with the court order.
+```rust
+// The 300,000th Fibonacci number by repeated addition on num-bigint.
+use num_bigint::BigUint;
+use num_traits::{One, Zero};
 
-## What is “France” from the perspective of the internet?
+const N: u32 = 300000;
 
-There are more important reasons geoIP blocking will not work. We already prevailed in a similar legal case in Germany in 2021-2023 in which we learned an important lesson: we tried to use geoIP blocking as a “hack” in a similar circumstance at the start of the legal proceedings, allowing us to continue services in Germany until the case concluded. The plaintiff (Sony Music Entertainment GmbH) then used a VPN to access the blocked content from Germany in circumvention of the geoIP blocking. The court agreed with Sony in their assertions of noncompliance, and we were fined for contempt of court.
+fn main() {
+    let mut a = BigUint::zero();
+    let mut b = BigUint::one();
+    for _ in 0..N {
+        let t = &a + &b;
+        a = std::mem::replace(&mut b, t);
+    }
+    let s = a.to_string();
+    println!("fib({N}) has {} digits", s.len());
+    println!("first 20: {}", &s[..20]);
+    println!("last 20: {}", &s[s.len() - 20..]);
+}
+```
 
-From this experience, we know that the geoIP-based model is not only unfit from a technical perspective, but we have proven, historical evidence that using geoIP methods results in fines being levied against us by courts. To any technology-aware person, this seems absurd and outrageous – but this is what we face in these lawsuits where there is a disconnect between the courts’ understanding and how (and why) the technical protocols of the internet actually operate. We cannot risk this negative outcome in this or any other future instance, as absurd decisions apparently are de rigueur in these cases.
+This was the Rust code used in Tov's benchmark. Their benchmarking results showed that Rust used 501 ms · 4.5 MB, while Tov used 168 ms · 3.1 MB. However, **we cannot reproduce their results on any of our setups**:
 
-We eventually [won that case against Sony](https://quad9.net/news/blog/quad9-turns-the-sony-case-around-in-dresden/), but it took several years, six figures of cost to Quad9, and massive wasted time – all of which set us back in our ability to deliver services and is a resource debt we are still paying for today. This case is just more of the same – the opposition has more lawyers than we have money and time.
+```javascript
+[root@8b4fcd497f61 Tov]# hyperfine -w 10 -m 64 ./bigint_fib_tov ./bigint_fib
+Benchmark 1: ./bigint_fib_tov
+  Time (mean ± σ):     451.3 ms ±   3.2 ms    [User: 449.6 ms, System: 1.6 ms]
+  Range (min … max):   447.0 ms … 461.3 ms    64 runs
 
-## The decision of Quad9
+Benchmark 2: ./bigint_fib
+  Time (mean ± σ):     336.6 ms ±   6.1 ms    [User: 335.2 ms, System: 1.4 ms]
+  Range (min … max):   328.2 ms … 368.4 ms    64 runs
 
-Given these conditions and as a result of our unwavering mission, our historical experience, our desire to remain within the law, and the outcome of the court decision, we are left with an uncomfortable choice.
+  Warning: Statistical outliers were detected. Consider re-running this benchmark on a quiet system without any interferences from other programs. It might help to use the '--warmup' or '--prepare' options.
 
-The demands lead us to an impossible requirement: we must adhere to the court’s decision, or we face growing risks to our existence. However, in implementing the blocking, we must either extend French law to the whole world (blocking globally) or create a vulnerability condition whereby we continue to be at risk because the available technical methods are imprecise,  impossible to validate, and do not meet any user privacy and security requirements.
+Summary
+  ./bigint_fib ran
+    1.34 ± 0.03 times faster than ./bigint_fib_tov
+```
 
-This leads us to the only conclusion we can understand to eliminate our legal risk and keep us true to our mission: we must make our cybersecurity protection and general services unavailable to French users. **Our departure is scheduled for November 24, 2026.**
+```javascript
+sh-5.3$ hyperfine -w 10 ./bigint_fib_tov ./target/release/bigint_fib
+Benchmark 1: ./bigint_fib_tov
+  Time (mean ± σ):     260.5 ms ±  29.8 ms    [User: 258.4 ms, System: 1.3 ms]
+  Range (min … max):   242.5 ms … 335.1 ms    11 runs
 
-In any event, for Quad9, this is a matter of principle regarding the potential misuse of these types of blocking measures. Allowing private corporations to have the ability to block what is seen on the internet seems to us to be a dangerous and infinitely deep problem. Actions that seem reasonable and infrequent today will tomorrow become an avalanche of petty demands used to suppress political, religious, economic, or social outcomes. We will not be even a small part of that degradation of the freedom of knowledge. Once the tools of censorship are built, they are rarely used sparingly or justly.
+  Warning: Statistical outliers were detected. Consider re-running this benchmark on a quiet system without any interferences from other programs. It might help to use the '--warmup' or '--prepare' options.
 
-This case with beIN is not the only litigation we face in France. There are approximately 20 different lawsuits pending against Quad9 (and other recursive resolver operators) that demand we comply with blocking hundreds of different names. We expect many of them to escalate to the same conditions as we have seen with beIN, which puts Quad9 at risk regardless of the outcome of this case.
+Benchmark 2: ./target/release/bigint_fib
+  Time (mean ± σ):     285.2 ms ±  15.2 ms    [User: 283.8 ms, System: 0.7 ms]
+  Range (min … max):   276.2 ms … 326.0 ms    10 runs
 
-Based on the generalized, high-level traffic statistics we keep, we know we have many users in France. With our departure, those users will be put at risk from the threats we have protected them from for nearly 9 years. We deeply regret that result, but we have no other choice. Below is a partial list of the networks from which we see traffic in France. You will see many infrastructure, national security, finance, education, and other networks of critical importance in addition to ISP users and mobile users. All these users will lose service on November 24 because of the legal risks facing Quad9 in France.
+  Warning: The first benchmarking run for this command was significantly slower than the rest (326.0 ms). This could be caused by (filesystem) caches that were not filled until after the first run. You are already using the '--warmup' option which helps to fill these caches before the actual benchmark. You can either try to increase the warmup count further or re-run this benchmark on a quiet system in case it was a random outlier. Alternatively, consider using the '--prepare' option to clear the caches before each timing run.
 
-## What is the purpose of this whole lawsuit, anyway?
+Summary
+  ./bigint_fib_tov ran
+    1.09 ± 0.14 times faster than ./target/release/bigint_fib
+```
 
-The most troubling part of this decision is that it is ineffective in practice. Forcing Quad9 to block domain names does not take the content out of circulation and has no effect on the servers that house the data.
+```javascript
+[tsuru@makimaki ~]$ hyperfine -w 10 ./bigint_fib_tov ./bigint_fib
+Benchmark 1: ./bigint_fib_tov
+  Time (mean ± σ):     621.5 ms ±   6.3 ms    [User: 616.2 ms, System: 1.8 ms]
+  Range (min … max):   614.8 ms … 632.2 ms    10 runs
 
-We offer a free service, and there are [thousands of other open DNS systems](https://dnsspy.io/dns-tools/public-dns-servers-list) that do what Quad9 does but with lower trust, safety, and reliability. Users seeking blocked content will simply shift their DNS to use one of those other free services, possibly using systems in other nations that have less-than-honorable intentions from a privacy and security perspective. This is like holding a piece of newspaper in front of a stadium full of people to block the view of a concert. It is an unsolvable problem via recursive DNS, and the effect of legal rulings like this is not measurable outside of the amounts paid to lawyers and the number of words in press releases declaring hollow victory.
+Benchmark 2: ./bigint_fib
+  Time (mean ± σ):     460.3 ms ±   3.4 ms    [User: 456.0 ms, System: 1.9 ms]
+  Range (min … max):   457.2 ms … 468.0 ms    10 runs
 
-Even beIN will not see any changes. Perhaps that is understood and the cruelty may be the point - we cannot say with certainty why such expenditures have been made against a small nonprofit like Quad9, which tries only to bring safer, trusted service to users. But of this we are certain: these actions are a tragic waste of time and resources and create a real, negative outcome for the internet community of France, whether or not they are our users.
+Summary
+  ./bigint_fib ran
+    1.35 ± 0.02 times faster than ./bigint_fib_tov
+```
 
-## What we are doing on November 24
+# dispatch
 
-Quad9 will not block the domains in question - we wish to remain committed to our integrity of providing a complete view of the DNS for users who wish that service. However, starting on November 24, we will no longer serve French users, thus keeping Quad9 out of danger from similar, perhaps even larger risks in the future. Our hope is that 30 days will be sufficient time for conversion, though we regret that this message will undoubtedly not reach some users in time.
+```rust
+// Virtual method calls: an array of shapes of three classes, `area()` called 50M times.
 
-An appeal is pending, and we will continue to legally defend our position in court in this case and as many other cases as we are able. We will continue to oppose court-ordered DNS blocking of this nature everywhere. Our resources are limited, but we are determined to keep the internet open and free. You can [donate here](https://quad9.net/donate/) to help us continue to deliver on our mission and assist us in the legal costs we incur in this and other fights.
+trait Shape {
+    fn area(&self) -> f64;
+}
 
-## What you can do next
+struct Circle {
+    r: f64,
+}
+struct Rect {
+    w: f64,
+    h: f64,
+}
+struct Tri {
+    b: f64,
+    h: f64,
+}
 
-We think this problem is reversible. French citizens: tell your legislators that looking up names is not a criminal offense. The internet needs to remain open and freely available to anyone, and neutral intermediaries like Quad9 (or any DNS resolver) should not be implicated in legal proceedings because we map names to IP addresses. Further, we know there are potential plans in consideration in France (and other European nations) to give private corporations and others automated and unvalidated abilities to filter DNS content that they alone determine to be unwanted, making it possible for a wide range of badly-managed or anti-democratic activities to be implemented. We believe you disagree with this as much as we do. Make yourself heard, or you will lose your rights silently.
+impl Shape for Circle {
+    fn area(&self) -> f64 {
+        std::f64::consts::PI * self.r * self.r
+    }
+}
+impl Shape for Rect {
+    fn area(&self) -> f64 {
+        self.w * self.h
+    }
+}
+impl Shape for Tri {
+    fn area(&self) -> f64 {
+        0.5 * self.b * self.h
+    }
+}
 
-ARCOM is your regulatory authority, and you should tell them this precedent places France at risk both from a practical and strategic perspective.
+fn main() {
+    let mut state: i64 = 42;
+    let mut shapes: Vec<Box<dyn Shape>> = Vec::new();
+    for _ in 0..1000 {
+        state = (state * 16807) % 2147483647;
+        let a = (state % 100) as f64 / 10.0 + 1.0;
+        state = (state * 16807) % 2147483647;
+        let b = (state % 100) as f64 / 10.0 + 1.0;
+        let kind = state % 3;
+        if kind == 0 {
+            shapes.push(Box::new(Circle { r: a }));
+        } else if kind == 1 {
+            shapes.push(Box::new(Rect { w: a, h: b }));
+        } else {
+            shapes.push(Box::new(Tri { b: a, h: b }));
+        }
+    }
+    let mut total = 0.0;
+    for _ in 0..50000 {
+        for s in &shapes {
+            total += s.area();
+        }
+    }
+    println!("{:.3}", total);
+}
+```
 
-Let them know that under their mandate, they have to balance your digital rights as citizens as well as the audiovisual rights on sports event broadcasts of rights holders. Balance cannot be claimed when the privacy and security of digital users are the collateral damage.
+Rust was given a very large disadvantage: dynamic dispatching at `Vec<Box<dyn Shape>>`. We've created an improved version that does not use dynamic dispatching:
 
-## In conclusion
+```rust
+use itertools::Itertools;
+const PI: f64 = std::f64::consts::PI;
 
-Fighting piracy via DNS resolvers blocking is ineffective. It is disproportionate and misguided, ill-fitted and futile to fight piracy, as the source content remains completely available to resurge under another name. Forcing Quad9 to depart harms French digital strategy and sovereignty in the long run relating to security, privacy, and integrity - contradicting France’s supreme national interests in exchange for a short-term, imaginary commercial victory.
+enum Shape {
+    Circle { r: f64 },
+    Rect { w: f64, h: f64 },
+    Tri { b: f64, h: f64 },
+}
 
-We deeply regret that we must leave our French users without cybersecurity protection, but we hope the future will see a more reasonable interpretation of the law which allows us to return.
+impl Shape {
+    #[inline(always)]
+    fn area(&self) -> f64 {
+        match self {
+            Shape::Circle { r } => PI * r * r,
+            Shape::Rect { w, h } => w * h,
+            Shape::Tri { b, h } => 0.5 * b * h,
+        }
+    }
+}
 
-Sincerely,
+fn main() {
+    let mut state: i64 = 42;
+    let shapes: [Shape; 1000] = (0..1000).map(|_| {
+        state = (state * 16807) % 2147483647;
+        let a = (state % 100) as f64 / 10.0 + 1.0;
+        state = (state * 16807) % 2147483647;
+        let b = (state % 100) as f64 / 10.0 + 1.0;
+        let kind = state % 3;
 
-The Quad9 Team
+        if kind == 0 {
+            Shape::Circle { r: a }
+        } else if kind == 1 {
+            Shape::Rect { w: a, h: b }
+        } else {
+            Shape::Tri { b: a, h: b }
+        }
+    }).collect_array().unwrap();
 
-* This post was authored and translated into French by humans on the Quad9 Team
+    let mut total = 0.0;
+    for _ in 0..50000 {
+        for s in &shapes {
+            total += s.area();
+        }
+    }
+    println!("{:.3}", total);
+}
+```
 
-### Partial List of French Networks Using Quad9
+We also used arrays instead of vectors because arrays were used in the C version. Here are the results:
 
-This list is extracted from network metrics of an hour or so of typical usage. Quad9 tracks network autonomous systems number origins as [per our privacy policy](https://quad9.net/service/privacy/), but we do not identify individual IP addresses or users within those networks. **There are hundreds of additional French networks using Quad9; we picked only these at random** to show the breadth of usage. Autonomous systems are not exclusively geographically-mapped and cannot be used as a jurisdictional identifier; though it is safe to say that most of these networks have a significant portion of their user base in France.
+```javascript
+[root@8b4fcd497f61 Tov]# hyperfine -w 10 -m 64 ./dispatch_tov ./dispatch ./better_dispatch
+Benchmark 1: ./dispatch_tov
+  Time (mean ± σ):      52.4 ms ±   1.3 ms    [User: 51.7 ms, System: 0.7 ms]
+  Range (min … max):    50.6 ms …  59.0 ms    64 runs
 
-**National government & public agencies**
-60855 — Direction interministérielle du numérique (DINUM) — Prime Minister’s digital directorate; sets state digital strategy and runs the interministerial state network (RIE).
-43717 — Business France (EPIC) — National agency that helps French firms export and attracts foreign investment.
-205461 — France Travail (EPA; formerly Pôle emploi) — National public employment service: job placement, jobseeker support, unemployment benefit payment.
-777 — CEA Paris-Saclay (EPIC) — Saclay centre of the Commissariat à l’énergie atomique et aux énergies alternatives; public research in nuclear and alternative energy, defence and health technology.
-44850 — Institut de recherche pour le développement (IRD; EPST) — Public research institute working with Global South partners on health, environment and social sciences.
-29110 — Institut Pasteur (private foundation, recognised as public utility) — Non-profit biomedical research foundation in Paris (infectious diseases, vaccines, microbiology); hosts national reference centres.
+Benchmark 2: ./dispatch
+  Time (mean ± σ):     298.2 ms ±   4.1 ms    [User: 297.1 ms, System: 1.1 ms]
+  Range (min … max):   295.9 ms … 319.9 ms    64 runs
 
-**Research & education network**
-1307, 1712, 1715, 1942, 1945, 2060, 2094, 2198, 2200, 2202, 2259, 2269, 2457, 2470, 2472 — RENATER (GIP) — National research and education network; its members are the State and public research bodies.
+  Warning: Statistical outliers were detected. Consider re-running this benchmark on a quiet system without any interferences from other programs. It might help to use the '--warmup' or '--prepare' options.
 
-**Student-run campus networks**
-204515 — Crans (association) — ENS Paris-Saclay student network association providing connectivity, hosting and email to members.
-212424 — ViaRézo (Association des réseaux de CentraleSupélec) — Student association providing internet and IT services on the CentraleSupélec campus.
-207849 — ESIEESPACE — ESIEE Paris student club that runs OpenGate, a student non-profit ISP.
+Benchmark 3: ./better_dispatch
+  Time (mean ± σ):      48.8 ms ±   0.3 ms    [User: 48.0 ms, System: 0.8 ms]
+  Range (min … max):    48.3 ms …  49.6 ms    64 runs
 
-**Private education**
-56339 — IONIS Education Group (SAS) — Private for-profit higher-education group (EPITA, Epitech, ESME, IPSA, ISG, Sup’Biotech).
+Summary
+  ./better_dispatch ran
+    1.07 ± 0.03 times faster than ./dispatch_tov
+    6.12 ± 0.09 times faster than ./dispatch
+```
 
-**Regional & local government**
-208458 — Région Nouvelle-Aquitaine — Regional authority covering 12 départements; seat in Bordeaux; created 2016.
-208820 — Département de la Seine-Saint-Denis — Île-de-France département; council seated in Bobigny.
-50036 — Département des Pyrénées-Atlantiques — Nouvelle-Aquitaine département; council seated in Pau.
-34000 — Département des Bouches-du-Rhône — Departmental council.
-48799 — Ville et Eurométropole de Strasbourg — Shared administration of the City of Strasbourg and the 33-commune Eurométropole.
-204897 — Grand Besançon Métropole — Communauté urbaine of 67 communes around Besançon.
-208574 — Communauté de communes du Pays de Bitche — Intercommunal body of 46 communes in Moselle; owns the Tubéo public fibre-to-the-home network.
-202834 — Commune d’Échirolles — Commune south of Grenoble; member of Grenoble-Alpes Métropole.
-211127 — SITPI (Syndicat intercommunal pour les télécommunications et les prestations informatiques) — Ten Grenoble-area communes pooling telecom, IT and GIS services.
+```javascript
+sh-5.3$ hyperfine -w 10 -m 64 ./dispatch_tov ./target/release/dispatch ./target/release/better_dispatch
+Benchmark 1: ./dispatch_tov
+  Time (mean ± σ):      37.2 ms ±   2.2 ms    [User: 36.0 ms, System: 1.0 ms]
+  Range (min … max):    34.7 ms …  50.6 ms    79 runs
 
-**Public digital infrastructure (local-authority networks & IT)**
-200245 — Manche Numérique (syndicat mixte) — Builds the Manche fibre network; provides IT, e-administration and telecom services to local authorities.
-44842 — Somme Numérique (syndicat mixte) — Owns the Somme fibre network; provides digital services to local authorities and schools.
-214589 — Essonne Numérique (syndicat mixte ouvert) — Essonne public fibre network, plus interconnection, hosting and data-centre services for public sites.
-47608 — Gigalis (GIP) — Pays de la Loire regional fibre network for local authorities, health, emergency services and schools.
-41114, 62038 — Orne THD (SPL) — Company owned by Rombas and neighbouring communes in Moselle; sells fibre internet and TV over their networks.
-39271 — C’Chartres Innovations Numériques (SEM) — Chartres Métropole company running fibre, a private 5G network, a data centre and IT services.
-207430 — SITEC, Société informatique et télématique corse (SEM; Collectivité de Corse 56%) — Hosting, cloud, cybersecurity and IT services for Corsican public bodies.
-50547 — Régie du réseau câblé du Haut Sundgau (local-authority régie) — Public wired telecom network in southern Alsace.
-49011 — MACS THD (SASU, SFR group) — Private company running the Maremne-Adour-Côte-Sud (Landes) high-speed network under a public-service concession.
+  Warning: Statistical outliers were detected. Consider re-running this benchmark on a quiet system without any interferences from other programs. It might help to use the '--warmup' or '--prepare' options.
 
-**Energy & utilities**
-1301 — Électricité de France (EDF; 100% state-owned) — National electricity producer and supplier; operates France’s nuclear fleet.
-62141 — Compagnie nationale du Rhône (CNR; majority public shareholding, Engie reference shareholder) — Holds the Rhône concession: hydroelectric dams, navigation and irrigation, plus wind and solar.
-39830 — Teréga (private SA; formerly TIGF) — Gas transmission and underground storage operator for south-west France.
-43734 — UEM (local SEM; formerly Usine d’électricité de Metz) — Metz utility: electricity, gas, district heating, public lighting.
-12727, 42487, 208719 — Vialis (SEM; Colmar largest shareholder) — Colmar utility: electricity and gas plus cable TV, internet and fibre.
-204645 — Régie ENES (Régie municipale d’électricité de Creutzwald) — Municipal régie: electricity, fibre internet, local TV, district heating.
+Benchmark 2: ./target/release/dispatch
+  Time (mean ± σ):      88.0 ms ±   6.0 ms    [User: 86.6 ms, System: 1.0 ms]
+  Range (min … max):    81.8 ms … 106.7 ms    64 runs
 
-**Transport**
-203885 — SNCF (Société nationale SNCF SA; state-owned) — Parent holding company of the national railway group.
-34809 — Sanef (SA; Abertis subsidiary) — Motorway concession operator for northern and eastern France.
+Benchmark 3: ./target/release/better_dispatch
+  Time (mean ± σ):      38.2 ms ±   2.3 ms    [User: 37.0 ms, System: 1.0 ms]
+  Range (min … max):    34.9 ms …  46.6 ms    79 runs
 
-**Health**
-201659 — AP-HM (Assistance Publique – Hôpitaux de Marseille) — Marseille’s public university hospital group.
-51588 — SESAN (GIP) — Île-de-France regional body providing shared digital-health services to care providers.
-49692 — Compagnie Générale de Santé (SAS; private) — Name of the hospital group now called Ramsay Santé.
+Summary
+  ./dispatch_tov ran
+    1.03 ± 0.09 times faster than ./target/release/better_dispatch
+    2.37 ± 0.21 times faster than ./target/release/dispatch
+```
 
-**Broadcast & media**
-24843, 43930 — France Télévisions (state-owned SA) — National public-service television broadcaster.
-43646 — TDF (SASU; owned by infrastructure funds) — Broadcast transmission and tower infrastructure operator.
+```javascript
+[tsuru@makimaki ~]$ hyperfine -w 10 ./dispatch ./dispatch_tov ./better_dispatch
+Benchmark 1: ./dispatch
+  Time (mean ± σ):     406.7 ms ±   2.2 ms    [User: 404.7 ms, System: 0.6 ms]
+  Range (min … max):   405.0 ms … 411.1 ms    10 runs
 
-**Private industry & technology**
-29104 — Thales Services Numériques (SAS; Thales group) — IT services, cloud, security operations and integration for defence, space and public-sector clients.
-49068 — Stormshield (SAS; Airbus Defence and Space) — Cybersecurity vendor (firewalls, endpoint protection, encryption); ANSSI-qualified products.
-57226 — IDEMIA Identity & Security France (SAS) — Identity documents, biometric identification and border/access systems; formerly Safran Morpho.
-41935 — Dassault Systèmes (SE; listed) — 3D design and simulation software (CATIA, SOLIDWORKS); not Dassault Aviation.
-42924 — VINCI Construction SI (SNC) — In-house IT unit of VINCI Construction.
-201647 — SI-nerGIE (GIE of Orano and Framatome) — Shared IT operations for both companies: data centres and local support.
-49920 — Flowbird (SAS) — Maker of parking meters and transit ticketing systems.
-20493 — Viparis Le Palais des Congrès de Paris (SA; 50/50 CCI Paris Île-de-France and Unibail-Rodamco-Westfield) — Operates the Palais des Congrès convention centre.
+Benchmark 2: ./dispatch_tov
+  Time (mean ± σ):      70.8 ms ±   0.8 ms    [User: 69.9 ms, System: 0.7 ms]
+  Range (min … max):    69.6 ms …  73.4 ms    41 runs
+
+Benchmark 3: ./better_dispatch
+  Time (mean ± σ):      67.7 ms ±   2.2 ms    [User: 66.6 ms, System: 0.8 ms]
+  Range (min … max):    66.3 ms …  79.0 ms    43 runs
+
+  Warning: Statistical outliers were detected. Consider re-running this benchmark on a quiet system without any interferences from other programs. It might help to use the '--warmup' or '--prepare' options.
+
+Summary
+  ./better_dispatch ran
+    1.05 ± 0.04 times faster than ./dispatch_tov
+    6.01 ± 0.20 times faster than ./dispatch
+```
+
+We believe Tov's developers intentionally used dynamic dispatching in order to slow down the performance significantly and create misleading results. The program / code between the original Rust version and the Tov version was highly inequivalent. Their benchmark and its results should be deemed invalid.
+
+# map_insert
+
+```rust
+// Insert N string keys into a string -> int map, then look every key up again.
+
+use std::collections::HashMap;
+
+fn main() {
+    let n: i64 = 2_000_000;
+    let mut m: HashMap<String, i64> = HashMap::new();
+    for i in 0..n {
+        m.insert(format!("k{i}"), i);
+    }
+    let mut sum: i64 = 0;
+    for i in 0..n {
+        sum += m[&format!("k{i}")];
+    }
+    println!("{} {}", m.len(), sum);
+}
+```
+
+We believe Tov developers deliberately chose `std::collections::HashMap`, which is a hash map known to be slow since it is made to be resilient to HashDoS attacks. Usually in real-world situations where HashDoS is not a concern, the `ahash` library is used. Tov developers chose to use external libraries like `num_bigint` to their advantage while ignoring popular libraries like `ahash` that are commonly used and make more sense in this case.
+
+```rust
+use ahash::AHashMap;
+use std::fmt::Write;
+
+fn main() {
+    const n: usize = 2_000_000;
+
+    let keys: Vec<String> = (0..n).map(|i| {
+        let mut s = String::with_capacity(8);
+        write!(s, "k{i}").unwrap();
+        s
+    }).collect();
+
+    let m: AHashMap<&str, i64> = keys.iter().enumerate().map(|(i, k)| (&**k, i as i64)).collect();
+
+    let mut sum: i64 = 0;
+    for k in &keys {
+        sum += m[&**k];
+    }
+    println!("{} {}", m.len(), sum);
+}
+```
+
+```javascript
+[root@8b4fcd497f61 Tov]# hyperfine -w 10 ./map_insert_tov ./map_insert ./ahashmap_map_insert
+Benchmark 1: ./map_insert_tov
+  Time (mean ± σ):     600.9 ms ±  44.8 ms    [User: 528.0 ms, System: 72.7 ms]
+  Range (min … max):   560.8 ms … 719.6 ms    10 runs
+
+Benchmark 2: ./map_insert
+  Time (mean ± σ):      1.705 s ±  0.102 s    [User: 1.559 s, System: 0.145 s]
+  Range (min … max):    1.628 s …  1.972 s    10 runs
+
+Benchmark 3: ./ahashmap_map_insert
+  Time (mean ± σ):     482.5 ms ±  15.0 ms    [User: 387.5 ms, System: 94.7 ms]
+  Range (min … max):   470.2 ms … 523.0 ms    10 runs
+
+Summary
+  ./ahashmap_map_insert ran
+    1.25 ± 0.10 times faster than ./map_insert_tov
+    3.53 ± 0.24 times faster than ./map_insert
+```
+
+```javascript
+sh-5.3$ hyperfine -w 5 ./map_insert_tov ./target/release/{,ahashmap_}map_insert
+Benchmark 1: ./map_insert_tov
+  Time (mean ± σ):     411.1 ms ±  55.5 ms    [User: 393.8 ms, System: 14.5 ms]
+  Range (min … max):   360.8 ms … 519.0 ms    10 runs
+
+Benchmark 2: ./target/release/map_insert
+  Time (mean ± σ):     849.4 ms ±  62.0 ms    [User: 800.4 ms, System: 41.7 ms]
+  Range (min … max):   793.1 ms … 977.0 ms    10 runs
+
+Benchmark 3: ./target/release/ahashmap_map_insert
+  Time (mean ± σ):     210.2 ms ±  31.5 ms    [User: 178.5 ms, System: 28.6 ms]
+  Range (min … max):   184.0 ms … 277.0 ms    15 runs
+
+  Warning: Statistical outliers were detected. Consider re-running this benchmark on a quiet system without any interferences from other programs. It might help to use the '--warmup' or '--prepare' options.
+
+Summary
+  ./target/release/ahashmap_map_insert ran
+    1.96 ± 0.39 times faster than ./map_insert_tov
+    4.04 ± 0.67 times faster than ./target/release/map_insert
+```
+
+```javascript
+[tsuru@makimaki ~]$ hyperfine -w 5 ./map_insert_tov ./{,ahashmap_}map_insert
+Benchmark 1: ./map_insert_tov
+  Time (mean ± σ):     918.3 ms ±  56.6 ms    [User: 784.3 ms, System: 128.1 ms]
+  Range (min … max):   850.8 ms … 1006.4 ms    10 runs
+
+Benchmark 2: ./map_insert
+  Time (mean ± σ):      2.594 s ±  0.077 s    [User: 2.296 s, System: 0.282 s]
+  Range (min … max):    2.525 s …  2.769 s    10 runs
+
+Benchmark 3: ./ahashmap_map_insert
+  Time (mean ± σ):     767.8 ms ±  19.7 ms    [User: 605.5 ms, System: 157.3 ms]
+  Range (min … max):   734.4 ms … 802.9 ms    10 runs
+
+Summary
+  ./ahashmap_map_insert ran
+    1.20 ± 0.08 times faster than ./map_insert_tov
+    3.38 ± 0.13 times faster than ./map_insert
+```
+
+# Wrapping Up
+
+The point of Rust is not to write simple code and get the fastest binary; it shines in getting near-metal performance from the code you have written. You have a program in Tov that runs slow? Good luck speeding your code up. You have a program in Rust that runs slow? Rewrite the part of the code that causes the slowdown.
+
+Code in JavaScript or TypeScript are not supposed to perform well. JavaScript is single-threaded. The name implies it's a scripting language. It doesn't make sense to write programs using tools meant for running scripts in a browser if performance matters.
+
+Tov failed not because their transpiler isn't good enough, but rather due to its design. Tov's main website is reflecting its design flaw — it is impossible to get faster than Rust and C in any meaningful way, especially if Tov transpiles to C.
+
+Tov's idea of shipping JavaScript programs as native binaries is not new. If you are interested, I recommend [Porffor](https://porffor.dev/?ref=blog.fyralabs.com). Porffor compiles your JavaScript code to a native binary, and it passes over 95% of all tests in the official ECMAScript conformance suite. It's also available in Terra, by the way. Note that Porffor and Tov are not affiliated with Fyra Labs.
