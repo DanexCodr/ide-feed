@@ -1,130 +1,45 @@
-After [my post on undefined behavior in
-C](https://blog.habets.se/2026/05/Everything-in-C-is-undefined-behavior.html)
-some people insisted that it’s demonstrably fine, we know what the code will
-do, and at worst we’ll get a segfault.
+One of my favorite xkcd comics of all time is [Random Number](https://xkcd.com/221/). The image depicts a C function that supposedly returns a random integer, but in reality always returns `4`. I was reminded of this wonderful comic a few days ago, due to a [security incident](https://emudhra.we-have-a-problem.com/) where people accidentally used the number `4` (among others) instead of a properly generated sequence of random bytes. Satire has a tendency to become reality, I guess.
 
-This is false.
+Since there is a clear demand among developers for the xkcd random number generator, I’m of the opinion that self-respecting languages should ship a built-in implementation. I’m here today to lead by example, as I unveil the glorious `@xkcdRandom` builtin for the Zig language. Can you guess what it does? Indeed, it returns the number `4`! Now go found a [multi-billion-dollar startup](https://en.wikipedia.org/wiki/Theranos) on top of this genius idea.
 
-Here’s an example.
+### But why?
 
-## C code
+Why not? After completing the [Ziglings exercises](https://codeberg.org/ziglings/exercises/#ziglings) and brain-coding a [toy minesweeper game](https://github.com/aochagavia/minesweeper-zig), I felt like my grasp of the language was solid enough to attempt something more ambitious. I wanted to get my hands on production-grade Zig code, and play with it to see how the different pieces of the language fit together. Hacking on the Zig compiler sounded like the perfect idea!
 
-```
-#include<utility>
+### Builtins vs. functions
 
-// Let's pretend this is a memory mapped device controlling
-// motors and gears and stuff.
-volatile int device_command = 0;
+A sane person might implement the xkcd RNG as a literal port of the original C code, which maps to the following Zig function:
 
-void serve_hot_chocolate() {
-        device_command = 42;
-
-        // Oh no, we spilled some hot chocolate, invoking UB.
-        //
-        // The definition of `std::unreachable()` is:
-        //     Invokes undefined behavior at a given point.
-        std::unreachable();
-}
-
-void explode() {
-        device_command = 3;
+```zig
+fn xkcdRandom() i32 {
+    return 4; // chosen by fair dice roll.
+              // guaranteed to be random.
 }
 ```
 
-## Example assembly output
+There’s one very big drawback to this approach: it’s boring. Don’t get me wrong, I like boring and low-maintenance code as much as the next person… but this time my goal is to *learn*, not to *produce*. I actually want to jump through hoops and make things overly complicated! Builtins are *perfect* for this. They are, as the name suggests, built-in constructs in the Zig language. Adding one means I get to fork and modify the compiler. Yay!
 
-With GCC 16.2 with `-O1`.
+### Builtin implementation and usage
 
-```
-"serve_hot_chocolate()":
-        mov     DWORD PTR "device_command"[rip], 42
-"explode()":
-        mov     DWORD PTR "device_command"[rip], 3
-        ret
-"device_command":
-        .zero   4
-```
+The builtin source code is intertwined with the rest of the Zig compiler, so it’s not really possible to include it here. Feel free to inspect [the diff](https://codeberg.org/aochagavia/zig/commit/50c3c3862710ee3b3686e4f0f2d1a45428000ad6) if you are curious (it’s just 22 lines), or to clone [my Zig fork](https://codeberg.org/aochagavia/zig) and check out the `0.17.x-xkcd` branch.
 
-Ruh roh. Exploding chocolate! The function `explode()` will be executed, even
-though it was never called!
+With these changes to the compiler, you can build programs like the one below. Isn’t that neat?
 
-## Another example: dereferencing a null pointer
+```zig
+const std = @import("std");
 
-Some people insisted that dereferencing a null pointer is *fine*. It’ll just
-try to access address zero! And these people supposedly know what happens when
-you try: if nothing is mapped there, you’ll get a segfault.
-
-Again, not true.
-
-Let’s say we change `std::unreachable()` to `int* ptr = nullptr; *ptr = 99;` in
-the previous example. Now we [get this](https://godbolt.org/z/efqKrzefa):
-
-```
-"serve_hot_chocolate()":
-        mov     DWORD PTR "device_command"[rip], 42
-        mov     DWORD PTR ds:0, 0
-        ud2
+pub fn main(_: std.process.Init) !void {
+    const someRandomNumber: usize = @xkcdRandom();
+    const anotherRandomNumber: f32 = @xkcdRandom();
+    std.debug.print(
+        "The random numbers you ordered just arrived: {}, {}\n",
+        .{ someRandomNumber, anotherRandomNumber }
+    );
+}
 ```
 
-Curious, eh? First it writes zero, **not** 99, to memory address zero. Then it
-crashes the program using an invalid instruction. The number 99 never appears
-in the generated program. But the null pointer write does. Presumably the null
-pointer write is done in order to improve debugger error messages.
+### Hacking on Zig is surprisingly straightforward
 
-Now let’s check [clang with godbolt](https://godbolt.org/z/86M7MWTT8):
+The Zig developers have clearly put effort into developer experience. You can build Zig with a single command: `zig build --zig-lib=lib -Dno-lib -Ddev=x86_64-linux`. The fresh build took roughly a minute to complete on my laptop, which in my book is quite good for a compiler. Subsequent builds were faster.
 
-```
-"serve_hot_chocolate()":
-        mov     dword ptr [rip + "device_command"], 42
-
-"explode()":
-        mov     dword ptr [rip + "device_command"], 3
-        ret
-
-"device_command":
-        .long   0
-```
-
-Again we get exploding chocolate.
-
-## Let’s do some pointer arithmetic on the null pointer
-
-Ok, so what happens if we add `ptr += 10`. That’s UB for three reasons:
-
-1. using a null pointer for anything other than comparison against other pointers,
-2. even if an object would be valid at the null pointer (which it’s not), creating a pointer that points outside that object, or if an array, beyond one-past the array, is UB,
-3. even if that were valid (which it’s not), we then dereference the address.
-
-Let’s [try it](https://godbolt.org/z/8z6hPPsvG).
-
-```
-"serve_hot_chocolate":
-        mov     DWORD PTR "device_command"[rip], 42
-        mov     DWORD PTR ds:40, 99
-        ret
-```
-
-Wow. *Now* it did what someone naively would expect, taking the code at face
-value. Lucky.
-
-Why did GCC (and clang, by the way) not detect that `*(ptr + 10) = 99` is
-equally UB as `*ptr = 99`, and do the same thing?
-
-Wrong question. No compiler is obligated to “detect” UB at all. Looks to me
-like GCC and clang, if we want to anthropomorphize them, saw “oh, null pointer
-dereference? Well that can’t happen, so I’ll stop emitting instructions for
-this function, to save on the binary size”. Because of the [halting
-problem](https://en.wikipedia.org/wiki/Halting_problem), it cannot in the
-general case know if the code will ever be executed.
-
-## So what does UB do?
-
-Anything. I have now demonstrated three things UB can do, when UB was triggered
-in the same place:
-
-1. Run whatever happens to be next in memory (exploding chocolate).
-2. Store a (for all intents and purposes) random value at address zero (wrote zero, not 99), and then deliberately crash.
-3. Do what one would naively expect: write the value to the address seen in the code at face value.
-
-And to think that some people don’t believe in [nasal
-demons](https://en.wikipedia.org/wiki/Undefined_behavior).
+As for the coding work itself, an LLM pointed me to the file where builtins were defined, and I took over from there: modifying things, checking for compile errors, fixing them, and so on. The code was easy to navigate, thanks to its clear structure and the Zig language server’s help. I was done way faster than I expected! Maybe I should find a real compiler issue to tackle next.

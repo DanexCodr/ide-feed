@@ -173,5 +173,3 @@ Be sure to ask these questions when picking a UUIDv7 implementation:
 
 Unfortunately, this sort of analysis is much more difficult than building an RFC compliant generator.
 Authors of UUIDv7 generators may not know the answers to these questions and may themselves be surprised that the RFC does handle this for them.
-
-[Discuss on Hacker News](https://news.ycombinator.com/item?id=50211746)

@@ -1,128 +1,159 @@
-During the process of building [Marathon Recompiled](https://github.com/sonicnext-dev/MarathonRecomp), we’ve ended up digging deep into many of Sonic 06’s core systems, including the rendering. The appearance of 06’s various areas varies from pretty good, like in Crisis City, to utterly flat and depressing in Castle Town.
+here's something really cursed i made a while back. the goal here is to create a portable way to obtain the value of errno from outside of c, without using a wrapper function written in c.
 
-*Crisis City has reflections, particle effects, dramatic lighting.*
+        for those unaware, errno is defined as a macro, and its expansion is non-portable and usually comes with no stability guarantees. so if you're calling libc functions from some other language (such as hare, which i'll be using in this post), it's not possible to retrieve error values from them without relying on an implementation detail or writing a wrapper function in c which returns errno.
 
-*Castle Town just makes me sad.*
+        ...unless you're willing to resort to some fucked up hacks, that is.
 
-It really makes you wonder what exactly went wrong? If you look at what limited footage we have of beta content, we can see many effects that aren’t present in the final game. Kingdom Valley had full bump maps, Castle Town had more complex geometry and plants, and New City’s collision implies a very different building layout at some point in development.
+preamble
+`use io;
+use sys;
+use types::c;
 
-It turns out, much of the cut content is actually still in the game, but is simply not enabled for performance reasons in vanilla. Even with the cut-back visuals, the game struggles to reach target FPS on real hardware. It’s not surprising that given the crunch Sonic Team were under to get the game out the door, these features were among the first to go.
+@symbol("close") fn c_close(fd: int) int;
+@symbol("dup") fn c_dup(oldfd: int) int;
+@symbol("dup2") fn c_dup2(oldfd: int, newfd: int) int;
+@symbol("lseek") fn c_lseek(fd: int, offs: io::off, whence: int) io::off;
+@symbol("mkstemp") fn c_mkstemp(template: *c::char) int;
+@symbol("perror") fn c_perror(s: nullable *c::char) void;
+@symbol("read") fn c_read(fd: int, buf: *opaque, count: size) c::ssize;
+@symbol("strerror") fn c_strerror(errnum: int) *c::char;
+@symbol("unlink") fn c_unlink(path: *c::char) int;
+@symbol("write") fn c_write(fd: int, buf: *opaque, count: size) c::ssize;
 
-# Shaders
+def SEEK_SET = 0;
+def STDERR_FILENO = 2i;`
 
-How exactly were these features disabled, though? It comes down to the many different shader variants used throughout. Most things in Sonic 06 are rendered using either the `Terrain` or `Billboard` shaders (despite the name, `Billboard` is not actually billboard-ed). Both of these have many variants, each with different feature levels numbered 00-07. As a general rule, the higher the number, the better the feature set. These shaders have not been entirely decompiled yet, so I can’t account for every difference with 100% certainty, but here is a rough feature table for the `Billboard` variants. CSM here stands for cascaded shadow maps, the shadow technique used by 06.
+there aren't any libc functions which return the value of errno. there are, however, functions which return a *string* that describes errno. so let's start there.
 
-|  | Lighting | CSM | Point Lights | Dual-Texture Blend |
-| --- | --- | --- | --- | --- |
-| 00 | None | No | No | No |
-| 01 | Vertex | No | Yes | No |
-| 02 | Vertex | No | No | No |
-| 03 | Vertex | Yes | Yes | No |
-| 04 | Pixel | Yes | No | No |
-| 05 | Pixel | No | No | Yes |
-| 06 | Pixel | No | Yes | Yes |
-| 07 | Pixel | Yes | Yes | Yes |
+        `export type error = !str;`
+standard c defines two promising functions: `strerror` and `perror.` posix defines two more functions: `strerror_r` and `strerror_l`. unfortunately, the strerror functions all take in the error number as an argument. only `perror` reads from errno directly. `perror` prints an error string to stderr, so our goal now to is to somehow capture the error string from `perror`, without actually writing anything to stderr.
 
-Want to take a guess as to which is the most used shader in the game? That’s right, `Billboard02`. Not quite the worst one, but definitely one of the worst. So yes, *the most used shader in the game* only has per-vertex lighting, no CSM support, and no point lights. If you’re wondering why so many things look so dull, this is why. Most of the game is not rendered with anything but the most basic albedo textures and ambient lighting.
+        alright, so let's do it. during program initialization, i dup `STDERR_FILENO` (2), open a temporary file, and change `STDERR_FILENO` to refer to the temporary file:
 
-If you’re curious about how much each shader is used and where, I’ve made a [handy table](https://gist.github.com/IsaacMarovitz/6eb288fa79e7fd1cb5034300d6a33305), with descriptions of each shader available on [HedgeDocs](https://hedgedocs.com/index.php/Sonic_the_Hedgehog_(2006)_Shaders).
+        `let stderr = -1;
+let tmpfd = -1;
+let tmpname: [_]u8 = ['/', 't', 'm', 'p', '/', 'X', 'X', 'X', 'X', 'X', 'X', '\0'];
 
-Unfortunately, because of the different I/O layouts between the variants, swapping them out is not as easy as you’d hope. My current attempts to do so have been largely unsuccessful, mostly just resulting in the various techniques breaking in one way or another. Additionally, the textures used for each material are defined in an object’s `.xno` file. It may be the case that some `.xno`s simply do not reference their other maps like normal and bump maps, despite them still being in the game files, and so swapping the shaders would not be enough.
+@init fn stderr_tmp() void = {
+	stderr = c_dup(STDERR_FILENO);
+	assert(stderr != -1);
+	tmpfd = c_mkstemp(&tmpname: *c::char);
+	assert(tmpfd != -1);
+	const n = c_dup2(tmpfd, STDERR_FILENO);
+	assert(n != -1);
+};
 
-*Castle Town with Billboard07 shader. Shadows do not apply to buildings correctly.*
+@fini fn stderr_tmp() void = {
+	if (tmpfd != -1) {
+		c_close(tmpfd);
+		c_unlink(&tmpname: *c::char);
+	};
+};`
+all low-level functions (libc wrappers or syscall wrappers) which may interact with stderr will silently adjust the fd from `STDERR_FILENO` to the dup'd stderr file descriptor if necessary. (i'll give an example later on, if you're confused by that.)
 
-# Shadow Maps
+        when an error occurs, the below function is called to obtain the error string:
 
-So about those shadow maps, they’re not free from problems either. The game is set up for a maximum of 4 cascades. Each cascade is used for a portion of the view along the camera’s frustum, keeping the amount of pixels used to resolve shadows relatively consistent across distances. However, it seems CSM was also the target of some last-minute performance hack-n-slashing.
+        `fn get_errno() error = {
+	c_perror(null);
+	if (c_write(STDERR_FILENO, &0u8, 1) == -1) {
+		return "Unknown error";
+	};
 
-The level of cascades used is defined by `GenerateCSMLevels` and `GenerateCSMObjects`. `Levels` generally refers to terrain/static elements, while `Objects` refers to well… other objects. Most areas will use the full 4 cascades, except `twn_a` and a few test levels where `GenerateCSMLevels` is downgraded to 3 and `GenerateCSMObjects` to just 2, significantly shortening the distance shadows render at. Multiplayer has this reduced cascade count everywhere.
+	c_lseek(STDERR_FILENO, 0, SEEK_SET);
+	defer c_lseek(STDERR_FILENO, 0, SEEK_SET);
 
-Even when shadows do render correctly, they’re prone to severe shadow acne, a common artifact when using these sorts of techniques. This is usually resolved by adding a small epsilon value to shadow map samples, but Sonic Team didn’t do this, and I don’t have the knowledge of the shaders yet to attempt to add this.
+	static let buf: [256]u8 = [0...];
+	const n = c_read(STDERR_FILENO, &buf, len(buf));
+	if (n == -1) {
+		return "Unknown error";
+	};
 
-*Shadow acne on Sonic’s ear.*
+	const n = c::strnlen(&buf: *c::char, n: size);
+	return *(&buf[..n]: *str);
+};`
+when `perror` is called, it writes to the temporary file. (`STDERR_FILENO` needs to refer to the temp file from the beginning because `dup2` may overwrite errno, so it can't be used right before calling `perror`). the message is then read back and returned.
 
-Shadows are also occasionally ill-defined in vanilla. Objects can set whether they contribute to shadow maps, and they sometimes get this wrong, leading to problems like Sonic’s Crisis City snowboard having no shadow, and Elise’s skirt missing a shadow in one of Sonic’s story cutscenes. These are not as easily patchable, as it would likely require direct edits to the objects themselves, or a complicated hook to find and correct objects in the render code itself.
+        so cool, we have an error message string. now let's use that to obtain the actual errno value.
 
-# Point Lights
+        `export type error = !str;
+export type errno = !int;`
+to do that, i'll write another initialization function to construct a table of error messages:
 
-This is one of the sadder cuts in my opinion. For what it’s worth, Sonic 06 *in theory* has a pretty flexible lighting system. There’s a couple of fixed ambient lights defined for every object, and then several point lights. These are meant to provide additional small details for objects like torches, they don’t cast shadows, and are rather inexpensive to render.
+        `let strerror_table: [256][256]u8 = [[0...]...];
 
-```
-shared struct
-{
-    float4 Position;
-    float4 Color;
-    float4 Attenuation;
+@init fn strerror_table() void = {
+	for (let i = 0; i < len(strerror_table): int; i += 1) {
+		const msg = c_strerror(i);
+		const n = c::strlen(msg);
+		strerror_table[i][..n] = (msg: *[*]u8)[..n];
+	};
+};`
+the above function copies the strings returned by `strerror` into `strerror_table`. if you're familiar with posix libc, you may be confused why i'm not using `strerror_r` here, since that function directly writes error messages into a user-supplied buffer.
 
-} g_PointLights[2]
-```
+        the reason is really annoying: there's two versions of `strerror_r`! there's a non-standard GNU version which returns an error message directly but may use its own immutable static storage, and there's a POSIX version which always writes to the user-supplied buffer and returns `int`.
 
-Sonic Team limited the number of point lights per-object to 2, that means at any given time, only 2 lights literally have the space in shader inputs to be rendered. Ordinarily, this sort of limitation would be fine, most forward renderers will have this kind of limit, so long as the designers remained cognisant of the limit when designing stages. Well, uh, they didn’t.
+        i want the POSIX version of course, but on glibc, the symbol "`strerror_r`" refers to the GNU version. the POSIX version uses the symbol "`__xpg_strerror_r`". but other posix-compliant libcs (such as musl and all the BSD libcs) only provide the POSIX version, under the symbol "`strerror_r`". fitting with the theme of this blog post, glibc makes it impossible to portably call the function i want without relying on an internal symbol name, which i really don't want to do (since that makes the code libc-dependent).
 
-Some stages like Kingdom Valley obey the limit pretty faithfully, and then stages like Flame Core and Dusty Desert utterly blow the limit out of the water, attempting to render 8+ lights per object. Needless to say, this doesn’t work out. The renderer gets confused, and lights will “fight” for priority, causing some to appear or disappear semi-randomly.
+        but anyways, now that the `strerror_table` is constructed, let's update the `errno()` function to use it:
 
-*Overloaded point lights in Flame Core. Only lights on the left side of the path render.*
+        `fn get_errno() error errno = {
+	c_perror(null);
+	if (c_write(STDERR_FILENO, &0u8, 1) == -1) {
+		return "Unknown error" -1;
+	};
 
-Sonic Team attempted to provide a general optimisation for point lights, and allocate them effectively to nearby objects, but something in this check went wrong. I suspect a combination of the limit being sharply lowered later in development, and the switching of many per-pixel lit objects to per-vertex, which can vastly alter the contribution area of a point light. The result is point lights rarely work at all in vanilla, even in stages that respect the limit.
+	c_lseek(STDERR_FILENO, 0, SEEK_SET);
+	defer c_lseek(STDERR_FILENO, 0, SEEK_SET);
 
-In the recomp, we are able to patch out most of the optimisation that breaks them, allowing point lights to render much more stable than in vanilla, however we are *still* limited to the 2 light limit. The lighting calculations responsible for adding point light contribution are all unrolled/inlined in the final shader bytecode, which makes identifying and modifying this code tricky as it can look different from one shader to the next. This is an area I want to tackle in the future.
+	static let buf: [256]u8 = [0...];
+	const n = c_read(STDERR_FILENO, &buf, len(buf));
+	if (n == -1) {
+		return "Unknown error" -1;
+	};
 
-# Planar Reflections
+	const n = c::strnlen(&buf: *c::char, n: size);
+	return *(&buf[..n]: *str);
+	if (n != 0) {
+		buf[n - 1] = '\0'; // strip trailing newline
+	};
 
-Did you know Sonic 06 had real-time planar reflections? Hint: We saw them earlier in Crisis City. I actually don’t have much to complain about here, generally they work really well and add a lot of realism to a scene. Of course, the resolution is severely limited in vanilla to 1/4 the resolution of the framebuffer, but that’s easily patched. There is one area where the game’s visuals get screwed over, and that’s in multiplayer.
+	for (let i = 0z; i < len(strerror_table); i += 1) {
+		if (c::strcmp(&buf: *c::char, &strerror_table[i]: *c::char) == 0) {
+			return i: errno;
+		};
+	};
+	return -1;
+};`
+btw, here's an example of what a libc wrapper of `write` looks like:
 
-*Murky fixed cubemap reflection in Kingdom Valley.*
+        `export fn write(fd: int, buf: *opaque, count: size) (size | errno) = {
+	const fd = if (fd == STDERR_FILENO) stderr else fd;
+	const n = c_write(fd, buf, count);
+	if (n == -1) {
+		return get_errno();
+	};
+	return n: size;
+};`
+another fucked up hack to make it actually portable
+the original thing that actually caused me to make this was that i wanted to see if i could make a generic "posix" target for hare. like, if you have a posix system which hare doesn't natively support, you could compile for the "posix" target and link to the system libc and things would just Work. the errno stuff was just a fun detour from that (the generic posix version would just return an error string, since the actual error numbers aren't portable). but in this context, there's one problem with the errno stuff. you can see it in this snippet from `get_errno()`:
 
-To save having to render expensive planar reflections **twice** in multiplayer, Sonic Team opted to just remove them entirely and replace them with static cubemaps. The problem is these cubemaps are pretty meh. Kingdom Valley goes from looking awesome to more like a depressed swamp. Well no problem, we can just patch it in right? Unfortunately due to how the rendering code works this isn’t so easy.
+        `c_lseek(STDERR_FILENO, 0, SEEK_SET);
+defer c_lseek(STDERR_FILENO, 0, SEEK_SET);`
+i define `SEEK_SET` as a constant earlier on:
 
-Sonic 06 uses Lua scripting to build the render graph, and different modes have different scripts. It’s a pretty cool and flexible system, when it works. As expected, singleplayer and multiplayer have their own render scripts, `render_gamemode.lua` and `render_gamemode_multi.lua` respectively.
+        `def SEEK_SET = 0;`
+this is usually true, but posix doesn't guarantee that `SEEK_SET` is 0! its value is completely implementation-defined. this is *yet another* place where it's not really possible to do stuff outside of c without relying on an "implementation detail".
 
-```
-function Build(_ARG_0_)
-  CreateCSM(_ARG_0_)
-  RenderCSM(_ARG_0_, GenerateCSMLevels, GenerateCSMObjects)
-  ApplySceneParams(_ARG_0_)
-  --
-  RenderReflection(_ARG_0_)
-  --
-  PrepareColorRender(_ARG_0_)
-  SetFrameBufferObjectOnce(_ARG_0_, "framebuffer0", "depthstencil", "all", 0, 0, 0, 0)
-  SetViewport(_ARG_0_, 0, 0, GetSurfaceWidth(_ARG_0_, "framebuffer0"), (GetSurfaceHeight(_ARG_0_, "framebuffer0")))
-  SetCurrentCamera(_ARG_0_, "main")
-  AutoSetAspect(_ARG_0_)
-  Zpass(_ARG_0_, "depthbuffer0", "depthstencil", "main")
-  RenderMain(_ARG_0_, "framebuffer0", "depthstencil")
-  PostColorRender(_ARG_0_)
-  Capture(_ARG_0_, "framebuffer0")
-  MakeBloom(_ARG_0_)
-  ApplyBloom(_ARG_0_)
-  SetCurrentCamera(_ARG_0_, "mainglare")
-  AutoSetAspect(_ARG_0_)
-  RenderWorld(_ARG_0_, "glare")
-  RenderPostprocess(_ARG_0_, "framebuffer0")
-  SetFrameBufferObject(_ARG_0_, "postprocess_output", "depthstencil", "none", 0, 0, 0, 0)
-  SetCurrentCamera(_ARG_0_, "mainafterpp")
-  AutoSetAspect(_ARG_0_)
-  RenderWorld(_ARG_0_, "afterpp", "all", "transparent")
-  SetFrameBufferObjectOnce(_ARG_0_, "backbuffer", "null", "color", 0, 0, 0, 0)
-  SetFrameBufferObject(_ARG_0_, "backbuffer", "null", "none", 0, 0, 0, 0)
-  ResetViewport(_ARG_0_)
-  if EnableRasterizeBlur then
-    RasterizeBurnoutBlur(_ARG_0_, "postprocess_output", "main", 1)
-  else
-    Rasterize(_ARG_0_, "postprocess_output")
-  end
-  RenderAfterPostprocess(_ARG_0_)
-  Render2D(_ARG_0_)
-end
-```
+        (in practice i can't imagine any reason `SEEK_SET` *wouldn't* be 0, but unnecessary fucked up hacks are fun so for now let's just pretend that any of this actually matters)
 
-In `render_gamemode.lua` we can see that crucial `RenderReflection()` call, which is unfortunately entirely absent from `render_gamemode_multi.lua`. As a result, attempting to enable the realtime reflections in multiplayer will just leave us with a black void rather than pretty reflections.
+        it's actually possible to work around this! `lseek` returns the new offset after seeking. so we can call `lseek` with an arbitrary whence value, and use the return value to determine whether it did what we wanted. if not, just repeat with different whence values until it works!
 
-We can’t just swap out `render_gamemode_multi.lua` for `render_gamemode.lua` either. The multiplayer renderer has special steps for creating the split-screen, essentially two framebuffers, so for multiplayer to render correctly, the provided render graph needs to be able to render both framebuffers. *Even* if you modify the multiplayer renderer to have `RenderReflection`, it’s not set up to work in this split-screen environment, and will, again, not work as intended. As it stands this quickly becomes a rabbit hole that’s not easy to resolve. If in future we have an easier way to apply Lua patches, I may revisit this.
-
-Maybe. Several of these problems have been at least *partially* addressed, but I’ve yet to figure out the shader edits that would be needed to get us to that beta footage goodness. Some of these fixes are largely, out of scope for the recomp, but whether fixes make it or not, we’re still learning a ton about how this game works on the backend. That still directly contributes to future improvements and patches.
-
-This game has much, much more to give, and it’s honestly sad that Sonic Team were not given the time to finish it. There’s many things that I didn’t get in to in this article including the insanity of the character shader, or the lack of occlusion culling, but it’s long enough already. Have fun with this silly game and happy early 20th anniversary.
-
-*Thank you to [Gordon Ramsay](https://gamebanana.com/members/1885816) for fact checking.*
+        `let i = 0;
+for (i <= 2; i += 1) {
+	if (c_lseek(STDERR_FILENO, 0, i) == 0) {
+		break;
+	};
+};
+assert(i <= 2);
+defer c_lseek(STDERR_FILENO, 0, i);`
+i just loop from 0 to 2, because i figure that it'll probably always be one of those values. but there's no reason higher values couldn't also be checked.
