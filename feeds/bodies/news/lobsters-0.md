@@ -1,130 +1,29 @@
-After [my post on undefined behavior in
-C](https://blog.habets.se/2026/05/Everything-in-C-is-undefined-behavior.html)
-some people insisted that it’s demonstrably fine, we know what the code will
-do, and at worst we’ll get a segfault.
+*Or, why we’re not seeing mass-exploitation of php2shell yet.*
 
-This is false.
+I saw wildly varying opinions on whether php2shell is serious, or if they cried wolf. Got curious, started digging into the PoCs. I’m not an exploit dev and maybe there were other factors, so take with a grain of salt. Egg on my face if mass exploitation starts right as I hit publish.
 
-Here’s an example.
+Best PoC of php2shell I’ve found: [https://github.com/9bie/php2shell-bypass-aslr-exp](https://github.com/9bie/php2shell-bypass-aslr-exp) (and a [fork with all docs translated to english](https://github.com/yanoshercohen/php2shell-bypass-aslr-exp-en))
 
-## C code
+To exploit, you need to do four consecutive requests to **the same php worker process**. And you need to know the exact php build (php version, OS version, architecture), or try exploits for every possible build.
 
-```
-#include<utility>
+What this PoC does is take a docker image that uses the default mod_php number of workers, which is 150. Then it opens 149 connections that send half a request to keep the other workers busy, and does the four exploit requests against the 150th worker.
 
-// Let's pretend this is a memory mapped device controlling
-// motors and gears and stuff.
-volatile int device_command = 0;
+Even a moderately popular production website will have multiple web VMs/containers running multiple php workers behind a load balancer and constant bot traffic. That means you would have to try a wide range of number of connections to open. On top of that you likely won’t know the exact build version, so you would have to try exploits for every combination out there.
 
-void serve_hot_chocolate() {
-        device_command = 42;
+Let’s say you try this for the 50 most popular php/OS combinations, and any number of workers between 10 and 1010. That’s 50k attempts. But against constant background traffic, you would need to try each combination a number of times. Each of these attempts involves opening a whole lot of connections, so they each take some time. The PoC runs against localhost and takes 3-4 seconds, so let’s optimistically call it 10 seconds on the internet.
 
-        // Oh no, we spilled some hot chocolate, invoking UB.
-        //
-        // The definition of `std::unreachable()` is:
-        //     Invokes undefined behavior at a given point.
-        std::unreachable();
-}
+You can only do one attempt at a time, so that means multiple days of bruteforcing in a way that is essentially a DoS, since a large part of that range will exhaust the maximum number of connections. At this point the person running the site will likely notice, start blocking IP addresses or adding a WAF.
 
-void explode() {
-        device_command = 3;
-}
-```
+Most high-traffic websites already run WAFs/rate-limiting to deal with bot traffic, so you would need to run this attack from a great many IPs, and preferably clean ones that are harder to come by. But running this from many IPs also increases the chances that your timing will be off, reducing the number of plausible attempts even further.
 
-## Example assembly output
+That’s assuming the WAF doesn’t block your attempts entirely, because the easiest ways to exploit these vulnerabilities were known at the time of the announcement.
 
-With GCC 16.2 with `-O1`.
+I’m sure people and agents will come up with clever techniques to reduce the required number of attempts eventually. But that has nothing to do with “this will get mass-exploited within 15 minutes.”
 
-```
-"serve_hot_chocolate()":
-        mov     DWORD PTR "device_command"[rip], 42
-"explode()":
-        mov     DWORD PTR "device_command"[rip], 3
-        ret
-"device_command":
-        .zero   4
-```
+Against very low-traffic websites that do not have any bot protection, leak information about their version, running close to stock configuration, you might get lucky.
 
-Ruh roh. Exploding chocolate! The function `explode()` will be executed, even
-though it was never called!
+So sure, it’s a critical vulnerability, deserves attention, should be patched ASAP. Maybe even put in the announcement that if you’re running low-traffic sites, be extra sure to patch fast.
 
-## Another example: dereferencing a null pointer
+But to the AI security vendors who promoted this as THE GATES OF HELL WILL OPEN YOU HAVE TO PATCH WITHIN 15 MINUTES OR DIE? I want my Wednesday back.
 
-Some people insisted that dereferencing a null pointer is *fine*. It’ll just
-try to access address zero! And these people supposedly know what happens when
-you try: if nothing is mapped there, you’ll get a segfault.
-
-Again, not true.
-
-Let’s say we change `std::unreachable()` to `int* ptr = nullptr; *ptr = 99;` in
-the previous example. Now we [get this](https://godbolt.org/z/efqKrzefa):
-
-```
-"serve_hot_chocolate()":
-        mov     DWORD PTR "device_command"[rip], 42
-        mov     DWORD PTR ds:0, 0
-        ud2
-```
-
-Curious, eh? First it writes zero, **not** 99, to memory address zero. Then it
-crashes the program using an invalid instruction. The number 99 never appears
-in the generated program. But the null pointer write does. Presumably the null
-pointer write is done in order to improve debugger error messages.
-
-Now let’s check [clang with godbolt](https://godbolt.org/z/86M7MWTT8):
-
-```
-"serve_hot_chocolate()":
-        mov     dword ptr [rip + "device_command"], 42
-
-"explode()":
-        mov     dword ptr [rip + "device_command"], 3
-        ret
-
-"device_command":
-        .long   0
-```
-
-Again we get exploding chocolate.
-
-## Let’s do some pointer arithmetic on the null pointer
-
-Ok, so what happens if we add `ptr += 10`. That’s UB for three reasons:
-
-1. using a null pointer for anything other than comparison against other pointers,
-2. even if an object would be valid at the null pointer (which it’s not), creating a pointer that points outside that object, or if an array, beyond one-past the array, is UB,
-3. even if that were valid (which it’s not), we then dereference the address.
-
-Let’s [try it](https://godbolt.org/z/8z6hPPsvG).
-
-```
-"serve_hot_chocolate":
-        mov     DWORD PTR "device_command"[rip], 42
-        mov     DWORD PTR ds:40, 99
-        ret
-```
-
-Wow. *Now* it did what someone naively would expect, taking the code at face
-value. Lucky.
-
-Why did GCC (and clang, by the way) not detect that `*(ptr + 10) = 99` is
-equally UB as `*ptr = 99`, and do the same thing?
-
-Wrong question. No compiler is obligated to “detect” UB at all. Looks to me
-like GCC and clang, if we want to anthropomorphize them, saw “oh, null pointer
-dereference? Well that can’t happen, so I’ll stop emitting instructions for
-this function, to save on the binary size”. Because of the [halting
-problem](https://en.wikipedia.org/wiki/Halting_problem), it cannot in the
-general case know if the code will ever be executed.
-
-## So what does UB do?
-
-Anything. I have now demonstrated three things UB can do, when UB was triggered
-in the same place:
-
-1. Run whatever happens to be next in memory (exploding chocolate).
-2. Store a (for all intents and purposes) random value at address zero (wrote zero, not 99), and then deliberately crash.
-3. Do what one would naively expect: write the value to the address seen in the code at face value.
-
-And to think that some people don’t believe in [nasal
-demons](https://en.wikipedia.org/wiki/Undefined_behavior).
+<small>Oh and the claims of it being exploited in the wild? At time of writing, they’re referring to exploitation *attempts*. In fact, HoneyLabs [so far](https://infosec.exchange/@HoneyLabs/117483559117381472) hasn’t seen a single exploit attempt that could even run successfully.</small>

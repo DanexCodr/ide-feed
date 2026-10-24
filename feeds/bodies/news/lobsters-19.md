@@ -1,20 +1,21 @@
-- Added `VC-WIN32-MSVC2013` and `VC-WIN64A-MSVC2013` build targets to provide internal functions for bridging the gaps in C99 standard support that are present in MSVC 2013.
-- Added optimized ML-DSA and ML-KEM NTT operations on `ppc64le`; optimized ML-DSA operations on `x86_64`; AVX-512-optimized SHAKE x4 operations for ML-DSA on `x86_64`; AVX-512 and VAES optimizations for AES-CBC decryption on `x86_64`.
-- Changed `tsget` utility to use `Net::Curl::Easy` (from the `Net-Curl` CPAN distribution) instead of the abandoned `WWW::Curl::Easy`. Users who rely on `tsget` should install `Net::Curl::Easy` before upgrading.
-- Dropped Windows-on-Itanium (`VC-WIN64I`) and Windows CE (`VC-CE`) targets from Configurations.
-- Dropped `no-ecdsa` and `no-ecdh` options from `Configure`, as these options did not really disable the implementations. Use `no-ec` to disable the elliptic curve support.
+i found a neat trick which lets you take advantage of CoW to duplicate memory without allocating anything upfront. maybe some people already know about this, but i just discovered it and i think it's cool (and i kinda wish it was easier to take advantage of this with higher-level stdlib functions)
 
-This release adds the following new features:
+        start by creating a memory-backed file descriptor and mmaping it (error handling omitted):
 
-- Support for DTLS 1.3 ([RFC 9147](https://datatracker.ietf.org/doc/html/rfc9147)). Refer to the `ossl-guide-dtlsv13(7)` manual page for details.
-- Support for [RFC 8701](https://datatracker.ietf.org/doc/html/rfc8701) GREASE (Generate Random Extensions And Sustain Extensibility).
-- DTLS support in the SSL listener API.
-- Support for IKEV2 KDF.
-- Initial support for the Elbrus2000 (`e2k`) architecture.
+        `int fd = memfd_create("foo", MFD_CLOEXEC);
+ftruncate(fd, SIZE);
+char *template = mmap(NULL, SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);`
+write some "template" to it (this is what will be dup'd later):
 
-Known issues in 4.1.0:
+        `memset(template, 67, SIZE);`
+now, to allocate a chunk of memory with this template, use `mmap` with `MAP_PRIVATE`:
 
-- [#32878](https://github.com/openssl/openssl/issues/32878) When a DTLS 1.3 KeyUpdate is received, all other outstanding post-handshake records are dropped from the retransmission buffer. This means post-handshake records still awaiting an ACK (such as a NewSessionTicket) will no longer be retransmitted if the original transmission is lost. A fix is in progress and planned for a future release.
-- [#33277](https://github.com/openssl/openssl/issues/33277) A permanent receive failure on a DTLS listener can be reported as `SSL_ERROR_WANT_READ` on an accepted connection. Polling and subsequent accept calls may also fail to report the error, causing applications to continue waiting after a permanent failure.
-- [#33278](https://github.com/openssl/openssl/issues/33278) A retryable write failure on a nonblocking connection accepted from a DTLS listener can be reported as `SSL_ERROR_SYSCALL` instead of `SSL_ERROR_WANT_WRITE`. Applications treating this result as fatal may close a connection that is still usable.
-- [#33242](https://github.com/openssl/openssl/issues/33242) DTLS 1.3 servers may abort handshakes with an `unexpected_message` alert when a client acknowledges part or all of the server's first flight before sending its response. This can occur after packet loss or while the client is preparing its authentication response.
+        `char *copy = mmap(NULL, SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);`
+this is cool because regardless of the size of the initial allocation, the copy isn't taking up any physical memory. and say you mutate the copy now:
+
+        `copy[i] = 69;`
+this will only allocate a single page of memory (4 KiB); the rest of the pages are still shared with the original template!
+
+        i did a test here where i allocated 32 MiB, and then "copied" it with what would be another 32 MiB allocation, but the total physical memory usage was 32.004 MiB.
+
+        i wonder if it would be possible to do this with a continuous memory region. like, 32 MiB of virtual memory, but because it's all filled with the same (non-zero) stuff, only 1 page of physical memory is allocated upfront. this feels like it could be useful maybe

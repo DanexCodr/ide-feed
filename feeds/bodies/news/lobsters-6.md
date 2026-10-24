@@ -1,37 +1,45 @@
-I decided to make my own container runtime for fun, and even though I’m still early on, I’ve learned that Docker is *weird*. Here’s some weird things I learned about Docker.
+One of my favorite xkcd comics of all time is [Random Number](https://xkcd.com/221/). The image depicts a C function that supposedly returns a random integer, but in reality always returns `4`. I was reminded of this wonderful comic a few days ago, due to a [security incident](https://emudhra.we-have-a-problem.com/) where people accidentally used the number `4` (among others) instead of a properly generated sequence of random bytes. Satire has a tendency to become reality, I guess.
 
-## Containers aren’t real
+Since there is a clear demand among developers for the xkcd random number generator, I’m of the opinion that self-respecting languages should ship a built-in implementation. I’m here today to lead by example, as I unveil the glorious `@xkcdRandom` builtin for the Zig language. Can you guess what it does? Indeed, it returns the number `4`! Now go found a [multi-billion-dollar startup](https://en.wikipedia.org/wiki/Theranos) on top of this genius idea.
 
-Unlike VMs, containers are just processes with special restrictions on them. Your kernel is still running that process! And if you know where to look, you can even find that process in /proc.
+### But why?
 
-## Containers really aren’t real
+Why not? After completing the [Ziglings exercises](https://codeberg.org/ziglings/exercises/#ziglings) and brain-coding a [toy minesweeper game](https://github.com/aochagavia/minesweeper-zig), I felt like my grasp of the language was solid enough to attempt something more ambitious. I wanted to get my hands on production-grade Zig code, and play with it to see how the different pieces of the language fit together. Hacking on the Zig compiler sounded like the perfect idea!
 
-There’s not really a linux feature that’s just “containers” either. Instead, containers are really 5 different linux kernel features in trenchcoat.
+### Builtins vs. functions
 
-Namespaces hide what the host and container can see, cgroups limit container resource usage, and there’s a whole bunch of networking magic I don’t understand that lets you isolate a container’s network.
+A sane person might implement the xkcd RNG as a literal port of the original C code, which maps to the following Zig function:
 
-## Images are just folders
+```zig
+fn xkcdRandom() i32 {
+    return 4; // chosen by fair dice roll.
+              // guaranteed to be random.
+}
+```
 
-Images are just folders that Docker puts somewhere and then calls `chroot` (or `pivot_root`) to make that folder your container process’s new root directory. So if you run `docker run -it --rm ubuntu /bin/bash`, Docker is going to:
+There’s one very big drawback to this approach: it’s boring. Don’t get me wrong, I like boring and low-maintenance code as much as the next person… but this time my goal is to *learn*, not to *produce*. I actually want to jump through hoops and make things overly complicated! Builtins are *perfect* for this. They are, as the name suggests, built-in constructs in the Zig language. Adding one means I get to fork and modify the compiler. Yay!
 
-- Download the ubuntu image from Dockerhub.
-- Put that image somewhere.
-- Run /some/weird/docker/path/bin/bash
+### Builtin implementation and usage
 
-## Go is kind of a terrible language for a container runtime
+The builtin source code is intertwined with the rest of the Zig compiler, so it’s not really possible to include it here. Feel free to inspect [the diff](https://codeberg.org/aochagavia/zig/commit/50c3c3862710ee3b3686e4f0f2d1a45428000ad6) if you are curious (it’s just 22 lines), or to clone [my Zig fork](https://codeberg.org/aochagavia/zig) and check out the `0.17.x-xkcd` branch.
 
-Docker’s container runtime, `runc`, is written in Go, and Go has some design choices that make it less suited for a container runtime. Go’s runtime is natively multi-threaded. That’s a really cool feature, but it leads to some challenges in `runc`.
+With these changes to the compiler, you can build programs like the one below. Isn’t that neat?
 
-Many of the Linux syscalls a container runtime needs to make have to be done in a single-threaded environment, so `runc` has [a crazy C module](https://github.com/opencontainers/runc/tree/main/libcontainer/nsenter) that runs before Go’s runtime initializes so it can run those syscalls.
+```zig
+const std = @import("std");
 
-Go also doesn’t have fork! Fork only forks the main thread, so it’s kind of a footgun in a runtime like Go’s. But a container runtime really wants to fork, set up a bunch of restrictions, and then exec the process you actually put in `docker run`. To get around this, `runc` execs `/proc/self/exe` with a special command line arguement that identifies it as a child process to approximate a fork.
+pub fn main(_: std.process.Init) !void {
+    const someRandomNumber: usize = @xkcdRandom();
+    const anotherRandomNumber: f32 = @xkcdRandom();
+    std.debug.print(
+        "The random numbers you ordered just arrived: {}, {}\n",
+        .{ someRandomNumber, anotherRandomNumber }
+    );
+}
+```
 
-## Docker requires root!
+### Hacking on Zig is surprisingly straightforward
 
-This is pretty easy to miss if you, like me, run Docker in MacOS. Many of the Linux kernel APIs that container runtimes use require, or at least used to, to be run as root, so the Docker daemon usually runs as root. I can only imagine that container security is a very tough job.
+The Zig developers have clearly put effort into developer experience. You can build Zig with a single command: `zig build --zig-lib=lib -Dno-lib -Ddev=x86_64-linux`. The fresh build took roughly a minute to complete on my laptop, which in my book is quite good for a compiler. Subsequent builds were faster.
 
-This seems better these days. The big exception seems to be networking. If you’re running a rootless container runtime, it looks like it has to reimplement the whole networking stack in userspace to actually give you the same features!
-
-## Learning is fun!
-
-I’ve only just started my own container runtime, and I already feel like I’ve learned so much about Docker. Writing your own version of a tool you use is a great way to learn about it!
+As for the coding work itself, an LLM pointed me to the file where builtins were defined, and I took over from there: modifying things, checking for compile errors, fixing them, and so on. The code was easy to navigate, thanks to its clear structure and the Zig language server’s help. I was done way faster than I expected! Maybe I should find a real compiler issue to tackle next.

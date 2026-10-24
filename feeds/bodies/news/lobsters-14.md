@@ -1,21 +1,83 @@
-i found a neat trick which lets you take advantage of CoW to duplicate memory without allocating anything upfront. maybe some people already know about this, but i just discovered it and i think it's cool (and i kinda wish it was easier to take advantage of this with higher-level stdlib functions)
+A link is just a button that takes you somewhere when you click it right?
 
-        start by creating a memory-backed file descriptor and mmaping it (error handling omitted):
+```
 
-        `int fd = memfd_create("foo", MFD_CLOEXEC);
-ftruncate(fd, SIZE);
-char *template = mmap(NULL, SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);`
-write some "template" to it (this is what will be dup'd later):
+<style>
+span {
+  text-decoration: underline;
+  color: #44EEEE;
+}
+</style>
+<span onclick="window.location='https://xkcd.com/'">100% legit link</span>
+```
 
-        `memset(template, 67, SIZE);`
-now, to allocate a chunk of memory with this template, use `mmap` with `MAP_PRIVATE`:
+100% legit link
 
-        `char *copy = mmap(NULL, SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);`
-this is cool because regardless of the size of the initial allocation, the copy isn't taking up any physical memory. and say you mutate the copy now:
+Except that's a pale, shallow imitation of a link.
+A real link can be:
 
-        `copy[i] = 69;`
-this will only allocate a single page of memory (4 KiB); the rest of the pages are still shared with the original template!
+Opened in a new tab. (ctrl)
+... or a fresh window. (shift)
+... or saved as a file (alt).
+Copied as a URL (right click)
+Used with the keyboard (tab + enter)
+Seen by tools like search engines and screen readers.
+Hovered over to see the URL.
 
-        i did a test here where i allocated 32 MiB, and then "copied" it with what would be another 32 MiB allocation, but the total physical memory usage was 32.004 MiB.
+ snip
 
-        i wonder if it would be possible to do this with a continuous memory region. like, 32 MiB of virtual memory, but because it's all filled with the same (non-zero) stuff, only 1 page of physical memory is allocated upfront. this feels like it could be useful maybe
+... none of which work with a button.
+
+*Another common offense* is to use a real link, but hook the click event to open a popup.
+However, with a real <a target="_blank"> link, I can:
+
+See the loading progress...
+... or/and cancel it.
+... see descriptive error pages and retry if needed.
+Open multiple at once.
+Read the original page while it loads.
+Use my browser's tabs or/and window manager to organize them.
+Bookmark the page.
+Copy the URL and send it to a friend.
+
+... and above all, they are consistent:
+
+I've long lost count of how many times I've accidentally closed the whole site while trying to close a popup that was a little too convincing.
+
+It's also extremely common to click a link with a slow connection, only to be greeted with perpetual spinner.
+I have no idea if anything is actually happening or how long it will take.
+Worse, it usually covers up the original page so I can't even read that!
+
+*Browsers are good at links and loading pages: It's the whole point.*
+
+Don't use javascript buttons as links.
+Don't build your own loading animations.
+Link previews should open and close on hover, not on click.
+Don't open links in javascript popups: Use target="_blank" instead.
+
+# *Other common problems*:
+
+Infinite scrolling breaks ctrl-f, bookmarks, the home/end keys and often the back button.
+
+You can have a 100k of text on a page:
+Browsers will render partially downloaded HTML and the user won't even notice.
+Using a 5 MB javascript framework just do a worse job of downloading text is dumb.
+
+To optimize speed, it's best to minimize the total number of round trips.
+Just putting everything in a single TCP connection will always be better than breaking it up because of TCP's slow start algorithm.
+
+*Don't reimplement <details>* which will break search tools and screen readers.
+
+... but using fancy CSS to make it look nice is fine.
+
+*Don't roll your own date picker* (or any other built-in form inputs)
+
+This will always used the user's preferred date format, covert it to the standard yyyy-mm-dd, and works with the keyboard...
+also, it's one line of code that works with dark mode by default.
+
+# *Related*:
+
+Real links!
+
+- https://susam.net/do-not-roll-your-own.html: Don't Roll Your Own ...
+- /misc/13kb/: Why using a single big page can actually improve performance.
