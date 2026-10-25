@@ -1,149 +1,49 @@
-MongoDB engineers juggling many implementations of many specs.
+Many people [are saying](https://rustify.rs/articles/rails-world-2026-keynote-dhh-hey-rust-ai-agents) that AI will make software faster by rewriting it in faster languages, but this isn’t generally true. Most programs cannot be meaningfully sped up by rewriting them in C or Rust.
 
-At MongoDB, we develop a dozen client libraries (“drivers”) in a dozen programming languages. A few wrap shared cores written in C or Java, but mostly they’re rewrites in their target languages: the JavaScript Driver is pure JavaScript, the Rust Driver is pure Rust, and so on. Building the drivers this way is a big commitment. Lots of database companies just write their client in C and make thin wrappers in various languages. Our way is harder but, in my opinion, better. Our drivers are easier to install, their APIs are more idiomatic in each language, and they participate normally in each language’s runtime: its threading model or async loop, its garbage collection, etc. This is only possible because we keep developing *native* drivers in each language.
+How can this be true? Some languages are orders-of-magnitude faster than others: for instance, C can be fifty times [faster](https://news.ycombinator.com/item?id=9753366) than Python. Won’t rewriting my Python program in C thus make it fifty times faster? No, it won’t. Software performance is usually dominated by I/O, not the speed of the language. Where language speed matters, most slow languages already have popular libraries that allow them to unlock C-like speed. In general, performance is a matter of *design*, not of language choice.
 
-But then, how do we ensure all our drivers’ behaviors and APIs are consistent? Or, that they’re *appropriately* consistent or inconsistent, according to the conventions of their target languages? Obviously, Python methods are snake_cased and Java methods are camelCased, but MongoDB drivers should have the same basic API in all languages, spelling aside. Node concurrency is async and C concurrency uses threads, but the meaning of [causal consistency](https://emptysqua.re/blog/how-to-use-mongodb-causal-consistency/) should be the same in all drivers.
+### Most real programs are I/O-bound
 
-# In Search of a Tolerable Test Language
+Consider a simple CRUD website with a database. For any given request, 50% of the request time<sup>[1](https://www.seangoedecke.com/software-is-slow-because-of-bad-design-not-slow-languages/#fn-1)</sup> might be spent querying the database: to fetch the current user, the record being asked for, any relevant user memberships or settings, and so on. Rewriting that website in C can only speed up that other 50%, which puts a hard ceiling on the improvements you can make<sup>[2](https://www.seangoedecke.com/software-is-slow-because-of-bad-design-not-slow-languages/#fn-2)</sup>. At best, you’ll make requests twice as fast (probably closer to 1.5x in practice). That’s not bad, but it’s nowhere near an order-of-magnitude speedup.
 
-[#](https://emptysqua.re/blog/polyglots-dilemma/#in-search-of-a-tolerable-test-language)
+In other words, most real programs are “I/O-bound”: they spend most of their time waiting for data to be input or output somewhere, as opposed to “CPU-bound” programs that spend most of their time actively doing things. I/O-bound programs don’t just have to rely on a database. Often programs have to wait on some third-party API, or on writing or reading data to disk. You could speed the code in `curl` up by 100x and you probably wouldn’t even notice, because `curl` spends all of its time waiting on the network.
 
-I joined MongoDB as a Python driver engineer in November 2011. Looking back through my emails, I see that we were intensely debating how to standardize our drivers from the moment I arrived. Some engineers were writing Java Driver tests in Cucumber, a “behavior-driven development” syntax, like this:
+What about work that is obviously not I/O-bound? For instance, wikis have to turn stored markdown into renderable HTML<sup>[3](https://www.seangoedecke.com/software-is-slow-because-of-bad-design-not-slow-languages/#fn-3)</sup>. Wouldn’t rewriting that in a faster language cause a massive speedup? It would! That’s why applications that do that use libraries like [cmark-gfm](https://github.com/github/cmark-gfm) that call out to fast languages for markdown rendering. In general, most slow languages can write very fast programs by invoking this kind of library. Python is famously a slow language, but it’s a competitive choice for CPU-bound workloads like machine learning and mathematics, because it has a [healthy](https://pytorch.org/) [set](https://www.tensorflow.org/) of libraries that let it offload these workloads to fast C code. If a Python program spends 80% of its time doing matrix multiplications on a GPU, you are very unlikely to be able to speed it up by rewriting it in C, because those matrix multiplications are already happening in tightly-optimized C or assembly code.
 
-```cucumber
-Scenario: Exclude a field from query results
-  Given collection "users" contains documents
-    """
-    {"_id": 1, "name": "alice", "password": "hunter2"}
-    {"_id": 2, "name": "bob",   "password": "swordfish"}
-    """
-  When find documents by
-    """
-    {"name": "alice"}
-    """
-  And return fields
-    """
-    {"password": false}
-    """
-  Then the result should be
-    """
-    {"_id": 1, "name": "alice"}
-    """
-```
+Of course, some programs do in fact do a lot of CPU-bound work in slow languages. If a program has not had much engineering attention, there will probably be a lot of [low-hanging fruit](https://www.seangoedecke.com/low-hanging-fruit/). But these programs are often unimportant: if they were important, someone would have gone in and optimized them already, before AI made it (relatively) easy. That doesn’t mean it’s impossible to find a useful program to rewrite. Actual Computer recently [rewrote](https://github.com/actual-computer/toks) tiktoken in assembly, providing a significant<sup>[4](https://www.seangoedecke.com/software-is-slow-because-of-bad-design-not-slow-languages/#fn-4)</sup> speedup. However, you’re not going to revolutionize some field of computing like this. Even fast tokenization is only useful on the margins, because time spent in tokenization is a fraction of the time spent in inference.
 
-My very first task at MongoDB was researching whether we could write test-runners for these Cucumber tests in Python, Ruby, and our other languages. I instantly learned that my second task was dealing with my colleagues’ revulsion to Cucumber’s syntax. One engineer wrote that if we replaced his handwritten tests with Cucumber, he’d “have no part in doing it or supporting the resulting disaster.” (I clarified that we weren’t going to replace tests, only complement them.) Our founder Eliot Horowitz encouraged us to make a shared test suite, but he thought Cucumber specifically was “hilarious.”
+Despite all this, I think most software is far slower than it could be. I’m optimistic about the potential (with or without AI) to significantly speed up commonly-used software. But I think most of these speedups will come from redesigning the program, not rewriting it in a faster language.
 
-We gave up on Cucumber. A few years later, I was involved in a new feature, [specifying how drivers measure and respond to network latency](https://specifications.readthedocs.io/en/latest/server-selection/server-selection/#localthresholdms). I observed that the English spec of the feature could be misunderstood, and some drivers implemented it differently. Once again, Eliot proposed a shared test suite. This time, we avoided Cucumber. We started to develop a custom test language on top of YAML instead. For details, see [my conference talk or blog post about YAML tests](https://emptysqua.re/blog/cat-herds-crook/), with Samantha Ritter.
+In a 2018 [post](https://bcantrill.dtrace.org/2018/09/18/falling-in-love-with-rust/), Bryan Cantrill described trying to rewrite a C program into Rust. It was difficult because the carefully-optimized design of the C program did not play well with the Rust borrow checker. Giving up, he simply wrote the program in Rust in the naive way, expecting a 20% slowdown or worse. Instead, it was 30% *faster*. The [reasons](https://bcantrill.dtrace.org/2018/09/28/the-relative-performance-of-c-and-rust/) boil down to Rust’s internal preference for a B-tree over a binary search tree, which happens to be a more cache-efficient data structure. So even in a largely CPU-bound workload, in the hands of someone very skilled at writing fast C, performance is dominated by design, not by language speed.
 
-# The Unreasonable Effectiveness of YAML
+This matches my own experience in higher-level languages. When I think of the significant speedups I’ve managed, they’re almost exclusively redesigns of the software to do less work:
 
-[#](https://emptysqua.re/blog/polyglots-dilemma/#the-unreasonable-effectiveness-of-yaml)
+- Caching a slow operation (typically an external API call)
+- Performing slow operations asynchronously, either in a background job or out of the request/response lifecycle
+- Performing operations in parallel instead of sequentially (sometimes breaking up large operations in order to do this)
+- Replacing a set of SQL queries with a single SQL query (fixing N+1 problems)
+- Replacing a slow SQL query with a fast SQL query
+- Skipping unnecessary slow operations (e.g. in a paginated view, only fetch ancillary data from entities that are on the current page)
 
-Testing drivers with YAML is one of the most successful projects I’ve ever been part of. In the 11 years (nearly 12 now) since we started writing YAML tests, the MongoDB drivers have all converged to a shared API and shared set of behaviors. They’re as similar as they should be, with consciously-chosen variations to fit each language’s idioms and conventions. [I left the Drivers team a while ago](https://emptysqua.re/blog/choosing-the-adventurous-route-video/), but the specification and YAML testing process is going stronger than ever. They now have a Unified Test Format, built on YAML, that can test drivers’ conformance to a dozen different specs. The specs cover how drivers read and write documents, how they retry failed commands, how they start and end transactions, how they encrypt private fields client-side, and lots of other intricate behaviors. Nearly 1,500 YAML files ensure that all these independent code bases implement the same protocols.
+All of these strategies are completely unrelated to how fast the language is. In fact, writing in a slow higher-level language can make it much easier to optimize the code, because you can see at a glance what the program is doing. If (for some reason) I had first rewritten the web server in assembly, I would have a much harder time noticing the N+1 query, or the fact that we could move an API call into a job, and so on.
 
-Here’s an example of a modern Unified Test Format file. It tests that a driver [auto-retries](https://emptysqua.re/blog/driver-features-for-mongodb-3-6/#retryable-writes) the `update` command after a network error:
+Right now everyone is asking their AI agents to rewrite programs in Rust or C or assembly. This is fun, but it’s not a serious attempt at optimization. The set of programs that can be meaningfully sped up by this kind of rewrite is very narrow.
 
-```yaml
-schemaVersion: "1.4"
-runOnRequirements:
-  - {minServerVersion: "4.4", topologies: [replicaset]}
-createEntities:
-  - client:
-      id: &client client0
-      observeEvents:
-        - commandStartedEvent
-        - poolClearedEvent
-        - serverDescriptionChangedEvent
-  - database:
-      id: &db db0
-      client: *client
-      databaseName: &dbName mydb
-  - collection:
-      id: &coll coll0
-      database: *db
-      collectionName: &collName mycoll
-initialData:
-  - collectionName: *collName
-    databaseName: *dbName
-    documents: [{_id: 1, x: 1}]
-tests:
-  - description: "updateOne retries after network error,
-                  exactly-once execution"
-    operations:
-      - name: failPoint
-        object: testRunner
-        arguments:
-          client: *client
-          failPoint:
-            configureFailPoint: failCommand
-            mode: {times: 1}
-            data:
-              failCommands: [update]
-              closeConnection: true
-      - name: updateOne
-        object: *coll
-        arguments:
-          filter: {_id: 1}
-          update: {$inc: {x: 1}}
-        expectResult:
-          matchedCount: 1
-          modifiedCount: 1
-          upsertedCount: 0
-      - name: waitForEvent
-        object: testRunner
-        arguments:
-          client: *client
-          event:
-            serverDescriptionChangedEvent:
-              newDescription: {type: Unknown}
-          count: 1
-    expectEvents:
-      - client: *client
-        eventType: command
-        events:
-          - commandStartedEvent: {commandName: update}
-          - commandStartedEvent: {commandName: update}
-      - client: *client
-        eventType: cmap
-        events: [{poolClearedEvent: {}}]
-    outcome:
-      - collectionName: *collName
-        databaseName: *dbName
-        documents: [{_id: 1, x: 2}] # x incremented once
-```
+If you want to make everything faster with AI — and you should! — you ought instead to be asking your agent to profile programs, identify hotspots, and suggest ways to redesign what the program does. Occasionally you may run into a hotspot that is truly CPU-bound and cannot be refactored to do less work. In these rare cases, rewriting that section in a faster language will help. But simply rewriting from the start will be far less successful than most people imagine.
 
-For each of our drivers, we implement a *test runner* which can interpret this syntax and call APIs on the driver being tested. The test runner creates two MongoClient objects: the MongoClient under test, and an “internal” MongoClient for sending side-channel commands to the server (see the `failPoint` below).
+There are many good reasons to rewrite software in a different language: portability, efficiency, maintainability, and so on. But in terms of raw *speed*, you’re better off focusing on the program’s design.
 
-`schemaVersion` tells the test runner which features the file uses, so an old runner can skip a file it wouldn’t understand instead of failing it. We use JSON Schema to check each YAML test has the proper syntax for its version of the Unified Test Format.
+edit: this post got some excellent comments on [lobste.rs](https://lobste.rs/s/hd72yt/software_is_slow_because_bad_design_not), mostly critical.
 
-`runOnRequirements` tells the test runner to skip the file unless the MongoDB server deployment matches—here, a replica set running MongoDB 4.4 or later.
+Many commenters [disagree](https://lobste.rs/c/wcyo4k) that CRUD software is IO-bound, because database queries take ~5ms but responses take ~500ms. This is an empirical question, and my position on it comes from my experience staring at thousands of Ruby flamegraphs. It’s not uncommon for a single request to make tens or even hundreds of queries, or to rely on large queries or internal API calls that are a lot slower than 5ms. However, while I have profiled a *lot* of Rails endpoints in my career, it’s only been at a couple of companies. Maybe other monoliths are different.
 
-`createEntities` builds an *entity map*: a client, a database, and a collection, named with YAML anchors (`&client`) so later operations can refer to them by alias (`*client`). This not only avoids repetition, it means YAML test runners can store and retrieve objects in the entity map, like assigning objects to variables in a real programming language.
+The top [commenter](https://lobste.rs/c/mhuwnq) says that there are many non-IO-bound programs, such as browser layout engines, 3d renderers, word processors, and neural networks. I agree that those examples are CPU-bound, but I think most engineers are not working on tasks like that. My sense is that the number of browser layout engines, 3d renderers and neural network programs in the world, all summed together, might make up about five percent of the number of CRUD programs (though they make up >50% of public *discussion* about programming, because they’re more interesting problems). Maybe I’m wrong!
 
-`initialData` puts one document in the collection before the test starts. Then the operations run in order:
+Other [commenters](https://lobste.rs/c/vcnyyd) [point](https://lobste.rs/c/n031ad) [out](https://lobste.rs/c/s5dkdu) that languages come with ecosystems that make performance harder or easier. I agree with that, but to me that falls under *design*: in some languages, fast designs are more natural than slow designs. If changing languages makes it easier to change designs, then sure, changing languages might speed up your program.
 
-- failPoint tells the server to close the connection the next time it receives an update. The test runner uses the internal MongoClient for this so it doesn’t touch the MongoClient under test.
-- updateOne tells the test runner to call the updateOne API on the MongoClient under test. In Python this is spelled update_one, in C it’s mongoc_collection_update_one, etc. Each driver’s test runner knows how to translate YAML into the driver’s API. The expectResult field asserts what the call returns. In this test, the driver tries to update a doc, it gets a network error from the fail point, it reconnects and retries, and succeeds, returning modifiedCount: 1.
-- waitForEvent blocks until the driver has noticed the server closed the connection. (In this test, that happens earlier during updateOne, so the test runner won’t actually block on this line.) The driver handles the network error by marking the server’s type as Unknown, meaning the driver has to figure out the server’s status once it reconnects.
-- expectEvents checks that the driver sent two update commands on the wire, meaning it retried the write exactly once, plus there was a poolClearedEvent showing the driver discarded all its connections after the network error.
-- outcome reads the collection back to confirm x was incremented exactly once—the retry didn’t apply the update again.
+Anyway, I do think my point empirically stands: if you go around with a LLM trying to “make software faster by rewriting it in C” you are going to run into software that’s already been suprisingly optimized compared to a rewrite, or IO-bound workloads that can’t be easily sped up, and you should instead be telling your LLM to “make software faster by redesigning it”.
 
-This example shows lots of exciting features! The Unified Test Format lets all the drivers share a test suite. We can prove they all act the same by publishing tests they must all pass. We can update a spec, and force all the drivers to comply with the change, by publishing changes to the shared tests and watching all outdated drivers fail.
-
-Additionally, this test is checking *hidden* behaviors that ordinary integration tests couldn’t observe. We use `failPoint` to make the server close the connection, so we can exercise the driver’s auto-retry logic. From the API surface, retries are invisible—that’s the point. But this YAML test triggers a retry and tests three hidden behaviors: the driver retries exactly once, it marks the server type `Unknown`, and it clears its connection pool. We could assert the entire contents of the two `update` commands the driver sends on the wire, if we wanted to.
-
-# Results
-
-[#](https://emptysqua.re/blog/polyglots-dilemma/#results)
-
-The Unified Test Format has saved us tens of thousands of lines of code over the years, and it’s probably saved us from scores of awful bugs. It enforces spec conformance so when you use MongoDB from several programming languages, you get a consistent API and predictable behavior.
-
-Here are some numbers, starting with code savings. When we created the unified format in 2020, we generalized the YAML test format used by lots of different specs into one format to rule them all. Seven drivers replaced their per-spec test runners with a single Unified Test Format runner, and every one of these came out smaller. We cut 22,000 lines total. The Java Driver alone deleted 6,000 lines of test-runner code.
-
-Meanwhile, we added more and more conformance tests. The Unified Test Format corpus went from about a thousand lines in 2021 to 124,000 today. The biggest jumps are when we mechanically ported tests from per-spec YAML formats into the unified format.
-
-Do the tests actually prevent bugs? We identified a natural experiment: Five drivers implemented the CRUD spec years *before* they adopted its YAML tests, which gives us a before and after to compare. We used Claude to classify every resolved ticket in those drivers—6,836 of them—and counted the ones that were genuine violations of the CRUD Spec. Four of the five drivers had a lower bug rate after adopting YAML tests.
-
-Node.js is the embarrassing one: its bug rate went *up*. Years after it adopted the YAML tests we discovered that its `BulkWriteResult` and `BulkWriteError` classes were inconsistent with the specs and the other drivers. Its test runner hadn’t asserted their contents rigorously enough. The Driver Team filed a bunch of bugs and changed the field names over two major releases.
-
-The IEEE International Symposium on Software Reliability Engineering (ISSRE) just accepted my paper about YAML testing, “The Polyglot’s Dilemma: Conformance Testing a Dozen Specs in as Many Languages.” Driver engineers Jeremy Mikola and Jeff Yemin are my coauthors. The paper has more detail about the history of our YAML tests, and it has plenty of stats and lessons. [Check it out, it’s only 6 pages](https://arxiv.org/abs/2608.18039).
+1. This might seem ridiculously high (if you typically work with slow languages or CPU-bound workloads), or ridiculously low (if you don’t). In my experience it’s at least in the ballpark for interpreted languages. ↩
+2. This is formally called [Amdahl’s law](https://en.wikipedia.org/wiki/Amdahl%27s_law). ↩
+3. Why not just store the HTML? You can, but sometimes the content of the HTML differs per-user (and even if you store the HTML you have to convert it at least once). ↩
+4. They claim 4-23x faster than tiktoken and it was indeed ~5x faster on my laptop — though arguably this speedup comes from a redesign to avoid the dependency on regex, not on any intrinsic slowness of Rust with Python bindings. ↩

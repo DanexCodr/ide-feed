@@ -1,5 +1,11 @@
 *Or, why we’re not seeing mass-exploitation of php2shell yet.*
 
+*Update 2026-10-25: three days after the patch was available, the first public [evidence appeared](https://github.com/0x4D31/honeypot-data/blob/main/reports/php2shell/2026-10-24-confirmed-rce.md) of exploitation in the wild. This was a honeypot, presumably a low-traffic sensor. As far as I can tell, the technique matches my description below. So seems likely that at this point, mass-exploitation of low-traffic sites has begun. The constraints making exploitation of mid/high traffic websites unlikely, to my knowledge, still stand.*
+
+*Update 2026-10-25: regarding high-traffic sites, a public $2k bounty on [stealmybitcoin.com](https://stealmybitcoin.com/) has not yet been claimed. However, Dan Guido of Trail of Bits, [claims](https://x.com/dguido/status/2113825891021144306) they have a reliable exploit that works under load. If so, that’s faster than I expected. I have not seen public confirmation, or what they mean by “under load.”*
+
+*Update 2026-10-25: discussions on [lobste.rs](https://lobste.rs/s/xgih2x/i_want_my_wednesday_back) and [reddit](https://www.reddit.com/r/AskNetsec/comments/1xe4l6k/is_php2shell_only_practical_against_extremely/).*
+
 I saw wildly varying opinions on whether php2shell is serious, or if they cried wolf. Got curious, started digging into the PoCs. I’m not an exploit dev and maybe there were other factors, so take with a grain of salt. Egg on my face if mass exploitation starts right as I hit publish.
 
 Best PoC of php2shell I’ve found: [https://github.com/9bie/php2shell-bypass-aslr-exp](https://github.com/9bie/php2shell-bypass-aslr-exp) (and a [fork with all docs translated to english](https://github.com/yanoshercohen/php2shell-bypass-aslr-exp-en))
