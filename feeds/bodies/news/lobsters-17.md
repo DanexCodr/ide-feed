@@ -1,83 +1,269 @@
-A link is just a button that takes you somewhere when you click it right?
+Nearly 1,800 developers from the Ruby on Rails community across 80 countries shared their thoughts on the tools, frameworks, and workflows that shape their daily development lives.
 
-```
+This year, we also asked about something that's on everyone's mind: AI. How teams are using it, how they feel about it, and whether it's actually changing the way they work.
 
-<style>
-span {
-  text-decoration: underline;
-  color: #44EEEE;
-}
-</style>
-<span onclick="window.location='https://xkcd.com/'">100% legit link</span>
-```
+This is the ninth edition of our survey since 2009. For nearly two decades, it has been one of the key ways our team at Planet Argon keeps a pulse on how this community has evolved.
 
-100% legit link
+Some of these questions date back to our very first survey, allowing us to track trends over time. Others are new additions, designed to reflect what's changed in our ecosystem since we last asked.
 
-Except that's a pale, shallow imitation of a link.
-A real link can be:
+Now it’s time to dig in. We hope you find something useful, surprising, or at least validating here.
 
-Opened in a new tab. (ctrl)
-... or a fresh window. (shift)
-... or saved as a file (alt).
-Copied as a URL (right click)
-Used with the keyboard (tab + enter)
-Seen by tools like search engines and screen readers.
-Hovered over to see the URL.
+**How to read the charts:** Responses were collected from April to early July 2026. Percentages are based on the people who answered each question. Many questions let people pick more than one answer, so those totals add up to more than 100%. Write-in answers were grouped by hand.
 
- snip
+Who took the 2026 survey.
 
-... none of which work with a button.
+### Which one of the following applies to you?
 
-*Another common offense* is to use a real link, but hook the click event to open a popup.
-However, with a real <a target="_blank"> link, I can:
+Percent of respondents.
 
-See the loading progress...
-... or/and cancel it.
-... see descriptive error pages and retry if needed.
-Open multiple at once.
-Read the original page while it loads.
-Use my browser's tabs or/and window manager to organize them.
-Bookmark the page.
-Copy the URL and send it to a friend.
+Percent of respondents by survey year.
 
-... and above all, they are consistent:
+Percent of respondents.
 
-I've long lost count of how many times I've accidentally closed the whole site while trying to close a popup that was a little too convincing.
+How Rails development teams are shaped and how they collaborate.
 
-It's also extremely common to click a link with a slow connection, only to be greeted with perpetual spinner.
-I have no idea if anything is actually happening or how long it will take.
-Worse, it usually covers up the original page so I can't even read that!
+Percent of respondents.
 
-*Browsers are good at links and loading pages: It's the whole point.*
+Percent of respondents by survey year.
 
-Don't use javascript buttons as links.
-Don't build your own loading animations.
-Link previews should open and close on hover, not on click.
-Don't open links in javascript popups: Use target="_blank" instead.
+Percent of respondents by survey year.
 
-# *Other common problems*:
+In  2026 :Mostly consumer-only (public)47%A balanced mix of consumers and internal users42%Mostly internal users only11%
 
-Infinite scrolling breaks ctrl-f, bookmarks, the home/end keys and often the back button.
+Select all that apply. Percent of respondents; totals add up to more than 100%.
 
-You can have a 100k of text on a page:
-Browsers will render partially downloaded HTML and the user won't even notice.
-Using a 5 MB javascript framework just do a worse job of downloading text is dumb.
+Respondents could pick up to three. Percent of respondents; totals add up to more than 100%.
 
-To optimize speed, it's best to minimize the total number of round trips.
-Just putting everything in a single TCP connection will always be better than breaking it up because of TCP's slow start algorithm.
+Other responses
 
-*Don't reimplement <details>* which will break search tools and screen readers.
+What versions the community is running and what holds upgrades back.
 
-... but using fancy CSS to make it look nice is fine.
+Select all that apply. Percent of respondents; totals add up to more than 100%.
 
-*Don't roll your own date picker* (or any other built-in form inputs)
+Percent of respondents by survey year. Select all that apply, so totals add up to more than 100%. mise appeared twice on the form; respondents who picked both are counted once.
 
-This will always used the user's preferred date format, covert it to the standard yyyy-mm-dd, and works with the keyboard...
-also, it's one line of code that works with dark mode by default.
+Select all that apply. Percent of respondents; totals add up to more than 100%.
 
-# *Related*:
+Percent of respondents.
 
-Real links!
+Select all that apply. Percent of respondents; totals add up to more than 100%.
 
-- https://susam.net/do-not-roll-your-own.html: Don't Roll Your Own ...
-- /misc/13kb/: Why using a single big page can actually improve performance.
+How Rails applications are configured and what they integrate with.
+
+Percent of respondents by survey year.
+
+Select all that apply. Percent of respondents; totals add up to more than 100%.
+
+Other responses
+
+Select all that apply. Percent of respondents; totals add up to more than 100%.
+
+Percent of respondents.
+
+Asked of respondents with a companion native app. Select all that apply. Percent of those respondents; totals add up to more than 100%.
+
+How Rails developers built their skills and stay connected to the community.
+
+Percent of respondents.
+
+Select all that apply. Percent of respondents; totals add up to more than 100%.
+
+Percent of respondents.
+
+Write-in responses, listed by number of mentions. Percentages are of respondents who answered this question.
+
+Most Mentioned
+
+Other Mentions
+
+Respondents could pick up to three. Percent of respondents; totals add up to more than 100%.
+
+Percent of respondents by survey year.
+
+Write-in responses, ranked by number of mentions. Rails World led by a wide margin: 30% of respondents plan to attend.
+
+Top 10
+
+Other Mentions
+
+Percent of respondents who said yes, by survey year. Local in-person and online groups were asked as separate questions. Online groups were first asked in 2020.
+
+Top 10
+
+Honorable Mentions
+
+Top Ten
+
+Honorable Mentions
+
+Top 10
+
+Honorable Mentions
+
+Top 12
+
+Community contribution and the gem ecosystem.
+
+Percent of respondents.
+
+Write-in responses, ranked by number of mentions. Percent of respondents who answered this question. Tied answers share a rank.
+
+Top 10
+
+Other Responses
+
+Write-in responses, ranked by number of mentions. Percent of respondents who answered this question. Tied answers share a rank.
+
+Top 10
+
+Other Responses
+
+How JavaScript sits alongside Rails in modern applications.
+
+Select all that apply. Percent of respondents; totals add up to more than 100%.
+
+Select all that apply. Percent of respondents; totals add up to more than 100%.
+
+Other responses
+
+Select all that apply. Percent of respondents; totals add up to more than 100%.
+
+Other responses
+
+Testing, monitoring, and staying on top of vulnerabilities.
+
+Select all that apply. Percent of respondents; totals add up to more than 100%.
+
+Percent of respondents.
+
+Percent of respondents.
+
+Select all that apply. Percent of respondents; totals add up to more than 100%.
+
+Other responses
+
+Select all that apply. Percent of respondents; totals add up to more than 100%.
+
+Other responses
+
+Select all that apply. Percent of respondents; totals add up to more than 100%.
+
+Respondents could pick up to three. Percent of respondents; totals add up to more than 100%.
+
+Where Rails apps run and how they get there.
+
+Percent of respondents by survey year.
+
+Select all that apply. Percent of respondents; totals add up to more than 100%.
+
+Percent of respondents by survey year. Select all that apply, so totals add up to more than 100%. Kamal grew from 2.4% in 2024 to 23.8% in 2026, after Rails 8 made it the default deployment tool for new apps.
+
+Select all that apply. Percent of respondents; totals add up to more than 100%.
+
+Other responses
+
+Select all that apply. Percent of respondents; totals add up to more than 100%.
+
+Percent of respondents by survey year. Select all that apply, so totals add up to more than 100%. 4% use no CI.
+
+Runner-ups in 2026
+
+Percent of respondents by survey year. Select all that apply, so totals add up to more than 100%. 22% don't use a CDN.
+
+Runner-ups in 2026
+
+Which data stores back Rails applications.
+
+Percent of respondents by survey year. Select all that apply, so totals add up to more than 100%.
+
+Runner-ups in 2026
+
+No longer asked
+
+Select all that apply. Percent of respondents; totals add up to more than 100%.
+
+Percent of respondents by survey year.
+
+The tools developers reach for on their local machines.
+
+Percent of respondents.
+
+Percent of respondents.
+
+Percent of respondents by survey year. Zed (10.2%) and Cursor (5.4%) were write-in responses in 2026 — they weren't offered as formal options in prior surveys.
+
+Runner-ups in 2026
+
+No longer asked
+
+How AI tools are (and aren't) landing in Rails workflows.
+
+Percent of respondents.
+
+Select all that apply. Percent of respondents; totals add up to more than 100%.
+
+Other responses
+
+Select all that apply. Percent of respondents; totals add up to more than 100%.
+
+Percent of respondents.
+
+Percent of respondents.
+
+Percent of respondents.
+
+Percent of respondents.
+
+Percent of respondents.
+
+Percent of respondents.
+
+Percent of respondents.
+
+Percent of respondents.
+
+Percent of respondents.
+
+Percent of respondents.
+
+Percent of respondents.
+
+Percent of respondents.
+
+Write-in responses, grouped by hand. Percent of respondents who answered; people could name more than one.
+
+Other Responses
+
+Sentiment on where Rails is heading and what teams are planning next.
+
+Percent of respondents.
+
+Two questions: what significant technical changes has your team completed in the last 24 months, and what is it planning or evaluating in the next ~12 months? These reflect choices individual teams made for their own codebases and constraints, not recommendations. Select all that apply. Percent of respondents who answered each question (1,659 and 1,509). None in the last 24 months: 5%. None planned: 11%.
+
+Upgrades
+
+AI & the app layer
+
+Infrastructure & deploys
+
+Architecture
+
+Data
+
+Testing & types
+
+Dots with a halo are past the  45 % axis; the exact numbers are beside each row.
+
+Percent of respondents.
+
+Percent of respondents.
+
+Percent of respondents.
+
+AI is no longer a sidebar in Rails development. It showed up throughout this year's responses: in the tools people reach for, the gems they love, and the workflows they're rethinking. The community isn't watching from a distance; we're actively exploring.
+
+Some things remain constant. A few of the same tools, books, and podcasts that have anchored this ecosystem for years are still showing up. And new ones are appearing alongside them.
+
+At [Planet Argon](https://www.planetargon.com/?utm_content=conclusion-name&utm_source=railsdeveloper.com&utm_medium=referral&utm_campaign=survey-2026), we remain steadfast in our belief that Ruby on Rails is an exceptional platform to invest in, and we're excited to continue supporting its growth. If a few of these numbers hit close to home (inherited code, an upgrade that keeps sliding, an AI policy that's still a draft), that's the work we do every day. [Come say hello](https://www.planetargon.com/contact?utm_content=conclusion&utm_source=railsdeveloper.com&utm_medium=referral&utm_campaign=survey-2026).
+
+Thank you to everyone who took the time to contribute to the 2026 Rails Community Survey, our ninth edition since 2009. Eighty countries' worth of perspectives on a framework that keeps finding new reasons to stick around. We'll see you in 2028!
