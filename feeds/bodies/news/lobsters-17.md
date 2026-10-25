@@ -1,149 +1,81 @@
-MongoDB engineers juggling many implementations of many specs.
+I’ve been slowly turning [my Emacs config](https://codeberg.org/jjba23/heks-emacs) into something I actually *enjoy* using, not just something that works, and folding was the last place where that wasn’t true.
 
-At MongoDB, we develop a dozen client libraries (“drivers”) in a dozen programming languages. A few wrap shared cores written in C or Java, but mostly they’re rewrites in their target languages: the JavaScript Driver is pure JavaScript, the Rust Driver is pure Rust, and so on. Building the drivers this way is a big commitment. Lots of database companies just write their client in C and make thin wrappers in various languages. Our way is harder but, in my opinion, better. Our drivers are easier to install, their APIs are more idiomatic in each language, and they participate normally in each language’s runtime: its threading model or async loop, its garbage collection, etc. This is only possible because we keep developing *native* drivers in each language.
+Every mode had its own idea of what folding is: `treesit-fold` in Tree-sitter modes, Hideshow in the Lisp-ish ones, Outline in everything that resembles text, Org with its own invisible text that no one else’s commands can undo.
 
-But then, how do we ensure all our drivers’ behaviors and APIs are consistent? Or, that they’re *appropriately* consistent or inconsistent, according to the conventions of their target languages? Obviously, Python methods are snake_cased and Java methods are camelCased, but MongoDB drivers should have the same basic API in all languages, spelling aside. Node concurrency is async and C concurrency uses threads, but the meaning of [causal consistency](https://emptysqua.re/blog/how-to-use-mongodb-causal-consistency/) should be the same in all drivers.
+So every buffer had different keys, a different look, and worst of all  different *performance* characteristics. Folding a big file sometimes felt like holding my breath.
 
-# In Search of a Tolerable Test Language
+I’m running Emacs 32.0.50 from `master` (built from source, as one does), and it’s finally one system.
 
-[#](https://emptysqua.re/blog/polyglots-dilemma/#in-search-of-a-tolerable-test-language)
+![](https://jointhefreeworld.org/static-assets/heks/screen-2026-10-23-16-17-32.png)
 
-I joined MongoDB as a Python driver engineer in November 2011. Looking back through my emails, I see that we were intensely debating how to standardize our drivers from the moment I arrived. Some engineers were writing Java Driver tests in Cucumber, a “behavior-driven development” syntax, like this:
+## kirigami is the piece I didn’t know I needed [#](https://jointhefreeworld.org/blog/articles/emacs/emacs-folding-kirigami/#kirigami-is-the-piece-i-didnrsquot-know-i-needed)
 
-```cucumber
-Scenario: Exclude a field from query results
-  Given collection "users" contains documents
-    """
-    {"_id": 1, "name": "alice", "password": "hunter2"}
-    {"_id": 2, "name": "bob",   "password": "swordfish"}
-    """
-  When find documents by
-    """
-    {"name": "alice"}
-    """
-  And return fields
-    """
-    {"password": false}
-    """
-  Then the result should be
-    """
-    {"_id": 1, "name": "alice"}
-    """
-```
+[kirigami](https://github.com/jamescherti/kirigami.el) doesn’t fold anything itself. It *dispatches*: it keeps a list of folding engines, checks which one is actually active in the buffer, and forwards to it. Tree-sitter, Hideshow, Outline, Org, Vdiff — all behind one interface.
 
-My very first task at MongoDB was researching whether we could write test-runners for these Cucumber tests in Python, Ruby, and our other languages. I instantly learned that my second task was dealing with my colleagues’ revulsion to Cucumber’s syntax. One engineer wrote that if we replaced his handwritten tests with Cucumber, he’d “have no part in doing it or supporting the resulting disaster.” (I clarified that we weren’t going to replace tests, only complement them.) Our founder Eliot Horowitz encouraged us to make a shared test suite, but he thought Cucumber specifically was “hilarious.”
+So on top of it I put one set of keys, the same in a Kotlin buffer, YAML, a Scheme or ELisp buffer and an Org file:
 
-We gave up on Cucumber. A few years later, I was involved in a new feature, [specifying how drivers measure and respond to network latency](https://specifications.readthedocs.io/en/latest/server-selection/server-selection/#localthresholdms). I observed that the English spec of the feature could be misunderstood, and some drivers implemented it differently. Once again, Eliot proposed a shared test suite. This time, we avoided Cucumber. We started to develop a custom test language on top of YAML instead. For details, see [my conference talk or blog post about YAML tests](https://emptysqua.re/blog/cat-herds-crook/), with Samantha Ritter.
+| Key | Does |
+| --- | --- |
+| `C-c v c` | close this fold |
+| `C-c v C` | close every fold |
+| `C-c v o` | open this fold |
+| `C-c v O` | open this fold and everything under it |
+| `C-c v r` | reveal everything |
+| `C-c v t` | toggle the fold at point |
 
-# The Unreasonable Effectiveness of YAML
+That sounds small. It is not small. The number of times a day I used to think “wait, what does TAB do in this mode again” is now zero, and the muscle memory transfers across an entire polyglot config.
 
-[#](https://emptysqua.re/blog/polyglots-dilemma/#the-unreasonable-effectiveness-of-yaml)
+One wrinkle worth mentioning: kirigami answers with the *first* engine in its list whose mode is on, and `outline-minor-mode` is on in nearly every buffer I have. In the buffers where I deliberately turned on Hideshow — Scheme, for instance — that choice has to win, otherwise `C-c v c` folds “headings” a Scheme file doesn’t have. So I reorder `kirigami-fold-list` to put Hideshow first instead of rewriting it; engines kirigami adds later still get used wherever Hideshow is off.
 
-Testing drivers with YAML is one of the most successful projects I’ve ever been part of. In the 11 years (nearly 12 now) since we started writing YAML tests, the MongoDB drivers have all converged to a shared API and shared set of behaviors. They’re as similar as they should be, with consciously-chosen variations to fit each language’s idioms and conventions. [I left the Drivers team a while ago](https://emptysqua.re/blog/choosing-the-adventurous-route-video/), but the specification and YAML testing process is going stronger than ever. They now have a Unified Test Format, built on YAML, that can test drivers’ conformance to a dozen different specs. The specs cover how drivers read and write documents, how they retry failed commands, how they start and end transactions, how they encrypt private fields client-side, and lots of other intricate behaviors. Nearly 1,500 YAML files ensure that all these independent code bases implement the same protocols.
+## Tree-sitter folding, with guides that are actually lines [#](https://jointhefreeworld.org/blog/articles/emacs/emacs-folding-kirigami/#tree-sitter-folding-with-guides-that-are-actually-lines)
 
-Here’s an example of a modern Unified Test Format file. It tests that a driver [auto-retries](https://emptysqua.re/blog/driver-features-for-mongodb-3-6/#retryable-writes) the `update` command after a network error:
+Most of my programming buffers are `*-ts-mode`, so `treesit-fold` does the work there — bash, C, C++, CMake, CSS, Dockerfile, Elixir, Go, HTML, Java, JS/TS/TSX, JSON, Kotlin, Lua, Nix, PHP, Python, Ruby, Rust, Scala, TOML, YAML. Line counts are shown inline, which I find genuinely useful when deciding whether to open a fold.
 
-```yaml
-schemaVersion: "1.4"
-runOnRequirements:
-  - {minServerVersion: "4.4", topologies: [replicaset]}
-createEntities:
-  - client:
-      id: &client client0
-      observeEvents:
-        - commandStartedEvent
-        - poolClearedEvent
-        - serverDescriptionChangedEvent
-  - database:
-      id: &db db0
-      client: *client
-      databaseName: &dbName mydb
-  - collection:
-      id: &coll coll0
-      database: *db
-      collectionName: &collName mycoll
-initialData:
-  - collectionName: *collName
-    databaseName: *dbName
-    documents: [{_id: 1, x: 1}]
-tests:
-  - description: "updateOne retries after network error,
-                  exactly-once execution"
-    operations:
-      - name: failPoint
-        object: testRunner
-        arguments:
-          client: *client
-          failPoint:
-            configureFailPoint: failCommand
-            mode: {times: 1}
-            data:
-              failCommands: [update]
-              closeConnection: true
-      - name: updateOne
-        object: *coll
-        arguments:
-          filter: {_id: 1}
-          update: {$inc: {x: 1}}
-        expectResult:
-          matchedCount: 1
-          modifiedCount: 1
-          upsertedCount: 0
-      - name: waitForEvent
-        object: testRunner
-        arguments:
-          client: *client
-          event:
-            serverDescriptionChangedEvent:
-              newDescription: {type: Unknown}
-          count: 1
-    expectEvents:
-      - client: *client
-        eventType: command
-        events:
-          - commandStartedEvent: {commandName: update}
-          - commandStartedEvent: {commandName: update}
-      - client: *client
-        eventType: cmap
-        events: [{poolClearedEvent: {}}]
-    outcome:
-      - collectionName: *collName
-        databaseName: *dbName
-        documents: [{_id: 1, x: 2}] # x incremented once
-```
+The indicators took the most fiddling. `treesit-fold-indicators` draws a block’s guide with a bitmap 23 rows tall, centered in the line beside it. A line in my config is 29 pixels — the font’s 23 plus six of `line-spacing` — so every row of the guide was a 23-pixel dash with three pixels of nothing above and below it. A folded block looked like a *dotted* line running down the fringe. Not subtle, just wrong.
 
-For each of our drivers, we implement a *test runner* which can interpret this syntax and call APIs on the driver being tested. The test runner creates two MongoClient objects: the MongoClient under test, and an “internal” MongoClient for sending side-channel commands to the server (see the `failPoint` below).
+There’s no setting for that, so I replaced the bitmaps: a single-row bitmap that `define-fringe-bitmap` repeats down however tall the line is (no spacing can introduce a gap), plus a `+=/`-= box and an end-elbow cut to the exact height of a line, so the guide runs from the marker into the row below and turns toward the text where the block ends. It’s an advice on the function that builds the string for each line. It looks like a bracket now, not a perforation.
 
-`schemaVersion` tells the test runner which features the file uses, so an old runner can skip a file it wouldn’t understand instead of failing it. We use JSON Schema to check each YAML test has the proper syntax for its version of the Unified Test Format.
+And the colour: the indicators inherited `shadow`, which most themes make as bright as a comment. Fine for one marker on one line, wrong for a marker on *every* line of a block — the grey became a rule drawn through the code. They’re now `shadow` blended 50% toward the theme’s background, recomputed on every theme and scale change, so it fades correctly on light themes too and no theme needs a special entry.
 
-`runOnRequirements` tells the test runner to skip the file unless the MongoDB server deployment matches—here, a replica set running MongoDB 4.4 or later.
+## Hideshow earns its keep [#](https://jointhefreeworld.org/blog/articles/emacs/emacs-folding-kirigami/#hideshow-earns-its-keep)
 
-`createEntities` builds an *entity map*: a client, a database, and a collection, named with YAML anchors (`&client`) so later operations can refer to them by alias (`*client`). This not only avoids repetition, it means YAML test runners can store and retrieve objects in the entity map, like assigning objects to variables in a real programming language.
+Not everything has a grammar, and I’m not going to pretend otherwise:
 
-`initialData` puts one document in the collection before the test starts. Then the operations run in order:
+- Scheme — my Emacs build has no Scheme grammar, so Scheme buffers use Hideshow with hs-block-start-regexp set to "^(" and hs-forward-sexp-function set to forward-sexp. A Scheme file is a sequence of top-level forms, so each definition is a fold, and collapsing the one you’re inside works from anywhere within it. That’s the behaviour I wanted from the start and Hideshow doesn’t guess it by default.
+- Emacs Lisp — the prog-mode fallback, same keys.
+- XML — folds from start tag to end tag using nxml-scan-element-forward, skipping <?xml ?>, comments, DOCTYPE and self-closing elements.
+- YAML (the non-Tree-sitter mode) — indentation-based blocks with a small forward-sexp of my own that walks to the end of the indented block.
 
-- failPoint tells the server to close the connection the next time it receives an update. The test runner uses the internal MongoClient for this so it doesn’t touch the MongoClient under test.
-- updateOne tells the test runner to call the updateOne API on the MongoClient under test. In Python this is spelled update_one, in C it’s mongoc_collection_update_one, etc. Each driver’s test runner knows how to translate YAML into the driver’s API. The expectResult field asserts what the call returns. In this test, the driver tries to update a doc, it gets a network error from the fail point, it reconnects and retries, and succeeds, returning modifiedCount: 1.
-- waitForEvent blocks until the driver has noticed the server closed the connection. (In this test, that happens earlier during updateOne, so the test runner won’t actually block on this line.) The driver handles the network error by marking the server’s type as Unknown, meaning the driver has to figure out the server’s status once it reconnects.
-- expectEvents checks that the driver sent two update commands on the wire, meaning it retried the write exactly once, plus there was a poolClearedEvent showing the driver discarded all its connections after the network error.
-- outcome reads the collection back to confirm x was incremented exactly once—the retry didn’t apply the update again.
+Hideshow’s own fringe indicators (`hs-show-indicators` + `hs-indicator-type 'fringe`) are on in all of these, so it doesn’t feel like a downgrade from the Tree-sitter buffers.
 
-This example shows lots of exciting features! The Unified Test Format lets all the drivers share a test suite. We can prove they all act the same by publishing tests they must all pass. We can update a spec, and force all the drivers to comply with the change, by publishing changes to the shared tests and watching all outdated drivers fail.
+The rule I enforce per buffer is **exactly one set of indicators**: Tree-sitter buffers get `treesit-fold` and Hideshow is turned off; Hideshow buffers get Hideshow and Outline’s clickable buttons are turned off so the two don’t double up; outline-only buffers (Markdown, diff) keep the buttons. Nobody ends up with two markers per block.
 
-Additionally, this test is checking *hidden* behaviors that ordinary integration tests couldn’t observe. We use `failPoint` to make the server close the connection, so we can exercise the driver’s auto-retry logic. From the API surface, retries are invisible—that’s the point. But this YAML test triggers a retry and tests three hidden behaviors: the driver retries exactly once, it marks the server type `Unknown`, and it clears its connection pool. We could assert the entire contents of the two `update` commands the driver sends on the wire, if we wanted to.
+## Org, which needed its own everything [#](https://jointhefreeworld.org/blog/articles/emacs/emacs-folding-kirigami/#org-which-needed-its-own-everything)
 
-# Results
+Org folds with text properties, not overlays, so neither Tree-sitter nor Hideshow nor Outline’s buttons can draw a marker for it. So I wrote its own indicators: a fringe triangle pointing down for an open heading, right for a folded one, clickable with `mouse-1` to toggle exactly like `TAB`. Folding itself is untouched — `TAB`, `S-TAB` and the `C-c v` keys all still work.
 
-[#](https://emptysqua.re/blog/polyglots-dilemma/#results)
+The performance part is where the real win is. A naive “redraw indicators after every command” implementation is a disaster in a large file, because it re-searches the buffer and rebuilds every overlay on every pause. Mine is driven by the text instead:
 
-The Unified Test Format has saved us tens of thousands of lines of code over the years, and it’s probably saved us from scores of awful bugs. It enforces spec conformance so when you use MongoDB from several programming languages, you get a consistent API and predictable behavior.
+- if buffer-chars-modified-tick didn’t change, only the indicators that are on screen are redrawn — off-screen headings can wait until they’re scrolled to;
+- if it changed and the change was recorded, only the dirty region is rebuilt;
+- if it changed with no recorded change, only then is the whole buffer rebuilt.
 
-Here are some numbers, starting with code savings. When we created the unified format in 2020, we generalized the YAML test format used by lots of different specs into one format to rule them all. Seven drivers replaced their per-spec test runners with a single Unified Test Format runner, and every one of these came out smaller. We cut 22,000 lines total. The Java Driver alone deleted 6,000 lines of test-runner code.
+Folding changes text properties rather than characters, so folding alone takes the cheap path. Fold state is read back from Org on each redraw rather than remembered, so external folding can never leave a stale marker.
 
-Meanwhile, we added more and more conformance tests. The Unified Test Format corpus went from about a thousand lines in 2021 to 124,000 today. The biggest jumps are when we mechanically ported tests from per-spec YAML formats into the unified format.
+Two config choices matter just as much: `org-fold-core-style` is `text-properties` (so a visibility cycle doesn’t re-parse the file), `org-element-use-cache` is on, and Org starts with `showeverything` — which is both what I want (a note is read, not consulted) and the cheaper state, because it skips the visibility passes that walk every heading on open. I also removed a `org-restart-font-lock` that was re-fontifying the whole buffer a second time on open; JIT-lock handles what’s on screen.
 
-Do the tests actually prevent bugs? We identified a natural experiment: Five drivers implemented the CRUD spec years *before* they adopted its YAML tests, which gives us a before and after to compare. We used Claude to classify every resolved ticket in those drivers—6,836 of them—and counted the ones that were genuine violations of the CRUD Spec. Four of the five drivers had a lower bug rate after adopting YAML tests.
+## It feels smooth, and that’s the whole point [#](https://jointhefreeworld.org/blog/articles/emacs/emacs-folding-kirigami/#it-feels-smooth-and-thatrsquos-the-whole-point)
 
-Node.js is the embarrassing one: its bug rate went *up*. Years after it adopted the YAML tests we discovered that its `BulkWriteResult` and `BulkWriteError` classes were inconsistent with the specs and the other drivers. Its test runner hadn’t asserted their contents rigorously enough. The Driver Team filed a bunch of bugs and changed the field names over two major releases.
+The end result is that folding is *boring* now. `C-c v c` in Kotlin, Scheme, Elisp, Org, XML, YAML, Markdown. Guides that look like brackets. Indicators quiet enough to ignore until you need them. No pause on a 3000-line Org file. No two competing markers.
 
-The IEEE International Symposium on Software Reliability Engineering (ISSRE) just accepted my paper about YAML testing, “The Polyglot’s Dilemma: Conformance Testing a Dozen Specs in as Many Languages.” Driver engineers Jeremy Mikola and Jeff Yemin are my coauthors. The paper has more detail about the history of our YAML tests, and it has plenty of stats and lessons. [Check it out, it’s only 6 pages](https://arxiv.org/abs/2608.18039).
+It honestly changes how much I collapse and expand while reading code. I used to avoid folding because it felt fiddly; now it’s free and mouse friendly.
+
+If you want to read the actual code: it’s in [dev-folding.el](https://codeberg.org/jjba23/heks-emacs/src/branch/trunk/src/modules/dev-folding.el) for the engines and indicators, the `heks/fold-*` wrappers in `heks-emacs.el` for the keys, and the Org indicators live in `org.el`. Everything is GPL-3.0, and it’s tested: `maak verify` asserts a fold actually covers a whole definition and that the documented keys are bound, and `maak keys` fails on a key that does two jobs or names a command that doesn’t exist.
+
+Happy to answer questions about any of it, especially if you’ve fought the `treesit-fold-indicators` bitmaps yourself, because that one cost me an evening and I’d love to know if there’s a cleaner way.
+
+1. kirigami is the piece I didn’t know I needed
+2. Tree-sitter folding, with guides that are actually lines
+3. Hideshow earns its keep
+4. Org, which needed its own everything
+5. It feels smooth, and that’s the whole point

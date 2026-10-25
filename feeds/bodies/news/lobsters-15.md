@@ -1,53 +1,133 @@
-![](https://philipotoole.com/wp-content/uploads/2014/09/rqlite-design.png)In September 2014 I published a [short post announcing](https://philipotoole.com/replicating-sqlite-using-raft-consensus/) [rqlite](https://rqlite.io). The idea was simple: take [SQLite](https://sqlite.org/), put a [Raft log](https://raft.github.io) in front of it, and replicate every write to a cluster so that the loss of a node did not mean the loss of the data. The [source went on GitHub](https://github.com/rqlite/rqlite) that same weekend. As far as I can tell, that was the first open-source system to combine Raft and SQLite. Nobody else was doing it, and for several years nobody else tried.
+After [my post on undefined behavior in
+C](https://blog.habets.se/2026/05/Everything-in-C-is-undefined-behavior.html)
+some people insisted that it’s demonstrably fine, we know what the code will
+do, and at worst we’ll get a segfault.
 
-Today “distributed SQLite” is a category with a dozen projects in it, a few of them venture-funded, two of them acquired. Since the people now writing about the category tend to start the story around 2021, I thought I should write down the version that starts in 2014. I was there for all of it.
+This is false.
 
-## 2014: rqlite
+Here’s an example.
 
-The need was concrete. A clustered system [I worked on at jut.io](https://philipotoole.com/resume/) needed a small amount of relational storage, and the question of which node should hold it had no good answer. Replicating SQLite with a consensus protocol solved it. We went another way at work, but [I kept building rqlite](https://philipotoole.com/tag/rqlite/) because the problem was general and the solution was small. The first version used [goraft](https://github.com/goraft), the same library [InfluxDB](https://github.com/influxdata/influxdb) and [etcd](https://etcd.io/) used at the time (I subsequently joined InfluxDB as a core developer around the same time). In early 2016 I [replaced it with](https://github.com/rqlite/rqlite/blob/master/CHANGELOG.md#20-april-5th-2016) [Hashicorp’s Raft implementation](https://github.com/hashicorp/raft) which rqlite still uses.
+## C code
 
-The design decision that mattered most was made then and never changed. rqlite is a [CP system](https://www.scylladb.com/glossary/cap-theorem/). Writes must go through the leader, a majority must acknowledge, and a partitioned minority refuses writes. Everything else, the [HTTP API](https://rqlite.io/docs/api/api/), the [read-consistency levels](https://rqlite.io/docs/api/read-consistency/), the [snapshotting](https://youtu.be/8XbxQ1Epi5w?t=493), followed from that.
+(sorry. This is C++, but the equivalent C code produces *exactly* the same
+assembly output)
 
-## Before 2014, and alongside it
+```
+#include<utility>
 
-Two things deserve mention for honesty’s sake. [Expensify](https://www.expensify.com/) had been replicating SQLite inside its own infrastructure for years with a [Paxos](https://en.wikipedia.org/wiki/Paxos_(computer_science))-style protocol; they released it as [Bedrock](https://bedrockdb.com/) in [2016](https://dbdb.io/db/bedrock). And ActorDB, an Erlang system that gave each “actor” its own SQLite database replicated by Raft, [appeared around the same time as rqlite](https://dbdb.io/db/actordb). Neither was widely adopted outside its origin, but both show the idea was in the air. What rqlite did was make it a standalone, general-purpose, open-source thing anyone could run.
+// Let's pretend this is a memory mapped device controlling
+// motors and gears and stuff.
+volatile int device_command = 0;
 
-## 2017: dqlite
+void serve_hot_chocolate() {
+        device_command = 42;
 
-[Canonical](https://canonical.com/) built [dqlite](https://canonical.com/dqlite) to get [LXD](https://canonical.com/lxd) and later MicroK8s an embedded replicated store without running etcd. [Mark Shuttleworth](https://en.wikipedia.org/wiki/Mark_Shuttleworth) actually called me once, and we talked, hoping that rqlite could be made to work, but it never quite fit. dqlite [began in Go](https://www.reddit.com/r/golang/comments/8a8h8y/dqlite_distributed_sqlite_for_go_applications/) and was rewritten in C with its own Raft library. It is the project most similar to rqlite in intent, and the main difference is of one of packaging: dqlite is a library you embed, rqlite is a server you run. Canonical’s need was a database inside their products: mine was a database beside anyone’s product.
+        // Oh no, we spilled some hot chocolate, invoking UB.
+        //
+        // The definition of `std::unreachable()` is:
+        //     Invokes undefined behavior at a given point.
+        std::unreachable();
+}
 
-## 2021: Litestream, and a change of approach
+void explode() {
+        device_command = 3;
+}
+```
 
-[Ben Johnson](https://github.com/benbjohnson) (whom I worked with at InfluxDB) released [Litestream](https://github.com/benbjohnson/litestream) in [early 2021](https://litestream.io/blog/why-i-built-litestream/). Litestream does not use consensus at all. It watches the SQLite [WAL](https://www.sqlite.org/wal.html) and streams it to [S3](https://aws.amazon.com/s3/), giving you disaster recovery for a single-node SQLite database at almost no cost. Ben’s argument was that most applications do not need a cluster; they use one machine and need a way to recover if it dies. He was right about a great many applications, and the “SQLite is enough” movement of the next few years, with blog posts and conference talks, owes a lot to that argument.
+## Example assembly output
 
-Litestream and rqlite answer different questions. Litestream: what if the machine dies? rqlite: what if the machine dies and I cannot wait to restore? The first question is more common, the second is the one people have when they come to rqlite.
+With GCC 16.2 with `-O1`.
 
-[Fly.io](https://fly.io/) hired Ben in 2022 and shipped [LiteFS](https://docs.fly.io/litefs), which replicates SQLite at filesystem level with leases from [Consul](https://developer.hashicorp.com/consul). It was the first attempt to make replicated SQLite a platform feature rather than a thing you deploy. And in a final twist, Litestream [inspired](https://philipotoole.com/rqlite-8-0-large-dataset-support-and-core-feature-upgrades/) rqlite’s v8.0 approach to handling the SQLite WAL.
+```
+"serve_hot_chocolate()":
+        mov     DWORD PTR "device_command"[rip], 42
+"explode()":
+        mov     DWORD PTR "device_command"[rip], 3
+        ret
+"device_command":
+        .zero   4
+```
 
-## 2022: forks and extensions
+Ruh roh. Exploding chocolate! The function `explode()` will be executed, even
+though it was never called!
 
-Two projects in 2022 took approaches that neither rqlite nor Litestream had. [cr-sqlite](https://github.com/vlcn-io/cr-sqlite) added [CRDTs](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type) to SQLite as an extension, so that multiple writers could diverge and merge without a leader. That is the AP corner of the design space, and it suits local-first applications where rqlite’s CP guarantees would be a hindrance.
+## Another example: dereferencing a null pointer
 
-[libSQL](https://github.com/tursodatabase/libsql) forked SQLite itself. ChiselStrike, later [Turso](https://turso.tech/), wanted to change things inside the engine that the SQLite project, which does not accept outside contributions, and would not change. On top of the fork they built a hosted service with replicas at the edge. Turso raised venture money on that, and in 2026 [Supabase acquired them](https://turso.tech/blog/turso-is-joining-supabase).
+Some people insisted that dereferencing a null pointer is *fine*. It’ll just
+try to access address zero! And these people supposedly know what happens when
+you try: if nothing is mapped there, you’ll get a segfault.
 
-Around the same time, [SQLite Cloud](https://www.sqlite.ai/cloud) appeared, offering hosted SQLite replicated with Raft. It is the project closest to rqlite’s original design, wrapped in a cloud service.
+Again, not true.
 
-## 2022 onward: the platforms
+Let’s say we change `std::unreachable()` to `int* ptr = nullptr; *ptr = 99;` in
+the previous example. Now we [get this](https://godbolt.org/z/efqKrzefa):
 
-[Cloudflare](https://www.cloudflare.com/) announced [D1](https://developers.cloudflare.com/d1/) in 2022, SQLite as a serverless database inside their edge network, and later put SQLite storage inside [Durable Objects](https://developers.cloudflare.com/durable-objects/concepts/what-are-durable-objects/). This is replicated SQLite as a managed product from a company that does not need to tell you how it works. Turso’s service is the same shape. The category had gone from “a thing you run” to “a thing you buy.”
+```
+"serve_hot_chocolate()":
+        mov     DWORD PTR "device_command"[rip], 42
+        mov     DWORD PTR ds:0, 0
+        ud2
+```
 
-## What the twelve years show
+Curious, eh? First it writes zero, **not** 99, to memory address zero. Then it
+crashes the program using an invalid instruction. The number 99 never appears
+in the generated program. But the null pointer write does. Presumably the null
+pointer write is done in order to improve debugger error messages.
 
-Three things, I think.
+Now let’s check [clang with godbolt](https://godbolt.org/z/86M7MWTT8):
 
-The core was right. SQLite as a storage engine, with replication added on the outside, has been reinvented by at least eight teams with different needs and different protocols. Nobody has found a reason to stop doing it.
+```
+"serve_hot_chocolate()":
+        mov     dword ptr [rip + "device_command"], 42
 
-The design space has three corners, and they appeared in order. Consensus first (rqlite, dqlite): one leader, strong consistency, a cluster. Streaming second (Litestream): one writer, cheap recovery, no cluster. Merge third (cr-sqlite, and parts of the local-first movement): many writers, eventual consistency. Each is correct for a different question, and most of the arguments are arguments between their users about which question is being asked.
+"explode()":
+        mov     dword ptr [rip + "device_command"], 3
+        ret
 
-And the money went to the platforms. rqlite, dqlite, and Litestream are open source and free. The projects that raised the capital or got acquired are the ones that turned replicated SQLite into a service with a bill. That is the usual fate of infrastructure ideas, and I do not mind it. But it is worth recording that the idea was open source for eight years before anyone sold it.
+"device_command":
+        .long   0
+```
 
-[rqlite](https://rqlite.io/) is still here. It does the same thing it did in 2014, a good deal better, and it is still the thing you reach for when you want a fault-tolerant relational database you can run yourself, understand fully, and not pay anyone for. Twelve years in, I am content with that position in the story.
+Again we get exploding chocolate.
 
-1. ![Judah](https://secure.gravatar.com/avatar/ed643bcc9d4ad9992350d7be54ba49b6f28999b543628bb4555e4013237ceaba?s=100&d=identicon&r=g) [Judah](http://jsotomayor.net) [October 23, 2026 / 11:26 pm](https://philipotoole.com/twelve-years-of-distributed-sqlite/#comment-91089) [Reply](https://philipotoole.com/twelve-years-of-distributed-sqlite/?replytocom=91089#respond) Thank you for this blog! It was very interesting.
-2. ![Joost De Cock](https://secure.gravatar.com/avatar/8543e38de4652095c51571fb8dc1734eb7b1b736e574176c42e2f954e5e95a50?s=100&d=identicon&r=g) [Joost De Cock](https://morio.it) [October 24, 2026 / 3:49 am](https://philipotoole.com/twelve-years-of-distributed-sqlite/#comment-91092) [Reply](https://philipotoole.com/twelve-years-of-distributed-sqlite/?replytocom=91092#respond) Thank you for all your great work Philip. Rqlite is absolutely wonderful, and as far as how to be a good maintainer goes, you are absolutely a role model to me. Thank you
-3. ![Amit](https://secure.gravatar.com/avatar/fbb9f636ab458562d79e52883a6a18508d3b29ad79beb8a5ebf15a5a94e51e86?s=100&d=identicon&r=g) Amit [October 24, 2026 / 3:59 am](https://philipotoole.com/twelve-years-of-distributed-sqlite/#comment-91093) [Reply](https://philipotoole.com/twelve-years-of-distributed-sqlite/?replytocom=91093#respond) Thank you Phillip! I have been familiar with all of the projects you’ve mentioned. At my previous company I’ve worked in we also built a distributed layer on top of SQLite. It also was in Go using hashicorp library. One thing that I’ve been working on there is distributed transactions. At first it was implemented as every stmt in a tx is a different command on the ledger. I changed it so there’s at most 2 commands . One for distributed begin and then the node that initiated it does the entire tx locally. Then it accumulates all of the tx stmts and at the end it rollbacks and sends a commit command with the entire batch
+## Let’s do some pointer arithmetic on the null pointer
+
+Ok, so what happens if we add `ptr += 10`. That’s UB for three reasons:
+
+1. using a null pointer for anything other than comparison against other pointers,
+2. even if an object would be valid at the null pointer (which it’s not), creating a pointer that points outside that object, or if an array, beyond one-past the array, is UB,
+3. even if that were valid (which it’s not), we then dereference the address.
+
+Let’s [try it](https://godbolt.org/z/8z6hPPsvG).
+
+```
+"serve_hot_chocolate":
+        mov     DWORD PTR "device_command"[rip], 42
+        mov     DWORD PTR ds:40, 99
+        ret
+```
+
+Wow. *Now* it did what someone naively would expect, taking the code at face
+value. Lucky.
+
+Why did GCC (and clang, by the way) not detect that `*(ptr + 10) = 99` is
+equally UB as `*ptr = 99`, and do the same thing?
+
+Wrong question. No compiler is obligated to “detect” UB at all. Looks to me
+like GCC and clang, if we want to anthropomorphize them, saw “oh, null pointer
+dereference? Well that can’t happen, so I’ll stop emitting instructions for
+this function, to save on the binary size”. Because of the [halting
+problem](https://en.wikipedia.org/wiki/Halting_problem), it cannot in the
+general case know if the code will ever be executed.
+
+## So what does UB do?
+
+Anything. I have now demonstrated three things UB can do, when UB was triggered
+in the same place:
+
+1. Run whatever happens to be next in memory (exploding chocolate).
+2. Store a (for all intents and purposes) random value at address zero (wrote zero, not 99), and then deliberately crash.
+3. Do what one would naively expect: write the value to the address seen in the code at face value.
+
+And to think that some people don’t believe in [nasal
+demons](https://en.wikipedia.org/wiki/Undefined_behavior).

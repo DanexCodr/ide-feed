@@ -1,89 +1,123 @@
-There is something I wish more people understood about bug reports, diagnostic information, and the apparently innocent act of attaching a log file to a support request, and it is this: your logs may contain things you really, really do not want anyone else reading.
+**TL;DR:** Experimental uv-ty integration is now available, enabling first-class support for Python
+scripts (on the CLI and in the editor) and a unified `uv check` command.
 
-I'm writing this because of a bug report I received recently, which came with a log file containing information I did not need to see, did not ask to see, and would have been perfectly happy going the rest of my life without ever seeing. I'm not going to identify the person who sent it, describe what was in it, or otherwise turn a perfectly understandable mistake into a public spectacle, because doing that to someone who was trying to help me fix my own software would be a spectacularly shitty thing to do. But the incident highlights something worth talking about, because I suspect an awful lot of people have absolutely no idea what they're handing over when they tick that little box labelled "Send logs," and the software they're using is rarely in any hurry to tell them.
+This is a step towards an integrated Astral toolchain, one that uses a shared understanding of your
+project to enable entirely new capabilities.
 
-## A Log File Is Not Necessarily Just a Log File
+At Astral, we build high-performance tools for the Python ecosystem:
+[uv](https://github.com/astral-sh/uv), our package manager;
+[Ruff](https://github.com/astral-sh/ruff), our linter and formatter; and
+[ty](https://github.com/astral-sh/ty), our type checker and language server.
 
-When most people think of logs, they imagine a wall of boring technical gibberish: timestamps, error messages, stack traces, the occasional complaint about a missing file or something failing to initialise. Logs do contain those things. They can also contain an astonishing amount of information about what you were actually doing when the problem occurred, and depending on the application, its logging configuration, and the nature of the problem, that might include:
+Historically, each Astral tool has focused on making a different component of Python development
+more productive. But we see an opportunity to further Python by unifying traditionally separate
+capabilities into an integrated toolchain.
 
-- Text displayed on your screen.
-- Messages you sent or received.
-- Usernames, email addresses, and account identifiers.
-- File paths containing your real name or other identifying details.
-- URLs, including query parameters and authentication tokens.
-- The names of documents you had open.
-- Clipboard contents.
-- Information about other applications and services.
-- Internal application state that was never meant for public consumption.
+Our vision for the Astral toolchain is simple: while each tool should be individually usable,
+useful, and interoperable with the rest of the ecosystem, they should be even more capable when used
+together.
 
-Some applications log very little. Others log absolutely fucking everything, particularly once debugging is switched on, and you generally cannot tell which kind you're dealing with from the size of the file or the name of the feature. A file called `debug.log` sounds harmless enough, and that tells you precisely nothing about whether it is.
+Today, we’re announcing an experimental **integration between uv and ty**, available in preview. uv
+understands your Python project’s environment and dependencies, while ty understands your code. By
+combining the two, we can unlock new functionality beyond what either tool can provide individually.
 
-A log is a record of whatever an application considered relevant at a particular moment, and what an application considers relevant and what you consider private are two entirely different things. The computer has no idea that the conversation you were having was personal, that the document you had open was confidential, or that the text on your screen was something you'd rather not share with a stranger on the internet. It knows that something happened and that somebody told it to write that something down, so it did.
+## First-class support for Python scripts  [#](https://astral.sh/blog/uv-ty-integration#first-class-support-for-python-scripts)
 
-## "Logs Can Contain Text Displayed on Screen"
+[PEP 723](https://peps.python.org/pep-0723/) enables Python scripts to declare their dependencies
+and Python version requirements through inline metadata. uv already uses this metadata to prepare an
+environment when running a script. Now, ty can use this metadata to understand your scripts.
 
-I work on a screen reader, and like all software it occasionally misbehaves, which means I depend on people telling me when it does. The problem report form includes an option to send logs. That option is off by default, and when you get to it, the form warns you that logs can contain text displayed on screen. That warning is not decoration, and it's not there to cover my arse; it's there because I want people to understand what they might be about to send me.
+On both the command line and in the editor, ty now uses inline metadata to discover scripts
+throughout your project and leverages uv to prepare an environment for each script. These
+environments allow ty to check your scripts against their declared requirements.
 
-A screen reader is in a particularly awkward position when it comes to privacy, because its entire job is to take whatever other applications put in front of you and make it accessible, which means it can encounter practically anything: your email, your private messages, your bank account, your medical records, your work documents, whatever happens to be on the screen at the time. When something goes wrong, diagnostic logging may well capture some of that, not because I'm secretly interested in what you get up to on your phone, but because the text a screen reader encountered is often directly relevant to why it behaved incorrectly. If it read something it shouldn't have, skipped something it should have read, or mangled a particular control, knowing what it was looking at can be the difference between fixing the bug and staring blankly at a stack trace. Useful, though, is not the same as harmless, and it certainly doesn't mean I need to know everything else you happened to be doing that day.
+Scripts can have different requirements within the same repository. Each script is checked against
+its own dependency declarations, even if those dependencies or Python requirements differ from the
+surrounding project.
 
-So when a form tells you that logs *can* contain text on screen, I'd like you to adopt one very simple rule: can means does. It doesn't matter if you know the application, if you've read the source, or if you're fairly confident the particular logging mode you used doesn't capture anything sensitive; treat it as though it does. This is exactly the principle behind treating every firearm as loaded. You don't point a gun at someone because you're pretty sure it's empty, and you don't assume it's safe because you remember unloading it earlier; you follow the same precautions every single time, because being wrong costs a great deal more than being careful. Obviously, accidentally sharing a private conversation is not equivalent to accidentally shooting someone, and I'm not pretending the stakes are the same. The point is that a safety habit is only worth anything if it doesn't depend on your confidence that nothing can go wrong. You shouldn't have to remember whether one version logs screen text under one configuration but not another, or which debug options you happened to leave on last Tuesday. Assume it captured everything it warned you it might, and then decide whether you're comfortable sharing that.
+Declare dependencies inline with PEP 723, save to sync with uv, and use ty’s completions, hover information, and Go to Definition capabilities in your editor.
 
-## Not Everyone Can Read Through Thousands of Lines
+*Declare dependencies inline with PEP 723, save to sync with uv, and use ty’s completions, hover
+information, and Go to Definition capabilities in your editor.*
 
-The standard advice at this point is "just read the logs before you send them," which sounds eminently reasonable right up until you think about it for more than a few seconds. Some log files run to tens of thousands of lines. Some contain binary data, encoded blobs, or structures that are meaningless without intimate knowledge of the software that produced them. And not everyone can comfortably wade through that much text in the first place; listening to a screen reader churn through thousands of lines of timestamps, function names, and memory addresses is nobody's idea of a good afternoon, and even someone scanning visually isn't necessarily going to spot one sensitive line buried in a sea of technical noise.
+When the integration is enabled in your editor, ty automatically invokes uv to prepare the script’s
+environment in the background, which it uses to provide type checking, code navigation, and
+completions based on the script’s declared requirements.
 
-So no, I'm not going to tell everyone to personally inspect every line of every log before reporting a problem, because that isn't always practical and pretending otherwise helps nobody. What I want instead is for people to understand the decision they're making. If you can't reasonably verify what's in a log, treat it as containing everything the application warned you it might contain. You don't need to understand a single line of debug output to understand that a screen reader may have logged something you were reading, or that a browser log probably contains URLs; you just need to take the warning at its word.
+Over time, we plan to enable script support by default, and enable automatic environment setup for
+standard Python projects.
 
-And if that possibility makes you uncomfortable, don't send the logs. You can still file the report, still explain what happened, still give reproduction steps and tell the developer what you expected versus what actually occurred. A report without logs is not automatically a useless report. Sometimes the developer will need more, sometimes they won't, and sometimes they'll be able to suggest a safer way to reproduce the problem or collect a much narrower slice of diagnostic data, which is a conversation well worth having. What isn't worth doing is blindly shipping off a file full of things you'd never otherwise share because you've somehow got it into your head that a bug report is incomplete without one.
+`uv check` introduces a unified diagnostic interface to uv, starting with support for ty. Over time,
+we plan to support Ruff in `uv check` to unify linting and type checking into a single command.
 
-## Optional Means Optional
+Running `uv check` will automatically prepare your project’s environment, install the required
+dependencies, and check your project with ty. It “just works.” (If you never run `uv check`, nothing
+changes for your uv experience; the ty binary is installed separately on first invocation.)
 
-This is exactly why the logs option in my problem report form defaults to off. I could have defaulted it to on. I could have made it mandatory, or silently attached diagnostics to every report and buried a warning somewhere nobody would ever read it, and it would undoubtedly have made some debugging easier. But that convenience would have come straight out of the pockets of the people using the software, and I don't think that's a reasonable trade.
+With `uv check`, you can check individual packages, or an entire workspace. In a workspace, use
+`uv check --package <name>` to select an individual package, or `uv check --all-packages` to check
+every package. uv uses your workspace configuration to determine what to check, so the command stays
+the same as your workspace grows.
 
-Someone submitting a problem report should have a genuine choice about whether to include potentially sensitive information: not a checkbox that's already ticked, not a warning that appears after the upload has finished, not a setting hidden three menus deep, but a clear, explicit decision they actually get to make. And when the form says logs can contain text on screen, that sentence is a description of what you are consenting to share, not a bit of legal boilerplate to scroll past on your way to the submit button.
+Sync your project’s dependencies and type-check your code with a single command.
 
-Defaults matter enormously here, because people filing bug reports are usually busy, tired, and frustrated that something isn't working, and they want to fire off the report as quickly as possible and get back to whatever they were trying to do. That is precisely the moment a safe default earns its keep. I don't want anyone to have to remember to protect their own privacy every time something breaks; I want the software not to share potentially sensitive information unless they deliberately choose to share it. That doesn't remove the user's responsibility to read the warning. It does mean the application isn't making the decision on their behalf.
+*Sync your project’s dependencies and type-check your code with a single command.*
 
-## But I Trust the Developer!
+Standalone PEP 723 scripts have independent environments and are checked separately. Use
+`uv check --script example.py` to check a script using its declared requirements.
 
-Wonderful. I'm delighted to hear it. That still doesn't mean the developer needs to know what you were talking about with your partner last night.
+`uv check` automatically uses the ty version recorded in your project’s lockfile. Commit your
+project configuration and lockfile, and developers and CI running `uv check` will share the same ty
+version without separately maintained pins.
 
-Trust is not a substitute for privacy. There are plenty of developers I trust with my data and with the security of systems I rely on every day, and I still have no desire to hand any of them an unfiltered transcript of everything I was doing when their application fell over. And speaking as someone on the receiving end of bug reports, I don't want that transcript either. I want to know why the thing crashed: which function failed, what exception was thrown, and what sequence of events got it there. I do not need your private messages, your browsing history, or the contents of the document you were reading, and I certainly don't want to be put in the position of accidentally learning something about you that you never meant to tell me.
+The [ty pre-commit hook](https://github.com/astral-sh/ty-pre-commit) also uses `uv check` under the
+hood to run ty before each commit over your Python project. By using `uv check`, the hook
+automatically sets up the environment for ty from your project’s dependency declarations.
 
-There's a nasty little assumption floating around that because someone builds a piece of software, they're somehow entitled to whatever that software happens to collect. No. Absolutely fucking not. A bug report is a request for technical help, not a waiver of your privacy.
+The uv-ty integration is powered by
+[`uv workspace metadata`](https://docs.astral.sh/uv/reference/internals/metadata/), which gives ty a
+structured view of your project or script’s packages, dependencies, and Python environment. ty then
+uses this information to provide type checking and editor features that reflect the configured
+environment.
 
-Even when the person you're sending it to is entirely trustworthy, there's the question of where that report ends up. Where is it stored? Who else can see it? Does the issue tracker make attachments public by default? Will the log get copied into some other system, and how long does any of it stick around? You might trust the person you're sending the file to, but that's not the same as understanding every system the file will pass through on its way to them and afterwards.
+For PEP 723 scripts, ty invokes uv to prepare the script’s environment, which includes installing
+declared dependencies. As dependency installation can require execution of third-party Python code,
+automatic environment setup is currently opt-in.
 
-## Reproduce the Bug Without Reproducing Your Entire Life
+To [try the integration](https://docs.astral.sh/ty/reference/editor-settings/#experimentaluseuv) for
+PEP 723 scripts in VS Code, [install uv](https://docs.astral.sh/uv/getting-started/installation/)
+and the [ty VS Code extension](https://marketplace.visualstudio.com/items?itemName=astral-sh.ty),
+then enable the uv integration in your VS Code `settings.json`.
 
-If you do need to send logs, there are ways to cut down the chance of including something sensitive without spending your evening reading them. The simplest is to reproduce the problem under controlled conditions: clear the existing log or start a fresh session if the application allows it, switch logging on just before you trigger the problem and off again straight afterwards, and where the bug involves on-screen text, try triggering it with something innocuous. Open a test document, use a dummy conversation, make a throwaway account if that's appropriate, and swap real information for made-up information wherever you can. If the screen reader fails to announce a particular control, see whether the same control misbehaves somewhere that doesn't contain your life story; if an application crashes opening a document, try a document with the same formatting and none of the confidential contents.
+```
+{
+  "ty.experimental.useUv": "on"
+}
+```
 
-Obviously this won't always work. Some bugs are intermittent, some only appear under very specific circumstances, and some depend on particular data in a way that makes them vanish the moment you change it. That's a legitimate technical problem, and sometimes a developer genuinely does need more to go on. But there is an enormous difference between deliberately sharing particular information because it's necessary to diagnose a problem and accidentally sharing it because you never stopped to think about what the logs might contain. If you can't reproduce the problem safely, say so; a developer can work with that. And if you decide to send the logs anyway, at least make it an informed decision rather than a reflex.
+You can also check your project and its PEP 723 scripts from the command line with:
 
-## Developers, This Is Your Problem Too
+```
+TY_UV=scripts ty check
+```
 
-Before anyone reads all of this as an attempt to dump the whole responsibility on users, let me be abundantly clear: developers have a hell of a lot to answer for here as well.
+[Running `uv check`](https://docs.astral.sh/uv/reference/cli/#uv-check) enables the integration
+automatically and requires no additional configuration.
 
-If your application collects diagnostic information, you should have a reasonably good idea of what that information contains. You should not be logging passwords. You should not be casually dumping authentication tokens into plaintext files. You should not be hoovering up arbitrary user content just because it makes debugging a little more convenient. And if your application genuinely needs to log potentially sensitive information, you should say so plainly, not on page seventeen of a privacy policy and not behind some mealy-mouthed line about collecting diagnostic data to improve the user experience, but clearly, at the point where someone is deciding whether to send it. Tell people the log may contain text displayed on screen, or private messages, or whatever else it might capture, and wherever practical, give them some control over it. Don't make them jump through hoops to opt out, either; if you're asking someone to send potentially sensitive data, the safe default is almost always not to send it.
+Support for PEP 723 scripts and the `uv check` command requires uv 0.12.3 or later, and ty 0.0.76 or
+later.
 
-There's also a rather important distinction between information being *useful* for debugging and information being *necessary* for it. I can imagine all sorts of things that would make my life easier as a developer, and none of that gives me the right to collect them. If a stack trace will do, collect a stack trace. If an error code will do, collect an error code. If you need one section of a log, ask for that section, rather than demanding a complete diagnostic archive of everything the application has ever seen because you couldn't be bothered to implement more selective logging. And for fuck's sake, don't automatically attach logs to public issue trackers without giving people a chance to make an informed choice. A warning is useful. Good defaults are better. Both together are better still.
+This integration is experimental, and we’d love your feedback as we refine the experience.
 
-## The Human Side of an Accidental Disclosure
+While this initial support largely leverages uv’s environment capabilities to power ty execution,
+we’re also working on a new category of checks that combine uv’s knowledge of your project’s
+dependencies with ty’s understanding of your code (e.g., to detect unused dependencies), which we’ll
+cover in a future post.
 
-There's another side to this that deserves some attention. When someone accidentally sends you sensitive information, your first instinct should not be to laugh about it, pass it round your friends, or turn it into an amusing anecdote at the sender's expense. People make mistakes, and very often they make this particular one while trying to help you improve your software. The right response is discretion: don't spread it, and let the person know if there's something they should be aware of. If you can delete an unnecessary copy of the log, do. If it ended up somewhere public, help get it taken down. If credentials were exposed, explain that they may need to be revoked or rotated. Don't punish someone for trusting you enough to file a bug report, and don't confuse having access to information with having permission to use it.
+And, in parallel, we’re continuing toward ty’s stable release.
 
-I have no interest whatsoever in shaming the person whose report prompted this post. Who sent it and what was in it are completely irrelevant to the lesson. What matters is that it happened, that it could happen to almost anyone, and that a few simple precautions would stop it happening again.
+Thank you for building with us!
 
-## "But Nothing Bad Has Ever Happened Before"
-
-Yes, and?
-
-This might be one of my least favourite arguments in the whole of computing. I've sent logs before and nothing bad happened; I've clicked through warnings for years and nobody's ever complained. Congratulations. That tells me precisely fuck all about whether the next file you send contains something sensitive. The absence of a previous incident is not proof that a practice is safe. Perhaps your previous logs genuinely contained nothing private. Perhaps they did and nobody noticed, or somebody noticed and had the decency not to mention it. You have no way of knowing which, and that's exactly why I keep coming back to the loaded gun: the whole point of a consistent safety practice is that you follow it when you think the risk is negligible, not just when the danger is staring you in the face. If you only take care once you already know something's wrong, you've missed half the point.
-
-## A Little Paranoia Is Healthy
-
-None of this is an argument for filing fewer bug reports. Quite the opposite: bug reports are enormously valuable, and good logs can turn a maddening, impossible-to-reproduce problem into something a developer can find and fix in minutes. Please keep reporting bugs, and please keep providing diagnostic information when you're comfortable doing so. Just understand that diagnostic information is still information, and some of it may be deeply personal.
-
-You don't need to read ten thousand lines of debug output or understand anything about an application's internals. You only need to take the warning seriously. If the application says logs can contain text displayed on screen, assume they do; if you can't verify what's in a log, don't mistake that uncertainty for safety; and if you're not comfortable sharing what might be in there, leave the logs out. Developers, make that choice easy, with clear warnings, safe defaults, and ways to report a problem that don't require anyone to surrender their privacy to do it.
-
-Can means does. Not because every log necessarily contains something sensitive, but because treating it as though it does is a great deal safer than gambling on the alternative. You wouldn't handle a firearm carelessly because you were fairly sure it wasn't loaded, so don't handle your private information carelessly because you're fairly sure it wasn't logged. The developer almost certainly doesn't want to know your secrets any more than you want to share them, and if you're not sure what's in that file, assume it's something you'd rather keep to yourself.
+*Thanks to [Aria Desires](https://github.com/Gankra),
+[Micha Reiser](https://github.com/MichaReiser), and [Zsolt Dollenstein](https://github.com/zsol)
+from the Astral team for implementing the features behind this integration.*

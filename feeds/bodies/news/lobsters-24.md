@@ -1,469 +1,72 @@
-[Tov](https://tov.sh/?ref=blog.fyralabs.com) is a new programming language marketed to be "[a] programming language for coding agents. It reads like TypeScript and builds native binaries that beat Rust's."
-
-[Benchmarks in their Git repository](https://github.com/richiemcilroy/Tov/tree/c2048582de4e9468267f801313144d75c12e983f/bench?ref=blog.fyralabs.com) show that they perform better than Rust, in some cases over 10× better. However, they also briefly mentioned the internals of Tov:
-
-> Tov is a compiler. It checks the TypeScript your agent wrote, writes it out as C and hands that to clang, so what you ship is one native binary with nothing to install next to it.
-
-A sane engineer would immediately doubt the correctness of their benchmarks. Rust has pretty much the same performance as C, and if Tov transpiles to C, **saying Tov beats Rust is mostly equivalent to saying C beats C**. That's contradiction right there. Let's ignore the stats for `axum`, maybe `tokio` has some overhead, like *maybe*; but clearly there's no way you get 1.6× faster than Rust in `strings`. You have to be lying. That's what a sane engineer would normally think.
-
-In this blog post, we check 3 of their "inflated" benchmarks: `bigint_fib`, `dispatch`, and `map_insert`. We show that **these benchmarks are maliciously crafted to slow Rust down**. We have also benchmarked the improved Rust programs with their Tov programs to show that **Rust has equivalent or better performance than Tov**.
-
-## Set-ups
-
-`cargo build --release` was used to compile the Rust programs, and `tov build` (which defaults to `-O3`) was used to compile the Tov programs. Here are our setups:
-
-### "ram-buffet"
-
-```
-root@8b4fcd497f61
------------------
-OS: Ultramarine Linux 44 (Container Image) x86_64
-Host: PowerEdge R640
-Kernel: Linux 7.0.0-31-generic
-Uptime: 36 days, 20 hours, 43 mins
-Packages: 1046 (rpm)
-Shell: bash 5.3.9
-Display (VGA-1): 1024x768 [External]
-Cursor: Adwaita
-Terminal: /dev/pts/2
-CPU: Intel(R) Xeon(R) Platinum 8251C (48) @ 4.20 GHz
-GPU: Matrox Electronics Systems Ltd. Integrated Matrox G200eW3 Graphics Controller
-Memory: 22.03 GiB / 247.25 GiB (9%)
-Swap: Disabled
-Disk (/): 3.62 TiB / 6.98 TiB (52%) - overlay
-Local IP (eth0): [redacted]
-Locale: C
-```
-
-### "nukobook"
-
-```
-mado@nukobook
--------------
-OS: Ultramarine Linux 44 (Plasma Edition) x86_64
-Host: Vivobook_ASUSLaptop K5404VA_K5404VA (1.0)
-Kernel: Linux 7.2.9-cachyos1.fc44.x86_64
-Uptime: 3 days, 22 hours, 18 mins
-Packages: 14 (flatpak), 5804 (rpm)
-Shell: zsh 5.9
-Display (SDC416D): 2880x1800 in 14", 60 Hz [Built-in]
-Desktop Environment: KDE Plasma 6.7.5
-Window Manager: KWin (Wayland)
-WM Theme: Klassy
-Theme: Klassy (Dark) [Qt], Materia-dark [GTK2/3/4]
-Icons: breeze-dark [Qt], breeze-dark [GTK2/3/4]
-Font: FakePearl (10pt) [Qt], FakePearl (10pt) [GTK2/3/4]
-Cursor: 茜マウスポインタ (32px)
-Terminal: konsole 26.8.1
-Terminal Font: CaskaydiaCove Nerd Font (10.8pt)
-CPU: 13th Gen Intel(R) Core(TM) i9-13900H (12+8) @ 5.40 GHz
-GPU: Intel Iris Xe Graphics @ 1.50 GHz [Integrated]
-Memory: 5.81 GiB / 15.24 GiB (38%)
-Swap: 2.23 GiB / 16.00 GiB (14%)
-Disk (/): 699.66 GiB / 752.28 GiB (93%) - btrfs
-Local IP (wlo1): 10.7.7.163/17
-Battery (ASUS Battery): 58% [Discharging]
-Locale: en_US.UTF-8
-```
-
-### "makimaki"
-
-```
-[tsuru@makimaki ~]$ fastfetch -l none
-tsuru@makimaki
---------------
-OS: Fedora Linux 44 (Cloud Edition) x86_64
-Host: KVM/QEMU Standard PC (Q35 + ICH9, 2009) (pc-q35-11.0)
-Kernel: Linux 7.2.10-200.fc44.x86_64
-Uptime: 9 hours
-Packages: 927 (rpm)
-Shell: bash 5.3.9
-Display (Virtual-1): 1280x800
-Terminal: /dev/pts/0 10.2p1
-CPU: QEMU Virtual version 2.5+ (6) @ 2.39 GHz
-GPU: QEMU Virtual Video Controller
-Memory: 1.80 GiB / 11.60 GiB (16%)
-Swap: 868.00 KiB / 8.00 GiB (0%)
-Disk (/): 31.47 GiB / 139.90 GiB (22%) - btrfs
-Local IP (eth0): [redacted]
-Locale: en_US.UTF-8
-```
-
-# bigint_fib
-
-```rust
-// The 300,000th Fibonacci number by repeated addition on num-bigint.
-use num_bigint::BigUint;
-use num_traits::{One, Zero};
-
-const N: u32 = 300000;
-
-fn main() {
-    let mut a = BigUint::zero();
-    let mut b = BigUint::one();
-    for _ in 0..N {
-        let t = &a + &b;
-        a = std::mem::replace(&mut b, t);
-    }
-    let s = a.to_string();
-    println!("fib({N}) has {} digits", s.len());
-    println!("first 20: {}", &s[..20]);
-    println!("last 20: {}", &s[s.len() - 20..]);
-}
-```
-
-This was the Rust code used in Tov's benchmark. Their benchmarking results showed that Rust used 501 ms · 4.5 MB, while Tov used 168 ms · 3.1 MB. However, **we cannot reproduce their results on any of our setups**:
-
-```javascript
-[root@8b4fcd497f61 Tov]# hyperfine -w 10 -m 64 ./bigint_fib_tov ./bigint_fib
-Benchmark 1: ./bigint_fib_tov
-  Time (mean ± σ):     451.3 ms ±   3.2 ms    [User: 449.6 ms, System: 1.6 ms]
-  Range (min … max):   447.0 ms … 461.3 ms    64 runs
-
-Benchmark 2: ./bigint_fib
-  Time (mean ± σ):     336.6 ms ±   6.1 ms    [User: 335.2 ms, System: 1.4 ms]
-  Range (min … max):   328.2 ms … 368.4 ms    64 runs
-
-  Warning: Statistical outliers were detected. Consider re-running this benchmark on a quiet system without any interferences from other programs. It might help to use the '--warmup' or '--prepare' options.
-
-Summary
-  ./bigint_fib ran
-    1.34 ± 0.03 times faster than ./bigint_fib_tov
-```
-
-```javascript
-sh-5.3$ hyperfine -w 10 ./bigint_fib_tov ./target/release/bigint_fib
-Benchmark 1: ./bigint_fib_tov
-  Time (mean ± σ):     260.5 ms ±  29.8 ms    [User: 258.4 ms, System: 1.3 ms]
-  Range (min … max):   242.5 ms … 335.1 ms    11 runs
-
-  Warning: Statistical outliers were detected. Consider re-running this benchmark on a quiet system without any interferences from other programs. It might help to use the '--warmup' or '--prepare' options.
-
-Benchmark 2: ./target/release/bigint_fib
-  Time (mean ± σ):     285.2 ms ±  15.2 ms    [User: 283.8 ms, System: 0.7 ms]
-  Range (min … max):   276.2 ms … 326.0 ms    10 runs
-
-  Warning: The first benchmarking run for this command was significantly slower than the rest (326.0 ms). This could be caused by (filesystem) caches that were not filled until after the first run. You are already using the '--warmup' option which helps to fill these caches before the actual benchmark. You can either try to increase the warmup count further or re-run this benchmark on a quiet system in case it was a random outlier. Alternatively, consider using the '--prepare' option to clear the caches before each timing run.
-
-Summary
-  ./bigint_fib_tov ran
-    1.09 ± 0.14 times faster than ./target/release/bigint_fib
-```
-
-```javascript
-[tsuru@makimaki ~]$ hyperfine -w 10 ./bigint_fib_tov ./bigint_fib
-Benchmark 1: ./bigint_fib_tov
-  Time (mean ± σ):     621.5 ms ±   6.3 ms    [User: 616.2 ms, System: 1.8 ms]
-  Range (min … max):   614.8 ms … 632.2 ms    10 runs
-
-Benchmark 2: ./bigint_fib
-  Time (mean ± σ):     460.3 ms ±   3.4 ms    [User: 456.0 ms, System: 1.9 ms]
-  Range (min … max):   457.2 ms … 468.0 ms    10 runs
-
-Summary
-  ./bigint_fib ran
-    1.35 ± 0.02 times faster than ./bigint_fib_tov
-```
-
-# dispatch
-
-```rust
-// Virtual method calls: an array of shapes of three classes, `area()` called 50M times.
-
-trait Shape {
-    fn area(&self) -> f64;
-}
-
-struct Circle {
-    r: f64,
-}
-struct Rect {
-    w: f64,
-    h: f64,
-}
-struct Tri {
-    b: f64,
-    h: f64,
-}
-
-impl Shape for Circle {
-    fn area(&self) -> f64 {
-        std::f64::consts::PI * self.r * self.r
-    }
-}
-impl Shape for Rect {
-    fn area(&self) -> f64 {
-        self.w * self.h
-    }
-}
-impl Shape for Tri {
-    fn area(&self) -> f64 {
-        0.5 * self.b * self.h
-    }
-}
-
-fn main() {
-    let mut state: i64 = 42;
-    let mut shapes: Vec<Box<dyn Shape>> = Vec::new();
-    for _ in 0..1000 {
-        state = (state * 16807) % 2147483647;
-        let a = (state % 100) as f64 / 10.0 + 1.0;
-        state = (state * 16807) % 2147483647;
-        let b = (state % 100) as f64 / 10.0 + 1.0;
-        let kind = state % 3;
-        if kind == 0 {
-            shapes.push(Box::new(Circle { r: a }));
-        } else if kind == 1 {
-            shapes.push(Box::new(Rect { w: a, h: b }));
-        } else {
-            shapes.push(Box::new(Tri { b: a, h: b }));
-        }
-    }
-    let mut total = 0.0;
-    for _ in 0..50000 {
-        for s in &shapes {
-            total += s.area();
-        }
-    }
-    println!("{:.3}", total);
-}
-```
-
-Rust was given a very large disadvantage: dynamic dispatching at `Vec<Box<dyn Shape>>`. We've created an improved version that does not use dynamic dispatching:
-
-```rust
-use itertools::Itertools;
-const PI: f64 = std::f64::consts::PI;
-
-enum Shape {
-    Circle { r: f64 },
-    Rect { w: f64, h: f64 },
-    Tri { b: f64, h: f64 },
-}
-
-impl Shape {
-    #[inline(always)]
-    fn area(&self) -> f64 {
-        match self {
-            Shape::Circle { r } => PI * r * r,
-            Shape::Rect { w, h } => w * h,
-            Shape::Tri { b, h } => 0.5 * b * h,
-        }
-    }
-}
-
-fn main() {
-    let mut state: i64 = 42;
-    let shapes: [Shape; 1000] = (0..1000).map(|_| {
-        state = (state * 16807) % 2147483647;
-        let a = (state % 100) as f64 / 10.0 + 1.0;
-        state = (state * 16807) % 2147483647;
-        let b = (state % 100) as f64 / 10.0 + 1.0;
-        let kind = state % 3;
-
-        if kind == 0 {
-            Shape::Circle { r: a }
-        } else if kind == 1 {
-            Shape::Rect { w: a, h: b }
-        } else {
-            Shape::Tri { b: a, h: b }
-        }
-    }).collect_array().unwrap();
-
-    let mut total = 0.0;
-    for _ in 0..50000 {
-        for s in &shapes {
-            total += s.area();
-        }
-    }
-    println!("{:.3}", total);
-}
-```
-
-We also used arrays instead of vectors because arrays were used in the C version. Here are the results:
-
-```javascript
-[root@8b4fcd497f61 Tov]# hyperfine -w 10 -m 64 ./dispatch_tov ./dispatch ./better_dispatch
-Benchmark 1: ./dispatch_tov
-  Time (mean ± σ):      52.4 ms ±   1.3 ms    [User: 51.7 ms, System: 0.7 ms]
-  Range (min … max):    50.6 ms …  59.0 ms    64 runs
-
-Benchmark 2: ./dispatch
-  Time (mean ± σ):     298.2 ms ±   4.1 ms    [User: 297.1 ms, System: 1.1 ms]
-  Range (min … max):   295.9 ms … 319.9 ms    64 runs
-
-  Warning: Statistical outliers were detected. Consider re-running this benchmark on a quiet system without any interferences from other programs. It might help to use the '--warmup' or '--prepare' options.
-
-Benchmark 3: ./better_dispatch
-  Time (mean ± σ):      48.8 ms ±   0.3 ms    [User: 48.0 ms, System: 0.8 ms]
-  Range (min … max):    48.3 ms …  49.6 ms    64 runs
-
-Summary
-  ./better_dispatch ran
-    1.07 ± 0.03 times faster than ./dispatch_tov
-    6.12 ± 0.09 times faster than ./dispatch
-```
-
-```javascript
-sh-5.3$ hyperfine -w 10 -m 64 ./dispatch_tov ./target/release/dispatch ./target/release/better_dispatch
-Benchmark 1: ./dispatch_tov
-  Time (mean ± σ):      37.2 ms ±   2.2 ms    [User: 36.0 ms, System: 1.0 ms]
-  Range (min … max):    34.7 ms …  50.6 ms    79 runs
-
-  Warning: Statistical outliers were detected. Consider re-running this benchmark on a quiet system without any interferences from other programs. It might help to use the '--warmup' or '--prepare' options.
-
-Benchmark 2: ./target/release/dispatch
-  Time (mean ± σ):      88.0 ms ±   6.0 ms    [User: 86.6 ms, System: 1.0 ms]
-  Range (min … max):    81.8 ms … 106.7 ms    64 runs
-
-Benchmark 3: ./target/release/better_dispatch
-  Time (mean ± σ):      38.2 ms ±   2.3 ms    [User: 37.0 ms, System: 1.0 ms]
-  Range (min … max):    34.9 ms …  46.6 ms    79 runs
-
-Summary
-  ./dispatch_tov ran
-    1.03 ± 0.09 times faster than ./target/release/better_dispatch
-    2.37 ± 0.21 times faster than ./target/release/dispatch
-```
-
-```javascript
-[tsuru@makimaki ~]$ hyperfine -w 10 ./dispatch ./dispatch_tov ./better_dispatch
-Benchmark 1: ./dispatch
-  Time (mean ± σ):     406.7 ms ±   2.2 ms    [User: 404.7 ms, System: 0.6 ms]
-  Range (min … max):   405.0 ms … 411.1 ms    10 runs
-
-Benchmark 2: ./dispatch_tov
-  Time (mean ± σ):      70.8 ms ±   0.8 ms    [User: 69.9 ms, System: 0.7 ms]
-  Range (min … max):    69.6 ms …  73.4 ms    41 runs
-
-Benchmark 3: ./better_dispatch
-  Time (mean ± σ):      67.7 ms ±   2.2 ms    [User: 66.6 ms, System: 0.8 ms]
-  Range (min … max):    66.3 ms …  79.0 ms    43 runs
-
-  Warning: Statistical outliers were detected. Consider re-running this benchmark on a quiet system without any interferences from other programs. It might help to use the '--warmup' or '--prepare' options.
-
-Summary
-  ./better_dispatch ran
-    1.05 ± 0.04 times faster than ./dispatch_tov
-    6.01 ± 0.20 times faster than ./dispatch
-```
-
-We believe Tov's developers intentionally used dynamic dispatching in order to slow down the performance significantly and create misleading results. The program / code between the original Rust version and the Tov version was highly inequivalent. Their benchmark and its results should be deemed invalid.
-
-# map_insert
-
-```rust
-// Insert N string keys into a string -> int map, then look every key up again.
-
-use std::collections::HashMap;
-
-fn main() {
-    let n: i64 = 2_000_000;
-    let mut m: HashMap<String, i64> = HashMap::new();
-    for i in 0..n {
-        m.insert(format!("k{i}"), i);
-    }
-    let mut sum: i64 = 0;
-    for i in 0..n {
-        sum += m[&format!("k{i}")];
-    }
-    println!("{} {}", m.len(), sum);
-}
-```
-
-We believe Tov developers deliberately chose `std::collections::HashMap`, which is a hash map known to be slow since it is made to be resilient to HashDoS attacks. Usually in real-world situations where HashDoS is not a concern, the `ahash` library is used. Tov developers chose to use external libraries like `num_bigint` to their advantage while ignoring popular libraries like `ahash` that are commonly used and make more sense in this case.
-
-```rust
-use ahash::AHashMap;
-use std::fmt::Write;
-
-fn main() {
-    const n: usize = 2_000_000;
-
-    let keys: Vec<String> = (0..n).map(|i| {
-        let mut s = String::with_capacity(8);
-        write!(s, "k{i}").unwrap();
-        s
-    }).collect();
-
-    let m: AHashMap<&str, i64> = keys.iter().enumerate().map(|(i, k)| (&**k, i as i64)).collect();
-
-    let mut sum: i64 = 0;
-    for k in &keys {
-        sum += m[&**k];
-    }
-    println!("{} {}", m.len(), sum);
-}
-```
-
-```javascript
-[root@8b4fcd497f61 Tov]# hyperfine -w 10 ./map_insert_tov ./map_insert ./ahashmap_map_insert
-Benchmark 1: ./map_insert_tov
-  Time (mean ± σ):     600.9 ms ±  44.8 ms    [User: 528.0 ms, System: 72.7 ms]
-  Range (min … max):   560.8 ms … 719.6 ms    10 runs
-
-Benchmark 2: ./map_insert
-  Time (mean ± σ):      1.705 s ±  0.102 s    [User: 1.559 s, System: 0.145 s]
-  Range (min … max):    1.628 s …  1.972 s    10 runs
-
-Benchmark 3: ./ahashmap_map_insert
-  Time (mean ± σ):     482.5 ms ±  15.0 ms    [User: 387.5 ms, System: 94.7 ms]
-  Range (min … max):   470.2 ms … 523.0 ms    10 runs
-
-Summary
-  ./ahashmap_map_insert ran
-    1.25 ± 0.10 times faster than ./map_insert_tov
-    3.53 ± 0.24 times faster than ./map_insert
-```
-
-```javascript
-sh-5.3$ hyperfine -w 5 ./map_insert_tov ./target/release/{,ahashmap_}map_insert
-Benchmark 1: ./map_insert_tov
-  Time (mean ± σ):     411.1 ms ±  55.5 ms    [User: 393.8 ms, System: 14.5 ms]
-  Range (min … max):   360.8 ms … 519.0 ms    10 runs
-
-Benchmark 2: ./target/release/map_insert
-  Time (mean ± σ):     849.4 ms ±  62.0 ms    [User: 800.4 ms, System: 41.7 ms]
-  Range (min … max):   793.1 ms … 977.0 ms    10 runs
-
-Benchmark 3: ./target/release/ahashmap_map_insert
-  Time (mean ± σ):     210.2 ms ±  31.5 ms    [User: 178.5 ms, System: 28.6 ms]
-  Range (min … max):   184.0 ms … 277.0 ms    15 runs
-
-  Warning: Statistical outliers were detected. Consider re-running this benchmark on a quiet system without any interferences from other programs. It might help to use the '--warmup' or '--prepare' options.
-
-Summary
-  ./target/release/ahashmap_map_insert ran
-    1.96 ± 0.39 times faster than ./map_insert_tov
-    4.04 ± 0.67 times faster than ./target/release/map_insert
-```
-
-```javascript
-[tsuru@makimaki ~]$ hyperfine -w 5 ./map_insert_tov ./{,ahashmap_}map_insert
-Benchmark 1: ./map_insert_tov
-  Time (mean ± σ):     918.3 ms ±  56.6 ms    [User: 784.3 ms, System: 128.1 ms]
-  Range (min … max):   850.8 ms … 1006.4 ms    10 runs
-
-Benchmark 2: ./map_insert
-  Time (mean ± σ):      2.594 s ±  0.077 s    [User: 2.296 s, System: 0.282 s]
-  Range (min … max):    2.525 s …  2.769 s    10 runs
-
-Benchmark 3: ./ahashmap_map_insert
-  Time (mean ± σ):     767.8 ms ±  19.7 ms    [User: 605.5 ms, System: 157.3 ms]
-  Range (min … max):   734.4 ms … 802.9 ms    10 runs
-
-Summary
-  ./ahashmap_map_insert ran
-    1.20 ± 0.08 times faster than ./map_insert_tov
-    3.38 ± 0.13 times faster than ./map_insert
-```
-
-# Wrapping Up
-
-The point of Rust is not to write simple code and get the fastest binary; it shines in getting near-metal performance from the code you have written. You have a program in Tov that runs slow? Good luck speeding your code up. You have a program in Rust that runs slow? Rewrite the part of the code that causes the slowdown.
-
-Code in JavaScript or TypeScript are not supposed to perform well. JavaScript is single-threaded. The name implies it's a scripting language. It doesn't make sense to write programs using tools meant for running scripts in a browser if performance matters.
-
-Tov failed not because their transpiler isn't good enough, but rather due to its design. Tov's main website is reflecting its design flaw — it is impossible to get faster than Rust and C in any meaningful way, especially if Tov transpiles to C.
-
-Tov's idea of shipping JavaScript programs as native binaries is not new. If you are interested, I recommend [Porffor](https://porffor.dev/?ref=blog.fyralabs.com). Porffor compiles your JavaScript code to a native binary, and it passes over 95% of all tests in the official ECMAScript conformance suite. It's also available in Terra, by the way. Note that Porffor and Tov are not affiliated with Fyra Labs.
+In [Why Lean is Faster Than Rust](https://kim-em.github.io/blog/2026-7-24-why-lean-is-faster-than-rust/), the author shares an impressive result: a [DEFLATE compression](https://en.wikipedia.org/wiki/Deflate) library written in [Lean 4](https://github.com/leanprover/lean4), a functional programming language and proof assistant, outperforming an equivalent Rust package that [crates.io says](https://crates.io/search?q=miniz_oxide) has been downloaded *over a billion times.* From the article:
+
+> `lean-zip` beats every single compression level `miniz_oxide` provides, i.e. we're capable of providing the same compression at higher throughput. At its fastest setting we're 15% quicker and the output is 8.8% smaller.
+
+However, the article also notes that while they managed to surpass Rust's `miniz_oxide`, they were no match for the end boss of DEFLATE performance: [libdeflate](https://github.com/ebiggers/libdeflate), written in C.
+
+> `lean-zip` is certainly not the best here: `libdeflate` unsurprisingly blows it out of the water (unsurprisingly because this is a very carefully tuned implementation using architecture-specific SIMD, that we can't touch in Lean).
+
+Enter [Roc](https://roc-lang.org), a functional programming language (but not a theorem prover) with an explicit focus on runtime performance.
+
+Roc's tagline is "Fast, Friendly, Functional," and [Fast comes first](https://roc-lang.org/fast) because both running fast *and* compiling fast have always been central goals. Roc is not a mature language (it's still weeks away from its first numbered release, 0.1.0), and its nascent package ecosystem has had almost no optimization work done on it. Still, between its language design, [longstanding optimizations](https://youtu.be/vzfy4EKwG_Y?si=oYa6k2pFdsRJcQW7), and [brand-new compiler implementation](https://rtfeldman.com/rust-to-zig), I figured Roc already had enough of a foundation in place to take on the champ: libdeflate.
+
+So I spent a bunch of time grinding through performance optimizations on [roc-deflate](https://github.com/niclas-ahden/roc-deflate), a package [Niclas Ahden](https://www.youtube.com/@NiclasAhden) wrote (and [uses in paid production work](https://youtu.be/12yVcgQHAK0?si=JETe6lec5y4jCLVL)) for DEFLATE compression. I didn't expect to beat libdeflate's performance across the board, but I wanted to see how close it could get on the non-streaming APIs (as roc-deflate hasn't implemented streaming yet), using the classic Silesia corpus for benchmarking and verifying that it produced identical outputs.
+
+## [Under 10% Slower](https://rtfeldman.com/fp-vs-c#under-10-slower)
+
+Here's where the benchmarks stand today, running on the 2021 M1 MacBook Pro where I did all the optimization work, as well as on an AMD Ryzen 9 3900X Ubuntu machine for an x64 comparison.
+
+roc-deflate ran these 144 benchmarks slower on average than libdeflate, in the median case **8.9%** slower on the Ryzen 3900X, and **2.6%** on the M1 MacBook Pro.
+
+So while we didn't outperform the champ on average, a median slowdown percentage in the single digits compared to such a carefully-tuned SIMD-powered C library is *wild.* It's frankly not a result I knew was achievable going in, since Roc is a functional language with automatic memory management racing against code that doesn't have to do bounds checks. (Bounds checks have a cost, but then again, the last time a skipped bounds check in C compression code led to a major Remote Code Execution vulnerability [was yesterday](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases#nodejs-brotli-decoder-out-of-bounds-write-permits-remote-code-execution-cve-2026-111497---high).)
+
+The graph shows more detail than just the median gap. On the worst-case inputs, roc-deflate was 18% slower than libdeflate, but on the best-case inputs, roc-deflate was slightly over 18% *faster!* That's not because Roc has some magical optimization that C can't access; it's just that the two implementations are different, and although on average roc-deflate is slower, for certain inputs it happens to be faster. So while it's *possible* to get a speedup by switching from libdeflate to roc-deflate, you shouldn't expect it on average.
+
+To be clear, C's performance ceiling is higher than Roc's. For any input where roc-deflate currently outperforms libdeflate, C code can close that gap. The reverse is not true; Roc code is memory-safe, does automatic reference counting, checks bounds, and supports no Rust-style `unsafe` to opt out of any of that. These properties give Roc code stronger safety guarantees than code written in C, Zig, Rust, and other languages that allow full access to the hardware—and the price it pays for those guarantees is a lower performance ceiling.
+
+Obviously we can't extrapolate from this one result about how close Roc can get to C in the general case, but now something has been demonstrated that nobody knew was achievable before. As far as I know, this is the most optimization effort that has been put into any Roc package to date, so how close others can get to this result is a complete unknown right now. So while I'm thrilled by this result, I'm fully aware that we won't know how well it generalizes until we've optimized a wider sample of real-world Roc code bases!
+
+## [What the Performance Gap Buys](https://rtfeldman.com/fp-vs-c#what-the-performance-gap-buys)
+
+An obvious question is "Why settle for *any* amount slower?" If you *could* get C levels of performance, why not use libdeflate itself and close that remaining gap?
+
+A pure-Roc implementation has several advantages over a pure-C one:
+
+- Memory safety. Roc code is fully memory-safe and has no language primitives that let you opt out of it. This code is only able to approach C levels of performance because Roc's optimization pipeline determined that many bounds checks and reference counting operations were provably safe to optimize away. Compression packages written in pure Roc don't have access to the unchecked memory operation that caused yesterday's Brotli Remote Code Execution vulnerability.
+- No side effects. Roc's type system infers which functions are pure and which can perform side effects. Pure functions' types use a thin arrow, like Bool -> Bool, whereas effectful functions use a thick arrow, like Bool => Bool. (As with memory safety, Roc enforces this and supports no way to opt out.) So when you see that roc-deflate's functions have only thin arrows in their annotations, you know they really are pure functions.
+- Supply-Chain Security. Roc does not have an arbitrary FFI, meaning you know for sure that roc-deflate's pure functions can't even attempt to do I/O or access arbitrary memory. Given the explosion in supply chain attacks, it's valuable to know that the damage a malicious actor can do with a pure function in a compromised Roc package is limited to returning the wrong value, crashing, or wasting system resources. Roc packages also don't support build scripts, which was the vector used to successfully compromise the popular Rust `arrayref` package two months ago.
+- Portability. Roc pure functions are designed to be extremely deterministic: they always return the same values when given the same arguments—not just when run on the same machine, but also on any target you compile that code to. (The functions may also crash or fail to terminate, but that behavior should also be deterministic across targets.) The only way a Roc pure function should be expected to behave differently when run on two different systems is if one system runs out of memory mid-execution.
+
+If any of these guarantees don't hold in practice, it can only be due to a defect in Roc's compiler, the [platform](https://www.roc-lang.org/docs/main/langref/platforms/) the application is running on, or the underlying hardware. So when you see in [roc-deflate's docs](https://niclas-ahden.github.io/roc-deflate/0.4.0/) that the entire package is 100% pure functions, you can be confident you are getting all of the above properties from everything the package has to offer. The type system enforces it!
+
+The reason we've been working so hard on all this might become clearer if you look at the proposition in reverse: would you give up guaranteed memory safety, guaranteed lack of side effects, guaranteed deterministic behavior across all targets, and the security benefits of having no exploitable build scripts in packages...for an average speedup percentage in the single digits?
+
+That answer can legitimately vary by use case—Roc's own compiler, for example, wants [the maximum performance the hardware can deliver](https://rtfeldman.com/rust-to-zig)—but I bet a lot of people reading this can see why we're so excited to have achieved this result.
+
+## [Roc-Specific Optimizations](https://rtfeldman.com/fp-vs-c#roc-specific-optimizations)
+
+Most of the optimizations that improved roc-deflate's numbers came from general optimization techniques that are widely beneficial across languages. (I always recommend [Casey Muratori's Performance-Aware Programming Series](https://www.computerenhance.com/p/table-of-contents), which I paid for and learned a lot from.) Some of the optimization techniques were Roc-specific, though, and I wanted to mention them here as a reference for others. Even if you're not writing Roc code, this can also give you an idea of [how Roc achieves its performance](https://youtu.be/vzfy4EKwG_Y?si=oYa6k2pFdsRJcQW7).
+
+### [Avoid Unnecessary Sharing](https://rtfeldman.com/fp-vs-c#avoid-unnecessary-sharing)
+
+One of Roc's most effective optimizations is *opportunistic mutation* (which [Koka](https://koka-lang.github.io/koka/doc/book.html#why-perceus) calls ["Functional but In-Place"](https://koka-lang.github.io/koka/doc/book.html#sec-fbip)). You can learn how it works in Roc's [docs on opportunistic mutation](https://www.roc-lang.org/docs/main/langref/expressions/#opportunistic-mutation), but from a performance optimization perspective, it's critically important to avoid unnecessary sharing so that values remain unique and therefore eligible for in-place mutation.
+
+### [Hoist Bounds Checks](https://rtfeldman.com/fp-vs-c#hoist-bounds-checks)
+
+You can't opt out of bounds checks (e.g. getting a value out of a dynamically-sized collection) in Roc like you can in C, Zig, and Rust, but Roc's compiler can optimize them away if it knows they'd be guaranteed to pass. Bounds checks are most costly inside loops, so you can get a lot of mileage out of adding something like `if collection.len() <= highest_index_used { return 0 }` before the loop starts. This adds an additional check that looks redundant, but it can allow the optimizer to safely delete costlier checks inside the loop, once it can tell that failures would not be reachable after that early return.
+
+### [Build Lookup Tables at Compile Time](https://rtfeldman.com/fp-vs-c#build-lookup-tables-at-compile-time)
+
+[Roc's compile-time evaluation](https://www.roc-lang.org/docs/main/langref/compile-time/) can be used to assemble lookup tables at compile time as long as nothing depends on runtime inputs. Even better, since their lengths are known at compile time, you can do things like `Ok(entry) = lookup_table.get(5)` to do an [exhaustive pattern match](https://www.roc-lang.org/docs/main/langref/pattern-matching/#exhaustiveness) that Roc's compiler will know is valid thanks to compile-time evaluation. This avoids runtime bounds checks that non-constant tables might have to pay for.
+
+### [Consider Wrapping Arithmetic](https://rtfeldman.com/fp-vs-c#consider-wrapping-arithmetic)
+
+In Roc, `a + b` desugars to `a.plus(b)`. For an integer like [`U64`](https://www.roc-lang.org/docs/main/Num/#U64), [`U64.plus`](https://www.roc-lang.org/docs/main/Num/#U64.plus) includes an overflow check, whereas [`plus_wrap`](https://www.roc-lang.org/docs/main/Num/#U64.plus_wrap) does not. Although `plus` is the safer default, [overflow checks have a runtime cost](https://danluu.com/integer-overflow), as CPUs can do wrapping integer arithmetic in one instruction. When Roc's compiler can prove that overflow won't occur, both `plus` and `plus_wrap` will optimize to the same instructions, but when it can't, you may get a speedup by choosing `plus_wrap`.
+
+## [Room for Improvement](https://rtfeldman.com/fp-vs-c#room-for-improvement)
+
+I'm sure there are still opportunities to improve roc-deflate's performance—especially on x64 CPUs—as well as the optimization pipeline in Roc's compiler.
+
+At this point I feel reasonably confident that all the low-hanging fruit has been picked, but if anyone wants to try it out for themselves, [here's the script I ran to set up and run the benchmark suite on Linux](https://gist.github.com/rtfeldman/7b6830809149867b79761ffb8e0456c3). (Note that Claude Opus 5.5 generated this script, and I haven't vetted it for security; run it outside a sandbox at your own risk!) It pins both Roc compiler revisions and roc-deflate versions, so you'll want to adjust those commits if you're trying out potential improvements.
+
+For my part, I'll be focusing on the upcoming Roc 0.1.0 release from now until it's out. It's been eight years in the making, so I'll be very happy for us to finally have a numbered release! If you'd like to learn more about Roc, check out [roc-lang.org](https://roc-lang.org) or [come say hi on Roc Zulip](https://roc.zulipchat.com/#narrow/channel/231634-beginners)!

@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-25T10:57:03Z",
+  "updated": "2026-10-25T15:44:50Z",
   "items": [
     {
       "id": "devto-4858196",
@@ -158,27 +158,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4845471",
-      "title": "I argued with AI until it apologized for calling my course \"AI Slop\"",
-      "desc": "By EffessDev | 3 min read",
-      "tag": "tutorial",
-      "published": "2026-10-14T11:31:46Z",
-      "order": 14,
-      "url": "https://dev.to/effessdev/i-argued-with-ai-until-it-apologized-for-calling-my-course-ai-slop-350d",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fsv9mqip5csydm4a6snax.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAwEAAv/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAENKvRKdf/EABoQAAICAwAAAAAAAAAAAAAAAAABAhARMUH/2gAIAQEAAQUC4qZgWhyP/8QAFREBAQAAAAAAAAAAAAAAAAAAARD/2gAIAQMBAT8BZ//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABYQAAMAAAAAAAAAAAAAAAAAAAAgMf/aAAgBAQAGPwJ4f//EABsQAAICAwEAAAAAAAAAAAAAAAABESEQQVFh/9oACAEBAAE/IWw/sI0LwpNlAlUvE//aAAwDAQACAAMAAAAQ3K//xAAWEQEBAQAAAAAAAAAAAAAAAAABABH/2gAIAQMBAT8QekJl/8QAFxEAAwEAAAAAAAAAAAAAAAAAAAEhEf/aAAgBAgEBPxDaNw//xAAbEAEBAQEBAQEBAAAAAAAAAAABEQAhMWFBUf/aAAgBAQABPxAOUVmjB4P5qJsGWT3I9/BmnRPN0e8+4FUZiVCL93//2Q==",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4796922",
       "title": "Three Times My Test Failed and the LLM Was Right",
       "desc": "By Debashish Ghosal | 6 min read",
       "tag": "tutorial",
       "published": "2026-10-25T01:03:43Z",
-      "order": 15,
+      "order": 14,
       "url": "https://dev.to/debashish_ghosal/three-times-my-test-failed-and-the-llm-was-right-43l2",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F4o2covnae1ry3vu9zaln.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAQIE/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAH/2gAMAwEAAhADEAAAAcVS1QJ//8QAGRAAAwEBAQAAAAAAAAAAAAAAAAECITFB/9oACAEBAAEFAiRiPJx1r4f/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAWEAADAAAAAAAAAAAAAAAAAAAQESD/2gAIAQEABj8CpD//xAAaEAEBAQADAQAAAAAAAAAAAAABABEhMUGB/9oACAEBAAE/IU9u2kfX7CDYnDZPIjhf/9oADAMBAAIAAwAAABDOv//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QP//EABoQAAIDAQEAAAAAAAAAAAAAAAERACFBMRD/2gAIAQEAAT8QYEsNOMAS3WxhJgdSvBhagqNE+QsKqB5DI9c//9k=",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4845471",
+      "title": "I argued with AI until it apologized for calling my course \"AI Slop\"",
+      "desc": "By EffessDev | 3 min read",
+      "tag": "tutorial",
+      "published": "2026-10-14T11:31:46Z",
+      "order": 15,
+      "url": "https://dev.to/effessdev/i-argued-with-ai-until-it-apologized-for-calling-my-course-ai-slop-350d",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fsv9mqip5csydm4a6snax.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAwEAAv/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAENKvRKdf/EABoQAAICAwAAAAAAAAAAAAAAAAABAhARMUH/2gAIAQEAAQUC4qZgWhyP/8QAFREBAQAAAAAAAAAAAAAAAAAAARD/2gAIAQMBAT8BZ//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABYQAAMAAAAAAAAAAAAAAAAAAAAgMf/aAAgBAQAGPwJ4f//EABsQAAICAwEAAAAAAAAAAAAAAAABESEQQVFh/9oACAEBAAE/IWw/sI0LwpNlAlUvE//aAAwDAQACAAMAAAAQ3K//xAAWEQEBAQAAAAAAAAAAAAAAAAABABH/2gAIAQMBAT8QekJl/8QAFxEAAwEAAAAAAAAAAAAAAAAAAAEhEf/aAAgBAgEBPxDaNw//xAAbEAEBAQEBAQEBAAAAAAAAAAABEQAhMWFBUf/aAAgBAQABPxAOUVmjB4P5qJsGWT3I9/BmnRPN0e8+4FUZiVCL93//2Q==",
       "color": "#3B49DF"
     },
     {
@@ -266,27 +266,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4840194",
-      "title": "Solodesk-Ai",
-      "desc": "By Shaurya Tiwari | 4 min read",
-      "tag": "tutorial",
-      "published": "2026-10-12T20:49:24Z",
-      "order": 23,
-      "url": "https://dev.to/dr5t/solodesk-ai-lpe",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fy11o4ykev6b1y23stmfi.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAABAED/8QAFgEBAQEAAAAAAAAAAAAAAAAAAgAB/9oADAMBAAIQAxAAAAESzpYhEY7f/8QAGBABAAMBAAAAAAAAAAAAAAAAAAECEDH/2gAIAQEAAQUCUX4hG//EABURAQEAAAAAAAAAAAAAAAAAAAAR/9oACAEDAQE/AVf/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAWEAADAAAAAAAAAAAAAAAAAAAAIFH/2gAIAQEABj8CI/8A/8QAGxAAAwACAwAAAAAAAAAAAAAAAAERITEQQYH/2gAIAQEAAT8hWxHN+iXXY+DqPBcDyf/aAAwDAQACAAMAAAAQ3J//xAAWEQEBAQAAAAAAAAAAAAAAAAAAETH/2gAIAQMBAT8QrT//xAAXEQADAQAAAAAAAAAAAAAAAAAAAREx/9oACAECAQE/ELEaj//EABsQAQACAwEBAAAAAAAAAAAAAAEAESExQVFx/9oACAEBAAE/EM/UJmFx6gqm9EMzeKkAr5DA3a3eoizTm+x9Az//2Q==",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4848909",
       "title": "Git, Docker, and IPFS All Hide the Same Beautiful Idea",
       "desc": "By James Anderson | 7 min read",
       "tag": "tutorial",
       "published": "2026-10-14T08:50:45Z",
-      "order": 24,
+      "order": 23,
       "url": "https://dev.to/james_anderson_h/git-docker-and-ipfs-all-hide-the-same-beautiful-idea-3j0",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Frjjnmpeah3gqjvc4u80m.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAAECBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHhZiUh/8QAFhABAQEAAAAAAAAAAAAAAAAAEQAg/9oACAEBAAEFAiN//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAGRABAAIDAAAAAAAAAAAAAAAAAQAxEBEg/9oACAEBAAE/IQJcQW41z//aAAwDAQACAAMAAAAQnX//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/ED//xAAdEAEAAQMFAAAAAAAAAAAAAAABABARITFRcZHR/9oACAEBAAE/EDK2Y2mpvAQMPsEl8Tqg2p//2Q==",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4840194",
+      "title": "Solodesk-Ai",
+      "desc": "By Shaurya Tiwari | 4 min read",
+      "tag": "tutorial",
+      "published": "2026-10-12T20:49:24Z",
+      "order": 24,
+      "url": "https://dev.to/dr5t/solodesk-ai-lpe",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fy11o4ykev6b1y23stmfi.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAABAED/8QAFgEBAQEAAAAAAAAAAAAAAAAAAgAB/9oADAMBAAIQAxAAAAESzpYhEY7f/8QAGBABAAMBAAAAAAAAAAAAAAAAAAECEDH/2gAIAQEAAQUCUX4hG//EABURAQEAAAAAAAAAAAAAAAAAAAAR/9oACAEDAQE/AVf/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAWEAADAAAAAAAAAAAAAAAAAAAAIFH/2gAIAQEABj8CI/8A/8QAGxAAAwACAwAAAAAAAAAAAAAAAAERITEQQYH/2gAIAQEAAT8hWxHN+iXXY+DqPBcDyf/aAAwDAQACAAMAAAAQ3J//xAAWEQEBAQAAAAAAAAAAAAAAAAAAETH/2gAIAQMBAT8QrT//xAAXEQADAQAAAAAAAAAAAAAAAAAAAREx/9oACAECAQE/ELEaj//EABsQAQACAwEBAAAAAAAAAAAAAAEAESExQVFx/9oACAEBAAE/EM/UJmFx6gqm9EMzeKkAr5DA3a3eoizTm+x9Az//2Q==",
       "color": "#3B49DF"
     },
     {

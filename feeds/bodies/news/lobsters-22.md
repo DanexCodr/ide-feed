@@ -1,83 +1,49 @@
-A link is just a button that takes you somewhere when you click it right?
+Many people [are saying](https://rustify.rs/articles/rails-world-2026-keynote-dhh-hey-rust-ai-agents) that AI will make software faster by rewriting it in faster languages, but this isn’t generally true. Most programs cannot be meaningfully sped up by rewriting them in C or Rust.
 
-```
+How can this be true? Some languages are orders-of-magnitude faster than others: for instance, C can be fifty times [faster](https://news.ycombinator.com/item?id=9753366) than Python. Won’t rewriting my Python program in C thus make it fifty times faster? No, it won’t. Software performance is usually dominated by I/O, not the speed of the language. Where language speed matters, most slow languages already have popular libraries that allow them to unlock C-like speed. In general, performance is a matter of *design*, not of language choice.
 
-<style>
-span {
-  text-decoration: underline;
-  color: #44EEEE;
-}
-</style>
-<span onclick="window.location='https://xkcd.com/'">100% legit link</span>
-```
+### Most real programs are I/O-bound
 
-100% legit link
+Consider a simple CRUD website with a database. For any given request, 50% of the request time<sup>[1](https://www.seangoedecke.com/software-is-slow-because-of-bad-design-not-slow-languages/#fn-1)</sup> might be spent querying the database: to fetch the current user, the record being asked for, any relevant user memberships or settings, and so on. Rewriting that website in C can only speed up that other 50%, which puts a hard ceiling on the improvements you can make<sup>[2](https://www.seangoedecke.com/software-is-slow-because-of-bad-design-not-slow-languages/#fn-2)</sup>. At best, you’ll make requests twice as fast (probably closer to 1.5x in practice). That’s not bad, but it’s nowhere near an order-of-magnitude speedup.
 
-Except that's a pale, shallow imitation of a link.
-A real link can be:
+In other words, most real programs are “I/O-bound”: they spend most of their time waiting for data to be input or output somewhere, as opposed to “CPU-bound” programs that spend most of their time actively doing things. I/O-bound programs don’t just have to rely on a database. Often programs have to wait on some third-party API, or on writing or reading data to disk. You could speed the code in `curl` up by 100x and you probably wouldn’t even notice, because `curl` spends all of its time waiting on the network.
 
-Opened in a new tab. (ctrl)
-... or a fresh window. (shift)
-... or saved as a file (alt).
-Copied as a URL (right click)
-Used with the keyboard (tab + enter)
-Seen by tools like search engines and screen readers.
-Hovered over to see the URL.
+What about work that is obviously not I/O-bound? For instance, wikis have to turn stored markdown into renderable HTML<sup>[3](https://www.seangoedecke.com/software-is-slow-because-of-bad-design-not-slow-languages/#fn-3)</sup>. Wouldn’t rewriting that in a faster language cause a massive speedup? It would! That’s why applications that do that use libraries like [cmark-gfm](https://github.com/github/cmark-gfm) that call out to fast languages for markdown rendering. In general, most slow languages can write very fast programs by invoking this kind of library. Python is famously a slow language, but it’s a competitive choice for CPU-bound workloads like machine learning and mathematics, because it has a [healthy](https://pytorch.org/) [set](https://www.tensorflow.org/) of libraries that let it offload these workloads to fast C code. If a Python program spends 80% of its time doing matrix multiplications on a GPU, you are very unlikely to be able to speed it up by rewriting it in C, because those matrix multiplications are already happening in tightly-optimized C or assembly code.
 
- snip
+Of course, some programs do in fact do a lot of CPU-bound work in slow languages. If a program has not had much engineering attention, there will probably be a lot of [low-hanging fruit](https://www.seangoedecke.com/low-hanging-fruit/). But these programs are often unimportant: if they were important, someone would have gone in and optimized them already, before AI made it (relatively) easy. That doesn’t mean it’s impossible to find a useful program to rewrite. Actual Computer recently [rewrote](https://github.com/actual-computer/toks) tiktoken in assembly, providing a significant<sup>[4](https://www.seangoedecke.com/software-is-slow-because-of-bad-design-not-slow-languages/#fn-4)</sup> speedup. However, you’re not going to revolutionize some field of computing like this. Even fast tokenization is only useful on the margins, because time spent in tokenization is a fraction of the time spent in inference.
 
-... none of which work with a button.
+Despite all this, I think most software is far slower than it could be. I’m optimistic about the potential (with or without AI) to significantly speed up commonly-used software. But I think most of these speedups will come from redesigning the program, not rewriting it in a faster language.
 
-*Another common offense* is to use a real link, but hook the click event to open a popup.
-However, with a real <a target="_blank"> link, I can:
+In a 2018 [post](https://bcantrill.dtrace.org/2018/09/18/falling-in-love-with-rust/), Bryan Cantrill described trying to rewrite a C program into Rust. It was difficult because the carefully-optimized design of the C program did not play well with the Rust borrow checker. Giving up, he simply wrote the program in Rust in the naive way, expecting a 20% slowdown or worse. Instead, it was 30% *faster*. The [reasons](https://bcantrill.dtrace.org/2018/09/28/the-relative-performance-of-c-and-rust/) boil down to Rust’s internal preference for a B-tree over a binary search tree, which happens to be a more cache-efficient data structure. So even in a largely CPU-bound workload, in the hands of someone very skilled at writing fast C, performance is dominated by design, not by language speed.
 
-See the loading progress...
-... or/and cancel it.
-... see descriptive error pages and retry if needed.
-Open multiple at once.
-Read the original page while it loads.
-Use my browser's tabs or/and window manager to organize them.
-Bookmark the page.
-Copy the URL and send it to a friend.
+This matches my own experience in higher-level languages. When I think of the significant speedups I’ve managed, they’re almost exclusively redesigns of the software to do less work:
 
-... and above all, they are consistent:
+- Caching a slow operation (typically an external API call)
+- Performing slow operations asynchronously, either in a background job or out of the request/response lifecycle
+- Performing operations in parallel instead of sequentially (sometimes breaking up large operations in order to do this)
+- Replacing a set of SQL queries with a single SQL query (fixing N+1 problems)
+- Replacing a slow SQL query with a fast SQL query
+- Skipping unnecessary slow operations (e.g. in a paginated view, only fetch ancillary data from entities that are on the current page)
 
-I've long lost count of how many times I've accidentally closed the whole site while trying to close a popup that was a little too convincing.
+All of these strategies are completely unrelated to how fast the language is. In fact, writing in a slow higher-level language can make it much easier to optimize the code, because you can see at a glance what the program is doing. If (for some reason) I had first rewritten the web server in assembly, I would have a much harder time noticing the N+1 query, or the fact that we could move an API call into a job, and so on.
 
-It's also extremely common to click a link with a slow connection, only to be greeted with perpetual spinner.
-I have no idea if anything is actually happening or how long it will take.
-Worse, it usually covers up the original page so I can't even read that!
+Right now everyone is asking their AI agents to rewrite programs in Rust or C or assembly. This is fun, but it’s not a serious attempt at optimization. The set of programs that can be meaningfully sped up by this kind of rewrite is very narrow.
 
-*Browsers are good at links and loading pages: It's the whole point.*
+If you want to make everything faster with AI — and you should! — you ought instead to be asking your agent to profile programs, identify hotspots, and suggest ways to redesign what the program does. Occasionally you may run into a hotspot that is truly CPU-bound and cannot be refactored to do less work. In these rare cases, rewriting that section in a faster language will help. But simply rewriting from the start will be far less successful than most people imagine.
 
-Don't use javascript buttons as links.
-Don't build your own loading animations.
-Link previews should open and close on hover, not on click.
-Don't open links in javascript popups: Use target="_blank" instead.
+There are many good reasons to rewrite software in a different language: portability, efficiency, maintainability, and so on. But in terms of raw *speed*, you’re better off focusing on the program’s design.
 
-# *Other common problems*:
+edit: this post got some excellent comments on [lobste.rs](https://lobste.rs/s/hd72yt/software_is_slow_because_bad_design_not), mostly critical.
 
-Infinite scrolling breaks ctrl-f, bookmarks, the home/end keys and often the back button.
+Many commenters [disagree](https://lobste.rs/c/wcyo4k) that CRUD software is IO-bound, because database queries take ~5ms but responses take ~500ms. This is an empirical question, and my position on it comes from my experience staring at thousands of Ruby flamegraphs. It’s not uncommon for a single request to make tens or even hundreds of queries, or to rely on large queries or internal API calls that are a lot slower than 5ms. However, while I have profiled a *lot* of Rails endpoints in my career, it’s only been at a couple of companies. Maybe other monoliths are different.
 
-You can have a 100k of text on a page:
-Browsers will render partially downloaded HTML and the user won't even notice.
-Using a 5 MB javascript framework just do a worse job of downloading text is dumb.
+The top [commenter](https://lobste.rs/c/mhuwnq) says that there are many non-IO-bound programs, such as browser layout engines, 3d renderers, word processors, and neural networks. I agree that those examples are CPU-bound, but I think most engineers are not working on tasks like that. My sense is that the number of browser layout engines, 3d renderers and neural network programs in the world, all summed together, might make up about five percent of the number of CRUD programs (though they make up >50% of public *discussion* about programming, because they’re more interesting problems). Maybe I’m wrong!
 
-To optimize speed, it's best to minimize the total number of round trips.
-Just putting everything in a single TCP connection will always be better than breaking it up because of TCP's slow start algorithm.
+Other [commenters](https://lobste.rs/c/vcnyyd) [point](https://lobste.rs/c/n031ad) [out](https://lobste.rs/c/s5dkdu) that languages come with ecosystems that make performance harder or easier. I agree with that, but to me that falls under *design*: in some languages, fast designs are more natural than slow designs. If changing languages makes it easier to change designs, then sure, changing languages might speed up your program.
 
-*Don't reimplement <details>* which will break search tools and screen readers.
+Anyway, I do think my point empirically stands: if you go around with a LLM trying to “make software faster by rewriting it in C” you are going to run into software that’s already been suprisingly optimized compared to a rewrite, or IO-bound workloads that can’t be easily sped up, and you should instead be telling your LLM to “make software faster by redesigning it”.
 
-... but using fancy CSS to make it look nice is fine.
-
-*Don't roll your own date picker* (or any other built-in form inputs)
-
-This will always used the user's preferred date format, covert it to the standard yyyy-mm-dd, and works with the keyboard...
-also, it's one line of code that works with dark mode by default.
-
-# *Related*:
-
-Real links!
-
-- https://susam.net/do-not-roll-your-own.html: Don't Roll Your Own ...
-- /misc/13kb/: Why using a single big page can actually improve performance.
+1. This might seem ridiculously high (if you typically work with slow languages or CPU-bound workloads), or ridiculously low (if you don’t). In my experience it’s at least in the ballpark for interpreted languages. ↩
+2. This is formally called [Amdahl’s law](https://en.wikipedia.org/wiki/Amdahl%27s_law). ↩
+3. Why not just store the HTML? You can, but sometimes the content of the HTML differs per-user (and even if you store the HTML you have to convert it at least once). ↩
+4. They claim 4-23x faster than tiktoken and it was indeed ~5x faster on my laptop — though arguably this speedup comes from a redesign to avoid the dependency on regex, not on any intrinsic slowness of Rust with Python bindings. ↩

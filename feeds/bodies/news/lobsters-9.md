@@ -1,81 +1,73 @@
-I’ve been slowly turning [my Emacs config](https://codeberg.org/jjba23/heks-emacs) into something I actually *enjoy* using, not just something that works, and folding was the last place where that wasn’t true.
+> I wrote an accelerated FAST feature detector for the ESP32-S3 that leverages its 128-bit SIMD instructions. It achieves roughly double the performance of the reference implementation, and takes around ~6ms to process a QVGA (320x240) frame. You can find the source code [here](https://github.com/shraiwi/simd-fast-esp32s3).
 
-Every mode had its own idea of what folding is: `treesit-fold` in Tree-sitter modes, Hideshow in the Lisp-ish ones, Outline in everything that resembles text, Org with its own invisible text that no one else’s commands can undo.
+For its price, the ESP32-S3 is a powerhouse of a microcontroller. Within its unassuming plastic package lies a dual-core CPU running at a maximum of 240MHz with a slew of peripherals, including WiFi and Bluetooth Low Energy radios. While digging through its [technical reference manual](https://www.espressif.com/sites/default/files/documentation/esp32-s3_technical_reference_manual_en.pdf) I discovered that the chip supports a limited set of SIMD instructions. For silicon that’s cheaper than the average coffee, that’s pretty cool. Let’s see what exciting things we can do with it!
 
-So every buffer had different keys, a different look, and worst of all  different *performance* characteristics. Folding a big file sometimes felt like holding my breath.
+In the process of writing a SIMD-accelerated FAST corner detector, I learned the basics of assembly on the ESP32-S3, worked around its eccentric limitations, and ended up writing my own basic register allocator, `basm`.
 
-I’m running Emacs 32.0.50 from `master` (built from source, as one does), and it’s finally one system.
+After some more web browsing, I realized that these instructions weren’t exactly [secret](https://bitbanksoftware.blogspot.com/2024/01/surprise-esp32-s3-has-few-simd.html), but rather relatively unknown. I wanted to experiment with them myself and write more advanced code than what I could find online. As I’ve been really interested in computer vision lately, I decided on writing a SIMD-accelerated implementation of the [FAST feature detector](https://en.wikipedia.org/wiki/Features_from_accelerated_segment_test) for the ESP32-S3.
 
-![](https://jointhefreeworld.org/static-assets/heks/screen-2026-10-23-16-17-32.png)
+I started by looking for example code that uses SIMD instructions. At the time of writing, I could only find three sources:
 
-## kirigami is the piece I didn’t know I needed [#](https://jointhefreeworld.org/blog/articles/emacs/emacs-folding-kirigami/#kirigami-is-the-piece-i-didnrsquot-know-i-needed)
+1. Larry Bank’s blog, where he explores the feature and provides a minimal example
+2. Espressif’s `esp-dsp` library, used for DSP-esque features (convolutions, FFT, etc.)
+3. Espressif’s `esp-dl` library, used for on-chip AI acceleration.
 
-[kirigami](https://github.com/jamescherti/kirigami.el) doesn’t fold anything itself. It *dispatches*: it keeps a list of folding engines, checks which one is actually active in the buffer, and forwards to it. Tree-sitter, Hideshow, Outline, Org, Vdiff — all behind one interface.
+After perusing through them, I was relieved to find that assembly on the ESP32-S3 isn’t that bad. I settled on this general structure:
 
-So on top of it I put one set of keys, the same in a Kotlin buffer, YAML, a Scheme or ELisp buffer and an Org file:
+```
+    .section .rodata
+	# read-only data here
 
-| Key | Does |
-| --- | --- |
-| `C-c v c` | close this fold |
-| `C-c v C` | close every fold |
-| `C-c v o` | open this fold |
-| `C-c v O` | open this fold and everything under it |
-| `C-c v r` | reveal everything |
-| `C-c v t` | toggle the fold at point |
+    .section .text
+    .align 4
 
-That sounds small. It is not small. The number of times a day I used to think “wait, what does TAB do in this mode again” is now zero, and the muscle memory transfers across an entire polyglot config.
+    .global add
+    .type   add,@function
+# a simple function that adds two numbers
+# int32_t add(int32_t a, int32_t b)
+add:
+    entry           sp, 48 # sp (stack pointer) is an alias for a1
 
-One wrinkle worth mentioning: kirigami answers with the *first* engine in its list whose mode is on, and `outline-minor-mode` is on in nearly every buffer I have. In the buffers where I deliberately turned on Hideshow — Scheme, for instance — that choice has to win, otherwise `C-c v c` folds “headings” a Scheme file doesn’t have. So I reorder `kirigami-fold-list` to put Hideshow first instead of rewriting it; engines kirigami adds later still get used wherever Hideshow is off.
+    #define r_a a2
+    #define r_b a3
 
-## Tree-sitter folding, with guides that are actually lines [#](https://jointhefreeworld.org/blog/articles/emacs/emacs-folding-kirigami/#tree-sitter-folding-with-guides-that-are-actually-lines)
+	# code here
 
-Most of my programming buffers are `*-ts-mode`, so `treesit-fold` does the work there — bash, C, C++, CMake, CSS, Dockerfile, Elixir, Go, HTML, Java, JS/TS/TSX, JSON, Kotlin, Lua, Nix, PHP, Python, Ruby, Rust, Scala, TOML, YAML. Line counts are shown inline, which I find genuinely useful when deciding whether to open a fold.
+	add a2, r_a, r_b # a2 = a + b
 
-The indicators took the most fiddling. `treesit-fold-indicators` draws a block’s guide with a bitmap 23 rows tall, centered in the line beside it. A line in my config is 29 pixels — the font’s 23 plus six of `line-spacing` — so every row of the guide was a 23-pixel dash with three pixels of nothing above and below it. A folded block looked like a *dotted* line running down the fringe. Not subtle, just wrong.
+    retw.n # return, with a2 containing the return value.
+```
 
-There’s no setting for that, so I replaced the bitmaps: a single-row bitmap that `define-fringe-bitmap` repeats down however tall the line is (no spacing can introduce a gap), plus a `+=/`-= box and an end-elbow cut to the exact height of a line, so the guide runs from the marker into the row below and turns toward the text where the block ends. It’s an advice on the function that builds the string for each line. It looks like a bracket now, not a perforation.
+From there, I started writing a SIMD-accelerated version of the FAST corner pre-test. Essentially, it samples one pixel in each cardinal direction and checks if there are at least three “extreme” pixels. In this case, an extreme pixel is one whose absolute difference from the center pixel is above a certain threshold.
 
-And the colour: the indicators inherited `shadow`, which most themes make as bright as a comment. Fine for one marker on one line, wrong for a marker on *every* line of a block — the grey became a rule drawn through the code. They’re now `shadow` blended 50% toward the theme’s background, recomputed on every theme and scale change, so it fades correctly on light themes too and no theme needs a special entry.
+I decided on a function that would calculate the extrema count of sixteen pixels at a time, since each vector register can store sixteen eight-bit values. This would be achieved by sampling four “chunks” of pixels in each cardinal direction and comparing them to their respective center pixels.
 
-## Hideshow earns its keep [#](https://jointhefreeworld.org/blog/articles/emacs/emacs-folding-kirigami/#hideshow-earns-its-keep)
+However, this is where I ran into my first limitation- the ISA doesn’t allow for direct misaligned reads. Under the assumption that the center pixel would be aligned, the east and west blocks would be misaligned:
 
-Not everything has a grammar, and I’m not going to pretend otherwise:
+Thankfully, the chip has an instruction that allows for extracting a slice of two concatenated registers into another one. Using this functionality, I was able to extract the east and west blocks by reading and extracting slices from the two blocks adjacent to the center block.
 
-- Scheme — my Emacs build has no Scheme grammar, so Scheme buffers use Hideshow with hs-block-start-regexp set to "^(" and hs-forward-sexp-function set to forward-sexp. A Scheme file is a sequence of top-level forms, so each definition is a fold, and collapsing the one you’re inside works from anywhere within it. That’s the behaviour I wanted from the start and Hideshow doesn’t guess it by default.
-- Emacs Lisp — the prog-mode fallback, same keys.
-- XML — folds from start tag to end tag using nxml-scan-element-forward, skipping <?xml ?>, comments, DOCTYPE and self-closing elements.
-- YAML (the non-Tree-sitter mode) — indentation-based blocks with a small forward-sexp of my own that walks to the end of the indented block.
+Okay, so now I have the pixel data. Time to do some comparisons, right? Wrong. Turns out the ESP32-S3’s only implements comparisons for signed eight-bit numbers. This made processing a little more difficult, because all my pixel data was stored as unsigned eight-bit numbers. If you just reinterpreted the unsigned data as signed data, you get some weird results:
 
-Hideshow’s own fringe indicators (`hs-show-indicators` + `hs-indicator-type 'fringe`) are on in all of these, so it doesn’t feel like a downgrade from the Tree-sitter buffers.
+```
+>>> np.int8(np.uint8(range(0, 256, 8)))
+array([   0,    8,   16,   24,   32,   40,   48,   56,   64,   72,   80,
+         88,   96,  104,  112,  120, -128, -120, -112, -104,  -96,  -88,
+        -80,  -72,  -64,  -56,  -48,  -40,  -32,  -24,  -16,   -8],
+      dtype=int8)
+```
 
-The rule I enforce per buffer is **exactly one set of indicators**: Tree-sitter buffers get `treesit-fold` and Hideshow is turned off; Hideshow buffers get Hideshow and Outline’s clickable buttons are turned off so the two don’t double up; outline-only buffers (Markdown, diff) keep the buttons. Nobody ends up with two markers per block.
+The range `[128 255]` gets nonlinearly mapped to `[-128 -1]`, breaking all compare operations. To make this work, I needed to shift the range of the values from `[0, 255]` to `[-128 127]`. This should’ve been a simple subtraction, but the instruction set got in the way again: on the ESP32-S3, all the SIMD arithmetic operations are saturating, which meant that all pixel values above 127 would end up being clamped at -128 instead of underflowing to their appropriate values. To overcome this problem, I had to somehow subtract 128 from each number in parallel without using the subtraction instruction. This seemed like a daunting task to me at first, but I eventually arrived at a solution.
 
-## Org, which needed its own everything [#](https://jointhefreeworld.org/blog/articles/emacs/emacs-folding-kirigami/#org-which-needed-its-own-everything)
+Let’s assume that `x` is the minuend. Here is its digits’ place values:
 
-Org folds with text properties, not overlays, so neither Tree-sitter nor Hideshow nor Outline’s buttons can draw a marker for it. So I wrote its own indicators: a fringe triangle pointing down for an open heading, right for a folded one, clickable with `mouse-1` to toggle exactly like `TAB`. Folding itself is untouched — `TAB`, `S-TAB` and the `C-c v` keys all still work.
+```
+-128 64 32 16 8 4 2 1
+```
 
-The performance part is where the real win is. A naive “redraw indicators after every command” implementation is a disaster in a large file, because it re-searches the buffer and rebuilds every overlay on every pause. Mine is driven by the text instead:
+Notice anything interesting? Subtraction is the same as addition by -128, so to compute `x - 128`, we can just “increment” the number by -128 by adding one to `x`’s most significant digit, whose place value is -128. We can compute this by simply flipping the highest bit of `x`. Since XORing any bit with one is the same as taking the bitwise NOT, we can selectively flip the highest bit of `x` by XORing it with the bit mask `0b10000000`, which equal to `0x80`. Therefore, `x - 128 == x ^ 0x80`.
 
-- if buffer-chars-modified-tick didn’t change, only the indicators that are on screen are redrawn — off-screen headings can wait until they’re scrolled to;
-- if it changed and the change was recorded, only the dirty region is rebuilt;
-- if it changed with no recorded change, only then is the whole buffer rebuilt.
+Now, whenever unsigned eight-bit values are loaded in, they are XOR’d with `0x80` to convert them an appropriate (linear) range where the arithmetic and comparisons make sense again.
 
-Folding changes text properties rather than characters, so folding alone takes the cheap path. Fold state is read back from Org on each redraw rather than remembered, so external folding can never leave a stale marker.
+With those two tricks, I was able to circumvent the limitations of the ESP32-S3 and write the SIMD-accelerated FAST corner pre-test. I also wrote a SIMD-accelerated scoring function using a similar set of operations but I won’t be writing about that here.
 
-Two config choices matter just as much: `org-fold-core-style` is `text-properties` (so a visibility cycle doesn’t re-parse the file), `org-element-use-cache` is on, and Org starts with `showeverything` — which is both what I want (a note is read, not consulted) and the cheaper state, because it skips the visibility passes that walk every heading on open. I also removed a `org-restart-font-lock` that was re-fontifying the whole buffer a second time on open; JIT-lock handles what’s on screen.
-
-## It feels smooth, and that’s the whole point [#](https://jointhefreeworld.org/blog/articles/emacs/emacs-folding-kirigami/#it-feels-smooth-and-thatrsquos-the-whole-point)
-
-The end result is that folding is *boring* now. `C-c v c` in Kotlin, Scheme, Elisp, Org, XML, YAML, Markdown. Guides that look like brackets. Indicators quiet enough to ignore until you need them. No pause on a 3000-line Org file. No two competing markers.
-
-It honestly changes how much I collapse and expand while reading code. I used to avoid folding because it felt fiddly; now it’s free and mouse friendly.
-
-If you want to read the actual code: it’s in [dev-folding.el](https://codeberg.org/jjba23/heks-emacs/src/branch/trunk/src/modules/dev-folding.el) for the engines and indicators, the `heks/fold-*` wrappers in `heks-emacs.el` for the keys, and the Org indicators live in `org.el`. Everything is GPL-3.0, and it’s tested: `maak verify` asserts a fold actually covers a whole definition and that the documented keys are bound, and `maak keys` fails on a key that does two jobs or names a command that doesn’t exist.
-
-Happy to answer questions about any of it, especially if you’ve fought the `treesit-fold-indicators` bitmaps yourself, because that one cost me an evening and I’d love to know if there’s a cleaner way.
-
-1. kirigami is the piece I didn’t know I needed
-2. Tree-sitter folding, with guides that are actually lines
-3. Hideshow earns its keep
-4. Org, which needed its own everything
-5. It feels smooth, and that’s the whole point
+In the end, I was able to improve the throughput of the FAST feature detector by about 220%, from 5.1MP/s to 11.2MP/s in my testing. This is well within the acceptable range of performance for realtime computer vision tasks, enabling the ESP32-S3 to easily process a 30fps VGA stream. Not bad for $2!

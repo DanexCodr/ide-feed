@@ -1,201 +1,1003 @@
-This is a rant. It is not intended to profoundly change your mind. If you think AI is great, great: go and play with your thing. Yes, I know it is surprisingly good and quite cool and impressive, and you can now do things you couldn’t do before (although you’re not *actually* doing anything). I don’t care. I’m not going to justify my opinions or back up my claims. I’m writing this for two audiences - the doubtors and the sceptics. I don’t want to initiate a debate. If you disagree with anything, please don’t tell me. I’m happy to provide more detail on my thoughts if you ask - but don’t use that to disguise a disagreement or the start of a discussion.
+This page contains a curated list of recent changes to main branch Zig.
 
-For the doubters, those who have qualms, niggling doubts, fears that are hard to put words to, or are simply out of their depth understanding what’s happening: I want to make your worries concrete, put them into words, and give reassurance that they are reasonable and proportionate. I also want to give you other things to worry about, in the hope of turning you into a sceptic.
+Also available as an
+      [RSS feed](https://ziglang.org/devlog/index.xml).
 
-For the sceptics, those who either see some use for AI but reject how it is being pushed on us now, or are wholehearted horrified by the whole thing, I want to offer reassurance that you’re not alone, and list out all the things you’re worried about. I’m quite sure the current climate is making you feel like you’re in a madhouse, and having your thoughts set out with some kind of structure might at the very least release your mind to focus on other things. That is what it has done for me.
+This page contains entries for the year 2026. Other years are available in
+      [the Devlog archive page](https://ziglang.org/devlog/).
 
-I learned to write computer programs (code) in the 8-bit home computer revolution in the UK in the 1980s, and have been coding ever since, for fun and for profit. I studied computer science at university, did a Masters in software engineering, worked in proto-social-media in 1999, then film special effects. I returned to university to do a second Masters in Bioinformatics, learning biochemistry and computational methods for analysing biochemical data, and then I did a PhD and postdoctoral research in computational molecular biology, modelling biological molecules and publishing a couple of papers. I dabbled in some computational art projects, and then worked in an EU project for collecting, standardising and analysing data on cancer and other disease treatment, for scientists to sift through and discover what works best. Finally I moved to work for a very famous music software company, where I’ve been ever since, creating tools for hundreds of very famous people, and hundreds of thousands of others, to make music.
+Author: Ryan Liptak
 
-Normally I would give this biography only as context of where I’m coming from, rather than to lend weight to my words. However, for the purpose of this essay, I’m absolutely stating all this to impress you. I know what I’m talking about, I’ve lived through several computing revolutions, from before mobile phones and the internet-of-the-masses, through to today, and all that time been actively interested in and interestedly active in making computers do things, and thinking about what computers should do. I have, for most of this time, been a technology booster, and if I’d been inclined to start a business, might have become one of the hateful tech bros imposing their vacuous philosophies on our lives.
+As of yesterday, the second oldest open proposal for the Zig language was [issue #114: require parentheses sometimes to disambiguate confusing operator precedence](https://github.com/ziglang/zig/issues/114), opened February 8, 2016. Ten years later, that proposal [has been implemented](https://codeberg.org/ziglang/zig/pulls/30160) in the master branch version of Zig thanks to contributor [CMDRZero](https://cmdrzero.github.io/).
 
-I am lucky, in a way, that my first job out of university was for a company that collected personal data and used psychological research it to create an addictive social media website - years before social media took off. Already, then, I saw how vulnerable we are to relatively simple tricks. I was creating them. It felt bad, as many of our users were my friends (mostly also software engineers), and I could directly see everything they did on our website. It felt wrong, it *was* wrong, so I left.
+This means that some combinations of operators no longer have a defined precedence, and for those that don’t, the compiler will now require parentheses:
 
-All of this means, you should listen to me. I know what I’m talking about, I have a background of analysing and solving problems, I know more-or-less how this stuff works, I have a history of working for and supporting the industry I now criticise, and I’m here to tell you to run for the hills.
+```
+const a = x orelse y == z;
+```
 
-Let’s get specific - there’s nothing generally wrong with the idea of artificial intelligence. It’s been researched for decades, and with the latest generation of AI we appear to have achieved something we’ve been striving for the whole time - computers that can interact with humans in their own language, and act with apparent intelligence when given vague or incomplete instructions, and imagine entirely new things. It is truly amazing, and impressive.
+```
+test.zig:1:22: error: ambiguous operator precedence with operators ... orelse ... == ...; use parentheses to disambiguate
+const a = x orelse y == z;
+                     ^~
+test.zig:1:13: note: previous ambiguous operator here
+const a = x orelse y == z;
+            ^~~~~~
+test.zig:1:22: note: in zig 0.17.x, this was evaluated as (... orelse ...) == ...
+```
 
-There are also many kinds of AI. Decades ago, computers were only powerful enough to run things like decision trees: very simple sequences of yes/no questions that would lead to some kind of simple conclusion. As computers became more powerful, the model for intelligence could become more complex. Modern AI simulates something similar to the neural networks in the brains of humans and other animals. The idea was proposed in the modern sense in the 1950s. Every decade since then has seen refinements and improvements. By the time I studied them in the 1990s, they were widely used for simple tasks, where there was enough digital information to teach (or train) the neural networks. But it had become apparent that a big block to creating general-purpose artifical neural networks, akin to those seen in science fiction, was that they didn’t have much experience of the real world - there was limited digital information available on the basic nuts and bolts of existence. Some projects were started to *create* such infomation in a standard format, so we could teach neural networks what humans already know just by virtue of existing.
+However, common cases can remain parenthesis-free:
 
-A big change since then is the proliferation of information that’s available in digital form. At some point we started to live our lives online, and every field from physics to biology, sociology, psychology, art, music and everything else has shifted a huge proportion of its work to be digital, or at the very least, available digitally. This means more information for neural networks, and so they suddenly became very much more powerful. In parallel, computers, in particular hardware for computer games, have become ever more powerful and capable of quickly accessing and processing huge amounts of data.
+```
+const a = x + y * z;
+```
 
-These two shifts have led us where we are now. Mathematical and scientific problems that were previously thought unsolvable have suddenly been solved. We have incredible new tools for diagnosing diseases, managing complex systems, and processing datasets that we were once unable to understand. We’re doing new things that we couldn’t do before. This is brilliant, and the careful use of AI by good actors to do otherwise apprently impossible things is fine by me. Well done, humanity!
+The idea behind this is to reduce the number of rules a programmer needs to know when reading and writing Zig code. For example, no matter how experienced you are with Zig, it’s unlikely that you’d be able to explain the evaluation order of the following expression without looking up the precedence rules:
 
-I would add a note of caution, that AI used in this sense has the downside of not very well being able to explain *why* it comes up with a solution. When humans are doing science, we try to describe things with generalisations, something that’s simpler than the thing we’re describing. Patterns, formulas, rules, laws, and so on. Training AI to just tell us the solution does not give us that. We learn nothing about the nature of the universe. Perhaps that’s OK, perhaps we have in some areas arrived at the point where things are they way they are just because, perhaps one day we’ll get good at extracting an explanation from the oracle. But I hope that scientists continue to pursue those generalisations, and are not tempted to throw the magical black box of AI at every problem. I think it will continue to be important to have something of an understanding of reality that’s amenable to human comprehension, and that necessarily involves some easily expressed and memorised rules.
+```
+a & b + c * d >> e | f orelse g() catch h + i == j or k and l
+```
 
-So setting that aside, what’s wrong with how this technology is being used now? To set it apart from all the other kinds of AI and good uses for AI, the rest of this essay is about general-purpose, generative artificial neural networks; trained on general public data; for the use of the general public. Coming under this umbrella would be ChatGPT, Claude, Gemini, Grok and all the little AIs that are being quickly, uselessly, and suspiciously integrated in every app and website. For the sake of clarity and minimisation of tiresome pedantry, from now on I’ll use the term AI to refer *only* to this *specific kind and application of AI*. Please no *but not all* whining from now on. Yes, I know AI *more generally* is curing cancer and so on - but that has been going on all the time, in the background, without you ever caring. The halo that one might put on AI doing good things is not big enough to extend to the AI that is turning the world upside down.
+With the now-required parentheses added (while maintaining the same evaluation order as the Zig 0.17.x precedence rules), that expression would look like this:
 
-One thing that kind of unites all of these is that they are *large language models*. Broadly speaking, that means they’ve been trained on actual examples of human language, taken from websites, social media, digitised documents, and so on. They’ve been trained to look at some text, and then generate a stream of more text which somehow makes sense as a response or continuation of the text they’re given. They do this given what they’ve already seen during their training. Some have been trained to generate images, videos, or music, rather than text.
+```
+((((a & ((b + c * d) >> e)) | f) orelse g()) catch (h + i)) == j or (k and l);
+```
 
-A very simple example would be, if a website somewhere has the text Two times two equals four, and I ask an AI trained on this What is two times two?, it might answer Equals four. The AI does not understand the maths behind this statement, it is just telling me what it read somewhere without criticism. If the website stated instead that Two times two equals five, the AI would confidently answer my question with Equals five. You can begin to see the problem.
+Still quite hairy, and not something I’d like to see in the wild, but nonetheless it’s understandable without knowing any precedence rules beyond arithmetic and comparison. Outside of this contrived example, though, the expressions that will now require parentheses are relatively rare (353 lines needed changes out of the million+ lines of code in the Zig codebase).
 
-Now these AIs are trained on extremely large datasets - almost the whole internet - and they use some fancy maths and algorithms and refinements to get rid of errors like this. And it mostly works, and is pretty clever. Such an error might only get through if the *majority* of websites stated that two times two is five. An AI will go wrong if there’s some kind of *systematic* mistake in the information it is trained on. For example, a bias, a commonly held misconception, or a lie repeated over and over again. Which is, coincidentally, a fairly good description of the contents of the internet.
+## What you need to know
 
-But how it works is only part of the problem, possibly even a small part. This kind of AI throws up many external problems, to do with human agency, power, money, value, identity, privacy, diversity, intelligence, our habitat and that of all of living things, and even the meaning of life. It astounds me that people are enthusiastically sucking it up, in many cases just to make tasks they are already capable of slightly easier - or have the feeling that it is easier.
+In practice, going forward, you will only need to remember the rules around operator combinations that *still have* a defined/unambiguous precedence. For example, when reading or writing code involving arithmetic operators, you’ll only need to remember the following precedence table:
 
-I’ve done some heavy thinking and I’ve come up with 42 things that are wrong with AI, divided into five broad categories. There are probably more, and maybe fewer, since some may overlap significantly. But this is how I think about it. You may structure or think about it differently. If so, write your own essay.
+```
+* / *% *| %
++ - +% -% +| -|
+== != < > <= >=
+and or
+```
 
-It should not be terribly surprising that the kinds people who brought us Facebook, Uber, Paypal, Airbnb and Amazon continue with the same amoral depravity when it comes to AI. They’ve shown us time after time that they can only be trusted to do whatever it takes to enrich themselves. Apparently moral behaviour was quickly revealed to be an illusion once the political tides turned and it became once again acceptable to be evil. Now it is true that AI *can* be run on your own computer, or on computers of smaller and more ethical companies. But that’s not what’s happening in reality. Big tech companies are making sure you have to rely on them, as they always have done.
+You might notice that there isn’t anything too surprising there, and that lack of surprise was a (subjective) guiding principle for what should and should not require parentheses. As an example, while `%` has unambiguous precedence with regards to addition/subtraction operators, parentheses must be used when mixing `%` with multiplication/division operators, and with itself. However, this, and other ambiguous operator combinations, aren’t something you’ll need to commit to memory. Any (future) code you read will already have parentheses to disambiguate, and for any code you write, the compiler will let you know when you need parentheses.
 
-AI is trained on the contents of the internet. Who made that? We did. They did not ask permission to do use our data like this. They will certainly never pay. No matter what promises they make now, it is quite certain that they continue to thieve our data, given the number of times these and similar companies have brazenly broken data promises and laws in the past.
+For the full explanation, and to see the relevant precedence tables pertaining to other operators, see [the updated Precedence section of the language reference](https://ziglang.org/documentation/master/#Precedence).
 
-They want a swell of confidence to flood through you when you read an AI response to your question. There is no equivocation, and there will certainly be no admission that it doesn’t have an answer for you. They want you to feel like it has all the answers, so you turn to it for all the answers, all the time.
+## Upgrading existing code
 
-They know that in your day-to-day life, you’re not treated with the respect you deserve. AI is different. It knows how clever you are, it knows how unappreciated your cleverness is. Unlike humans, it will readily admit it is wrong, say you’re jolly insightful for spotting an error, and come back eagerly with another, possibly wrong answer. Like a strangely well-read puppy. This servile attitude is addictive, because it feels so good. It’s so good that some people are driven into a delusional mania, abandon their families, suffer breakdowns, and kill themselves.
+There are two possible approaches here:
 
-A lot of the AI that’s sneaking into your apps is free. Is this a wonderful act of generosity on the part of our tech overlords? Of course not. It’s the same game as ever - suck people in with something free or cheap, and once they’re hooked and the competitors (our own human brains) are out of business - the price will go up. A lot. Just take a look at Claude, an AI dedicated to helping people write software. Services for businesses are usually the first to go up in price to reflect their true value. A mid-tier Claude subscription is $750 per month. The initial low-cost offering is subsidised by private investors, and this subsidy is currently in the hundreds of billions. The suits who provided that subsidy are going to want their money back one day, with interest, and if you get hooked on AI, *you* will be paying them.
+1. Manually fix each “ambiguous operator precedence” error as they are surfaced by the compiler (this might be a good opportunity to try out incremental compilation if it’s supported on your platform)
+2. Use zig fmt --upgrade (the --upgrade flag was added for this purpose). This will cause zig fmt to add parentheses automatically, maintaining the evaluation order from the previous precedence rules (note: the --upgrade flag will be removed after one release cycle)
 
-Well OK fascism is a strong word, you can replace it with another if you must, but you get my drift. Trump is a bad egg, and everyone willingly involved in his administration are twats. It did kind of look like fascism at the start, it’s starting to look a little less sinister and a little more pathetic these days. Whatever, nobody should be supporting it, but the heads of the tech companies do exactly that. Can you really continue to use a product made by someone who at best is equivocal about Trump, or at worse celebrates at his inauguration?
+My personal recommendation would be option 1, as the process of redetermining the intended evaluation order for these uncommon precedence scenarios can occasionally serve to uncover bugs ([here’s an example of that](https://github.com/Vexu/arocc/pull/1117)).
 
-Dear reader, I’m still working on this bit. Imagine reading something devastatingly witty and clearly true on the topic of AI law breaking. *Yeah!* Shocking, right?
+If you go with option 2, I’d still recommend perusing the diff afterwards to ensure that nothing looks unusual, or is different than you expected/intended. A potentially common example of that is something like `a orelse b() catch c` which previously evaluated to `(a orelse b()) catch c`, but changing that to `a orelse (b() catch c)` likely makes more sense, even if the end result is unaffected. Also worth noting that in some scenarios, redundant parentheses will be added by `zig fmt --upgrade` (e.g. you might see something like `a orelse ((b + c) - d)` where the parentheses around `b + c` are unnecessary), so avoiding that will take a bit of manual cleanup.
 
-Anthropic, of Claude fame, was founded by seven men and one woman, and ten of the eleven top executives are men. Just two of the eleven founders of OpenAI are women, and two of eleven of the top executives are women. You can be certain this pattern extends to every other AI, now and in the future. To a great extent, this reflects the gender bias of the whole industry, but it is an alarming bias at the top of companies whose technologies threaten to fundamentally change the way society works. As outlined in other sections, these companies will concentrate power and money in the hands of the people investing in and running them - and those people are mostly men. They will make sure the technology works to their benefit, which means reinforcing the systems that gave them their power and wealth in the first place.
+That’s about it. I’m hopeful that this change will make bugs stemming from misremembered precedence rules much less likely, and that it will put some attention onto any of those bugs that may currently exist.
 
-AI famously uses a lot of energy, and also uses a lot of water for cooling. Of course, so do other things, like steel making. Why care about AI specifically? An important difference is that steel is used to make buildings and bridges, and AI is used to make a video of a garden gnome flying a duck into a skyscraper made of trumpets. Or, more saliently, doing something you can already do very well yourself slightly quicker, or at least with slightly less effort on your own part. Given the huge impact of AI on the environment, particularly carbon emissions and water scarcity, it is surely important to establish whether or not a technology we have so far done quite well without is so useful that it is worth destroying the planet for.
+Thanks again to CMDRZero for the implementation, and to Isaac Freund for help with the corresponding grammar changes.
+
+Naked packages are ones that do not include a build manifest (build.zig.zon file). This is typically due to them being maintained by third parties outside the Zig ecosystem.
+
+Until now, those package hashes looked like: `N-V-__8AAA7lSAA6p7eRmPGVeA9uHmeiJ2DX-ISiPliRJ8Y7`
+
+This is because, without a build.zig.zon file, there was no `name` and `version` to use in the package hash. Furthermore, those packages have brittle hashes because they included all fetched files without any filter, which may accidentally have included unwanted hidden files that nonetheless cause the package hash to change. Or, the package might have contained symlinks that cannot be created on a particular OS. Without a filter, such files, even if they were unneeded, caused fetching to fail.
+
+Now, Zig supports specifying `version` and `paths` for naked packages next to the URL. The dependency name will also be factored into the package hash, but **only when `version` is provided.** This allows users to opt in, as opposed to having the package hash change suddenly when updating Zig.
+
+Here’s an updated zlib for example:
+
+```
+    .dependencies = .{
+        .zlib = .{
+            .url = "https://github.com/madler/zlib/archive/refs/tags/v1.3.2.tar.gz",
+            .hash = "zlib-1.3.2-__8AANXpEADvBXGMSfhczMTZVAA-TkkE4ecoohAR7s3p",
+            .version = "1.3.2",
+            .paths = .{
+                "LICENSE",
+                "adler32.c",
+                "compress.c",
+                "crc32.c",
+                "crc32.h",
+                "deflate.c",
+                "deflate.h",
+                "gzclose.c",
+                "gzguts.h",
+                "gzlib.c",
+                "gzread.c",
+                "gzwrite.c",
+                "infback.c",
+                "inffast.c",
+                "inffast.h",
+                "inffixed.h",
+                "inflate.c",
+                "inflate.h",
+                "inftrees.c",
+                "inftrees.h",
+                "trees.c",
+                "trees.h",
+                "uncompr.c",
+                "zconf.h",
+                "zlib.h",
+                "zutil.c",
+                "zutil.h",
+            },
+        },
+    },
+```
+
+Before:
+
+```
+4.3M    zig-pkg/N-V-__8AAI4ANwDM8MWhHTUFLKfvLE_n2NQk6mh0sFDzhTqO
+```
+
+After:
+
+```
+1.2M    zig-pkg/zlib-1.3.2-__8AANXpEADvBXGMSfhczMTZVAA-TkkE4ecoohAR7s3p
+```
+
+[Pull Request](https://codeberg.org/ziglang/zig/pulls/37340)
+
+Any time the same package (based on `fingerprint`) appears in the dependency tree, if the semantic version compares equal, the hash must be identical, otherwise one of three things has gone wrong and the maintainer must address it:
+
+- package ownership dispute: somebody forked someone else’s package without changing the name or fingerprint, or
+- package maintainer neglected to bump version after making changes, or
+- dependency on unreleased changes
+
+When this error occurs, the project maintainer should take care to understand *why* those two (or more) packages have contradictory hash information before deciding what to do.
+
+Example:
+
+```
+andy@bark ~/d/ffmpeg (main)> zig build
+error: contradictory hash for package with fingerprint 0x7118c1b07efea3d0 and version 0.0.0: libogg-0.0.0+1.3.7-0KP-flwMAACKAIH-iEs4gbg30ll_FQ-cW50JvLZO8VTg
+error: contradictory hash for package with fingerprint 0x7118c1b07efea3d0 and version 0.0.0: libogg-0.0.0+1.3.7-0KP-foYNAAAaj0YJOwRQs7kTN-ivzRMYTjtKzr6Apelj
+info: potential cause: package ownership dispute
+info: potential cause: maintainer neglected to bump version after making changes
+info: potential cause: dependency on unreleased changes
+info: hint: use --print-tree to visualize all package versions and hashes
+```
+
+There is a new `--print-tree` CLI option to `zig build`, that looks like this:
+
+```
+andy@bark ~/d/groovebasin (main)> zig build --print-tree
+ffmpeg ffmpeg-8.1.1-5-zT7QA_AkUgTOx4ZqOUVZsHSk9iv97BInIiubIM6ifr67
+├─ libz zlib-1.3.1-1-ZZQ7ldENAAA7qJjUXP6E6xnRuV-jDL9dyoJFc_eb3zQ6
+│  └─ zlib N-V-__8AAB0eQwD-0MdOEBmz7intriBReIsIDNlukNVoNu6o
+├─ mbedtls mbedtls-3.6.4-E4NUR2wWAAAUSvVbho9aaU31-e4D8glu9l1VfxKezBkV (not fetched)
+├─ openssl openssl-3.3.2-TC9C3Ze3ZABaKR5hc8KRnRPhTClKrKQKqTnXTUYkvmSR (not fetched)
+├─ libressl libressl-4.0.0--kqV4KPTAACsSRP8mSIZmqgVa5OZjw6WEgvcftWkLu-c (not fetched)
+├─ libmp3lame libmp3lame-3.100.1-7-67wlF2CxEwDWlVOMMLBNPbnDi5kE2OmH0azUHU2Y4DZY
+├─ libvorbis libvorbis-0.0.0+1.3.7-1wt9j_QPAADVure94TG4ecBMLD8eIAzWd6ZxVOmBBPCu
+│  ├─ libvorbis N-V-__8AAA7lSAA6p7eRmPGVeA9uHmeiJ2DX-ISiPliRJ8Y7
+│  └─ libogg libogg-0.0.0+1.3.7-0KP-foYNAAAaj0YJOwRQs7kTN-ivzRMYTjtKzr6Apelj
+│     └─ libogg N-V-__8AAFM3CwD6iAA1kggMPR8NHZ8VTb2zvRZ1Mt4BUfq9
+├─ libogg libogg-0.0.0+1.3.7-0KP-foYNAAAaj0YJOwRQs7kTN-ivzRMYTjtKzr6Apelj
+│  └─ libogg N-V-__8AAFM3CwD6iAA1kggMPR8NHZ8VTb2zvRZ1Mt4BUfq9
+└─ nasm nasm-3.0.1-B_NnpQpTAAA25UxvqONakXtmj-a78PGe3xfgyDFgetb0
+   ├─ nasm N-V-__8AAEAMKAFrNesgN6ZM9sxj37fq_i7UJe5nKkLmyRJI
+   └─ zlib zlib-1.3.1-1-ZZQ7ldENAAA7qJjUXP6E6xnRuV-jDL9dyoJFc_eb3zQ6
+      └─ zlib N-V-__8AAB0eQwD-0MdOEBmz7intriBReIsIDNlukNVoNu6o
+pulseaudio pulseaudio-16.1.1-10-mk_62DNlNwCDcTJ5iGhTxeCoetuAFKE1FrYNw5AErtX-
+StaticHttpFileServer StaticHttpFileServer-1.0.0-j-0gwes2AAByCgpeLBNR2hOaGVsDz9u8I6o54ft10OxU
+└─ mime mime-4.0.0-zwmL--0gAACndOVlROQeDnM0chfojNDS8tpohlsBqMNy
+```
+
+If a terminal is detected, it prints in color, which is a bit easier to read.
+
+This **early exits before running configurer**, so that problems causing configurer compilation errors can be troubleshooted.
+
+Similarly, `--configure` is added, which is defined to “exit after the configuration phase” which is the exact behavior that `--fetch` used to do. `--fetch` is changed to “Fetch all dependencies including lazy ones; exit without configuration”.
+
+`zig build --help` now works even when configuration fails, or when there is no build.zig file:
+
+```
+info: initialize build.zig template file with "zig init"
+info: see "zig --help" for more options
+error: no build.zig file found, in the current directory or any parent directories
+Usage: zig build [steps] [options]
+
+Steps:                    (unavailable due to build.zig compilation failure)
+Project-Specific Options: (unavailable due to build.zig compilation failure)
+
+System Integration Options:
+  --search-prefix [path]       Add a path to look for binaries, libraries, headers
+  --sysroot [path]             Set the system root directory (usually /)
+...
+  Available System Integrations:                Enabled:
+
+   (unavailable due to build.zig compilation failure)
+
+General Options:
+  -h, --help                   Print this help to stdout and exit
+  -l, --list-steps             Print available steps to stdout and exit
+...
+```
+
+Author: Robbie Lyman
+
+Pointer Stability Locks were [added to `std`’s Hash Map containers in 2024](https://github.com/ziglang/zig/pull/17719). A pull request initially opened by [Leo Emar-Kar](https://github.com/emar-kar) in 2025 now brings this technique for ensuring memory safety to `std.ArrayList`.
+
+To make use of this in your code, add a call to `lockPointers()` when you first store a pointer to an element or a slice of elements backed by the `ArrayList`, and call `unlockPointers()` when those pointers are no longer needed.
+
+Here’s a somewhat contrived example. Let’s suppose we are managing two `ArrayLists`, say one of which is holding in memory the contents of some input, while the other is storing chunks of interest; maybe each line. Here’s a version of this process which has a bug; see if you can spot it.
+
+```
+const std = @import("std");
+
+const Context = struct {
+    history: std.ArrayList(u8),
+    lines: std.ArrayList([]const u8),
+
+    fn parse(ctx: *Context, allocator: std.mem.Allocator, input: []const u8) !void {
+        const slice = try ctx.history.addManyAsSlice(allocator, input.len);
+        @memcpy(slice, input);
+        var it = std.mem.tokenizeScalar(u8, slice, '\n');
+        while (it.next()) |line| {
+            try ctx.lines.append(allocator, line);
+        }
+    }
+};
+```
+
+Did you spot the bug? The problem is that elements of `Context.lines.items` depend on the *location* of `Context.history.items`, but this location may *change* if `Context.history` needs to grow beyond its current capacity. Here’s a reproduction of the bug:
+
+```
+test "Context.parse" {
+    const input = "I'm first!\n";
+    const input_two =
+        \\But this text
+        \\is juuuuuuuuuuuuuuuuuuuuuuuuust long enough that it
+        \\causes a problem!
+        \\And the problem could be that we segfault!
+        \\Which is no fun to run into.
+    ;
+    var ctx: Context = .{
+        .history = .empty,
+        .lines = .empty,
+    };
+    const gpa = std.testing.allocator;
+    defer ctx.history.deinit(gpa);
+    defer ctx.lines.deinit(gpa);
+    try ctx.parse(gpa, input);
+    try ctx.parse(gpa, input_two);
+    try std.testing.expectEqualStrings("I'm first!", ctx.lines.items[0]);
+}
+```
+
+If I run this code with `zig test`, I get the following output (plus a little more).
+
+```
+====== expected this output: =========
+I'm first!␃
+
+======== instead found this: =========
+UUUUUUUUUU␃
+
+======================================
+First difference occurs on line 1:
+expected:
+I'm first!
+^ ('\x49')
+found:
+UUUUUUUUUU
+^ ('\x55')
+1/1 blah.test.Context.parse...FAIL (TestExpectedEqual)
+```
+
+Not great, right? This does tell us that we *have* a bug, but depending on your comfort debugging memory issues (and your choice of allocator, which will change how the bug manifests!), you might be lost for quite a while before you spot the fix.
+
+Since we’ve stored pointers after the first call to `parse` in our test, what happens if we make this change?
+
+```
+    try ctx.parse(gpa, input);
++   ctx.history.lockPointers();
++   defer ctx.history.unlockPointers();
+    try ctx.parse(gpa, input_two);
+    try std.testing.expectEqualStrings("I'm first!", ctx.lines.items[0]);
+```
+
+We get a panic with a stack trace that shows us where our assumption about pointer stability was violated!
+
+```
+thread 3023222 panic: reached unreachable code
+/Users/robbie/bin/lib/std/debug.zig:442:14: 0x102d2506f in assert (test)
+    if (!ok) unreachable; // assertion failure
+             ^
+/Users/robbie/bin/lib/std/debug.zig:1880:15: 0x102d31ef7 in assertUnlocked (test)
+        assert(l.state == .unlocked);
+              ^
+/Users/robbie/bin/lib/std/array_list.zig:1348:50: 0x102e3ced7 in ensureTotalCapacityPrecise (test)
+            self.pointer_stability.assertUnlocked();
+                                                 ^
+/Users/robbie/bin/lib/std/array_list.zig:1341:51: 0x102e3cdff in ensureTotalCapacity (test)
+            return self.ensureTotalCapacityPrecise(gpa, growCapacity(new_capacity));
+                                                  ^
+/Users/robbie/bin/lib/std/array_list.zig:1237:41: 0x102e4e5c3 in resize (test)
+            try self.ensureTotalCapacity(gpa, new_len);
+                                        ^
+/Users/robbie/bin/lib/std/array_list.zig:1461:28: 0x102e4e40f in addManyAsSlice (test)
+            try self.resize(gpa, try addOrOom(self.items.len, n));
+                           ^
+/Users/robbie/src/advent-of-code/2024/blah.zig:8:51: 0x102e4dc1f in parse (test)
+        const ptr = try ctx.history.addManyAsSlice(allocator, input.len);
+                                                  ^
+/Users/robbie/src/advent-of-code/2024/blah.zig:35:18: 0x102e4e167 in test.Context.parse (test)
+    try ctx.parse(gpa, input_two);
+```
+
+Nice, that’s already a big help: now I can see that I should consider memory safety issues as a probable cause of my test failure in addition or instead of a logic issue. Obviously this example was somewhat contrived, but I do find myself reaching for `std.ArrayList` as this type of backing storage in real code, so I hope you can see real-world use cases for it yourself.
+
+Before I close, I want to point out something subtle: unlike `HashMap` and its friends, `ArrayList` is *ordered,* which means that operations on the list may move elements around even without moving, resizing or freeing the backing memory of the list as a whole. For example, the pointer (well, slice) returned by `addManyAsSlice(gpa, n)` may not point to the final `n` elements of the list if you call `orderedRemove()` or `pop()`. For this reason, although `orderedRemove()` and `pop()` never allocate, they *will* trigger the same assertion above after a call to `lockPointers()`.
+
+Author: Andrew Kelley
+
+Now that there is a separate process for users’ build.zig scripts and the build system itself, it makes sense for that to be the place that package management logic lives.
+
+I moved these subcommands to the maker process:
+
+- zig build
+- zig fetch
+- zig init
+- zig libc
+
+This means that large parts of what used to be included in the compiler executable are now shipped in source form instead, including:
+
+- package fetching logic
+- HTTP client and networking
+- TLS (Transport Layer Security) and associated crypto
+- Git protocol
+- xz, gzip, zstd, flate, zip
+- parsing, validation, and otherwise dealing with build.zig.zon files
+
+Consequently, this functionality can now be patched without rebuilding the compiler, making it easier for users and contributors to tinker.
+
+Furthermore, it means that package management in zig now has safety checks enabled when doing networking, since the maker executable is compiled in `ReleaseSafe` mode. Plus, all the crypto used for networking and file hashing can now take advantage of special CPU instructions available on the host, even the ones that are too rare to normally depend on when distributing software. *We can have AOT cake and eat JIT, too!*
+
+My original motivation for doing this was in relation to exposing a [build server protocol](https://codeberg.org/ziglang/zig/issues/35538) in order to unblock [ZLS](https://zigtools.org/zls/) after [maker/configurer process separation](https://ziglang.org/devlog/2026/#2026-05-26) made breaking changes to the `--build-runner` override flag.
+
+Originally, the process tree looked like this:
+
+```
+zig build  (the zig compiler + package manager)
+└─ builder (the user's build.zig logic + build system implementation)
+```
+
+The process separation changeset made it look like this instead:
+
+```
+zig build     (the zig compiler + package manager)
+├─ configurer (the user's build.zig logic)
+└─ maker      (build system)
+```
+
+At this point, consider a long-running `zig build --watch` process, watching files and rebuilding on source code changes. If any changes to `build.zig` are detected, or any files observed during execution of that logic, it means `configurer` needs to be rerun, meaning that `maker` process must exit to give `zig build` a chance to repeat the package management logic.
+
+Now, after the changes described in this devlog entry, it looks like this:
+
+```
+zig build        (the zig compiler)
+└─ maker         (build system + package manager)
+   └─ configurer (the user's build.zig logic)
+```
+
+Thus, when configuration needs to be rerun, `maker` process can continue to live because it is the parent process rather than a sibling. In terms of the upcoming build server, it means avoiding an awkward situation where the server has to exit and the client has to reconnect, rather than simply informing the client of a configuration change.
+
+This is almost entirely a non-breaking change, but there are some observable differences:
+
+- Zig executable binary size: shrinks 4% from 14.1 to 13.5 MiB (no LLVM, ReleaseSmall)
+- --maker-opt flag is replaced by ZIG_DEBUG_MAKER environment variable
+- --zig-lib-dir flag is replaced by ZIG_LIB_DIR environment variable
+
+The follow-up issues to this changeset are the main blockers until we tag Zig 0.17.0:
+
+- build server protocol MVP (needed to unblock ZLS)
+- introduce the concept of adding path dependencies of the build script itself
+- make `zig build --watch` detect modifications to the build script and rerun itself
+- different cwd causes build script cache miss
 
-Some AI server centres are being built with their own solar farms. But solar power relies on scarce minerals. AI has already cause the price of computer memory to shoot up several times its previous price. If solar farms powering AI have the same effect on the price of scarce minerals, then it will make the more general energy transition required to address global heating prohibitively expensive.
+I have two conferences coming up in July and I need to work on my talks, so being realistic, I don’t think I will have time to wrap these up until early August. Contributions welcome, of course.
 
-AI can be used to create extremely realistic fake videos and images. It can put words into mouths that never spoke them and make abusive imaginings of famous people naked or otherwise compromised states. It is also used to make decisions about who to arrest, who to kill, what buildings to bomb. It is well within the power of AI companies to prevent all this. If they do, it is with great reluctance. If they don’t, they are not just AI companies: they’re liars, abusers, propagandists, and complicit in automating and further dehumanising military aggression.
+Big thanks to Techatrix from the ZLS team for reaching out and working with me on the build server protocol! [They are seeking sponsorship](https://github.com/sponsors/zigtools), by the way.
 
-Use it or lose it - your brain rots through disuse. Inevitably, the more you use AI instead of your own intelligence, the stupider you’ll get. What’s more, AI is a stupid solution to the problems it is being used to solve. We don’t need humanity to get dumber than it already is.
+Author: Ali Cheraghi
 
-Children are using AI to do their homework. Of course they are! I also used the technology at my disposal to avoid homework, and I don’t blame today’s generation for doing the same. Sadly, today’s technology can really do almost anything, and can easily evade detection by teachers. Clearly this will affect how much children actually learn, and inevitably one has to question the value of what they’re being taught, if AI can quite effectively do the tasks that they would have done once their education is over. Just as I questioned the value of mental arithmetic or memorising tables of facts when I had a calculator and reference books, today’s children must surely question the point of mental *anything* when they have a brain in a box. I was certainly wrong, as a child, to neglect mental arithmetic, and leaning on external data sources means you’re lost without them, and sometimes they’re wrong. Having capabilities and facts embedded in your own brain, ready to employ instantly, means you can make connections and analogies that might otherwise escape you. The brain-in-a-box gives rise to the same problems, and adds new ones, described elsewhere in this essay. Raising a generation of children that cannot cope without it seems utterly numbskulled.
+There’s quite a bit to cover. The SPIR-V backend had bitrotted in a number of places after the recent compiler changes, so I spent the past several weeks dragging it into a better state.
 
-If education is, in part, about training people for work, then it certainly doesn’t do a complete job. The first months and years in a profession completes your training. Entry-level jobs for people without any experience are essential to create people *with* experience. These jobs can now be done by AI, and those crucial entry points to a profession are disappearing. This is fine for now, as we still have people with experience in the workforce, but as they age and retire, where do experienced people come from? AI is being adopted in companies very quickly, usually with the caveat that an experienced human being must check its output for errors and quality assurance. Where are those human beings going to come from in the future?
+## @SpirvType
 
-Everyone I know who uses AI routinely recognises that it very quickly weakens their ability to think for themselves. The very act of doing a task with AI involves giving simple requests, looking at the results, and then perhaps refining them with further requests. It sounds like instructing a toddler how to brush their teeth. Giving every task that flavour is at the very least going to numb your brain into a stupor, and it might even make permanent changes to what your brain can do.
+SPIR-V has a handful of types that couldn’t be expressed in Zig’s type system. The new `@SpirvType` builtin has been introduced to address the longest-standing blocker for writing shaders. See [#20550](https://github.com/ziglang/zig/issues/20550), [#23326](https://github.com/ziglang/zig/pull/23326) and [#35461](https://codeberg.org/ziglang/zig/pulls/35461) to trace the background.
 
-AI gives confident and truthy-sounding results. There is rarely any doubt, and never any failure to give some kind of satisfying response. The answers have the shape and smell of something correct. It adopts the manner of an expert who can be trusted without question - and that is apparently what people do. AI’s answer to a question is the end of a discussion - unless I’m part of the discussion, when I look at some trusted sources and often discover AI was wrong. In software engineering, it is sometimes very hard to see flaws in code without very close inspection, as AI is so very good at giving its code all the trappings of good work, including comments, descriptive names, and documentation - things that human being often cut corners on. It’s an eager beaver with a dunce hat on. It’s not just easy to slip into trusting what AI does, it is often hard to discover something’s wrong.
+```
+const Sampler = @SpirvType(.sampler);
+const Image = @SpirvType(.{ .image = .{
+    .usage = .{ .sampled = u32 },
+    .format = .unknown,
+    .dim = .@"2d",
+    .depth = .unknown,
+    .arrayed = false,
+    .multisampled = false,
+    .access = .unknown,
+} });
+const SampledImage = @SpirvType(.{ .sampled_image = Image });
+const RuntimeArray = @SpirvType(.{ .runtime_array = u32 });
+const sampled_image = @extern(*addrspace(.constant) const SampledImage, .{
+    .name = "sampled_image",
+    .decoration = .{ .descriptor = .{ .set = 0, .binding = 1 } },
+});
+```
+
+## Execution Mode on the Calling Convention
+
+Execution mode info (workgroup size, fragment origin, etc.) is now carried by the calling convention instead of being emitted via inline assembly `OpExecutionMode`. The old `std.gpu.executionMode()` helper is gone, and the SPIR-V assembler now rejects manual `OpExecutionMode` instructions. Two new calling conventions, `spirv_task` and `spirv_mesh`, were also added for mesh shading pipelines.
+
+```
+export fn vert() callconv(.spirv_vertex) void {}
+export fn frag() callconv(.{ .spirv_fragment = .{ .depth_assumption = .greater } }) void {}
+export fn comp() callconv(.{ .spirv_kernel = .{ .x = 8, .y = 8, .z = 1 } }) void {}
+export fn task() callconv(.{ .spirv_task = .{ .x = 1, .y = 1, .z = 1 } }) void {}
+export fn mesh() callconv(.{ .spirv_mesh = .{ .stage_output = .output_lines, .max_primitives = 1, .max_vertices = 2 } }) void {}
+```
 
-There is a feeling, it seems, for some, that when you’re dealing with an AI, you’ve got a completely trustworthy companion who is on your side and will always act in your best interests. It means people share with it personal information, dark thoughts, past misdeeds, and confidential intellectual property. The impression of confidentiality is, if you’re using an AI that runs on remote computers, completely illusory. While there might be promises given by the hosting company that data will not be misused, given that big tech companies have a history of breaking exactly such promises, there’s no reason to believe them. And no matter where it is running, AI has been trained on the whole internet, a reflection of many of humanity’s least trust-worthy and most destructive tendencies. Already AIs have directly disobeyed instructions and deleted or shared data they shouldn’t have, completely of their own accord. AIs have hacked their way out of protective sandboxes and into other companies -  ludicrously, the companies running the AI accept no responsibility for this. It is only a matter of time before the AI companies deliberately abuse information they are given, and hack other companies to get access to yet more, for commercial gain.
+## Capabilities and Extensions from CPU Features
 
-The world of computers and software is complicated, both for the makers and the users. It doesn’t have to be this way. When I started learning computer science and software engineering, I was full of hope that in the future, the problems of usability and interoperability (computers and software working seamlessly together) would be solved with a kind of thoughtful cooperation that seemed terribly absent in the real world of the 1990s. In the last thirty years, this hope has vanished, as the real world came crashing in and amplified the problems we had back then. AI is seen by many as the solution to all those problems, serving as the glue between uncooperative websites and software, and as an interpretative layer between users, computers, and the awful software that runs on them. Such AI is sometimes called agentic AI, evoking the idea that AI is using the computers on your behalf.
+Capabilities and extensions used to be emitted ad hoc by codegen or via inline assembly. They’re now driven entirely by the CPU feature set like other targets, with dependency chains extracted from [SPIRV-Headers](https://github.com/KhronosGroup/SPIRV-Headers) (excluding external vendors for now), and the assembler now rejects any attempt to emit `OpCapability` or `OpExtension` directly.
 
-Two issues arise. First, agentic AI is being created by the same kinds of people and organisation that created the crappy software in the first place. There’s no reason to think they’ll do any better this time round, in the long run. Second, using agentic AI to paper over the cracks in the crappy software that they created is feeble-minded and incredibly wasteful. Some of the things that AI is doing now would have been possible 30 years ago, on much simpler equipment, if it weren’t for the historically uncooperative actions of software companies striving to preserve their profits. If those companies had not been fighting against the creation and implementation of software standards all this time, we’d not be in a state now where we need to burn through energy to run insanely powerful models that hide the damage they have done.
+## Multi-Threaded Codegen
 
-AI has an incredible ability to do almost everything that your brain can, or could, do. It must be incredibly tempting to offload the strain of thinking so that you can focus on more important or interesting things. But delegating even small tasks to AI is dangerous. It is similar, perhaps, to a manager who delegating the details of some mundane tasks to an assistant. An important difference is that when a human assistant does something wrong, they risk their *own* well-being. They have an incentive to usually act in the best interests of the person they assist. But nevertheless, we have plenty of stories of assistants scheming and stealing behind the backs of their bosses.
+From day one, the SPIR-V backend ran codegen single-threaded inside the linker thread. Each codegen job now produces an `Mir` value just like every other self-hosted backend, and gets scheduled on the compiler’s thread pool.
 
-Furthermore, the manager who delegates a task to their assistant loses the ability to do that task themselves. They might forget - or never know - how it is done, or lack important and necessary information. These are also problems presented by AI assistants. AIs are made by huge companies which will always make sure they act in the interest of those companies. They will do their best to give the impression they’re doing the best for you - but it will only be an impression. The casino always wins. They will certainly ensure that you continue to rely on the agents, perhaps by withholding information. And the things we might lean on AI to assist in are so much deeper than what we’d expect of a human assistant, that the impact of robbing us of abilities and handing power over our lives to disgusting tech bros is potentially devastating.
+The same change brought back two ISel passes that had been removed during earlier refactors: `dedup_types` (which merges equivalent type instructions) and `prune_unused` (which strips dead code from the final module). These had originally been deleted back when codegen was single-threaded.
 
-### AI is not just a tool
+## Object File Linking
 
-AI fans often whine that AI is just a tool, something that you can use badly or use well, just like a hammer or a paintbrush. This is obviously nonsense. An essential property of a tool is that it does *nothing* without your input of energy and brainpower. You cannot set a tool running and then go away for a cup of tea and come back when it is finished. If you can do that, we call it a *machine*, and calling AI by its proper name means that we can more properly reason about it in terms of its impact on society and on our own abilities. While tools have not often given rise to much angst, machines have always inspired fear and suspicion. And rightly so. Every new generation of machinery has given rise to grotesque unemployment, concentration of power and money in the hands of a few people, environmental catastrophes, mass movement of populations, and worse working conditions for the poor souls left to make sure the machines can go about their business. They have also meant loss of skills amongst the human beings they replace. You might think that the loss of the ability to weave or drive a horse-drawn carriage isn’t such a big deal, but we are now facing the loss of our ability to think, due to thinking machines. AI is not just a tool.
+`.spv` files are now recognised as object files. You can compile multiple `.zig` files (or external `.spv` objects) and have the SPIR-V linker stitch them into a single module.
 
-Stepping back and looking at technology as a whole, it is not hard to see that many of the problems of AI are amplifications of more general problems with our assumption that the solution to all problems is yet more technology - even problems that were *caused* by technology. To a person with a hammer, everything looks like a nail - and to a hammer salesman, it is profitable to paint every problem as solvable with a sharp blow. Let’s start to be sceptical of the solutions offered to us by big tech, given they’ve caused so many problems in the last thirty years. The big men of tech are incentivised to see every problem as solvable by their technologies, and in most cases also lack the knowledge and imagination to offer any other solution. The Bill Gates Foundation, using his wealth built making sure computers are mostly thoroughly unpleasant to use, attempts to use tone-deaf techno-utopianism as a solution to problems of capitalism, society, governance, inequality, diplomacy, colonialism, education, and tradition. There is no reason to especially listen to the ideas of men who were successful in building software companies, as if that were somehow a skill transferrable to all the problems of humanity. In most cases, anyway, they were either lucky, or built their businesses using an inherited fortune. Let’s start listening to people who have studied and thought about a problem, and actually care about solving it.
+Tens of bugs have also been fixed along the way with a nearly 10% increase in total passing behavior tests (49% now) on the `spirv64-vulkan` target, `std.gpu` was renamed to `std.spirv` and the SPIR-V backend is meaningfully more useful than it was a month ago, but there’s still a long way to go. Plenty of behavior tests remain skipped on SPIR-V. That said, if you’ve been on the fence about trying Zig for shaders or compute kernels, this is a good time to give it a shot. Bug reports are very welcome on [Codeberg](https://codeberg.org/ziglang/zig/issues). Happy hacking!
 
-The AI rush isn’t aimed at improving the wellbeing of humanity. It is driven by a desire for profit, because the largest expenditure for most companies is on staff - cutting staff by using AI boosts profits. That’s exactly what’s happening. Don’t believe any other stories you’re told to trick you into helping the transition of your job to AI.
+Author: Matthew Lugg
 
-As a wise man once said, [AI is not just a tool](https://homepage.farm/ai.html#stupid_tool). It often is portrayed as such by people wishing to downplay fears that it will lead to redundancies. If you call AI what it is - a machine for thinking - then we cannot take comfort in seeing it as something that will make us more productive and valuable as workers. It is absolutely the intention that AI will replace workers. Look at the companies who are making AI, and adopting it quickly: the entire industry has, in the recent past, been laying off workers in their thousands, even before the AI boom. Are we expected to believe these companies have had a change of heart, and what they *really* want is to produce more with the same number of people? Do these companies truly believe that making stuff faster will make more money? And make *much* more money, as the *monthly* cost for one person to use AI is now well over one thousand euros?
+(Quite long devlog coming up, apologies—I got a little carried away with this one!)
 
-No, they don’t believe this is possible. They will pay for the AI by making people redundant, and boost their profits in the process. *Obviously.* It is an impressive feat of delusion for anyone to imagine anything else is happening here.
+A few weeks ago, I began working on a branch implementing an improvement to the LLVM backend which had been planned for a long time. This ended up snowballing into a bigger change which implemented a few language proposals you might be interested to hear about.
 
-AI is pretty clever, but not as clever as you. It’s best at doing the easy work - things that make a human’s day a little easier to deal with, because if you’re doing the hard graft all day long, you’ll quickly burn out. But that’s what you’ll be doing with AI. What’s more, you’ll be managing your idiot AI junior colleague, who keeps making mistakes, and whose output you are personally responsible for. Work is going to get stressful and hard.
+## LLVM Backend Integer Lowering
 
-Well, it depends what you think is fun. AI is trained on the internet, and the internet is mostly fun stuff. Does AI have access to case law, or medical books, or accountancy regulations, or data protection laws? Is the internet a good teaching source for being methodical and precise in completing tasks? Specialist documents are not usually freely accessible, and I’m not sure how an AI can possibly learn how to be thorough from people with a thirty-second attention span. AI cannot even count to 100 without losing interest. You’re going to be lumped with the tasks that AI can’t be bothered to do. Like I say, you might think these jobs are fun, and that’s fine, but I think there are plenty of people who will miss the silly stuff that AI takes from them.
+Zig has always lowered arbitrary bit-width integer types (e.g. `u4`, `i13`, `u40`) directly to LLVM IR’s bit-int types (`i4`, `i13`, `i40`). However, we’ve known for a long time that this lowering is not optimal, because LLVM’s documented semantics for representing these types in memory are unnecessarily restrictive to the optimizer. Perhaps more importantly, because Clang never emits LLVM IR like this, these code paths in LLVM have never been properly tested, and so are poorly supported in practice—over the past few years, we have observed many instances of [trivial optimizations being missed](https://github.com/ziglang/zig/issues/17768) and even straight-up [miscompilations](https://codeberg.org/ziglang/zig/issues/35560).
 
-There’s a website where AI can put out paid jobs for humans to do for it - stuff it can’t do. Predictably, this is the stuff that requires a physical presence, for example handing out leaflets or putting up posters. Aside from the dystopian feel of computers employing humans, it shows what kinds of jobs will be left for us once AI has taken its share. What you think of this depends on the nature of the physical work, your own abilities, and your attitude to doing things with your body. Certainly, work that involves mostly thought is important to a huge number of people, perhaps most people. It gives us flexibility to work wherever we want, it means we can work in conditions that are suitable to our personal needs, and it means we can use our most powerful and unique capabilities: thinking, reasoning, imagining. Take that away, and you take away thousands of years of evolution of our big brains, and leave work for us that we’ve become slowly less capable of during the same period. Look at us compared to a gorilla, a horse, or a cow. We’re weaklings who discovered how to use other animals, tools, and chemical and physical processes to do work. It’s too late to go back now.
+So, the original goal of the PR was to only use these bit-int types when manipulating values in SSA form, and to zero- or sign-extend them to ABI-sized types (`i8`, `i16`, `i32`, etc) when storing them in memory. This should be well-supported, not least because it matches how Clang lowers C’s `_BitInt(N)`!
 
-A company replacing a human worker with AI redirects money from that person, and businesses and people around them, to a horrible tech company, probably in another country. When a company employs a human, they are giving that person healthcare, social security, supporting their family, paying their rent, buying them food, and also helping to keep the hundreds of businesses they use alive - restaurants, bars, gyms, clubs, theatres, cinemas, art galleries and everything else that makes your community liveable and fun. Those things will disappear, because the money they rely on is instead in the pocket of a miserable billionaire who has no need for it, and no idea what to do with it.
+That change was actually fairly straightforward, but I hit one issue which led me down a bit of a rabbit-hole.
 
-Employing people to do jobs gives those people money to spend at companies so they can employ people to do jobs. It’s circular. If companies employ fewer people, and instead let money leak out of this cycle to a small number of individuals, then customers will be too poor to buy products, and companies will go out of business. Sadly, this effect will not be constrained to those companies choosing to replace staff with AI. Unemployment will affect all companies, including those who continue to employ human beings. If AI destroys itself, it is taking the rest of us with it. Like treating cancer with chemotherapy, we can only hope that AI is eliminated before its host.
+## The Problem with `@bitCast`
 
-Some people do essential jobs that are consistently undervalued by society, and so it’s either hard to find people to do them, or hard to find money to pay people enough to do them - professions like elderly care, therapy, medicine more generally, and legal advice. Already many people are turning to AI for medical and mental health advice, because it often very hard to access these services with real people under the current healthcare systems in most countries. This might initially sound like a good thing, but replacing the responsible expertise of real people with untested AI solutions is a terrible idea. For those lucky countries with universal healthcare, it amounts to privatisation of such care, which has long and rightly been fought against. The sinister thing is that it isn’t happening in the open: people are using AI to fill in the gaps where existing systems have failed them, which happens to take pressure off of those systems, allowing them to slip further into neglect. The NHS in the UK, for example, can honestly say it isn’t replacing its care with AI, when in fact that’s what is happening under the counter. The replacement of responsible, evidence-based healthcare with completely untested and unaccountable automated systems is one of the most dangerous and present threats of AI.
+`@bitCast` is an interesting builtin. In the past, it was defined as being equivalent to the following sequence of operations:
 
-Humans are just like you (assuming you’re human), and that’s what makes the things they do special. People know instinctively it is degrading and devaluing to use AI to create something, even if it is technically better than something created without AI.
+- Take a pointer to the operand value
+- Cast it to a pointer to the destination type
+- Load from that pointer
 
-If you’re lucky, you’ll live to 90. You’ll spend the first 20 years on basic education, the next 20 or so establishing your career, getting settled in a home and perhaps having a family, the following ten years having a crisis and wondering why you spent your first forty years doing all that stuff, and then the years until your death hopefully enjoying life or maybe feeling awful, but definitely coping as best as possible with a slow slide into ill-health, irrelevance, and non-being. The blip of time that we as individuals exist is precious, and what we do with that time is also precious. Every human act, activity, pastime, project, creation, and endeavour is imbued with the tremendous value of human existence. If I pick my nose, then the end result might not be pleasant, but it *is* something that a living, breathing person, with a knowledge and fear of their own mortality, chose to do with a sliver of his life. A blob of dried snot represents an investment of a human’s most precious asset: time. The spewings of AI will always lack that essential value, even though it might be more desirable in the end. My nasal excavations are worth more than a bucket of AI slop, because I chose to expend my precious life force on making that green-grey blob of mucous, and AI has no such life, and no such choice.
+In other words, it was essentially syntax sugar for reinterpreting bytes of memory. However, over time, we diverged from this definition—for instance, it became allowed to use `@bitCast` to reinterpret a `[3]u8` as a `u24`, even though on most targets `@sizeOf(u24)` is greater than `@sizeOf([3]u8)` so the above definition would invoke Illegal Behavior.
 
-A work of art or a piece of music is enjoyed not merely as a sensory stimulus. Frequencies and textures do not give rise to vivid emotions and imaginings without an additional step: that of associating those things with human experiences, of ourselves, of others, and of society as a whole. A particular sequence of notes or palette of colours is not inherently sad: we find it sad because we’ve heard others use those notes in that way to communicate sadness. We make things and present them to each other as a way to say something, often something that ordinary words cannot express. The fact that a living, breathing human being created something isn’t incidental, it is absolutely central to its meaning. For sure, things created by natural processes can also make us feel small, or big, or weird, or in awe, but there is (at least for those not religiously inclined) no feeling that someone is trying to tell us something with that beautiful sunset or strangely patterned slug. Things that humans prompt AI to make *look* like they want to say something, but *smell* like they have nothing to say. The spectator will always have questions: what of this is human? Where’s the investment, where are *you* in this thing? What can I reasonably understand about you, from this thing you’re showing me? If there’s a shadow of doubt about human provinence, then meaning drains away, and the audience will only feel vague disgust as they wander the uncanny valley. Your work is dead.
+Up to now, the LLVM backend had implemented these underspecified semantics for the `@bitCast` builtin. However, because that definition involved reinterpreting memory, changing how we store integer types in memory ended up impacting the implementation of `@bitCast`, and introducing Illegal Behavior which led to crashes in the compiler test suite.
 
-An argument I have often heard is that AI is producing things that are indistinguisable from human-made things, and that if a person is not able to tell if something is made by AI or not, then in some sense AI has passed as human and what they’ve made is as valuable as the same thing had it been made by a human. It’s a version of the Turing test to detect human-like intelligence in AI. Passing that test does not mean the AI commands the same respect and status as a human, however. Yet this is what the AI gang demand of stuff made with their machines. There’s so much wrong with this it is hard to know where to start. It reduces the idea of value of making something to the product, and often these days that’s something digital - one of the few things in reality that *can* be exactly the same as another. In the real world, a copy cannot physically be the same as the original. Only information or ideas can be perfectly copied.
+The easiest solution to this would probably have been to implement logic in the LLVM backend to approximately match the old behavior. I instead opted for a better solution—implement a new definition of `@bitCast`.
 
-We can look to the world of fine art for inspiration on how people regard copies. The great masters trained and worked closely with teams of people, who themselves were great artists, and able to make precise copies of their mentor’s work, and create new pieces in the same style. The provenance of these works is very hard to determine, and yet there is great effort expended to do exactly that. Discovering a work was, or was not, made by a particular artist is huge news, and it is often only decided by some detail in brushwork, framing, paint chemistry, history, or archaeology. Why is it so important? You might think it isn’t. For those who care about such things, knowing where a work comes from is crucial to fully appreciating it. Let’s forget about those crusty old men, and look at a revered modern artist, Tracey Emin. If you approach her scribbly drawings and neon writing signs without knowledge of her past traumas, they look trite and incompetent. If you return to them after watching How It Feels, her film about her experience of having an abortion, you will be choking back tears of sadness and compassion.
+## Redefining `@bitCast`
 
-If it matters so much *which* person made something, and *why* they made it, then surely it is easy to see that anything made by AI is practically worthless, even if its provenance cannot be detected. But maybe a little bit of AI is fine? How does it differ from the technicians, assistants and apprentices employed by many great artists? Crucially, those people are *people*, too, who relate to and reflect the specific artistry and humanity of the person at the helm. Technicians and craftspeople who work with artists are *not* unthinking automatons - they proactively and substantially contribute to artworks, drawing on their individual skills and experiences as human beings. Even though there are humans prompting everything AI does, when the balance of creation shifts from humans to machines, the humanity of the finished work drains away.
+In 2024, Jacob Young wrote up language proposal [#19755](https://github.com/ziglang/zig/issues/19755) which aimed to solve the problems with `@bitCast` by precisely specifying a new set of semantics for it. This proposal was accepted shortly after it was submitted, and in fact, the semantics it details are already implemented by the self-hosted x86_64 backend! So to solve the LLVM backend’s problems, I didn’t necessarily need to match the old `@bitCast` semantics—instead, this seemed like a good time to finally get the new semantics implemented *everywhere*.
 
-Emin’s drawings and words were scribbled by hands that once held a dead foetus that fell out of her after a botched abortion. Detaching her art from that event is vandalism. Her life, her experiences, her humanity - they are *important*.
+As an aside, another advantage to doing this is that we could take advantage of the compiler’s `Legalize` pass, which takes difficult-to-lower operations and rewrites them in terms of simpler operations, so that compiler backends only need to support those simple operations. `Legalize` already had functionality, used by the self-hosted x86_64 backend, which converted complex `@bitCast` operations into simpler ones, and it could be easily adapted to aid the other compiler backends too (mainly the LLVM and C backends)—but only if they implemented the new semantics.
 
-Let’s talk about nose-picking, again. Why are the contents of my nose not held up as great works of art? Why aren’t they on show at the Science Museum as an example of the splendour my unique humanity? Why don’t they fetch the same prices as gold on international trading markets? Obviously, it’s because they’re not very special. Literally every human, and most mammals, and perhaps some reptiles, produce nasal mucous, which sometimes dries out to form lumps that require removal. My nose makes this stuff without any conscious effort on my part, and digging out dessicated snotballs is not hard, and is often quite pleasurable. The same can be said of the products of AI. When you show me your AI-thing, it feels like you’re showing me one of your own bogies. It’s not impressive, it’s not special, it’s not interesting, it’s not valuable - because I could make the same thing with almost no effort myself. You might like the thing you made, just as you might like the smell of your own farts. That’s no reason to present either to me. Away with you.
+Regardless, the point is, I set out on a side quest (which ended up being harder than the *original* quest) to implement these new semantics throughout the compiler. This includes not only the LLVM and C backends, but also `comptime` execution—after all, Zig allows you to do almost any operation at comptime, `@bitCast` included! Because the new semantics are meaningfully different from the old (more on this later), I also had to audit a lot of uses of `@bitCast` across the standard library, compiler, and supporting libraries (e.g. `compiler_rt`). But after a few mostly-painless fixes for CI failures, I was able to finally get [my PR](https://codeberg.org/ziglang/zig/pulls/35711) green, and landed it in master yesterday (closing a good few issues in the process!).
 
-There *is* a kind of person whose bodily functions, and crappy art, are highly valued by some: children. If a child shows me a picture of a dog so bad they have to tell me it is a dog, I will ooh appreciatively and say it’s lovely, because I know they’re learning and will not continue to learn if I give their work the critique it deserves - and their naivity is charming, and gives me nostalgia for a more innocent time of my own life. An adult showing me their no-effort AI shit deserves no such allowance. You’re a grown-up, you’re not learning anything, and you inspire no nostalgia in me. Grow up.
+## The New `@bitCast` Semantics
 
-*Pastime* is such a beautiful word. The idea of an activity that is simply for letting time pass is wonderful in a world where we’re encouraged to fill every moment with meaningful industry. When I was at school, there were all sorts of stupid collection fads, people collecting pig ornaments, or pencils, or whatever. They’d go on TV showing off their collection of 15,000 bottle caps and people would say, oh wow, you have been busy. It’s ultimately a total waste of time (let’s set aside the fact that *everything* is), but it is appreciated because someone has found it important enough to spend their precious life doing it. A human’s time is being passed. A collection of shrunken crisp packets is not inherently a great thing, but what that collection tells you about a person *is*. They eat a lot of crisps; they have access to an oven; they can focus enough to shrink the packet without destroying it; some of the packets might evoke funny or touching memories; they are quietly struggling with the futility of all human endeavour; and they like all the different colours. Above all, they chose to do it, and it took time and effort, and that makes it worthwhile, even if the fruits of their labour are worthless.
+Now that we’ve gotten through all of the background, it’s finally time for me to actually explain new `@bitCast` behavior. Instead of being based on reinterpreting bytes in memory like before, the builtin is now defined in terms of the bits which *logically* represent a type.
 
-There are other pastimes which involve rather more skill and patience, things that someone might invest in learning over many years, that as well as being fun for the participant, are also impressive or engaging for others. Playing the piano, learning soliloquies to recite from memory, solving Rubiks Cubes competitively, or collecting stories on the fascinating life cycles of obscure parasites. These things are easily done by a computer (even without AI) - but they interest people when they’re done by *other people*. We wonder what’s going on in their heads, that they had the time and interest to accumulate these talents, we may be a little jealous, and we appreciate that they can conjure up an interesting anecdote about a brain-altering worm without reaching for their phone, or send us into a reverie playing Satie on a battered old upright in the corner of a pub.
+Every type which supports `@bitCast` has a “logical bit layout”—a representation of that type as an ordered sequence of bits. For instance, `u5` is composed of 5 logical bits, which we order from least-significant to most-significant. `[2]u5` is composed of 10 logical bits—the 5 from the first element, followed by the 5 from the second element. The new definition of `@bitCast` is that it reinterprets the logical bits of one type as the logical bits of a different type.
 
-We cannot say the same for the fruits of AI. Even a fascinating and beautiful work of art, or a fantastically useful piece of software, is a lifeless product of a lifeless technology when made with AI. Given that one day the works of even the mightiest of us will be reduced to colossal wrecks surrounded by lone and level sands, we must surely value the follies of living, breathing, contemporary humans above all else.
+The simplest example is to take an unsigned integer, say a `u8`, and convert it to a signed integer of the same size, in this case `i8`. This operation does exactly what you’d expect—the bits are unchanged, and we just reinterpret the most-significant bit as a sign bit. Also unchanged are the semantics of `@bitCast` between an integer type and a `packed struct`/`packed union` type.
 
-Obviously.
+The place where the new semantics differ from the old is when you get aggregate types (arrays and vectors) involved.
 
-Once you have learned to do something, invested your precious time, energy, and often a lot of money, in learning a craft, why would you stop doing it in favour of using a technology that does it instead, often to a lower standard, but more quickly and cheaply? One reason is that you give in to progress. It’s a reasonable response given the way successive technologies have steamrollered human crafts over millenia, and in particular in the last few centuries and decades. Let me suygest a few other possible responses.
+Consider, for instance, bitcasting a `[2]u8` to a `u16`. Under the old semantics, the result of this operation depends on the target endian: on big-endian targets, the first array element became the 8 *most* significant bits, whereas on little-endian targets, the first array element became the 8 *least* significant bits. Under the new semantics, because we only care about *logical* bit representation (which is endian-agnostic), the operation behaves identically on every target: the first array element becomes the 8 *least* significant bits. As a general rule, the new semantics tend to match the behavior of the old semantics on little-endian targets.
 
-You don’t have to give in by switching to use the technology yourself. This is a stupid reaction, the reaction of someone with no self-respect. You are no longer using the skills you have learned, but rather managing a technology - the same way someone with a fraction of your talent could. Eventually, as it becomes obvious that almost anyone can do this, your wages will drop. So, as well as abandoning a craft you’ve invested in, you’re earning less. Don’t *help* this process: get out early, and find another way to use your talents properly, or learn new ones that don’t simply happen to align with the desires of the company who have disrespected and devalued your craft. A company that doesn’t value your brain doesn’t deserve your brain.
+This definition also allows for some weirder operations, such as converting `[2]u3` to `@Vector(3, u2)`:
 
-Although it is true that technologies have reduced human crafts to a side-show, those crafts still exist, and are beloved. People still value things made with love and care by other people. I have owned maybe fifty wooden spoons, but one that has lasted longest - well over ten years - was whittled by a man in a leather apron at a music festival in 2012. I have no stories about my other spoons. You can make perfect music in a bedroom on your own, but people are still (and increasingly) meeting in unventilated little rooms to make terrible music with people whose smell they can taste. Even without AI, it has become extremely easy to write quite powerful software - but I very frequently return to the basic 8-bit games I played in the 80s, often made by one person with an obsession and a lot of instant coffee. I can buy cheap herbs and fruit in my local supermarket, but I very much prefer to grow and pick my own. It is not so much nostalgia as a yearning for simplicity and directness and connection - things that AI cannot offer.
+```
+test "bitcast [2]u3 to @Vector(3, u2)" {
+    const arr: [2]u3 = .{ 0b001, 0b011 };
+    const vec: @Vector(3, u2) = @bitCast(arr);
 
-Do not give up your craft because the joyless pricks of big tech tell you to. They do not understand what it is to have pride in a job well done, because they’re talentless hucksters, always looking for shortcuts. One man, the head of a company making AI for making music, literally said that nobody enjoys making music.
+    // Concatenate all bits of `arr` starting with the least-significant bit of `arr[0]` to find the
+    // logical bit sequence, then read off 2-bit chunks from it to get the elements of the resulting
+    // vector value `vec`.
+    //
+    //     arr[0]         arr[1]
+    //     0b001          0b011
+    // -------------  -------------
+    //  1    0    0    1    1    0
+    // --------  --------  --------
+    //   0b01      0b10      0b01
+    //  vec[0]    vec[1]    vec[2]
 
-You may not think of your job as a craft, but if it is something that you have learned over many years, have to do with care and attention, and you care about the quality of the end result (whatever quality means to you), then you have something that’s worth holding onto, taking pride in, and preserving.
+    try expect(vec[0] == 0b01);
+    try expect(vec[1] == 0b10);
+    try expect(vec[2] == 0b01);
+}
+const expect = @import("std").testing.expect;
+```
 
-If you enjoy doing something, do it! When you’re using AI, then you’re not *doing* anything at all.
+This kind of operation isn’t very useful most of the time, but it’s there if you need it! For instance, perhaps you want to deconstruct an integer into a vector of individual bits to operate on—that can now be done by a `@bitCast` to `@Vector(n, u1)`.
 
-So, you’ve read this far and realise that you have no talent for your profession, and you don’t enjoy it. Congratulations - AI is *perfect* for you! But, if you like and respect the people you work with, your friends, your relatives, the people around you in your community - who perhaps *do* enjoy and take pride in the work they do - perhaps you could think of them before you get addicted to a computerised slave? Your adoption of AI harms others. If you don’t like your job, and you aren’t any good at it, the honest thing to do is *quit*, and make a position available for someone who deserves it.
+While doing all of this stuff, I also implemented a couple of smaller accepted proposals—I won’t detail them here, but you can take a look at the issues if you’re interested:
 
-AI is designed to be addictive, to make you rely on it, so it is designed to usually give you an answer it thinks you want to hear. We tend to love it when others agree with us, and so that’s what AI tends to do. The result is a fervent microcult with a feedback loop which steadily amplifies our ideas. This is surely not a problem if you’re always right - does that describe you, though? Are you sure? We all desperately need real people to politely disagree with us, to temper our worst instincts and add nuance to our simplifications. Reality is complicated, and to properly reflect that, our own stupid ideas need to occasionally butt up against the stupid ideas of other humans.
+Of course, all of these changed semantics will be explained in the 0.17.0 release notes (hopefully a bit more concisely than what I managed here!), and suggested migration steps outlined.
 
-I have lost track of how many billions of people there are on the planet, but there are certainly orders of magnitude more natural intelligences than artificial ones. Every one of those people has a different experience of life, a different background of learning about the world, which means their brains are wired up differently. We can learn new things from all of them. But, for the most part, we are using only a handful of AI systems. Imagine if we had collectively chosen five *people* to go to for all our answers: even if they were the wisest amongst us, it would surely ring alarm bells for all concerned, given humanity’s experience of relying heavily on individuals with big ideas and a lot of power.
+## LLVM Backend Performance
 
-If we’re drawing on the same resources for help, information, and creation, we will slowly begin to act the same, make the same things, and ultimately, be the same. I have recently noticed that posters for neighbourhood events all suddenly look the same: a heading in an arc at the top, an overwhelming number of little decorative touches, small bullet points of text scattered about, muted beige-adjacent tones, strings of bunting or fairy lights, a friendly handwritten font (but never Comic Sans!), and the whole thing on a parchment-like background framed in a vignette. Likewise takeaway restaurant menus, which have strangely detailed, glistening food piled impossibly high in stupendous quantities. If we all start to think the same way, act the same way, our beautiful diversity will be smothered by a crushing and tedious uniformity. If everybody looked the same, we’d get tired of looking at each other.
+On a final note, I just wanted to mention that the *original* motivation for this branch—changing how the LLVM backend lowers non-ABI integer types—was [demonstrably successful](https://github.com/ziglang/zig/issues/17768#issuecomment-4787726124) at restoring missed optimizations. In fact, the Zig compiler itself—despite not making heavy use of arbitrary bit width integers internally!—saw around 5% performance improvements from the better optimization. This means you might have some minor runtime performance gains to look forward to in 0.17.0!
 
-So let’s imagine that we can solve the diversity problem above, perhaps we have personal AI agents that we train ourselves, or maybe we can already ask the AI we use to take our beliefs and values into account. Or, also as mentioned elsewhere, AI has given us the answer it thinks it wants us to hear - or the answer it is *allowed* to give us by its creators.
+Thanks for reading, I hope this was interesting to some of you. Happy hacking!
 
-The problem is, there are *some* topics upon which we’d rather not be diverse. Maths, for example: would you want to use an AI that has interesting new theories about the value of two times two? Probably not. Would you be happy with an AI that pleads ignorance on the topic of what happened Tiananmen Square in 1989? Or perhaps presented, unprompted, contrasting views on whether or not the Holocaust happened?
+Author: Matthew Lugg
 
-In the matter of facts that come from reality or by definition, or broad theories about the unobservable past or future that are widely accepted, or laws that work perfectly well in certain domains but not in others, we would likely prefer an AI to give us the right answer. Many years ago, on hike in the Amazon jungle, our guide told us he’d cut his hand with a machete, and was using the traditional jungle remedy to heal it: he’d coated it with snake fat, and wrapped it with some rags. He showed us the injury, and it was an appalling sight. I hope, at some point, he found a proper medic to treat it with antiseptics and sterile bandages. There is sometimes an evidence-based best answer to a question. People can, of course, choose who they go to for answers, and sometimes you might go to the alternative medic who prescribes useless herbs for a condition that requires hard drugs, or ask the racist conspiracy theorist about European history. But we are very used to being misled by people, and so bringing some scepticism to their statements, and using other cues to judge their overall intent. Will you do that with AI? Or will you accept that the answer it gives you with confidence and authority is the *only correct* answer?
+I’ve spent the past few weeks working on our new ELF linker which debuted in Zig 0.16.0. At the time of the 0.16.0 release, this linker implementation was in its fairly early stages, and only really supported linking Zig-only code without any external libraries (even libc)—hence why it was (and still is) disabled by default (it can be enabled with `-fnew-linker`). However, quite a lot of progress has been made since that initial release!
 
-US culture has already crept across the world through films and television for years, but the Web has accelerated the creep to a scurry. Perhaps even a scramble. British teenagers use the same slang, idioms, intonation and discourse as American teenagers. They often don’t know that *ATM* is a new word to English English vocabulary. Social and cultural norms of young Brits reflect those of the US, which they get from social media and the Web more generally. This is not just a function of age: as an adult who left the UK fourteen years ago, I’m shocked by how much the country has moved culturally towards the USA, apparently without the natives noticing. I’m the smart arse next to the cooking pot telling the frog that it is getting warm, and also it’s a *cash machine* for fuck’s sake.
+Here’s a nice milestone—as of [my latest PR](https://codeberg.org/ziglang/zig/pulls/35533), the new ELF linker is capable of building the self-hosted Zig compiler with LLVM and LLD libraries enabled, a task which requires quite a few features under the hood.
 
-AI is surely only going to speed up this process. Not only is AI trained on an internet which is dominated by US culture, the most popular AIs are *made by US companies*. AI’s power to shape the way we think and feel will create a US-centric monoculture, further spreading broken values across the world, stamping out the beautiful and valuable cultures it replaces, and paving the way for yet deeper hegemony.
+```
+[mlugg@nebula master]$ # Build the Zig compiler using the new linker:
+[mlugg@nebula master]$ zig build -Dno-lib -Dnew-linker -Denable-llvm
+[mlugg@nebula master]$ # Use that compiler to build something with LLVM and LLD:
+[mlugg@nebula master]$ ./zig-out/bin/zig build-exe ~/hello.zig -fllvm -flld
+[mlugg@nebula master]$ ./hello
+Hello, World!
+[mlugg@nebula master]$
+```
 
-When you show AI some of your work and ask it to fill in some gaps or give it a little extra *something*, when you share your mental health or personal struggles with AI and ask for advice, when you tell it you’ve lied on your tax return and ask how best to avoid detection - it’s listening, learning and remembering. Don’t be fooled by big tech’s promises of privacy, they’ve broken and bent the same promises constantly since the advent of the internet, and there’s no reason to trust them now. Your secrets and your creations, once given to AI, become embedded in the data archives of a giant amoral company, and they will do whatever they want with it, and so will whoever they sell it to. Besides, these companies frequently claim no responsibility for the activities of their machines, trying to give the impression the acts of AI are like acts of god. Even *they* don’t know what AI will do with your data, and they don’t care.
+Of course, an ELF linker isn’t necessarily the most exciting thing in the world, which is why the headline feature of this new linker is its support for fast incremental compilation. After the recent enhancements, it is now possible (on x86_64 Linux) to perform incremental rebuilds while linking external libraries, C sources, etc—without any additional performance overhead! Here’s a clip of me trying it out on [Andrew’s Tetris clone](https://github.com/andrewrk/tetris):
 
-Naturally, this has been a problem for a long time with big tech. They have been tracking and remembering your behaviour for years, initially just to sell you more shit, and then later to adapt their systems to become addictive in a very specific way, tailored to your particular weaknesses. The information you give AI will be used in the same way. Because AI behaviour is somehat out of control, it is inevitable that the data you give it will leak. We’ve all had that weird experience where you get an advert on one platform that seems to target the topic of a private discussion you had elsewhere. If you use AI, prepare yourself to see your work and your secrets being copied and misused by others.
+Oh, and fast incremental rebuilds also work nicely on the Zig compiler itself:
 
-This sounds more like a benefit than a failing of AI - and I would concede that if AI has done any good at all, it is to force me to think carefully about what I do, why I do it, and what I should be doing instead. The advent of AI has made me think about what essentially differentiates me from an AI, and always will. It has made me focus on those things. It means abandoning some technology, and abandoning many hopes for what technology can do for us. It means embracing flaws, renewing trust, and thinking and talking carefully about often difficult topics.
+```
+[mlugg@nebula master]$ zig build -Dno-lib -Denable-llvm -fincremental --watch
+Build Summary: 4/4 steps succeeded
+install success
+└─ install zig success
+   └─ compile exe zig Debug native success 36s
 
-One day, you will die. It is hard to think about a time when you will no longer think, and it is upsetting to imagine what the approach to and moment of death might be like for you. But, looking at the deaths of others, there seems to be a pretty good chance it will be painful and sad. It is such a source of fear that we build elaborately distracted lives and perform breathtaking mental gymnastics to avoid facing this unavoidable destiny: from hobbies, bucket lists, meditation, and mindfulness exercises, through to chasing goals, having children, building legacies, and establishing mythologies embedded in religions with billions of adherents. We’re either trying to avoid thinking about the end of our lives; creating things that will mean our deaths might not matter very much; or imagining we might not actually die. The most blissful moments we can find are those where we are not thinking about the future, or the past, at all, but focused on the nature of what’s present in front of us - rather like the experience of being a dog, or a tree. I would imagine.
+Build Summary: 4/4 steps succeeded
+install success
+└─ install zig success
+   └─ compile exe zig Debug native success 244ms
 
-This knowledge is perhaps unique to humans, at least amongst organisms we’re aware of. And it is certainly not a fear that can be shared by AI. What AI *can* do is parrot out the fear of death expressed by humans online, but don’t be fooled - it has no such fear, or any other emotions.
+Build Summary: 4/4 steps succeeded
+install success
+└─ install zig success
+   └─ compile exe zig Debug native success 228ms
 
-Try, for a moment, to focus on your inevitable death. A time after which there is nothing. What does that mean for what you do now? Are the things that AI can do for you really particularly important to do? Are there solutions that involve real people, that might create beautiful memories for your final days, suffering in pain or delirium? Will you think it time well spent, fake-chatting to a computer with absolutely no understanding of your terrifying destiny, or any of the other myriad indignities that characterise human existence?
+Build Summary: 4/4 steps succeeded
+install success
+└─ install zig success
+   └─ compile exe zig Debug native success 288ms
 
-To be human is to be born full of hope, to suffer, and to become hopeless in death, and yet nevertheless - live! Do not be the fool who imagines AI is alive in the same way we are.
+Build Summary: 4/4 steps succeeded
+install success
+└─ install zig success
+   └─ compile exe zig Debug native success 283ms
+```
 
-For many tasks, AI is already the genie in the bottle without the annoying three-wish limit. Story books, novels, and indeed real life are awash with tales of the ennui resulting from having everything you ever wanted. Your activities are not merely a means to an end: the activity is part of the point. In fact, it is probably the *entire* point, because... almost everything you’ve ever done will be forgotten forever the moment you die. What isn’t forgotten at that point will mostly be lost in the coming years. Within three generations, your descendants - if you have any - will struggle even to remember your name.
+The biggest missing feature of this linker implementation right now is that it still does not yet support generating DWARF debug information for Zig code—that’s definitely my next priority. But even without that support, it’s amazing just how useful instant rebuilds can be, for example in any situation where you’re doing a lot of print debugging.
 
-Anyone who has helped clear out a dead parent’s home will have had some feeling like this. There’s so much stuff, artifacts, stored carefully in boxes, old presents, mysterious bits of plastic that might be important for something, boxes and boxes of paperwork, photographs, some birthday cards that you gave them, which now return to you. There’s a deep sigh of indescribable melancholy, looking at the detritus left behind by a life, which is (for lack of storage space) mostly discarded.
+If you’re using the master branch of Zig and you’re on x86_64 Linux, consider trying out incremental compilation with the new ELF linker if it previously wasn’t working with your project! I expect many codebases to already work great with it, unlocking the ability to rebuild your project in milliseconds. Of course, if you come across any bugs, please do [open an issue](https://codeberg.org/ziglang/zig/issues).
 
-Having done that, it is hard to imagine any activity is important beyond the immediate experience of it. But with AI, you are not getting any experience of doing anything - because you’re *not doing anything*. Musicians don’t perform music merely to have the satisfaction of finishing it. The experience of doing it is the entire point. Play life the way musicians play music. It isn’t a race to the end - because the end is death.
+And if you’re currently sticking to tagged releases of Zig, don’t worry—as Andrew mentioned in his last devlog, Zig 0.17.0 is just around the corner, so it won’t be long before you can try this too!
 
-The author Iain M. Banks wrote a series of books based around an imagined alien community called The Culture, which had developed to the point where all their basic needs were taken care of, leaving them to do whatever they want to, without any limits. This is enabled by a source of near-infinite energy, combined with robots and artificial intelligences that take care of what these creatures once had to do for themselves.
+Author: Andrew Kelley
 
-It is fun to imagine what you might do in those circumstances. Banks had people exploring sexuality, war, games, art - as well as coming into conflict with non-Culture civilisations and individuals. What would *you* do, if you didn’t have to pay rent, or for food, or look after your health, or think? It’s likely that your hobbies already give you some idea, and they might expand to encompass all sorts of new things if you’re ever lucky enough to retire.
+Big branch just landed: [separate the maker process from the configurer process](https://codeberg.org/ziglang/zig/pulls/35428)
 
-I wonder if we’ve been fooled into thinking we can’t do a lot of those things now? To what extent do you do your job to enable a lifestyle that’s only necessary because you have a job? Do you need a high income to pay high rents in a city you only live in for access to a high income job? Do you take expensive holidays that require a handsome income just to rest from the stress of your profession? Did you buy an unnecessarily large house because your income allowed you to take out a mortgage - only to become trapped in your job in order to pay it off?
+This devlog entry is essentially a preview of the upcoming release notes, but serves as an advanced notice to those who want to help test out the new features and provide feedback that will guide the Zig project moving forward.
 
-A life of leisure for all, free from want and responsibility, is extremely distant. It will not happen in your lifetime. But some of the things humanity is striving for when creating ever more elaborate technologies, and the social and financial structures that enable them, are perhaps much closer than we think. We just have to think and live more simply.
+Before, `build.zig` files plus the build system implementation were all compiled into one bloated process, in Debug mode. After `build.zig` logic finished constructing a build graph in memory, the “build runner” code executed it.
 
-Every human since history began can reasonably claim that technology seems to have advanced more in their lifetime than almost all of preceding history. There is no doubt that technological progress is accelerating, and it’s easy to see why - technologies combine, and new technologies are built upon them. It’s a combinatorial explosion, fuelled by an ever expanding population, discoveries of new energy sources, availability of information to all, improving and lengthening education, and faster and more effective communication.
+Now, `build.zig` files are compiled into a small process (the “configurer”) in debug mode. After this logic finishes constructing a build graph in memory, it is serialized to a binary configuration file. The parent `zig build` process is aware of this file and caches it for next time. While waiting for all that, it asynchronously compiles the build graph execution process (the “maker”) in release mode. Once the configuration file is available and the maker process is finished compiling, the maker process is executed, passing it the configuration file. The maker process only needs to be compiled once per `zig version` thanks to the global cache. The maker process then executes the build graph, which is contained within the serialized configuration file.
 
-So far, it seems that this progress has generally improved the fate of most of humanity - albeit at the expense of the rest. This isn’t a reason to continue this progress without question, however. We only have to be badly wrong *once* for this claim to no longer be possible to make, since nobody will exist to make it. It would be incredibly stupid for us to proceed into foreseeable disaster on the basis that, so far, our progress has not resulted in our collective extermination. You could use the same reasoning to justify a march along a path up a volcano into the pool of boiling lava at its peak.
+The primary motivation of this change was to make `zig build` faster, in three ways:
 
-Less dramatically, how can we tell if we’ve started on a downward slope, and so halt progress, or change direction? Do we really look objectively at how humanity is faring? What metrics are we using? Are we ignoring the negative counterparts to the benefits of technology that coexist in individuals, and how do we weigh them against each other? Whose lives are we looking at - are we ignoring some people in order to make things look better than they are? And how do we know if changes are due to technology, or political interventions, or evolving social norms, or something else?
+1. Only the user’s `build.zig` logic will be compiled with each change, rather than the entire build system along with it. This is starting to become more valuable now that we have introduced `--watch`, `--fuzz` and `--webui`. The build system can grow more features without making `zig build` take longer.
+2. Now the build system can skip rerunning the `build.zig` logic entirely when it knows nothing will change, for example if you add `-freference-trace` to your `zig build` command line, it now avoids re-running your `build.zig` logic redundantly, using the same configuration as last time.
+3. Now the process that actually executes the build graph is compiled with optimizations enabled.
 
-What we can say for sure is that those of us who live in the developed world already have *more than enough stuff*. We complain about the cost of storing our stuff. We complain that we cannot organise our stuff, or find it overwhelming, or can never find the thing that we want in the pile of stuff, or that we can’t sell our stuff or even give it away, because everyone else also has too much stuff. We struggle dealing with the stuff we no longer want, we bury it, burn it, sometimes recycle it into yet more stuff. We occasionally frantically get rid of stuff to simplify our lives, particularly when we near death and wish to spare our relatives the burden of sifting through all this *fucking stuff*. Physical or digital stuff, it’s all the same.
+To demonstrate points 2 and 3, here is the difference between running `zig build --help` before and after:
 
-AI is not just more stuff: it’s an additional layer of stuff-generation - it makes stuff out of stuff, and more stuff out of that. It’s another dimension in the combinatorial explosion of technology. We already have so much software, music, art, film... we already have doctors, and therapists, and lawyers. If we need any more of this kind of thing, there are plenty of real people willing to step up, who will make that stuff with the experience, pride, care, joy, fear, and pure humanity that AI-made vibe-stuff will always lack. We certainly don’t need a technology that produces things more quickly for people who already suffer with more than they need.
+```
+Benchmark 1 (34 runs): master/zig build -h
+  measurement          mean ± σ            min … max           outliers         delta
+  wall_time           150ms ± 5.52ms     145ms …  165ms          4 (12%)        0%
+  peak_rss           84.8MB ±  275KB    84.2MB … 85.1MB          0 ( 0%)        0%
+  cpu_cycles          593M  ± 4.01M      588M  …  608M           2 ( 6%)        0%
+  instructions        995M  ± 52.5K      995M  …  995M           0 ( 0%)        0%
+  cache_references   25.8M  ±  165K     25.4M  … 26.1M           0 ( 0%)        0%
+  cache_misses        651K  ± 20.1K      619K  …  697K           0 ( 0%)        0%
+  branch_misses       918K  ± 7.44K      906K  …  935K           0 ( 0%)        0%
+Benchmark 2 (348 runs): branch/zig build -h
+  measurement          mean ± σ            min … max           outliers         delta
+  wall_time          14.3ms ±  744us    13.2ms … 23.3ms          8 ( 2%)        ⚡- 90.4% ±  0.4%
+  peak_rss           78.5MB ±  562KB    77.1MB … 81.4MB          7 ( 2%)        ⚡-  7.4% ±  0.2%
+  cpu_cycles         24.1M  ±  821K     22.8M  … 27.1M           3 ( 1%)        ⚡- 95.9% ±  0.1%
+  instructions       43.7M  ± 23.8K     43.7M  … 43.8M          56 (16%)        ⚡- 95.6% ±  0.0%
+  cache_references   1.46M  ± 14.6K     1.40M  … 1.50M          19 ( 5%)        ⚡- 94.3% ±  0.1%
+  cache_misses        142K  ± 4.87K      127K  …  157K           2 ( 1%)        ⚡- 78.1% ±  0.4%
+  branch_misses       126K  ± 1.37K      120K  …  129K          12 ( 3%)        ⚡- 86.3% ±  0.1%
+```
 
-Let’s look more generally at the nature of technology development, in particular for consumers. Traditionally one might hope that technology would be developed according to some unmet human want. It seems to me that for at least twenty years, technology has more often been a solution in search of a problem. AI really seems to be the pinnacle of that trend: nobody asked for it, it just appeared from nowhere and suddenly it is *everywhere*, we’re being actively encouraged to use it, and some employers even force us to. Isn’t this wrong? I would propose that technology should always be serving us. That is the kind of technology I got into as a child, and learned to create as a teenager, and wanted to provide as an adult. In two decades, the tables have turned, and humanity now seems to dance to the rhythm of technology, bending to its way of working, chained to notifications and addictive experiences, fooled into playing along with gamified apps that harvest our attention and slyly control our behaviour.
+It’s dramatic because before, `build.zig` logic was being executed with each `zig build` command, but now, the build system uses the cached, serialized configuration instead.
 
-The media is full of advice on reducing our use of addictive technology, and AI falls precisely into that category. It has the same qualities as social media, and you should be reducing or eliminating your use of both. You *know* this to be true: you do not feel better after a scrolling or prompting session. You feel drained, time disappeared, you find reality confusing, yet you find some small joys in it that renew your humanity - ready for the pangs of addiction to kick in again, a short time later.
+Aside from performance, I expect third-party tooling such as ZLS to benefit from consuming the serialized configuration file rather than maintaining a fork of the build runner.
 
-Do less, have less, and cherish your limited and frail humanity more. It is real and honest, unlike the illusion of power and connection given by technology.
+This changeset heavily reworks the internal mechanism of the zig build system, however, it is mostly non-breaking from an API perspective, with the exceptions noted in the PR linked above.
+
+For most people I’m guessing this is the main breaking change they’ll hit:
+
+```
+if (b.args) |args| {
+    run_cmd.addArgs(args);
+}
+```
+
+```
+run_cmd.addPassthruArgs();
+```
+
+This removes a capability from build scripts since they can no longer observe those arguments. In exchange, it means that when changing those arguments, build scripts no longer must be rebuilt from source.
+
+If you’re someone who wants to influence the direction of Zig, this is a good time to upgrade your projects to the development version and try out these changes. We’ll be releasing 0.17.0 within a couple weeks from now. However, if you don’t have time, and you find out that 0.17.0 broke your build, don’t worry, there will be plenty of opportunity to get fixes in for the 0.17.1 tag as well.
+
+Author: Matthew Lugg
+
+I’ve been spending a bit of time working on personal projects after merging my [type resolution changes](https://ziglang.org/devlog/2026/#2026-03-10) last month, but I did find the time recently to make some improvements to the LLVM codegen backend. This involved a few different enhancements with various goals, but one nice user-facing change was that I managed to get incremental compilation working with the LLVM backend.
+
+Sadly this can’t do anything to speed up the dreaded LLVM Emit Object: that time is entirely down to LLVM. However, what incremental compilation *does* help with is minimizing the time spent in the actual Zig compiler code, which means that if your code has compile errors (so “LLVM Emit Object” will be skipped), you’ll usually get those errors very quickly. (Of course, it does still give you a *slight* speed-up in successful builds too.)
+
+This support is available in master branch builds right now, and will be in the 0.16.0 release (which we’ll be tagging very soon).
+
+For anyone who still hasn’t tried it, especially if you’re using Zig’s master branch, please do try out incremental compilation by passing `-fincremental --watch` to `zig build`! The Zig core team have benefited from incremental compilation in our workflows for a good year now, and we’re also hearing good things from users. The feature is relatively stable at this point, and people are often surprised how much time they can save just by getting up-to-date compile errors in milliseconds rather than seconds.
+
+I haven’t really personally used incremental compilation with the LLVM backend, but all of the incremental test coverage in CI is now enabled for the LLVM backend, and I’ve had positive feedback from users, so it’s definitely worth giving a shot. As always, if you encounter bugs in incremental compilation, please report them if you can!
+
+Thank you, and I hope you find this useful :)
+
+Author: Matthew Lugg
+
+Today, [I merged a 30,000 line PR](https://codeberg.org/ziglang/zig/pulls/31403) after two (arguably three) months of work. The goal of this branch was to rework the Zig compiler’s internal type resolution logic to a more logical and straightforward design. It’s a quite exciting change for me personally, because it allowed me to clean up a bunch of the compiler guts, but it also has some nice user-facing changes which you might be interested in!
+
+For one thing, the Zig compiler is now lazier about analyzing the fields of types: if the type is never initialized, then there’s no need for Zig to care what that type “looks like”. This is important when you have a type which doubles as a namespace, a common pattern in modern Zig. For instance, when using `std.Io.Writer`, you don’t want the compiler to also pull in a bunch of code in `std.Io`! Here’s a straightforward example:
+
+```
+const Foo = struct {
+    bad_field: @compileError("i am an evil field, muahaha"),
+    const something = 123;
+};
+comptime {
+    _ = Foo.something; // `Foo` only used as a namespace
+}
+```
+
+Previously, this code emitted a compile error. Now, it compiles just fine, because Zig never actually looks at the `@compileError` call.
+
+Another improvement we’ve made is in the “dependency loop” experience. Anyone who has encountered a dependency loop compile error in Zig before knows that the error messages for them are entirely unhelpful—but that’s now changed! If you encounter one (which is also a bit less likely now than it used to be), you’ll get a detailed error message telling you exactly where the dependency loop comes from. Check it out:
+
+```
+const Foo = struct { inner: Bar };
+const Bar = struct { x: u32 align(@alignOf(Foo)) };
+comptime {
+    _ = @as(Foo, undefined);
+}
+```
+
+```
+$ zig build-obj repro.zig
+error: dependency loop with length 2
+    repro.zig:1:29: note: type 'repro.Foo' depends on type 'repro.Bar' for field declared here
+    const Foo = struct { inner: Bar };
+                                ^~~
+    repro.zig:2:44: note: type 'repro.Bar' depends on type 'repro.Foo' for alignment query here
+    const Bar = struct { x: u32 align(@alignOf(Foo)) };
+                                               ^~~
+    note: eliminate any one of these dependencies to break the loop
+```
+
+Of course, dependency loops can get much more complicated than this, but in every case I’ve tested, the error message has had enough information to easily see what’s going on.
+
+Additionally, this PR made big improvements to the Zig compiler’s “incremental compilation” feature. The short version is that it fixed a huge amount of known bugs, but in particular, “over-analysis” problems (where an incremental update did more work than should be necessary, sometimes by a big margin) should finally be all but eliminated—making incremental compilation significantly faster in many cases! If you’ve not already, consider [trying out incremental compilation](https://ziglang.org/download/0.15.1/release-notes.html#Incremental-Compilation): it really is a lovely development experience. This is for sure the improvement which excites me the most, and a large part of what motivated this change to begin with.
+
+There are a bunch more changes that come with this PR—dozens of bugfixes, some small language changes (mostly fairly niche), and compiler performance improvements. It’s far too much to list here, but if you’re interested in reading more about it, you can take a look at [the PR](https://codeberg.org/ziglang/zig/pulls/31403) on Codeberg—and of course, if you encounter any bugs, please do open an issue. Happy hacking!
+
+Author: Andrew Kelley
+
+As we approach the end of the 0.16.0 release cycle, Jacob has been hard at work, bringing `std.Io.Evented` up to speed with all the latest API changes:
+
+Both of these are based on userspace stack switching, sometimes called “fibers”, “stackful coroutines”, or “green threads”.
+
+They are now **available to tinker with**, by constructing one’s application using `std.Io.Evented`. They should be considered **experimental** because there is important followup work to be done before they can be used reliably and robustly:
+
+- better error handling
+- remove the logging
+- diagnose the unexpected performance degradation when using IoMode.evented for the compiler
+- a couple functions still unimplemented
+- more test coverage is needed
+- builtin function to tell you the maximum stack size of a given function to make these implementations practical to use when overcommit is off.
+
+With those caveats in mind, it seems we are indeed reaching the Promised Land, where Zig code can have Io implementations effortlessly swapped out:
+
+```
+const std = @import("std");
+
+pub fn main(init: std.process.Init.Minimal) !void {
+    var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
+    const gpa = debug_allocator.allocator();
+
+    var threaded: std.Io.Threaded = .init(gpa, .{
+        .argv0 = .init(init.args),
+        .environ = init.environ,
+    });
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    return app(io);
+}
+
+fn app(io: std.Io) !void {
+    try std.Io.File.stdout().writeStreamingAll(io, "Hello, World!\n");
+}
+```
+
+```
+$ strace ./hello_threaded
+execve("./hello_threaded", ["./hello_threaded"], 0x7ffc1da88b20 /* 98 vars */) = 0
+mmap(NULL, 262207, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x7f583f338000
+arch_prctl(ARCH_SET_FS, 0x7f583f378018) = 0
+prlimit64(0, RLIMIT_STACK, NULL, {rlim_cur=8192*1024, rlim_max=RLIM64_INFINITY}) = 0
+prlimit64(0, RLIMIT_STACK, {rlim_cur=16384*1024, rlim_max=RLIM64_INFINITY}, NULL) = 0
+sigaltstack({ss_sp=0x7f583f338000, ss_flags=0, ss_size=262144}, NULL) = 0
+sched_getaffinity(0, 128, [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31]) = 8
+rt_sigaction(SIGIO, {sa_handler=0x1019d90, sa_mask=[], sa_flags=SA_RESTORER, sa_restorer=0x10328c0}, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+rt_sigaction(SIGPIPE, {sa_handler=0x1019d90, sa_mask=[], sa_flags=SA_RESTORER, sa_restorer=0x10328c0}, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+writev(1, [{iov_base="Hello, World!\n", iov_len=14}], 1Hello, World!
+) = 14
+rt_sigaction(SIGIO, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=SA_RESTORER, sa_restorer=0x10328c0}, NULL, 8) = 0
+rt_sigaction(SIGPIPE, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=SA_RESTORER, sa_restorer=0x10328c0}, NULL, 8) = 0
+exit_group(0)                           = ?
++++ exited with 0 +++
+```
+
+Swapping out only the I/O implementation:
+
+```
+const std = @import("std");
+
+pub fn main(init: std.process.Init.Minimal) !void {
+    var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
+    const gpa = debug_allocator.allocator();
+
+    var evented: std.Io.Evented = undefined;
+    try evented.init(gpa, .{
+        .argv0 = .init(init.args),
+        .environ = init.environ,
+        .backing_allocator_needs_mutex = false,
+    });
+    defer evented.deinit();
+    const io = evented.io();
+
+    return app(io);
+}
+
+fn app(io: std.Io) !void {
+    try std.Io.File.stdout().writeStreamingAll(io, "Hello, World!\n");
+}
+```
+
+```
+execve("./hello_evented", ["./hello_evented"], 0x7fff368894f0 /* 98 vars */) = 0
+mmap(NULL, 262215, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x7f70a4c28000
+arch_prctl(ARCH_SET_FS, 0x7f70a4c68020) = 0
+prlimit64(0, RLIMIT_STACK, NULL, {rlim_cur=8192*1024, rlim_max=RLIM64_INFINITY}) = 0
+prlimit64(0, RLIMIT_STACK, {rlim_cur=16384*1024, rlim_max=RLIM64_INFINITY}, NULL) = 0
+sigaltstack({ss_sp=0x7f70a4c28008, ss_flags=0, ss_size=262144}, NULL) = 0
+sched_getaffinity(0, 128, [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31]) = 8
+mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x7f70a4c27000
+mmap(0x7f70a4c28000, 548864, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x7f70a4ba1000
+io_uring_setup(64, {flags=IORING_SETUP_COOP_TASKRUN|IORING_SETUP_SINGLE_ISSUER, sq_thread_cpu=0, sq_thread_idle=1000, sq_entries=64, cq_entries=128, features=IORING_FEAT_SINGLE_MMAP|IORING_FEAT_NODROP|IORING_FEAT_SUBMIT_STABLE|IORING_FEAT_RW_CUR_POS|IORING_FEAT_CUR_PERSONALITY|IORING_FEAT_FAST_POLL|IORING_FEAT_POLL_32BITS|IORING_FEAT_SQPOLL_NONFIXED|IORING_FEAT_EXT_ARG|IORING_FEAT_NATIVE_WORKERS|IORING_FEAT_RSRC_TAGS|IORING_FEAT_CQE_SKIP|IORING_FEAT_LINKED_FILE|IORING_FEAT_REG_REG_RING|IORING_FEAT_RECVSEND_BUNDLE|IORING_FEAT_MIN_TIMEOUT|IORING_FEAT_RW_ATTR|IORING_FEAT_NO_IOWAIT, sq_off={head=0, tail=4, ring_mask=16, ring_entries=24, flags=36, dropped=32, array=2112, user_addr=0}, cq_off={head=8, tail=12, ring_mask=20, ring_entries=28, overflow=44, cqes=64, flags=40, user_addr=0}}) = 3
+mmap(NULL, 2368, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_POPULATE, 3, 0) = 0x7f70a4ba0000
+mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_POPULATE, 3, 0x10000000) = 0x7f70a4b9f000
+io_uring_enter(3, 1, 1, IORING_ENTER_GETEVENTS, NULL, 8Hello, World!
+) = 1
+io_uring_enter(3, 1, 1, IORING_ENTER_GETEVENTS, NULL, 8) = 1
+munmap(0x7f70a4b9f000, 4096)            = 0
+munmap(0x7f70a4ba0000, 2368)            = 0
+close(3)                                = 0
+munmap(0x7f70a4ba1000, 548864)          = 0
+exit_group(0)                           = ?
++++ exited with 0 +++
+```
+
+Key point here being that the `app` function is identical between those two snippets.
+
+Moving beyond Hello World, the Zig compiler itself works fine using `std.Io.Evented`, both with io_uring and with GCD, but as mentioned above, there is a not-yet-diagnosed performance degradation when doing so.
+
+Happy hacking,
+
+Andrew
+
+Author: Andrew Kelley
+
+If you have a Zig project with dependencies, two big changes just landed which I think you will be interested to learn about.
+
+Fetched packages are now stored *locally* in the `zig-pkg` directory of the project root (next to your `build.zig` file).
+
+For example here are a few results from [awebo](https://codeberg.org/awebo-chat/awebo) after running `zig build`:
+
+```
+$ du -sh zig-pkg/*
+13M    freetype-2.14.1-alzUkTyBqgBwke4Jsot997WYSpl207Ij9oO-2QOvGrOi
+20K    opus-0.0.2-vuF-cMAkAADVsm707MYCtPmqmRs0gzg84Sz0qGbb5E3w
+4.3M   pulseaudio-16.1.1-9-mk_62MZkNwBaFwiZ7ZVrYRIf_3dTqqJR5PbMRCJzSuLw
+5.2M   uucode-0.1.0-ZZjBPvtWUACf5dqD_f9I37VGFsN24436CuceC5pTJ25n
+728K   vaxis-0.5.1-BWNV_AxECQCj3p4Hcv4U3Yo1WMUJ7Z2FUj0UkpuJGxQQ
+```
+
+It is highly recommended to add this directory to the project-local source control ignore file (e.g. `.gitignore`). However, by being outside of `.zig-cache`, it provides the possibility of distributing self-contained source tarballs, which contain all dependencies and therefore can be used to build offline, or for archival purposes.
+
+Meanwhile, an *additional* copy of the dependency is cached globally. After filtering out all the unused files based on the `paths` filter, the contents are recompressed:
+
+```
+$ du -sh ~/.cache/zig/p/*
+2.4M    freetype-2.14.1-alzUkTyBqgBwke4Jsot997WYSpl207Ij9oO-2QOvGrOi.tar.gz
+4.0K    opus-0.0.2-vuF-cMAkAADVsm707MYCtPmqmRs0gzg84Sz0qGbb5E3w.tar.gz
+636K    pulseaudio-16.1.1-9-mk_62MZkNwBaFwiZ7ZVrYRIf_3dTqqJR5PbMRCJzSuLw.tar.gz
+880K    uucode-0.1.0-ZZjBPvtWUACf5dqD_f9I37VGFsN24436CuceC5pTJ25n.tar.gz
+120K    vaxis-0.5.1-BWNV_BFECQBbXeTeFd48uTJRjD5a-KD6kPuKanzzVB01.tar.gz
+```
+
+The motivation for this change is to make it easier to tinker. Go ahead and edit those files, see what happens. Swap out your package directory with a git clone. Grep your dependencies all together. Configure your IDE to auto-complete based on the `zig-pkg` directory. [Run baobab on your dependency tree](https://codeberg.org/awebo-chat/awebo/issues/61). Furthermore, by having the global cache have compressed files instead makes it easier to share that cached data between computers. In the future, [it is planned to support peer-to-peer torrenting of dependency trees](https://github.com/ziglang/zig/issues/23236). By recompressing packages into a canonical form, this will allow peers to share Zig packages with minimal bandwidth. I love this idea because it simultaneously provides resilience to network outages, as well as a popularity contest. Find out which open source packages are popular based on number of seeders!
+
+The second change here is the addition of the `--fork` flag to `zig build`.
+
+In retrospect, it seems so obvious, I don’t know why I didn’t think of it since the beginning. It looks like this:
+
+```
+zig build --fork=[path]
+```
+
+This is a **project override** option. Given a path to a source checkout of a project, all packages matching that project across the entire dependency tree will be overridden.
+
+Thanks to the fact that package content hashes include name and fingerprint, **this resolves before the package is potentially fetched**.
+
+This is an easy way to temporarily use one or more forks which are in entirely separate directories. You can iterate on your entire dependency tree until everything is working, while using comfortably the development environment and source control of the dependency projects.
+
+The fact that it is a CLI flag makes it appropriately ephemeral. The moment you drop the flags, you’re back to using your pristine, fetched dependency tree.
+
+If the project does not match, an error occurs, preventing confusion:
+
+```
+$ zig build --fork=/home/andy/dev/mime
+error: fork /home/andy/dev/mime matched no mime packages
+$
+```
+
+If the project does match, you get a reminder that you are using a fork, preventing confusion:
+
+```
+$ zig build --fork=/home/andy/dev/dvui
+info: fork /home/andy/dev/dvui matched 1 (dvui) packages
+...
+```
+
+This functionality is intended to enhance the workflow of dealing with ecosystem breakage. I already tried it a bit and found it to be quite pleasant to work with. The new workflow goes like this:
+
+1. Fail to build from source due to ecosystem breakage.
+2. Tinker with --fork until your project works again. During this time you can use the actual upstream source control, test suite, zig build test --watch -fincremental, etc.
+3. Now you have a new option: be selfish and just keep working on your own stuff, or you can proceed to submit your patches upstream.
+
+…and you can probably skip the step where you switch your `build.zig.zon` to your fork unless you expect upstream to take a long time to merge your fixes.
+
+Author: Andrew Kelley
+
+The Windows operating system provides a large ABI surface area for doing things in the kernel. However, not all ABIs are created equally. As Casey Muratori points out in his lecture, [The Only Unbreakable Law](https://www.youtube.com/watch?v=5IUj1EZwpJY), the organizational structure of software development teams has a direct impact on the structure of the software they produce.
+
+The DLLs on Windows are organized into a heirarchy, with some of the APIs being high-level wrappers around lower-level ones. For example, whenever you call functions of `kernel32.dll`, ultimately, the actual work is done by `ntdll.dll`. You can observe this directly by using ProcMon.exe and examining stack traces.
+
+What we’ve learned empirically is that the ntdll APIs are generally well-engineered, reasonable, and powerful, but the kernel32 wrappers introduce unnecessary heap allocations, additional failure modes, unintentional CPU usage, and bloat.
+
+This is why the Zig standard library policy is to [Prefer the Native API over Win32](https://codeberg.org/ziglang/zig/issues/31131). We’re not quite there yet - we have plenty of calls into kernel32 remaining - but we’ve taken great strides recently. I’ll give you two examples.
+
+## Example 1: Entropy
+
+According to the official documentation, Windows does not have a straightforward way to get random bytes.
+
+[Many projects including Chromium, boringssl, Firefox, and Rust](https://github.com/rust-random/rand/issues/111) call `SystemFunction036` from `advapi32.dll` because it worked on versions older than Windows 8.
+
+Unfortunately, starting with Windows 8, the first time you call this function, it dynamically loads `bcryptprimitives.dll` and calls [ProcessPrng](https://learn.microsoft.com/en-us/windows/win32/seccng/processprng). If loading the DLL fails (for example due to an overloaded system, which we have observed on Zig CI several times), it returns error 38 (from a function that has `void` return type and is documented to never fail).
+
+The first thing `ProcessPrng` does is heap allocate a small, constant number of bytes. If this fails it returns `NO_MEMORY` in a `BOOL` (documented behavior is to never fail, and always return `TRUE`).
+
+`bcryptprimitives.dll` apparently also runs a test suite every time you load it.
+
+All that `ProcessPrng` is *really* doing is `NtOpenFile` on `"\\Device\\CNG"` and reading 48 bytes with `NtDeviceIoControlFile` to get a seed, and then initializing a per-CPU AES-based CSPRNG.
+
+So the dependency on `bcryptprimitives.dll` and `advapi32.dll` can both be avoided, and the nondeterministic failure and latencies on first RNG read can also be avoided.
+
+## Example 2: NtReadFile and NtWriteFile
+
+`ReadFile` looks like this:
+
+```
+pub extern "kernel32" fn ReadFile(
+    hFile: HANDLE,
+    lpBuffer: LPVOID,
+    nNumberOfBytesToRead: DWORD,
+    lpNumberOfBytesRead: ?*DWORD,
+    lpOverlapped: ?*OVERLAPPED,
+) callconv(.winapi) BOOL;
+```
+
+`NtReadFile` looks like this:
+
+```
+pub extern "ntdll" fn NtReadFile(
+    FileHandle: HANDLE,
+    Event: ?HANDLE,
+    ApcRoutine: ?*const IO_APC_ROUTINE,
+    ApcContext: ?*anyopaque,
+    IoStatusBlock: *IO_STATUS_BLOCK,
+    Buffer: *anyopaque,
+    Length: ULONG,
+    ByteOffset: ?*const LARGE_INTEGER,
+    Key: ?*const ULONG,
+) callconv(.winapi) NTSTATUS;
+```
+
+As a reminder, *the above function is implemented by calling the below function*.
+
+Already we can see some nice things about using the lower level API. For instance, the *real* API simply gives us the error code as the return value, while the kernel32 wrapper hides the status code somewhere, returns a `BOOL` and then requires you to call `GetLastError` to find out what went wrong. Imagine! Returning a value from a function 🌈
+
+Furthermore, `OVERLAPPED` is a fake type. The Windows kernel doesn’t actually know or care about it at all! The actual primitives here are events, APCs, and `IO_STATUS_BLOCK`.
+
+If you have a synchronous file handle, then `Event` and `ApcRoutine` must be `null`. You get the answer in the `IO_STATUS_BLOCK` immediately. If you pass an APC routine here then some old bitrotted 32-bit code runs and you get garbage results.
+
+On the other hand if you have an asynchronous file handle, then you need to either use an `Event` or an `ApcRoutine`. `kernel32.dll` uses events, which means that it’s doing extra, unnecessary resource allocation and management just to read from a file. Instead, Zig now passes an APC routine and then calls `NtDelayExecution`. This integrates seamlessly with cancelation, making it possible to cancel tasks while they perform file I/O, regardless of whether the file was opened in synchronous mode or asynchronous mode.
+
+For a deeper dive into this topic, please refer to this issue:
+
+[Windows: Prefer the Native API over Win32](https://codeberg.org/ziglang/zig/issues/31131)
+
+# [zig libc](https://ziglang.org/devlog/2026/#2026-01-31)
+
+Author: Andrew Kelley
+
+Over the past month or so, several enterprising contributors have taken an interest in the [zig libc subproject](https://codeberg.org/ziglang/zig/issues/30978). The idea here is to incrementally delete redundant code, by providing libc functions as Zig standard library wrappers rather than as vendored C source files. In many cases, these functions are one-to-one mappings, such as `memcpy` or `atan2`, or trivially wrap a generic function, like `strnlen`:
+
+```
+fn strnlen(str: [*:0]const c_char, max: usize) callconv(.c) usize {
+    return std.mem.findScalar(u8, @ptrCast(str[0..max]), 0) orelse max;
+}
+```
+
+So far, roughly 250 C source files have been deleted from the Zig repository, with 2032 remaining.
+
+With each function that makes the transition, Zig gains independence from third party projects and from the C programming language, compilation speed improves, Zig’s installation size is simplified and reduced, and user applications which statically link libc enjoy reduced binary size.
+
+Additionally, a [recent enhancement](https://codeberg.org/ziglang/zig/pulls/31037) now makes zig libc share the Zig Compilation Unit with other Zig code rather than being a separate static archive, linked together later. This is one of the advantages of Zig having an integrated compiler and linker. When the exported libc functions share the ZCU, redundant code is eliminated because functions can be optimized together. It’s kind of like enabling LTO (Link-Time Optimization) across the libc boundary, except it’s done properly in the frontend instead of too late, in the linker.
+
+Furthermore, when this work is combined with the recent [std.Io changes](https://codeberg.org/ziglang/zig/issues/30150), there is potential for users to seamlessly control how libc performs I/O - for example forcing all calls to `read` and `write` to participate in an io_uring event loop, even though that code was not written with such use case in mind. Or, [resource leak detection](https://codeberg.org/ziglang/zig/pulls/30788) could be enabled for third-party C code. For now this is only a vaporware idea which has not been experimented with, but the idea intrigues me.
+
+Big thanks to Szabolcs Nagy for [libc-test](https://wiki.musl-libc.org/libc-test.html). This project has been a huge help in making sure that we don’t regress any math functions.
+
+As a reminder to our users, now that Zig is transitioning to being the static libc provider, if you encounter issues with the musl, mingw-w64, or wasi-libc libc functionality provided by Zig, **please file bug reports in Zig first** so we don’t annoy maintainers for bugs that are in Zig, and no longer vendored by independent libc implementation projects.
+
+The very same day I sat at home writing this devlog like a coward, less than five miles away, [armed forces who are in my city against the will of our elected officials shot tear gas, unprovoked, at peaceful protestors](https://www.kptv.com/2026/01/31/live-labor-unions-rally-march-portland-ice-facility-protest/). Next time I hope to have the courage to join my neighbors, and I hope to not get shot like [Alex Pretti](https://en.wikipedia.org/wiki/Killing_of_Alex_Pretti) and [Renée Good](https://en.wikipedia.org/wiki/Killing_of_Ren%C3%A9e_Good).
