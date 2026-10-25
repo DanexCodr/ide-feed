@@ -1,269 +1,54 @@
-Nearly 1,800 developers from the Ruby on Rails community across 80 countries shared their thoughts on the tools, frameworks, and workflows that shape their daily development lives.
+![](https://philipotoole.com/wp-content/uploads/2014/09/rqlite-design.png)In September 2014 I published a [short post announcing](https://philipotoole.com/replicating-sqlite-using-raft-consensus/) [rqlite](https://rqlite.io). The idea was simple: take [SQLite](https://sqlite.org/), put a [Raft log](https://raft.github.io) in front of it, and replicate every write to a cluster so that the loss of a node did not mean the loss of the data. The [source went on GitHub](https://github.com/rqlite/rqlite) that same weekend. As far as I can tell, that was the first open-source system to combine Raft and SQLite. Nobody else was doing it, and for several years nobody else tried.
 
-This year, we also asked about something that's on everyone's mind: AI. How teams are using it, how they feel about it, and whether it's actually changing the way they work.
+Today “distributed SQLite” is a category with a dozen projects in it, a few of them venture-funded, two of them acquired. Since the people now writing about the category tend to start the story around 2021, I thought I should write down the version that starts in 2014. I was there for all of it.
 
-This is the ninth edition of our survey since 2009. For nearly two decades, it has been one of the key ways our team at Planet Argon keeps a pulse on how this community has evolved.
+## 2014: rqlite
 
-Some of these questions date back to our very first survey, allowing us to track trends over time. Others are new additions, designed to reflect what's changed in our ecosystem since we last asked.
+The need was concrete. A clustered system [I worked on at jut.io](https://philipotoole.com/resume/) needed a small amount of relational storage, and the question of which node should hold it had no good answer. Replicating SQLite with a consensus protocol solved it. We went another way at work, but [I kept building rqlite](https://philipotoole.com/tag/rqlite/) because the problem was general and the solution was small. The first version used [goraft](https://github.com/goraft), the same library [InfluxDB](https://github.com/influxdata/influxdb) and [etcd](https://etcd.io/) used at the time (I subsequently joined InfluxDB as a core developer around the same time). In early 2016 I [replaced it with](https://github.com/rqlite/rqlite/blob/master/CHANGELOG.md#20-april-5th-2016) [Hashicorp’s Raft implementation](https://github.com/hashicorp/raft) which rqlite still uses.
 
-Now it’s time to dig in. We hope you find something useful, surprising, or at least validating here.
+The design decision that mattered most was made then and never changed. rqlite is a [CP system](https://www.scylladb.com/glossary/cap-theorem/). Writes must go through the leader, a majority must acknowledge, and a partitioned minority refuses writes. Everything else, the [HTTP API](https://rqlite.io/docs/api/api/), the [read-consistency levels](https://rqlite.io/docs/api/read-consistency/), the [snapshotting](https://youtu.be/8XbxQ1Epi5w?t=493), followed from that.
 
-**How to read the charts:** Responses were collected from April to early July 2026. Percentages are based on the people who answered each question. Many questions let people pick more than one answer, so those totals add up to more than 100%. Write-in answers were grouped by hand.
+## Before 2014, and alongside it
 
-Who took the 2026 survey.
+Two things deserve mention for honesty’s sake. [Expensify](https://www.expensify.com/) had been replicating SQLite inside its own infrastructure for years with a [Paxos](https://en.wikipedia.org/wiki/Paxos_(computer_science))-style protocol; they released it as [Bedrock](https://bedrockdb.com/) in [2016](https://dbdb.io/db/bedrock). And ActorDB, an Erlang system that gave each “actor” its own SQLite database replicated by Raft, [appeared around the same time as rqlite](https://dbdb.io/db/actordb). Neither was widely adopted outside its origin, but both show the idea was in the air. What rqlite did was make it a standalone, general-purpose, open-source thing anyone could run.
 
-### Which one of the following applies to you?
+## 2017: dqlite
 
-Percent of respondents.
+[Canonical](https://canonical.com/) built [dqlite](https://canonical.com/dqlite) to get [LXD](https://canonical.com/lxd) and later MicroK8s an embedded replicated store without running etcd. [Mark Shuttleworth](https://en.wikipedia.org/wiki/Mark_Shuttleworth) actually called me once, and we talked, hoping that rqlite could be made to work, but it never quite fit. dqlite [began in Go](https://www.reddit.com/r/golang/comments/8a8h8y/dqlite_distributed_sqlite_for_go_applications/) and was rewritten in C with its own Raft library. It is the project most similar to rqlite in intent, and the main difference is of one of packaging: dqlite is a library you embed, rqlite is a server you run. Canonical’s need was a database inside their products: mine was a database beside anyone’s product.
 
-Percent of respondents by survey year.
+## 2021: Litestream, and a change of approach
 
-Percent of respondents.
+[Ben Johnson](https://github.com/benbjohnson) (whom I worked with at InfluxDB) released [Litestream](https://github.com/benbjohnson/litestream) in [early 2021](https://litestream.io/blog/why-i-built-litestream/). Litestream does not use consensus at all. It watches the SQLite [WAL](https://www.sqlite.org/wal.html) and streams it to [S3](https://aws.amazon.com/s3/), giving you disaster recovery for a single-node SQLite database at almost no cost. Ben’s argument was that most applications do not need a cluster; they use one machine and need a way to recover if it dies. He was right about a great many applications, and the “SQLite is enough” movement of the next few years, with blog posts and conference talks, owes a lot to that argument.
 
-How Rails development teams are shaped and how they collaborate.
+Litestream and rqlite answer different questions. Litestream: what if the machine dies? rqlite: what if the machine dies and I cannot wait to restore? The first question is more common, the second is the one people have when they come to rqlite.
 
-Percent of respondents.
+[Fly.io](https://fly.io/) hired Ben in 2022 and shipped [LiteFS](https://docs.fly.io/litefs), which replicates SQLite at filesystem level with leases from [Consul](https://developer.hashicorp.com/consul). It was the first attempt to make replicated SQLite a platform feature rather than a thing you deploy. And in a final twist, Litestream [inspired](https://philipotoole.com/rqlite-8-0-large-dataset-support-and-core-feature-upgrades/) rqlite’s v8.0 approach to handling the SQLite WAL.
 
-Percent of respondents by survey year.
+## 2022: forks and extensions
 
-Percent of respondents by survey year.
+Two projects in 2022 took approaches that neither rqlite nor Litestream had. [cr-sqlite](https://github.com/vlcn-io/cr-sqlite) added [CRDTs](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type) to SQLite as an extension, so that multiple writers could diverge and merge without a leader. That is the AP corner of the design space, and it suits local-first applications where rqlite’s CP guarantees would be a hindrance.
 
-In  2026 :Mostly consumer-only (public)47%A balanced mix of consumers and internal users42%Mostly internal users only11%
+[libSQL](https://github.com/tursodatabase/libsql) forked SQLite itself. ChiselStrike, later [Turso](https://turso.tech/), wanted to change things inside the engine that the SQLite project, which does not accept outside contributions, and would not change. On top of the fork they built a hosted service with replicas at the edge. Turso raised venture money on that, and in 2026 [Supabase acquired them](https://turso.tech/blog/turso-is-joining-supabase).
 
-Select all that apply. Percent of respondents; totals add up to more than 100%.
+Around the same time, [SQLite Cloud](https://www.sqlite.ai/cloud) appeared, offering hosted SQLite replicated with Raft. It is the project closest to rqlite’s original design, wrapped in a cloud service.
 
-Respondents could pick up to three. Percent of respondents; totals add up to more than 100%.
+## 2022 onward: the platforms
 
-Other responses
+[Cloudflare](https://www.cloudflare.com/) announced [D1](https://developers.cloudflare.com/d1/) in 2022, SQLite as a serverless database inside their edge network, and later put SQLite storage inside [Durable Objects](https://developers.cloudflare.com/durable-objects/concepts/what-are-durable-objects/). This is replicated SQLite as a managed product from a company that does not need to tell you how it works. Turso’s service is the same shape. The category had gone from “a thing you run” to “a thing you buy.”
 
-What versions the community is running and what holds upgrades back.
+## What the twelve years show
 
-Select all that apply. Percent of respondents; totals add up to more than 100%.
+Three things, I think.
 
-Percent of respondents by survey year. Select all that apply, so totals add up to more than 100%. mise appeared twice on the form; respondents who picked both are counted once.
+The core was right. SQLite as a storage engine, with replication added on the outside, has been reinvented by at least eight teams with different needs and different protocols. Nobody has found a reason to stop doing it.
 
-Select all that apply. Percent of respondents; totals add up to more than 100%.
+The design space has three corners, and they appeared in order. Consensus first (rqlite, dqlite): one leader, strong consistency, a cluster. Streaming second (Litestream): one writer, cheap recovery, no cluster. Merge third (cr-sqlite, and parts of the local-first movement): many writers, eventual consistency. Each is correct for a different question, and most of the arguments are arguments between their users about which question is being asked.
 
-Percent of respondents.
+And the money went to the platforms. rqlite, dqlite, and Litestream are open source and free. The projects that raised the capital or got acquired are the ones that turned replicated SQLite into a service with a bill. That is the usual fate of infrastructure ideas, and I do not mind it. But it is worth recording that the idea was open source for eight years before anyone sold it.
 
-Select all that apply. Percent of respondents; totals add up to more than 100%.
+[rqlite](https://rqlite.io/) is still here. It does the same thing it did in 2014, a good deal better, and it is still the thing you reach for when you want a fault-tolerant relational database you can run yourself, understand fully, and not pay anyone for. Twelve years in, I am content with that position in the story.
 
-How Rails applications are configured and what they integrate with.
-
-Percent of respondents by survey year.
-
-Select all that apply. Percent of respondents; totals add up to more than 100%.
-
-Other responses
-
-Select all that apply. Percent of respondents; totals add up to more than 100%.
-
-Percent of respondents.
-
-Asked of respondents with a companion native app. Select all that apply. Percent of those respondents; totals add up to more than 100%.
-
-How Rails developers built their skills and stay connected to the community.
-
-Percent of respondents.
-
-Select all that apply. Percent of respondents; totals add up to more than 100%.
-
-Percent of respondents.
-
-Write-in responses, listed by number of mentions. Percentages are of respondents who answered this question.
-
-Most Mentioned
-
-Other Mentions
-
-Respondents could pick up to three. Percent of respondents; totals add up to more than 100%.
-
-Percent of respondents by survey year.
-
-Write-in responses, ranked by number of mentions. Rails World led by a wide margin: 30% of respondents plan to attend.
-
-Top 10
-
-Other Mentions
-
-Percent of respondents who said yes, by survey year. Local in-person and online groups were asked as separate questions. Online groups were first asked in 2020.
-
-Top 10
-
-Honorable Mentions
-
-Top Ten
-
-Honorable Mentions
-
-Top 10
-
-Honorable Mentions
-
-Top 12
-
-Community contribution and the gem ecosystem.
-
-Percent of respondents.
-
-Write-in responses, ranked by number of mentions. Percent of respondents who answered this question. Tied answers share a rank.
-
-Top 10
-
-Other Responses
-
-Write-in responses, ranked by number of mentions. Percent of respondents who answered this question. Tied answers share a rank.
-
-Top 10
-
-Other Responses
-
-How JavaScript sits alongside Rails in modern applications.
-
-Select all that apply. Percent of respondents; totals add up to more than 100%.
-
-Select all that apply. Percent of respondents; totals add up to more than 100%.
-
-Other responses
-
-Select all that apply. Percent of respondents; totals add up to more than 100%.
-
-Other responses
-
-Testing, monitoring, and staying on top of vulnerabilities.
-
-Select all that apply. Percent of respondents; totals add up to more than 100%.
-
-Percent of respondents.
-
-Percent of respondents.
-
-Select all that apply. Percent of respondents; totals add up to more than 100%.
-
-Other responses
-
-Select all that apply. Percent of respondents; totals add up to more than 100%.
-
-Other responses
-
-Select all that apply. Percent of respondents; totals add up to more than 100%.
-
-Respondents could pick up to three. Percent of respondents; totals add up to more than 100%.
-
-Where Rails apps run and how they get there.
-
-Percent of respondents by survey year.
-
-Select all that apply. Percent of respondents; totals add up to more than 100%.
-
-Percent of respondents by survey year. Select all that apply, so totals add up to more than 100%. Kamal grew from 2.4% in 2024 to 23.8% in 2026, after Rails 8 made it the default deployment tool for new apps.
-
-Select all that apply. Percent of respondents; totals add up to more than 100%.
-
-Other responses
-
-Select all that apply. Percent of respondents; totals add up to more than 100%.
-
-Percent of respondents by survey year. Select all that apply, so totals add up to more than 100%. 4% use no CI.
-
-Runner-ups in 2026
-
-Percent of respondents by survey year. Select all that apply, so totals add up to more than 100%. 22% don't use a CDN.
-
-Runner-ups in 2026
-
-Which data stores back Rails applications.
-
-Percent of respondents by survey year. Select all that apply, so totals add up to more than 100%.
-
-Runner-ups in 2026
-
-No longer asked
-
-Select all that apply. Percent of respondents; totals add up to more than 100%.
-
-Percent of respondents by survey year.
-
-The tools developers reach for on their local machines.
-
-Percent of respondents.
-
-Percent of respondents.
-
-Percent of respondents by survey year. Zed (10.2%) and Cursor (5.4%) were write-in responses in 2026 — they weren't offered as formal options in prior surveys.
-
-Runner-ups in 2026
-
-No longer asked
-
-How AI tools are (and aren't) landing in Rails workflows.
-
-Percent of respondents.
-
-Select all that apply. Percent of respondents; totals add up to more than 100%.
-
-Other responses
-
-Select all that apply. Percent of respondents; totals add up to more than 100%.
-
-Percent of respondents.
-
-Percent of respondents.
-
-Percent of respondents.
-
-Percent of respondents.
-
-Percent of respondents.
-
-Percent of respondents.
-
-Percent of respondents.
-
-Percent of respondents.
-
-Percent of respondents.
-
-Percent of respondents.
-
-Percent of respondents.
-
-Percent of respondents.
-
-Write-in responses, grouped by hand. Percent of respondents who answered; people could name more than one.
-
-Other Responses
-
-Sentiment on where Rails is heading and what teams are planning next.
-
-Percent of respondents.
-
-Two questions: what significant technical changes has your team completed in the last 24 months, and what is it planning or evaluating in the next ~12 months? These reflect choices individual teams made for their own codebases and constraints, not recommendations. Select all that apply. Percent of respondents who answered each question (1,659 and 1,509). None in the last 24 months: 5%. None planned: 11%.
-
-Upgrades
-
-AI & the app layer
-
-Infrastructure & deploys
-
-Architecture
-
-Data
-
-Testing & types
-
-Dots with a halo are past the  45 % axis; the exact numbers are beside each row.
-
-Percent of respondents.
-
-Percent of respondents.
-
-Percent of respondents.
-
-AI is no longer a sidebar in Rails development. It showed up throughout this year's responses: in the tools people reach for, the gems they love, and the workflows they're rethinking. The community isn't watching from a distance; we're actively exploring.
-
-Some things remain constant. A few of the same tools, books, and podcasts that have anchored this ecosystem for years are still showing up. And new ones are appearing alongside them.
-
-At [Planet Argon](https://www.planetargon.com/?utm_content=conclusion-name&utm_source=railsdeveloper.com&utm_medium=referral&utm_campaign=survey-2026), we remain steadfast in our belief that Ruby on Rails is an exceptional platform to invest in, and we're excited to continue supporting its growth. If a few of these numbers hit close to home (inherited code, an upgrade that keeps sliding, an AI policy that's still a draft), that's the work we do every day. [Come say hello](https://www.planetargon.com/contact?utm_content=conclusion&utm_source=railsdeveloper.com&utm_medium=referral&utm_campaign=survey-2026).
-
-Thank you to everyone who took the time to contribute to the 2026 Rails Community Survey, our ninth edition since 2009. Eighty countries' worth of perspectives on a framework that keeps finding new reasons to stick around. We'll see you in 2028!
+1. ![Judah](https://secure.gravatar.com/avatar/ed643bcc9d4ad9992350d7be54ba49b6f28999b543628bb4555e4013237ceaba?s=100&d=identicon&r=g) [Judah](http://jsotomayor.net) [October 23, 2026 / 11:26 pm](https://philipotoole.com/twelve-years-of-distributed-sqlite/#comment-91089) [Reply](https://philipotoole.com/twelve-years-of-distributed-sqlite/?replytocom=91089#respond) Thank you for this blog! It was very interesting.
+2. ![Joost De Cock](https://secure.gravatar.com/avatar/8543e38de4652095c51571fb8dc1734eb7b1b736e574176c42e2f954e5e95a50?s=100&d=identicon&r=g) [Joost De Cock](https://morio.it) [October 24, 2026 / 3:49 am](https://philipotoole.com/twelve-years-of-distributed-sqlite/#comment-91092) [Reply](https://philipotoole.com/twelve-years-of-distributed-sqlite/?replytocom=91092#respond) Thank you for all your great work Philip. Rqlite is absolutely wonderful, and as far as how to be a good maintainer goes, you are absolutely a role model to me. Thank you
+3. ![Amit](https://secure.gravatar.com/avatar/fbb9f636ab458562d79e52883a6a18508d3b29ad79beb8a5ebf15a5a94e51e86?s=100&d=identicon&r=g) Amit [October 24, 2026 / 3:59 am](https://philipotoole.com/twelve-years-of-distributed-sqlite/#comment-91093) [Reply](https://philipotoole.com/twelve-years-of-distributed-sqlite/?replytocom=91093#respond) Thank you Phillip! I have been familiar with all of the projects you’ve mentioned. At my previous company I’ve worked in we also built a distributed layer on top of SQLite. It also was in Go using hashicorp library. One thing that I’ve been working on there is distributed transactions. At first it was implemented as every stmt in a tx is a different command on the ledger. I changed it so there’s at most 2 commands . One for distributed begin and then the node that initiated it does the entire tx locally. Then it accumulates all of the tx stmts and at the end it rollbacks and sends a commit command with the entire batch
+4. ![Valentinus](https://secure.gravatar.com/avatar/fee51dcbcea624cbb8509a57dce56b7a226534c4bbae54c76869da1664f48b37?s=100&d=identicon&r=g) Valentinus [October 25, 2026 / 12:04 am](https://philipotoole.com/twelve-years-of-distributed-sqlite/#comment-91106) [Reply](https://philipotoole.com/twelve-years-of-distributed-sqlite/?replytocom=91106#respond) Great blog. Thank you so much.
