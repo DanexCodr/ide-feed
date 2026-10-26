@@ -1,220 +1,143 @@
-I got bored and wanted to make a parser of C expressions. this will probably become a compiler at some point. previously, I’ve made a calculator using [shunting yard](https://en.wikipedia.org/wiki/Shunting_yard_algorithm), but with an itch to perhaps make a compiler of some kind, I looked at *pratt parsing*.
+Java ME (Micro Edition, also referred to as J2ME) is a platform for running Java applications on small resource constrained devices, such as feature phones from before the iPhone era. It is largely considered a dead platform with the advent of smartphones, and modern feature phones such as KaiOS use web technologies instead for their apps.
 
-you won’t find much information about pratt parsing in a conventional learning path of computer science. the [dragon book](https://en.wikipedia.org/wiki/Compilers:_Principles,_Techniques,_and_Tools), for all it talks about parsing, doesn’t mention it. as far as I’m aware, most programming language courses will probably teach either LR or recursive descent depending on how academic it is. pratt parsing specifically appears to be relegated mostly to compiler development and PLT circles. the most mainstream mention I know of it is in [crafting interpreters](https://craftinginterpreters.com/compiling-expressions.html); [wikipedia](https://en.wikipedia.org/wiki/Operator-precedence_parser#Pratt_parsing) also links a few other posts. I used the crafting interpreters text to get my bearings, but I also wanted to practice reading formal papers more, so I tried using [Pratt’s original paper text](https://tdop.github.io/) as much as possible. it did take a bit more time than I’d have liked to wrap my mind around how the recursion fits into the operator precedence, but it did just *click* all at once, namely once I related it back to shunting yard. so now I’m writing the observations down so I don’t forget. maybe it’s useful to you.
+However it is likely that you or someone you know have one of these old phones lying around, and you may be interested in how you can make Java apps that will run on it. This post goes through how to build a simple Java ME app solely with modern tooling in a modern environment, without needing anything from the old Sun Java ME SDKs.
 
-## shunting yard
+## Requirements
 
-the [shunting yard algorithm](https://en.wikipedia.org/wiki/Shunting_yard_algorithm) is, comparatively, much simpler than pratt. you have an output stream and an operator stack. operators are defined with their binding powers, where higher binding power means it binds tighter to its arguments (e.g. `*` has higher binding power in arithmetic than `+`). in the simplest description of shunting yard, for every token in the input stream:
+- You will need some distribution of OpenJDK 8, such as the Temurin builds for various platforms. You should ideally make the binaries available on the PATH (and check that it’s the right version with java -version), for convenience.
+- Also download MicroEmulator, because we will use their stub JARs that provides the Java ME APIs for compilation.
+- Also download ProGuard (I use 7.1.1 for this), which will be used for the preverification step.
 
-- if it’s a “standalone” token (i.e. identifier/number), just push it to the output
-- if it’s an operator token:
-  - if it’s of higher binding power than the top of the operator stack, push it to the stack
-  - if it’s of equal of lower binding power than the top of the operator stack, then pop all operator tokens of higher or equal binding power to the output stream before pushing the operator token to the operator stack
-    - popping all “higher or equal binding power” operators assumes that all operators are left-associative
-- at the end of the token stream, pop all remaining operators to the output.
+The instructions in this blog post assume a Linux-y terminal environment, but you could also follow along with Git Bash or a similar environment on Windows.
 
-a very primitive shunting yard in C, where expressions are converted to postfix notation, could be:
+## Hello World
+
+Here is a simple Hello World MIDlet that we will use. It will show a simple form using the LCDUI API with the text “Hello World!”:
 
 ```
-#include <stdio.h>
-#include <ctype.h>
+import javax.microedition.midlet.MIDlet;
+import javax.microedition.lcdui.Display;
+import javax.microedition.lcdui.Form;
 
-typedef struct {
-    char ops[32]; // limit of 32 operators
-    int idx; // index of last operator
-} Stk;
-
-void push(Stk *s, char op) {
-    s->idx += 1;
-    s->ops[s->idx] = op;
-}
-void pop(Stk *s)   { s->idx -= 1; }
-char peek(Stk *s)  { return s->ops[s->idx]; }
-char empty(Stk *s) { return s->idx == -1; }
-
-int get_bindpower(char op) {
-    static const int bps[] = { ['+'] = 1, ['-'] = 1, ['*'] = 2, ['/'] = 2 };
-    return bps[op];
-}
-
-int main(int argc, char **argv) {
-    char *str = argv[1];
-    Stk _opstk = (Stk){ .idx = -1 };
-    Stk *opstk = &_opstk;
-
-    while (*str != '\0') {
-        if (isdigit(*str)) {
-            // number
-            printf("EMIT '%c'\n", *str);
-        } else {
-            // operator (assumed valid)
-            // get_bindpower(peek(opstk)) is the left binding power
-            // get_bindpower(*str) is the right binding power
-            while (!empty(opstk) && get_bindpower(peek(opstk)) >= get_bindpower(*str)) {
-                printf("EMIT '%c'\n", peek(opstk));
-                pop(opstk);
-            }
-            push(opstk, *str);
-        }
-        str += 1;
+public class HelloMIDlet extends MIDlet {
+    public void startApp() {
+        Form form = new Form("Hello");
+        form.append("Hello World!");
+        Display.getDisplay(this).setCurrent(form);
     }
-
-    while (!empty(opstk)) {
-        printf("EMIT '%c'\n", peek(opstk));
-        pop(opstk);
-    }
-
-    return 0;
+    public void pauseApp() {}
+    public void destroyApp(boolean unconditional) {}
 }
 ```
 
-```
-$ ./a.out '1+5*2+6'
-EMIT '1'
-EMIT '5'
-EMIT '2'
-EMIT '*'
-EMIT '+'
-EMIT '6'
-EMIT '+'
-```
+Save it as `src/HelloMIDlet.java`.
 
-the problem with shunting yard is that it’s not very extensible to *new behavior*. for example, the algorithm has no concept of “subexpressions” in the recursive sense; adding parentheses means attaching special functionality to the `)` token for popping off the stack until reaching the matching `(`. that’s not hard in its own right, but more complex behavior like unary operators, right-associative expressions, functions with variable arguments, etc. will get [messy](https://web.archive.org/web/20220705004349/https://wcipeg.com/wiki/Shunting_yard_algorithm#Extensions). this is where the transformation to pratt parsing comes in.
+## Compile the class
 
-## from shunting to pratt
+We will compile this with `javac`, but we first need the stub JARs from MicroEmulator available in the `lib` directory. Extract `cldcapi11.jar` and `midpapi20.jar` and put them in a `lib` directory next to the `src` directory.
 
-the core realization to turn shunting yard into pratt is, instead of using an explicit stack for operator precedence, using the *call stack* to implicitly be inside of subexpressions as we need them. unlike recursive descent, you don’t nest calls through every level of precedence for every expression, but rather only nest and return when entering subexpressions.
+The `cldcapi11.jar` provides the [CLDC 1.1 API](https://docs.oracle.com/javame/config/cldc/ref-impl/cldc1.1/jsr139/index.html) and `midpapi20.jar` provides the [MIDP 2.0 API](https://docs.oracle.com/javame/config/cldc/ref-impl/midp2.0/jsr118/index.html). MIDP 2.0 is circa 2002, and is probably what you want to use for widest compatibility, while it has some important features that MIDP 1.0 lacks.
 
-unfortunately, there’s no clean “intermediate” step for this. you kind of just have to thrust it all through the wringer and look at the output. here’s the simplest pratt-style parser I can show in c, equivalent to the shunting yard parser before:
+Then we can compile the Java source file with the following command:
 
 ```
-#include <stdio.h>
-#include <ctype.h>
-#include <stdlib.h>
-
-int get_bindpower(char op) {
-    // the end token ('\0') is now defined in the bind power array
-    static const int bps[] = {
-        ['\0'] = 0,
-        ['+'] = 1, ['-'] = 1, ['*'] = 2, ['/'] = 2
-    };
-    return bps[op];
-}
-
-typedef struct {
-    char *str;
-} Parser;
-
-char cur(Parser *p) { return *p->str; }
-void bump(Parser *p) { p->str += 1; }
-
-void
-expr(Parser *parser, int left_bindpower) {
-    // all expressions *must* start with a number (or "prefix" token)
-    if (isdigit(cur(parser))) {
-        printf("EMIT '%c'\n", cur(parser));
-    } else {
-        puts("expression doesn't start with a number");
-        abort();
-    }
-    bump(parser);
-
-    // at this point, we're at an infix (or postfix) operator.
-    // when this check is false, it's equivalent to "unwinding" the stack in shunting yard.
-    while (left_bindpower < get_bindpower(cur(parser))) {
-        // assumed to be valid operator (like the shunting yard code)
-
-        // there's an expression on the right side of binary operators. parse it first.
-        // this is the equivalent of pushing to the operator stack in shunting yard.
-        int new_left_bindpower = get_bindpower(cur(parser));
-        char op = cur(parser);
-        bump(parser);
-        expr(parser, new_left_bindpower);
-
-        printf("EMIT '%c'\n", op);
-    }
-}
-
-int main(int argc, char **argv) {
-    Parser parser = (Parser){ .str = argv[1] };
-
-    expr(&parser, 0);
-
-    return 0;
-}
+mkdir -p build/classes
+javac -source 1.3 -target 1.1 -bootclasspath "lib/cldcapi11.jar:lib/midpapi20.jar" \
+    -d build/classes src/HelloMIDlet.java
 ```
 
-```
-$ ./a.out '1+5*2+6'
-EMIT '1'
-EMIT '5'
-EMIT '2'
-EMIT '*'
-EMIT '+'
-EMIT '6'
-EMIT '+'
-```
+- -source 1.3 sets the source compatibility to 1.3, which means that your source code will be Java 1.3 code.
+- -target 1.1 sets the target compatibility to 1.1, which means that the generated bytecode will be compatible with Java 1.1 (bytecode version 45.3). This is what is required for MIDP 2.0, which is probably what you want to target.
+- -bootclasspath specifies the libraries it should include on the classpath for compiling code, and specifically we want these libraries to override all the built-in libraries in OpenJDK 8 which are for the regular Java SE API.
 
-on its own, this doesn’t look too exciting. I made the stack implicit. big whuff. but! there are two neat things here:
+(To compile multiple `.java` files in `src`, you would put `$(find src -name "*.java")` instead.)
 
-- “prefix” operators have first-class handling now
-- we have the power to assign arbitrary code to any individual operator as soon as the operator is seen, just like recursive descent.
+## Package the JAR
 
-these combined allow for simple & straightforward extensibility. here’s all it takes to add parentheses into the mix:
+MIDlets need some metadata in the META-INF manifest file to work. Most of the fields are self-explanatory:
 
 ```
-int get_bindpower(char op) {
-    // add '(' to bps
-    static const int bps[] = {
-        ['\0'] = 0,
-        ['('] = 0,
-        ['+'] = 1, ['-'] = 1, ['*'] = 2, ['/'] = 2
-    };
-    return bps[op];
-}
-
-// ...
-
-// forward-declare expr() and add paren() subroutine.
-// this doesn't even need to be a subroutine; you can inline this in the expr() func.
-// but this is cleaner :)
-void expr(Parser *parser, int left_bindpower);
-
-void paren(Parser *parser) {
-    expr(parser, get_bindpower('('));
-    if (cur(parser) != ')') {
-        puts("no matching ')'");
-        abort();
-    }
-}
-
-// ...
-
-// add the if '(' conditional here; rest is same
-void
-expr(Parser *parser, int left_bindpower) {
-    if (cur(parser) == '(') {
-        bump(parser);
-        paren(parser);
-    } else if (isdigit(cur(parser))) {
-        printf("EMIT '%c'\n", cur(parser));
-    } else {
-        puts("expression doesn't start with a valid prefix token");
-        abort();
-    }
-    // ...
-}
+Manifest-Version: 1.0
+MIDlet-Name: hello-midlet
+MIDlet-Version: 1.0.0
+MIDlet-Vendor: The Author
+MIDlet-1: HelloMIDlet,/icon.png,HelloMIDlet
+MicroEdition-Configuration: CLDC-1.1
+MicroEdition-Profile: MIDP-2.0
 ```
 
+For the `MIDlet-1` field, the format is a comma-separated list of three values: The human-readable name of the MIDlet, the path to the icon inside of the JAR, and the fully qualified class name of the entrypoint class. Since the above Java code specifies no package, it will be in the default package at the root of the JAR.
+
+Save this to `resources/META-INF/MANIFEST.MF`, creating a `resources/` directory to house assets to put in the final JAR. Also put a 16x16 PNG icon in `resources/icon.png`. Then let’s package everything together into a JAR:
+
 ```
-$ ./a.out '1+5*(2+6)'
-EMIT '1'
-EMIT '5'
-EMIT '2'
-EMIT '6'
-EMIT '+'
-EMIT '*'
-EMIT '+'
+cp -r resources/* build/classes
+jar cfm build/input.jar resources/META-INF/MANIFEST.MF -C build/classes .
 ```
 
-want to add *even more* operators? coalesce the `get_bindpower()` function with choosing the subroutine to run, storing “rules” as a struct of the binding power, prefix subroutine, and postfix subroutine. the core stays simple while all the operators run in their own little functions! I’m not going to paste another blob of code here, but that setup is described in the [crafting interpreters chapter](https://craftinginterpreters.com/compiling-expressions.html). it’s so elegant!
+Now we have a JAR file `build/input.jar`… But we need to preverify it before it can be run on a Java ME device.
+
+## Preverification
+
+Preverification is a process required for the [KVM](https://en.wikipedia.org/wiki/K_virtual_machine) (the minimal Java virtual machine used in Java ME) to ensure that the bytecode is valid. Traditionally this would be done by a `preverify` tool from the original Java ME SDK, but ProGuard supports doing the same thing and is more modern.
+
+```
+java -jar "lib/proguard.jar" \
+    -injars "build/input.jar" -outjars "app.jar" \
+    -libraryjars "lib/cldcapi11.jar" \
+    -libraryjars "lib/midpapi20.jar" \
+    -dontshrink -dontoptimize -dontobfuscate \
+    -microedition
+```
+
+You can also use ProGuard to shrink, optimise and obfuscate your code to reduce the footprint of the resulting JAR, which is especially important for Java ME apps where the JAR size limit can be very strict. But for this example we disable all of that for now and just specify `-microedition` to do the preverification.
+
+Now you have a `app.jar` file that can actually be run on a Java ME device or in an emulator. You can use MicroEmulator to run it, or something with more features like [FreeJ2ME-plus](https://github.com/TASEmulators/freej2me-plus), currently the best J2ME emulator for desktop platforms.
+
+![Hello World](https://voxelmanip.se/media/building-java-me-apps-with-modern-tooling/hello_world.webp)
+
+## Getting the JAR to your phone
+
+Now that you have gotten it running in an emulator it would be nice to get it running on the real hardware. The feature phone I had lying around that’s the most functional is the Sony Ericsson S312, a budget feature phone from 2009. It even has a camera!
+
+![A Dawn Blue coloured Sony Ericsson S312 feature phone, on the screen is the photo viewer showing a selfie taken with the phone.](https://voxelmanip.se/media/building-java-me-apps-with-modern-tooling/sony_ericsson_s312.webp)
+
+Java feature phones tend to have connectivity and storage mediums that are generally considered obsolete nowadays. My Sony Ericsson S312 has a proprietary charger cable with no USB on either end - supposedly you can use a special USB transfer cable, but that was a separate accessory that doesn’t seem worthwhile to obtain. In addition to this, the physical external memory storage is some strange card format that is distinct from any standard kind of SD card (M2 memory stick, not to be confused with the M.2 connector).
+
+Bluetooth ended up being the easiest way to transfer files to and from the phone. After connecting the phone to my computer and installing `bluez-obex` for OBEX, used for transferring files over Bluetooth, I was able to explore the files on the phone like I had plugged it in via USB and then copy over the JAR file.
+
+It’s quite slow - very slow in fact, but a simple app should only be a few kilobytes in size. Once transferred over, I was able to go into the file manager on my phone, find the JAR and then install it. After some time, it showed up in the list of games.
+
+![The games list on the Sony Ericsson S312, showing a new 'hello-midlet' app with a raccoon icon.](https://voxelmanip.se/media/building-java-me-apps-with-modern-tooling/ericsson_app_list.webp)
+
+## Sample app
+
+After getting the Hello World working, I expanded upon it a bit to draw images to the screen. I used the same image that was used for the app icon, a raccoon pixel art. Then I made them bounce across the screen. Just something simple to get the satisfaction of seeing something moving on the screen.
+
+![A screenshot of the bouncing raccoons app in the FreeJ2ME emulator.](https://voxelmanip.se/media/building-java-me-apps-with-modern-tooling/bouncing_raccoons_screenshot.webp)
+
+This code and the final `build.sh` script to build a functioning JAR of it can be found [on GitHub](https://github.com/rollerozxa/j2me-test-app) for reference. One thing you might need to customise is the path to where OpenJDK 8 is installed - I just hardcoded it to where I have it on my system at the top of the buildscript:
+
+```
+export PATH="/usr/lib/jvm/java-8-openjdk/bin/:$PATH"
+```
+
+## Limitations of the platform
+
+I’d also like to end with a section of the limitations of the Java ME platform, of which there are many important ones to be aware of.
+
+First of all, you will be writing Java 1.3 code. While the basic language features are the same, it is very limited compared to modern Java or even something like Java 8. In addition to this, the API that MIDP 2.0 provides is very limited compared to the Java SE API when it comes to classes in the standard library. A full reference of all the classes you have available is available in the old [MIDP 2.0 API documentation](https://docs.oracle.com/javame/config/cldc/ref-impl/midp2.0/jsr118/index.html).
+
+Different phone manufacturers have different implementations of the Java ME platform, and some of them implement their own APIs on top of the standard ones. Developers back in the day would typically ship several different versions of their app for Nokia, Sony Ericsson and generic MIDP 2.0 baselines to make use of these additional features. While MIDP 2.0 is the common denominator, you may also find that there are some discrepancies between different phone manufacturers. A lot of work was made for Android to not make the same mistake, despite its own diverse ecosystem of devices.
+
+As for the specs of the phones you are targeting… Well, they are very limited. One thing to note is that many older feature phones have no hardware accelerated FPU - while the `float` type is available in Java, it will be emulated in software and be very slow on devices without a FPU. Generally you would always want to use fixed point math when doing heavier calculations.
+
+As the size of your app will also be constrained, general advise for size optimisation applies. You can use ProGuard to shrink your code, PNG optimisers to reduce the size of your assets, and try to minimise the amount of separate classes and image files you have to take the most advantage from the per-file compression of JAR files. Your Java code will likely end up looking the complete opposite of what is considered clean code by Java OOP standards, but that’s okay.
+
+## Comments & support
+
+You can discuss the blog post in [this forum thread](https://forum.voxelmanip.se/thread?id=179) on the Voxelmanip Forums.
+
+All blog posts are written by a human who would also appreciate a
+		[donation](https://voxelmanip.se/donate/#links)
+		if you got some value out of this piece of writing.

@@ -1,365 +1,278 @@
-First off, I tried it out myself and confirmed that YouTube was completely broken. This
-didn’t show up in testing because I almost never use YouTube on desktop, preferring the
-mobile app instead, so I failed to observe any issues with it.
+Many years ago I worked on an alternate Java compiler and runtime
+called gcj, the GNU Compiler for the Java Programming Language.
+These days, my preferred programming language for most tasks is
+Common Lisp, but I’m still interested in Java runtimes.
 
-The logs in the issue were interesting:
+Back in late 2024, I wanted to use a Java library from SBCL, but
+couldn’t find an integration approach that suited the application.
+This led me to explore the idea of building a simple JVM bytecode
+processor in Lisp so I could execute the code directly in process.
 
-```
-Oct 05 09:51:57 fedora org.chromium.Chromium.desktop[2865]: [2:19:1005/095157.560929:ERROR:chrome_browser_main_extra_parts_metrics.cc(228)] crbug.com/1216328: Checking Bluetooth availability started. Please report if there is no report that this ends.
-Oct 05 09:51:57 fedora org.chromium.Chromium.desktop[2865]: [2:19:1005/095157.560954:ERROR:chrome_browser_main_extra_parts_metrics.cc(231)] crbug.com/1216328: Checking Bluetooth availability ended.
-Oct 05 09:51:57 fedora org.chromium.Chromium.desktop[2865]: [2:19:1005/095157.560962:ERROR:chrome_browser_main_extra_parts_metrics.cc(234)] crbug.com/1216328: Checking default browser status started. Please report if there is no report that this ends.
-Oct 05 09:51:57 fedora org.chromium.Chromium.desktop[2865]: [2:19:1005/095157.567208:ERROR:chrome_browser_main_extra_parts_metrics.cc(238)] crbug.com/1216328: Checking default browser status ended.
-Oct 05 09:52:16 fedora org.chromium.Chromium.desktop[3529]: The futex facility returned an unexpected error code.
-Oct 05 09:52:16 fedora org.chromium.Chromium.desktop[3543]: Failed to load cookie file from cookie: Permission denied
-Oct 05 09:52:16 fedora org.chromium.Chromium.desktop[3543]: The futex facility returned an unexpected error code.
-Oct 05 09:52:17 fedora org.chromium.Chromium.desktop[3648]: Failed to load cookie file from cookie: Permission denied
-Oct 05 09:52:17 fedora org.chromium.Chromium.desktop[3648]: The futex facility returned an unexpected error code.
-```
+I started before coding agents became useful for this kind of work,
+and wrote the first working version by hand.
 
-The last several lines are *definitely* not from Chromium itself, as they don’t follow the
-standard Chromium log format. A quick google of the error pointed me to
-[this Gentoo issue](https://bugs.gentoo.org/799878#c8), detailing that the error is actually
-being logged by glibc. It included this code fragment from within the glibc source code:
+[OpenLDK](https://github.com/atgreen/openldk) is a JIT compiler and
+runtime for Java, written in Common Lisp. It reads Java bytecode,
+translates it into Lisp, and lets SBCL compile that Lisp into native
+machine code. Java objects live in the same process and heap as the
+Lisp application.
 
-```
-static __always_inline __attribute__ ((__noreturn__)) void
-futex_fatal_error (void)
-{
-  __libc_fatal ("The futex facility returned an unexpected error code.\n");
+My goal is to make Java libraries feel at home in Common Lisp. For
+general Java execution, HotSpot will be much faster.
+
+In the last few days, however, OpenLDK has gotten much better. I’ve
+experimented with JVM-hosted languages and Spring Boot application
+execution.
+
+OpenLDK leads to some wonderfully strange possibilities. Java classes
+become CLOS classes. Lisp can add methods around methods written in
+Kotlin. A Clojure function can become something you pass to
+`funcall`. Java’s own compiler runs inside SBCL. And an initialized
+Spring Boot application can be saved in a Lisp image and launched
+again in about 84 milliseconds.
+
+You can even connect Emacs and [SLY](https://joaotavora.github.io/sly/)
+to a Spring Boot application running on OpenLDK, inspect its objects,
+and monkey-patch its behavior while it keeps running.
+
+Here is a tour of how it works, what it can do, and what that startup number actually means.
+
+The compilation pipeline begins with ordinary class files. OpenLDK targets JDK 25 and uses OpenJDK’s runtime libraries, reading them from the JDK’s JMOD files or its `lib/modules` container.
+
+When a class loads, OpenLDK creates its CLOS representation and installs stubs for its methods. Calling a method for the first time triggers compilation: bytecode becomes an intermediate representation, then Lisp, then native code through SBCL. The compiled definition replaces the stub.
+
+That laziness matters. Loading a library does not mean compiling every method in it. Much of a large library may never be used by a particular application.
+
+Consider a Java method:
+
+```java
+public static int add(int x, int y) {
+    return x + y;
 }
+```
 
-static __always_inline int
-futex_wait (unsigned int *futex_word, unsigned int expected, int private)
-{
-  int err = lll_futex_timed_wait (futex_word, expected, NULL, private);
-  switch (err)
-    {
-    case 0:
-    case -EAGAIN:
-    case -EINTR:
-      return -err;
+Stripped of the generated control-flow scaffolding and exception machinery, its translated body amounts to:
 
-    case -ETIMEDOUT: /* Cannot have happened as we provided no timeout.  */
-    case -EFAULT: /* Must have been caused by a glibc or application bug.  */
-    case -EINVAL: /* Either due to wrong alignment or due to the timeout not
-		     being normalized.  Must have been caused by a glibc or
-		     application bug.  */
-    case -ENOSYS: /* Must have been caused by a glibc bug.  */
-    /* No other errors are documented at this time.  */
-    default:
-      futex_fatal_error ();
+```lisp
+(sb-c::mask-signed-field 32 (+ x y))
+```
+
+The signed-field operation preserves Java’s 32-bit integer overflow behavior. With typed operands, SBCL can compile this to a machine addition. OpenLDK handles Java’s semantics while drawing on the compiler SBCL already provides.
+
+The translation also makes the program accessible to Lisp. Java fields become slots. Instance methods become methods of CLOS generic functions, identified by their JVM signatures so overloaded methods remain distinct. Static methods become ordinary Lisp functions. Java’s exception hierarchy has a corresponding Lisp condition hierarchy.
+
+Compiled methods are retained in a persistent code cache. Subsequent runs can load cached code when the classes it depends on remain unchanged, and cache entries are separated by OpenLDK build. Different images can reuse compiled JDK methods too.
+
+The most interesting consequences appear when an application starts using these representations directly.
+
+Foreign source can appear directly inside Lisp source. After starting the relevant languages and enabling OpenLDK’s source syntax, a Kotlin expression looks like this:
+
+```lisp
+(let ((n 4))
+  #@kt{ (1..$n).map { it * it } })
+;; => (1 4 9 16)
+```
+
+`$n` passes the Lisp value into the Kotlin code as an object. Lexical variables, collections, and callbacks can cross the boundary without being serialized into source strings.
+
+The same mechanism supports Scala, Groovy, Clojure, Kawa, JScheme, and ABCL. Each block keeps the language’s own syntax. Clojure also has a `#[ ... ]` notation.
+
+A Clojure function can come back as a callable foreign-function object. The surrounding Lisp invokes it with ordinary `funcall`, with argument and result conversion handled by the interop layer. The reverse direction works too: Lisp functions can become callbacks for the other languages.
+
+You can also nest those source blocks. Here is the entire [`examples/one-form.lisp`](https://github.com/atgreen/openldk/blob/39f33c0/examples/one-form.lisp) file, verbatim. After the setup, one expression passes a value through all seven languages:
+
+```lisp
+;;;; One form, seven languages
+;;;;
+;;;; A single Lisp expression in which every JVM language OpenLDK runs does
+;;;; one thing it is known for, written in its own syntax, and hands its
+;;;; result to the next.  Read it from the inside out:
+;;;;
+;;;;   Clojure  takes ten primes from an infinite lazy sequence
+;;;;            (2 3 5 7 11 13 17 19 23 29)
+;;;;   Groovy   squares them with the spread-dot operator and sums: 2397
+;;;;   Kawa     adds one with Java's Long.sum, by colon notation, and
+;;;;            divides exactly by the first of 6, 5, 4, 3, 2 that doesn't
+;;;;            divide it evenly, escaping the search with call/cc: 1199/3,
+;;;;            returned as its numerator and denominator
+;;;;   JScheme  sums each one's digits in a named let: (20 3)
+;;;;   Scala    matches the pair against a list pattern with a guard: 60
+;;;;   Kotlin   pours it into a local data class, copies it, and sweetens it
+;;;;            with when and the Elvis operator: 61
+;;;;   ABCL     writes it with FORMAT, in Roman numerals and in English
+;;;;
+;;;; Each block is source in its language, as the language writes it.
+;;;; $#@lang{ ... } (or $#[ ... ] for Clojure) splices the value of the
+;;;; block inside into the language around it, passed as an object.
+;;;;
+;;;;   ./sbcl-polyglot --load examples/one-form.lisp
+;;;;
+;;;; prints: LXI (sixty-one)
+
+(require :asdf)
+(push (uiop:getcwd) asdf:*central-registry*)
+(asdf:load-system "openldk/polyglot")
+(polyglot:startup :verbose nil)
+(setf *readtable* (polyglot:enable-syntax (copy-readtable)))
+
+(format t "~&~A~%"
+  #@abcl{                                ; ABCL: FORMAT's Roman numerals and English
+    (let ((n $#@kt{                      // Kotlin: a local data class, copy, when, ?:
+               data class Cup(val tea: Int, val sugar: Int? = null)
+               val cup = Cup($#@sc{     // Scala: a list pattern with a guard
+                               $#@jscheme{   ; JScheme: digit sums in a named let
+                                 (map (lambda (n)
+                                        (let loop ((n n) (sum 0))
+                                          (if (< n 1)
+                                              sum
+                                              (loop (quotient n 10) (+ sum (remainder n 10))))))
+                                      $#@kawa{   ; Kawa: Java by colon notation; call/cc; exact division
+                                        (let* ((m (java.lang.Long:sum
+                                                   $#@gv{   // Groovy: the spread-dot operator
+                                                     $#[ (->> (iterate inc 2)   ; Clojure: lazy and infinite
+                                                              (filter (fn [n] (not-any? #(zero? (rem n %))
+                                                                                        (range 2 n))))
+                                                              (take 10)) ]*.power(2).sum()
+                                                   }
+                                                   1))
+                                               (d (call-with-current-continuation
+                                                    (lambda (found)
+                                                      (for-each (lambda (d)
+                                                                  (if (not (= 0 (remainder m d))) (found d)))
+                                                                '(6 5 4 3 2))
+                                                      1)))
+                                               (r (/ m d)))
+                                          (list (numerator r) (denominator r)))
+                                      })
+                               } match {
+                                 case List(a: Int, b: Int) if a > b => a * b
+                                 case List(a: Int, b: Int) => a + b
+                               }
+                             }).copy(sugar = null)
+               when { cup.tea > 40 -> cup.tea + (cup.sugar ?: 1); else -> cup.tea }
+             }))
+      (format nil "~@R (~R)" n n))
+  })
+```
+
+The result:
+
+```text
+LXI (sixty-one)
+```
+
+The `$` before a nested block passes its result to the enclosing language. The expression crosses seven language implementations, using their own syntax and libraries, inside one Lisp process. I think that’s extremely cool.
+
+CLOS integration goes further. Lisp can add a method that runs before Java’s `ArrayList.clear()`:
+
+```lisp
+(openldk.interop:define-java-method :before
+    ("java.util.ArrayList" "clear()V") (list)
+  (format t "~&clearing ~D elements~%"
+          (openldk.interop:java-call "size()I" list)))
+```
+
+The signature’s `V` means the method returns Java’s `void`; `size()I` returns an integer. This method prints the number of elements before the original implementation clears the list.
+
+Calls from compiled Java, Kotlin, Scala, or Groovy code go through it too.
+
+Java methods participate in CLOS method combination. Lisp can supply `:before`, `:after`, and `:around` behavior at the point where the application needs it.
+
+Lisp can also define a class that Java code sees as an ordinary Java class. OpenLDK’s `define-java-class` generates a class file and installs it through the application class loader, while its method implementations are Lisp code.
+
+These classes can implement Java interfaces. Their methods can consult Lisp state and call other language components, while Java reflection sees an ordinary Java class.
+
+Error handling participates in the same integration. A `NumberFormatException` escaping a foreign call becomes a typed Lisp condition, `foreign-number-format-error`, which is also a `parse-error`. Other mappings cover arithmetic, file, type, and storage errors.
+
+The foreign-call interface offers `use-value` and `retry` restarts. Lisp handlers can supply a replacement value or retry a failed foreign call.
+
+A Lisp error raised inside a callback can travel in the other direction as an appropriate Java exception. If it escapes back to Lisp, the original Lisp condition is recovered. Each side can use its own error-handling facilities.
+
+Collections have similar accommodations. A Java list can be exposed as a Lisp sequence, converting elements as they are accessed. A Lisp sequence or hash table can be presented to Java through a backed list or map view.
+
+The build system joins in as well. ASDF systems can contain Maven JAR components and source components for the supported languages. Kotlin, Scala, and Groovy files compile during ASDF’s compilation operation; their classes become available to later components. Maven components place libraries on the shared classpath. Dependencies must currently be listed explicitly.
+
+Inline Kotlin and Scala blocks can also compile with the surrounding Lisp file when their splices have static types and the language compiler is running. Their class bytes are stored in the FASL. Loading that FASL does not require recompiling those blocks. The [interop documentation](https://github.com/atgreen/openldk/blob/39f33c0/docs/INTEROP.md) covers these interfaces and the language-specific conversions.
+
+These features sit on top of some substantial programs already running.
+
+Java’s `javac` compiler works on OpenLDK, and the build produces a warmed `javacl` executable. Clojure runs with protocols, records, atoms, and futures. Kawa and JScheme run Scheme. Scala’s compiler and REPL work, Kotlin compiles source into executable class files, and Groovy runs dynamic scripts and statically compiled classes.
+
+ABCL adds a particularly pleasing loop: Common Lisp compiled into Java bytecode, translated back into Common Lisp, then compiled by SBCL. Its REPL, compiler, CLOS, conditions, and Java interop run in that environment.
+
+There are also Spring Boot and Quarkus applications. Spring PetClinic runs with embedded Tomcat, Hibernate, and H2. That is separate from the small command-line application used for the startup measurements below.
+
+All that compilation has a cost. Starting a large language implementation cold can take minutes, because OpenLDK is compiling the implementation itself as it runs. Saving executable images makes a substantial difference.
+
+A warm image runs an application during the build, exercises selected paths, and saves the compiled code. Paths the warmup never exercised still compile on first use.
+
+Application state is a separate choice. By default, `dump-warm-image` resets application-class static state so initialization can happen again. With `:reset-classes nil`, it preserves the state left by the warmups. An application designed to reuse that state can begin with much of its initialization already complete.
+
+That is how the Spring Boot snapshot works.
+
+The benchmark application uses auto-configuration, configuration properties bound into a record, dependency injection, and an auto-configured Jackson mapper. A `CommandLineRunner` produces JSON and reads a value back. Ordinary startup also prints Spring’s banner and logs through Logback.
+
+Its snapshot entry point keeps the initialized context:
+
+```java
+public class Snapshot {
+    static ConfigurableApplicationContext ctx;
+
+    public static void main(String[] args) throws Exception {
+        if (ctx == null) {
+            ctx = SpringApplication.run(BootApp.class, args);
+        } else {
+            for (CommandLineRunner runner :
+                    ctx.getBeansOfType(CommandLineRunner.class).values()) {
+                runner.run(args);
+            }
+        }
     }
 }
 ```
 
-For some context: futex is a Linux syscall that’s used in various synchronization
-operations, such as mutexes and condition variables. In this case, when futex is run, an
-unexpected error code is returned, causing glibc to panic. The chance of the kernel
-returning a brand-new type of error due to a Flatpak runtime upgrade is…​not very high,
-to say the least. But, how else  would another error code end up being returned here?
-Well, it turns out, there’s *one* important thing that stands between glibc and the
-kernel…​
+With the Spring imports supplied, this is the benchmark’s entry point. The first call starts Spring. Later calls reuse the context and execute its runners.
 
-## The BPF Sandbox
+After loading OpenLDK into SBCL and setting `CLASSPATH` to the application classes and each required JAR, the image can be built with:
 
-Chromium’s sandboxing architecture on Linux is an
-[impressive,
-multi-level system](https://chromium.googlesource.com/chromium/src/+/0e94f26e8/docs/linux_sandboxing.md), where the first layer restricts the process’s runtime environment,
-and the second layer restricts the process’s syscall access. That second layer is known as
-the *BPF sandbox*: if a syscall is executed that is not explicitly allowed, the BPF
-sandbox rejects it, returning a custom error code. Syscalls…​syscalls like futex, right?
-Well, this seems rather interesting!
-
-At this point, I recalled a previous experience I had with Chromium’s sandboxing while
-working on the Flatpak port: the *audio service sandbox*, which is what applies the BPF
-sandbox to the audio process. Given that the errors in the screenshot showed a connection
-to the audio renderer, this seemed like a useful target. With this in mind, I was able to
-grab a core dump from the crashing audio service and retrieved this traceback:
-
-Note the bottom few frames, which refer to code inside PulseAudio’s client library,
-libpulse. This essentially confirmed that the error was indeed from the audio service.
-Given my previous experience with said service, I recalled that there was a
-[feature
-flag](https://source.chromium.org/chromium/chromium/src/+/main:content/public/common/content_features.cc;l=62-69;drc=4d1cf30786b9d1cec55b7b5a713f4a78fd4c73b0) controlling whether or not the audio sandbox was enabled, so I decided to try
-disabling it to confirm it was actually the issue, via
-`--disable-features=AudioServiceSandbox`. It *did* indeed stop the audio service from
-crashing. (Unfortunately, videos still did not play, but that later turned out to be due
-to unrelated network connection issues.)
-
-## Field Trials
-
-But, why was this only broken on Chromium, and not Chrome or Brave? Well, Chromium and its
-derivatives use [field trials](https://textslashplain.com/2017/10/18/chrome-field-trials/),
-which are essentially randomized feature flag controls to perform A/B testing and gradual
-rollouts. When I checked the active feature trials in the various browsers via
-`chrome://version/?show-variations-cmd`, it became apparent that only Chromium had the
-`AudioServiceSandboxLinux` feature trial active, among many, many other trials (this part
-is important later!). By contrast, Chrome, Brave, and Edge had no reported issues tied to
-YouTube, and this field trial was **not** active there.
-
-## Futex Flags
-
-To recap what we know so far:
-
-- Chromium’s audio service is crashing due to an unexpected error returned from `futex`.
-- This only occurs when the audio service sandbox is enabled.
-
-With this in mind, the most obvious cause of the problem was that something about the way
-`futex` was being called had changed on the new runtime version, so it gets blocked by the
-BPF sandbox. Two components in the runtime stand out in the original stack trace from gdb:
-
-- PulseAudio, which indirectly calls `futex` because it uses conditional variables
-- glibc, because it actually executes the `futex` calls
-
-A quick look at PulseAudio’s sources confirmed that the code involving condition variables
-had not changed in a suspicious way between 20.08 and 21.08, leaving glibc as the
-remaining suspect.
-
-Runtime 21.08 updated glibc from 2.31 to 2.33, so I went through each frame of the
-original stack trace and checked for any relevant changes that took place between these
-releases. Then, I found an
-[interesting
-commit](https://github.com/bminor/glibc/commit/2e39f65b5ef11647beb4980c4244bac8af192c14):
-
-```
-From 2e39f65b5ef11647beb4980c4244bac8af192c14 Mon Sep 17 00:00:00 2001
-From: Adhemerval Zanella <REDACTED>
-Date: Mon, 23 Nov 2020 15:26:42 -0300
-Subject: [PATCH] nptl: Remove futex_wait_cancelable
-
-It is used solely on __pthread_cond_wait_common and the call can be
-replaced by a __futex_abstimed_wait_cancelable64 one.
-
-Checked on x86_64-linux-gnu and i686-linux-gnu.
-
-Reviewed-by: Lukasz Majewski <REDACTED>
----
- nptl/pthread_cond_wait.c      | 22 ++--------------------
- sysdeps/nptl/futex-internal.h | 29 -----------------------------
- 2 files changed, 2 insertions(+), 49 deletions(-)
-
-diff --git a/nptl/pthread_cond_wait.c b/nptl/pthread_cond_wait.c
-index 7d158d553f..685dbca32f 100644
---- a/nptl/pthread_cond_wait.c
-+++ b/nptl/pthread_cond_wait.c
-@@ -501,26 +501,8 @@ __pthread_cond_wait_common (pthread_cond_t *cond, pthread_mutex_t *mutex,
-...
--	  if (abstime == NULL)
--	    {
--	      /* Block without a timeout.  */
--	      err = futex_wait_cancelable (
--	          cond->__data.__g_signals + g, 0, private);
--	    }
--	  else
--	    {
--	      /* Block, but with a timeout.
--	         Work around the fact that the kernel rejects negative timeout
--	         values despite them being valid.  */
--	      if (__glibc_unlikely (abstime->tv_sec < 0))
--	        err = ETIMEDOUT;
--	      else
--	        {
--	          err = __futex_abstimed_wait_cancelable64
--                    (cond->__data.__g_signals + g, 0, clockid, abstime,
--                     private);
--	        }
--	    }
-+	  err = __futex_abstimed_wait_cancelable64 (
-+	    cond->__data.__g_signals + g, 0, clockid, abstime, private);
-...
+```lisp
+(openldk::dump-warm-image
+ "boot-snapshot" "demo.boot.Snapshot"
+ :classpath (uiop:getenv "CLASSPATH")
+ :warmups (list nil nil)
+ :reset-classes nil)
 ```
 
-(I trimmed down the diff a bit to highlight the notable parts.)
+The first warmup initializes Spring; the second exercises the reuse path. Saving the image preserves that initialized object graph.
 
-This commit changed the code paths for condition variables a bit. In particular, it
-modifies `__pthread_cond_wait_common`, which we saw in the original stack trace. Before,
-when waiting on a condition variable without a timeout (`abstime == NULL`),
-`futex_wait_cancelable` was called, and if there *was* a timeout,
-`__futex_abstimed_wait_cancelable64` was called. Now, though,
-`__futex_abstimed_wait_cancelable64` *always* gets called. The stack trace from before
-showed that `abstime` was indeed `NULL` when the audio service crashed:
+This is similar in spirit to [CRaC (Coordinated Restore at Checkpoint)](https://crac.org/about/about-crac/): initialize the application once, save its state, and reuse that work on subsequent launches. CRaC restores a checkpointed JVM process. OpenLDK uses SBCL’s image-saving machinery and calls `main` again with the Spring context already present. It does not implement the CRaC API or preserve running threads, so thread pools and other process-local resources need attention when designing an application for this approach.
 
-```
-#7  0x00007fb3a46bb5b4 in __pthread_cond_wait_common (abstime=0x0, clockid=0, mutex=0x3824001d7690, cond=0x3824001d8740) at pthread_cond_wait.c:504
-```
+Here are the results from my recent run:
 
-What’s `__futex_abstimed_wait_cancelable64`? Well, it’s just a thin wrapper over
-`__futex_abstimed_wait_common`:
+- Host: Intel(R) Core(TM) Ultra 7 255H, 16 CPUs
+- JDK: openjdk version “25.0.4.1” 2026-08-18
+- GraalVM: native-image 25.0.4.1.1 2026-08-18
+- OpenLDK: 39f33c0
+- Load average before: 3.75 5.29 3.83
+- Twenty timed runs per variant
 
-```
-int
-__futex_abstimed_wait_cancelable64 (unsigned int* futex_word,
-                                    unsigned int expected, clockid_t clockid,
-                                    const struct __timespec64* abstime,
-                                    int private)
-{
-  return __futex_abstimed_wait_common (futex_word, expected, clockid,
-                                       abstime, private, true);
-}
-```
+| Variant | Median | Min | Max | Peak RSS |
+| --- | --- | --- | --- | --- |
+| HotSpot, fat jar | 2138.3 ms | 2078.9 ms | 2219.0 ms | 266 MB |
+| HotSpot, extracted jar | 1791.3 ms | 1755.0 ms | 1880.1 ms | 225 MB |
+| HotSpot + Spring AOT | 1481.4 ms | 1420.5 ms | 1575.8 ms | 194 MB |
+| HotSpot + JDK AOT cache | 758.8 ms | 713.4 ms | 828.8 ms | 181 MB |
+| HotSpot + Spring AOT + AOT cache | 595.1 ms | 568.5 ms | 625.6 ms | 157 MB |
+| **GraalVM native image** | **53.5 ms** | **50.9 ms** | **63.1 ms** | **41 MB** |
+| OpenLDK warm image | 1261.7 ms | 1237.8 ms | 1283.2 ms | 450 MB |
+| **OpenLDK snapshot image** | **83.9 ms** | **77.5 ms** | **88.6 ms** | **175 MB** |
 
-Now then, what about `__futex_abstimed_wait_common`? Well, when I looked at it,
-something stood out:
+These timings cover process launch through exit for the small command-line application; peak RSS is measured separately. The [benchmark script](https://github.com/atgreen/openldk/tree/39f33c0/bench/spring-boot) checks that the application output matches across variants. This measures startup and a short task, not steady-state throughput or web-server readiness.
 
-```
-static int
-__futex_abstimed_wait_common (unsigned int* futex_word,
-                              unsigned int expected, clockid_t clockid,
-                              const struct __timespec64* abstime,
-                              int private, bool cancel)
-{
-  /* ... */
+GraalVM is faster and smaller here: **53.5 ms and 41 MB**, against OpenLDK’s **83.9 ms and 175 MB**. GraalVM still runs Spring initialization at launch; OpenLDK reuses the saved context.
 
-  clockbit = (clockid == CLOCK_REALTIME) ? FUTEX_CLOCK_REALTIME : 0;
-  int op = __lll_private_flag (FUTEX_WAIT_BITSET | clockbit, private);
+Standard GraalVM Native Image makes a [closed-world assumption](https://www.graalvm.org/jdk25/reference-manual/native-image/metadata/#defining-classes-at-run-time): all classes must be known at build time, with dynamic accesses covered by analysis or metadata. **OpenLDK keeps its class loader and JIT compiler**, so new classes and previously unused methods can still compile after launch. Those paths pay their compilation cost when first used.
 
-#ifdef __ASSUME_TIME64_SYSCALLS
-  err = __futex_abstimed_wait_common64 (futex_word, expected, op, abstime,
-					private, cancel);
-#else
-  /* ... */
-#endif
-```
+Saved images also need their classpath files and JDK available at runtime. The [image documentation](https://github.com/atgreen/openldk/blob/39f33c0/docs/IMAGES.md) covers deployment constraints.
 
-(Snippet was trimmed to show only the relevant code.)
-
-This looks like it’s pretty normal…​but wait a sec. Look at the part of the diff above
-again:
-
-```
--	  if (abstime == NULL)
--	    {
--	      /* Block without a timeout.  */
--	      err = futex_wait_cancelable (
--	          cond->__data.__g_signals + g, 0, private);
--	    }
--	  else
--	    {
--	      ...
--	    }
-+	  err = __futex_abstimed_wait_cancelable64 (
-+	    cond->__data.__g_signals + g, 0, clockid, abstime, private);
-```
-
-Before, if there was no timeout set (`abstime == NULL`), then the value of `clockid` was
-ignored. Now, though, `clockid` still gets passed to
-`__futex_abstimed_wait_cancelable64`, even if there is no timeout.
-`__futex_abstimed_wait_cancelable64` then uses the value of `clockid` to determine what
-flags to pass to `futex`:
-
-```
-  clockbit = (clockid == CLOCK_REALTIME) ? FUTEX_CLOCK_REALTIME : 0;
-  int op = __lll_private_flag (FUTEX_WAIT_BITSET | clockbit, private);
-```
-
-Then it calls `futex`, or more specifically, the `futex_time64` syscall (that’s
-invocation is in `__futex_abstimed_wait_common64`).
-
-If `clockid` is `CLOCK_REALTIME`, then this will add `FUTEX_CLOCK_REALTIME` to the flags
-being passed.
-
-Well, *is* `clockid` equal to `CLOCK_REALTIME`? The gdb stack trace showed that it equals
-`0`, and it also shows that `__pthread_cond_wait_common` is called by
-`__pthread_cond_wait`:
-
-```
-#7  0x00007fb3a46bb5b4 in __pthread_cond_wait_common (abstime=0x0, clockid=0, mutex=0x3824001d7690, cond=0x3824001d8740) at pthread_cond_wait.c:504
-#8  __pthread_cond_wait (cond=0x3824001d8740, mutex=0x3824001d7690) at pthread_cond_wait.c:619
-```
-
-Why does `__pthread_cond_wait` pass a value of 0 here? Well…​
-
-```
-/* See __pthread_cond_wait_common.  */
-int
-___pthread_cond_wait (pthread_cond_t *cond, pthread_mutex_t *mutex)
-{
-  /* clockid is unused when abstime is NULL. */
-  return __pthread_cond_wait_common (cond, mutex, 0, NULL);
-}
-```
-
-Note the comment, saying that `clockid` is unused if `abstime == NULL`. We know for sure
-that this is no longer the case. The `clockid` it passes is `0`…​would that by any chance
-be `CLOCK_REALTIME`?
-
-Okay, it is!
-
-So, now `FUTEX_CLOCK_REALTIME` is passed to every `futex_time64` operation. Let’s take a
-look at Chromium’s audio sandbox policy (i.e. the rules that determine how to sandbox
-syscalls):
-
-```
-#if defined(__NR_futex)
-    case __NR_futex:
-#if defined(__i386__) || defined(__arm__) || \
-    (defined(ARCH_CPU_MIPS_FAMILY) && defined(ARCH_CPU_32_BITS))
-    case __NR_futex_time64:
-#endif
-    {
-      const Arg<int> op(1);
-#if defined(USE_PULSEAUDIO)
-      return Switch(op & ~FUTEX_PRIVATE_FLAG)
-          .SANDBOX_BPF_DSL_CASES(
-              (FUTEX_CMP_REQUEUE, FUTEX_LOCK_PI, FUTEX_UNLOCK_PI, FUTEX_WAIT,
-               FUTEX_WAIT_BITSET, FUTEX_WAKE),
-              Allow())
-          .Default(Error(EPERM));
-```
-
-This code is essentially taking the `futex` operation being performed (in `op`), removing
-the flags (`& ~FUTEX_PRIVATE_FLAG`), and then comparing it to a list of allowed values. If
-it’s not in the list, it returns `EPERM`.
-
-Notice, though, that it *only* removes `FUTEX_PRIVATE_FLAG`…​not `FUTEX_CLOCK_REALTIME`.
-When glibc passes it to `futex_time64`, Chromium’s sandbox doesn’t remove the flag
-properly before checking the operation value, and it ends up rejecting the call. Eureka!
-
-## The Full Solution
-
-In summary, here’s what happened:
-
-- libpulse needs to wait on condition variables.
-- glibc 2.33, as part of a code refactoring, unintentionally started passing the flag `FUTEX_CLOCK_REALTIME` to every `futex_time64` syscall when waiting on condition variables.
-- Chromium’s sandbox only handles one flag, `FUTEX_PRIVATE_FLAG`. Therefore, it ends up incorrectly checking the `futex_time64` syscall, thus rejecting it.
-- glibc freaks out and crashes, taking down the audio service.
-- No videos play.
-
-The fix for this was [a
-simple one-line change](https://chromium-review.googlesource.com/c/chromium/src/+/3209906), because all the craziest bugs seem to have the most basic fixes.
-
-## Feature Trials (Redux)
-
-There’s still one remaining question, though…​ I mentioned this above:
-
-> it became apparent that only Chromium had the `AudioServiceSandboxLinux` feature trial
-> active, among many, many other trials (this part is important later!)
-
-In particular, Chromium had *significantly* more field trials enabled than any of the
-other variants…​but why? Was it not reading the field trial configuration correctly?
-
-Well, it turns out, Chromium never actually reads field trial configurations from Google’s
-servers. Instead, by default, it hardcodes a very, very aggressive field trial setup that
-enables almost everything, and there’s this nice little
-[comment
-buried in the documentation](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/testing/variations/README.md):
-
-> Note: Non-developer builds of Chromium (for example, non-Chrome browsers, or Chromium
-> builds provided by Linux distros) should disable the testing config via the GN flag
-> `disable_fieldtrial_testing_config=true``.
-
-This certainly explains why the trial list was so long with our Chromium builds.
-
-## Lessons Learned
-
-The main lesson here was honestly that *no change is too small for adequate testing*.
-Really, I didn’t put Chromium through wide enough testing for the runtime upgrade, and
-it’s also big enough of a project that the tiniest changes can affect it. Test everything!
-
-Also, this is further evidence that the craziest bug stories have the most basic fixes.
-
-## A Bad Omen
-
-Interestingly enough, this was the first of **three** times in the last two months that some
-glibc change ended up causing unintended breakage elsewhere. One of these was quite minor,
-but the other will definitely involve another post in the future…​
+OpenLDK still has compatibility gaps, including unimplemented bytecode verification. Development targets SBCL on Linux.

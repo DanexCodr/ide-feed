@@ -1,641 +1,1003 @@
-A memory-safe systems language with no heap allocator, garbage
-collector, or lifetime annotations. In this repository's benchmarks,
-Goose runs faster than C++ and Rust while using less memory.
+This page contains a curated list of recent changes to main branch Zig.
 
-[Tutorial](https://aardappel.github.io/goose/docs/tutorial.html) · [Reference](https://aardappel.github.io/goose/docs/reference.html) · [Specification](https://aardappel.github.io/goose/docs/goose_spec.html) · [Packages](https://aardappel.github.io/goose/docs/packages.html) · [Samples](https://aardappel.github.io/goose/samples/index.html) · [Benchmarks](https://aardappel.github.io/goose/bench/results.html) · [Standard library](https://aardappel.github.io/goose/docs/stdlib.html)
+Also available as an
+      [RSS feed](https://ziglang.org/devlog/index.xml).
 
-Goose has syntax familiar to C and Rust programmers, but
-**there is no heap**. Every dynamic value lives inline on
-data stacks managed by the compiler. Growth advances a pointer, and
-memory is freed when its scope ends. The language's type and lifetime
-rules make this memory model safe to use.
+This page contains entries for the year 2026. Other years are available in
+      [the Devlog archive page](https://ziglang.org/devlog/).
 
-[![Discord Chat](https://img.shields.io/badge/chat-discord-blue)](https://discord.gg/397eZdbnsR) [![Twitter Follow](https://img.shields.io/twitter/follow/wvo.svg?style=social)](https://twitter.com/wvo)
+Author: Ryan Liptak
 
-## Why Goose
+As of yesterday, the second oldest open proposal for the Zig language was [issue #114: require parentheses sometimes to disambiguate confusing operator precedence](https://github.com/ziglang/zig/issues/114), opened February 8, 2016. Ten years later, that proposal [has been implemented](https://codeberg.org/ziglang/zig/pulls/30160) in the master branch version of Zig thanks to contributor [CMDRZero](https://cmdrzero.github.io/).
 
-- Faster than C++ and than safe Rust, while memory safe. Over sixteen benchmarks Goose runs at 3.3x the speed of idiomatic C++, 1.16x hand-optimized C++ and 1.12x the best safe Rust, and uses 1.9x, 1.3x and 1.2x less memory (results). These gains come from Goose's data layouts and memory model.
-- No allocator, no GC, no reference counting, no destructors. Memory is a handful of data stacks that the compiler assigns statically. Freeing a structure with a million elements takes a single store, no matter how deeply it is nested.
-- Growth preserves references. A reference into a growing array stays valid for as long as the array does. In the corresponding benchmarks, Goose keeps typed references where C++ must call reserve and safe Rust uses u32 indices.
-- Memory safe with zero annotations. There is no lifetime syntax, there are no aliasing or exclusivity rules, and there is no unsafe. The compiler infers what every reference is rooted at and rejects references that could outlive their owners.
-- Nested data stays inline. A string, an array of strings, a record with variable-size fields and an array of those records are each stored as one contiguous block that contains no pointers. A example record that takes 160 bytes and one allocation in C++ takes 29 bytes and no allocations in Goose.
-- Variable sized Enums. Variable-mode ADTs store each value at the size of its own variant rather than that of the largest variant. On the benchmark that exercises this, they use 4x less memory than a Rust enum and run at 2x its speed.
-- Links narrower than pointers. A relative reference stores a typed, checked link as a 1, 2 or 4-byte offset. Structures built from them are position independent, so a data structure can be written to a file as is. Saving it is a single write, and loading it is a single read followed by a verification pass that rejects malformed or hostile data.
-- Everything is built in place, guaranteed. A value is constructed at its final destination through any depth of calls. items.push(parse(line)) writes the parsed record directly into the array, and returning a growable array by value does not copy it.
-- Returns across multiple calls. return err from load returns from a function any number of frames up the call stack. It is checked statically, and needs no unwinder, no Result type and no ? on every call.
-- Threads with no shared memory. A worker is compiled as a separate program with its own memory, and flat values are passed between threads through typed queues with a memcpy. Data races, locks, atomics and memory orderings do not exist in the language.
-- Generics and higher-order functions with no overhead. An untyped parameter is generic. Function values are compile-time entities, so xs.filter() { it > 0 } compiles to what the handwrittend loop would looks like and builds its result directly in its destination.
-- Compiles to C and can call C. Goose compiles to one C file, so it runs wherever a C compiler does and calls C directly through extern fn. The bundled TinyCC backend compiles and runs a program in-process, with no build step.
-
-The [tutorial](https://aardappel.github.io/goose/docs/tutorial.html) walks through all of
-this by example, the [reference](https://aardappel.github.io/goose/docs/reference.html) covers
-the whole language topic by topic, the [specification](https://aardappel.github.io/goose/docs/goose_spec.html) has the exact rules, and
-the [benchmarks](https://aardappel.github.io/goose/bench/results.html) have the numbers,
-including the cases where Goose loses.
-
-## Features
-
-This section focuses on what distinguishes Goose. The [tutorial](https://aardappel.github.io/goose/docs/tutorial.html) explains these features in more
-detail, and the [samples](https://aardappel.github.io/goose/samples/index.html) show them in
-thirty-one complete programs.
-
-### One memory
-model: data stacks freed at scope exit
-
-A program has the native call stack, static data and N data stacks,
-where the compiler works out N. A data stack is a large address-space
-reservation with a bump pointer, and there is no other memory. At most
-one resizable value is live per stack and it is always on top, so growth
-never moves anything and never checks a capacity. All of this is proved
-at compile time; the runtime tracks only the bump pointers.
+This means that some combinations of operators no longer have a defined precedence, and for those that don’t, the compiler will now require parentheses:
 
 ```
-for round in 3 {
-    var scratch: u8[>..] = [];                        // grow-only: growth is a pointer bump
-    for i in 100000 { scratch.push((i % 256) as! u8); }
-    print("round ", round, ": ", scratch.len, " bytes");
-}                                                     // the free: one store to the stack top
+const a = x orelse y == z;
 ```
 
-### Memory never
-moves, so references survive growth
-
 ```
-struct Item { id: i32, weight: f32 }
-
-var items: Item[>..] = [];
-let first .= items.push(Item { 1, 0.5 });             // a reference to element 0
-for i: i32 in 2..1000001 { items.push(Item { i, 0.0 }); }
-first.weight = 99.5;                                  // still valid, a million pushes later
+test.zig:1:22: error: ambiguous operator precedence with operators ... orelse ... == ...; use parentheses to disambiguate
+const a = x orelse y == z;
+                     ^~
+test.zig:1:13: note: previous ambiguous operator here
+const a = x orelse y == z;
+            ^~~~~~
+test.zig:1:22: note: in zig 0.17.x, this was evaluated as (... orelse ...) == ...
 ```
 
-`push` returns a reference to the new element, so a
-program can link elements while building the array. A
-`vector<T>` or `Vec<T>` may reallocate
-and cannot provide this guarantee. Stable references account for several
-benchmark gains.
-
-### Safe references, no
-annotations
-
-Every reference and slice has a static *root*: the variable
-that bounds its target's lifetime. A reference must not outlive the
-variable that owns its target or access that target through an
-incompatible type. The compiler infers roots and specializes functions
-for them, so no annotations are needed. There are no aliasing or
-exclusivity rules. When a lifetime check fails, the error names the
-reference's root and its destination:
+However, common cases can remain parenthesis-free:
 
 ```
-fn longest(a: u8[:], b: u8[:]) -> u8[:] { if a.len >= b.len { a } else { b } }
-
-var outer: u8[>..] = [];
-var w = outer[..];
-{
-    var inner: u8[>..] = [];
-    format(inner, "inner text");
-    w = longest(outer, inner);     // error: storing a reference rooted at inner,
-}                                  //        which does not outlive the destination (§9.2)
+const a = x + y * z;
 ```
 
-A slice `T[:]` lets a function accept a range from any
-array kind without copying its elements. For example, `split`
-returns slices into its input, and a dictionary keyed by
-`u8[:]` stores views of strings rather than copies.
-
-### Nested data stays inline
-
-There is no single array type. Instead there is a family of array
-types that differ only in how their size can change. Every member is
-laid out as `[metadata][elements...]`, inline and packed,
-never as a pointer to a separate block of elements:
-
-| Type | What it is |
-| --- | --- |
-| `T[k]` | fixed size, known at compile time |
-| `T[]`, `T[varint]` | sized at construction, frozen after; a fixed or variable-width length |
-| `T[..k]`, `T[..]` | capacity inline; grows and shrinks within it |
-| `T[>..]` | **grow-only**: the most commonly used kind; references into it stay valid |
-| `T[>..<]` | **grow-shrink**: stacks, queues, heaps |
-
-Strings are `u8` arrays: `u8[>..]` is a
-builder, `u8[]` a finished string stored inline in whatever
-holds it, `u8[..16]` a small string inside a struct,
-`u8[:]` a view. A struct may contain variable-size parts,
-which are stored inline in declaration order, so a record is a sequence
-of bytes with no indirection in it:
+The idea behind this is to reduce the number of rules a programmer needs to know when reading and writing Zig code. For example, no matter how experienced you are with Zig, it’s unlikely that you’d be able to explain the evaluation order of the following expression without looking up the precedence rules:
 
 ```
-struct Item  { sku: u8[varint], qty: varint, cents: varint }
-struct Order { id: varint, customer: u8[varint], items: Item[varint] }
-
-var book: Order[>..] = [];
-book.push(Order { id: 1001, customer: "alice",
-                  items: [Item { sku: "SKU-441", qty: 2, cents: 1999 },
-                          Item { sku: "SKU-7", qty: 1, cents: 500 }] });
+a & b + c * d >> e | f orelse g() catch h + i == j or k and l
 ```
 
-That order is **29 bytes and 0 allocations**. As C++
-`std::string` + `std::vector<Item>` it is
-160 bytes and 1 allocation, and as Rust `String` +
-`Vec<Item>` it is 153 bytes and 4 allocations. An
-entire order book is a single array, so reading it streams through the
-cache. The trade-off is that an array of variable-size elements is
-sequential: you can iterate it but not index it (unless you keep a
-second array of references into it as an index).
-
-### Enums in two sizes
-
-Algebraic data types are the only form of dynamic polymorphism; there
-is no inheritance and there are no vtables. Every ADT can be stored in
-two ways, chosen at the point of use. Fixed mode (`Shape`)
-stores a tag plus room for the largest payload, so values can be indexed
-and overwritten. Variable mode (`Shape..`) gives each value
-exactly the size of its variant. An array of such values becomes
-sequential and a value never changes variant, but in exchange you may
-take references *into* a payload:
+With the now-required parentheses added (while maintaining the same evaluation order as the Zig 0.17.x precedence rules), that expression would look like this:
 
 ```
-enum Shape { Circle { r: f64 }, Rect { w: f64, h: f64 }, Dot }
-
-var packed: Shape..[>..] = [];                 // 9, 17 and 1 bytes, not 17 each
-packed.push(Shape.Circle { r: 1.0 });
-packed.push(Shape.Rect { w: 2.0, h: 3.0 });
-packed.push(Shape.Dot);
-for s in packed {
-    match s { Rect &r => { r.w += 1.0; }, _ => {} }   // edits the payload in place, inside the array
-}
+((((a & ((b + c * d) >> e)) | f) orelse g()) catch (h + i)) == j or (k and l);
 ```
 
-*Case functions* provide another way to dispatch on a variant:
-define one overload per variant. Calls dispatch on the tag through a
-jump table, and the compiler checks that the overloads cover every
-variant:
+Still quite hairy, and not something I’d like to see in the wild, but nonetheless it’s understandable without knowing any precedence rules beyond arithmetic and comparison. Outside of this contrived example, though, the expressions that will now require parentheses are relatively rare (353 lines needed changes out of the million+ lines of code in the Zig codebase).
+
+## What you need to know
+
+In practice, going forward, you will only need to remember the rules around operator combinations that *still have* a defined/unambiguous precedence. For example, when reading or writing code involving arithmetic operators, you’ll only need to remember the following precedence table:
 
 ```
-fn area(s: Shape.Circle) -> f64 { 3.14159 * s.r * s.r }
-fn area(s: Shape.Rect) -> f64   { s.w * s.h }
-fn area(s: Shape.Dot) -> f64    { 0.0 }
-
-for s in packed { print(s, " area ", area(s)); }
+* / *% *| %
++ - +% -% +| -|
+== != < > <= >=
+and or
 ```
 
-### Links narrower than pointers
+You might notice that there isn’t anything too surprising there, and that lack of surprise was a (subjective) guiding principle for what should and should not require parentheses. As an example, while `%` has unambiguous precedence with regards to addition/subtraction operators, parentheses must be used when mixing `%` with multiplication/division operators, and with itself. However, this, and other ambiguous operator combinations, aren’t something you’ll need to commit to memory. Any (future) code you read will already have parentheses to disambiguate, and for any code you write, the compiler will let you know when you need parentheses.
 
-A `T&` is a machine address: it takes eight bytes and
-never dangles. A *relative reference* is the same link stored as
-a narrow offset. A `T&<u32>` is measured from the
-field itself to a target in the same array, so the structure is position
-independent. A `T&<u32 in pool>` is measured from
-the base of a named pool, so other arrays can link into the pool.
-`T&<u32>?` uses offset 0 as null. Here is a binary
-search tree in one grow-only array, with 12-byte nodes:
+For the full explanation, and to see the relevant precedence tables pertaining to other operators, see [the updated Precedence section of the language reference](https://ziglang.org/documentation/master/#Precedence).
+
+## Upgrading existing code
+
+There are two possible approaches here:
+
+1. Manually fix each “ambiguous operator precedence” error as they are surfaced by the compiler (this might be a good opportunity to try out incremental compilation if it’s supported on your platform)
+2. Use zig fmt --upgrade (the --upgrade flag was added for this purpose). This will cause zig fmt to add parentheses automatically, maintaining the evaluation order from the previous precedence rules (note: the --upgrade flag will be removed after one release cycle)
+
+My personal recommendation would be option 1, as the process of redetermining the intended evaluation order for these uncommon precedence scenarios can occasionally serve to uncover bugs ([here’s an example of that](https://github.com/Vexu/arocc/pull/1117)).
+
+If you go with option 2, I’d still recommend perusing the diff afterwards to ensure that nothing looks unusual, or is different than you expected/intended. A potentially common example of that is something like `a orelse b() catch c` which previously evaluated to `(a orelse b()) catch c`, but changing that to `a orelse (b() catch c)` likely makes more sense, even if the end result is unaffected. Also worth noting that in some scenarios, redundant parentheses will be added by `zig fmt --upgrade` (e.g. you might see something like `a orelse ((b + c) - d)` where the parentheses around `b + c` are unnecessary), so avoiding that will take a bit of manual cleanup.
+
+That’s about it. I’m hopeful that this change will make bugs stemming from misremembered precedence rules much less likely, and that it will put some attention onto any of those bugs that may currently exist.
+
+Thanks again to CMDRZero for the implementation, and to Isaac Freund for help with the corresponding grammar changes.
+
+Naked packages are ones that do not include a build manifest (build.zig.zon file). This is typically due to them being maintained by third parties outside the Zig ecosystem.
+
+Until now, those package hashes looked like: `N-V-__8AAA7lSAA6p7eRmPGVeA9uHmeiJ2DX-ISiPliRJ8Y7`
+
+This is because, without a build.zig.zon file, there was no `name` and `version` to use in the package hash. Furthermore, those packages have brittle hashes because they included all fetched files without any filter, which may accidentally have included unwanted hidden files that nonetheless cause the package hash to change. Or, the package might have contained symlinks that cannot be created on a particular OS. Without a filter, such files, even if they were unneeded, caused fetching to fail.
+
+Now, Zig supports specifying `version` and `paths` for naked packages next to the URL. The dependency name will also be factored into the package hash, but **only when `version` is provided.** This allows users to opt in, as opposed to having the package hash change suddenly when updating Zig.
+
+Here’s an updated zlib for example:
 
 ```
-struct Node { key: i32, left: Node&<u32>?, right: Node&<u32>? }   // 12 bytes, links included
+    .dependencies = .{
+        .zlib = .{
+            .url = "https://github.com/madler/zlib/archive/refs/tags/v1.3.2.tar.gz",
+            .hash = "zlib-1.3.2-__8AANXpEADvBXGMSfhczMTZVAA-TkkE4ecoohAR7s3p",
+            .version = "1.3.2",
+            .paths = .{
+                "LICENSE",
+                "adler32.c",
+                "compress.c",
+                "crc32.c",
+                "crc32.h",
+                "deflate.c",
+                "deflate.h",
+                "gzclose.c",
+                "gzguts.h",
+                "gzlib.c",
+                "gzread.c",
+                "gzwrite.c",
+                "infback.c",
+                "inffast.c",
+                "inffast.h",
+                "inffixed.h",
+                "inflate.c",
+                "inflate.h",
+                "inftrees.c",
+                "inftrees.h",
+                "trees.c",
+                "trees.h",
+                "uncompr.c",
+                "zconf.h",
+                "zlib.h",
+                "zutil.c",
+                "zutil.h",
+            },
+        },
+    },
+```
 
-fn insert(pool: Node[>..]&, key: i32) {
-    if pool.len == 0 { pool.push(Node { key: key }); return; }
-    var cur .= pool[0];                             // .= binds a reference; = would copy the node
-    loop {
-        if key == cur.key { return; }
-        let next = if key < cur.key { cur.left } else { cur.right };
-        if next { cur .= next; continue; }          // narrowed by `if`: next is a Node&
-        if key < cur.key { cur.left .= pool.push(Node { key: key }); }
-        else             { cur.right .= pool.push(Node { key: key }); }
-        return;
+Before:
+
+```
+4.3M    zig-pkg/N-V-__8AAI4ANwDM8MWhHTUFLKfvLE_n2NQk6mh0sFDzhTqO
+```
+
+After:
+
+```
+1.2M    zig-pkg/zlib-1.3.2-__8AANXpEADvBXGMSfhczMTZVAA-TkkE4ecoohAR7s3p
+```
+
+[Pull Request](https://codeberg.org/ziglang/zig/pulls/37340)
+
+Any time the same package (based on `fingerprint`) appears in the dependency tree, if the semantic version compares equal, the hash must be identical, otherwise one of three things has gone wrong and the maintainer must address it:
+
+- package ownership dispute: somebody forked someone else’s package without changing the name or fingerprint, or
+- package maintainer neglected to bump version after making changes, or
+- dependency on unreleased changes
+
+When this error occurs, the project maintainer should take care to understand *why* those two (or more) packages have contradictory hash information before deciding what to do.
+
+Example:
+
+```
+andy@bark ~/d/ffmpeg (main)> zig build
+error: contradictory hash for package with fingerprint 0x7118c1b07efea3d0 and version 0.0.0: libogg-0.0.0+1.3.7-0KP-flwMAACKAIH-iEs4gbg30ll_FQ-cW50JvLZO8VTg
+error: contradictory hash for package with fingerprint 0x7118c1b07efea3d0 and version 0.0.0: libogg-0.0.0+1.3.7-0KP-foYNAAAaj0YJOwRQs7kTN-ivzRMYTjtKzr6Apelj
+info: potential cause: package ownership dispute
+info: potential cause: maintainer neglected to bump version after making changes
+info: potential cause: dependency on unreleased changes
+info: hint: use --print-tree to visualize all package versions and hashes
+```
+
+There is a new `--print-tree` CLI option to `zig build`, that looks like this:
+
+```
+andy@bark ~/d/groovebasin (main)> zig build --print-tree
+ffmpeg ffmpeg-8.1.1-5-zT7QA_AkUgTOx4ZqOUVZsHSk9iv97BInIiubIM6ifr67
+├─ libz zlib-1.3.1-1-ZZQ7ldENAAA7qJjUXP6E6xnRuV-jDL9dyoJFc_eb3zQ6
+│  └─ zlib N-V-__8AAB0eQwD-0MdOEBmz7intriBReIsIDNlukNVoNu6o
+├─ mbedtls mbedtls-3.6.4-E4NUR2wWAAAUSvVbho9aaU31-e4D8glu9l1VfxKezBkV (not fetched)
+├─ openssl openssl-3.3.2-TC9C3Ze3ZABaKR5hc8KRnRPhTClKrKQKqTnXTUYkvmSR (not fetched)
+├─ libressl libressl-4.0.0--kqV4KPTAACsSRP8mSIZmqgVa5OZjw6WEgvcftWkLu-c (not fetched)
+├─ libmp3lame libmp3lame-3.100.1-7-67wlF2CxEwDWlVOMMLBNPbnDi5kE2OmH0azUHU2Y4DZY
+├─ libvorbis libvorbis-0.0.0+1.3.7-1wt9j_QPAADVure94TG4ecBMLD8eIAzWd6ZxVOmBBPCu
+│  ├─ libvorbis N-V-__8AAA7lSAA6p7eRmPGVeA9uHmeiJ2DX-ISiPliRJ8Y7
+│  └─ libogg libogg-0.0.0+1.3.7-0KP-foYNAAAaj0YJOwRQs7kTN-ivzRMYTjtKzr6Apelj
+│     └─ libogg N-V-__8AAFM3CwD6iAA1kggMPR8NHZ8VTb2zvRZ1Mt4BUfq9
+├─ libogg libogg-0.0.0+1.3.7-0KP-foYNAAAaj0YJOwRQs7kTN-ivzRMYTjtKzr6Apelj
+│  └─ libogg N-V-__8AAFM3CwD6iAA1kggMPR8NHZ8VTb2zvRZ1Mt4BUfq9
+└─ nasm nasm-3.0.1-B_NnpQpTAAA25UxvqONakXtmj-a78PGe3xfgyDFgetb0
+   ├─ nasm N-V-__8AAEAMKAFrNesgN6ZM9sxj37fq_i7UJe5nKkLmyRJI
+   └─ zlib zlib-1.3.1-1-ZZQ7ldENAAA7qJjUXP6E6xnRuV-jDL9dyoJFc_eb3zQ6
+      └─ zlib N-V-__8AAB0eQwD-0MdOEBmz7intriBReIsIDNlukNVoNu6o
+pulseaudio pulseaudio-16.1.1-10-mk_62DNlNwCDcTJ5iGhTxeCoetuAFKE1FrYNw5AErtX-
+StaticHttpFileServer StaticHttpFileServer-1.0.0-j-0gwes2AAByCgpeLBNR2hOaGVsDz9u8I6o54ft10OxU
+└─ mime mime-4.0.0-zwmL--0gAACndOVlROQeDnM0chfojNDS8tpohlsBqMNy
+```
+
+If a terminal is detected, it prints in color, which is a bit easier to read.
+
+This **early exits before running configurer**, so that problems causing configurer compilation errors can be troubleshooted.
+
+Similarly, `--configure` is added, which is defined to “exit after the configuration phase” which is the exact behavior that `--fetch` used to do. `--fetch` is changed to “Fetch all dependencies including lazy ones; exit without configuration”.
+
+`zig build --help` now works even when configuration fails, or when there is no build.zig file:
+
+```
+info: initialize build.zig template file with "zig init"
+info: see "zig --help" for more options
+error: no build.zig file found, in the current directory or any parent directories
+Usage: zig build [steps] [options]
+
+Steps:                    (unavailable due to build.zig compilation failure)
+Project-Specific Options: (unavailable due to build.zig compilation failure)
+
+System Integration Options:
+  --search-prefix [path]       Add a path to look for binaries, libraries, headers
+  --sysroot [path]             Set the system root directory (usually /)
+...
+  Available System Integrations:                Enabled:
+
+   (unavailable due to build.zig compilation failure)
+
+General Options:
+  -h, --help                   Print this help to stdout and exit
+  -l, --list-steps             Print available steps to stdout and exit
+...
+```
+
+Author: Robbie Lyman
+
+Pointer Stability Locks were [added to `std`’s Hash Map containers in 2024](https://github.com/ziglang/zig/pull/17719). A pull request initially opened by [Leo Emar-Kar](https://github.com/emar-kar) in 2025 now brings this technique for ensuring memory safety to `std.ArrayList`.
+
+To make use of this in your code, add a call to `lockPointers()` when you first store a pointer to an element or a slice of elements backed by the `ArrayList`, and call `unlockPointers()` when those pointers are no longer needed.
+
+Here’s a somewhat contrived example. Let’s suppose we are managing two `ArrayLists`, say one of which is holding in memory the contents of some input, while the other is storing chunks of interest; maybe each line. Here’s a version of this process which has a bug; see if you can spot it.
+
+```
+const std = @import("std");
+
+const Context = struct {
+    history: std.ArrayList(u8),
+    lines: std.ArrayList([]const u8),
+
+    fn parse(ctx: *Context, allocator: std.mem.Allocator, input: []const u8) !void {
+        const slice = try ctx.history.addManyAsSlice(allocator, input.len);
+        @memcpy(slice, input);
+        var it = std.mem.tokenizeScalar(u8, slice, '\n');
+        while (it.next()) |line| {
+            try ctx.lines.append(allocator, line);
+        }
     }
+};
+```
+
+Did you spot the bug? The problem is that elements of `Context.lines.items` depend on the *location* of `Context.history.items`, but this location may *change* if `Context.history` needs to grow beyond its current capacity. Here’s a reproduction of the bug:
+
+```
+test "Context.parse" {
+    const input = "I'm first!\n";
+    const input_two =
+        \\But this text
+        \\is juuuuuuuuuuuuuuuuuuuuuuuuust long enough that it
+        \\causes a problem!
+        \\And the problem could be that we segfault!
+        \\Which is no fun to run into.
+    ;
+    var ctx: Context = .{
+        .history = .empty,
+        .lines = .empty,
+    };
+    const gpa = std.testing.allocator;
+    defer ctx.history.deinit(gpa);
+    defer ctx.lines.deinit(gpa);
+    try ctx.parse(gpa, input);
+    try ctx.parse(gpa, input_two);
+    try std.testing.expectEqualStrings("I'm first!", ctx.lines.items[0]);
 }
 ```
 
-References are transparent (there is no `*` or
-`->`). `.=` binds or retargets a reference, and
-`Node?` is a nullable reference that `if`,
-`guard` and `assert` narrow. The insert is one
-push and one store, and the push cannot invalidate `cur`.
-When lifetimes are not nested, a `reusable` pool pairs a
-grow-only array with a hidden freelist. `alloc_ref` reuses a
-free slot or pushes a new one, and `free` returns a slot to
-the pool. Since a slot's memory is never actually freed, a stale slot
-reads a *different value of the correct type* rather than
-corrupting memory.
-
-### Saving and loading data as
-bytes
+If I run this code with `zig test`, I get the following output (plus a little more).
 
 ```
-var image: u8[>..] = tree.to_bytes();           // a framed byte image of the whole array
-var loaded, ok = from_bytes<Node[>..]>(image);  // verified before it becomes a value
-image[image.len - 3] = 200;                     // tamper with a link ...
-var bad, bok = from_bytes<Node[>..]>(image);    // ... and it is false and an empty array
+====== expected this output: =========
+I'm first!␃
+
+======== instead found this: =========
+UUUUUUUUUU␃
+
+======================================
+First difference occurs on line 1:
+expected:
+I'm first!
+^ ('\x49')
+found:
+UUUUUUUUUU
+^ ('\x55')
+1/1 blah.test.Context.parse...FAIL (TestExpectedEqual)
 ```
 
-The tree's links are self-relative, so the tree means the same thing
-wherever it is stored. Saving it writes its bytes and loading it reads
-them back, with no serializer, no schema and no pointer fixups.
-`from_bytes` checks the framing, every tag, every length and
-every link before the bytes become a value, so a corrupt or hostile file
-makes it return `false`, never a wild reference.
+Not great, right? This does tell us that we *have* a bug, but depending on your comfort debugging memory issues (and your choice of allocator, which will change how the bug manifests!), you might be lost for quite a while before you spot the fix.
 
-### In-place construction
-
-The copy-free construction guarantee ([spec
-§4.3](https://aardappel.github.io/goose/docs/goose_spec.html#43-the-in-place-construction-guarantee)) says a constructed value is always built at its final
-location, which is passed down through calls. A function returning a
-grow-only array by value writes its elements directly into the caller's
-variable, or into a field of the record being built inside another
-array, so out-parameters are rarely needed.
+Since we’ve stored pointers after the first call to `parse` in our test, what happens if we make this change?
 
 ```
-words.push(str("word", i));                    // formatted straight into the new element
-let evens = xs.filter() { it % 2 == 0 };       // built straight into `evens`: no temporary
-book.push(Order { id: 1001, customer: "alice", items: parse_items("SKU-441:2:1999;SKU-7:1:500") });
+    try ctx.parse(gpa, input);
++   ctx.history.lockPointers();
++   defer ctx.history.unlockPointers();
+    try ctx.parse(gpa, input_two);
+    try std.testing.expectEqualStrings("I'm first!", ctx.lines.items[0]);
 ```
 
-### Returning errors across
-calls
+We get a panic with a stack trace that shows us where our assumption about pointer stability was violated!
 
 ```
-struct User { name: u8[..16], age: i32 }
+thread 3023222 panic: reached unreachable code
+/Users/robbie/bin/lib/std/debug.zig:442:14: 0x102d2506f in assert (test)
+    if (!ok) unreachable; // assertion failure
+             ^
+/Users/robbie/bin/lib/std/debug.zig:1880:15: 0x102d31ef7 in assertUnlocked (test)
+        assert(l.state == .unlocked);
+              ^
+/Users/robbie/bin/lib/std/array_list.zig:1348:50: 0x102e3ced7 in ensureTotalCapacityPrecise (test)
+            self.pointer_stability.assertUnlocked();
+                                                 ^
+/Users/robbie/bin/lib/std/array_list.zig:1341:51: 0x102e3cdff in ensureTotalCapacity (test)
+            return self.ensureTotalCapacityPrecise(gpa, growCapacity(new_capacity));
+                                                  ^
+/Users/robbie/bin/lib/std/array_list.zig:1237:41: 0x102e4e5c3 in resize (test)
+            try self.ensureTotalCapacity(gpa, new_len);
+                                        ^
+/Users/robbie/bin/lib/std/array_list.zig:1461:28: 0x102e4e40f in addManyAsSlice (test)
+            try self.resize(gpa, try addOrOom(self.items.len, n));
+                           ^
+/Users/robbie/src/advent-of-code/2024/blah.zig:8:51: 0x102e4dc1f in parse (test)
+        const ptr = try ctx.history.addManyAsSlice(allocator, input.len);
+                                                  ^
+/Users/robbie/src/advent-of-code/2024/blah.zig:35:18: 0x102e4e167 in test.Context.parse (test)
+    try ctx.parse(gpa, input_two);
+```
 
-fn load(text: u8[:]) -> User[>..], u8[] {
-    var users: User[>..] = [];
-    each_split(text, '\n') { users.push(parse_user(it)); };
-    return users, "";
+Nice, that’s already a big help: now I can see that I should consider memory safety issues as a probable cause of my test failure in addition or instead of a logic issue. Obviously this example was somewhat contrived, but I do find myself reaching for `std.ArrayList` as this type of backing storage in real code, so I hope you can see real-world use cases for it yourself.
+
+Before I close, I want to point out something subtle: unlike `HashMap` and its friends, `ArrayList` is *ordered,* which means that operations on the list may move elements around even without moving, resizing or freeing the backing memory of the list as a whole. For example, the pointer (well, slice) returned by `addManyAsSlice(gpa, n)` may not point to the final `n` elements of the list if you call `orderedRemove()` or `pop()`. For this reason, although `orderedRemove()` and `pop()` never allocate, they *will* trigger the same assertion above after a call to `lockPointers()`.
+
+Author: Andrew Kelley
+
+Now that there is a separate process for users’ build.zig scripts and the build system itself, it makes sense for that to be the place that package management logic lives.
+
+I moved these subcommands to the maker process:
+
+- zig build
+- zig fetch
+- zig init
+- zig libc
+
+This means that large parts of what used to be included in the compiler executable are now shipped in source form instead, including:
+
+- package fetching logic
+- HTTP client and networking
+- TLS (Transport Layer Security) and associated crypto
+- Git protocol
+- xz, gzip, zstd, flate, zip
+- parsing, validation, and otherwise dealing with build.zig.zon files
+
+Consequently, this functionality can now be patched without rebuilding the compiler, making it easier for users and contributors to tinker.
+
+Furthermore, it means that package management in zig now has safety checks enabled when doing networking, since the maker executable is compiled in `ReleaseSafe` mode. Plus, all the crypto used for networking and file hashing can now take advantage of special CPU instructions available on the host, even the ones that are too rare to normally depend on when distributing software. *We can have AOT cake and eat JIT, too!*
+
+My original motivation for doing this was in relation to exposing a [build server protocol](https://codeberg.org/ziglang/zig/issues/35538) in order to unblock [ZLS](https://zigtools.org/zls/) after [maker/configurer process separation](https://ziglang.org/devlog/2026/#2026-05-26) made breaking changes to the `--build-runner` override flag.
+
+Originally, the process tree looked like this:
+
+```
+zig build  (the zig compiler + package manager)
+└─ builder (the user's build.zig logic + build system implementation)
+```
+
+The process separation changeset made it look like this instead:
+
+```
+zig build     (the zig compiler + package manager)
+├─ configurer (the user's build.zig logic)
+└─ maker      (build system)
+```
+
+At this point, consider a long-running `zig build --watch` process, watching files and rebuilding on source code changes. If any changes to `build.zig` are detected, or any files observed during execution of that logic, it means `configurer` needs to be rerun, meaning that `maker` process must exit to give `zig build` a chance to repeat the package management logic.
+
+Now, after the changes described in this devlog entry, it looks like this:
+
+```
+zig build        (the zig compiler)
+└─ maker         (build system + package manager)
+   └─ configurer (the user's build.zig logic)
+```
+
+Thus, when configuration needs to be rerun, `maker` process can continue to live because it is the parent process rather than a sibling. In terms of the upcoming build server, it means avoiding an awkward situation where the server has to exit and the client has to reconnect, rather than simply informing the client of a configuration change.
+
+This is almost entirely a non-breaking change, but there are some observable differences:
+
+- Zig executable binary size: shrinks 4% from 14.1 to 13.5 MiB (no LLVM, ReleaseSmall)
+- --maker-opt flag is replaced by ZIG_DEBUG_MAKER environment variable
+- --zig-lib-dir flag is replaced by ZIG_LIB_DIR environment variable
+
+The follow-up issues to this changeset are the main blockers until we tag Zig 0.17.0:
+
+- build server protocol MVP (needed to unblock ZLS)
+- introduce the concept of adding path dependencies of the build script itself
+- make `zig build --watch` detect modifications to the build script and rerun itself
+- different cwd causes build script cache miss
+
+I have two conferences coming up in July and I need to work on my talks, so being realistic, I don’t think I will have time to wrap these up until early August. Contributions welcome, of course.
+
+Big thanks to Techatrix from the ZLS team for reaching out and working with me on the build server protocol! [They are seeking sponsorship](https://github.com/sponsors/zigtools), by the way.
+
+Author: Ali Cheraghi
+
+There’s quite a bit to cover. The SPIR-V backend had bitrotted in a number of places after the recent compiler changes, so I spent the past several weeks dragging it into a better state.
+
+## @SpirvType
+
+SPIR-V has a handful of types that couldn’t be expressed in Zig’s type system. The new `@SpirvType` builtin has been introduced to address the longest-standing blocker for writing shaders. See [#20550](https://github.com/ziglang/zig/issues/20550), [#23326](https://github.com/ziglang/zig/pull/23326) and [#35461](https://codeberg.org/ziglang/zig/pulls/35461) to trace the background.
+
+```
+const Sampler = @SpirvType(.sampler);
+const Image = @SpirvType(.{ .image = .{
+    .usage = .{ .sampled = u32 },
+    .format = .unknown,
+    .dim = .@"2d",
+    .depth = .unknown,
+    .arrayed = false,
+    .multisampled = false,
+    .access = .unknown,
+} });
+const SampledImage = @SpirvType(.{ .sampled_image = Image });
+const RuntimeArray = @SpirvType(.{ .runtime_array = u32 });
+const sampled_image = @extern(*addrspace(.constant) const SampledImage, .{
+    .name = "sampled_image",
+    .decoration = .{ .descriptor = .{ .set = 0, .binding = 1 } },
+});
+```
+
+## Execution Mode on the Calling Convention
+
+Execution mode info (workgroup size, fragment origin, etc.) is now carried by the calling convention instead of being emitted via inline assembly `OpExecutionMode`. The old `std.gpu.executionMode()` helper is gone, and the SPIR-V assembler now rejects manual `OpExecutionMode` instructions. Two new calling conventions, `spirv_task` and `spirv_mesh`, were also added for mesh shading pipelines.
+
+```
+export fn vert() callconv(.spirv_vertex) void {}
+export fn frag() callconv(.{ .spirv_fragment = .{ .depth_assumption = .greater } }) void {}
+export fn comp() callconv(.{ .spirv_kernel = .{ .x = 8, .y = 8, .z = 1 } }) void {}
+export fn task() callconv(.{ .spirv_task = .{ .x = 1, .y = 1, .z = 1 } }) void {}
+export fn mesh() callconv(.{ .spirv_mesh = .{ .stage_output = .output_lines, .max_primitives = 1, .max_vertices = 2 } }) void {}
+```
+
+## Capabilities and Extensions from CPU Features
+
+Capabilities and extensions used to be emitted ad hoc by codegen or via inline assembly. They’re now driven entirely by the CPU feature set like other targets, with dependency chains extracted from [SPIRV-Headers](https://github.com/KhronosGroup/SPIRV-Headers) (excluding external vendors for now), and the assembler now rejects any attempt to emit `OpCapability` or `OpExtension` directly.
+
+## Multi-Threaded Codegen
+
+From day one, the SPIR-V backend ran codegen single-threaded inside the linker thread. Each codegen job now produces an `Mir` value just like every other self-hosted backend, and gets scheduled on the compiler’s thread pool.
+
+The same change brought back two ISel passes that had been removed during earlier refactors: `dedup_types` (which merges equivalent type instructions) and `prune_unused` (which strips dead code from the final module). These had originally been deleted back when codegen was single-threaded.
+
+## Object File Linking
+
+`.spv` files are now recognised as object files. You can compile multiple `.zig` files (or external `.spv` objects) and have the SPIR-V linker stitch them into a single module.
+
+Tens of bugs have also been fixed along the way with a nearly 10% increase in total passing behavior tests (49% now) on the `spirv64-vulkan` target, `std.gpu` was renamed to `std.spirv` and the SPIR-V backend is meaningfully more useful than it was a month ago, but there’s still a long way to go. Plenty of behavior tests remain skipped on SPIR-V. That said, if you’ve been on the fence about trying Zig for shaders or compute kernels, this is a good time to give it a shot. Bug reports are very welcome on [Codeberg](https://codeberg.org/ziglang/zig/issues). Happy hacking!
+
+Author: Matthew Lugg
+
+(Quite long devlog coming up, apologies—I got a little carried away with this one!)
+
+A few weeks ago, I began working on a branch implementing an improvement to the LLVM backend which had been planned for a long time. This ended up snowballing into a bigger change which implemented a few language proposals you might be interested to hear about.
+
+## LLVM Backend Integer Lowering
+
+Zig has always lowered arbitrary bit-width integer types (e.g. `u4`, `i13`, `u40`) directly to LLVM IR’s bit-int types (`i4`, `i13`, `i40`). However, we’ve known for a long time that this lowering is not optimal, because LLVM’s documented semantics for representing these types in memory are unnecessarily restrictive to the optimizer. Perhaps more importantly, because Clang never emits LLVM IR like this, these code paths in LLVM have never been properly tested, and so are poorly supported in practice—over the past few years, we have observed many instances of [trivial optimizations being missed](https://github.com/ziglang/zig/issues/17768) and even straight-up [miscompilations](https://codeberg.org/ziglang/zig/issues/35560).
+
+So, the original goal of the PR was to only use these bit-int types when manipulating values in SSA form, and to zero- or sign-extend them to ABI-sized types (`i8`, `i16`, `i32`, etc) when storing them in memory. This should be well-supported, not least because it matches how Clang lowers C’s `_BitInt(N)`!
+
+That change was actually fairly straightforward, but I hit one issue which led me down a bit of a rabbit-hole.
+
+## The Problem with `@bitCast`
+
+`@bitCast` is an interesting builtin. In the past, it was defined as being equivalent to the following sequence of operations:
+
+- Take a pointer to the operand value
+- Cast it to a pointer to the destination type
+- Load from that pointer
+
+In other words, it was essentially syntax sugar for reinterpreting bytes of memory. However, over time, we diverged from this definition—for instance, it became allowed to use `@bitCast` to reinterpret a `[3]u8` as a `u24`, even though on most targets `@sizeOf(u24)` is greater than `@sizeOf([3]u8)` so the above definition would invoke Illegal Behavior.
+
+Up to now, the LLVM backend had implemented these underspecified semantics for the `@bitCast` builtin. However, because that definition involved reinterpreting memory, changing how we store integer types in memory ended up impacting the implementation of `@bitCast`, and introducing Illegal Behavior which led to crashes in the compiler test suite.
+
+The easiest solution to this would probably have been to implement logic in the LLVM backend to approximately match the old behavior. I instead opted for a better solution—implement a new definition of `@bitCast`.
+
+## Redefining `@bitCast`
+
+In 2024, Jacob Young wrote up language proposal [#19755](https://github.com/ziglang/zig/issues/19755) which aimed to solve the problems with `@bitCast` by precisely specifying a new set of semantics for it. This proposal was accepted shortly after it was submitted, and in fact, the semantics it details are already implemented by the self-hosted x86_64 backend! So to solve the LLVM backend’s problems, I didn’t necessarily need to match the old `@bitCast` semantics—instead, this seemed like a good time to finally get the new semantics implemented *everywhere*.
+
+As an aside, another advantage to doing this is that we could take advantage of the compiler’s `Legalize` pass, which takes difficult-to-lower operations and rewrites them in terms of simpler operations, so that compiler backends only need to support those simple operations. `Legalize` already had functionality, used by the self-hosted x86_64 backend, which converted complex `@bitCast` operations into simpler ones, and it could be easily adapted to aid the other compiler backends too (mainly the LLVM and C backends)—but only if they implemented the new semantics.
+
+Regardless, the point is, I set out on a side quest (which ended up being harder than the *original* quest) to implement these new semantics throughout the compiler. This includes not only the LLVM and C backends, but also `comptime` execution—after all, Zig allows you to do almost any operation at comptime, `@bitCast` included! Because the new semantics are meaningfully different from the old (more on this later), I also had to audit a lot of uses of `@bitCast` across the standard library, compiler, and supporting libraries (e.g. `compiler_rt`). But after a few mostly-painless fixes for CI failures, I was able to finally get [my PR](https://codeberg.org/ziglang/zig/pulls/35711) green, and landed it in master yesterday (closing a good few issues in the process!).
+
+## The New `@bitCast` Semantics
+
+Now that we’ve gotten through all of the background, it’s finally time for me to actually explain new `@bitCast` behavior. Instead of being based on reinterpreting bytes in memory like before, the builtin is now defined in terms of the bits which *logically* represent a type.
+
+Every type which supports `@bitCast` has a “logical bit layout”—a representation of that type as an ordered sequence of bits. For instance, `u5` is composed of 5 logical bits, which we order from least-significant to most-significant. `[2]u5` is composed of 10 logical bits—the 5 from the first element, followed by the 5 from the second element. The new definition of `@bitCast` is that it reinterprets the logical bits of one type as the logical bits of a different type.
+
+The simplest example is to take an unsigned integer, say a `u8`, and convert it to a signed integer of the same size, in this case `i8`. This operation does exactly what you’d expect—the bits are unchanged, and we just reinterpret the most-significant bit as a sign bit. Also unchanged are the semantics of `@bitCast` between an integer type and a `packed struct`/`packed union` type.
+
+The place where the new semantics differ from the old is when you get aggregate types (arrays and vectors) involved.
+
+Consider, for instance, bitcasting a `[2]u8` to a `u16`. Under the old semantics, the result of this operation depends on the target endian: on big-endian targets, the first array element became the 8 *most* significant bits, whereas on little-endian targets, the first array element became the 8 *least* significant bits. Under the new semantics, because we only care about *logical* bit representation (which is endian-agnostic), the operation behaves identically on every target: the first array element becomes the 8 *least* significant bits. As a general rule, the new semantics tend to match the behavior of the old semantics on little-endian targets.
+
+This definition also allows for some weirder operations, such as converting `[2]u3` to `@Vector(3, u2)`:
+
+```
+test "bitcast [2]u3 to @Vector(3, u2)" {
+    const arr: [2]u3 = .{ 0b001, 0b011 };
+    const vec: @Vector(3, u2) = @bitCast(arr);
+
+    // Concatenate all bits of `arr` starting with the least-significant bit of `arr[0]` to find the
+    // logical bit sequence, then read off 2-bit chunks from it to get the elements of the resulting
+    // vector value `vec`.
+    //
+    //     arr[0]         arr[1]
+    //     0b001          0b011
+    // -------------  -------------
+    //  1    0    0    1    1    0
+    // --------  --------  --------
+    //   0b01      0b10      0b01
+    //  vec[0]    vec[1]    vec[2]
+
+    try expect(vec[0] == 0b01);
+    try expect(vec[1] == 0b10);
+    try expect(vec[2] == 0b01);
+}
+const expect = @import("std").testing.expect;
+```
+
+This kind of operation isn’t very useful most of the time, but it’s there if you need it! For instance, perhaps you want to deconstruct an integer into a vector of individual bits to operate on—that can now be done by a `@bitCast` to `@Vector(n, u1)`.
+
+While doing all of this stuff, I also implemented a couple of smaller accepted proposals—I won’t detail them here, but you can take a look at the issues if you’re interested:
+
+Of course, all of these changed semantics will be explained in the 0.17.0 release notes (hopefully a bit more concisely than what I managed here!), and suggested migration steps outlined.
+
+## LLVM Backend Performance
+
+On a final note, I just wanted to mention that the *original* motivation for this branch—changing how the LLVM backend lowers non-ABI integer types—was [demonstrably successful](https://github.com/ziglang/zig/issues/17768#issuecomment-4787726124) at restoring missed optimizations. In fact, the Zig compiler itself—despite not making heavy use of arbitrary bit width integers internally!—saw around 5% performance improvements from the better optimization. This means you might have some minor runtime performance gains to look forward to in 0.17.0!
+
+Thanks for reading, I hope this was interesting to some of you. Happy hacking!
+
+Author: Matthew Lugg
+
+I’ve spent the past few weeks working on our new ELF linker which debuted in Zig 0.16.0. At the time of the 0.16.0 release, this linker implementation was in its fairly early stages, and only really supported linking Zig-only code without any external libraries (even libc)—hence why it was (and still is) disabled by default (it can be enabled with `-fnew-linker`). However, quite a lot of progress has been made since that initial release!
+
+Here’s a nice milestone—as of [my latest PR](https://codeberg.org/ziglang/zig/pulls/35533), the new ELF linker is capable of building the self-hosted Zig compiler with LLVM and LLD libraries enabled, a task which requires quite a few features under the hood.
+
+```
+[mlugg@nebula master]$ # Build the Zig compiler using the new linker:
+[mlugg@nebula master]$ zig build -Dno-lib -Dnew-linker -Denable-llvm
+[mlugg@nebula master]$ # Use that compiler to build something with LLVM and LLD:
+[mlugg@nebula master]$ ./zig-out/bin/zig build-exe ~/hello.zig -fllvm -flld
+[mlugg@nebula master]$ ./hello
+Hello, World!
+[mlugg@nebula master]$
+```
+
+Of course, an ELF linker isn’t necessarily the most exciting thing in the world, which is why the headline feature of this new linker is its support for fast incremental compilation. After the recent enhancements, it is now possible (on x86_64 Linux) to perform incremental rebuilds while linking external libraries, C sources, etc—without any additional performance overhead! Here’s a clip of me trying it out on [Andrew’s Tetris clone](https://github.com/andrewrk/tetris):
+
+Oh, and fast incremental rebuilds also work nicely on the Zig compiler itself:
+
+```
+[mlugg@nebula master]$ zig build -Dno-lib -Denable-llvm -fincremental --watch
+Build Summary: 4/4 steps succeeded
+install success
+└─ install zig success
+   └─ compile exe zig Debug native success 36s
+
+Build Summary: 4/4 steps succeeded
+install success
+└─ install zig success
+   └─ compile exe zig Debug native success 244ms
+
+Build Summary: 4/4 steps succeeded
+install success
+└─ install zig success
+   └─ compile exe zig Debug native success 228ms
+
+Build Summary: 4/4 steps succeeded
+install success
+└─ install zig success
+   └─ compile exe zig Debug native success 288ms
+
+Build Summary: 4/4 steps succeeded
+install success
+└─ install zig success
+   └─ compile exe zig Debug native success 283ms
+```
+
+The biggest missing feature of this linker implementation right now is that it still does not yet support generating DWARF debug information for Zig code—that’s definitely my next priority. But even without that support, it’s amazing just how useful instant rebuilds can be, for example in any situation where you’re doing a lot of print debugging.
+
+If you’re using the master branch of Zig and you’re on x86_64 Linux, consider trying out incremental compilation with the new ELF linker if it previously wasn’t working with your project! I expect many codebases to already work great with it, unlocking the ability to rebuild your project in milliseconds. Of course, if you come across any bugs, please do [open an issue](https://codeberg.org/ziglang/zig/issues).
+
+And if you’re currently sticking to tagged releases of Zig, don’t worry—as Andrew mentioned in his last devlog, Zig 0.17.0 is just around the corner, so it won’t be long before you can try this too!
+
+Author: Andrew Kelley
+
+Big branch just landed: [separate the maker process from the configurer process](https://codeberg.org/ziglang/zig/pulls/35428)
+
+This devlog entry is essentially a preview of the upcoming release notes, but serves as an advanced notice to those who want to help test out the new features and provide feedback that will guide the Zig project moving forward.
+
+Before, `build.zig` files plus the build system implementation were all compiled into one bloated process, in Debug mode. After `build.zig` logic finished constructing a build graph in memory, the “build runner” code executed it.
+
+Now, `build.zig` files are compiled into a small process (the “configurer”) in debug mode. After this logic finishes constructing a build graph in memory, it is serialized to a binary configuration file. The parent `zig build` process is aware of this file and caches it for next time. While waiting for all that, it asynchronously compiles the build graph execution process (the “maker”) in release mode. Once the configuration file is available and the maker process is finished compiling, the maker process is executed, passing it the configuration file. The maker process only needs to be compiled once per `zig version` thanks to the global cache. The maker process then executes the build graph, which is contained within the serialized configuration file.
+
+The primary motivation of this change was to make `zig build` faster, in three ways:
+
+1. Only the user’s `build.zig` logic will be compiled with each change, rather than the entire build system along with it. This is starting to become more valuable now that we have introduced `--watch`, `--fuzz` and `--webui`. The build system can grow more features without making `zig build` take longer.
+2. Now the build system can skip rerunning the `build.zig` logic entirely when it knows nothing will change, for example if you add `-freference-trace` to your `zig build` command line, it now avoids re-running your `build.zig` logic redundantly, using the same configuration as last time.
+3. Now the process that actually executes the build graph is compiled with optimizations enabled.
+
+To demonstrate points 2 and 3, here is the difference between running `zig build --help` before and after:
+
+```
+Benchmark 1 (34 runs): master/zig build -h
+  measurement          mean ± σ            min … max           outliers         delta
+  wall_time           150ms ± 5.52ms     145ms …  165ms          4 (12%)        0%
+  peak_rss           84.8MB ±  275KB    84.2MB … 85.1MB          0 ( 0%)        0%
+  cpu_cycles          593M  ± 4.01M      588M  …  608M           2 ( 6%)        0%
+  instructions        995M  ± 52.5K      995M  …  995M           0 ( 0%)        0%
+  cache_references   25.8M  ±  165K     25.4M  … 26.1M           0 ( 0%)        0%
+  cache_misses        651K  ± 20.1K      619K  …  697K           0 ( 0%)        0%
+  branch_misses       918K  ± 7.44K      906K  …  935K           0 ( 0%)        0%
+Benchmark 2 (348 runs): branch/zig build -h
+  measurement          mean ± σ            min … max           outliers         delta
+  wall_time          14.3ms ±  744us    13.2ms … 23.3ms          8 ( 2%)        ⚡- 90.4% ±  0.4%
+  peak_rss           78.5MB ±  562KB    77.1MB … 81.4MB          7 ( 2%)        ⚡-  7.4% ±  0.2%
+  cpu_cycles         24.1M  ±  821K     22.8M  … 27.1M           3 ( 1%)        ⚡- 95.9% ±  0.1%
+  instructions       43.7M  ± 23.8K     43.7M  … 43.8M          56 (16%)        ⚡- 95.6% ±  0.0%
+  cache_references   1.46M  ± 14.6K     1.40M  … 1.50M          19 ( 5%)        ⚡- 94.3% ±  0.1%
+  cache_misses        142K  ± 4.87K      127K  …  157K           2 ( 1%)        ⚡- 78.1% ±  0.4%
+  branch_misses       126K  ± 1.37K      120K  …  129K          12 ( 3%)        ⚡- 86.3% ±  0.1%
+```
+
+It’s dramatic because before, `build.zig` logic was being executed with each `zig build` command, but now, the build system uses the cached, serialized configuration instead.
+
+Aside from performance, I expect third-party tooling such as ZLS to benefit from consuming the serialized configuration file rather than maintaining a fork of the build runner.
+
+This changeset heavily reworks the internal mechanism of the zig build system, however, it is mostly non-breaking from an API perspective, with the exceptions noted in the PR linked above.
+
+For most people I’m guessing this is the main breaking change they’ll hit:
+
+```
+if (b.args) |args| {
+    run_cmd.addArgs(args);
+}
+```
+
+```
+run_cmd.addPassthruArgs();
+```
+
+This removes a capability from build scripts since they can no longer observe those arguments. In exchange, it means that when changing those arguments, build scripts no longer must be rebuilt from source.
+
+If you’re someone who wants to influence the direction of Zig, this is a good time to upgrade your projects to the development version and try out these changes. We’ll be releasing 0.17.0 within a couple weeks from now. However, if you don’t have time, and you find out that 0.17.0 broke your build, don’t worry, there will be plenty of opportunity to get fixes in for the 0.17.1 tag as well.
+
+Author: Matthew Lugg
+
+I’ve been spending a bit of time working on personal projects after merging my [type resolution changes](https://ziglang.org/devlog/2026/#2026-03-10) last month, but I did find the time recently to make some improvements to the LLVM codegen backend. This involved a few different enhancements with various goals, but one nice user-facing change was that I managed to get incremental compilation working with the LLVM backend.
+
+Sadly this can’t do anything to speed up the dreaded LLVM Emit Object: that time is entirely down to LLVM. However, what incremental compilation *does* help with is minimizing the time spent in the actual Zig compiler code, which means that if your code has compile errors (so “LLVM Emit Object” will be skipped), you’ll usually get those errors very quickly. (Of course, it does still give you a *slight* speed-up in successful builds too.)
+
+This support is available in master branch builds right now, and will be in the 0.16.0 release (which we’ll be tagging very soon).
+
+For anyone who still hasn’t tried it, especially if you’re using Zig’s master branch, please do try out incremental compilation by passing `-fincremental --watch` to `zig build`! The Zig core team have benefited from incremental compilation in our workflows for a good year now, and we’re also hearing good things from users. The feature is relatively stable at this point, and people are often surprised how much time they can save just by getting up-to-date compile errors in milliseconds rather than seconds.
+
+I haven’t really personally used incremental compilation with the LLVM backend, but all of the incremental test coverage in CI is now enabled for the LLVM backend, and I’ve had positive feedback from users, so it’s definitely worth giving a shot. As always, if you encounter bugs in incremental compilation, please report them if you can!
+
+Thank you, and I hope you find this useful :)
+
+Author: Matthew Lugg
+
+Today, [I merged a 30,000 line PR](https://codeberg.org/ziglang/zig/pulls/31403) after two (arguably three) months of work. The goal of this branch was to rework the Zig compiler’s internal type resolution logic to a more logical and straightforward design. It’s a quite exciting change for me personally, because it allowed me to clean up a bunch of the compiler guts, but it also has some nice user-facing changes which you might be interested in!
+
+For one thing, the Zig compiler is now lazier about analyzing the fields of types: if the type is never initialized, then there’s no need for Zig to care what that type “looks like”. This is important when you have a type which doubles as a namespace, a common pattern in modern Zig. For instance, when using `std.Io.Writer`, you don’t want the compiler to also pull in a bunch of code in `std.Io`! Here’s a straightforward example:
+
+```
+const Foo = struct {
+    bad_field: @compileError("i am an evil field, muahaha"),
+    const something = 123;
+};
+comptime {
+    _ = Foo.something; // `Foo` only used as a namespace
+}
+```
+
+Previously, this code emitted a compile error. Now, it compiles just fine, because Zig never actually looks at the `@compileError` call.
+
+Another improvement we’ve made is in the “dependency loop” experience. Anyone who has encountered a dependency loop compile error in Zig before knows that the error messages for them are entirely unhelpful—but that’s now changed! If you encounter one (which is also a bit less likely now than it used to be), you’ll get a detailed error message telling you exactly where the dependency loop comes from. Check it out:
+
+```
+const Foo = struct { inner: Bar };
+const Bar = struct { x: u32 align(@alignOf(Foo)) };
+comptime {
+    _ = @as(Foo, undefined);
+}
+```
+
+```
+$ zig build-obj repro.zig
+error: dependency loop with length 2
+    repro.zig:1:29: note: type 'repro.Foo' depends on type 'repro.Bar' for field declared here
+    const Foo = struct { inner: Bar };
+                                ^~~
+    repro.zig:2:44: note: type 'repro.Bar' depends on type 'repro.Foo' for alignment query here
+    const Bar = struct { x: u32 align(@alignOf(Foo)) };
+                                               ^~~
+    note: eliminate any one of these dependencies to break the loop
+```
+
+Of course, dependency loops can get much more complicated than this, but in every case I’ve tested, the error message has had enough information to easily see what’s going on.
+
+Additionally, this PR made big improvements to the Zig compiler’s “incremental compilation” feature. The short version is that it fixed a huge amount of known bugs, but in particular, “over-analysis” problems (where an incremental update did more work than should be necessary, sometimes by a big margin) should finally be all but eliminated—making incremental compilation significantly faster in many cases! If you’ve not already, consider [trying out incremental compilation](https://ziglang.org/download/0.15.1/release-notes.html#Incremental-Compilation): it really is a lovely development experience. This is for sure the improvement which excites me the most, and a large part of what motivated this change to begin with.
+
+There are a bunch more changes that come with this PR—dozens of bugfixes, some small language changes (mostly fairly niche), and compiler performance improvements. It’s far too much to list here, but if you’re interested in reading more about it, you can take a look at [the PR](https://codeberg.org/ziglang/zig/pulls/31403) on Codeberg—and of course, if you encounter any bugs, please do open an issue. Happy hacking!
+
+Author: Andrew Kelley
+
+As we approach the end of the 0.16.0 release cycle, Jacob has been hard at work, bringing `std.Io.Evented` up to speed with all the latest API changes:
+
+Both of these are based on userspace stack switching, sometimes called “fibers”, “stackful coroutines”, or “green threads”.
+
+They are now **available to tinker with**, by constructing one’s application using `std.Io.Evented`. They should be considered **experimental** because there is important followup work to be done before they can be used reliably and robustly:
+
+- better error handling
+- remove the logging
+- diagnose the unexpected performance degradation when using IoMode.evented for the compiler
+- a couple functions still unimplemented
+- more test coverage is needed
+- builtin function to tell you the maximum stack size of a given function to make these implementations practical to use when overcommit is off.
+
+With those caveats in mind, it seems we are indeed reaching the Promised Land, where Zig code can have Io implementations effortlessly swapped out:
+
+```
+const std = @import("std");
+
+pub fn main(init: std.process.Init.Minimal) !void {
+    var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
+    const gpa = debug_allocator.allocator();
+
+    var threaded: std.Io.Threaded = .init(gpa, .{
+        .argv0 = .init(init.args),
+        .environ = init.environ,
+    });
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    return app(io);
 }
 
-fn parse_user(line: u8[:]) -> User {              // returns a User: no Result, no error parameter
-    let comma = find(line, ",");
-    guard comma >= 0 else { return [], str("expected name,age: ", line) from load; }
-    let age, ok = parse_int(line[comma + 1..]);
-    guard ok else { return [], str("bad age: ", line) from load; }
-    let name = trim(line[..comma]);
-    return User { name: name, age: age as i32 };
+fn app(io: std.Io) !void {
+    try std.Io.File.stdout().writeStreamingAll(io, "Hello, World!\n");
 }
 ```
 
-`return E from f` returns `E` as the result of
-the innermost active call of `f`, however many frames up that
-call is. Every function in between keeps its plain signature. The
-construct is checked statically: every call of `parse_user`
-must lie inside a `load` call, so nothing can go uncaught at
-runtime. It is implemented as a hidden discriminant checked in each
-frame rather than as an unwinder, and the message is built directly
-where `load`'s caller wants it. The parsers in the samples
-use it for every syntax error.
+```
+$ strace ./hello_threaded
+execve("./hello_threaded", ["./hello_threaded"], 0x7ffc1da88b20 /* 98 vars */) = 0
+mmap(NULL, 262207, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x7f583f338000
+arch_prctl(ARCH_SET_FS, 0x7f583f378018) = 0
+prlimit64(0, RLIMIT_STACK, NULL, {rlim_cur=8192*1024, rlim_max=RLIM64_INFINITY}) = 0
+prlimit64(0, RLIMIT_STACK, {rlim_cur=16384*1024, rlim_max=RLIM64_INFINITY}, NULL) = 0
+sigaltstack({ss_sp=0x7f583f338000, ss_flags=0, ss_size=262144}, NULL) = 0
+sched_getaffinity(0, 128, [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31]) = 8
+rt_sigaction(SIGIO, {sa_handler=0x1019d90, sa_mask=[], sa_flags=SA_RESTORER, sa_restorer=0x10328c0}, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+rt_sigaction(SIGPIPE, {sa_handler=0x1019d90, sa_mask=[], sa_flags=SA_RESTORER, sa_restorer=0x10328c0}, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+writev(1, [{iov_base="Hello, World!\n", iov_len=14}], 1Hello, World!
+) = 14
+rt_sigaction(SIGIO, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=SA_RESTORER, sa_restorer=0x10328c0}, NULL, 8) = 0
+rt_sigaction(SIGPIPE, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=SA_RESTORER, sa_restorer=0x10328c0}, NULL, 8) = 0
+exit_group(0)                           = ?
++++ exited with 0 +++
+```
 
-### Generics and function blocks
+Swapping out only the I/O implementation:
 
 ```
-fn twice(x) { x + x }                              // an untyped parameter is a generic one
+const std = @import("std");
 
-fn each_pair<T, F>(xs: T[:]) {                     // F is a function value: a compile-time entity
-    for i in 0..xs.len - 1 { F(xs[i], xs[i + 1]); }
+pub fn main(init: std.process.Init.Minimal) !void {
+    var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
+    const gpa = debug_allocator.allocator();
+
+    var evented: std.Io.Evented = undefined;
+    try evented.init(gpa, .{
+        .argv0 = .init(init.args),
+        .environ = init.environ,
+        .backing_allocator_needs_mutex = false,
+    });
+    defer evented.deinit();
+    const io = evented.io();
+
+    return app(io);
 }
 
-fn first_gap(xs: i64[:]) -> i64 {
-    each_pair(xs) { a, b => if b - a > 1 { return a; } };   // returns from first_gap, not each_pair
-    return -1;
-}
-
-let evens = xs.filter() { it % 2 == 0 };
-let total = fold(xs, 0) { acc, x => acc + x };
-sort(xs) { a, b => a > b };
-```
-
-Everything is monomorphized. Type arguments are inferred from
-argument types; type parameters that do not appear in those types can be
-supplied explicitly. Function values are passed as generic parameters.
-Every call of a function value is direct and can be inlined, function
-values cannot escape, and there are no closure objects or function
-pointers, so a higher-order function compiles to exactly the loop it
-looks like. A block may `return` from its lexically enclosing
-function, and nested functions can use the enclosing function's
-locals.
-
-### Threads with no shared
-memory
-
-```
-thread_fn worker() {                                // a separate program with its own memory
-    loop {
-        let job = qget<Job>();                      // blocks on the typed queue for Job
-        guard job.n >= 0 else { break; }            // -1 means stop
-        qput(Result { n: job.n, digits: count_digits(job.n) });
-    }
-}
-
-for i in n { ids.push(thread_spawn(worker)); }
-```
-
-There is no shared mutable memory. A `thread_fn` and
-everything it calls is compiled as its own program with its own data
-stacks and its own copies of the globals. Values are passed between
-threads through typed queues, one per type, and must be *flat*,
-with no references at any depth. Passing them is cheap because a flat
-Goose value is contiguous: a job or a result can carry real data, such
-as pixels, and passing it is a single `memcpy`.
-
-A failed check or `abort` in a worker started with
-`thread_spawn_contained` ends only that worker. Its message
-goes to whoever waits for it, not to stderr, so a supervisor can log it
-and start another:
-
-```
-var why: u8[>..] = [];
-while !thread_wait(thread_spawn_contained(serve, attempt), why) {
-    log(why);                                       // "assert failed (serve.goose:12)"
-    why.clear();
-    attempt++;
+fn app(io: std.Io) !void {
+    try std.Io.File.stdout().writeStreamingAll(io, "Hello, World!\n");
 }
 ```
 
-The first `thread_wait(id, msg)` for a worker takes the
-message; a caller that doesn't ask for it loses it.
-
-### Compiling to and calling C
-
 ```
-extern fn hypot(x: f64, y: f64) -> f64;             // straight from libm
-extern fn crc32_bytes(s: const u8[:]) -> u32;       // a slice crosses as { data, len }
-extern fn stats_of(xs: i32[:], out: Stats&);        // a struct filled through a pointer
-```
-
-An `extern fn` binds a Goose signature to a C symbol. The
-`math` and `os` modules use this interface. Only
-types with supported C representations may cross the boundary;
-unsupported signatures are rejected at the declaration. The compiler
-emits one C file for the whole program. The bundled TinyCC backend can
-compile and run that C inside the Goose compiler's process.
-
-### Where the speed comes from
-
-Much of the speed comes from the memory model: no heap allocation or
-per-object teardown, contiguous data, narrow links, and enums sized for
-the variant they contain. Every index is bounds-checked, and the
-compiler removes checks it can prove unnecessary. An `assert`
-on a slice length often lets the compiler remove the remaining checks in
-a kernel, so that the kernel can be vectorized. `--bce-lines`
-reports the checks that remain. `checkfree fn` rejects a
-kernel if any bounds check remains in it; index types let graph edges
-keep the validation done while the graph was built. Benchmark
-measurements use whole-process wall-clock time, including teardown.
-
-| Geometric mean over 16 benchmarks | vs idiomatic C++ | vs hand-optimized C++ | vs best safe Rust |
-| --- | --- | --- | --- |
-| speed, MSVC backend | 3.51x | 1.24x | 1.13x |
-| speed, clang backend | 3.54x | 1.26x | 1.19x |
-| peak memory | 1.95x less | 1.32x less | 1.25x less |
-
-The [summary](https://aardappel.github.io/goose/bench/summary.html) explains the gains and
-losses; [results.md](https://aardappel.github.io/goose/bench/results.html) has every
-measurement, and [design.md](https://aardappel.github.io/goose/bench/design.html) explains what
-the suite tests.
-
-### Limitations
-
-- You have to think about where data lives: who owns it, and how long its scope lasts. Usually the owner is the function that builds the data, which needs no extra work; when it is not, the data goes in a reusable pool.
-- Recursive functions cannot keep growable data across a recursive call. Scratch data must end before the call, and data that outlives the call is passed in as a pool.
-- Arrays of variable-size elements can be iterated but not indexed (unless you keep an index of references beside them). A fixed-mode enum cannot be pointed into, and a variable-mode one cannot be overwritten. You make this choice per container.
-- There are no escaping closures, no function pointers and no dynamic dispatch beyond ADT tags, and only whole-program compilation is supported.
-- A slot that was returned to a reusable pool but is still referenced reads whatever its next owner put there. That is a logic bug, but never memory corruption.
-
-[Tutorial §18](https://aardappel.github.io/goose/docs/tutorial.html#18-limitations) is the
-full list.
-
-## Install a release
-
-Prebuilt compilers for Windows (x64), Linux (x64) and macOS (Apple
-silicon and Intel) are on the [releases page](https://github.com/aardappel/goose/releases),
-with the graphics, audio, ui and physics packages compiled in. Unpack
-one anywhere and put its directory on PATH: the compiler finds the
-standard library, TinyCC's runtime and the packages beside itself, and
-keeps what it builds under `~/.goose`
-(`GOOSE_HOME`). The archive also holds these docs, the
-samples and the VS Code extension.
-
-Running a program in-process (`goose file.goose`) needs
-nothing else on Windows. On Linux it needs the C library's headers
-(`libc6-dev`, or `glibc-devel`); on macOS, the SDK
-of the Xcode command line tools (`xcode-select --install`).
-`goose build` also needs a C compiler: Visual Studio 2022 or
-later, or clang, on Windows; gcc or clang elsewhere. The Linux compiler
-needs glibc 2.35 or later (Ubuntu 22.04, Debian 12), and the macOS
-compiler needs macOS 13.3 or later. macOS keeps a downloaded archive's
-files from running until `xattr -dr com.apple.quarantine` is
-run on the unpacked directory.
-
-## Build and run
-
-You need CMake 3.27 or later, a C++20 compiler (MSVC, clang or gcc)
-and Python 3 for the test and sample runners. TinyCC, which the
-in-process backend is built from, is part of the tree. The graphics,
-audio, ui and physics modules are packages in repositories of their own
-([goose_gfx](https://github.com/aardappel/goose_gfx) and [goose_physics](https://github.com/aardappel/goose_physics);
-`docs/design/packages.md`).
-`-DGOOSE_BUILTIN_LIBS=all` fetches them with git at configure
-time, at the pinned tags, and compiles them into the compiler, so
-programs that use them run with nothing else installed. Without that
-option the compiler is built on its own, and the first time a program
-imports one of these packages, the package is built into
-`~/.goose`, which needs git, cmake and a C compiler.
-
-```
-git clone https://github.com/aardappel/goose
-cd goose
-cmake -B build -DCMAKE_BUILD_TYPE=Release -DGOOSE_BUILTIN_LIBS=all
-cmake --build build --config Release
+execve("./hello_evented", ["./hello_evented"], 0x7fff368894f0 /* 98 vars */) = 0
+mmap(NULL, 262215, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x7f70a4c28000
+arch_prctl(ARCH_SET_FS, 0x7f70a4c68020) = 0
+prlimit64(0, RLIMIT_STACK, NULL, {rlim_cur=8192*1024, rlim_max=RLIM64_INFINITY}) = 0
+prlimit64(0, RLIMIT_STACK, {rlim_cur=16384*1024, rlim_max=RLIM64_INFINITY}, NULL) = 0
+sigaltstack({ss_sp=0x7f70a4c28008, ss_flags=0, ss_size=262144}, NULL) = 0
+sched_getaffinity(0, 128, [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31]) = 8
+mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x7f70a4c27000
+mmap(0x7f70a4c28000, 548864, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x7f70a4ba1000
+io_uring_setup(64, {flags=IORING_SETUP_COOP_TASKRUN|IORING_SETUP_SINGLE_ISSUER, sq_thread_cpu=0, sq_thread_idle=1000, sq_entries=64, cq_entries=128, features=IORING_FEAT_SINGLE_MMAP|IORING_FEAT_NODROP|IORING_FEAT_SUBMIT_STABLE|IORING_FEAT_RW_CUR_POS|IORING_FEAT_CUR_PERSONALITY|IORING_FEAT_FAST_POLL|IORING_FEAT_POLL_32BITS|IORING_FEAT_SQPOLL_NONFIXED|IORING_FEAT_EXT_ARG|IORING_FEAT_NATIVE_WORKERS|IORING_FEAT_RSRC_TAGS|IORING_FEAT_CQE_SKIP|IORING_FEAT_LINKED_FILE|IORING_FEAT_REG_REG_RING|IORING_FEAT_RECVSEND_BUNDLE|IORING_FEAT_MIN_TIMEOUT|IORING_FEAT_RW_ATTR|IORING_FEAT_NO_IOWAIT, sq_off={head=0, tail=4, ring_mask=16, ring_entries=24, flags=36, dropped=32, array=2112, user_addr=0}, cq_off={head=8, tail=12, ring_mask=20, ring_entries=28, overflow=44, cqes=64, flags=40, user_addr=0}}) = 3
+mmap(NULL, 2368, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_POPULATE, 3, 0) = 0x7f70a4ba0000
+mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_POPULATE, 3, 0x10000000) = 0x7f70a4b9f000
+io_uring_enter(3, 1, 1, IORING_ENTER_GETEVENTS, NULL, 8Hello, World!
+) = 1
+io_uring_enter(3, 1, 1, IORING_ENTER_GETEVENTS, NULL, 8) = 1
+munmap(0x7f70a4b9f000, 4096)            = 0
+munmap(0x7f70a4ba0000, 2368)            = 0
+close(3)                                = 0
+munmap(0x7f70a4ba1000, 548864)          = 0
+exit_group(0)                           = ?
++++ exited with 0 +++
 ```
 
-`GOOSE_BUILTIN_LIBS` can also name some of the packages
-(`physics`, or `gfx`, which includes
-`audio` and `ui` too). On Linux, SDL needs the X11
-or Wayland development packages ([`third_party/SDL/docs/README-linux.md`](https://github.com/libsdl-org/SDL/blob/main/docs/README-linux.md));
-without them the build leaves the `gfx` module out and says
-what to install.
+Key point here being that the `app` function is identical between those two snippets.
 
-The runner scripts prefer `build/Release`, then
-`build/RelWithDebInfo`, then `build`, then
-`build/Debug`. Pass `--exe` to select a specific
-compiler; use an explicit Debug executable when testing with compiler
-assertions enabled. The compiler is `build/goose`
-(`build/Release/goose.exe` with the Visual Studio generator),
-and it finds the standard library in the source tree it was built from.
-On Windows 10 version 1903 and later, its embedded manifest selects a
-UTF-8 process code page so compiler paths do not depend on the system
-locale. Earlier Windows versions retain their legacy code page.
-Generated native executables retain their own process settings.
+Moving beyond Hello World, the Zig compiler itself works fine using `std.Io.Evented`, both with io_uring and with GCD, but as mentioned above, there is a not-yet-diagnosed performance degradation when doing so.
 
-Run a program directly from source, in-process
-(`goose run` is the explicit form of the same command, and
-`goose check` only typechecks):
+Happy hacking,
+
+Andrew
+
+Author: Andrew Kelley
+
+If you have a Zig project with dependencies, two big changes just landed which I think you will be interested to learn about.
+
+Fetched packages are now stored *locally* in the `zig-pkg` directory of the project root (next to your `build.zig` file).
+
+For example here are a few results from [awebo](https://codeberg.org/awebo-chat/awebo) after running `zig build`:
 
 ```
-build/goose samples/01_tour.goose
+$ du -sh zig-pkg/*
+13M    freetype-2.14.1-alzUkTyBqgBwke4Jsot997WYSpl207Ij9oO-2QOvGrOi
+20K    opus-0.0.2-vuF-cMAkAADVsm707MYCtPmqmRs0gzg84Sz0qGbb5E3w
+4.3M   pulseaudio-16.1.1-9-mk_62MZkNwBaFwiZ7ZVrYRIf_3dTqqJR5PbMRCJzSuLw
+5.2M   uucode-0.1.0-ZZjBPvtWUACf5dqD_f9I37VGFsN24436CuceC5pTJ25n
+728K   vaxis-0.5.1-BWNV_AxECQCj3p4Hcv4U3Yo1WMUJ7Z2FUj0UkpuJGxQQ
 ```
 
-Or build an executable, which is written beside the source
-(`-o` puts it elsewhere). The compiler finds a C compiler on
-the machine (`goose toolchain` shows which one: MSVC or clang
-on Windows, cc, gcc or clang elsewhere; `--cc` selects one)
-and links the generated C with the runtime and any native modules the
-program uses, including graphics. Programs that use threads must be
-built this way, since TinyCC cannot place thread-local storage.
+It is highly recommended to add this directory to the project-local source control ignore file (e.g. `.gitignore`). However, by being outside of `.zig-cache`, it provides the possibility of distributing self-contained source tarballs, which contain all dependencies and therefore can be used to build offline, or for archival purposes.
+
+Meanwhile, an *additional* copy of the dependency is cached globally. After filtering out all the unused files based on the `paths` filter, the contents are recompressed:
 
 ```
-build/goose build samples/01_tour.goose && samples/01_tour
-build/goose build samples/27_gfx_cube.goose && samples/27_gfx_cube
+$ du -sh ~/.cache/zig/p/*
+2.4M    freetype-2.14.1-alzUkTyBqgBwke4Jsot997WYSpl207Ij9oO-2QOvGrOi.tar.gz
+4.0K    opus-0.0.2-vuF-cMAkAADVsm707MYCtPmqmRs0gzg84Sz0qGbb5E3w.tar.gz
+636K    pulseaudio-16.1.1-9-mk_62MZkNwBaFwiZ7ZVrYRIf_3dTqqJR5PbMRCJzSuLw.tar.gz
+880K    uucode-0.1.0-ZZjBPvtWUACf5dqD_f9I37VGFsN24436CuceC5pTJ25n.tar.gz
+120K    vaxis-0.5.1-BWNV_BFECQBbXeTeFd48uTJRjD5a-KD6kPuKanzzVB01.tar.gz
 ```
 
-`--debug` turns on the overflow, range and tag checks in
-the generated C and builds the C with debug information. Each abort from
-these checks names its source line (and, for an overflow or a cast, the
-values involved). `--dry-run` prints the commands a build
-would run, for use in a build system of your own, and `-v`
-prints them as they run. Intermediate files go under
-`~/.goose` (`GOOSE_HOME`), where the runtime
-object is compiled once per C compiler. Useful flags for both forms
-(running and building):
-`-O0`/`-O1`/`-O2` set the inlining
-level (`-O2` by default), `--bce-lines` reports
-the bounds checks kept per line, and `-DGS_DEBUG=1` is the
-define that `--debug` sets. Every resizable value lives on a
-data stack of 2 GB of reserved address space, committed as it is used.
-`--stack-reserve 16G` changes that size for a program.
-`--stacks` reports how many data stacks the program and each
-of its workers can use, and the resulting cap on
-`hardware_threads()`. `-DGS_STACK_STATS=1` makes a
-program report its actual stack use when it ends.
+The motivation for this change is to make it easier to tinker. Go ahead and edit those files, see what happens. Swap out your package directory with a git clone. Grep your dependencies all together. Configure your IDE to auto-complete based on the `zig-pkg` directory. [Run baobab on your dependency tree](https://codeberg.org/awebo-chat/awebo/issues/61). Furthermore, by having the global cache have compressed files instead makes it easier to share that cached data between computers. In the future, [it is planned to support peer-to-peer torrenting of dependency trees](https://github.com/ziglang/zig/issues/23236). By recompressing packages into a canonical form, this will allow peers to share Zig packages with minimal bandwidth. I love this idea because it simultaneously provides resilience to network outages, as well as a popularity contest. Find out which open source packages are popular based on number of seeders!
 
-A program with C of its own lists that C in a sidecar file beside the
-source, `foo.build` beside `foo.goose`:
-`c_sources = ["impl.c"];`. The sidecar can also set
-`c_include`, `c_defines` and `c_libs`,
-and each of these has `_windows`, `_linux` or
-`_macos` variants for the part that applies to one platform.
-Both forms build the C: `goose build` links it in, and
-`goose run` builds it into a library that the in-process run
-loads, so an `extern fn` can call it either way. A library
-does the same with a sidecar beside its entry file (or names the static
-library target of its own CMake project,
-`cmake_target = "x";`, which the compiler builds through
-cmake). A program uses a library by writing
-`import name from "source";` in its root file. The source is
-a directory (`"./lib"`), or a git repository at a tag or
-commit (`"owner/repo@v1"` on GitHub,
-`"host/owner/repo@ref"`), which is fetched into
-`~/.goose` and built there once per C compiler
-(`docs/design/packages.md`).
+The second change here is the addition of the `--fork` flag to `zig build`.
 
-Underneath, `goose -o tour.c tour.goose` writes the C.
-That file holds the program and the part of the runtime that is inlined
-into it. The rest of the runtime (the OS layer, data stack reservation,
-threads, printing) is one more C file, which
-`goose --emit-runtime goose_runtime.c` writes. It is compiled
-once and linked with every program
-(`cc -O2 tour.c goose_runtime.o -o tour -lm -pthread`; on
-Windows `cl /O2 tour.c goose_runtime.obj`). Build the runtime
-with the same C compiler and flags the programs use. It takes no
-`-D` of its own, and a program from another version of the
-compiler fails to link against it. `--standalone` instead
-writes a C file that holds the whole runtime, and that file builds on
-its own. A program using `audio`, `gfx`,
-`physics` or `ui` also links that module's layer.
-`goose --audio-link msvc|cc`, `--gfx-link`,
-`--physics-link` and `--ui-link` print a response
-file that names the layer
-(`cc cube.c goose_runtime.o -o cube @$(goose --gfx-link cc)`;
-a ui program puts the ui layer before the gfx layer it draws through).
-`goose build --dry-run` prints all of this for the program at
-hand.
-
-A program using `audio` plays procedural mono/stereo PCM
-through SDL3 without opening a graphics window. See the [audio reference](https://aardappel.github.io/goose/docs/stdlib.html#audio).
-
-The test suite and the samples run on Windows, macOS and Linux:
+In retrospect, it seems so obvious, I don’t know why I didn’t think of it since the beginning. It looks like this:
 
 ```
-python test/run_tests.py
-python samples/run_samples.py
+zig build --fork=[path]
 ```
 
-For editing, the [VS Code extension](https://aardappel.github.io/goose/vscode/index.html)
-gives syntax highlighting, the compiler's language server
-(`goose lsp`: errors as you type, hover, go to definition,
-completion, rename, symbols) and one-key runs through the JIT:
+This is a **project override** option. Given a path to a source checkout of a project, all packages matching that project across the entire dependency tree will be overridden.
+
+Thanks to the fact that package content hashes include name and fingerprint, **this resolves before the package is potentially fetched**.
+
+This is an easy way to temporarily use one or more forks which are in entirely separate directories. You can iterate on your entire dependency tree until everything is working, while using comfortably the development environment and source control of the dependency projects.
+
+The fact that it is a CLI flag makes it appropriately ephemeral. The moment you drop the flags, you’re back to using your pristine, fetched dependency tree.
+
+If the project does not match, an error occurs, preventing confusion:
 
 ```
-code --install-extension vscode/goose-language.vsix
+$ zig build --fork=/home/andy/dev/mime
+error: fork /home/andy/dev/mime matched no mime packages
+$
 ```
 
-Other editors can run `goose lsp` themselves; [editors](https://aardappel.github.io/goose/docs/editors.html) has the configuration for Neovim,
-Helix and Emacs.
+If the project does match, you get a reminder that you are using a fork, preventing confusion:
 
-## Documentation
+```
+$ zig build --fork=/home/andy/dev/dvui
+info: fork /home/andy/dev/dvui matched 1 (dvui) packages
+...
+```
 
-- Documentation index: the map of everything below, and the root of the documentation site built from these files (how).
-- Tutorial: the friendly introduction, by example. Read this first.
-- Language reference: every feature, topic by topic, with a compiling example for each. It covers the whole language and is written to be read.
-- Language specification: the exact rules, when you want to know why something did not compile.
-- Samples: thirty-one complete programs in reading order, from a tour of the language to a JSON parser, a threaded Mandelbrot, a file tree built from two pools, a spinning cube on the GPU, thousands of boxes raining into a heap and a to-do list in windows of widgets.
-- Standard library: fourteen modules, all written in readable Goose under stdlib/. They include gfx for graphics on SDL3's GPU API (how it is built) and physics for rigid body physics on Box3D (how it is built). The ui module provides fonts, text rendering and game HUDs. It also provides windows and widgets on Nuklear, drawn through gfx (how it is built).
-- Building programs and using packages: goose build, libraries from git repositories or directories, a program's own C, and how to make a package of your own.
-- Benchmarks: the numbers, with the full results and the design behind them.
-- Implementation notes: how the compiler works, pass by pass, and how it is tested.
+This functionality is intended to enhance the workflow of dealing with ecosystem breakage. I already tried it a bit and found it to be quite pleasant to work with. The new workflow goes like this:
 
-## Status
+1. Fail to build from source due to ecosystem breakage.
+2. Tinker with --fork until your project works again. During this time you can use the actual upstream source control, test suite, zig build test --watch -fincremental, etc.
+3. Now you have a new option: be selfish and just keep working on your own stuff, or you can proceed to submit your patches upstream.
 
-Goose is new. What exists today is a whole-program compiler of about
-thirty thousand lines of C++, the specification, the standard library,
-the samples, and a test suite that CI runs on Windows, macOS and Linux
-with an extra sanitizer job. These are deliberately out of scope for
-now: moves for resizable values, more than one resizable per struct,
-labeled `break`, namespace privacy, and more OS/library
-access. Open items are tracked in the [specification's
-Appendix B](https://aardappel.github.io/goose/docs/goose_spec.html#appendix-b-todo--open-items).
+…and you can probably skip the step where you switch your `build.zig.zon` to your fork unless you expect upstream to take a long time to merge your fixes.
 
-## License
+Author: Andrew Kelley
 
-Goose is licensed under the [Apache License,
-Version 2.0](https://aardappel.github.io/goose/LICENSE.html).
+The Windows operating system provides a large ABI surface area for doing things in the kernel. However, not all ABIs are created equally. As Casey Muratori points out in his lecture, [The Only Unbreakable Law](https://www.youtube.com/watch?v=5IUj1EZwpJY), the organizational structure of software development teams has a direct impact on the structure of the software they produce.
 
-## Authors
+The DLLs on Windows are organized into a heirarchy, with some of the APIs being high-level wrappers around lower-level ones. For example, whenever you call functions of `kernel32.dll`, ultimately, the actual work is done by `ntdll.dll`. You can observe this directly by using ProcMon.exe and examining stack traces.
 
-**Wouter van Oortmerssen**: Language Design, Compiler
-Design, Coding standards. [home](https://strlen.com/) page,
-[twitter](https://x.com/wvo).
+What we’ve learned empirically is that the ntdll APIs are generally well-engineered, reasonable, and powerful, but the kernel32 wrappers introduce unnecessary heap allocations, additional failure modes, unintentional CPU usage, and bloat.
 
-**Claude Fable**: Compiler implementation, Benchmarking,
-Sample & Doc writing.
+This is why the Zig standard library policy is to [Prefer the Native API over Win32](https://codeberg.org/ziglang/zig/issues/31131). We’re not quite there yet - we have plenty of calls into kernel32 remaining - but we’ve taken great strides recently. I’ll give you two examples.
 
-## History & Use of AI
+## Example 1: Entropy
 
-This repo was produced almost entirely with AI, from a human language
-design. I had designed Goose several years ago, and had started to
-implement it, but running a game startup (which is built on another
-programming language of mine, [Lobster](https://strlen.com/lobster/)) there was no time to
-finish it. Which was sad, because I knew Goose could do things other
-languages can't, and it should exist.
+According to the official documentation, Windows does not have a straightforward way to get random bytes.
 
-I had not expected AI to help with this until Fable came out. I
-thought it might be capable enough to do a good job. I made it
-essentially clone the style and structure of my other recent compiler
-(Lobster), which is why if you look at the code, it looks rather similar
-to that. My initial design had left lots of things unspecified, and lots
-of back and forth with Fable made me decide on all of those, and it is
-now a better language for it.
+[Many projects including Chromium, boringssl, Firefox, and Rust](https://github.com/rust-random/rand/issues/111) call `SystemFunction036` from `advapi32.dll` because it worked on versions older than Windows 8.
 
-It is also an experiment in using AI to implement a new language,
-rather than reproduce an existing one.
+Unfortunately, starting with Windows 8, the first time you call this function, it dynamically loads `bcryptprimitives.dll` and calls [ProcessPrng](https://learn.microsoft.com/en-us/windows/win32/seccng/processprng). If loading the DLL fails (for example due to an overloaded system, which we have observed on Zig CI several times), it returns error 38 (from a function that has `void` return type and is documented to never fail).
 
-You may wonder why I had it work in C++, if clearly I could have used
-any language, like Rust, or my own Lobster, or.. Goose itself (that may
-still happen). With Fable, it was my observation that it is almost
-equally capable in any language, and the strong guardrails of Rust or
-other languages are not as pressing as they once were. Since the
-compiler emits C, you likely already need to have a C/C++ compiler
-around, so sticking inside one ecosystem would seem to simplify
-deployment and adoption. I've also integrated libtcc and who knows what
-other C libraries in the future. And, like I said, to have the compiler
-code mimic my existing Lobster compiler seemed fun, at least I can read
-it like it is my own.
+The first thing `ProcessPrng` does is heap allocate a small, constant number of bytes. If this fails it returns `NO_MEMORY` in a `BOOL` (documented behavior is to never fail, and always return `TRUE`).
+
+`bcryptprimitives.dll` apparently also runs a test suite every time you load it.
+
+All that `ProcessPrng` is *really* doing is `NtOpenFile` on `"\\Device\\CNG"` and reading 48 bytes with `NtDeviceIoControlFile` to get a seed, and then initializing a per-CPU AES-based CSPRNG.
+
+So the dependency on `bcryptprimitives.dll` and `advapi32.dll` can both be avoided, and the nondeterministic failure and latencies on first RNG read can also be avoided.
+
+## Example 2: NtReadFile and NtWriteFile
+
+`ReadFile` looks like this:
+
+```
+pub extern "kernel32" fn ReadFile(
+    hFile: HANDLE,
+    lpBuffer: LPVOID,
+    nNumberOfBytesToRead: DWORD,
+    lpNumberOfBytesRead: ?*DWORD,
+    lpOverlapped: ?*OVERLAPPED,
+) callconv(.winapi) BOOL;
+```
+
+`NtReadFile` looks like this:
+
+```
+pub extern "ntdll" fn NtReadFile(
+    FileHandle: HANDLE,
+    Event: ?HANDLE,
+    ApcRoutine: ?*const IO_APC_ROUTINE,
+    ApcContext: ?*anyopaque,
+    IoStatusBlock: *IO_STATUS_BLOCK,
+    Buffer: *anyopaque,
+    Length: ULONG,
+    ByteOffset: ?*const LARGE_INTEGER,
+    Key: ?*const ULONG,
+) callconv(.winapi) NTSTATUS;
+```
+
+As a reminder, *the above function is implemented by calling the below function*.
+
+Already we can see some nice things about using the lower level API. For instance, the *real* API simply gives us the error code as the return value, while the kernel32 wrapper hides the status code somewhere, returns a `BOOL` and then requires you to call `GetLastError` to find out what went wrong. Imagine! Returning a value from a function 🌈
+
+Furthermore, `OVERLAPPED` is a fake type. The Windows kernel doesn’t actually know or care about it at all! The actual primitives here are events, APCs, and `IO_STATUS_BLOCK`.
+
+If you have a synchronous file handle, then `Event` and `ApcRoutine` must be `null`. You get the answer in the `IO_STATUS_BLOCK` immediately. If you pass an APC routine here then some old bitrotted 32-bit code runs and you get garbage results.
+
+On the other hand if you have an asynchronous file handle, then you need to either use an `Event` or an `ApcRoutine`. `kernel32.dll` uses events, which means that it’s doing extra, unnecessary resource allocation and management just to read from a file. Instead, Zig now passes an APC routine and then calls `NtDelayExecution`. This integrates seamlessly with cancelation, making it possible to cancel tasks while they perform file I/O, regardless of whether the file was opened in synchronous mode or asynchronous mode.
+
+For a deeper dive into this topic, please refer to this issue:
+
+[Windows: Prefer the Native API over Win32](https://codeberg.org/ziglang/zig/issues/31131)
+
+# [zig libc](https://ziglang.org/devlog/2026/#2026-01-31)
+
+Author: Andrew Kelley
+
+Over the past month or so, several enterprising contributors have taken an interest in the [zig libc subproject](https://codeberg.org/ziglang/zig/issues/30978). The idea here is to incrementally delete redundant code, by providing libc functions as Zig standard library wrappers rather than as vendored C source files. In many cases, these functions are one-to-one mappings, such as `memcpy` or `atan2`, or trivially wrap a generic function, like `strnlen`:
+
+```
+fn strnlen(str: [*:0]const c_char, max: usize) callconv(.c) usize {
+    return std.mem.findScalar(u8, @ptrCast(str[0..max]), 0) orelse max;
+}
+```
+
+So far, roughly 250 C source files have been deleted from the Zig repository, with 2032 remaining.
+
+With each function that makes the transition, Zig gains independence from third party projects and from the C programming language, compilation speed improves, Zig’s installation size is simplified and reduced, and user applications which statically link libc enjoy reduced binary size.
+
+Additionally, a [recent enhancement](https://codeberg.org/ziglang/zig/pulls/31037) now makes zig libc share the Zig Compilation Unit with other Zig code rather than being a separate static archive, linked together later. This is one of the advantages of Zig having an integrated compiler and linker. When the exported libc functions share the ZCU, redundant code is eliminated because functions can be optimized together. It’s kind of like enabling LTO (Link-Time Optimization) across the libc boundary, except it’s done properly in the frontend instead of too late, in the linker.
+
+Furthermore, when this work is combined with the recent [std.Io changes](https://codeberg.org/ziglang/zig/issues/30150), there is potential for users to seamlessly control how libc performs I/O - for example forcing all calls to `read` and `write` to participate in an io_uring event loop, even though that code was not written with such use case in mind. Or, [resource leak detection](https://codeberg.org/ziglang/zig/pulls/30788) could be enabled for third-party C code. For now this is only a vaporware idea which has not been experimented with, but the idea intrigues me.
+
+Big thanks to Szabolcs Nagy for [libc-test](https://wiki.musl-libc.org/libc-test.html). This project has been a huge help in making sure that we don’t regress any math functions.
+
+As a reminder to our users, now that Zig is transitioning to being the static libc provider, if you encounter issues with the musl, mingw-w64, or wasi-libc libc functionality provided by Zig, **please file bug reports in Zig first** so we don’t annoy maintainers for bugs that are in Zig, and no longer vendored by independent libc implementation projects.
+
+The very same day I sat at home writing this devlog like a coward, less than five miles away, [armed forces who are in my city against the will of our elected officials shot tear gas, unprovoked, at peaceful protestors](https://www.kptv.com/2026/01/31/live-labor-unions-rally-march-portland-ice-facility-protest/). Next time I hope to have the courage to join my neighbors, and I hope to not get shot like [Alex Pretti](https://en.wikipedia.org/wiki/Killing_of_Alex_Pretti) and [Renée Good](https://en.wikipedia.org/wiki/Killing_of_Ren%C3%A9e_Good).
