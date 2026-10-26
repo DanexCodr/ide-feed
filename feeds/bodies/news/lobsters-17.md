@@ -1,17 +1,13 @@
-[Akku.scm](https://akkuscm.org/) version 1.2.0, the language package manager for R6RS
-and R7RS Scheme, is now generally available. It can be downloaded
-from [GitLab](https://gitlab.com/akkuscm/akku/-/releases). The most important change is a fix to the
-dependency solver, which was running very slowly due to a bug
-triggered by the many versions of the `chez-srfi` package.
+The [M-Vave FM-1](https://www.cuvave.com/product?id=fm-1) is exactly the kind of device I have a weakness for. I may not have an intended use for the frequency-modulation synthesizer, but when a low price meets a high coolness factor, I’m powerless to keep it out of my cart.
 
-Akku is a project-based package manager, where each project has its
-own set of dependencies. You use `.akku/env` to set shell variables
-that let your Scheme implementation know where to find everything.
+Initially billed as a pocket cousin of the famous Yamaha DX7 synthesizer, the FM-1 is a bargain at only $59.72 after fees. At release, it was a cool device that did what it said on the box, but not much else.
 
-You can upload your own packages to the archive. They go through a
-review process to ensure nothing malicious is distributed.
+But in July, some intrepid tinkerers on Reddit’s[r/synthdiy](https://www.reddit.com/r/synthdiy/) board began reverse-engineering the FM-1’s stock firmware to expand the device’s abilities. By September, custom firmware began appearing. We’re not even through October, and there are already more community firmware projects available to install on the FM-1 than I could ever hope to cover.
 
-Akku also performs automatic conversion from the R7RS `define-library`
-form to the R6RS `library` form. This lets, e.g., Chez Scheme use R7RS
-libraries. Packages from the Snow package manager, which has many R7RS
-packages, are also available via Akku.
+I decided to check a few of them out. And just in case you were wondering: Yes, it plays *Doom*.
+
+## Stock firmware and FM1 Open
+
+On October 17, M-Vave announced [FM](https://open.m-vave.com/fm1-workbench)[1 Open,](https://open.m-vave.com/fm1-workbench) a software package that encourages FM-1 owners to develop custom firmware for the synth-turned-whatever-else-you-can-imagine. Alongside the FM1 Open package came an SDK, a browser-based workbench, and version 15 of the stock firmware, now an open platform you can flash and build on. The unit’s 27 physical piano keys and modest 1.54-inch TFT display lend themselves well to a host of projects, musical or otherwise.
+
+Normally, when an enthusiast community reverse-engineers a closed device, an official patch quickly follows. M-Vave has taken the opposite approach, though. The application source is published under [GPLv3](https://gplv3.fsf.org/), and the company even includes an in-browser emulator to test custom firmware prior to flashing actual hardware. There’s a caveat, however: The underlying synth engine that powers the stock FM-1 package is still distributed as a closed binary, so it’s the application layer of the stack that’s actually open. I don’t think that diminishes M-Vave’s gesture toward the community, but it’s worth noting.

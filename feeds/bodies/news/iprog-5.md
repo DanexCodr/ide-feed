@@ -1,3 +1,111 @@
-The first Fortran Reference Manual was released in October 1956, six months before the first working compilers were distributed to IBM customers. While Fortran may have challengers as the first compiled computer language, it is certainly the most influential and the most durable of the early high-level languages. The name Fortran stands for FORmula TRANslator - its full title was  _The IBM Formula Translating System_ and it was designed specifically for the IBM 704 by a team led by[ John Backus](<https://www.i-programmer.info/history/people/326-john-backus-gthe-father-of-fortran.html>). _John Backus_ _December 3, 1924 - March 17, 2007_ Prior to Fortran every new computer had its own language - machine code tied to the architecture of the machine and designed to make the best of its features. A programmer would know how the machine worked and would carefully craft code to achieve a result that took minimum time and/or memory. Every byte was manually allocated and managed and so was the use of the machine's internal registers where the work was done. The big problem is that working in machine code is particularly unfriendly and makes creating programs time-consuming and error-prone. To enable the move away from machine code and to enable a computer language to run on multiple machines needed a compiler. This was the breakthrough made by IBM for the 704 and it turned out to be extremely difficult to find an automatic way to translate arithmetic expressions - the task that Fortran accomplishes. Fortran introduced many new ideas - arithmetic assignment, comments, the DO loop, subroutines and functions, formatted input/output - to name just a few. It also seeded the idea of machine independence because a machine that had a Fortran compiler could run any Fortran program. Fortran was an IBM product but even the baby Big Blue of the time must have been surprised at how fast it became the language of computing and established IBM as the leading computer supplier. _The IBM 704 - first with Fortran_ Many of the key facilities that we have come to expect of a high-level language including arithmetic and logical expressions; the DO loop (an early form of the FOR loop); the IF statement; subroutines; arrays; and formatting were introduced by Fortran. And yet initially Fortran stayed close to the underlying machine with constructs such as the 3-way if: `if(expression) doneg, dozero,dopos` where the instruction that was jumped to depended on the value of the expression - negative, zero or positive. The reason for this odd instruction was that the IBM 704, for which it was created, had a machine code instruction that was a thre- way branch on the value in a register.  It is difficult for us to realize how hard this problem was. It had never been done before and the team didn't really know what success would look like. Most programmers at the time simply didn't think high-level languages could be made to work and assembler would always be faster and more memory efficient. As John Backus wrote some years later: _As far as we were aware, we simply made up the language as we went along. We did not regard language design as a difficult problem, merely a simple prelude to the real problem: designing a compiler which could produce efficient programs. Of course one of our goals was to design a language which would make it possible for engineers and scientists to write programs themselves for the 704. We also wanted to eliminate a lot of the bookkeeping and detailed, repetitive planning which hand coding involved. Very early in our work we had in mind the notions of assignment statements, subscribed variables, and the DO statement (which I believe was proposed by Herrick). We felt that these provided a good basis for achieving our goals for the language, and whatever else was needed emerged as we tried to build a way of programming on these basic ideas. We certainly had no idea that languages almost identical to the one we were working on would be used for more than one IBM computer, not to mention those of other manufacturers. (After all, there were very few computers around then.) But we did expect our system to have a big impact, in the sense that it would make programming for the 704 very much faster, cheaper, more reliable. We also expected that, if we were successful in meeting our goals, other groups and manufacturers would follow our example in reducing the cost of programming by providing similar systems with different but similar languages_ Once something is achieved in software it becomes forever easy. Back then no one had a clear idea how to take something like: `A=B*3+(C-4)*283-Z/X` and turn it into low- level assembler working with a limited range of registers. All programmers knew how to do it for any given arithmetic expression but not for any and all such arithmetic expression of any complexity you cared to think up.  As the first high-level language, Fortran is clearly important, but it also influenced many generations of programmers, especially when you take into account the popularity during the early home computer era of BASIC, which was a derived directly from Fortran. Every single language that compiles an expression owes a debt to Fortran and to John Backus. What may comes as a surprise is that after 70 years, Fortran is still a popular language for some important applications, climate modelling, for example. Having evolved from the original FORTRAN I, through FORTRAN II and III and FORTRAN 66 (also known as FORTRAN IV), it achieved great popularity with Fortran 77, the version that lost the all-caps name. Then came Fortran 90 and Fortran 95, Fortran 2003 and Fortran 2008. Until this point, although the language had evolved it hadn't changed out of all recognition and was still so true to its original design that a FORTRAN I programmer would be able to follow something in Fortran 2008.  Fortran 2018 expanded upon previous standards, particularly in C interoperability and parallel programming and is considered a clearer standard that has allowed many deficiencies and irregularities in the earlier language versions to be resolved. It led to a real renaissance, dubbed Modern Fortran. The most recent version, Fortran 2023, continued the trend of adding features that make the language more robust and convenient for its core user base. The fact that Fortan is still relevant is reflected in the fact that is currently at #13 in the TIOBE Index which ranks computer languages in terms of their popularity. When it re-entered the Top 20 in April 2021 it was greeted with a degree of surprise that a "dinosaur" could be back after an absence of more than 10 years, but it continued to rise. It re-entered the Top 10 in May 2024 and stayed within that tier for about 14 months before dropping out in July 2025, when it was unseated by Ada. During that run in the top 10,climbed as high as #8, in November 2024.
+If you have dismissed or overlooked containerization as not being relevant to you, think again. Containers are useful in every programming environment. The problem is becoming familiar with their quirks and idiosyncrasies. Help is at hand and this week we have a second installment from Programmers Guide to Containers. To receive this digest automatically by email, sign up for our weekly [ newsletter. ](<https://www.i-programmer.info/register.html>) **October 15 - 21, 2026** | 
 
-  * **Mike James** is the author of **_[The Programmer’s Guide To Theory](<https://www.i-programmer.info/book-watch-archive/13283-the-programmers-guide-to-theory-io-press.html>) _**which sets out to present the fundamental ideas of computer science, including the grammar used by a compiler, in an informal and yet informative way.
+### Featured Articles  
+
+---  
+
+* * *
+
+[ Programmers Guide To Containers - Container As File System ](<https://www.i-programmer.info/programming/241-devops/19229-programmers-guide-to-containers-container-as-file-system.html>)   
+21 Oct  |  Mike James    
+[ ](<https://www.i-programmer.info/programming/241-devops/19229-programmers-guide-to-containers-container-as-file-system.html>) Containers are functional systems, but they are first and foremost file systems. How do you get the files where you want them? <ASIN:B0HKY1GQ5K> [ \+ Full Story ](<https://www.i-programmer.info/programming/241-devops/19229-programmers-guide-to-containers-container-as-file-system.html>)  
+
+* * *
+
+[ Why Some Developers Prefer Premium SAST Over Open Source ](<https://www.i-programmer.info/programming/223-security/19218-why-some-developers-prefer-premium-sast-over-open-source.html>)   
+16 Oct  |  Mian Azhar    
+[ ](<https://www.i-programmer.info/programming/223-security/19218-why-some-developers-prefer-premium-sast-over-open-source.html>) When free, open-source customizable tools are readily available, why do many engineering teams choose to pay for enterprise static application security testing platforms instead? [ \+ Full Story ](<https://www.i-programmer.info/programming/223-security/19218-why-some-developers-prefer-premium-sast-over-open-source.html>)  
+
+### Programming News and Views  
+
+* * *
+
+[ Regex As Marble Machine ](<https://www.i-programmer.info/news/90-tools/19230-regex-as-marble-machine.html>)   
+21 Oct  |  Mike James    
+[ ](<https://www.i-programmer.info/news/90-tools/19230-regex-as-marble-machine.html>) Is there a programmer on the planet who doesn't love regular expressions? OK, perhaps many of us just pretend and are really in awe and fear... What could be easier then viewing your favorite expression as a marble machine. [ \+ Full Story ](<https://www.i-programmer.info/news/90-tools/19230-regex-as-marble-machine.html>)  
+
+* * *
+
+[ JetBrains Sheds Light on CI/CD Pipeline ](<https://www.i-programmer.info/news/240-devops/19228-jetbrains-sheds-light-on-cicd-pipeline.html>)   
+20 Oct  |  Janet Swift    
+[ ](<https://www.i-programmer.info/news/240-devops/19228-jetbrains-sheds-light-on-cicd-pipeline.html>) Combining the results of four surveys JetBrains reports on the current state of CI/CD and the impact that AI is having on CI/CD pipelines, [ \+ Full Story ](<https://www.i-programmer.info/news/240-devops/19228-jetbrains-sheds-light-on-cicd-pipeline.html>)  
+
+* * *
+
+[ Couchbase Expands AI Data Plane ](<https://www.i-programmer.info/news/197-data-mining/19226-couchbase-expands-ai-data-plane.html>)   
+20 Oct  |  Kay Ewbank    
+[ ](<https://www.i-programmer.info/news/197-data-mining/19226-couchbase-expands-ai-data-plane.html>) Couchbase has announced a major expansion of its AI Data Plane with new capabilities including native Amazon Bedrock integration with semantic caching, managed Agent Memory and a managed MCP server on AWS. Vector search has also been added to Couchbase Operational Insights. [ \+ Full Story ](<https://www.i-programmer.info/news/197-data-mining/19226-couchbase-expands-ai-data-plane.html>)  
+
+* * *
+
+[ Understand Search With Qdrant ](<https://www.i-programmer.info/news/150-training-a-education/19227-understand-search-with-qdrant.html>)   
+20 Oct  |  Nikos Vaggalis    
+[ ](<https://www.i-programmer.info/news/150-training-a-education/19227-understand-search-with-qdrant.html>) The Qdrant Beginner Course is a "must take" because it teaches the fundamentals of vector search and system deployment using the Qdrant vector database as an example. [ \+ Full Story ](<https://www.i-programmer.info/news/150-training-a-education/19227-understand-search-with-qdrant.html>)  
+
+* * *
+
+[ GitLab 19.4 Adds Lower Cost Agentic Automation ](<https://www.i-programmer.info/news/90-tools/19224-gitlab-194-adds-lower-cost-agentic-automation.html>)   
+19 Oct  |  Kay Ewbank    
+[ ](<https://www.i-programmer.info/news/90-tools/19224-gitlab-194-adds-lower-cost-agentic-automation.html>) GitLab 19.4 has been released with new options for cost efficiency when using agentic automatic. The update also includes GitLab's own MCP tools. [ \+ Full Story ](<https://www.i-programmer.info/news/90-tools/19224-gitlab-194-adds-lower-cost-agentic-automation.html>)  
+
+* * *
+
+[ .NET 11 Release Candidate 2 Updates F# ](<https://www.i-programmer.info/news/89-net/19225-net-11-release-candidate-2-updates-f.html>)   
+19 Oct  |  Alex Denham    
+[ ](<https://www.i-programmer.info/news/89-net/19225-net-11-release-candidate-2-updates-f.html>) Microsoft has released .NET 11 Release Candidate 2 with updates to F#, MAUI and various libraries. As with RC1, this release includes a go-live support license, so it can be used in production applications. [ \+ Full Story ](<https://www.i-programmer.info/news/89-net/19225-net-11-release-candidate-2-updates-f.html>)  
+
+* * *
+
+[ Tiny Feather Star Robot Swims On Two Actuators ](<https://www.i-programmer.info/news/169-robotics/19222-tiny-feather-star-robot-swims-on-two-actuators-.html>)   
+18 Oct  |  Lucy Black    
+[ ](<https://www.i-programmer.info/news/169-robotics/19222-tiny-feather-star-robot-swims-on-two-actuators-.html>) Researchers at North Carolina State University have created an aquatic soft robot inspired by marine invertebrates called Feather Stars. The Feather Star robot is able to move through the water in all three dimensions, powered by only two actuators. [ \+ Full Story ](<https://www.i-programmer.info/news/169-robotics/19222-tiny-feather-star-robot-swims-on-two-actuators-.html>)  
+
+* * *
+
+[ NFL Big Data Bowl 2027 Competition Now Open ](<https://www.i-programmer.info/news/204-challenges/19221-nfl-big-data-bowl-2027-competition-now-open.html>)   
+16 Oct  |  Lucy Black    
+[ ](<https://www.i-programmer.info/news/204-challenges/19221-nfl-big-data-bowl-2027-competition-now-open.html>) A Kaggle competition to uncover non-obvious linkages between combine sensor tracking and regular-season NFL game performance is now open, with top prizes of $10,000. [ \+ Full Story ](<https://www.i-programmer.info/news/204-challenges/19221-nfl-big-data-bowl-2027-competition-now-open.html>)  
+
+* * *
+
+[ What Happened At EuroPython 2026 ](<https://www.i-programmer.info/news/216-python/19219-what-happened-at-europython-2026.html>)   
+16 Oct  |  Nikos Vaggalis    
+[ ](<https://www.i-programmer.info/news/216-python/19219-what-happened-at-europython-2026.html>) EuroPython 2026 was the 25th anniversary edition of Europe's longest running community Python conference. We provide an overview of this year's event. [ \+ Full Story ](<https://www.i-programmer.info/news/216-python/19219-what-happened-at-europython-2026.html>)  
+
+* * *
+
+[ Mojo Reaches 1.0 And Goes Open Source ](<https://www.i-programmer.info/news/98-languages/19217-mojo-reaches-10-and-goes-open-source.html>)   
+15 Oct  |  Kay Ewbank    
+[ ](<https://www.i-programmer.info/news/98-languages/19217-mojo-reaches-10-and-goes-open-source.html>) The Mojo programming language has reached version 1.0 and has now been made fully open source. The source code for the Mojo compiler, tooling, and everything else you need to build the language are now available in the modular GitHub repository. [ \+ Full Story ](<https://www.i-programmer.info/news/98-languages/19217-mojo-reaches-10-and-goes-open-source.html>)  
+
+* * *
+
+[ pg-java Is The Modern JDBC Driver For PostgreSQL ](<https://www.i-programmer.info/news/80-java/19216-pg-java-is-the-modern-jdbc-driver-for-postgresql.html>)   
+15 Oct  |  Nikos Vaggalis    
+[ ](<https://www.i-programmer.info/news/80-java/19216-pg-java-is-the-modern-jdbc-driver-for-postgresql.html>) pg-java is a modern pre-release PostgreSQL database driver specifically designed for Java 21+ and the JVM. [ \+ Full Story ](<https://www.i-programmer.info/news/80-java/19216-pg-java-is-the-modern-jdbc-driver-for-postgresql.html>)  
+
+### Book Watch  
+
+* * *
+
+[ Go in Action, 2nd Ed (Manning) ](<https://www.i-programmer.info/book-watch-archive/19231-go-in-action-2nd-ed-manning.html>)   
+
+This book is a guide to mastering Go's unique type system and high-performance concurrency model. Coauthored byJoel Holmes, Andrew Walker, and William Kennedy, this fully revised new edition reflects modern Go practices, replacing legacy environments with Go Modules and multi-module workspaces. You'll find full coverage of Go Generics, native fuzz testing, and structured JSON processing, along with the architectural principles you'll need to build AI-powered and agentic applications. <ASIN:1633439704 > [ \+ Full Story ](<https://www.i-programmer.info/book-watch-archive/19231-go-in-action-2nd-ed-manning.html>)  
+
+* * *
+
+[ The Art of 64-Bit Assembly, Volume 2 (No Starch Press) ](<https://www.i-programmer.info/book-watch-archive/19223-the-art-of-64-bit-assembly-volume-2-no-starch-presssubtitled-qmachine-level-oop-exceptions-and-concurrencyq-this-book-closes-the-gap-between-a-plausible-explanation-and-genuine-understanding-of-assembly-level-programming-randall-hyde-explains-conc.html>)   
+
+Subtitled "Machine-Level OOP, Exceptions, and Concurrency", this book closes the gap between a plausible explanation and genuine understanding of assembly level programming. Randall Hyde explains concepts such as what Windows actually expects the vtable to look like, why method dispatch behaves the way it does at the instruction level, or what breaks when you deviate from convention. Every chapter takes a construct you’ve used in C++, Python, or Rust, strips away the runtime, and rebuilds it from scratch in MASM, running under Windows. Objects, exceptions, closures, coroutines, concurrency: Each is dissected at the instruction level, with every decision made visible and explicit. <ASIN:1718504349 > [ \+ Full Story ](<https://www.i-programmer.info/book-watch-archive/19223-the-art-of-64-bit-assembly-volume-2-no-starch-presssubtitled-qmachine-level-oop-exceptions-and-concurrencyq-this-book-closes-the-gap-between-a-plausible-explanation-and-genuine-understanding-of-assembly-level-programming-randall-hyde-explains-conc.html>)  
+
+* * *
+
+[ The Last Best Place on the Internet (W. W. Norton) ](<https://www.i-programmer.info/book-watch-archive/19220-the-last-best-place-on-the-internet-a-human-history-of-wikipedia-w-w-norton.html>)   
+
+This book, "A Human History of Wikipedia" is an exploration of how this portal was built, why it thrived, and what we lose as its ideals disintegrate.Wikipedia is the largest repository of human knowledge ever made, with editions in 343 languages, read by millions of people every day. Yet, argues Richard Cooke, its rightful status as a “digital wonder of the world” is coupled with an odd complacency. <ASIN:0393881881 > [ \+ Full Story ](<https://www.i-programmer.info/book-watch-archive/19220-the-last-best-place-on-the-internet-a-human-history-of-wikipedia-w-w-norton.html>)  
+
+I Programmer has reported news for over 15 years. You can access [ I Programmer Weekly ](<https://www.i-programmer.info/i-programmer-weekly>) back to January 2012 for all the headlines plus the book reviews and articles.
+
+To keep up with the latest news and receive this digest automatically by email, [ sign up ](<https://www.i-programmer.info/register.html>) for our [ weekly newsletter ](<https://www.i-programmer.info/edit-profile.html?layout=form>) and follow us on [ Twitter, ](<http://twitter.com/Iprogrammerinfo>) [ Facebook, ](<http://www.facebook.com/pages/iProgrammer/127140977307932#%21/pages/iProgrammer/127140977307932?v=wall>) and [ LinkedIn ](<http://www.linkedin.com/company/i-programmer>) , where you are welcome to share all our stories.
+
+You can also subscribe to our RSS Feeds - we have one for [ Full Contents ](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=3&format=raw>) , another for [ News ](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=1&format=raw>) and also one for [ Books ](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=2&format=raw>) with details of reviews and additions to Book Watch.

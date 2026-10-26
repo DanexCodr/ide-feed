@@ -1,112 +1,175 @@
-I’ll be honest: it has been a long road. The first v3 alpha tag went out in January 2023, and a great many people have built, tested, broken and fixed things along the way since then. I’m truly grateful to every one of you. If you want the candid version of that journey, I wrote about it in the [v3 beta announcement](https://v3.wails.io/blog/wails-v3-beta/).
+C++26 failed its DIS ballot. As far as I know, it is the first C++ draft to fail one. Robert Seacord,
+the convenor of the C committee, wrote that he doesn’t think any language standard from SC22 has ever
+failed its ballot before, and Daveed Vandevoorde, a member of the WG21 Direction Group
+([P5000R1](https://wg21.link/P5000R1)), wrote that no earlier C++ draft got even a single vote
+against. So reflection, `std::execution`, library hardening, and contracts are all in a draft that ISO hasn’t approved, and nobody knows yet
+how long the delay will be.
 
-## What *is* Wails?
+The ballot closed on 23 October 2026, and Robert Seacord, the convenor of the C committee,
+[posted the
+result](https://www.linkedin.com/posts/robertseacord_balloting-has-completed-for-c26-unfortunately-activity-7519795140887035918-5PWL)
+on LinkedIn the next day:
 
-If you’re new here: Wails lets Go programmers build desktop applications with the web frontend tools they already know, using the native WebView on each platform rather than an embedded browser. You write your backend in Go, your UI in HTML, CSS and JavaScript (or whichever framework you like), and Wails wraps it all up into a single native application.
+## Where I stand[#](https://train-it.eu/blog/cpp26-contracts-the-ballot-result/#where-i-stand)
 
-## Why v3?
+I kept this series neutral while the vote was open and didn’t want to push anyone toward either
+side. The vote is over, so I can say where I stand.
 
-Wails v2 made it straightforward to build a Go application with a modern web frontend, and it has served a lot of applications well. But its single-window, context-driven runtime made some everyday desktop work harder than it should have been.
+I love contracts as an idea, and I have missed them since they were removed from C++20. I have
+always cared about API design, about libraries, good interfaces, and frameworks, and that is also
+why I am in LEWG. My reasons for liking contracts come from that experience. Checking is one
+benefit, and a good one: the program can verify its own assumptions. The second axis, which I
+care about just as much, is documentation. A precondition or a postcondition in the signature records
+the intent of the API designer, so users know what to expect and how to use the function, and a
+documentation system such as Doxygen or cppreference.com can show it right there. A comment can say
+the same thing, but nothing keeps it true. It can drift away from the code without anyone noticing.
+A contract is part of the code. The compiler checks it together with the function, and when the
+checks are enabled, a violation fails loudly, so this documentation can’t quietly go stale. Concepts
+already give us both for the types a function accepts, at compile time. Contracts are the part that
+is still missing, the one that does the same for the values at run time. I would love to see
+contracts in the standard, and it is a pity they didn’t make it this time. My preference is to keep
+them. If the design comes out better because of this, that is a good result too.
 
-v3 starts from a different model. Applications, windows, services, events and platform capabilities are explicit objects. You create an application, register services, create windows, and talk to the object that owns the behaviour you need. It’s easier to follow as an app grows, and things like multiple windows are a normal part of the model rather than a workaround.
+This isn’t an abstract question for me. I have started teaching C++26 contracts in my workshops, and
+[mp-units](https://mpusz.github.io/mp-units/) uses the C++26 version.
 
-## What’s in v3.0.0
+## The numbers[#](https://train-it.eu/blog/cpp26-contracts-the-ballot-result/#the-numbers)
 
-- Multiple windows. Create, manage and close windows at runtime, each with its own configuration and lifecycle.
-- System tray. Give your app a persistent presence, with menus, light and dark icons, template icons on macOS, and the option to attach a window to the tray icon.
-- Native menus and dialogs. Application menus, context menus and native dialogs on each platform.
-- Services and generated bindings. Your backend stays ordinary Go code. Bindings are generated with static source analysis, so comments and meaningful parameter names carry through to the frontend, with a single wails3 generate bindings command.
-- A build system you can see. Projects use a Taskfile-based build you can inspect, extend and debug, instead of one opaque command.
-- Cross-platform. Windows (amd64 and arm64), macOS (Intel and Apple Silicon) and Linux (amd64 and arm64), with GTK4 and WebKitGTK 6.0 as the Linux default. The legacy GTK3 stack is still available with -tags gtk3 until v3.1.
-- iOS and Android. The same main.go and frontend can run on mobile. Mobile support is still marked experimental in the docs, so treat it as something to explore and give feedback on rather than a stable promise.
-- Built with Go 1.26. The v3 module builds with Go 1.26.
-- An in-app updater. Pluggable providers, cryptographic verification, an atomic swap and a default UI you can theme or replace. See the updater guide.
-- Packaging and signing. Guides for code signing on every platform, installers and MSIX packaging.
-- Server builds. Run the same application and services as an HTTP server without a native window.
+[Part 2](https://train-it.eu/blog/cpp26-contracts-common-ground#what-the-ballot-does) explained the two conditions a DIS
+has to meet. The draft missed both of them:
 
-## Highlights since the beta
+| Condition | Requirement | Result |
+| --- | --- | --- |
+| Votes in favor, from the voting (P-)members | at least two-thirds | 12 of 20, which is 60% |
+| Negative votes, from all bodies that voted | no more than 25% | 9 of 22, which is 41% |
 
-The beta post went out on 2 August, and the changelog has been busy since then. A few things I want to call out:
+Two-thirds of 20 needs 14 votes in favor, and the draft got 12. A quarter of 22 allows five negative
+votes, and the draft got nine. Either one alone would have failed the draft.
 
-- A new documentation site. The docs now run on M-Press, our own documentation tool, and the translations were completed and brought across from the community. The English documentation remains the source of truth.
-- A tougher Windows experience. Wails now recovers from WebView2 process failures instead of leaving you with a blank window, and a number of WebView2 COM lifetime issues were fixed along the way.
-- Global shortcuts that respect your keyboard. On macOS, letter accelerators now follow the labelled key on layouts such as AZERTY, QWERTZ and Dvorak.
-- Updater hardening. Fixes for swapping binaries across filesystems on Linux and for AppImage updates, among others.
-- Setup and tooling. The wails3 setup wizard was completed, and wails3 dev now stops its background processes when your app exits.
-- Native Liquid Glass on macOS. Support for the Liquid Glass effect on macOS 26 and later, with a fallback for earlier versions.
+## Which countries voted, and how[#](https://train-it.eu/blog/cpp26-contracts-the-ballot-result/#which-countries-voted-and-how)
 
-## Moving from v2
+The official result names every country. Nine voted No: Denmark, Finland, Iran, Italy, Japan,
+Luxembourg, Romania, Spain, and Sweden. Each of them sent comments with its vote. France and Ireland
+abstained but also sent comments, so 11 countries commented in total. Poland and the United States
+abstained. I am a member of the Polish national body.
 
-v3 is a new major version, and migrating is a real port rather than a version bump. The big shifts are the application and window lifecycle, services in place of context-bound bindings, direct application and window APIs in place of the v2 runtime package, and regenerated frontend bindings.
+The comments themselves aren’t available yet. The ISO/IEC Directives (clause 2.6.5 of Part 1)
+require a full report within 12 weeks of the vote’s end, including the result, the committee chair’s
+decision, and the full text of the comments. For a ballot that closed on 23 October, this is
+mid-January 2027 at the latest. At the committee-draft stage, WG21 published that kind of report as
+[N5028](https://wg21.link/N5028). I don’t know if it will do the same this time.
 
-The [v2-to-v3 migration guide](https://v3.wails.io/migration/v2-to-v3/) walks through all of it, with before-and-after examples. Please port deliberately, test as you go, and keep v2 in place until your v3 application is ready.
+## Poland’s abstention[#](https://train-it.eu/blog/cpp26-contracts-the-ballot-result/#polands-abstention)
 
-**Wails v2 isn’t going away.** It continues to receive critical updates. For new projects, use v3.0.0. The two CLIs are separate binaries (`wails` and `wails3`) with different module import paths, so you can have both on one machine.
+Poland’s position on C++ is decided in a technical committee of the Polish Committee for
+Standardization, KT 331. Its ballot asked whether Poland should reject the DIS and send technical
+comments to ISO. The vote didn’t pass, so Poland told ISO “Abstention”, and no technical comments
+could go with it.
 
-## Install
+I won’t share the tally or say who voted how. This is an internal vote, and I don’t know whether it
+may be published. A few votes decide whether Poland says something or nothing at all.
 
-Install the v3.0.0 CLI with:
+It almost came to nothing for a different reason. A few days before the Polish ballot closed, we
+were still missing votes for a quorum, and without a quorum there would have been no Polish position.
+Some of the people on the list had changed jobs. I tried to reach the quiet ones by email and on
+LinkedIn, and some of the emails bounced, most likely because the addresses belonged to former
+employers.
+
+Whichever way you think C++26 should have gone, two things follow:
+
+- If you are on a national committee, vote. The vote counts no matter which way you cast it.
+- If you can no longer take part, ask to be removed from the list of voting members. The quorum counts you, so an inactive member makes it harder for everyone else to reach one, in this ballot and in every one that follows. The committee office can’t simply remove someone who has gone quiet, so it depends on the member to ask.
+
+## What the No votes were about[#](https://train-it.eu/blog/cpp26-contracts-the-ballot-result/#what-the-no-votes-were-about)
+
+I am convinced the No votes were about contracts. That is where the opposition was on record before
+the ballot. Both objections explained at the Croydon plenary that sent C++26 to the ballot were
+about contracts. Several national-body comments on the committee draft asked to remove them ([part
+2](https://train-it.eu/blog/cpp26-contracts-common-ground#who-is-who) has the table). [P4238R1](https://wg21.link/p4238r1) asked the national bodies
+to vote No over the contracts design and how it advanced through the committee. I expect all nine No
+votes to be about contracts, and we will know for sure only when the comments are published.
+
+For readers who have not followed the series, this is the feature, and [part
+1](https://train-it.eu/blog/how-cpp26-contracts-work) explains it in detail:
 
 ```
-go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0
+#include <cmath>
+
+double checked_sqrt(double x)
+    pre (x >= 0.0)
+    post (r : r >= 0.0)
+{
+  const double root = std::sqrt(x);
+  contract_assert(!std::isnan(root));
+  return root;
+}
 ```
 
-Then run the guided setup wizard, which checks your environment and helps with the dependencies Wails needs:
+This code doesn’t decide whether each of those checks runs or what happens when one of them fails.
+The draft defines four evaluation semantics, `ignore`, `observe`, `enforce`, and `quick-enforce`,
+and leaves the choice between them to the implementation. In GCC 16, you pick one with a compiler
+flag. Much of the dispute is about this choice, whether a contract assertion is a check the build
+may drop or a guarantee the program can rely on ([part
+3](https://train-it.eu/blog/cpp26-contracts-who-decides-a-check-runs)). [Part
+4](https://train-it.eu/blog/cpp26-contracts-inside-a-predicate) and [part
+5](https://train-it.eu/blog/cpp26-contracts-experience-and-process) cover the rest of it.
 
-```
-wails3 setup
-```
+## What happens next[#](https://train-it.eu/blog/cpp26-contracts-the-ballot-result/#what-happens-next)
 
-![The Wails v3 setup wizard in dark mode](https://v3.wails.io/assets/screenshots/wails3-setup-wizard-dark.png)
+The directives give four courses of action after a failed DIS:
 
-And create your first project:
+- circulate a revised enquiry draft, with an eight-week vote instead of twelve,
+- circulate a revised committee draft for comments,
+- circulate it as a draft technical specification instead,
+- cancel the project.
 
-```
-wails3 init
-```
+The SC22 chair chooses one of the first three, in cooperation with the SC22 secretariat and the WG21
+convenor, and in consultation with the ISO/IEC central office. Canceling is the only one that SC22
+as a whole has to decide. WG21’s part is to address the comments, recommend a course, and, if
+needed, prepare a revised draft. When I wrote this, I had seen no announcement of which one they
+chose.
 
-- Documentation: https://v3.wails.io/
-- Migration guide: https://v3.wails.io/migration/v2-to-v3/
-- Release notes: Wails v3.0.0 on GitHub
+The next WG21 meeting is in Búzios, Brazil, from 16 to 21 November 2026. It will be the first
+meeting of the whole committee since the result, and opinions on what it should do are divided:
 
-## Support and releases
+- Some want WG21 to seek another ballot without changing or removing contracts. P4433R0 is a formal proposal for this. It also asks WG21 to reject comments that call for removal unless they bring new technical information, and to confirm both with a poll in Búzios.
+- Others say the short-term answer is simple. J. Daniel Garcia, one of the authors of P4238R1, wrote under Seacord’s post: “the short term solution is simple, remove one problematic feature and the rest of the standard can very likely be approved”. Vandevoorde’s recommendation “will be to remove contracts from the draft, with adjustments to keep library hardening”.
+- Some of the earlier national-body comments asked for a technical specification or a white paper instead.
 
-Wails has grown far beyond what I expected, and it has been hard to keep up with the volume of issues and pull requests. Releases have sometimes been ad hoc, and fixes and contributions have waited too long to reach users. We’ve put systems in place to automate more of the groundwork in triage and release preparation, so we can respond more quickly to problems and spend more time shipping improvements and new features.
+I would like to see a plan in Búzios, and it is not enough for me if it only says what to do with
+contracts. If they have to leave C++26 so the rest can ship, that is a pity, but I can live with
+it. I would not like everything else to wait with them. I would like to see the rest of C++26 ship
+as soon as possible.
 
-After v3.0.0, we’re moving to **nightly pre-releases** with dated tags such as `v3.1.0-nightly.20261026`, alongside **weekly minor releases** such as `v3.1.0` and `v3.2.0`. Nightlies make recent fixes available sooner, while the weekly releases give you a regular cadence of tested updates.
+A harder question is how the design improves from here. The objections I have read point in
+different directions: stronger guarantees checked by the compiler, more of the design in the
+library, a technical specification first, checks that can’t be switched off. I have not seen a
+single alternative that all of those who object would accept, so I find it hard to say which one
+change would satisfy everyone. That is how I see it, and I may be wrong.
 
-If you find a reproducible bug, please report it with the output of `wails3 doctor` and a minimal example. If you want to propose a new capability or a change to public behaviour, start a draft WEP (Wails Enhancement Proposal) PR rather than a feature-request issue.
+Until a new edition is published, the current C++ standard is still ISO/IEC 14882:2024 (C++23).
 
-## Translations
+## What it means for your code today[#](https://train-it.eu/blog/cpp26-contracts-the-ballot-result/#what-it-means-for-your-code-today)
 
-To everyone who helped translate the Wails v2 documentation: thank you, from the bottom of our hearts. You gave your time so that developers could read the docs in their own language, and that mattered to a lot of people. We are deeply grateful.
+Compilers implement features from the working draft, and the ballot doesn’t change what they already
+ship. GCC 16 accepts `-std=c++26`, and Clang has `-std=c++2c`. GCC 16 implements contracts as part
+of its experimental C++26 support, and the Clang implementation hasn’t been merged. Whether vendors
+keep every drafted feature under that flag is up to each of them, and nobody can promise it today.
 
-We found Crowdin particularly difficult to manage, and we have stopped using it. From v3 onwards, the documentation is translated automatically, and the translations live in the repository next to the English pages.
+If your team already uses C++26 features, or is learning them, nothing has to be undone yet.
+However, what your compiler implements today is a draft, and it may not match the published
+standard.
 
-If you would like a translation in a language we don’t have yet, or you have spotted a mistake in one that we do, please open an issue and tell us. We would love to hear from you, and we are thankful for every report.
+## What is still open[#](https://train-it.eu/blog/cpp26-contracts-the-ballot-result/#what-is-still-open)
 
-## Credit & Thanks
+- the text of the comments from the 11 countries that sent them,
+- what WG21 recommends in Búzios, which course of action is chosen, and on what schedule.
 
-Wails v3 exists because of the people who tested incomplete builds, reported hard bugs, translated documentation, answered questions and contributed code. Thank you. The full list of contributors lives on the [credits page](https://v3.wails.io/credits/), and I’d encourage you to go and look at it.
+I hope the compilers keep implementing C++26 contracts, whatever the committee decides next. One
+objection is the lack of production and deployment experience, and [part
+5](https://train-it.eu/blog/cpp26-contracts-experience-and-process#how-much-deployment-is-enough) presents both sides
+of that argument. This experience is hard to gain without implementations that people can use, which
+is a chicken-and-egg problem. I would rather not see the same objection come back the next time
+contracts are voted on.
 
-First, a huge thank you to [Atterpac](https://github.com/atterpac), a Wails maintainer, for the development tooling, Linux desktop integration and community support that have helped bring v3 to this point.
-
-Special thanks to [Fabio Massaioli (fbbdev)](https://github.com/fbbdev) for creating such an amazing static source analyser and binding generator. It is a huge part of what makes v3 work: ordinary Go services become JavaScript and TypeScript APIs, with types and documentation carried through to your frontend.
-
-Thank you also to [Travis McLane](https://github.com/tmclane) for his extensive early platform work; [Stffabi](https://github.com/stffabi) for the asset server and native platform foundations; [Zach Botterman (popaprozac)](https://github.com/popaprozac) for notifications, Dock integration and other desktop features; [Ian VanSchooten (IanVS)](https://github.com/IanVS) for typed events and runtime improvements; and [Lyimmi](https://github.com/Lyimmi) for Linux work. These contributions remain part of v3, alongside the work of everyone who has helped build and refine it.
-
-A very heartfelt thank you to the sponsors who have carried Wails through this long transition. Your support gave us the time to work on the architecture, tooling, testing and documentation that got us here. Special thanks also to JetBrains and ZSA, and to [CodeRabbit](https://www.coderabbit.ai/oss) for supporting the project with code reviews.
-
-Finally, a special thank you to Valerio Tesei for all of his support of the project over the years.
-
-## Final Words
-
-We already have a lot of work waiting in the wings. There are some exciting developments across the tech world, and we’re ready to explore new paradigms and bring whole new features to Wails. First, we need v3 to be a stable foundation that you can rely on. Getting that right comes before rolling out what’s next.
-
-I’m really proud of v3. I hope it gives you as much pleasure to build with as it has given us to make. Try it, build something, and tell us what you think. Come and say hello on [Discord](https://discord.gg/JDdSxwjhGf), [GitHub Discussions](https://github.com/wailsapp/wails/discussions) or the [subreddit](https://www.reddit.com/r/wails/).
-
-Enjoy!
-
-‐ Lea
-
-PS: If you or your company find Wails useful, please consider [sponsoring the project](https://github.com/sponsors/leaanthony). Thanks!
+I will update this article when more information is published.

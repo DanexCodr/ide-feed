@@ -1,18 +1,32 @@
-[`wordexp(3)`](https://pubs.opengroup.org/onlinepubs/9799919799/functions/wordexp.html) is a POSIX API for performing shell-style expansions from C.
+If you have questions or thoughts on the post I'd love to [hear about it!](https://brennenputh.me/contact/)
+      I'm currently looking for work in the northeastern US. I'll be graduating with a BS in both Computer Science and Cyber Operations at the end of the school year.
+      I have worked in web application development and Java, and I have experience in Rust, C++, Python, and various other languages.
+      If you're curious about what I've done in the past, I keep up a short list of projects [here](https://brennenputh.me/projects/) or [contact me](https://brennenputh.me/contact/) to give me a place to send my resume.
+      I figure anyone who reads my posts will have an interesting offer, so all leads are appreciated!
 
-It's often cited/recommended as a way to do tilde expansion (e.g. `~/foo` to `/home/me/foo`):
+I read a lot of printed papers these days. While I enjoy reading on a laptop as much as the next guy, marking up a printed document engages me better. Also, there's something about sitting with a whiteboard and a printed document that makes me rightly feel like I'm doing something important. So I've been thinking about how to best allow others to enjoy this medium for content that I write.
 
-However, `wordexp(3)` is also dangerous! That last `0` argument is for the *flags* parameter.
-By default, all expansion features are enabled, **including command expansion**:
+Luckily for me, printed documents were a major focus of web design a while ago. You can print any webpage you like, by hitting CTRL-P and hoping your printer driver decides to cooperate today.
+I tested this on my own webpage, foolishly thinking I would have a decent print job without any effort.
 
-or:
+It wasn't great, although you can at least see all the content. The text was too big by about 2 levels, the header looks awful when printed, and my links look awfully gray in black-and-white. Totally unacceptable.
 
-Disabling this requires passing [`WRDE_NOCMD`](https://pubs.opengroup.org/onlinepubs/9799919799/functions/wordexp.html#:~:text=WRDE_NOCMD,Substitution%2C%20is%20requested.) as a flag. Unfortunately, this
-palliative at best in some libc implementations:
+### Making Things Printable
 
-- [musl implements `wordexp(3)`](https://git.musl-libc.org/cgit/musl/tree/src/misc/wordexp.c) by delegating to the system shell. It adds some perfunctory scanning for command substitutions before delegating, but fails to match some patterns that the underlying shell (like GNU Bash) can treat as valid command substitutions.
-- [macOS's libc implements `wordexp(3)`](https://github.com/apple-oss-distributions/Libc/blob/71bbe350ab79eef58113991d817ccc6165061a64/gen/FreeBSD/wordexp.c#L201) in a similar manner, delegating to `/usr/lib/system/wordexp-helper`<sup>[1](https://yossarian.net/til/post/posix-wordexp-3-is-dangerous/#fn-perl)</sup>. According to [Julian Squires](https://www.cipht.net) this had the same bypass as musl [as recently as 2023](https://www.cipht.net/2023/11/21/worried-by-wordexp.html), although I didn't bother testing whether it's still effective now that the default macOS shell is `zsh` instead of `bash`.
+Luckily, the web community has had this aforementioned focus on printing documents from HTML pages. CSS has selectors to allow styling specifically printed content, and they can be useful. Here's my print-related snippet for this page now:
 
-Bottom line: don't use `wordexp(3)` on untrusted inputs, even with `WRDE_NOCMD`.
+You can see the effects of this snippet by hitting CTRL-P or the print button on this page. Here's the functions this does for me, in order:
 
-1. Previously, macOS's `wordexp(3)` would shell out to Perl. `wordexp-helper` appears to be the "modern" solution. [↩](https://yossarian.net/til/post/posix-wordexp-3-is-dangerous/#fnref-perl)
+1. onlyPrint can be added as a class to allow elements which only show up in the printed document. Right now, that means tagging a small author attribution to the subtitle.
+2. noPrint is used to remove something from the printed website. I put it on the header, because it looks honestly very ugly in printed format.
+3. Adjusting font sizes for print is very important. The variable-scale text which I use on my website looks awful on a printed page. 12pt is a fairly well accepted size, so I figured it'll do. A slightly larger size for the headers makes sense as well.
+4. The giallo tweaks are for codeblocks. Honestly, codeblocks are still the ugliest part even after some tweaking. They want to come out as one chunk and not break over page borders, and if anyone has a solution to that I'd be greatly appreciative.
+5. Blue links, as much as I like them on the site, look awful in grayscale. Turning them the same color as other text is fine. Feel free to pull any code you like from the CSS, I'm not protective of it. I would personally love to experience more webpages that think about how printing works.
+
+### Why You Should Do This
+
+After attempting to optimize my website in this way, I am sympathetic for those who wouldn't prioritize printing. Hiding and showing all the right things in print took me a decent chunk of my morning. My site isn't very complex. I also doubt how many people regularly print webpages out. I might be the only one.
+
+Still, if all your website consists of is text, allowing people to experience the text in their favorite medium is never a bad thing. The digital medium allows a lot of flexibility. The road to good software is paved with kindnesses from software engineers to their users. One day, perhaps someone shall find this kindness and smile, even if just for a fleeting moment. And that will be worth it.
+
+**Edit 2026-10-26:** I was informed by a friend that this post ended up on the front page of HN and lobste.rs after I submitted it. Fun! Despite the several flaws I am now informed of in my CSS, I hope this article at least pushes a few to consider this medium more carefully. Thanks all for reading!
