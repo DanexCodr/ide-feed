@@ -1,73 +1,35 @@
-> I wrote an accelerated FAST feature detector for the ESP32-S3 that leverages its 128-bit SIMD instructions. It achieves roughly double the performance of the reference implementation, and takes around ~6ms to process a QVGA (320x240) frame. You can find the source code [here](https://github.com/shraiwi/simd-fast-esp32s3).
+*Or, why we’re not seeing mass-exploitation of php2shell yet.*
 
-For its price, the ESP32-S3 is a powerhouse of a microcontroller. Within its unassuming plastic package lies a dual-core CPU running at a maximum of 240MHz with a slew of peripherals, including WiFi and Bluetooth Low Energy radios. While digging through its [technical reference manual](https://www.espressif.com/sites/default/files/documentation/esp32-s3_technical_reference_manual_en.pdf) I discovered that the chip supports a limited set of SIMD instructions. For silicon that’s cheaper than the average coffee, that’s pretty cool. Let’s see what exciting things we can do with it!
+*Update 2026-10-25: three days after the patch was available, the first public [evidence appeared](https://github.com/0x4D31/honeypot-data/blob/main/reports/php2shell/2026-10-24-confirmed-rce.md) of exploitation in the wild. This was a honeypot, presumably a low-traffic sensor. As far as I can tell, the technique matches my description below. So seems likely that at this point, mass-exploitation of low-traffic sites has begun. The constraints making exploitation of mid/high traffic websites unlikely, to my knowledge, still stand.*
 
-In the process of writing a SIMD-accelerated FAST corner detector, I learned the basics of assembly on the ESP32-S3, worked around its eccentric limitations, and ended up writing my own basic register allocator, `basm`.
+*Update 2026-10-25: regarding high-traffic sites, a public $2k bounty on [stealmybitcoin.com](https://stealmybitcoin.com/) has not yet been claimed. However, Dan Guido of Trail of Bits, [claims](https://x.com/dguido/status/2113825891021144306) they have a reliable exploit that works under load. If so, that’s faster than I expected. I have not seen public confirmation, or what they mean by “under load.”*
 
-After some more web browsing, I realized that these instructions weren’t exactly [secret](https://bitbanksoftware.blogspot.com/2024/01/surprise-esp32-s3-has-few-simd.html), but rather relatively unknown. I wanted to experiment with them myself and write more advanced code than what I could find online. As I’ve been really interested in computer vision lately, I decided on writing a SIMD-accelerated implementation of the [FAST feature detector](https://en.wikipedia.org/wiki/Features_from_accelerated_segment_test) for the ESP32-S3.
+*Update 2026-10-25: discussions on [lobste.rs](https://lobste.rs/s/xgih2x/i_want_my_wednesday_back) and [reddit](https://www.reddit.com/r/AskNetsec/comments/1xe4l6k/is_php2shell_only_practical_against_extremely/).*
 
-I started by looking for example code that uses SIMD instructions. At the time of writing, I could only find three sources:
+I saw wildly varying opinions on whether php2shell is serious, or if they cried wolf. Got curious, started digging into the PoCs. I’m not an exploit dev and maybe there were other factors, so take with a grain of salt. Egg on my face if mass exploitation starts right as I hit publish.
 
-1. Larry Bank’s blog, where he explores the feature and provides a minimal example
-2. Espressif’s `esp-dsp` library, used for DSP-esque features (convolutions, FFT, etc.)
-3. Espressif’s `esp-dl` library, used for on-chip AI acceleration.
+Best PoC of php2shell I’ve found: [https://github.com/9bie/php2shell-bypass-aslr-exp](https://github.com/9bie/php2shell-bypass-aslr-exp) (and a [fork with all docs translated to english](https://github.com/yanoshercohen/php2shell-bypass-aslr-exp-en))
 
-After perusing through them, I was relieved to find that assembly on the ESP32-S3 isn’t that bad. I settled on this general structure:
+To exploit, you need to do four consecutive requests to **the same php worker process**. And you need to know the exact php build (php version, OS version, architecture), or try exploits for every possible build.
 
-```
-    .section .rodata
-	# read-only data here
+What this PoC does is take a docker image that uses the default mod_php number of workers, which is 150. Then it opens 149 connections that send half a request to keep the other workers busy, and does the four exploit requests against the 150th worker.
 
-    .section .text
-    .align 4
+Even a moderately popular production website will have multiple web VMs/containers running multiple php workers behind a load balancer and constant bot traffic. That means you would have to try a wide range of number of connections to open. On top of that you likely won’t know the exact build version, so you would have to try exploits for every combination out there.
 
-    .global add
-    .type   add,@function
-# a simple function that adds two numbers
-# int32_t add(int32_t a, int32_t b)
-add:
-    entry           sp, 48 # sp (stack pointer) is an alias for a1
+Let’s say you try this for the 50 most popular php/OS combinations, and any number of workers between 10 and 1010. That’s 50k attempts. But against constant background traffic, you would need to try each combination a number of times. Each of these attempts involves opening a whole lot of connections, so they each take some time. The PoC runs against localhost and takes 3-4 seconds, so let’s optimistically call it 10 seconds on the internet.
 
-    #define r_a a2
-    #define r_b a3
+You can only do one attempt at a time, so that means multiple days of bruteforcing in a way that is essentially a DoS, since a large part of that range will exhaust the maximum number of connections. At this point the person running the site will likely notice, start blocking IP addresses or adding a WAF.
 
-	# code here
+Most high-traffic websites already run WAFs/rate-limiting to deal with bot traffic, so you would need to run this attack from a great many IPs, and preferably clean ones that are harder to come by. But running this from many IPs also increases the chances that your timing will be off, reducing the number of plausible attempts even further.
 
-	add a2, r_a, r_b # a2 = a + b
+That’s assuming the WAF doesn’t block your attempts entirely, because the easiest ways to exploit these vulnerabilities were known at the time of the announcement.
 
-    retw.n # return, with a2 containing the return value.
-```
+I’m sure people and agents will come up with clever techniques to reduce the required number of attempts eventually. But that has nothing to do with “this will get mass-exploited within 15 minutes.”
 
-From there, I started writing a SIMD-accelerated version of the FAST corner pre-test. Essentially, it samples one pixel in each cardinal direction and checks if there are at least three “extreme” pixels. In this case, an extreme pixel is one whose absolute difference from the center pixel is above a certain threshold.
+Against very low-traffic websites that do not have any bot protection, leak information about their version, running close to stock configuration, you might get lucky.
 
-I decided on a function that would calculate the extrema count of sixteen pixels at a time, since each vector register can store sixteen eight-bit values. This would be achieved by sampling four “chunks” of pixels in each cardinal direction and comparing them to their respective center pixels.
+So sure, it’s a critical vulnerability, deserves attention, should be patched ASAP. Maybe even put in the announcement that if you’re running low-traffic sites, be extra sure to patch fast.
 
-However, this is where I ran into my first limitation- the ISA doesn’t allow for direct misaligned reads. Under the assumption that the center pixel would be aligned, the east and west blocks would be misaligned:
+But to the AI security vendors who promoted this as THE GATES OF HELL WILL OPEN YOU HAVE TO PATCH WITHIN 15 MINUTES OR DIE? I want my Wednesday back.
 
-Thankfully, the chip has an instruction that allows for extracting a slice of two concatenated registers into another one. Using this functionality, I was able to extract the east and west blocks by reading and extracting slices from the two blocks adjacent to the center block.
-
-Okay, so now I have the pixel data. Time to do some comparisons, right? Wrong. Turns out the ESP32-S3’s only implements comparisons for signed eight-bit numbers. This made processing a little more difficult, because all my pixel data was stored as unsigned eight-bit numbers. If you just reinterpreted the unsigned data as signed data, you get some weird results:
-
-```
->>> np.int8(np.uint8(range(0, 256, 8)))
-array([   0,    8,   16,   24,   32,   40,   48,   56,   64,   72,   80,
-         88,   96,  104,  112,  120, -128, -120, -112, -104,  -96,  -88,
-        -80,  -72,  -64,  -56,  -48,  -40,  -32,  -24,  -16,   -8],
-      dtype=int8)
-```
-
-The range `[128 255]` gets nonlinearly mapped to `[-128 -1]`, breaking all compare operations. To make this work, I needed to shift the range of the values from `[0, 255]` to `[-128 127]`. This should’ve been a simple subtraction, but the instruction set got in the way again: on the ESP32-S3, all the SIMD arithmetic operations are saturating, which meant that all pixel values above 127 would end up being clamped at -128 instead of underflowing to their appropriate values. To overcome this problem, I had to somehow subtract 128 from each number in parallel without using the subtraction instruction. This seemed like a daunting task to me at first, but I eventually arrived at a solution.
-
-Let’s assume that `x` is the minuend. Here is its digits’ place values:
-
-```
--128 64 32 16 8 4 2 1
-```
-
-Notice anything interesting? Subtraction is the same as addition by -128, so to compute `x - 128`, we can just “increment” the number by -128 by adding one to `x`’s most significant digit, whose place value is -128. We can compute this by simply flipping the highest bit of `x`. Since XORing any bit with one is the same as taking the bitwise NOT, we can selectively flip the highest bit of `x` by XORing it with the bit mask `0b10000000`, which equal to `0x80`. Therefore, `x - 128 == x ^ 0x80`.
-
-Now, whenever unsigned eight-bit values are loaded in, they are XOR’d with `0x80` to convert them an appropriate (linear) range where the arithmetic and comparisons make sense again.
-
-With those two tricks, I was able to circumvent the limitations of the ESP32-S3 and write the SIMD-accelerated FAST corner pre-test. I also wrote a SIMD-accelerated scoring function using a similar set of operations but I won’t be writing about that here.
-
-In the end, I was able to improve the throughput of the FAST feature detector by about 220%, from 5.1MP/s to 11.2MP/s in my testing. This is well within the acceptable range of performance for realtime computer vision tasks, enabling the ESP32-S3 to easily process a 30fps VGA stream. Not bad for $2!
+<small>Oh and the claims of it being exploited in the wild? At time of writing, they’re referring to exploitation *attempts*. In fact, HoneyLabs [so far](https://infosec.exchange/@HoneyLabs/117483559117381472) hasn’t seen a single exploit attempt that could even run successfully.</small>

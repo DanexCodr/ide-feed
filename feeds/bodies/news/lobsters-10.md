@@ -1,123 +1,13 @@
-**TL;DR:** Experimental uv-ty integration is now available, enabling first-class support for Python
-scripts (on the CLI and in the editor) and a unified `uv check` command.
+When I was first learning the C programming language, in my early 20s, it was [common knowledge](https://retrocomputing.stackexchange.com/questions/27125/has-there-ever-been-a-c-compiler-where-using-i-was-faster-than-i) that of the two ways to increment a variable, `i++` was slower than `++i`. The post-increment function returned the original value of `i`, which meant stashing a copy of that value before performing the increment. Pre-increment avoided this wasteful operation.
 
-This is a step towards an integrated Astral toolchain, one that uses a shared understanding of your
-project to enable entirely new capabilities.
+And by “common knowledge” I really mean folklore, because I turned 20 in 1995 and even by then, the most basic of optimising compilers knew to check if you ever used the return value of `i++`, and if not, skip the operation to save it.
 
-At Astral, we build high-performance tools for the Python ecosystem:
-[uv](https://github.com/astral-sh/uv), our package manager;
-[Ruff](https://github.com/astral-sh/ruff), our linter and formatter; and
-[ty](https://github.com/astral-sh/ty), our type checker and language server.
+Scratch an old programmer and you'll probably find a dozen or so ingrained habits that, in an era where CPUs are doing [branch prediction](https://stackoverflow.com/questions/11227809/why-is-conditional-processing-of-a-sorted-array-faster-than-of-an-unsorted-array) and code reordering, are just as likely to make their program slower.
 
-Historically, each Astral tool has focused on making a different component of Python development
-more productive. But we see an opportunity to further Python by unifying traditionally separate
-capabilities into an integrated toolchain.
+Anyway, remember prompt engineering?
 
-Our vision for the Astral toolchain is simple: while each tool should be individually usable,
-useful, and interoperable with the rest of the ecosystem, they should be even more capable when used
-together.
+It makes sense to believe that all the tricks we come up with with to make models behave better, the ways of working with models that get us to a useful result faster, if they work, are going to be folded back into the product, packaged, and become the default experience a few months later. And yet, in five years, I’m sure there will be old heads doggedly adding “you are an experienced software developer, make no mistakes” to their custom instructions.
 
-Today, we’re announcing an experimental **integration between uv and ty**, available in preview. uv
-understands your Python project’s environment and dependencies, while ty understands your code. By
-combining the two, we can unlock new functionality beyond what either tool can provide individually.
+I'm not saying it's worthless to keep up with the state of the art. You still need to be able do your job today, to the best of your ability. But a skill that can be picked up in a few weeks, and will be obsolete in a few months, has no value outside the moment.
 
-## First-class support for Python scripts  [#](https://astral.sh/blog/uv-ty-integration#first-class-support-for-python-scripts)
-
-[PEP 723](https://peps.python.org/pep-0723/) enables Python scripts to declare their dependencies
-and Python version requirements through inline metadata. uv already uses this metadata to prepare an
-environment when running a script. Now, ty can use this metadata to understand your scripts.
-
-On both the command line and in the editor, ty now uses inline metadata to discover scripts
-throughout your project and leverages uv to prepare an environment for each script. These
-environments allow ty to check your scripts against their declared requirements.
-
-Scripts can have different requirements within the same repository. Each script is checked against
-its own dependency declarations, even if those dependencies or Python requirements differ from the
-surrounding project.
-
-Declare dependencies inline with PEP 723, save to sync with uv, and use ty’s completions, hover information, and Go to Definition capabilities in your editor.
-
-*Declare dependencies inline with PEP 723, save to sync with uv, and use ty’s completions, hover
-information, and Go to Definition capabilities in your editor.*
-
-When the integration is enabled in your editor, ty automatically invokes uv to prepare the script’s
-environment in the background, which it uses to provide type checking, code navigation, and
-completions based on the script’s declared requirements.
-
-Over time, we plan to enable script support by default, and enable automatic environment setup for
-standard Python projects.
-
-`uv check` introduces a unified diagnostic interface to uv, starting with support for ty. Over time,
-we plan to support Ruff in `uv check` to unify linting and type checking into a single command.
-
-Running `uv check` will automatically prepare your project’s environment, install the required
-dependencies, and check your project with ty. It “just works.” (If you never run `uv check`, nothing
-changes for your uv experience; the ty binary is installed separately on first invocation.)
-
-With `uv check`, you can check individual packages, or an entire workspace. In a workspace, use
-`uv check --package <name>` to select an individual package, or `uv check --all-packages` to check
-every package. uv uses your workspace configuration to determine what to check, so the command stays
-the same as your workspace grows.
-
-Sync your project’s dependencies and type-check your code with a single command.
-
-*Sync your project’s dependencies and type-check your code with a single command.*
-
-Standalone PEP 723 scripts have independent environments and are checked separately. Use
-`uv check --script example.py` to check a script using its declared requirements.
-
-`uv check` automatically uses the ty version recorded in your project’s lockfile. Commit your
-project configuration and lockfile, and developers and CI running `uv check` will share the same ty
-version without separately maintained pins.
-
-The [ty pre-commit hook](https://github.com/astral-sh/ty-pre-commit) also uses `uv check` under the
-hood to run ty before each commit over your Python project. By using `uv check`, the hook
-automatically sets up the environment for ty from your project’s dependency declarations.
-
-The uv-ty integration is powered by
-[`uv workspace metadata`](https://docs.astral.sh/uv/reference/internals/metadata/), which gives ty a
-structured view of your project or script’s packages, dependencies, and Python environment. ty then
-uses this information to provide type checking and editor features that reflect the configured
-environment.
-
-For PEP 723 scripts, ty invokes uv to prepare the script’s environment, which includes installing
-declared dependencies. As dependency installation can require execution of third-party Python code,
-automatic environment setup is currently opt-in.
-
-To [try the integration](https://docs.astral.sh/ty/reference/editor-settings/#experimentaluseuv) for
-PEP 723 scripts in VS Code, [install uv](https://docs.astral.sh/uv/getting-started/installation/)
-and the [ty VS Code extension](https://marketplace.visualstudio.com/items?itemName=astral-sh.ty),
-then enable the uv integration in your VS Code `settings.json`.
-
-```
-{
-  "ty.experimental.useUv": "on"
-}
-```
-
-You can also check your project and its PEP 723 scripts from the command line with:
-
-```
-TY_UV=scripts ty check
-```
-
-[Running `uv check`](https://docs.astral.sh/uv/reference/cli/#uv-check) enables the integration
-automatically and requires no additional configuration.
-
-Support for PEP 723 scripts and the `uv check` command requires uv 0.12.3 or later, and ty 0.0.76 or
-later.
-
-This integration is experimental, and we’d love your feedback as we refine the experience.
-
-While this initial support largely leverages uv’s environment capabilities to power ty execution,
-we’re also working on a new category of checks that combine uv’s knowledge of your project’s
-dependencies with ty’s understanding of your code (e.g., to detect unused dependencies), which we’ll
-cover in a future post.
-
-And, in parallel, we’re continuing toward ty’s stable release.
-
-Thank you for building with us!
-
-*Thanks to [Aria Desires](https://github.com/Gankra),
-[Micha Reiser](https://github.com/MichaReiser), and [Zsolt Dollenstein](https://github.com/zsol)
-from the Astral team for implementing the features behind this integration.*
+Eighteen months ago, I was sitting in a crowded room watching a CEO enthusiastically declare that it was time to get on the AI train, because if you didn't get on it *right now* you'd be left behind. Maybe I'm getting old, but in a world where Google, Facebook, the iPod, iPhone and iPad, and so many other examples have shown that getting it right is more valuable than getting in first, I feel content to just keep pace with the pack, ready to pull [Steven Bradbury](https://www.youtube.com/watch?v=WUi4-H6hfw8) if and when the time comes.
