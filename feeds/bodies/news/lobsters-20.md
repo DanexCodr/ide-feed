@@ -1,487 +1,230 @@
-Welcome back to another round of [Simple Sudoku Solvers](https://blog.veitheller.de/sss/)! If you
-are unfamiliar with the series, I suggest you start with [the
-first post](https://blog.veitheller.de/Six_Simple_Sudoku_Solvers_I:_Python_(Reference).html) or by perusing [the backlog](https://blog.veitheller.de/sss/). Last time, in [Agda](https://blog.veitheller.de/Simple_Sudoku_Solvers_SIII,_EI:_Agda.html),
-the solver wasn’t allowed to hand us a board without a correctness
-proof. Today we go in the opposite direction: assembly, where nothing is
-checked at all, and the machine stares at us directly.
+I got bored and wanted to make a parser of C expressions. this will probably become a compiler at some point. previously, I’ve made a calculator using [shunting yard](https://en.wikipedia.org/wiki/Shunting_yard_algorithm), but with an itch to perhaps make a compiler of some kind, I looked at *pratt parsing*.
 
-To be quite specific, today we’ll write AArch64 assembly for macOS,
-because that’s the machine I’m sitting at<sup>[1](https://blog.veitheller.de/Simple_Sudoku_Solvers_SIII%2C_EII%3A_Assembly.html#1)</sup>.
-Surprisingly, the solver is just a little over 200 lines, and as always,
-[the code is on
-GitHub](https://github.com/hellerve/sudoku).
+you won’t find much information about pratt parsing in a conventional learning path of computer science. the [dragon book](https://en.wikipedia.org/wiki/Compilers:_Principles,_Techniques,_and_Tools), for all it talks about parsing, doesn’t mention it. as far as I’m aware, most programming language courses will probably teach either LR or recursive descent depending on how academic it is (mine taught recursive descent). pratt parsing specifically appears to be relegated mostly to compiler development and PLT circles. the most mainstream mention I know of it is in [crafting interpreters](https://craftinginterpreters.com/compiling-expressions.html); [wikipedia](https://en.wikipedia.org/wiki/Operator-precedence_parser#Pratt_parsing) also links a few other posts.
 
-## Why assembly?
+I used the crafting interpreters text to get my bearings, but I also wanted to practice reading formal papers more, so I tried using [Pratt’s original paper text](https://tdop.github.io/) as much as possible. it did take a bit more time than I’d have liked to wrap my mind around how the recursion fits into the operator precedence, but it did just *click* all at once, namely once I related it back to the shunting yard algorithm. so now I’m writing the observations down so I don’t forget. maybe it’s useful to you.
 
-Season three is about solvers, specifications, and constraints, and
-assembly might seem like the odd duck. But I think it fits!
+## shunting yard
 
-After a proof assistant that checks everything, it’s worth looking at
-what’s left when nothing is checked, and nothing is proven.
+the [shunting yard algorithm](https://en.wikipedia.org/wiki/Shunting_yard_algorithm) is, comparatively, much simpler than pratt. you have an output stream and an operator stack. operators are defined with their binding powers, where higher binding power means it binds tighter to its arguments (e.g. `*` has higher binding power in arithmetic than `+`). in the simplest description of shunting yard, for every token in the input stream:
 
-- Nothing is hidden. There is no allocator, no garbage collector, no runtime, and no compiler making choices for us. The board gets copied because we wrote exactly the instructions that copy it.
-- The machine already knows our tricks! We’ve been doing bit-twiddling with candidate masks since the Common Lisp episode, and in Forth we had to roll our own popcount and lowest-bit search. The CPU has instructions for most of that, and today we get to use them directly. So, in many ways, we gain some abstractions!
-- The stack is, uh, the stack. In Forth we built our own stack of boards for backtracking. Here, the machine stack is right there, so we might as well use it.
+- if it’s a “standalone” token (i.e. identifier/number), just push it to the output
+- if it’s an operator token:
+  - if it’s of higher binding power than the top of the operator stack, push it to the stack
+  - if it’s of equal of lower binding power than the top of the operator stack, then pop all operator tokens of higher or equal binding power to the output stream before pushing the operator token to the operator stack
+    - popping all “higher or equal binding power” operators assumes that all operators are left-associative
+- at the end of the token stream, pop all remaining operators to the output.
 
-Since there are no types, everything is a number, and the only thing
-standing between us and a wrong answer is our own diligence. Fun!
-
-## A quick primer on reading
-AArch64
-
-If you’ve never read ARM assembly before, here is what you need for
-this post.
-
-AArch64 has 31 general-purpose registers, `x0` to
-`x30`, each 64 bits wide. Writing `w0` instead of
-`x0` means “the lower 32 bits of register 0”, and since all
-of our numbers are small, we’ll use `w` registers most of the
-time. `sp` is the stack pointer.
-
-Instructions read like `op destination, source, source`,
-so `add w0, w1, w2` means `w0 = w1 + w2`. Memory
-is only touched by loads and stores:
-`ldrb w9, [x19, w21, uxtw]` loads the byte at address
-`x19 + w21` into `w9`, and `strb`
-stores one. `[x7], #1` means “load from `x7`, then
-add 1 to `x7`”, which is handy for walking through
-memory.
-
-We call functions with `bl`, which jumps and stores the
-return address in `x30`, and we return with `ret`,
-which jumps back to `x30`. Arguments go in `x0`
-and up, and the result comes back in `x0`. A function may
-freely overwrite `x0` to `x17` (`x18`
-is reserved), but has to restore `x19` to `x28`
-before it returns, so those are where we keep anything we need to
-survive a call.
-
-That should be enough to get through it. Everything else I’ll explain
-as we go. I recommend keeping your favorite drawing tool (pen and paper
-work well) handy to simulate the stack and register movement in your
-head. I’ve always had trouble with the mnemonics, so I read assembly
-differently than most other programming languages, modelling stack and
-register state as I go. Maybe that works for you as well!
-
-## The board
-
-The board is the same flat array of 81 bytes that we’ve been using
-for most of the series, with `0` for an empty cell. We put it
-in the data section (which means it’s baked into the executable quite
-literally), with the puzzle already filled in:
+a very primitive shunting yard in C, where expressions are converted to postfix notation, could be:
 
 ```
-        .data
-        .p2align 4
-board:  .byte 8,0,0,0,0,0,0,0,0
-        .byte 0,0,3,6,0,0,0,0,0
-        .byte 0,7,0,0,9,0,2,0,0
-        .byte 0,5,0,0,0,7,0,0,0
-        .byte 0,0,0,0,4,5,7,0,0
-        .byte 0,0,0,1,0,0,0,3,0
-        .byte 0,0,1,0,0,0,0,6,8
-        .byte 0,0,8,5,0,0,0,1,0
-        .byte 0,9,0,0,0,0,4,0,0
+#include <stdio.h>
+#include <ctype.h>
+
+typedef struct {
+    char ops[32]; // limit of 32 operators
+    int idx; // index of last operator
+} Stk;
+
+void push(Stk *s, char op) {
+    s->idx += 1;
+    s->ops[s->idx] = op;
+}
+void pop(Stk *s)   { s->idx -= 1; }
+char peek(Stk *s)  { return s->ops[s->idx]; }
+char empty(Stk *s) { return s->idx == -1; }
+
+int get_bindpower(char op) {
+    static const int bps[] = { ['+'] = 1, ['-'] = 1, ['*'] = 2, ['/'] = 2 };
+    return bps[op];
+}
+
+int main(int argc, char **argv) {
+    char *str = argv[1];
+    Stk _opstk = (Stk){ .idx = -1 };
+    Stk *opstk = &_opstk;
+
+    while (*str != '\0') {
+        if (isdigit(*str)) {
+            // number
+            printf("EMIT '%c'\n", *str);
+        } else {
+            // operator (assumed valid)
+            // get_bindpower(peek(opstk)) is the left binding power
+            // get_bindpower(*str) is the right binding power
+            while (!empty(opstk) && get_bindpower(peek(opstk)) >= get_bindpower(*str)) {
+                printf("EMIT '%c'\n", peek(opstk));
+                pop(opstk);
+            }
+            push(opstk, *str);
+        }
+        str += 1;
+    }
+
+    while (!empty(opstk)) {
+        printf("EMIT '%c'\n", peek(opstk));
+        pop(opstk);
+    }
+
+    return 0;
+}
 ```
 
-This is the same puzzle we used in the Agda episode, and it’s one of
-the harder ones I use for checking. `.p2align 4` aligns the
-board to 16 bytes. Strictly speaking we don’t need that, but we’re about
-to copy it around in 16-byte chunks, and it doesn’t cost us anything, so
-we might as well do it.
-
-There is one global board, and the solver mutates it in place.
-Whatever is in `board` when `solve` returns is our
-answer.
-
-## The solver
-
-As always, we’ll go outside-in. This is `solve` in its
-entirety, and it is the longest function in the file, so we’ll take it
-in pieces.
-
 ```
-solve:
-        stp     x29, x30, [sp, #-64]!
-        mov     x29, sp
-        stp     x19, x20, [sp, #16]
-        stp     x21, x22, [sp, #32]
-        str     x23, [sp, #48]
-        bl      propagate
-        cbz     w0, fail
+$ ./a.out '1+5*2+6'
+EMIT '1'
+EMIT '5'
+EMIT '2'
+EMIT '*'
+EMIT '+'
+EMIT '6'
+EMIT '+'
 ```
 
-The first five lines are the prologue, which is the ceremony every
-function that calls other functions usually goes through (it’s also the
-main thing that distinguishes functions and labels inside the block). We
-reserve 64 bytes on the stack, save our return address
-(`x30`) and the frame pointer (`x29`), and save
-the callee-saved registers we’re about to use. `stp` stores a
-pair of registers in one go, and the `!` means “update
-`sp` first”.
+the problem with shunting yard is that it’s not very extensible to *new behavior*. for example, the algorithm has no concept of “subexpressions” in the recursive sense; adding parentheses means attaching special functionality to the `)` token for popping off the stack until reaching the matching `(`. that’s not hard in its own right, but more complex behavior like unary operators, right-associative expressions, functions with variable arguments, etc. will get [messy](https://web.archive.org/web/20220705004349/https://wcipeg.com/wiki/Shunting_yard_algorithm#Extensions). this is where the transformation to pratt parsing comes in.
 
-The rest is familiar. We propagate, and if propagation hits a dead
-end, we fail. `cbz` is “compare and branch if zero”, which
-comes up a lot, because it’s basically an `if` statement.
+## from shunting to pratt
 
-Next up is finding the cell with the fewest candidates:
+the main transformation that turns the shunting yard algorithm into a pratt parser is: instead of using an explicit stack for operators, using the *call stack* to enter subexpressions as operators need them. with this, you thread the “left binding power” of infix/postfix operators to those recursive calls, returning when you encounter a binding power of an infix/postfix operator less than the left binding power. unwinding the stack when encountering a lower binding power in shunting yard is the same as returning from the recursive call in a pratt parser.
+
+a cool thing with this is that, unlike recursive descent, you don’t nest calls through every level of precedence for every expression, but rather only nest when entering subexpressions. simultaneously slightly more efficient and cleaner!
+
+unfortunately, there’s no clean “intermediate” step for this. you kind of just have to thrust it all through the wringer and look at the output. here’s the simplest pratt-style parser I can show in c, equivalent to the shunting yard parser before:
 
 ```
-        adrp    x19, board@PAGE
-        add     x19, x19, board@PAGEOFF
-        mov     w20, #-1                // best cell
-        mov     w21, #10                // its candidate count
-        mov     w22, #0                 // cell
-mrv:
-        ldrb    w9, [x19, w22, uxtw]
-        cbnz    w9, 1f
-        mov     w0, w22
-        bl      cands
-        fmov    s0, w0
-        cnt     v0.8b, v0.8b
-        addv    b0, v0.8b
-        fmov    w9, s0
-        cmp     w9, w21
-        b.hs    1f
-        mov     w21, w9
-        mov     w20, w22
-        mov     w23, w0                 // its candidates
-1:      add     w22, w22, #1
-        cmp     w22, #81
-        b.lo    mrv
-        tbnz    w20, #31, done          // no empty cell left
+#include <stdio.h>
+#include <ctype.h>
+#include <stdlib.h>
+
+int get_bindpower(char op) {
+    // the end token ('\0') is now defined in the bind power array
+    static const int bps[] = {
+        ['\0'] = 0,
+        ['+'] = 1, ['-'] = 1, ['*'] = 2, ['/'] = 2
+    };
+    return bps[op];
+}
+
+typedef struct {
+    char *str;
+} Parser;
+
+char cur(Parser *p) { return *p->str; }
+void bump(Parser *p) { p->str += 1; }
+
+void
+expr(Parser *parser, int left_bindpower) {
+    // all expressions *must* start with a "prefix" token
+    // this is what pratt calls "nuds" in his original paper.
+    // in this case, our only prefix tokens are digits
+    if (isdigit(cur(parser))) {
+        printf("EMIT '%c'\n", cur(parser));
+    } else {
+        fprintf(stderr, "expression doesn't start with a number\n");
+        abort();
+    }
+    bump(parser);
+
+    // at this point, we're at an infix/postfix operator.
+    // this is what pratt calls "leds" in his original paper.
+    // when this check is false, it's kind of like "unwinding" the stack in shunting yard.
+    while (left_bindpower < get_bindpower(cur(parser))) {
+        // assumed to be valid operator (like the shunting yard code)
+
+        // there's an expression on the right side of binary operators. parse it first.
+        // this is kind of like pushing to the operator stack in shunting yard.
+        int new_left_bindpower = get_bindpower(cur(parser));
+        char op = cur(parser);
+        bump(parser);
+        expr(parser, new_left_bindpower);
+
+        printf("EMIT '%c'\n", op);
+    }
+}
+
+int main(int argc, char **argv) {
+    Parser parser = (Parser){ .str = argv[1] };
+
+    expr(&parser, 0);
+
+    return 0;
+}
 ```
 
-The first two lines load the address of the board. On AArch64, an
-instruction is always 32 bits wide, so you can’t fit a full address into
-one. Instead, `adrp` gets the address of the 4KB page the
-board is on, and `add` adds the offset within that page.
-You’ll see this pair a lot. It’s a weird little ceremony if you ask me,
-but nobody did.
-
-Then we loop over all 81 cells. Filled cells are skipped. For empty
-cells, we get the candidate mask from `cands` and count its
-bits, and if the count beats the best one so far, we remember the cell,
-the count, and the mask.
-
-Counting bits is the first weird, delightful bit. Base AArch64 has no
-instruction for counting the bits in a general-purpose
-register<sup>[2](https://blog.veitheller.de/Simple_Sudoku_Solvers_SIII%2C_EII%3A_Assembly.html#2)</sup>. It does have one for its vector
-registers, though. `cnt` counts the bits in each of eight
-bytes, and `addv` adds those eight counts up. So we move our
-mask over to the vector unit with `fmov`, count there, and
-move the result back. It’s four instructions instead of the
-nine-iteration loop we wrote in Forth where we implemented bit-counting
-by hand.
-
-`w20` starts out as `-1` (all ones in binary).
-If it’s unchanged after the loop, there are no empty cells left, and
-we’re done. `tbnz` tests a single bit and branches if it is
-set, and bit 31 is the sign bit, so this is a cheap “is it negative?”
-check, and another one of those idioms you just kind of have to
-know.
-
-Note that we never check if the best cell has zero candidates.
-Propagation already returns a dead end for that, so by the time we
-select one, every cell has at least one candidate.
-
-Now for the backtracking:
-
 ```
-        sub     sp, sp, #96
-        copy81  sp, x19
-try:
-        rbit    w9, w23
-        clz     w9, w9
-        strb    w9, [x19, w20, uxtw]
-        bl      solve
-        cbnz    w0, found
-        copy81  x19, sp
-        sub     w9, w23, #1
-        and     w23, w23, w9 // drop the digit we tried
-        cbnz    w23, try
-        add     sp, sp, #96
+$ ./a.out '1+5*2+6'
+EMIT '1'
+EMIT '5'
+EMIT '2'
+EMIT '*'
+EMIT '+'
+EMIT '6'
+EMIT '+'
 ```
 
-Before we try anything, we make room on the stack and copy the board
-there. The board is 81 bytes, but the stack pointer has to stay aligned
-to 16 bytes, so we take 96, more ceremony.
+on its own, this doesn’t look too exciting. I made the stack implicit. big whuff. but! there are two neat things here:
 
-This is basically what we did in Forth with the board stack, except
-that it lives on the “real” stack, grows by itself with recursion, and
-gets popped when we return. We don’t have to pick a maximum depth this
-time, though the depth is bounded anyway, since every level fills at
-least one cell.
+- “prefix” operators have first-class handling now in the first half of expr()
+  - these are called “nuds” in pratt’s original paper. the other half of expr() is for handling what I call “infix/postfix” operators, or “leds” in pratt’s paper.
+- we have the power to assign arbitrary code to any individual operator as soon as the operator is seen, just like recursive descent.
 
-Then we try each candidate. `rbit` reverses the bits of
-the mask and `clz` counts the leading zeros, which together
-give us the position of the lowest set bit. That’s the trailing zero
-count we also used before, in [Rust](https://blog.veitheller.de/Six_Simple_Sudoku_Solvers_V:_Rust.html),
-and as we’ll see in a minute, the position of the bit maps to the digit.
-Finally, we write the digit into the cell and recurse!
-
-If the recursive call succeeds, we’re done. Otherwise we copy the
-saved board back and drop the digit we just tried from the mask.
-`x & (x - 1)` clears the lowest set bit of `x`
-(still one of my favorite little tricks from the series), and when the
-mask is empty, we’ve run out of options.
-
-The rest is bookkeeping:
+these combined allow for simple & straightforward extensibility. here’s all it takes to add parentheses into the mix:
 
 ```
-fail:
-        mov     w0, #0
-        b       1f
-found:
-        add     sp, sp, #96
-done:
-        mov     w0, #1
-1:      ldr     x23, [sp, #48]
-        ldp     x21, x22, [sp, #32]
-        ldp     x19, x20, [sp, #16]
-        ldp     x29, x30, [sp], #64
-        ret
+int get_bindpower(char op) {
+    // add '(' to bps
+    static const int bps[] = {
+        ['\0'] = 0,
+        ['('] = 0,
+        ['+'] = 1, ['-'] = 1, ['*'] = 2, ['/'] = 2
+    };
+    return bps[op];
+}
+
+// ...
+
+// forward-declare expr() and add paren() subroutine.
+// this doesn't even need to be a subroutine; you can inline this in the expr() func.
+// but this is cleaner :)
+void expr(Parser *parser, int left_bindpower);
+
+void paren(Parser *parser) {
+    expr(parser, get_bindpower('('));
+    if (cur(parser) != ')') {
+        puts("no matching ')'");
+        abort();
+    }
+}
+
+// ...
+
+// add the if '(' conditional here; rest is same
+void
+expr(Parser *parser, int left_bindpower) {
+    if (cur(parser) == '(') {
+        bump(parser);
+        paren(parser);
+    } else if (isdigit(cur(parser))) {
+        printf("EMIT '%c'\n", cur(parser));
+    } else {
+        puts("expression doesn't start with a valid prefix token");
+        abort();
+    }
+    // ...
+}
 ```
 
-We set the return value and undo the prologue, in reverse. The only
-subtle part is the order of the labels. `found` has to give
-the 96 bytes of board back before falling through into
-`done`. `fail` and `done` can be
-reached without them, so they have to navigate around
-`found`.
-
-You won’t notice right away if you mess any of this up (ask me how I
-know). If you’re lucky it’ll just crash, if you’re not, it’ll return
-somewhere random. There are no types to catch you, and nothing checks
-that you restore what you saved. Functions by hand.
-
-### Copying boards
-
-`copy81` is a macro. The assembler has a simple macro
-system, which we use to avoid writing the same eight lines twice (you
-know that I’m a macro fiend):
-
 ```
-.macro copy81 dst, src
-        ldp     q0, q1, [\src]
-        stp     q0, q1, [\dst]
-        ldp     q0, q1, [\src, #32]
-        stp     q0, q1, [\dst, #32]
-        ldr     q0, [\src, #64]
-        str     q0, [\dst, #64]
-        ldrb    w9, [\src, #80]
-        strb    w9, [\dst, #80]
-.endm
+$ ./a.out '1+5*(2+6)'
+EMIT '1'
+EMIT '5'
+EMIT '2'
+EMIT '6'
+EMIT '+'
+EMIT '*'
+EMIT '+'
 ```
 
-`q0` and `q1` are 128-bit vector registers, so
-one `ldp` moves 32 bytes. Two pairs and a single give us 80
-bytes, and one more byte gets us to 81.
+want to add *even more* operators? coalesce the `get_bindpower()` function with choosing the subroutine to run, storing “rules” as a struct of the binding power, prefix subroutine, and postfix subroutine. the core stays simple while all the operators run in their own little functions! I’m not going to paste another blob of code here, but that setup is described in the [crafting interpreters chapter](https://craftinginterpreters.com/compiling-expressions.html). it’s neat!
 
-It’s basically `memcpy`, specialized to our board!
-
-## Propagation
-
-Propagation is the loop we’ve written way too often at this point. We
-fill every cell that has a single candidate, and keep going until
-nothing changes.
-
-```
-propagate:
-        stp     x29, x30, [sp, #-48]!
-        mov     x29, sp
-        stp     x19, x20, [sp, #16]
-        str     x21, [sp, #32]
-        adrp    x19, board@PAGE
-        add     x19, x19, board@PAGEOFF
-again:
-        mov     w20, #0 // changed?
-        mov     w21, #0 // cell
-cell:
-        ldrb    w9, [x19, w21, uxtw]
-        cbnz    w9, next
-        mov     w0, w21
-        bl      cands
-        cbz     w0, dead
-        sub     w9, w0, #1
-        tst     w0, w9
-        b.ne    next // more than one candidate
-        rbit    w9, w0
-        clz     w9, w9
-        strb    w9, [x19, w21, uxtw]
-        mov     w20, #1
-next:
-        add     w21, w21, #1
-        cmp     w21, #81
-        b.lo    cell
-        cbnz    w20, again
-        mov     w0, #1
-        b       1f
-dead:
-        mov     w0, #0
-1:      ldr     x21, [sp, #32]
-        ldp     x19, x20, [sp, #16]
-        ldp     x29, x30, [sp], #48
-        ret
-```
-
-There are two small departures from earlier versions.
-
-First, we don’t need popcount here. We only care whether a mask has
-exactly one bit set, and our `x & (x - 1)` trick can
-answer that. It’s zero exactly when there was at most one bit.
-`tst` computes the `and` without storing it, so we
-don’t even need an extra register.
-
-Second, the contradiction check is folded in. In Forth, we had a
-separate `contradiction?` pass after propagation. Here, if
-any empty cell has no candidates, we nope out on the spot with
-`cbz w0, dead`. It means that an invalid input puzzle can
-pass, but surely no one would hand us the wrong input?
-
-## Candidates
-
-This is where the bit tricks pay their dues. We need the set of
-digits that don’t appear in a cell’s row, column, or box. As in every
-other bitmask solver so far, we collect the digits we’ve seen in a mask
-and invert it at the end.
-
-There is one change from before, though. Usually digit `d`
-lives in bit `d-1`, so we have to skip empty cells, because
-there is no bit -1.
-
-Here, digit `d` lives in bit `d`. Empty cells
-are 0, so they set bit 0, and we throw that bit away at the end. That
-means we never have to check whether a cell is empty, and no branching
-is needed.
-
-It also means that the position of a bit is the digit, which is what
-saved us the `+ 1` in `solve` and
-`propagate`.
-
-Since we do this for 27 cells, it too gets its own macro:
-
-```
-.macro mark used, at
-        ldrb    w10, \at
-        lsl     w10, w6, w10
-        orr     \used, \used, w10
-.endm
-```
-
-`w6` holds 1, so this loads a cell, shifts 1 left by its
-value, and `or`s it into the mask. With that, the candidate
-function becomes three loops:
-
-```
-cands:
-        adrp    x9, board@PAGE
-        add     x9, x9, board@PAGEOFF
-        mov     w2, #9
-        udiv    w3, w0, w2       // row
-        msub    w4, w3, w2, w0   // col
-        mov     w5, #0           // used digits
-        mov     w6, #1
-
-        mul     w7, w3, w2
-        add     x7, x9, w7, uxtw // first cell of the row
-        mov     w8, #9
-1:      mark    w5, "[x7], #1"
-        subs    w8, w8, #1
-        b.ne    1b
-
-        add     x7, x9, w4, uxtw // first cell of the column
-        mov     w8, #9
-2:      mark    w5, "[x7], #9"
-        subs    w8, w8, #1
-        b.ne    2b
-
-        mov     w2, #3
-        udiv    w3, w3, w2
-        mov     w8, #27
-        mul     w3, w3, w8       // box row offset
-        udiv    w4, w4, w2
-        mul     w4, w4, w2       // box column offset
-        add     w3, w3, w4
-        add     x7, x9, w3, uxtw // first cell of the box
-        mov     w8, #3
-3:      mark    w5, "[x7]"
-        mark    w5, "[x7, #1]"
-        mark    w5, "[x7, #2]"
-        add     x7, x7, #9
-        subs    w8, w8, #1
-        b.ne    3b
-
-        mvn     w0, w5
-        and     w0, w0, #0x3fe
-        ret
-```
-
-There is no modulo instruction, so to get the column we divide
-(`udiv`) and then compute `cell - row * 9` with
-`msub`, which multiplies and subtracts in one go. This seems
-like a clever trick at first, but again, this is one of those tricks
-you’ll just find online and then try to remember every time until it’s
-hard-wired in your brain.
-
-The row loop walks nine consecutive bytes, and the column loop walks
-with a stride of nine. The box loop unrolls the three cells of each box
-row and then skips ahead by nine. The box offset is the same arithmetic
-we did in Forth, 27 for every block of rows, and 3 for every block of
-columns. `cands` doesn’t call anything, so it only uses
-registers it may clobber, and we can skip the prologue entirely. This
-might not be a good idea in big programs written by multiple people, but
-it’s fine between lazy friends.
-
-At the end, `mvn` inverts the mask and the
-`and` keeps bits 1 to 9. That throws away bit 0, where the
-empty cells went, and all the bits above 9, which the inversion set (but
-which we don’t care about).
-
-And that’s about it!
-
-## How fast is it?
-
-On my machine, the whole program takes about 4 milliseconds, and
-roughly 1.7 of those are the operating system starting a process. The
-Python reference takes about 70 milliseconds for the same puzzle, and
-Agda took 2.7 seconds. I didn’t do anything clever to make it fast,
-either. It recomputes candidates from scratch every time, just like the
-Forth solver did. There just isn’t anything to slow us down except our
-own laziness.
-
-## Fin
-
-We wrote a Sudoku solver in about 200 lines of assembly, and we used
-native bit instructions to do what we’ve been emulating before. We kept
-our backtracking boards on the “real” stack, and we learned some cool
-new tricks like `x & (x - 1)`.
-
-This episode remains the surprise guest this season, but I did enjoy
-writing it. If the Agda episode was about trusting nothing but our spec,
-this was about trusting nothing, period. Nothing verified that we
-restored our registers or that our stack stayed aligned.
-
-Personally, I prefer the proof, but it was fun to find out how to do
-it with just our CPU.
-
-In the next episode, we go even lower: Verilog, where there are no
-instructions anymore, only wires and blinkenlights. See you there!
-
-#### Footnotes
-
-1. If you’re on Linux on an ARM machine, two
-things change, according to untested claims by a language genie. System
-calls take their number in `x8` and use `svc #0`,
-and `write` is number 64 there. Addresses are written as
-`adrp x9, board` and
-`add x9, x9, :lo12:board`.
-
-By the way, Apple doesn’t promise that system call numbers stay
-stable, and officially you should go through the C library. For a blog
-post, I think we can live with that. Just harden your production version
-a bit.
-
-2. Newer revisions of the architecture added one,
-but I didn’t want to depend on that, and I also wanted to show what
-you’ll see in a lot of other places.
+update: I also made my own structured example in [my snippets repo](https://git.unix.dog/yosh/snippets/src/branch/main/c/pratt). it’s for mostly the same expression grammar with a few extensions (unary `+`, `-`, and a postfix `!`), showing how it can get extended to a more realistic and maintable form for a codebase.

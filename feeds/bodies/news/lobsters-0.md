@@ -1,32 +1,31 @@
-If you have questions or thoughts on the post I'd love to [hear about it!](https://brennenputh.me/contact/)
-      I'm currently looking for work in the northeastern US. I'll be graduating with a BS in both Computer Science and Cyber Operations at the end of the school year.
-      I have worked in web application development and Java, and I have experience in Rust, C++, Python, and various other languages.
-      If you're curious about what I've done in the past, I keep up a short list of projects [here](https://brennenputh.me/projects/) or [contact me](https://brennenputh.me/contact/) to give me a place to send my resume.
-      I figure anyone who reads my posts will have an interesting offer, so all leads are appreciated!
+# Are you tired of your screenshares looking like this?
 
-I read a lot of printed papers these days. While I enjoy reading on a laptop as much as the next guy, marking up a printed document engages me better. Also, there's something about sitting with a whiteboard and a printed document that makes me rightly feel like I'm doing something important. So I've been thinking about how to best allow others to enjoy this medium for content that I write.
+*OBS*
 
-Luckily for me, printed documents were a major focus of web design a while ago. You can print any webpage you like, by hitting CTRL-P and hoping your printer driver decides to cooperate today.
-I tested this on my own webpage, foolishly thinking I would have a decent print job without any effort.
+## Don't you think they should look like this instead?
 
-It wasn't great, although you can at least see all the content. The text was too big by about 2 levels, the header looks awful when printed, and my links look awfully gray in black-and-white. Totally unacceptable.
+## You need WHIP.
 
-### Making Things Printable
+Did you know OBS or FFmpeg can go directly into a video conference? You configure everything,
+           so you control exactly the quality you are going to get. WHIP support means these tools
+           now speak the protocol of video conferencing.
 
-Luckily, the web community has had this aforementioned focus on printing documents from HTML pages. CSS has selectors to allow styling specifically printed content, and they can be useful. Here's my print-related snippet for this page now:
+## Help! My video conferencing provider doesn't support WHIP. What can I do?
 
-You can see the effects of this snippet by hitting CTRL-P or the print button on this page. Here's the functions this does for me, in order:
+Send them an angry email. Tell them you don't want their crappy
+          proprietary client. You want open standards that let you bring the tools
+          you prefer.
 
-1. onlyPrint can be added as a class to allow elements which only show up in the printed document. Right now, that means tagging a small author attribution to the subtitle.
-2. noPrint is used to remove something from the printed website. I put it on the header, because it looks honestly very ugly in printed format.
-3. Adjusting font sizes for print is very important. The variable-scale text which I use on my website looks awful on a printed page. 12pt is a fairly well accepted size, so I figured it'll do. A slightly larger size for the headers makes sense as well.
-4. The giallo tweaks are for codeblocks. Honestly, codeblocks are still the ugliest part even after some tweaking. They want to come out as one chunk and not break over page borders, and if anyone has a solution to that I'd be greatly appreciative.
-5. Blue links, as much as I like them on the site, look awful in grayscale. Turning them the same color as other text is fine. Feel free to pull any code you like from the CSS, I'm not protective of it. I would personally love to experience more webpages that think about how printing works.
+## FAQ
 
-### Why You Should Do This
+[WHIP](https://www.rfc-editor.org/rfc/rfc9725.html) is an open standard for sending live video to a service using WebRTC.
+              Your provider gives you a server URL and a stream key, called a bearer token. Before to join a conference
+              call each client had to run custom code. That means FFmpeg/OBS would never be able to join.
 
-After attempting to optimize my website in this way, I am sympathetic for those who wouldn't prioritize printing. Hiding and showing all the right things in print took me a decent chunk of my morning. My site isn't very complex. I also doubt how many people regularly print webpages out. I might be the only one.
+A lack of control. Your browser is picking a bitrate, codec or resolution that doesn't match what you need.
 
-Still, if all your website consists of is text, allowing people to experience the text in their favorite medium is never a bad thing. The digital medium allows a lot of flexibility. The road to good software is paved with kindnesses from software engineers to their users. One day, perhaps someone shall find this kindness and smile, even if just for a fleeting moment. And that will be worth it.
+OBS and FFmpeg let you choose your resolution, frame rate, bitrate, and codec.
+              You can tune those settings for the content you're sharing and the hardware and connection you have.
 
-**Edit 2026-10-26:** I was informed by a friend that this post ended up on the front page of HN and lobste.rs after I submitted it. Fun! Despite the several flaws I am now informed of in my CSS, I hope this article at least pushes a few to consider this medium more carefully. Thanks all for reading!
+OBS Virtual Camera sends your OBS scene to the conferencing app as a webcam.
+              You can pick the layout of your stream, but the conferencing app still handles encoding.

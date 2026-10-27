@@ -1,13 +1,18 @@
-When I was first learning the C programming language, in my early 20s, it was [common knowledge](https://retrocomputing.stackexchange.com/questions/27125/has-there-ever-been-a-c-compiler-where-using-i-was-faster-than-i) that of the two ways to increment a variable, `i++` was slower than `++i`. The post-increment function returned the original value of `i`, which meant stashing a copy of that value before performing the increment. Pre-increment avoided this wasteful operation.
+[`wordexp(3)`](https://pubs.opengroup.org/onlinepubs/9799919799/functions/wordexp.html) is a POSIX API for performing shell-style expansions from C.
 
-And by “common knowledge” I really mean folklore, because I turned 20 in 1995 and even by then, the most basic of optimising compilers knew to check if you ever used the return value of `i++`, and if not, skip the operation to save it.
+It's often cited/recommended as a way to do tilde expansion (e.g. `~/foo` to `/home/me/foo`):
 
-Scratch an old programmer and you'll probably find a dozen or so ingrained habits that, in an era where CPUs are doing [branch prediction](https://stackoverflow.com/questions/11227809/why-is-conditional-processing-of-a-sorted-array-faster-than-of-an-unsorted-array) and code reordering, are just as likely to make their program slower.
+However, `wordexp(3)` is also dangerous! That last `0` argument is for the *flags* parameter.
+By default, all expansion features are enabled, **including command expansion**:
 
-Anyway, remember prompt engineering?
+or:
 
-It makes sense to believe that all the tricks we come up with with to make models behave better, the ways of working with models that get us to a useful result faster, if they work, are going to be folded back into the product, packaged, and become the default experience a few months later. And yet, in five years, I’m sure there will be old heads doggedly adding “you are an experienced software developer, make no mistakes” to their custom instructions.
+Disabling this requires passing [`WRDE_NOCMD`](https://pubs.opengroup.org/onlinepubs/9799919799/functions/wordexp.html#:~:text=WRDE_NOCMD,Substitution%2C%20is%20requested.) as a flag. Unfortunately, this
+palliative at best in some libc implementations:
 
-I'm not saying it's worthless to keep up with the state of the art. You still need to be able do your job today, to the best of your ability. But a skill that can be picked up in a few weeks, and will be obsolete in a few months, has no value outside the moment.
+- [musl implements `wordexp(3)`](https://git.musl-libc.org/cgit/musl/tree/src/misc/wordexp.c) by delegating to the system shell. It adds some perfunctory scanning for command substitutions before delegating, but fails to match some patterns that the underlying shell (like GNU Bash) can treat as valid command substitutions.
+- [macOS's libc implements `wordexp(3)`](https://github.com/apple-oss-distributions/Libc/blob/71bbe350ab79eef58113991d817ccc6165061a64/gen/FreeBSD/wordexp.c#L201) in a similar manner, delegating to `/usr/lib/system/wordexp-helper`<sup>[1](https://yossarian.net/til/post/posix-wordexp-3-is-dangerous/#fn-perl)</sup>. According to [Julian Squires](https://www.cipht.net) this had the same bypass as musl [as recently as 2023](https://www.cipht.net/2023/11/21/worried-by-wordexp.html), although I didn't bother testing whether it's still effective now that the default macOS shell is `zsh` instead of `bash`.
 
-Eighteen months ago, I was sitting in a crowded room watching a CEO enthusiastically declare that it was time to get on the AI train, because if you didn't get on it *right now* you'd be left behind. Maybe I'm getting old, but in a world where Google, Facebook, the iPod, iPhone and iPad, and so many other examples have shown that getting it right is more valuable than getting in first, I feel content to just keep pace with the pack, ready to pull [Steven Bradbury](https://www.youtube.com/watch?v=WUi4-H6hfw8) if and when the time comes.
+Bottom line: don't use `wordexp(3)` on untrusted inputs, even with `WRDE_NOCMD`.
+
+1. Previously, macOS's `wordexp(3)` would shell out to Perl. `wordexp-helper` appears to be the "modern" solution. [↩](https://yossarian.net/til/post/posix-wordexp-3-is-dangerous/#fnref-perl)

@@ -1,7 +1,7 @@
 **What is signed integer floor division?**  
 *Signed integer floor division* is where you do `a/b` and get a result that rounds towards `−∞`,  
 whereas standard (*“truncated”*) signed division rounds towards `0`.  
-As stated in Hacker's Delight: *“floor division more often gives the result you want”*.  
+As stated in Hacker's Delight: *“[I suspect that] floor division more often gives the result you want”*.  
 
 This article is about floor division where the **divisor is known at compile time**.
 
@@ -471,7 +471,7 @@ For certain divisors of the form 2N−2K, I have a faster alternative that uses 
 *See the [day-of-week article](https://www.benjoffe.com/fast-day-of-week) and [time-of-day article](https://www.benjoffe.com/fast-time-of-day) for more details about this identity.*
 
 Euclidean division is the same as floor division for positive divisors.  
-For negative divisors, we can use the following identity (except at INT_MIN) which results in just one extra cycle for the subsequent negation (the first negation for the `floor_div` call is performed at compile-time).  
+For divisors less than `-1`, we can use the following identity which results in just one extra cycle for the subsequent negation (the first negation for the `floor_div` call is performed at compile-time).  
 The second runtime negation can in some cases be absorbed for "free" in subsequent operations, such as in obtaining Euclidean modulus:
 
 1. const i64 *floor_div* = fast_floor_div<*-Divisor*>(*x*) // Negate divisor
@@ -539,7 +539,7 @@ This mostly solves the bug, but given you've read this far you probably know a f
 8. **return** *x* / *y*
 9. }
 
-Tests used for validating the functions in this article can be found in the testcase code: [https://github.com/benjoffe/fast-floordiv ![](https://www.benjoffe.com/static/media/link-external.f2d3f5e2e0517a859106527b07648224.svg)](https://github.com/benjoffe/fast-floordiv).
+Tests used for validating the functions in this article can be found in the testcase code: [https://github.com/benjoffe/fastdiv ![](https://www.benjoffe.com/static/media/link-external.f2d3f5e2e0517a859106527b07648224.svg)](https://github.com/benjoffe/fastdiv).
 
 The same repository is used for benchmarking, and you can run them yourself like this:
 
