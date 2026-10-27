@@ -1,436 +1,1823 @@
-[tar-codec](https://github.com/astral-sh/astral-codec/tree/main/crates/tar-codec) is roughly twice as fast as our previous tar implementation ([astral-tokio-tar](https://crates.io/crates/astral-tokio-tar)) while
-also reducing uv's exposure to parser differentials and other security risks.
+This post explores how far Java’s type system can be pushed by building a small
+Haskell-style type class instance resolution engine entirely in plain Java.
 
-This blog post is about [tar-codec](https://github.com/astral-sh/astral-codec/tree/main/crates/tar-codec) itself: what it is, and what compelled us to build and optimize
-it. Read on if you, too, would like to know too much about tar archives.
+Using only reflection, generic type metadata, and a tiny first-order unifier, we
+can automatically resolve type class instances (including higher-kinded ones),
+support overlapping instances, and derive witnesses for arbitrarily nested
+generic types.
 
-*What follows is an extended digression on the tar format. If all you care about is `tar-codec`,
-[skip to it](https://astral.sh/blog/tar-codec#tar-codec)*.
+It’s not intended for production, but as an experiment it reveals just how much
+structure Java actually preserves at runtime — and how surprisingly close it can
+get to type-level programming without language changes.
 
-As a Python packaging tool, uv is in the business of resolving and installing Python packages. [uv](https://github.com/astral-sh/uv)
-requests *installable distributions* from various sources (principally package indices like [PyPI](https://pypi.org))
-and installs them on the user's behalf. This is how you go from `uv add urllib3` to something you
-can actually import and use in your own Python codebase.
+You can also jump straight to the full implemention
+[in this gist](https://gist.github.com/Garciat/204226a528018fa7d10abb93fa51c4ca).
 
-Installable distributions come in two primary forms:
+Update: I published a GitHub repo for the project at
+[github.com/garciat/java-type-classes](https://github.com/garciat/java-type-classes).
 
-- "Built"<sup>[2](https://astral.sh/blog/tar-codec#user-content-fn-built)</sup> distributions, also known as *bdists* or (most commonly) *wheels*, are essentially ZIP archives containing structured metadata and a fixed layout. Installers handle these by (more or less) plopping their contents into the right destination directory. Many people think that *bdist* is short for "binary distribution," since wheels often contain compiled native code. This one common way to use wheels, but wheels can also contain pure Python. They're just another (and frequently better) way to package and install a distribution.
-- "Source" distributions, also known as *sdists*, are essentially tar archives. Unlike built distributions, a source distribution is *essentially*<sup>[3](https://astral.sh/blog/tar-codec#user-content-fn-sdist)</sup> just a rollup of a source tree's state at release time. By definition, source distributions execute arbitrary code at installation time. This makes them very powerful, but brittle (missing build tools or dependencies) and also a security risk (an attacker who controls the sdist can run code without the user needing to `import` anything).
+Consider:
 
-Wheels are generally produced by running a [build backend](https://peps.python.org/pep-0517/) on a source distribution. Examples of
-that include uv's own [uv_build](https://docs.astral.sh/uv/concepts/build-backend/), [maturin](https://github.com/pyo3/maturin), and [flit](https://flit.pypa.io/en/stable/).
+```java
+interface Equatable<T> {
+  boolean eq(T other);
+}
 
-Consequently, at a bare minimum, a Python package installer needs to understand at least two
-different archive formats: ZIP for wheels, and tar for sdists.
-
-We've already [talked a bit before](https://astral.sh/blog/uv-security-advisory-cve-2025-54368) about ZIPs on the Astral blog, and we'll certainly be talking
-about them again soon enough. But today we'll be focusing on tar.
-
-It's fair to ask: why does [uv](https://github.com/astral-sh/uv) want a new tar parser?
-
-In short: security and performance, but mostly security.
-
-Up until 0.13, uv used [astral-tokio-tar](https://crates.io/crates/astral-tokio-tar) for its tar operations, including both parsing and
-creation (in `uv build`). [astral-tokio-tar](https://crates.io/crates/astral-tokio-tar) is itself a fork of [edera-dev/tokio-tar](https://github.com/edera-dev/tokio-tar), which is a
-fork of [vorot93/tokio-tar](https://github.com/vorot93/tokio-tar), which is a fork of [dignifiedquire/async-tar](https://github.com/dignifiedquire/async-tar), which is an async
-*adaptation* of [composefs/tar-rs](https://github.com/composefs/tar-rs).
-
-Around a year ago, we began to receive a [number of security reports](https://github.com/astral-sh/tokio-tar/security/advisories) in [astral-tokio-tar](https://crates.io/crates/astral-tokio-tar). This
-spurred us into looking more into our compression and archive handling stack, where we found
-additional problems.
-
-Many of these boiled down to differentials that could cause a full parser
-desynchronization<sup>[4](https://astral.sh/blog/tar-codec#user-content-fn-tarmageddon)</sup>: given an identical tarball, [uv](https://github.com/astral-sh/uv), [pip](https://github.com/pypa/pip), and other package tooling
-could be made to see different contents for the same package distribution. We found this
-particularly concerning in the context of archives that would appear "safe" to an index (like PyPI)
-but could extract dangerously when parsed by an installer like [uv](https://github.com/astral-sh/uv) or [pip](https://github.com/pypa/pip).
-
-This could the take the form of an "append" differential (where the attacker can append new files or
-new contents to existing files for a specific victim parser), or even a "full" differential (where
-the attacker can fully separate the extraction contents for each parser):
-
-In the context of [uv](https://github.com/astral-sh/uv), the attacker model for these kinds of vulnerabilities is somewhat subtle:
-tar is only used for source distributions which, per above and unlike wheels, are assumed to execute
-arbitrary code at build time. Consequently, Python packaging *mostly* considers tar differentials to
-be a minor concern, since any attacker who *would* use them has a much more direct and official
-route towards writing arbitrary contents to disk (or executing arbitrary code).
-
-Still, these findings unnerved us, and we [embarked on a project](https://github.com/astral-sh/tokio-tar/pull/95) to eliminate every differential we
-could find in [astral-tokio-tar](https://crates.io/crates/astral-tokio-tar).
-
-[tar-codec](https://github.com/astral-sh/astral-codec/tree/main/crates/tar-codec) grew directly out of that effort: we ultimately came to the conclusion that the
-tokio-tar family was *too lenient by design*, and that retrofitting constraints to it would be more
-troublesome and error-prone (including for existing non-Astral users of its APIs) than developing
-our own, ground-up implementation of tar. This would also give us the opportunity to systematically
-understand the tar format, and ensure that our assumptions around which aspects are (or aren't)
-differential risks hold true.
-
-Similarly, we determined that our performance goals around tar parsing would be impossible to meet
-in the existing code base, at least not without refactors that would be tantamount to a rewrite.
-
-It's important to understand that one does not simply build a tar parser from scratch. One must
-first understand *how* the tar format evolved into its current state<sup>[5](https://astral.sh/blog/tar-codec#user-content-fn-dorum)</sup>.
-
-tar is an *interesting* format. Or more precisely, it's an interesting *family* of formats.
-
-To summarize, there are three (and a half) variants that matter in practice:
-
-- There's UNIX V7 tar, which is the "original" tar. Very few tar implementations write this format by default anymore, but virtually all still read it. For example, Python's [`tarfile` module](https://docs.python.org/3/library/tarfile.html#supported-tar-formats) will happily parse V7 tar files. The UNIX V7 format is not widely used anymore because it comes with significant limitations on per-member file sizes (approximately 8 GiB) and path lengths (100 bytes).
-- Then there's the UStar/pax tar family<sup>[6](https://astral.sh/blog/tar-codec#user-content-fn-family)</sup>. This family is widely supported by tar implementations for both reading and writing. As far as tar goes, UStar and pax are what passes for a "gold standard" in terms of clarity of specification and documentation. At this juncture, the main thing to know about the UStar/pax family is that it's derived from the UNIX V7 format, but with certain restrictions lifted:
-  - UStar keeps the per-member size limit at 8 GiB, but raises the path length limit to 255 bytes (except for link names, which remain 100 bytes),
-  - pax makes per-member sizes and path lengths unlimited, including link names.
-- Finally, there's GNU tar<sup>[7](https://astral.sh/blog/tar-codec#user-content-fn-oldgnu)</sup>. GNU tar is documented in the [GNU tar manual](https://www.gnu.org/software/tar/manual/html_node/Standard.html), but is not standardized *per se*. The source code of GNU `tar` (the CLI) is the *de facto* standard for GNU tar. Like UStar/pax, GNU tar is derived from UNIX V7 tar. It's *also* derived from an [early draft of UStar](https://www.gnu.org/software/tar/manual/html_node/gnu.html). Also like pax, GNU tar makes file sizes and path/link lengths (effectively) unlimited. It does so in a completely different and much funnier way than pax does.
-
-That gives us the following genealogy:
-
-If you've ever written a parser for a binary format before, then you probably have a preconception
-for what a binary format *should* look like. To first, second, and third approximations, binary
-formats tend to look *something* like this:
-
-Within this, too, certain idioms appear: binary formats typically use some form of [TLV encoding](https://en.wikipedia.org/wiki/Type%E2%80%93length%E2%80%93value),
-use different magics to signal different endiannesses, &c.
-
-The tar format does not look like this, regardless of the variant. tar is fundamentally a *block
-format*, owing to its origins as a tape archival format<sup>[8](https://astral.sh/blog/tar-codec#user-content-fn-tape)</sup>.
-
-As a block format, a tar archive is comprised of one or more fixed-length blocks. There is no
-file-level header; instead, many of its blocks *are* headers, while other blocks contain actual
-member<sup>[9](https://astral.sh/blog/tar-codec#user-content-fn-member)</sup> data:
-
-In all flavors of tar, all blocks (including the header blocks) are always 512 bytes. Each header
-block declares metadata for the *member* that follows it. This includes important things like the
-size of the member and its filepath.
-
-Member contents don't always fit cleanly into multiples of 512 bytes, so a tar that wants to encode
-a file member of `N` bytes will allocate `ceil(N / 512)` blocks and pad out the remainder of the
-last block. This doesn't affect extraction, since the reader knows (via the header block) exactly
-how many bytes out of the allocated space are actual file content.
-
-Conventionally, the padding or "holes" in a tar archive are filled with NUL bytes. However, nothing
-stops a tar producer from filling them with uninitialized memory, or lines from the Bee Movie, or
-anything else. A recurring theme with tar (of all flavors) is that it has no opinions about what
-goes in the holes of the format. This malleability makes it very prone to parser differentials,
-since it gives the attacker ample space to place surprising data.
-
-tar's block design also makes it relatively space-inefficient<sup>[10](https://astral.sh/blog/tar-codec#user-content-fn-compression)</sup> by modern standards. For
-example, a 513-byte file occupies an absolute minimum of 1,536 bytes when encoded as a tar member:
-one 512-byte block for the header, and two blocks for the content (one of which has only 1 "real"
-byte, followed by 511 bytes of padding). Similarly, a tar archive containing 1000 one-byte files
-requires a minimum of 1025 KiB of encoding (1 MiB for the headers and contents, and then 1 KiB for
-the trailing zero blocks).
-
-So far, this all sounds pretty sane. It's not a "normal" file format by modern standards, but
-there's a simple state machine one could write to formalize a parse for the tar example above:
-
-Unfortunately, it's not that simple. The state machine above is accurate for a V7 tar, but not for
-anything else in the tar format family.
-
-To understand why, we have to remember V7 tar's limitations. All of those limitations come down to
-the C structure that represents a V7 member header, which we've annotated here:
-
-```
-struct v7_header {
-    // The member's path. Observe that this can be no more than 100 bytes;
-    // NUL termination isn't required, since it's a fixed-size field.
-	char name[100];
-
-    // The member's mode, as an octal string.
-    // Note that only the first 4 octal digits (12 bits) have well-defined semantics in pax.
-	char mode[8];
-
-    // The member's owner's UID and GID, as octal strings.
-	char uid[8];
-	char gid[8];
-
-    // The size of the member, as an octal string.
-    // V7 treats this as NUL-terminated, so the largest
-    // interoperable value in it is `77777777777\0`.
-	char size[12];
-
-    // The member's mtime, as an octal string.
-	char mtime[12];
-
-    // A checksum for the member header itself.
-	char chksum[8];
-
-    // '\0' for a regular file, '1' for a hard link,
-    // and '2' for a symbolic link.
-	char linkflag;
-
-    // When `linkflag` is '1' or '2', this is the link's destination.
-    // Like `name` this is limited to 100 bytes.
-	char linkname[100];
-
-    // 255 bytes of the header are unused.
-	char pad[255];
-};
+record Point(int x, int y) implements Equatable<Point> {
+  @Override
+  public boolean eq(Point other) {
+    return x == other.x() && y == other.y();
+  }
+}
 ```
 
-Three big limitations stand out, and each member of the tar family tries to solve them in various
-different ways:
+That's a pretty simple OOP-style generic interface.
 
-1. Member and link names cannot be longer than 100 bytes;
-2. Members cannot be larger than 0o77777777777 bytes, i.e. one byte short of 8 GiB;
-3. Only regular files and links are defined; there are no directory or other member types[11](https://astral.sh/blog/tar-codec#user-content-fn-dir).
+However:
 
-Let's see how each family works around these.
-
-### UStar and pax  [#](https://astral.sh/blog/tar-codec#ustar-and-pax)
-
-UStar's half-solution is to preserve the existing physical header block, while [impressing](https://en.wikipedia.org/wiki/Impressment) some of
-its fields and padding into new roles.
-
-This is the UStar header:
-
-```
-struct ustar_header {
-    // Unchanged.
-	char name[100];
-	char mode[8];
-	char uid[8];
-	char gid[8];
-	char size[12];
-	char mtime[12];
-	char checksum[8];
-
-    // `linkflag` is now `typeflag`, and encodes, inter alia,
-    // '5' for a directory.
-	char typeflag[1];
-
-    // Unchanged.
-	char linkname[100];
-
-    // `"ustar\0"`
-	char magic[6];
-
-    // `"00"`
-	char version[2];
-
-    // The user and group names for the member.
-	char uname[32];
-	char gname[32];
-
-    // For chardev/blockdev members, the device's major and minor numbers.
-	char devmajor[8];
-	char devminor[8];
-
-    // If nonempty, a prefix to prepend to `name` (joined by a `/`).
-	char prefix[155];
-
-    // 12 remaining bytes of the header are unused.
-	char pad[12];
-};
+```java
+record Dup<A>(A fst, A snd) implements Equatable<Dup<A>> {
+  @Override
+  public boolean eq(Dup<A> other) {
+    return fst.eq(other.fst()) && snd.eq(other.snd());
+    // Error: no method eq() in type A!
+  }
+}
 ```
 
-This partially lifts the member name restriction (by raising it to 255 bytes), but retains the file
-size and linkname limitations.
+We can't implement `eq()` for `Dup` without knowing the fact that
+`A extends Equatable<A>`.
 
-pax fixes these remaining limitations by doing away with the single-block metadata design. Instead,
-pax has *extensions* that rely on two new UStar typeflags:
+So let's try that:
 
-- Typeflag 'x' indicates a local extended header block.
-- Typeflag 'g' indicates a global extended header block.
-
-In both cases, an extended header block indicates its member's "size." But that size isn't for a
-file: instead, it's for the extension data itself.
-
-So, what's in the extension data? pax calls it an *extended header*, and it's an entirely different
-encoding format. An *extended header* contains one or more pax "records," and each record is a
-string that looks like this:
-
-```
-<length> <keyword>=<value>\n
+```java
+record Dup<A extends Equatable<A>>(A fst, A snd) implements Equatable<Dup<A>> {
+  @Override
+  public boolean eq(Dup<A> other) {
+    return fst.eq(other.fst()) && snd.eq(other.snd());
+    // OK
+  }
+}
 ```
 
-where:
+Now the code compiles.
 
-- <length> is the byte-length of the record itself, including <length> itself[12](https://astral.sh/blog/tar-codec#user-content-fn-selfdesc);
-- <keyword> is a keyword that sets or overrides some pax parsing state;
-- <value> is the value to apply to <keyword>.
+However, `Dup` is now only compatible with types that extend `Equatable`. `Dup`
+is now less capable.
 
-This can be hard to visualize, so here's a concrete example:
+We could have checked at runtime if each object is `instanceof Equatable`, but
+that doesn't work very well with generics. And it may fail at runtime.
 
-```
-13 size=8000↵
-```
+Ideally, there would be a way to say:
 
-"↵" above indicates the linefeed.
+`Dup` implements `Equatable<Dup<A>>` **if and only if** `A` implements
+`Equatable<A>`.
 
-Despite being a new encoding, the way that pax records work is *relatively* simple: if there is an
-*effective* pax record that corresponds to a tar member header's state, the pax record's value takes
-precedence. In the example above, this means that the subsequent member's size is `8000` bytes, even
-if the member's own header records a different size.
+> Also, if you think about it, it is a bit strange that the definition of
+> equality for a type `A` depends on the object instance. As in, `eq()` is an
+> instance method.
+>
+> It would make more sense if equality depended only on the type `A` itself.
+> Right?
 
-This is where the difference between global and local extensions comes in as well: global extended
-headers take precedence over *all* subsequent members in the archive, while local extended headers
-only affect the *next* file in the archive. Local extended headers also take precedence over any
-global headers, so we have the following precedence ordering:
+That's where type clases come in:
 
-(This, too, is simplified. More on that later.)
+```java
+interface Eq<A> {
+  boolean eq(A x, A y);
+}
 
-To visualize all of that:
+record Point(int x, int y) {
+  public static Eq<Point> eq() {
+    return (p1, p2) ->
+        p1.x() == p2.x()
+        && p1.y() == p2.y();
+  }
+}
 
-For this example, a pax-conforming tar implementation should extract two members:
-
-- `hasdrubal.txt`, with a payload of `10737418240` bytes and an `mtime` of `100`. Observe that this is both greater than the UStar size limit of 8 GiB and does *not* use the UStar header's own `name` (of `hannibal.txt`) or `size` (of `0`), since the member's header is preceded by an `x` extended header that overrides those values<sup>[13](https://astral.sh/blog/tar-codec#user-content-fn-own)</sup>. Moreover, the archive *also* contains a `g` extended header that overrides `mtime` for all subsequent members and `x` does not contain its own `mtime`, so the global extended header's `mtime=100` also takes effect.
-- `hamilcar.txt`, with a payload of `1234` bytes and an `mtime` of `100`. Observe that, unlike `hasdrubal.txt`, there is no `x` extended header for this member. As a result, the UStar member states are used, with the exception of those overridden by the effective `g` extended header. Thus `hamilcar.txt` ends up with `mtime=100`, even if its UStar header sets a different value.
-
-### GNU tar  [#](https://astral.sh/blog/tar-codec#gnu-tar)
-
-GNU tar takes a very different approach. First, here's the GNU tar header:
-
-```
-struct gnu_header {
-    // Unchanged from UStar.
-	char name[100];
-	char mode[8];
-
-    // Same layout as UStar, but potentially base-256.
-	char uid[8];
-	char gid[8];
-	char size[12];
-	char mtime[12];
-	char checksum[8];
-
-    // Same layout as UStar, but additional typeflags.
-	char typeflag[1];
-
-    // Unchanged.
-	char linkname[100];
-
-    // `"ustar "`
-	char magic[6];
-
-    // `" \0"`
-	char version[2];
-
-    // Unchanged from UStar.
-	char uname[32];
-	char gname[32];
-	char devmajor[8];
-	char devminor[8];
-
-    // GNU extensions.
-	char atime[12];
-	char ctime[12];
-	char offset[12];
-	char longnames[4];
-	char unused[1];
-	struct {
-		char offset[12];
-		char numbytes[12];
-	} sparse[4];
-	char isextended[1];
-	char realsize[12];
-
-    // 17 remaining bytes of the header are unused.
-	char pad[17];
-};
+record Dup<A>(A fst, A snd) {
+  public static <A> Eq<Dup<A>> eq(Eq<A> eqA) {
+    return (d1, d2) ->
+        eqA.eq(d1.fst(), d2.fst())
+        && eqA.eq(d1.snd(), d2.snd());
+  }
+}
 ```
 
-Observe that, unlike the UStar format, there is no `char prefix[155]` field. Furthermore, instead of
-pax extended headers with a fully general keyword/value format, GNU tar does two things:
+Let's unpack this:
 
-- It goes *way* harder than UStar on trying to re-use the existing 512-byte V7 member header. In particular, GNU tar adds its own base-256 encoding: if the first byte in a numeric field has its high bit set, then the remaining octets in that field are binary, rather than tar's normal octal form. This effectively expands the per-byte entropy in numeric fields from 3 bits to 8 bits. For a `char size[12]`, that makes the effective size limit `2**80`<sup>[14](https://astral.sh/blog/tar-codec#user-content-fn-big)</sup> or one yobibyte.
-- Instead of general `x` and `g` extended headers, GNU tar introduces a bunch of *specialized* typeflags for its own extensions. [Many of these](https://www.gnu.org/software/tar/manual/html_node/Standard.html) are not relevant to the post, or even to modern tar archives at all. But two are: These two typeflags effectively fill the role of the pax `path` and `linkpath` records, respectively.
-  - The L typeflag identifies the next sequence of content blocks as containing a filename.
-  - The K typeflag identifies the next sequence of content blocks as containing a link name.
+The code is rather simple, but it marks a dramatic change of perspective:
 
-To visualize that:
+Equality now belongs to the type definition and not to an object instance.
 
-For this example, a GNU tar implementation should extract two members:
+So, what are type classes?
 
-- `hasdrubal.txt` with a payload of `10737418240` bytes. Observe that this size, which exceeds 8 GiB, was encoded directly in the header. However, the effective filename of `hasdrubal.txt` comes from overriding the header's original filename of `hannibal.txt` via the preceding GNU `L` extension.
-- `publius.txt`, which links to another file named `africanus.txt`. Observe that `publius.txt` originally declared `publius.txt -> scipio.txt` as its link, but this gets overridden to `africanus.txt` by the preceding GNU `K` extension.
+Type classes can be seen as a pattern that allows us to model shared behavior in
+a way that puts types first AND is entirely compositional.
 
-Finally, while GNU tar does not have pax's notion of global vs. local precedence, GNU tar extensions
-can *stack*. For example, to override a member's `name` and `linkname` at the same time, you'd have
-a tar header sequence like this<sup>[15](https://astral.sh/blog/tar-codec#user-content-fn-order)</sup>:
+Now, in the above example, how do we actually use `Dup`'s `eq()`?
 
-## tar-codec  [#](https://astral.sh/blog/tar-codec#tar-codec)
+```java
+Eq<Dup<Point>> pointDupEq = Dup.eq(Point.eq());
 
-Now that we understand *very roughly* how the various tar family formats look and work, let's see
-what [tar-codec](https://github.com/astral-sh/astral-codec/tree/main/crates/tar-codec) has to do to parse them safely and efficiently.
+pointDupEq.eq(new Point(1, 1), new Point(1, 1));
+// Returns: true
+```
 
-First we'll revisit the state machine. Our nice and simple V7 state machine now understands the
-different pax and GNU states, and has become this monstrosity:
+We must first construct the witness `Eq<Dup<Point>>` by chaining calls to the
+respective `Eq` witness constructors of `Dup` and `Point`.
 
-(Note that the error transitions in this state machine are dramatically simplified: in practice, any
-I/O or validation failure at any point also results in a `Failed` state.)
+Then, we use this witness to access/invoke the actual logic that we're after.
 
-What in the world happened? A few different things:
+Notice how this pattern composes very nicely:
 
-- Our state machine begins with a "classification" stage, which effectively locks the remainder of the parse to a single family (either UStar/pax or GNU<sup>[16](https://astral.sh/blog/tar-codec#user-content-fn-nov7)</sup>) based on the identity (magic and version) of the first block. This is done for differential reduction reasons: while researching [tar-codec](https://github.com/astral-sh/astral-codec/tree/main/crates/tar-codec)'s design, we realized that many other widely used tar parsers attempt to merge states across various tar families, with inconsistent results. For example, with some tar parsers, it's possible to stack headers like so: ![Mixed GNU and PAX headers in parse order: L, x, then foo.txt; dashed arrows show possible GNU long-name targets: the PAX header or the file](https://astral.sh/static/SVG/mixed-tar-headers.dark.svg)Click to enlargeActual sizeClose This has unclear semantics: GNU tar expects an `L` or `K` to apply to the next "file" member, but the next physical member in the stream is a pax local extension that *also* wants to modify the next "file" member. In practice we've seen other parsers do all kinds of things in this state, including attempting to merge the extensions, honoring one over the other(s), attempting to apply the `L` state to `x` instead of the file member, and so forth. Each of these is a potentially exploitable differential! Instead, [tar-codec](https://github.com/astral-sh/astral-codec/tree/main/crates/tar-codec) will reject a tar archive if its individual headers don't agree about what family of tar it is. Real-world tar encoders don't mix tar families (there's no good reason to), so this doesn't pose a significant breakage risk.
-- The GNU part of the state machine is slightly more strict than the GNU documentation implies: the GNU documentation allows stacking of `L`/`K` extensions, including *multiple of the same kind*, in any order. [tar-codec](https://github.com/astral-sh/astral-codec/tree/main/crates/tar-codec) tightens that to allowing `L` and `K` in any order, but only one of each per underlying member.
-- The UStar/pax part of the state machine models local and global extended headers rigidly. There's a significant amount of complexity beneath this: pax allows `x` and `g` *anywhere* in the tar stream. For example, this is a perfectly valid extension sequence in pax: ![Parsing interleaved PAX headers: global records persist, local records apply to the next file, and each file combines the effective mtime and uid values](https://astral.sh/static/SVG/pax-extension-sequence.dark.svg)Click to enlargeActual sizeClose This brings us to one of the most painful parts of pax that we glossed over before: extended headers don't *shadow* each other fully, they *compose* depending on what state the "stack" of effective pax records is in. The state of any given pax record can be: ![Three PAX path examples: undeclared uses the member name, active overrides it, and tombstoned suppresses fallback and is rejected by tar-codec](https://astral.sh/static/SVG/pax-tombstones.dark.svg)Click to enlargeActual sizeClose Needless to say, [tar-codec](https://github.com/astral-sh/astral-codec/tree/main/crates/tar-codec) tries to follow this faithfully. In particular, it attempts to be diligent about rejecting logically-consistent-but-nonsense states that fall out of pax's strange record state machine, including empty paths and global extended headers that try to declare `size` and other key states for all members.
-  - *Undeclared*: no effective pax record exists anywhere in the current stack of local and global extensions, which means that the member's own UStar header's state takes precedence.
-  - *Active*: there's an effective pax record in the stack, *and* it has a value.
-  - *Tombstoned*: there's an effective pax record in the stack, but it has no value (for example, `8 path=\n` instead of `12 path=abc\n`). You would think that this would be the same as the *Undeclared* state, but it's not! pax considers this record **explicitly** deleted, and [prescribes](https://pubs.opengroup.org/onlinepubs/9799919799/utilities/pax.html#:~:text=If%20the%20%3Cvalue%3E%20field%20is%20zero%20length%2C%20it%20shall%20delete%20any%20header%20block%20field%2C%20previously%20entered%20extended%20header%20value%2C%20or%20global%20extended%20header%20value%20of%20the%20same%20name.): If the `<value>` field is zero length, it shall delete any header block field, previously entered extended header value, or global extended header value of the same name. This has fascinating consequences for the state machine, because it means that an effective-but-deleted `path` record means...a file with no path? How are you supposed to extract that<sup>[17](https://astral.sh/blog/tar-codec#user-content-fn-random)</sup>?
+```java
+static <K, V> Eq<Map<K, V>> mapEq(Eq<K> eqK, Eq<V> eqV) { ... }
 
-One of the early design choices we made with [tar-codec](https://github.com/astral-sh/astral-codec/tree/main/crates/tar-codec) was to isolate the implementation into a
-few layers. From lowest to highest:
+static <E> Eq<List<E>> listEq(Eq<E> eqE);
 
-- The [tar-framing](https://crates.io/crates/tar-framing) crate is responsible for taking a stream of blocks and turning it into a stream of frames. This happens in two refinement stages:
-  - The stream or "physical" API honors the big state machine above and yields each block in a given state, one block at a time.
-  - The "logical" API consumes the blocks produced by the "physical" API, and yields them as a stream of assembled members. Each assembled member is essentially its "header" (which is the physical header, merged with any effective extension state that affected the physical framing), a separate extension state for non-framing extensions (such as GNU `L` and `K`), and a readable payload for the member's actual contents.
-- The [tar-codec](https://crates.io/crates/tar-codec) crate takes the "logical" API from [tar-framing](https://crates.io/crates/tar-framing) and turns it into something that can be extracted in memory or onto disk.
+static Eq<Integer> integerEq();
 
-Extracting an archive (of any format) onto disk is its own can of worms, with its own differential
-risks<sup>[18](https://astral.sh/blog/tar-codec#user-content-fn-extdiff)</sup>. Another one of our early observations is that every archive implementation tends to
-have its own extract-to-disk implementation, with its own edge cases.
+static Eq<String> stringEq();
 
-We built [archive-trait](https://crates.io/crates/archive-trait) to address that. [archive-trait](https://crates.io/crates/archive-trait) exposes `Archive` and `ArchiveBuilder`
-traits (along with associated types and machinery) that allow any format to expose uniform APIs for
-reading and creating archives. We then built [archive-trait](https://crates.io/crates/archive-trait)'s own filesystem extraction on top of
-[cap-std](https://crates.io/crates/cap-std), giving us the ability to "anchor" extraction into a single directory and avoid a large
-class of link and path traversal footguns.
+// then:
 
-- Writing a differential-resistant tar parser is *surprisingly* hard, given how ubiquitous tar files of all flavors are, and how simple the original (V7) format is. This post has only scratched the surface in terms of complexity. To recap: Separately, there were numerous places where we had to compromise on strict pax conformance because of observed behavior from other implementations: Finally, in the process of designing and implementing tar-codec, we found *many* parser differential primitives that cause various tar implementations to behave *very* differently on identical inputs. Some of these are currently being disclosed as security vulnerabilities. However, some of the general classes we saw:
-  - Each tar family has its own state machine, which is not always clearly laid out in that family's documentation or reference implementation. It is *imperative* that these state machines do not mix, but real-world tar parsers regularly allow them to.
-  - Each tar family has its own, non-trivial rules for determining the precedence of state (pathname, linkname, and size) attached to archive members. Some of this state affects the framing of the parser itself, meaning that faithfully handling e.g. pax archives means handling `size` and similar records up-front, rather than trying to abstract the parse across individual 512-byte header blocks.
-  - The pax spec is explicit that pax record values must be UTF-8. However, both GNU tar and `star` historically emitted some vendor-specific records<sup>[19](https://astral.sh/blog/tar-codec#user-content-fn-paxvendor)</sup> as raw binary. See [this bug-tar thread for more context](https://lists.gnu.org/r/bug-tar/2013-12/msg00012.html).
-  - UStar and pax are explicit that `uname` and `gname` should be NUL-terminated in the UStar header, meaning that each can be at most 31 bytes long. However, CPython's `tarfile` (and probably others) will happily fill either to 32 bytes, only overflowing to the pax record at 33 bytes or more. See [CPython#159322](https://github.com/python/cpython/issues/159322) for more context.
-  - More generally, tar implementations will frequently leave `mode`, `uid`, `gid`, and `mtime` as all NUL, rather than zeroed or similar. This doesn't pose a framing/parser synchronization risk, so [tar-codec](https://github.com/astral-sh/astral-codec/tree/main/crates/tar-codec) tracks them as "missing" rather than assigning an arbitrary default value.
-  - pax/GNU state machine confusion, as mentioned above. In particular, some tar implementations can be fooled into applying a pax extension's states to a GNU extension (or vice versa) instead of to the subsequent member, often resulting in full desynchronization and different extraction results.
-  - Mis-handling of pax extension precedence, in particular both global (`g`) extended headers and record "tombstoning." For example, some implementations will accept a `g` header with `size=1234` but ignore it, despite pax saying clearly that such a `size` record overrides any UStar `size` fields. This also typically results in a full desynchronization primitive.
-  - Mis-handling of pax record parsing. For example, some implementations will ignore the `<length>` prefix and instead assume that pax records can be safely split on `\n`. This is not true, since the `<value>` of a pax record can contain a verbatim `\n`. As you may have guessed, this also typically results in a full desynchronization primitive.
-  - More generally, we found a great deal of variety in how lax various tar implementations are when it comes to parsing integer fields: many use their language's native "integer from string" API, which can [behave surprisingly](https://yossarian.net/til/post/some-surprising-numeric-conversions-in-python/) in the presence of different (non-Western Arabic) numeral forms, leading and trailing whitespace, and so forth. These small variations can percolate into two different implementations parsing the same `size` field as different integers, once again resulting in desynchronization.
-- Decode and encode performance was *not* the hard part: we found a lot of low-hanging fruit while optimizing both, including optimizing tar's checksum generation and calculating pax record length prefixes. We also picked up significant performance gains by ensuring that tar-codec reuses allocations and batches/buffers its work wherever possible (and where doing so does not weaken the API's internal consistency or cancellation correctness in an `async` setting).
-- Conversely, *performant* secure extraction *is* somewhat hard: directory capability tracking (of the kind that [cap-std](https://crates.io/crates/cap-std) does) adds measurable overhead to many of our filesystem operations, particularly when extracting on hosts that lack [`openat2(2)`](https://man7.org/linux/man-pages/man2/openat2.2.html) or an equivalent system call<sup>[20](https://astral.sh/blog/tar-codec#user-content-fn-openat)</sup>. This negatively impacts extraction on macOS in particular.
+Eq<Map<String, List<Integer>>> eq =
+  mapEq(stringEq(), listEq(integerEq()));
 
-All in all, [tar-codec](https://github.com/astral-sh/astral-codec/tree/main/crates/tar-codec)'s design rests on well-worn principles for secure parser design: we are
-[conservative rather than liberal](https://alexgaynor.net/2025/mar/25/postels-law-and-the-three-ring-circus/) in what we accept, and we enforce correctness by construction
-through increasingly constrictive layers (from member framing to streaming to extraction). These
-design choices have made us confident that [tar-codec](https://github.com/astral-sh/astral-codec/tree/main/crates/tar-codec) is more resistant to differentials (by
-correctly rejecting them) than other tar implementations.
+Map<String, List<Integer>> m1 = ...;
+Map<String, List<Integer>> m2 = ...;
 
-The fractured and under-specified nature of tar makes it impossible for us to say that we are
-*entirely* devoid of differentials, or that new differentials won't be discovered in the future.
-However, we believe that [tar-codec](https://github.com/astral-sh/astral-codec/tree/main/crates/tar-codec)'s primitives are the correct ones if and when those
-contingencies occur.
+eq.eq(m1, m2);
+```
 
-This is not the end of our work, on several levels:
+With witness constructors as our building blocks, we can recursively construct
+infinitely many witnesses, as needed.
 
-- While [tar-codec](https://github.com/astral-sh/astral-codec/tree/main/crates/tar-codec) is essentially feature-complete for our own purposes (within [uv](https://github.com/astral-sh/uv)), we're interested in making sure that it also solves problems that the larger Open Source community has around secure and performant tar parsing. To that end, we'll be looking at supporting other, more niche aspects of the various tar families (like sparse files, and more control over vendor-specific pax records) as the need arises. Separately, we'll be working with others in the community on improving the correctness of *other* tar implementations. In particular, we see Harmen Stoppel's nascent [tar-minefield](https://stoppels.ch/tar/) project as a promising way to test and re-align other implementations with stricter, more differential-resistant interpretations of the tar family formats.
-- Separately, as you may have guessed from our decision to build a generic [archive-trait](https://crates.io/crates/archive-trait) library: tar is not the only format we're thinking about here! We're also actively looking into replacing uv's ZIP parsing, for similar reasons. We hope to share our lessons from that work soon, along with material benefits to uv itself.
+> A note on nomenclature:
+>
+> In Haskell, type class 'implementations' are called *instances*.
+>
+> Here, I am calling them *witnesses* because that's how Java's Architect, Brian
+> Goetz, decided to refer to them in
+> [a recent talk](https://www.youtube.com/watch?v=Gz7Or9C0TpM) he gave about
+> bringing type classes to Java sometime in the future.
 
-1. [tar-codec](https://github.com/astral-sh/astral-codec/tree/main/crates/tar-codec) has been available since 0.12, but was disabled by default behind the `--preview-features tar-codec` flag. As of 0.13, it is the default and can be disabled by setting `UV_LEGACY_TAR_BACKEND=1`. [↩](https://astral.sh/blog/tar-codec#user-content-fnref-preview)
-2. The term "built" is the source of a great deal of confusion for newcomers when they first encounter Python packaging. In the context of Python packaging, "built" refers to the fact that the distribution is produced by a "build backend", i.e. contains structured metadata that a source distribution is not guaranteed to have. It does **not** imply that the wheel contains shared libraries or other native code, although it can. Pure Python packages are also regularly distributed as built distributions, because installing them is faster and more reliable. [↩](https://astral.sh/blog/tar-codec#user-content-fnref-built)
-3. Historically, a source distribution was *literally* just a source archive, with the convention of having a `pyproject.toml` or `setup.py` at the archive's root. More recent Python packaging standards state that source distributions must contain a `PKG-INFO` file containing standard metadata. See [PEP 643](https://peps.python.org/pep-0643/) for more on that. As a result, many source distributions contain no metadata other than the build system itself, which must be executed to access the distribution's metadata. [↩](https://astral.sh/blog/tar-codec#user-content-fnref-sdist)
-4. We recommend Edera's "[TARmageddon](https://edera.dev/stories/tarmageddon)" blog post for a detailed treatment of one such differential. [↩](https://astral.sh/blog/tar-codec#user-content-fnref-tarmageddon)
-5. [Martin Dørum](https://mort.coffee) has a [great blog post](https://mort.coffee/home/tar/) on the original tar format and how it evolved over time into the constellation of variants that currently exist. We highly recommend reading his post. [↩](https://astral.sh/blog/tar-codec#user-content-fnref-dorum)
-6. Whether or not UStar and pax should be clumped together in the same family is doubtless extremely controversial to the dozen-or-so other people on Earth who have thought about the tar format this much. I consider them to be in the same family, since pax is *effectively* a strict superset of UStar and comes from the same standards body (POSIX) that produced UStar. [↩](https://astral.sh/blog/tar-codec#user-content-fnref-family)
-7. There are actually two different GNU tar formats: there's `oldgnu` i.e. "old GNU" and `gnu` i.e. "new GNU". The difference between these two is minor (relative to everything else) and GNU tar itself emits "new GNU" as of tar 1.12, which was released in 1997. So that's enough about "old GNU." [↩](https://astral.sh/blog/tar-codec#user-content-fnref-oldgnu)
-8. "tar" of course being short for "Tape ARchive." Magnetic tapes (like all mass storage) store their contents in sequences of fixed-sized blocks, and tar seals 1979's glorious 512-byte blocks in amber. tar is also far from the only block-style file format. [cpio](https://en.wikipedia.org/wiki/Cpio) is another well-known one. [↩](https://astral.sh/blog/tar-codec#user-content-fnref-tape)
-9. Archive members are things like files and directories, but *also* things like sockets and device files. I'm not really clear on what it means to archive a socket, but both UStar/pax and GNU tar will happily let you express that you've done so! [↩](https://astral.sh/blog/tar-codec#user-content-fnref-member)
-10. Before compression, of course. tar knows nothing about compression. It's just the format that encodes one or more files into a single file. [↩](https://astral.sh/blog/tar-codec#user-content-fnref-compression)
-11. V7 tar handles directories in two ways: it creates directories that are *implied* to exist (for example, a member whose name is `foo/makeme/bar` will create `foo` and `foo/makeme` if needed), and it will explicitly create a directory if a regular file member ends with a slash, e.g. `foo/makeme/`. [↩](https://astral.sh/blog/tar-codec#user-content-fnref-dir)
-12. In other words, it's a self-describing length. This is somewhat unusual when compared to a "normal" TLV/LTV encoding, where the length component is typically either a fixed length or something with only limited length variation, like [LEB128](https://en.wikipedia.org/wiki/LEB128). [↩](https://astral.sh/blog/tar-codec#user-content-fnref-selfdesc)
-13. You might be thinking: why bother putting states in the member's UStar header at all, if they're just going to be overridden by the pax extended header? Why not just fill those parts of the block with NULs? The answer has to do with backwards compatibility: both GNU and pax do a <del>disgusting hack</del> interesting trick where the extension/extended header's *own* name field is also a valid path, conventionally a specially formatted one like `%d/PaxHeaders.%p/%f`, where `%d` is the dirname of the pax `path` record, `%p` is the current PID, and `%f` is the basename of the same `path` record. The theory behind this is (probably) that a subsequent tool can repair the extraction, by looking at the pax headers which have been extracted as a regular file instead. In practice I suspect this doesn't work well in the greater-than-8 GiB case, which is one of the cases where it matters the most. [↩](https://astral.sh/blog/tar-codec#user-content-fnref-own)
-14. This is `2**80` instead of `2**96` because we lose `size[0]` to the base-256 sign bit and `size[11]` to the NUL byte. Implementations that don't require a NUL terminator for fields like `size` could in principle allow up to `2**88` instead. [↩](https://astral.sh/blog/tar-codec#user-content-fnref-big)
-15. The order of GNU extensions before the member they affect does not appear to matter in any implementation. In other words, you can have `L -> K -> 1` or `K -> L -> 1`. [↩](https://astral.sh/blog/tar-codec#user-content-fnref-order)
-16. That's correct: we don't support parsing V7-style tar files. An early review revealed that they're nonexistent in the Python packaging ecosystem, probably because Python's own `tarfile` never supported creating them. The gap between V7 and UStar is small, however, so adding it would not be difficult *if* needed. [↩](https://astral.sh/blog/tar-codec#user-content-fnref-nov7)
-17. Many tar implementations do random things here, like trying to extract to an empty path (which of course fails), or picking *some* previous filename or extended header state. [↩](https://astral.sh/blog/tar-codec#user-content-fnref-random)
-18. Extraction differentials themselves are out of this post's scope, but to summarize: extraction depends heavily on the target filesystem and its state, including any pre-existing symbolic and hard links. Nuances abound, including how to handle files that differ in casing inside the archive but not on the filesystem itself (macOS and Windows), how to handle symlinking on systems where symbolic links are privileged (Windows), and how to handle "funky but valid" filenames (non-UTF-8, UTF-8 with NULs, control characters, &c.). [↩](https://astral.sh/blog/tar-codec#user-content-fnref-extdiff)
-19. A pax "vendor record" is a normal pax record, but with a name like `VENDOR.keyword` instead of `keyword`. pax itself does not specify their semantics and various implementations do wildly different things with them, so tar-codec rejects them by default (with an option to skip/ignore them instead). `SCHILY.xattr.*` is one common example of a vendor record namespace. GNU also has their own vendor namespace, e.g. `GNU.sparse.*` for sparse members. [↩](https://astral.sh/blog/tar-codec#user-content-fnref-paxvendor)
-20. Without `openat2(2)` or a similar source of `RESOLVE_BENEATH` semantics, `cap-std` needs to open each directory component in a path, which means that its system calls scale linearly with the depth of the paths it needs to track. This is on top of the system call overhead for the extraction I/O itself. [↩](https://astral.sh/blog/tar-codec#user-content-fnref-openat)
+Now, wouldn't it be great if we didn't have to manually construct these
+witnesses?
+
+Given:
+
+```java
+@TypeClass
+interface Show<A> {
+  String show(A value);
+
+  // Convenience shortcut
+  static <A> String show(Show<A> showA, A value) {
+    return showA.show(value);
+  }
+
+  @TypeClass.Witness
+  static Show<Integer> showInteger() { ... }
+
+  @TypeClass.Witness
+  static <A> Show<List<A>> showList(Show<A> showA) { ... }
+}
+```
+
+Instead of:
+
+```java
+Show<List<List<Integer>>> w =
+    Show.showList(Show.showList(Show.showInteger()));
+
+Show.show(w, List.of(List.of(1, 2), List.of(3, 4)));
+// Returns: "[[1, 2], [3, 4]]"
+```
+
+We want:
+
+```java
+Show.show(witness(), List.of(List.of(1, 2), List.of(3, 4)));
+// Returns: "[[1, 2], [3, 4]]"
+```
+
+Which means that the `witness()` method is able to automatically construct the
+required witness for `Show<List<List<Integer>>>`.
+
+How do we get there?
+
+First, we must understand some aspects of how Java generics work at runtime.
+
+It is a well-known fact that Java generics get erased at runtime.
+
+However, there are a few scenarios in which generics *do* get reified!
+
+> Note: 'Type Reification' is the process by which type information is made
+> concrete and available at runtime.
+
+Given:
+
+```java
+interface Stream<T> { ... }
+
+interface IntStream extends Stream<Integer> { ... }
+```
+
+Then:
+
+```java
+IntStream.class.getInterfaces()[0];
+// Returns: Stream
+
+IntStream.class.getGenericInterfaces()[0];
+// Returns: Stream<Integer>
+```
+
+This means that Java *did* preserve the generic type arguments for the supertype
+`Stream<Integer>`. (We just need to know where to look for it.)
+
+Note that this also occurs with anonymous classes:
+
+```java
+var s = new Stream<String>() { ... };
+
+s.getClass().getGenericInterfaces()[0];
+// Returns: Stream<String>
+```
+
+This leads us to our first workaround:
+
+We define:
+
+```java
+interface Ty<T> {
+  default Type type() {
+    return requireNonNull(
+        ((ParameterizedType) getClass().getGenericInterfaces()[0])
+            .getActualTypeArguments()[0]);
+  }
+}
+```
+
+Which lets us write:
+
+```java
+Type type = new Ty<Map<String, List<Integer>>>() {}.type();
+
+println(type);
+// Prints: Map<String, List<Integer>>
+```
+
+Why do we need this?
+
+Because our `witness()` method will need a runtime representation of the type
+that it is trying to instantiate.
+
+So our use case has turned into:
+
+```java
+Show.show(witness(new Ty<>() {}), List.of(List.of(1, 2), List.of(3, 4)));
+```
+
+Note that we do not have to specify the type argument for `Ty<>`. Thankfully,
+type inference does that for us.
+
+Type inference works in this case because the `List.of(...)` parameter has a
+well-defined type, and the call to `<A> Show.show(Show<A>, A)` lets type
+inference flow from the second argument to the first.
+
+## Aside: Understanding `java.lang.reflect.Type`'s hierarchy[#](https://garciat.com/posts/java-type-classes/#aside-understanding-javalangreflecttypes-hierarchy)
+
+The standard `java.lang.reflect.Type` hierarchy consists of:
+
+Where:
+
+Moreover, a `java.lang.reflect.Method` can be queried via
+`TypeVariable<?>[] getTypeParameters()`, `Type[] getGenericParameterTypes()`,
+and `Type getGenericReturnType()`.
+
+For example:
+
+```java
+class Example {
+  static <A> List<A> hello(String s, A[] arr, Optional<?> opt) { ... }
+}
+```
+
+Inspecting the `Example`'s `hello` method at runtime would yield something like:
+
+```
+Method(
+  name: "hello",
+  typeParameters:
+    [TypeVariable(A)],
+  genericReturnType:
+    ParameterizedType(
+      rawType: List.class,
+      typeArguments: [TypeVariable(A)],
+    ),
+  genericParameterTypes:
+    [
+      String.class,
+      GenericArrayType(componentType: TypeVariable(A)),
+      ParameterizedType(
+        rawType: Optional.class,
+        typeArguments: [WildcardType()]
+      )
+    ]
+)
+```
+
+Note that the three ocurrences of `TypeVariable(A)` are unique in the sense that
+they compare `equal()` to each other, but *not* to other type variable
+instances, even if their names are also `A`.
+
+We want to do this for a few reasons:
+
+Here's the AST:
+
+```java
+sealed interface ParsedType {
+  record Var(TypeVariable<?> java) implements ParsedType {}
+
+  record App(ParsedType fun, ParsedType arg) implements ParsedType {}
+
+  record ArrayOf(ParsedType elementType) implements ParsedType {}
+
+  record Const(Class<?> java) implements ParsedType {}
+
+  record Primitive(Class<?> java) implements ParsedType {}
+}
+```
+
+And these are our parsing rules:
+
+```java
+sealed interface ParsedType {
+  // ...
+
+  static ParsedType parse(Type java) {
+    return switch (java) {
+      case Class<?> arr when arr.isArray() ->
+          new ArrayOf(parse(arr.getComponentType()));
+      case Class<?> prim when prim.isPrimitive() ->
+          new Primitive(prim);
+      case Class<?> c ->
+          new Const(c);
+      case TypeVariable<?> v ->
+          new Var(v);
+      case ParameterizedType p ->
+          parseAll(p.getActualTypeArguments()).stream()
+              .reduce(parse(p.getRawType()), App::new);
+      case GenericArrayType a ->
+          new ArrayOf(parse(a.getGenericComponentType()));
+      case WildcardType w ->
+          throw new IllegalArgumentException("Cannot parse wildcard type: " + w);
+      default ->
+          throw new IllegalArgumentException("Unsupported type: " + java);
+    };
+  }
+}
+```
+
+> Note: the rule for `ParameterizedType` will take a type like `T<A, B>` and
+> turn it into `App(App(Const(T), A), B)`.
+>
+> This means that the generic type `T` is first applied to `A` and then to `B`.
+
+For example, `Map<Integer, List<String>>` becomes:
+
+```
+App(
+  App(Const(Map.class), Const(Integer.class)),
+  App(Const(List.class), Const(String.class))
+)
+```
+
+That's it! Really, it's not much, but the added uniformity will help our code
+down the line.
+
+Until this point we have:
+
+Now, let's move on to the problem of type class instance resolution.
+
+Let's consider the following scenario:
+
+```java
+@TypeClass
+interface Show<A> {
+  String show(A value);
+
+  // Convenience shortcut
+  static <A> String show(Show<A> showA, A value) {
+    return showA.show(value);
+  }
+
+  @TypeClass.Witness
+  static Show<Integer> showInteger() { ... }
+
+  @TypeClass.Witness
+  static <A> Show<List<A>> showList(Show<A> showA) { ... }
+}
+
+record Pair<A, B>(A fst, B snd) {
+  @TypeClass.Witness
+  public static <A, B> Show<Pair<A, B>> show(Show<A> showA, Show<B> showB) { ... }
+}
+```
+
+We observe that, for example, in order to summon a witness for
+`Show<List<Pair<Integer, List<Integer>>>`, then we must apply several witness
+constructors recursively.
+
+> What is a witness constructor? It is a `public static` method annotated with
+> `@TypeClass.Witness`.
+
+But first, we must find the witness constructors!
+
+How do we do that? Do we need to do a runtime scan of all loaded classes?
+
+That would be way too complicated.
+
+In order to reduce our search scope, we can define the following convention:
+
+> When trying to resolve a witness `C<T>` for some type class `C` and a concrete
+> type `T`, then we only look for witness constructors within the definitions of
+> `C` and `T` and nowhere else.
+
+For example, when looking for `Show<Integer>`, then we scan the methods of
+`Show` and `Integer`.
+
+Generally, we will prefer to define witness constructors within concrete types
+and not within type classes. However, for a built-in type like `Integer`, we
+have no choice and we must define its witness constructors within the relevant
+type classes, as we have done with `static Show<Integer> showInteger()`.
+
+Now that we are able to find the relevant witness constructors, how do we:
+
+First, we must understand type unification:
+
+Type unification is the process of finding a substitution that makes two types
+identical.
+
+For example, given `Pair<[A], String>` and `Pair<Integer, String>`, then the
+substitution `{A -> Integer}` would make the first type identical to the second.
+
+> Here, I have placed the type `A` between square brackets to indicate that it
+> is a *type variable*. We only substitute type variables!
+
+Unification may fail when it encounters incompatible types. For example,
+`List<Integer>` and `List<String>` cannot be unified because no substitution
+exists that would make them identical.
+
+Conversely, when two types are already identical, unification succeeds with an
+empty substitution `{}`.
+
+Because types are recursive, the unification algorithm must also be recursive
+(in nature).
+
+Consider:
+
+```java
+unify(
+  Map<Pair<String, [T]>, List<[U]>>,
+  Map<Pair<String, Integer>, List<Optional<Boolean>>>
+)
+
+// we are unifying two types of shape:
+// - Map<K1, V1>
+// - Map<K2, V2>
+// the type constructors match on either side (Map)
+// so we recurse to their type arguments:
+// unify(K1, K2) ∪ unify(V1, V2)
+// and so on!
+
+=   unify(Pair<String, [T]>, Pair<String, Integer>)
+  ∪ unify(List<[U]>, List<Optional<Boolean>>)
+
+=   unify(String, String) // first arguments of Pair
+  ∪ unify([T], Integer)   // second arguments of Pair
+  ∪ unify([U], <Optional<Boolean>) // arguments of List
+
+=   {}
+  ∪ {T -> Integer}
+  ∪ {U -> Optional<Boolean>}
+
+= {T -> Integer, U -> Optional<Boolean>}
+
+// Done!
+```
+
+If any unification step fails, then the entire unification fails:
+
+```java
+unify(Pair<[T], Integer>, Pair<String, String>)
+
+=   unify([T], String)
+  ∪ unify(Integer, String)
+
+=   {T -> String}
+  ∪ err
+
+= err
+```
+
+Following is a code listing for the concrete type unification algorithm
+`unify()` for our `ParsedType` definition, along with a `subsitute()` method
+that applies a substitution to a type.
+
+Here we use the `Maybe` type, which is analogous to Java's `Optional`. It is
+used to indicate that the `unify()` function may fail with a `nothing()` (empty)
+case. This is different from it returning `just(Map.of())` (an empty map), which
+signals success but without any substitutions. In short, based on the examples
+above, `err` is `nothing()` and `{}` is `just(Map.of())`.
+
+A key step here is the unification of `App`. This is the main driver for the
+algorithm's recursion.
+
+The following helper methods are relevant to this step:
+
+```java
+// applies function `f` if both `ma` and `mb` are present
+<A, B, C> Maybe<C> apply(BiFunction<A, B, C> f, Maybe<A> ma, Maybe<B> mb);
+
+// merges two maps
+// it fails at runtime if duplicate keys /with different values/ exist
+<K, V> Map<K, V> merge(Map<K, V> m1, Map<K, V> m2);
+```
+
+Here's the full code:
+
+```java
+class Unification {
+  public static Maybe<Map<ParsedType.Var, ParsedType>> unify(ParsedType t1, ParsedType t2) {
+    return switch (Pair.of(t1, t2)) {
+      case Pair<ParsedType, ParsedType>(ParsedType.Var var1, ParsedType.Primitive p) ->
+          Maybe.nothing(); // no primitives in generics
+      case Pair<ParsedType, ParsedType>(ParsedType.Var var1, var t) ->
+          Maybe.just(Map.of(var1, t));
+      case Pair<ParsedType, ParsedType>(ParsedType.Const const1, ParsedType.Const const2)
+          when const1.equals(const2) ->
+          Maybe.just(Map.of());
+      case Pair<ParsedType, ParsedType>(
+              ParsedType.App(var fun1, var arg1),
+              ParsedType.App(var fun2, var arg2)) ->
+          Maybe.apply(Maps::merge, unify(fun1, fun2), unify(arg1, arg2));
+      case Pair<ParsedType, ParsedType>(
+              ParsedType.ArrayOf(var elem1),
+              ParsedType.ArrayOf(var elem2)) ->
+          unify(elem1, elem2);
+      case Pair<ParsedType, ParsedType>(
+              ParsedType.Primitive(var prim1),
+              ParsedType.Primitive(var prim2))
+          when prim1.equals(prim2) ->
+          Maybe.just(Map.of());
+      default ->
+          Maybe.nothing();
+    };
+  }
+
+  public static ParsedType substitute(Map<ParsedType.Var, ParsedType> map, ParsedType type) {
+    return switch (type) {
+      case ParsedType.Var var ->
+          map.getOrDefault(var, var);
+      case ParsedType.App(var fun, var arg) ->
+          new ParsedType.App(substitute(map, fun), substitute(map, arg));
+      case ParsedType.ArrayOf var ->
+          new ParsedType.ArrayOf(substitute(map, var.elementType()));
+      case ParsedType.Primitive p ->
+          p;
+      case ParsedType.Const c ->
+          c;
+    };
+  }
+
+  public static List<ParsedType> substituteAll(
+      Map<ParsedType.Var, ParsedType> map, List<ParsedType> types) {
+    return types.stream().map(t -> substitute(map, t)).toList();
+  }
+}
+```
+
+```java
+record FuncType(Method java, List<ParsedType> paramTypes, ParsedType returnType) {
+  public static FuncType parse(Method method) {
+    if (!Modifier.isStatic(method.getModifiers())) {
+      throw new IllegalArgumentException("Method must be static: " + method);
+    }
+    return new FuncType(
+        method,
+        ParsedType.parseAll(method.getGenericParameterTypes()),
+        ParsedType.parse(method.getGenericReturnType()));
+  }
+}
+```
+
+Why is type unification relevant?
+
+Type unification will guide the witness resolution process in two ways:
+
+For example, when resolving `Show<List<Integer>>`, we check:
+
+- We scan List:
+  - It contains zero witness constructors.
+- We scan Show, and it contains:
+  - Show<Integer> showInteger()
+  - <A> Show<List<A>> showList(Show<A> showA)
+
+That outlines the witness resolution algorithm.
+
+Until this point we have:
+
+Now, let's put it all together!
+
+Let's start with the witness constructor lookup code:
+
+```java
+@Retention(RetentionPolicy.RUNTIME)
+@interface TypeClass {
+  @Retention(RetentionPolicy.RUNTIME)
+  @interface Witness {}
+}
+
+class TypeClasses {
+  // ...
+
+  private static List<InstanceConstructor> findRules(ParsedType target) {
+    return switch (target) {
+      case ParsedType.App(var fun, var arg) ->
+          Lists.concat(findRules(fun), findRules(arg));
+      case ParsedType.Const(var java) ->
+          rulesOf(java);
+      case ParsedType.Var(var java) ->
+          List.of();
+      case ParsedType.ArrayOf(var elem) ->
+          List.of();
+      case ParsedType.Primitive(var java) ->
+          List.of();
+    };
+  }
+
+  private static List<InstanceConstructor> rulesOf(Class<?> cls) {
+    return Arrays.stream(cls.getDeclaredMethods())
+        .filter(TypeClasses::isWitnessMethod)
+        .map(FuncType::parse)
+        .map(InstanceConstructor::new)
+        .toList();
+  }
+
+  private static boolean isWitnessMethod(Method m) {
+    return m.accessFlags().contains(PUBLIC)
+        && m.accessFlags().contains(STATIC)
+        && m.isAnnotationPresent(TypeClass.Witness.class);
+  }
+
+  private record InstanceConstructor(FuncType func) {}
+
+  // ...
+}
+```
+
+Now, let's move on to how we choose relevant witness constructors and find our
+subsequent goals:
+
+```java
+class TypeClasses {
+  // ...
+
+  private static List<Candidate> findCandidates(ParsedType target) {
+    return findRules(target).stream()
+        .flatMap(
+            rule ->
+                rule
+                    .tryMatch(target)
+                    .map(requirements -> new Candidate(rule, requirements))
+                    .stream())
+        .toList();
+  }
+
+  private record Candidate(WitnessRule rule, List<ParsedType> requirements) {}
+
+  // Spoiler: we will have another subtype of WitnessRule later on (;
+  private sealed interface WitnessRule {
+    Maybe<List<ParsedType>> tryMatch(ParsedType target);
+
+    Object instantiate(List<Object> dependencies);
+  }
+
+  private record InstanceConstructor(FuncType func) implements WitnessRule {
+    @Override
+    public Maybe<List<ParsedType>> tryMatch(ParsedType target) {
+      return Unification.unify(func.returnType(), target)
+          .map(map -> Unification.substituteAll(map, func.paramTypes()));
+    }
+
+    @Override
+    public Object instantiate(List<Object> dependencies) {
+      try {
+        return func.java().invoke(null, dependencies.toArray());
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }
+  }
+
+  // ...
+}
+```
+
+Then, the code that drives the recursive resolution:
+
+```java
+class TypeClasses {
+  // ...
+
+  private static Either<SummonError, Object> summon(ParsedType target) {
+    return switch (ZeroOneMore.of(findCandidates(target, context))) {
+      case ZeroOneMore.One<Candidate>(Candidate(var rule, var requirements)) ->
+          summonAll(requirements, context)
+              .map(rule::instantiate)
+              .mapLeft(error -> new SummonError.Nested(target, error));
+      case ZeroOneMore.Zero<Candidate>() ->
+          Either.left(new SummonError.NotFound(target));
+      case ZeroOneMore.More<Candidate>(var candidates) ->
+          Either.left(new SummonError.Ambiguous(target, candidates));
+    };
+  }
+
+  private static Either<SummonError, List<Object>> summonAll(List<ParsedType> targets) {
+    return Either.traverse(targets, TypeClasses::summon);
+  }
+
+  private sealed interface SummonError {
+    record NotFound(ParsedType target) implements SummonError {}
+
+    record Ambiguous(ParsedType target, List<Candidate> candidates) implements SummonError {}
+
+    record Nested(ParsedType target, SummonError cause) implements SummonError {}
+  }
+
+  // ...
+}
+```
+
+And, finally, the public entry point for all of it:
+
+```java
+class TypeClasses {
+  public static <T> T witness(Ty<T> ty) {
+    return switch (summon(ParsedType.parse(ty.type()))) {
+      case Either.Left<SummonError, Object>(SummonError error) ->
+          throw new WitnessResolutionException(error);
+      case Either.Right<SummonError, Object>(Object instance) -> {
+        @SuppressWarnings("unchecked")
+        T typedInstance = (T) instance;
+        yield typedInstance;
+      }
+    };
+  }
+
+  public static class WitnessResolutionException extends RuntimeException {
+    private WitnessResolutionException(SummonError error) {
+      super(error.format());
+    }
+  }
+
+  // ...
+}
+```
+
+Surprinsingly, that's it!
+
+You can find a *mostly accurate* compilation of all of the above code in
+[this Gist](https://gist.github.com/Garciat/a6ca3c9195d5b1d997badecd73282e38).
+(This was the first version of the type class system that I built.)
+
+Now, let's see it in action.
+
+Given:
+
+```java
+@TypeClass
+interface Show<A> {
+  String show(A a);
+
+  static <A> String show(Show<A> showA, A a) {
+    return showA.show(a);
+  }
+
+  @TypeClass.Witness
+  static Show<Integer> integerShow() {
+    return i -> Integer.toString(i);
+  }
+
+  @TypeClass.Witness
+  static Show<String> stringShow() {
+    return s -> "\"" + s + "\"";
+  }
+
+  @TypeClass.Witness
+  static <A> Show<Optional<A>> optionalShow(Show<A> showA) {
+    return optA -> optA.map(a -> "Some(" + showA.show(a) + ")").orElse("None");
+  }
+
+  @TypeClass.Witness
+  static <A> Show<List<A>> listShow(Show<A> showA) { ... }
+
+  @TypeClass.Witness
+  static <K, V> Show<Map<K, V>> mapShow(Show<K> showK, Show<V> showV) { ... }
+}
+```
+
+Then:
+
+```java
+Map<String, List<Optional<Integer>>> m1 =
+    Map.of(
+        "a", List.of(Optional.of(1), Optional.empty()),
+        "b", List.of(Optional.of(2), Optional.of(3)));
+
+println(Show.show(witness(new Ty<>() {}), m1));
+// Prints: {"a": [Some(1), None], "b": [Some(2), Some(3)]}
+```
+
+Note that this requires the recursive instantiation of 5 witness constructors.
+Here's what some debug logs show:
+
+```
+Instantiating: () -> Show[A](String)
+Instantiating: () -> Show[A](Integer)
+Instantiating: ∀ A. (Show[A](A)) -> Show[A](Optional[T](A))
+Instantiating: ∀ A. (Show[A](A)) -> Show[A](List[E](A))
+Instantiating: ∀ K V. (Show[A](K), Show[A](V)) -> Show[A](Map[K, V](K)(V))
+```
+
+Given:
+
+```java
+@TypeClass
+interface Monoid<A> {
+  A combine(A a1, A a2);
+
+  A identity();
+
+  static <A> A combineAll(Monoid<A> monoid, List<A> elements) {
+    A result = monoid.identity();
+    for (A element : elements) {
+      result = monoid.combine(result, element);
+    }
+    return result;
+  }
+}
+
+@TypeClass
+interface Num<A> {
+  A add(A a1, A a2);
+
+  A mul(A a1, A a2);
+
+  A zero();
+
+  A one();
+
+  @TypeClass.Witness
+  static Num<Integer> integerNum() {
+    return new Num<>() {
+      @Override
+      public Integer add(Integer a1, Integer a2) {
+        return a1 + a2;
+      }
+
+      @Override
+      public Integer mul(Integer a1, Integer a2) {
+        return a1 * a2;
+      }
+
+      @Override
+      public Integer zero() {
+        return 0;
+      }
+
+      @Override
+      public Integer one() {
+        return 1;
+      }
+    };
+  }
+}
+
+record Sum<A>(A value) {
+  @TypeClass.Witness
+  public static <A> Monoid<Sum<A>> monoid(Num<A> num) {
+    return new Monoid<>() {
+      @Override
+      public Sum<A> combine(Sum<A> s1, Sum<A> s2) {
+        return new Sum<>(num.add(s1.value(), s2.value()));
+      }
+
+      @Override
+      public Sum<A> identity() {
+        return new Sum<>(num.zero());
+      }
+    };
+  }
+}
+```
+
+Then:
+
+```java
+var sums = List.of(new Sum<>(3), new Sum<>(5), new Sum<>(10));
+
+println(Monoid.combineAll(witness(new Ty<>() {}), sums));
+// Prints: Sum[value=18]
+```
+
+This example is based on:
+[https://wiki.haskell.org/Varargs](https://wiki.haskell.org/Varargs)
+
+It abuses type classes in order to implement variadic functions. Please read the
+link above to understand how this works.
+
+It's really striking how it *just works* with our system!
+
+Given:
+
+```java
+@TypeClass
+interface PrintAll<T> {
+  T printAll(List<String> strings);
+
+  static <T> T of(PrintAll<T> printAll) {
+    return printAll.printAll(List.of());
+  }
+
+  @TypeClass.Witness
+  static PrintAll<Void> base() {
+    return strings -> {
+      for (String s : strings) {
+        System.out.println(s);
+      }
+      return null;
+    };
+  }
+
+  @TypeClass.Witness
+  static <A, R> PrintAll<Function<A, R>> func(Show<A> showA, PrintAll<R> printR) {
+    return strings -> a -> printR.printAll(Lists.concat(strings, List.of(showA.show(a))));
+  }
+}
+```
+
+Then:
+
+```java
+Function<String, Function<List<String>, Function<Integer, Void>>> printer =
+    PrintAll.of(witness(new Ty<>() {}));
+
+printer.apply("Items:").apply(JavaList.of("apple", "banana", "cherry")).apply(42);
+// Prints:
+// "Items:"
+// ["apple", "banana", "cherry"]
+// 42
+```
+
+### Type Class: Type Equality![#](https://garciat.com/posts/java-type-classes/#type-class-type-equality)
+
+This examples shows how we can encode propositions about types themselves and
+have the resolver construct evidence for them.
+
+Reified type equality is very neat construct that I'd like to write more about
+soon.
+
+For now, let's appreciate how this neatly encodes
+[Haskell's own type equality](https://hackage.haskell.org/package/base-4.21.0.0/docs/Data-Type-Equality.html)
+in Java.
+
+Consider:
+
+```java
+@TypeClass
+sealed interface TyEq<A, B> {
+  A castR(B b);
+
+  B castL(A a);
+
+  @TypeClass.Witness
+  static <T> TyEq<T, T> refl() {
+    return new Refl<>();
+  }
+
+  record Refl<T>() implements TyEq<T, T> {
+
+    @Override
+    public T castR(T t) {
+      return t;
+    }
+
+    @Override
+    public T castL(T t) {
+      return t;
+    }
+  }
+}
+```
+
+`TyEq<A, B>` represents the proposition that `A = B`.
+
+And the only possible constructor for it is `refl()`, which can only prove that
+`TyEq<T, T>` for any `T`.
+
+How is that useful?
+
+`TyEq<T, T>` may be trivial in the static context where it is constructed. But
+it certainly is not in the context where it may be needed.
+
+Take a look:
+
+```java
+class List<T> {
+  // ...
+
+  int sum(TyEq<T, Integer> ty) {
+    int s = 0;
+    for (T item : this) {
+      s += ty.castL(item); // casts T to Integer !
+    }
+    return s;
+  }
+
+  // ...
+}
+
+// then
+
+var xs = List.of(1, 2, 3);
+
+xs.sum(refl());
+// Returns: 6
+```
+
+Within `List<T>`, we have no idea what `T`. Code can make no assumptions about
+it. However, if we have a proof that `T = Integer`, then we *can* sum the
+elements up into an `int`.
+
+Now, we can also request them as witnesses in a witness constructor:
+
+```java
+@TypeClass
+interface SumAllInt<A> {
+  A sum(List<Integer> list);
+
+  static <T> T of(SumAllInt<T> sumAllInt) {
+    return sumAllInt.sum(List.of());
+  }
+
+  @TypeClass.Witness
+  static SumAllInt<Integer> base() {
+    return list -> list.stream().mapToInt(Integer::intValue).sum();
+  }
+
+  @TypeClass.Witness
+  static <A, R> SumAllInt<Function<A, R>> func(TyEq<A, Integer> eq, SumAllInt<R> sumR) {
+    return list -> a -> sumR.sum(Lists.concat(list, List.of(eq.castL(a))));
+  }
+}
+```
+
+Similar to the `PrintAll` example, this lets us summon variadic functions:
+
+```java
+Function<Integer, Function<Integer, Function<Integer, Integer>>> sum =
+    SumAllInt.of(witness(new Ty<>() {}));
+println(sum.apply(1).apply(2).apply(3));
+```
+
+However, notice how in the `func` rule, we requested `TyEq<A, Integer>`. This
+constrains the `A` type argument to just `Integer`.
+
+Funny enough, this is actually only necessary in Haskell due to how integer
+literals are overloaded. So I implemented this here for no gain. But it was cool
+that it just worked!
+
+Consider the `Functor` type class in Haskell:
+
+```haskell
+class Functor f where
+  fmap :: (a -> b) -> f a - > f b
+```
+
+Notice how `f` is not a type?
+
+It is not one because it is being applied to types `a` and `b`, respectively.
+
+This means that `f` is a *type constructor*.
+
+> A type constructor is a sort of type-level *function* that builds new types
+> from existing types.
+>
+> Here, we mean *function* in the sense that it has the mathematical property of
+> being *injective*. That is, no two inputs map to the same output.
+>
+> In practice, this means that if we know that the output is the same, then the
+> input must be the same:
+>
+> `F<X> = F<Y>  ⇒  X = Y`
+>
+> This property is what allows us to unify under type constructors.
+
+In Java, `class List<T>` can be seen as a type constructor. Though we don't use
+type application syntax as in Haskell, we do use type parameterization syntax:
+`List<Integer>`. In Java, generic types cannot be partially applied. That is,
+for a type `class C<T1, T2, ..., TN>`, we must provide all `N` type arguments at
+once.
+
+Let's try representing the `Functor` type class with a Java interface:
+
+```java
+interface Functor<F> {
+  <A, B> F<B> fmap(Function<A, B> f, F<A> fa);
+}
+```
+
+Uh-oh:
+
+```
+The type F is not generic; it cannot be parameterized with arguments <B>
+```
+
+Indeed, Java requires that the type parameter `F` is a *type*, and **not a type
+constructor**.
+
+Are we cooked?
+
+Not quite.
+
+Simply: values have types; types have kinds.
+
+`42` has type `Integer`.
+
+`Integer` has kind `*` (read: star).
+
+> The syntax `*` for the kind of plain types comes from Haskell.
+>
+> We could also say `Integer` has kind `Type`, but that may be confusing given
+> how overloaded the word 'type' is in this context.
+
+`List<Integer>` also has kind `*`.
+
+So what is the kind of `List` itself?
+
+`List` has kind `* -> *`.
+
+That is, it is a type-level function that accepts a type and returns a type.
+
+Here we introduce an *encoding* of higher-kinded types for Java.
+
+Recall that interface `Functor<F>` failed because Java insists `F` is a concrete
+type, not a type constructor. This encoding gives us a way to pretend `F` is
+higher-kinded.
+
+> Note: I did not invent this encoding. I have seen several projects using it
+> (see the Related Work section). I am not sure where it originated, but it is
+> rather elegant.
+
+Consider:
+
+```java
+interface TApp<F, A> {}
+
+abstract class TagBase {}
+
+sealed interface Maybe<A> extends TApp<Maybe.Tag, A> {
+  record Nothing<A>() implements Maybe<A> {}
+
+  record Just<A>(A value) implements Maybe<A> {}
+
+  final class Tag extends TagBase {}
+
+  static <A> Maybe<A> unwrap(TApp<Maybe.Tag, A> m) {
+    return (Maybe<A>) m; // unsafe if we misuse TApp and tag types
+  }
+}
+```
+
+Let's unpack this:
+
+- TApp<F, A> represents type application, hence its name.
+  - We assume that F has kind * -> * and A has kind *.
+  - TApp<F, A> represents F<A>.
+  - Therefore TApp<F, A>, in principle, has kind *.
+- Maybe.Tag is a sort of proxy type for Maybe as an unapplied type constructor.
+  - TApp<Maybe.Tag, A>, in principle, means Maybe<A>.
+  - That is why Maybe<A> extends TApp<Maybe.Tag, A>.
+- Maybe.Tag extends TagBase just so that we can easily identify this type via reflection later.
+
+How is this useful?
+
+Now we *do* have a mechanism (more of a convention) to represent `Functor`!
+
+Check it out:
+
+```java
+interface Functor<F> {
+  <A, B> TApp<F, B> fmap(Function<A, B> f, TApp<F, A> fa);
+}
+```
+
+Remember: `TApp<F, A>` means `F<A>`.
+
+And we can also define the witness constructor:
+
+```java
+sealed interface Maybe<A> extends TApp<Maybe.Tag, A> {
+  // ...
+
+  default <B> Maybe<B> map(Function<A, B> f) { ... }
+
+  @TypeClass.Witness
+  static Functor<Maybe.Tag> functor() {
+    return new Functor<>() {
+      @Override
+      public <A, B> TApp<Maybe.Tag, B> fmap(Function<A, B> f, TApp<Maybe.Tag, A> fa) {
+        return unwrap(fa).map(f);
+      }
+    };
+  }
+}
+```
+
+Let's unpack that:
+
+That's it!
+
+Now, we must extend our type class system to understand these typing
+conventions.
+
+This is actually not very involved. Check it out:
+
+```java
+sealed interface ParsedType {
+  // ...
+
+  static ParsedType parse(Type java) {
+    return switch (java) {
+      // New:
+      case Class<?> tag
+        when parseTagType(tag) instanceof Maybe.Just<Class<?>>(var tagged) ->
+          new Const(tagged);
+      // New:
+      case ParameterizedType p
+          when parseAppType(p)
+              instanceof Maybe.Just<Pair<Type, Type>>(Pair<Type, Type>(var fun, var arg)) ->
+          new App(parse(fun), parse(arg));
+      // etc
+    };
+  }
+
+  private static Maybe<Class<?>> parseTagType(Class<?> c) {
+    return switch (c.getEnclosingClass()) {
+      case Class<?> enclosing when c.getSuperclass().equals(TagBase.class) ->
+          Maybe.just(enclosing);
+      case null -> Maybe.nothing();
+      default -> Maybe.nothing();
+    };
+  }
+
+  private static Maybe<Pair<Type, Type>> parseAppType(ParameterizedType t) {
+    return switch (t.getRawType()) {
+      case Class<?> raw when raw.equals(TApp.class) ->
+          Maybe.just(Pair.of(t.getActualTypeArguments()[0], t.getActualTypeArguments()[1]));
+      default -> Maybe.nothing();
+    };
+  }
+}
+```
+
+We only had to add two new pattern-match cases to `parse`:
+
+That's it!
+
+I was also surprised! The witness resolution code needs no changes whatsoever!
+
+Although, I was worried about potential bugs coming from misuses of `Tag`s and
+`TApp`. So I came up with a lightweight embedded kind-checking mechanism.
+
+Given:
+
+```java
+interface Kind<K extends Kind.Base> {
+  sealed interface Base {}
+
+  // KStar = *
+  final class KStar implements Base {}
+
+  // KArr k = * -> k
+  final class KArr<K extends Base> implements Base {}
+}
+
+abstract class TagBase<K extends Kind.Base> implements Kind<K> {}
+
+// Full application of a unary type constructor
+// TApp :: (* -> *) -> * -> *
+interface TApp<Tag extends Kind<KArr<KStar>>, A> extends Kind<KStar> {}
+
+// Partial application of a binary type constructor
+// TPar :: (* -> * -> *) -> * -> (* -> *)
+interface TPar<Tag extends Kind<KArr<KArr<KStar>>>, A> extends Kind<KArr<KStar>> {}
+```
+
+- TApp now can only apply to tags of kind * -> *, itself becoming a kind *.
+- TPar applies to tags of kind * -> * -> *, itself becoming a kind * -> *.
+- This gives us some rudimentary kind-checking in Java
+
+Then:
+
+```java
+sealed interface Maybe<A> extends TApp<Maybe.Tag, A> {
+  // ...
+
+  final class Tag extends TagBase<KArr<KStar>> {}
+
+  static <A> Maybe<A> unwrap(TApp<Tag, A> value) {
+    return (Maybe<A>) value;
+  }
+}
+```
+
+And also:
+
+```java
+@FunctionalInterface
+interface State<S, A> extends TApp<TPar<State.Tag, S>, A> {
+  // ...
+
+  @TypeClass.Witness
+  static <S> Functor<TPar<Tag, S>> functor() { ... }
+
+  final class Tag extends TagBase<KArr<KArr<KStar>>> {}
+
+  static <S, A> State<S, A> unwrap(TApp<TPar<Tag, S>, A> value) {
+    return (State<S, A>) value;
+  }
+}
+```
+
+Notice in this case that `State` has two type parameters:
+
+According to Haskell's
+[documentation on Traversable](https://hackage.haskell.org/package/base-4.21.0.0/docs/Data-Traversable.html):
+
+> Traversable is the class of data structures that can be traversed from left to
+> right, performing an action on each element.
+
+The Haskell type class looks like this:
+
+```haskell
+class (Functor t, Foldable t) => Traversable t where
+  traverse :: Applicative f => (a -> f b) -> t a -> f (t b)
+```
+
+Notice the use of the following features:
+
+`Traversable` is a rather advanced type class.
+
+Let's translate it into Java.
+
+For now, let's ignore its superclasses:
+
+```java
+@TypeClass
+interface Traversable<T extends Kind<KArr<KStar>>> {
+
+  <F extends Kind<KArr<KStar>>, A, B>
+      TApp<F, ? extends TApp<T, B>> traverse(
+          Applicative<F> applicative,
+          Function<A, ? extends TApp<F, B>> f,
+          TApp<T, A> t);
+
+  // And a static helper, for convenience:
+  // (I omitted some types and arguments for brevity)
+  static <F, A, B> ... traverse(
+      Traversable<T> traversable,
+      Applicative<F> applicative,
+      ...) {
+    return traversable.traverse(applicative, f, t);
+  }
+}
+```
+
+We see that:
+
+Then:
+
+```java
+// Unfortunately for HKTs, we must wrap regular Java lists
+record JavaList<A>(List<A> toList) implements TApp<JavaList.Tag, A> {
+  // ...
+
+  @TypeClass.Witness
+  public static <A> Show<JavaList<A>> show(Show<A> showA) { ... }
+
+  @TypeClass.Witness
+  public static Functor<JavaList.Tag> functor() { ... }
+
+  @TypeClass.Witness
+  public static Traversable<JavaList.Tag> traversable() { ... }
+
+  // ...
+}
+
+// and:
+
+sealed interface Maybe<A> {
+  // ...
+
+  @TypeClass.Witness
+  static Applicative<Maybe.Tag> applicative() { ... }
+
+  // ...
+}
+```
+
+For example:
+
+```java
+Traversable.traverse(
+    witness(new Ty<>() {}), // for Traversable<JavaList>
+    witness(new Ty<>() {}), // for Applicative<Maybe>
+    JavaList.of(1, 2, 3),
+    Maybe::just);
+// Returns: Just[value=JavaList[toList=[1, 2, 3]]]
+```
+
+As expected:
+
+```java
+@TypeClass
+interface Functor<F extends Kind<KArr<KStar>>> {
+  <A, B> TApp<F, B> map(Function<A, B> f, TApp<F, A> fa);
+}
+
+@TypeClass
+interface Applicative<F extends Kind<KArr<KStar>>> extends Functor<F> {
+  <A> TApp<F, A> pure(A a);
+
+  <A, B> TApp<F, B> ap(TApp<F, Function<A, B>> ff, TApp<F, A> fa);
+
+  @Override
+  default <A, B> TApp<F, B> map(Function<A, B> f, TApp<F, A> fa) {
+    return ap(pure(f), fa);
+  }
+}
+
+@TypeClass
+interface Monad<M extends Kind<KArr<KStar>>> extends Applicative<M> {
+  <A, B> TApp<M, B> flatMap(Function<A, TApp<M, B>> f, TApp<M, A> fa);
+
+  @Override
+  default <A, B> TApp<M, B> map(Function<A, B> f, TApp<M, A> fa) {
+    return flatMap(a -> pure(f.apply(a)), fa);
+  }
+
+  @Override
+  default <A, B> TApp<M, B> ap(TApp<M, Function<A, B>> ff, TApp<M, A> fa) {
+    return flatMap(a -> map(f -> f.apply(a), ff), fa);
+  }
+}
+```
+
+I currently don't have any interesting `Monad` examples. I may add one or two
+soon.
+
+We have built:
+
+And altogether:
+
+This was **a lot** of fun to work on. I had never before implemented type
+classes in a language, and it turned out to be way simpler than I thought. The
+key insight was figuring out that type unification was all that I needed.
+Stupidly, I did not check Haskell's spec to figure that out. But it did come
+somewhat naturally after a bit of thinking, given my experience in implementing
+type systems.
+
+This project was partially inspired by
+[this recent Brian Goetz JVMLS talk](https://www.youtube.com/watch?v=Gz7Or9C0TpM)
+where he presents his early ideas on how to bring type clases to Java. His
+proposed syntax is `Show<Integer>.witness`. And, of course, the mechanism is
+supposed to resolve witnesses at compile time.
+
+You can find the complete implementation in
+[this Gist](https://gist.github.com/Garciat/204226a528018fa7d10abb93fa51c4ca).
+
+The code also contains several other type class examples like QuickCheck's
+[Arbitrary type class](https://hackage-content.haskell.org/package/QuickCheck-2.17.1.0/docs/Test-QuickCheck-Arbitrary.html).
+
+### Related Work[#](https://garciat.com/posts/java-type-classes/#related-work)
+
+Here are some related projects and posts:
+
+Consider this example:
+
+```java
+static <A> String example(Show<A> showA, A value) {
+  return Show.show(witness(new Ty<>() {}), JavaList.of(value));
+}
+```
+
+It is equivalent to the following Haskell code:
+
+```haskell
+example :: Show a => a -> String
+example value = show [value]
+```
+
+In the Java code, we try to lookup `Show<List<A>>`, but we don't know what `A`
+is!
+
+Sure, at runtime we may know its real type, but we actually would like
+resolution to be static. (Even though we use reflection for witness resolution.)
+
+In the Haskell code, the available instance of `Show a` as captured by the
+function's signature becomes available as a 'context instance' that is used to
+derive `Show [a]` for the call of `show`.
+
+How can we achieve this in Java?
+
+First, we define a type that can capture a witness along with its static type:
+
+```java
+abstract class Ctx<T> {
+  private final T instance;
+
+  Ctx(T instance) {
+    this.instance = instance;
+  }
+
+  public T instance() {
+    return instance;
+  }
+
+  public Type type() {
+    return requireNonNull(
+        ((ParameterizedType) getClass().getGenericSuperclass())
+            .getActualTypeArguments()[0]);
+  }
+}
+```
+
+It leverages the same mechanism as `Ty<T>` to capture static types.
+
+Then, we pass it to the `witness()` method:
+
+```java
+static <A> String example(Show<A> showA, A value) {
+  return Show.show(
+      witness(new Ty<>() {}, new Ctx<>(showA) {}),
+      JavaList.of(value));
+}
+```
+
+Finally, we update a bit of our type class resolution code:
+
+```java
+class TypeClasses {
+  // New: second parameter
+  public static <T> T witness(Ty<T> ty, Ctx<?>... context) {
+    return switch (summon(ParsedType.parse(ty.type()), parseContext(context))) {
+      // ...
+    };
+  }
+
+  // New: parsing Ctx<?> into ContextInstance
+  private static List<ContextInstance> parseContext(Ctx<?>[] context) {
+    return Arrays.stream(context)
+        .map(ctx -> new ContextInstance(ctx.instance(), ParsedType.parse(ctx.type())))
+        .toList();
+  }
+
+  // ...
+
+  // New: second parameter
+  private static Either<SummonError, Object> summon(
+      ParsedType target, List<ContextInstance> context) {
+    // ...
+  }
+
+  // New: second parameter
+  private static Either<SummonError, List<Object>> summonAll(
+      List<ParsedType> targets, List<ContextInstance> context) {
+    // ...
+  }
+
+  // New: second parameter
+  private static List<Candidate> findCandidates(
+      ParsedType target, List<ContextInstance> context) {
+    // New: use the context instances along with the discovered witness constructors!
+    return Stream.<WitnessRule>concat(
+            context.stream(),
+            findRules(target).stream())
+        .flatMap(...)
+        .toList();
+  }
+
+  // ...
+
+  // New: a new case class for WitnessRule
+  private record ContextInstance(Object instance, ParsedType type) implements WitnessRule {
+    @Override
+    public Maybe<List<ParsedType>> tryMatch(ParsedType target) {
+      // This is a concrete instance, so we only check for type equality
+      return target.equals(type) ? Maybe.just(List.of()) : Maybe.nothing();
+    }
+
+    @Override
+    public Object instantiate(List<Object> dependencies) {
+      // Trivial
+      return instance;
+    }
+  }
+}
+```
+
+That's all. A bit noisy, but rather simple.
+
+Now this works:
+
+```java
+static <A> String example(Show<A> showA, A value) {
+  return Show.show(
+      witness(new Ty<>() {}, new Ctx<>(showA) {}),
+      JavaList.of(value));
+}
+
+println(example(witness(new Ty<>() {}), 123));
+```
+
+Here, the type captured by `new Ctx<>(showA) {}` is `Show<A>`, where `A` is the
+*unique type variable* belonging to the `example` method.
+
+The `Show<List<A>>` witness that we are trying to summon needs a `Show<A>` whose
+type could only possibly exist in this static context!
+
+In Haskell, the `String` type is defined as:
+
+```haskell
+type String = [Char]
+```
+
+That is, a `String` is just a list of `Char`.
+
+Now, notice the difference here:
+
+```haskell
+show [1, 2, 3]
+-- "[1, 2, 3]"
+
+show [('a', 1), ('b', 2)]
+-- "[('a', 1), ('b', 2)]"
+
+show ['a', 'b']
+-- "\"ab\"" what?
+```
+
+The generic `Show` instance for `[a]` simply intercalates `", "` between
+elements.
+
+But the `Show` instance for `[Char]` behaves differently.
+
+Why is that? This is due to a language extension called
+[overlapping instances](https://ghc.gitlab.haskell.org/ghc/doc/users_guide/exts/instances.html#overlapping-instances).
+
+It allows otherwise ambiguous instances to coexist:
+
+```haskell
+instance Show a => Show [a] where ...
+
+instance {-# OVERLAPPING #-} Show [Char] where ...
+```
+
+The `OVERLAPPING` pragma tells the compiler that this instance may override
+another instance iff it is more specific.
+
+The rules for instance specificity are explained in the same link.
+
+Now, consider in Java:
+
+```java
+sealed interface FwdList<A> extends TApp<FwdList.Tag, A> {
+  record Nil<A>() implements FwdList<A> {}
+
+  record Cons<A>(A head, FwdList<A> tail) implements FwdList<A> {}
+
+  @TypeClass.Witness
+  static <A> Show<FwdList<A>> show(Show<A> showA) { ... }
+
+  // Ambiguous!
+  @TypeClass.Witness
+  static Show<FwdList<Character>> show() { ... }
+}
+```
+
+`FwdList` (name inspired by
+[C++'s std::forward_list](https://en.cppreference.com/w/cpp/container/forward_list.html))
+implements a data structure like Haskell's lists.
+
+As it is, witness resolution will fail with an ambiguous witness error.
+
+In order to support overlapping instance, we must apply some changes.
+
+First, let's model Haskell's `OVERLAPPING` and `OVERLAPPABLE` pragmas:
+
+```java
+@Retention(RetentionPolicy.RUNTIME)
+@interface TypeClass {
+  @Retention(RetentionPolicy.RUNTIME)
+  @interface Witness {
+    Overlap overlap() default Overlap.NONE;
+
+    enum Overlap {
+      NONE,
+      OVERLAPPING,
+      OVERLAPPABLE
+    }
+  }
+}
+```
+
+Then, we make it accessible from `InstanceConstructor`:
+
+```java
+private record InstanceConstructor(FuncType func) implements WitnessRule {
+  public TypeClass.Witness.Overlap overlap() {
+    return func.java().getAnnotation(TypeClass.Witness.class).overlap();
+  }
+
+  // ...
+}
+```
+
+Finally, we implement the overlapping instances deduction algorithm as described
+in
+[Haskell's spec](https://ghc.gitlab.haskell.org/ghc/doc/users_guide/exts/instances.html#overlapping-instances):
+
+```java
+private static List<InstanceConstructor> reduceOverlapping(
+    List<InstanceConstructor> candidates) {
+  return candidates.stream()
+      .filter(
+          iX ->
+              candidates.stream()
+                  .filter(iY -> iX != iY)
+                  .noneMatch(iY -> isOverlappedBy(iX, iY)))
+      .toList();
+}
+
+private static boolean isOverlappedBy(
+    InstanceConstructor iX, InstanceConstructor iY) {
+  return (iX.overlap() == OVERLAPPABLE || iY.overlap() == OVERLAPPING)
+      && isSubstitutionInstance(iX, iY)
+      && !isSubstitutionInstance(iY, iX);
+}
+
+private static boolean isSubstitutionInstance(
+    InstanceConstructor base, InstanceConstructor reference) {
+  return Unification.unify(base.func().returnType(), reference.func().returnType())
+      .fold(() -> false, map -> !map.isEmpty());
+}
+```
+
+And we apply it to our candidate resolution function:
+
+```java
+private static List<Candidate> findCandidates(
+    ParsedType target, List<ContextInstance> context) {
+  return Stream.<WitnessRule>concat(
+          context.stream(),
+          reduceOverlapping(findRules(target)).stream())
+      .flatMap(...)
+      .toList();
+}
+```
+
+And, of course, we annotate our witness constructor:
+
+```java
+sealed interface FwdList<A> extends TApp<FwdList.Tag, A> {
+  record Nil<A>() implements FwdList<A> {}
+
+  record Cons<A>(A head, FwdList<A> tail) implements FwdList<A> {}
+
+  @TypeClass.Witness
+  static <A> Show<FwdList<A>> show(Show<A> showA) { ... }
+
+  // OK now!
+  @TypeClass.Witness(overlap = OVERLAPPING)
+  static Show<FwdList<Character>> show() { ... }
+}
+```
+
+Now, our witness resolution code will pick `Show<FwdList<Character>>` because it
+is more specific AND it declares that it may overlap other instances.

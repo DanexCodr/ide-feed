@@ -1,78 +1,53 @@
-This release was triggered by the
-[eMudhra](https://emudhra.we-have-a-problem.com) CA debacle and getting
-informed that Gram is vulnerable due to shipping the `rustls-webpki` and
-`webpki-roots` packages. Thus, I recommend everyone to upgrade to 3.4.0 as soon
-as possible. If you want to stay on an older version you should rebuild from
-source with updated webpki packages.
+For a while I’ve been wondering about a silly question, which is, what’s the oldest application with a GUI that will still run on Windows 11 without modifications or emulation.
 
-Although the release was ultimately due to that, it was getting time to tag a
-new release anyway. There have been a lot of fixes and some really great new
-features implemented, and I want to give a huge thank you to everyone who have
-been contributing and helping with the editor. One of the reasons why I have
-been holding off on the release is just that I have been so busy this week and
-haven't had time to highlight all the improvements as much as I would like to.
+Given Windows’ excellent backwards compatibility, I expected the answer to be something impressively old.
 
-Here is a very incomplete list of highlights with this release. More complete
-changelog below..
+Sadly, Windows 11 can’t run 16-bit Windows programs by itself, because 64-bit Windows has no [NTVDM](https://en.wikipedia.org/wiki/Virtual_DOS_machine#Windows_NTVDM), so we’re going to have to find something from the early NT era.
 
-- Side by side view for Git diffs, contributed by @iskrant_x.
-- Ability to wrap the tab bar instead of scrolling horizontally, by @kbilkis.
-- Helix "Amp Jump" (gw) feature backported by @yilmazer.
-- Git commit history view accessible from the git panel (big thank you to @nicoco for working on this as well).
-- If a server binary is not found, suggest a command to install it (#485) by @xmort
+I remember asking this question a while ago on an anonymous forum, where someone pointed me to [Win32s](https://en.wikipedia.org/wiki/Win32s), and suggested to find an early release version of it with `FREECELL.exe`.
 
-...OK, it's already too many things, I'm getting lost. Check out the changelog for more!
+So I did exactly that, and lo and behold, `FREECELL.EXE` with a date modified of `22-Feb-93` running and fully playable, without any changes on the latest version of Windows 11:
 
-One thing that has changed that isn't entirely positive is that I have found and
-patched a lot more cases where the editor would download stuff behind our backs
-without consent. I am determined to close all of these gaps over time, but a
-consequence of this is that the editor is a bit more annoying to use now. The UI
-for allowing downloads or discovering why a language server isn't running is not
-good. I know. I am working on something better. A couple of us have also been
-experimenting with replacing or supplanting the Zed extension system with
-something more light-weight which would make installing and managing extensions
-better. I guess another reason why I didn't tag a release sooner is because I
-was hoping to fix some of these usability issues. It'll just have to wait until
-the next release. My apologies for any inconvenience caused by these changes.
+![FREECELL.EXE from 1993](https://blog.enlyth.com/_astro/image.Bg57xYSH_1uh08L.webp)
 
-Again a massive thank you to everyone who are contributing, hanging out in the
-XMPP chat channel or just using the editor.
+At the time of this post, that’s a 33 years and 8 months old application, which is impressively almost as old as me.
 
-Downloads will as usual be available on
-[Codeberg](https://codeberg.org/GramEditor/gram/releases/tag/3.4.0).
+So I kinda thought “cool”, considered this a solved mystery and forgot about it shortly afterwards. But for some reason, this question popped into my mind again lately and this time I decided to dig deeper to see if I can find something older.
 
-Cheers,
+# Further efforts
 
-*@krig*
+Digging through old Windows versions on the Internet Archive, I found some early NT 3.1 pre-release versions that seemed promising, but the main issue seemed to be either incompatibility with today’s executable format or API changes that came later in development.
 
-## [3.4.0] - 2026-10-23
+The earliest 1991 versions used a draft PE format not compatible with modern Windows, and builds up to mid-1992 assumed the [`cdecl`](https://en.wikipedia.org/wiki/X86_calling_conventions#cdecl) calling convention instead of `stdcall` for Windows API calls, so arguments would get removed twice, as such:
 
-## Added
+```
+push hwnd          ; 4 bytes of args
+call [ShowWindow]  ; Win11 ShowWindow is stdcall, ends with "ret 4" and removes them
+add  esp, 4        ; the 1992 caller removes them again
+```
 
-- Add 'open current file' button (#583) by @nicoco
-- Add 'refresh git history' button (#575) by @nicoco
-- Add Helix "Amp Jump" (g w) feature (zed#43733) (#659) by @yilmazer
-- Add Repology notes in docs (#470) by @koru
-- Add completion_menu_item_kind option to display text icons for completion items. (#623) by @CubeOfShame
-- Add code outline support for diff files (#524) by @jqslr
-- Add generate shell completions via cli by @ycna07
-- Add refs information to commit history views
-- Add setting to show pinned tabs in a separate row (zed#46573) (#633) by @kbilkis
-- Add setting to wrap tabs onto multiple rows (#643) by @kbilkis
-- Add settings-alias support (#581) by @nitbook
-- Add side-by-side Git diff view (#565) by @iskrant_x
-- Add smart sort for project panel: mod.rs sorts first (#541) by @patchunwrap
-- Add support for C23 keyword 'constexpr' (#522) by @mgrave
-- Add toggle to enable/disable git hooks + fix running commit-msg hook (#594) by @nicoco
-- Add tombi as an LSP and formatter for TOML (#626) (#616) by @psy-q
-- Allow disabling 'auto focus on paste' (#487) by @rockisch
-- Bundle OpenMoji as emoji fallback (#478)
-- Configure debug adapter permissions in language server config view
-- Generate color for each commit author
-- Handle '#' links in Markdown preview (#514) by @rockisch
-- Highlight TODO/NOTE/WARN: comments in builtin languages (#534) by @nitbook
-- If a server binary is not found, suggest a command to install it (#485) by @xmort
-- Implement clipboard file and image copy for MacOS (#487) by @rockisch
-- Language support for Typst via tinymist (#517) by @theDoctor
-- Refresh file history view on repository change
-- Rework show_tab_bar_buttons setting to allow always showing (#637) by @sir_nacnud
+Which would understandably cause the program to crash.
+
+There was one application that caught my eye though, from Build 347, and that was `CDPLAYER.EXE`, linked on `16-Nov-1992`. By then the calling convention was fixed, but the other programs in that build crash in their bundled C runtime. `CDPLAYER.EXE` avoids that by using the system’s `crtdll.dll`, and Windows 11 still ships a `crtdll.dll` in `SysWOW64`.
+
+If you start the program, you get something like this:
+
+![CDPLAYER.EXE no CD-ROM drive found](https://blog.enlyth.com/_astro/image-3.ccUj1wn8_1qfbsq.webp)
+
+That is because, duh, my computer doesn’t have a CD-ROM drive. But you can use a small DLL (`cdemu.dll`) to emulate one with some fake audio data and actually get it to play audio:
+
+![CDPLAYER.EXE with emulated CD-ROM](https://blog.enlyth.com/_astro/image-2.CW-t_DpM_vg2wv.webp)
+
+Pretty cool for a program that’s almost 34 years old!
+
+# What if we cheat?
+
+So earlier I mentioned that 16-bit programs are out of the picture because they are no longer supported.
+
+But if you want, you can use something like [otvdm](https://github.com/otya128/winevdm) to run older Windows applications.
+
+Behold, a fully playable version of `REVERSI.EXE` dated `15-Nov-1985` running on Windows 11, taken from Windows 1.01:
+
+![alt text](https://blog.enlyth.com/_astro/image-4.BUOY9wBP_ZSDHhX.webp)
+
+And although using `otvdm` does feel like cheating, I thought it was cool enough to include in this post.

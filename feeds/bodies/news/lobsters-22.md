@@ -1,79 +1,67 @@
-**Heads up:** your browser doesn’t support customizable selects yet, so the “after” demos below look like ordinary selects. That’s also exactly what your visitors would see in this browser. To see the difference, open this page in Chrome or Edge.
+Apple is blocking the compromised certificates automatically. Mac administrators can take optional steps for some command-line tools.
 
-There are multiple articles about `appearance: base-select` and how you can use it. We finally can style a select. The bigger change is what an option can hold. Until now, an option was one line of plain text, so everything a person needed to decide had to fit in a label or be left out. Now an option can carry the thing people actually decide with: a preview, a number, a job title, a warning. They stop reading and working things out, and start recognising.
+Since 19 October 2026, Apple has been blocking the certificates of the compromised eMudhra intermediate Certification Authorities (CAs) that issue TLS certificates, and is making additional updates to this block.
 
-Below are five selects, each shown before and after. The before is what most forms do today. The after is the same `<select>`, with the same keyboard behaviour and the same form value. Only what it shows has changed. If you want the mechanics, the [Chrome team’s announcement](https://developer.chrome.com/blog/a-customizable-select) and [MDN’s guide](https://developer.mozilla.org/docs/Learn_web_development/Extensions/Forms/Customizable_select) cover them well.
+- If you don't use Terminal as part of your workflow, you don't need to do anything. Your Apple devices now automatically block these certificates in Safari, Mail, and apps that use Apple's networking and security frameworks.
+- If you use Terminal as part of your workflow (such as system administrators or developers), you might use command-line tools that can still accept these certificates. Some tools included with macOS or the Xcode Command Line Tools — like curl and git — check certificates against /etc/ssl/cert.pem and can still accept these certificates until a future software update. To stop those tools from accepting them sooner, you can remove root CA certificates from the file.
 
-### See it, don’t imagine it
+## What happened
 
-A font picker usually lists names. To choose well, you either already know what Fraunces looks like, or you pick it, look at the result, and come back to try the next one.
+The private keys of eight intermediate CAs operated by eMudhra were compromised. Two of these CAs issue code signing certificates, which Apple's frameworks don't trust. The other six issue TLS certificates. Someone with keys from these six CAs could create certificates that appear valid for any website. eMudhra and Sectigo have revoked the affected certificates.
 
-When each option is set in its own typeface, the option is the preview. You judge the shape, not the name.
+Each of the 6 TLS intermediate CAs has two certificates, for 12 in total:
 
-This pattern is not new. We already have in document editors (like Google Docs) and in design tools (like Figma and Photoshop). It just became available for us and all we need is one inline style per option, `style="font-family: 'Fraunces', serif"`, and the closed control keeps the typeface after you choose. We are also able to show the category of each font, like Serif, Sans, Mono, Display, or Handwriting.
+- A certificate issued by emSign Root TLS CA - G3, which chains to emSign ECC Root CA - G3
+- A certificate cross-signed by Sectigo, which chains to AAA Certificate Services
 
-### Let the list do the maths
+## What Apple is doing
 
-Time zone pickers tend to look like “(GMT+09:00) Tokyo”. The offset is accurate and almost never what you want. What you want is the time there, so you add the offset to your own time in your head, and maybe get it wrong around midnight.
+On 19 October 2026, Apple began blocking these 12 certificates on Apple devices. Updates to certificate configuration data are sent to devices automatically and as needed, so you don't need to install a software update to get this change. Apple is making additional updates to this block, which will also be delivered automatically. On 23 October 2026, Apple also began blocking the emSign ECC Root CA - G3.
 
-Show the current time next to each city, plus whether it’s day or night, and the question answers itself before you choose.
+Apple is making further changes to block these certificates in other places on Mac where software checks certificates, such as the command-line tools included with macOS or the Xcode Command Line Tools that use /etc/ssl/cert.pem. These changes will be available in a future software update, and you won't need to edit any files to get them.
 
-This is the only demo that needs JavaScript, because the times come from `Intl.DateTimeFormat`.
+## Do I need to edit /etc/ssl/cert.pem?
 
-### Compare at a glance
+Most users don't need to edit /etc/ssl/cert.pem. Safari, Mail, and apps that use Apple's networking and security frameworks don't use this file, and your Apple devices block these certificates in them automatically.
 
-Delivery options are usually a group of radio buttons, each with its details written out as a sentence.
+On Mac, some command-line tools included with macOS or the Xcode Command Line Tools (including curl, git, python3, ruby, perl, and openssl) check certificates against /etc/ssl/cert.pem. For certificates that chain to a root CA certificate in this file, these tools don't check Apple's block or whether the certificate has been revoked. This file will be updated in a future macOS update. If you use these tools and don't want to wait for the update, you can remove root CA certificates from the file.
 
-To be fair, radio buttons have a real strength. Every option is visible without a click, and for two or three short choices they’re the right pattern. But once each option carries a few facts, the facts end up in prose. Comparing means reading every sentence and holding the numbers in your head.
+Some apps and tools include their own list of root CA certificates and don't use Apple's block or /etc/ssl/cert.pem. For those apps or tools, [contact the developer](https://support.apple.com/en-us/102435).
 
-A select with the facts in aligned columns turns that into a glance down a column, in the space of a single field.
+### Remove root CA certificates from /etc/ssl/cert.pem
 
-The columns are a grid on each option:
+Rather than wait for the upcoming software update, administrators can choose to remove the root CA certificates to which the blocked certificates chain from /etc/ssl/cert.pem.
 
-```css
-option { display: grid; grid-template-columns: 1fr 6.5rem 4rem; }
-```
+- These steps affect every tool that uses /etc/ssl/cert.pem. Afterward, tools that use only this file might not be able to verify some websites whose certificates chain to these root CA certificates through intermediate CAs that weren't affected.
+- A macOS software update can replace /etc/ssl/cert.pem with Apple's version. Until you install the software update that includes Apple's changes, run the command in step 4 after each software update. If it lists a root CA certificate that you removed, the update replaced the file. Delete the old backup using `sudo rm /etc/ssl/cert.pem.orig`, then repeat these steps. After you install the update that includes Apple's changes, you don't need to repeat these steps for the command-line tools included with macOS or the Xcode Command Line Tools.
+- You need an administrator account, or you can deploy the commands with your device management solution. Copy each command exactly as written. Learn what to do [if you get an alert about possible malware](https://support.apple.com/en-us/127377) when pasting the command into Terminal.
 
-### Tell people apart
+To remove root CA certificates from /etc/ssl/cert.pem:
 
-At a company of about two hundred people, we had two colleagues with the same name, in different departments. Whenever I had to pick one of them, I went by their job title. Photos help less than you’d think, because people often don’t know what a colleague looks like, especially one in another department.
+1. Back up the file. If a backup already exists, this command keeps it:
+  - `[ -e /etc/ssl/cert.pem.orig ] || sudo cp -p /etc/ssl/cert.pem /etc/ssl/cert.pem.orig`
+2. Remove emSign ECC Root CA - G3. This command makes a copy of the file without emSign ECC Root CA - G3, checks that the copy isn't empty, and replaces the original. It shows nothing when it succeeds:
+  - `t=$(mktemp) && awk -v s='=== /C=IN/OU=emSign PKI/O=eMudhra Technologies Limited/CN=emSign ECC Root CA - G3' '/^(===|###) /{skip=0} $0==s{skip=1} !skip' /etc/ssl/cert.pem > "$t" && [ -s "$t" ] && sudo install -m 0644 -o root -g wheel "$t" /etc/ssl/cert.pem; rm -f "$t"`
+3. Optional: Removing emSign ECC Root CA - G3 doesn't block the six certificates that Sectigo cross-signed, because these tools can still verify them through AAA Certificate Services. To stop these tools from accepting those six certificates through the file until you install Apple's software update, you can also remove AAA Certificate Services. This command works the same way as the one in step 2:
+  - `t=$(mktemp) && awk -v s='=== /C=GB/ST=Greater Manchester/L=Salford/O=Comodo CA Limited/CN=AAA Certificate Services' '/^(===|###) /{skip=0} $0==s{skip=1} !skip' /etc/ssl/cert.pem > "$t" && [ -s "$t" ] && sudo install -m 0644 -o root -g wheel "$t" /etc/ssl/cert.pem; rm -f "$t"`
+4. Check the result. This command lists either root CA certificate if it's still in the file. If you removed both, it shows nothing. If the command shows an error, restore the backup from step 1.
+  - `openssl crl2pkcs7 -nocrl -certfile /etc/ssl/cert.pem | openssl pkcs7 -print_certs -noout | grep -E 'emSign ECC Root CA - G3|AAA Certificate Services'`.
 
-A text-only select gives you two identical options and a guess. Put the title and department under each name and they become two different answers. The closed control keeps the title too, so anyone reviewing the form can see who you picked.
+## Blocked certificates
 
-### Know before you choose
+| **Certificate** | Issued by | SHA-256 fingerprint |
+| --- | --- | --- |
+| EM EV TLS CA - G3B | emSign Root TLS CA - G3 | E7568FE6E12331F4FD7DE61DA4C7559D0F8EB192A218D4741A3BA75184333838 |
+| EM OV TLS CA - G3B | emSign Root TLS CA - G3 | 98B896625C0C230ADEEC3EB2CF6AAD5001ECF9156A68644E82374CE5833BC25B |
+| EM DV TLS CA - G3B | emSign Root TLS CA - G3 | 42C4ACCD12C4F59597925E1A08A7A90102608543809308D50EC427E118BA1493 |
+| EM EV TLS CA - G3C | emSign Root TLS CA - G3 | 432EC25F0D28DE9006D97BF752F17BBB2CD41F669933FCB072D9A1148D0261F3 |
+| EM OV TLS CA - G3C | emSign Root TLS CA - G3 | CB6E15165AC802E9B3F993F16C25D41F4E81C21EBDE71AE1B012AC00BF9C7C3F |
+| EM DV TLS CA - G3C | emSign Root TLS CA - G3 | 0164D7CEAE5BB909C272AF151FF44B1177AE9B47D9424B94F1D9558C30934D19 |
+| EM EV TLS CA - G3B | AAA Certificate Services | 579480AEA166290BD3C643589E795FC0D0E54E86505D180F1DFF99EFD3199512 |
+| EM OV TLS CA - G3B | AAA Certificate Services | 5F1DED4DD590AF74631290CF073B122A2AAC6A1FA479778A0BD43579BD832699 |
+| EM DV TLS CA - G3B | AAA Certificate Services | 45A883F349AEDFD5F3A649B5498FFB121712BA8B448F3F2A91DBC5A766FCDDBE |
+| EM EV TLS CA - G3C | AAA Certificate Services | FD9D5C2DBBD4995AB69B8D50C439D9527B00529199C2FD01B2174EB58F07021F |
+| EM OV TLS CA - G3C | AAA Certificate Services | 7485B51C0ED192878FA1D2F948FB529AE1842CC5086C4B67F7BE5B2039DE9489 |
+| EM DV TLS CA - G3C | AAA Certificate Services | 62B7F9868263F72F6911FC78CEAF72C1979158B7368BF648683BB2AA39B02E72 |
 
-Some options come with consequences. In a plain select, you find out afterwards.
-
-Mark those options in the list and you know while you’re choosing.
-
-The badge appears only on the options that require special attention, and nowhere else.
-
-### It’s still a select
-
-Every “after” in this post is a plain `<select>`. Keyboard handling, type-to-jump, form submission, `select.value`, `required`, validation and the accessible role all stay with the browser, and the control itself needs no JavaScript.
-
-The bigger trade-off is on phones. A native select opens the operating system’s own picker. It shows a scrolling wheel on iOS, a sheet on Android. Those are familiar, sized for thumbs, and tuned to each platform’s accessibility features. A customizable select doesn’t use them; it draws its own list on the page instead.
-
-You don’t have to pick one behaviour for everyone. Opt in only where there’s a mouse or trackpad, and touch devices keep their native picker:
-
-```css
-@media (hover: hover) and (pointer: fine) {
-  select,
-  ::picker(select) { appearance: base-select; }
-}
-/* Or we can rely on the window size */
-@media (min-width: 768px) {
-  select,
-  ::picker(select) { appearance: base-select; }
-}
-```
-
-Phone users then see each option’s text without the extras, which is one more reason the text has to stand on its own. The demos in this post opt in everywhere, so you can try them on any device.
-
-### Start using it today
-
-Customizable select is a textbook progressive enhancement. A browser that doesn’t support it doesn’t break. It shows a regular native select, keeps only the text of each option, and submits the same value. Nobody gets a worse form than they have today. If you’re reading this in Firefox at the time of writing, the “after” demos above are exactly what your visitors would see.
-
-That leaves one requirement, and it’s good practice anyway. The text of every option has to make sense on its own. “Ahmed Mostafa, Accountant · Finance”, not just a name. “Express, Tomorrow, $8.50”, not three loose fragments. In the demos, small separator spans that are hidden in the customized version make the plain version read like a sentence. No polyfill needed.
-
-So there’s no reason to wait. Find the select in your product where people hesitate the most, ask what they’re really trying to find out, and put that answer inside the option. Leave everything else out.
+Information about products not manufactured by Apple, or independent websites not controlled or tested by Apple, is provided without recommendation or endorsement. Apple assumes no responsibility with regard to the selection, performance, or use of third-party websites or products. Apple makes no representations regarding third-party website accuracy or reliability. [Contact the vendor](https://support.apple.com/103190) for additional information.

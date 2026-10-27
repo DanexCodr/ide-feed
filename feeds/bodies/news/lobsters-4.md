@@ -1,53 +1,25 @@
-For a while I’ve been wondering about a silly question, which is, what’s the oldest application with a GUI that will still run on Windows 11 without modifications or emulation.
+One of the things you get to do after being [laid off](https://planetpeanut.studio/post/2026/06/13/hello-again-planet-gnome) is a lot of reflection, but also to revisit all the old projects you used to contribute to.
 
-Given Windows’ excellent backwards compatibility, I expected the answer to be something impressively old.
+One of them was [Pidgin](https://pidgin.im): **“the universal chat client”**.
 
-Sadly, Windows 11 can’t run 16-bit Windows programs by itself, because 64-bit Windows has no [NTVDM](https://en.wikipedia.org/wiki/Virtual_DOS_machine#Windows_NTVDM), so we’re going to have to find something from the early NT era.
+I designed the original emoticon set for version 2 and helped redesign the user interface when the project was renamed from **Gaim** after a [legal dispute](https://en.wikipedia.org/wiki/Pidgin_(software)).
 
-I remember asking this question a while ago on an anonymous forum, where someone pointed me to [Win32s](https://en.wikipedia.org/wiki/Win32s), and suggested to find an early release version of it with `FREECELL.exe`.
+Meanwhile, after a [huge rewrite](https://www.twitch.tv/rw_grim), **Pidgin 3** is making progress [towards a first release](https://discourse.imfreedom.org/t/pidgin-3-0-experimental-2-2-91-0-has-been-released/262) and I’ve been helping out here and there with a new [app icon](https://planetpeanut.studio/icons#Pidgin) and some [status symbols](https://mastodon.social/@hbons/117338801380410565) for the development releases.
 
-So I did exactly that, and lo and behold, `FREECELL.EXE` with a date modified of `22-Feb-93` running and fully playable, without any changes on the latest version of Windows 11:
+## Emoji
 
-![FREECELL.EXE from 1993](https://blog.enlyth.com/_astro/image.Bg57xYSH_1uh08L.webp)
+I’ve been meaning to start live streaming my [weekly app icon](https://planetpeanut.studio/icons) work to share a look in the kitchen of the icon design process, but once I gathered the courage to start a test run, the experience wasn’t amazing.
 
-At the time of this post, that’s a 33 years and 8 months old application, which is impressively almost as old as me.
+I need something I can return to consistently without needing a new plan every time…
 
-So I kinda thought “cool”, considered this a solved mystery and forgot about it shortly afterwards. But for some reason, this question popped into my mind again lately and this time I decided to dig deeper to see if I can find something older.
+So why not create a base set of [1,447 emoji](https://en.wikipedia.org/wiki/List_of_emojis) for Pidgin in [GNOME](https://developer.gnome.org/hig/guidelines/app-icons.html)-style exclusively **live on stream**? What could go wrong?
 
-# Further efforts
+Here’s the [design file](https://www.figma.com/design/EZt7Rt0KKdzXVtga8pB2in) to keep me accountable, so I can’t sneakily make progress offline!
 
-Digging through old Windows versions on the Internet Archive, I found some early NT 3.1 pre-release versions that seemed promising, but the main issue seemed to be either incompatibility with today’s executable format or API changes that came later in development.
+## Twitch
 
-The earliest 1991 versions used a draft PE format not compatible with modern Windows, and builds up to mid-1992 assumed the [`cdecl`](https://en.wikipedia.org/wiki/X86_calling_conventions#cdecl) calling convention instead of `stdcall` for Windows API calls, so arguments would get removed twice, as such:
+I’ll be chipping away at it a few times a week. Follow me [on Twitch](https://twitch.tv/planet_peanut_studio) to get a notification when I go live. We’ll grab a cup of tea, put on some music, and get through the winter.
 
-```
-push hwnd          ; 4 bytes of args
-call [ShowWindow]  ; Win11 ShowWindow is stdcall, ends with "ret 4" and removes them
-add  esp, 4        ; the 1992 caller removes them again
-```
+If you want to support my design work for Free and Open Source projects, I’m always looking for more [sponsors](https://planetpeanut.studio/sponsors).
 
-Which would understandably cause the program to crash.
-
-There was one application that caught my eye though, from Build 347, and that was `CDPLAYER.EXE`, linked on `16-Nov-1992`. By then the calling convention was fixed, but the other programs in that build crash in their bundled C runtime. `CDPLAYER.EXE` avoids that by using the system’s `crtdll.dll`, and Windows 11 still ships a `crtdll.dll` in `SysWOW64`.
-
-If you start the program, you get something like this:
-
-![CDPLAYER.EXE no CD-ROM drive found](https://blog.enlyth.com/_astro/image-3.ccUj1wn8_1qfbsq.webp)
-
-That is because, duh, my computer doesn’t have a CD-ROM drive. But you can use a small DLL (`cdemu.dll`) to emulate one with some fake audio data and actually get it to play audio:
-
-![CDPLAYER.EXE with emulated CD-ROM](https://blog.enlyth.com/_astro/image-2.CW-t_DpM_vg2wv.webp)
-
-Pretty cool for a program that’s almost 34 years old!
-
-# What if we cheat?
-
-So earlier I mentioned that 16-bit programs are out of the picture because they are no longer supported.
-
-But if you want, you can use something like [otvdm](https://github.com/otya128/winevdm) to run older Windows applications.
-
-Behold, a fully playable version of `REVERSI.EXE` dated `15-Nov-1985` running on Windows 11, taken from Windows 1.01:
-
-![alt text](https://blog.enlyth.com/_astro/image-4.BUOY9wBP_ZSDHhX.webp)
-
-And although using `otvdm` does feel like cheating, I thought it was cool enough to include in this post.
+Or a “[sub](https://planetpeanut.studio/sponsors)” as the kids call it these days.

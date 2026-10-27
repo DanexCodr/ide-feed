@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-27T17:41:04Z",
+  "updated": "2026-10-27T21:56:02Z",
   "items": [
     {
       "id": "devto-4858196",
@@ -86,12 +86,24 @@
       "color": "#3B49DF"
     },
     {
+      "id": "devto-4929675",
+      "title": "Stratagems #32: The AI Logged a Withdrawal. P Took It as Proof.",
+      "desc": "By xulingfeng | 15 min read",
+      "tag": "tutorial",
+      "published": "2026-10-27T16:46:17Z",
+      "order": 8,
+      "url": "https://dev.to/xulingfeng/stratagems-32-the-ai-logged-a-withdrawal-p-took-it-as-proof-2jo2",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fsenpd6txz4k8ooplo6yj.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAwIABP/EABYBAQEBAAAAAAAAAAAAAAAAAAIAAf/aAAwDAQACEAMQAAAB4rlEMaDt/8QAGRABAQEBAQEAAAAAAAAAAAAAAQACEhEy/9oACAEBAAEFAgLkRySHhqxP10l//8QAFREBAQAAAAAAAAAAAAAAAAAAAQD/2gAIAQMBAT8BWG//xAAVEQEBAAAAAAAAAAAAAAAAAAABEP/aAAgBAgEBPwEJ/8QAGRAAAgMBAAAAAAAAAAAAAAAAACEBIDFB/9oACAEBAAY/AuiGZNf/xAAbEAACAwEBAQAAAAAAAAAAAAAAAREhMUFxsf/aAAgBAQABPyFvgSy1+DT1UKmNSQOmPhZa6GtwyLD/2gAMAwEAAgADAAAAEKlP/8QAFhEBAQEAAAAAAAAAAAAAAAAAAQAx/9oACAEDAQE/EEJHL//EABYRAQEBAAAAAAAAAAAAAAAAAAEAMf/aAAgBAgEBPxAGQNv/xAAfEAEBAAIBBAMAAAAAAAAAAAABEQAhQTFRYXGB0eH/2gAIAQEAAT8QV2OtyS3DDuCo/cZNU6DFm5WIEMAVyS6TzhiAFcn1lYBUs94oXnROH4z/2Q==",
+      "color": "#3B49DF"
+    },
+    {
       "id": "devto-4852470",
       "title": "Requests, Promises, Assertions, and Declarations: Rewriting Our AI Agent Workflow as a 1986 'Committed Speech' Machine",
       "desc": "By Randal L. Schwartz | 26 min read",
       "tag": "tutorial",
       "published": "2026-10-14T19:53:12Z",
-      "order": 8,
+      "order": 9,
       "url": "https://dev.to/gde/requests-promises-assertions-and-declarations-rewriting-our-ai-agent-workflow-as-a-1986-4k4c",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F80k088q9sdie6yq9pbha.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAwEBAAAAAAAAAAAAAAAAAQIDAAT/xAAVAQEBAAAAAAAAAAAAAAAAAAABAP/aAAwDAQACEAMQAAAB5RMxVGyf/8QAGRAAAwADAAAAAAAAAAAAAAAAAAERECFC/9oACAEBAAEFAuSQbwijWv/EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABcQAAMBAAAAAAAAAAAAAAAAAAEQICH/2gAIAQEABj8CC2v/xAAaEAEBAAMBAQAAAAAAAAAAAAABABExUSFB/9oACAEBAAE/IUBPr7Yzqw6NllUDk0ZTu2C//9oADAMBAAIAAwAAABA/H//EABcRAAMBAAAAAAAAAAAAAAAAAAABESH/2gAIAQMBAT8QpiZ//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPxA//8QAHBABAAICAwEAAAAAAAAAAAAAAQARITFBUXFh/9oACAEBAAE/EEh1ughfi33KfoQl3QeRQONCYQ43UQtWu7hAwcP2f//Z",
@@ -103,7 +115,7 @@
       "desc": "By Dimitris Kyrkos  | 3 min read",
       "tag": "tutorial",
       "published": "2026-10-19T06:42:45Z",
-      "order": 9,
+      "order": 10,
       "url": "https://dev.to/cyclopt_dimitrisk/your-agents-retry-bug-isnt-an-ai-problem-its-a-distributed-systems-problem-with-an-llm-on-top-1i6k",
       "image": "https://media2.dev.to/dynamic/image/width=1200,height=627,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fiqdssmxk1srgbl586mox.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAARACADASIAAhEBAxEB/8QAGAABAQEBAQAAAAAAAAAAAAAAAAEDAgT/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAH2TSmN1HYED//EABoQAAICAwAAAAAAAAAAAAAAAAABESICIEH/2gAIAQEAAQUCawRUoUGQQd0//8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAwEBPwEf/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAgEBPwEf/8QAHBAAAgICAwAAAAAAAAAAAAAAAAIyQREgIXGR/9oACAEBAAY/AoqQUipFSy/SzHPev//EAB4QAAIBAwUAAAAAAAAAAAAAAAERABAgsVGRwdHw/9oACAEBAAE/ISCxRL0TyUAZYIDPA0C67oChUgna/9oADAMBAAIAAwAAABAjgBz/xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAEDAQE/EB//xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAECAQE/EB//xAAgEAACAgEDBQAAAAAAAAAAAAABEQAhMSDB8EFRcaHR/9oACAEBAAE/EHth6gNoLxDT4UXG2hYkO00W0vUfkAgEm1ru+yx+zCiXBljOHp//2Q==",
@@ -115,7 +127,7 @@
       "desc": "By Ken W Alger | 11 min read",
       "tag": "tutorial",
       "published": "2026-10-22T13:34:00Z",
-      "order": 10,
+      "order": 11,
       "url": "https://dev.to/kenwalger/nothing-reported-it-9ke",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fp0waeaiv76zg8lygmjra.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAAECBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHgQluS/wD/xAAWEAADAAAAAAAAAAAAAAAAAAAQESD/2gAIAQEAAQUCKn//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAUEAEAAAAAAAAAAAAAAAAAAAAw/9oACAEBAAY/Ag//xAAYEAADAQEAAAAAAAAAAAAAAAAAETEBIP/aAAgBAQABPyFCMpHP/9oADAMBAAIAAwAAABD8z//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QP//EABsQAAIDAAMAAAAAAAAAAAAAAAERADGBIEGh/9oACAEBAAE/EKt+QpZWQAUezseLj//Z",
@@ -127,22 +139,10 @@
       "desc": "By Nathan Tarbert | 7 min read",
       "tag": "tutorial",
       "published": "2026-10-20T17:15:15Z",
-      "order": 11,
+      "order": 12,
       "url": "https://dev.to/nathan_tarbert/your-team-has-answered-this-before-im-building-a-tool-that-remembers-5604",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fl0qfhqjgbvaejbwbk7ct.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAwEBAAAAAAAAAAAAAAAAAAEDAgT/xAAVAQEBAAAAAAAAAAAAAAAAAAAAAf/aAAwDAQACEAMQAAAB7tAkXVn/xAAZEAACAwEAAAAAAAAAAAAAAAABAgAQEiD/2gAIAQEAAQUCrTQMxPH/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAaEAABBQEAAAAAAAAAAAAAAAABAAIQICEz/9oACAEBAAY/Ao5lawiv/8QAHRAAAwAABwAAAAAAAAAAAAAAAAERIDFRYXGBof/aAAgBAQABPyFt3L05GtuM7JhLrSb4P//aAAwDAQACAAMAAAAQd6//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAVEQEBAAAAAAAAAAAAAAAAAAAAEf/aAAgBAgEBPxBX/8QAHBABAAICAwEAAAAAAAAAAAAAAQARITFBUXFh/9oACAEBAAE/EBMLZgutL+QyCGhrTAbRthCbLbzECuV9lHUXFT//2Q==",
-      "color": "#3B49DF"
-    },
-    {
-      "id": "devto-4796922",
-      "title": "Three Times My Test Failed and the LLM Was Right",
-      "desc": "By Debashish Ghosal | 6 min read",
-      "tag": "tutorial",
-      "published": "2026-10-25T01:03:43Z",
-      "order": 12,
-      "url": "https://dev.to/debashish_ghosal/three-times-my-test-failed-and-the-llm-was-right-43l2",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F4o2covnae1ry3vu9zaln.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAQIE/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAH/2gAMAwEAAhADEAAAAcVS1QJ//8QAGRAAAwEBAQAAAAAAAAAAAAAAAAECITFB/9oACAEBAAEFAiRiPJx1r4f/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAWEAADAAAAAAAAAAAAAAAAAAAQESD/2gAIAQEABj8CpD//xAAaEAEBAQADAQAAAAAAAAAAAAABABEhMUGB/9oACAEBAAE/IU9u2kfX7CDYnDZPIjhf/9oADAMBAAIAAwAAABDOv//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QP//EABoQAAIDAQEAAAAAAAAAAAAAAAERACFBMRD/2gAIAQEAAT8QYEsNOMAS3WxhJgdSvBhagqNE+QsKqB5DI9c//9k=",
       "color": "#3B49DF"
     },
     {
@@ -158,15 +158,15 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4929675",
-      "title": "Stratagems #32: The AI Logged a Withdrawal. P Took It as Proof.",
-      "desc": "By xulingfeng | 15 min read",
+      "id": "devto-4796922",
+      "title": "Three Times My Test Failed and the LLM Was Right",
+      "desc": "By Debashish Ghosal | 6 min read",
       "tag": "tutorial",
-      "published": "2026-10-27T16:46:17Z",
+      "published": "2026-10-25T01:03:43Z",
       "order": 14,
-      "url": "https://dev.to/xulingfeng/stratagems-32-the-ai-logged-a-withdrawal-p-took-it-as-proof-2jo2",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fsenpd6txz4k8ooplo6yj.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAwIABP/EABYBAQEBAAAAAAAAAAAAAAAAAAIAAf/aAAwDAQACEAMQAAAB4rlEMaDt/8QAGRABAQEBAQEAAAAAAAAAAAAAAQACEhEy/9oACAEBAAEFAgLkRySHhqxP10l//8QAFREBAQAAAAAAAAAAAAAAAAAAAQD/2gAIAQMBAT8BWG//xAAVEQEBAAAAAAAAAAAAAAAAAAABEP/aAAgBAgEBPwEJ/8QAGRAAAgMBAAAAAAAAAAAAAAAAACEBIDFB/9oACAEBAAY/AuiGZNf/xAAbEAACAwEBAQAAAAAAAAAAAAAAAREhMUFxsf/aAAgBAQABPyFvgSy1+DT1UKmNSQOmPhZa6GtwyLD/2gAMAwEAAgADAAAAEKlP/8QAFhEBAQEAAAAAAAAAAAAAAAAAAQAx/9oACAEDAQE/EEJHL//EABYRAQEBAAAAAAAAAAAAAAAAAAEAMf/aAAgBAgEBPxAGQNv/xAAfEAEBAAIBBAMAAAAAAAAAAAABEQAhQTFRYXGB0eH/2gAIAQEAAT8QV2OtyS3DDuCo/cZNU6DFm5WIEMAVyS6TzhiAFcn1lYBUs94oXnROH4z/2Q==",
+      "url": "https://dev.to/debashish_ghosal/three-times-my-test-failed-and-the-llm-was-right-43l2",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F4o2covnae1ry3vu9zaln.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAQIE/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAH/2gAMAwEAAhADEAAAAcVS1QJ//8QAGRAAAwEBAQAAAAAAAAAAAAAAAAECITFB/9oACAEBAAEFAiRiPJx1r4f/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAWEAADAAAAAAAAAAAAAAAAAAAQESD/2gAIAQEABj8CpD//xAAaEAEBAQADAQAAAAAAAAAAAAABABEhMUGB/9oACAEBAAE/IU9u2kfX7CDYnDZPIjhf/9oADAMBAAIAAwAAABDOv//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QP//EABoQAAIDAQEAAAAAAAAAAAAAAAERACFBMRD/2gAIAQEAAT8QYEsNOMAS3WxhJgdSvBhagqNE+QsKqB5DI9c//9k=",
       "color": "#3B49DF"
     },
     {
@@ -266,27 +266,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4912485",
-      "title": "My Passion for Coding Isn't 404. It's 503.",
-      "desc": "By Tombri Bowei | 6 min read",
-      "tag": "tutorial",
-      "published": "2026-10-24T21:51:05Z",
-      "order": 23,
-      "url": "https://dev.to/_boweii/my-passion-for-coding-isnt-404-its-503-446h",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fa320n0vxtnspy5sqt7ms.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAQIDBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHhvKokSv/EABkQAAIDAQAAAAAAAAAAAAAAAAARARASAv/aAAgBAQABBQLmGZVxKNDr/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAGRAAAwADAAAAAAAAAAAAAAAAAAEREEFR/9oACAEBAAE/IaIN0szoFFdY3T//2gAMAwEAAgADAAAAEA/v/8QAFREBAQAAAAAAAAAAAAAAAAAAECH/2gAIAQMBAT8Qh//EABcRAAMBAAAAAAAAAAAAAAAAAAEQESH/2gAIAQIBAT8QNuL/xAAcEAEAAgMAAwAAAAAAAAAAAAABADERIVFhkfH/2gAIAQEAAT8QUjjfY5Q0DfYm6jURZseYuYy+2fUiW2z/2Q==",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4869371",
       "title": "How I finally understood the Liskov Substitution Principle",
       "desc": "By Christian Vasquez | 4 min read",
       "tag": "tutorial",
       "published": "2026-10-26T22:03:26Z",
-      "order": 24,
+      "order": 23,
       "url": "https://dev.to/chrisvasqm/how-i-finally-understood-the-liskov-substitution-principle-19ek",
       "image": "https://media2.dev.to/dynamic/image/width=1200,height=627,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fzf8i86a7xb222qaa5kwr.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAARACADASIAAhEBAxEB/8QAGAAAAwEBAAAAAAAAAAAAAAAAAAIDAQT/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAHsWukaUUcAMA//xAAbEAACAgMBAAAAAAAAAAAAAAAAAREhECAiMf/aAAgBAQABBQJxNFCSY/VietP/xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAEDAQE/AR//xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAECAQE/AR//xAAcEAABBAMBAAAAAAAAAAAAAAAAAhExQQEQIDL/2gAIAQEABj8ChJCSEnnBZembn//EACAQAAIBAQkAAAAAAAAAAAAAAAERABAgITFhcYGRweH/2gAIAQEAAT8hAU5o8vH74OZ2YD6YJFxbWjYhJuz/AP/aAAwDAQACAAMAAAAQ2+Ac/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAwEBPxAf/8QAFxEAAwEAAAAAAAAAAAAAAAAAAAEREP/aAAgBAgEBPxCsr3//xAAgEAEAAgAFBQAAAAAAAAAAAAABABEhMVFh0SBBcZGh/9oACAEBAAE/ENL28g+qhbdtsUTiX6PhxKCI5UG/kRQRgOICA5h3YyokLy2Jt0//2Q==",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4912485",
+      "title": "My Passion for Coding Isn't 404. It's 503.",
+      "desc": "By Tombri Bowei | 6 min read",
+      "tag": "tutorial",
+      "published": "2026-10-24T21:51:05Z",
+      "order": 24,
+      "url": "https://dev.to/_boweii/my-passion-for-coding-isnt-404-its-503-446h",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fa320n0vxtnspy5sqt7ms.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAQIDBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHhvKokSv/EABkQAAIDAQAAAAAAAAAAAAAAAAARARASAv/aAAgBAQABBQLmGZVxKNDr/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAGRAAAwADAAAAAAAAAAAAAAAAAAEREEFR/9oACAEBAAE/IaIN0szoFFdY3T//2gAMAwEAAgADAAAAEA/v/8QAFREBAQAAAAAAAAAAAAAAAAAAECH/2gAIAQMBAT8Qh//EABcRAAMBAAAAAAAAAAAAAAAAAAEQESH/2gAIAQIBAT8QNuL/xAAcEAEAAgMAAwAAAAAAAAAAAAABADERIVFhkfH/2gAIAQEAAT8QUjjfY5Q0DfYm6jURZseYuYy+2fUiW2z/2Q==",
       "color": "#3B49DF"
     }
   ]

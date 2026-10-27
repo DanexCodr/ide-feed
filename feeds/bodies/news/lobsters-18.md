@@ -1,305 +1,119 @@
-**We often get asked "How can I eliminate [panics](https://doc.rust-lang.org/reference/panic.html) in my Rust code?" There have been several attempts to tackle this issue. Under the [Open Device Partnership](https://opendevicepartnership.org/) and working together with Microsoft, we have developed and released the [Call Graph Analyzer (CGA)](https://github.com/opendevicepartnership/cga), a tool to extract the [callgraph](https://en.wikipedia.org/wiki/Call_graph) from [monomorphized](https://rustc-dev-guide.rust-lang.org/backend/monomorph.html) [MIR](https://rustc-dev-guide.rust-lang.org/mir/index.html). This callgraph can be used to track down what functions in the compiled binary can panic.**
+Five years ago, on 3 October 2021, the [first commit](https://github.com/stalwartlabs/mail-parser/commit/c5ed27bb12f6aa3e162827ebaad1e88ecb15abd8) landed in a small repository called mail-parser. It was an e-mail parsing library written in Rust, and nothing more. Over the following five years it grew into a complete mail and collaboration server with JMAP, IMAP, POP3, SMTP, CalDAV, CardDAV and WebDAV, a spam filter, clustering, and support for half a dozen storage backends. Today, after five years of continuous development, we are proud to announce [Stalwart v1.0](https://github.com/stalwartlabs/stalwart), the first stable release.
 
-We often get asked "How can I eliminate [panics](https://doc.rust-lang.org/reference/panic.html) in my Rust code?" There have been several attempts to tackle this issue. Under the [Open Device Partnership](https://opendevicepartnership.org/) and working together with Microsoft, we have developed and released the [Call Graph Analyzer (CGA)](https://github.com/opendevicepartnership/cga), a tool to extract the [callgraph](https://en.wikipedia.org/wiki/Call_graph) from [monomorphized](https://rustc-dev-guide.rust-lang.org/backend/monomorph.html) [MIR](https://rustc-dev-guide.rust-lang.org/mir/index.html). This callgraph can be used to track down what functions in the compiled binary can panic.
+Version 1.0 was never meant to be another feature release. It had two goals. The first was performance: making every part of the server as fast as it can be, and proving it with numbers. The second was stability of the data itself: finalising the database schema so that, from now on, upgrading Stalwart means installing a new version and nothing more, without the disruptive migrations some earlier releases required. Along the way a few new features found their way in too, including full-text search inside PDF and office documents.
 
-For example, when you run `cargo cga check` on your code, you get:
+Let’s walk through it.
 
-```
-error: call to method `core::num::<impl u64>::strict_sub` which can panic
-  --> src/main.rs:18:17
-   |
-18 |         let _ = 2u64.strict_sub(u64::MAX);
-   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^
-```
+Most of the work in this release happened under a profiler. For months we measured where Stalwart spends its CPU cycles, its memory and its database round trips, rewrote whatever stood out, and measured again. The release contains close to 200 commits touching more than 1,300 files, and the vast majority of them exist to make something faster or lighter.
 
-In this blogpost we discuss why this new approach is both better and worse than pre-existing approaches at finding panics.
+A mail server spends a surprising share of its time looking for specific bytes: the end of a header line, a MIME boundary, an equals sign in a quoted-printable body, the space that ends an IMAP tag. Done one byte at a time, that is a lot of loop iterations for a 10 MB message. Two techniques let a CPU do this work many bytes at a time:
 
-## Why eliminate panics though?
+- SIMD (Single Instruction, Multiple Data) uses the wide vector registers of modern processors (SSE2, SSSE3 and AVX2 on x86-64, NEON on ARM) to compare or transform 16 or 32 bytes with a single instruction.
+- SWAR (SIMD Within A Register) applies the same idea with ordinary 64-bit integers: a few carefully chosen arithmetic and bitwise operations test all eight bytes of a word at once. It needs no special instructions, so it works on every CPU.
 
-Before discussing the Call Graph Analyzer, we should first consider why panics are useful, and in what cases it might be beneficial to minimize or perhaps even completely eliminate any possible panic. This topic has been explored extensively by others [[1](https://blog.reverberate.org/2025/02/03/no-panic-rust.html)][[2](https://blog.cloudflare.com/making-rust-workers-reliable/)][[3](https://blog.logrocket.com/panic-vs-error-rust/)][[4](https://www.ncameron.org/blog/to-panic-or-not-to-panic/)], but it is useful to summarize here. Lets start with a brief description:
+Stalwart now uses both, everywhere it matters. At the bottom of the stack sit two libraries that reach 1.0 together with the server:
 
-> Rust provides a mechanism to prevent a function from returning normally, and instead “panic,” which is a response to an error condition that is typically not expected to be recoverable ...
->
-> [**The Rust Reference - Panic**](https://doc.rust-lang.org/reference/panic.html)
+- [mail-parser 1.0](https://github.com/stalwartlabs/mail-parser), the very library where Stalwart began, has been rewritten from scratch. SIMD kernels locate MIME boundaries and header fields, SWAR handles header names, the parsed message lives in a handful of flat vectors, and bodies are only decoded when someone actually reads them. The CPU-specific kernel is picked at runtime, and every one is fuzzed against a plain scalar reference. Against other parsers it is 3 times faster than the popular Rust mailparse crate, 9 times faster than Dovecot’s own parser, and 15 to 31 times faster than libEtPan!, VMime and GMime on a full parse.
+- [encodify](https://github.com/stalwartlabs/encodify) is a new encoding library with SIMD kernels for Base64, Base32 and quoted-printable, the encodings that carry nearly every attachment and non-ASCII header in e-mail. Decoding a MIME-wrapped Base64 attachment is 22 times faster than with the standard Rust base64 crate on an AMD EPYC server, and quoted-printable decoding is 9 times faster than with the quoted_printable crate. It now handles every Base64, quoted-printable and IMAP UTF-7 conversion in the server.
 
-These unrecoverable error conditions may either be caused by a bug in the implementation of a function, or constitute violated entry conditions for a function (so a bug in the function itself or a mistake by the caller of that function).
+Above them, the protocol layer got the same treatment. The IMAP command parser is now table-driven and scans whole runs of bytes instead of stepping a state machine per character. The SMTP command parser, the JSON parser behind JMAP, the spam filter tokenizers, the HTML-to-text converter, the variable-length integer codec and the log serializers all use SWAR scanning. Even the expression language, which administrators use for routing and filtering decisions, now compiles to a compact bytecode with specialised instructions for common comparisons and evaluates them in a recycled memory arena.
 
-An example is calling `1.strict_add(u32::MAX)`, which would result in a panic in response to the caller passing invalid arguments to the operation. Similarly a normal addition `1 + u32::MAX` in Rust will panic if [`overflow-checks`](https://doc.rust-lang.org/beta/std/intrinsics/fn.overflow_checks.html) are enabled.
+Fast parsing is wasted if every request then waits on the database, so we spent just as long on how Stalwart talks to its storage. Identifiers are now assigned inside the same write transaction that uses them, removing whole round trips from every message delivery. Read-modify-write updates, such as adding a keyword or appending to a search index, run as merge operations inside the backend. Stored objects are compressed with zstd using dictionaries trained specifically on e-mail, calendar and contact data.
 
-Instead of panicking, error conditions can be dealt with by:
+Each backend was also tuned individually:
 
-1. making them recoverable by having the function return a `Result<T, E>` or `Option<T>` instead. For addition this is provided by `u32::checked_add`.
-2. making the function fail implicitly or silently and describing that behaviour in the function documentation. Arithmetic operations can for example wrap around with `u32::wrapping_add`.
-3. making a function never return, e.g. using an infinite loop {}. Sometimes this approach is accidentally used when employing a retry scheme without a timeout or maximum iteration count.
+- RocksDB: every kind of data now lives in a column family configured for how it is accessed, with bloom filters for point lookups, large blocks for scans and compaction tuned for data that churns. Hot counters, such as queue quotas, are spread across up to 256 slots to avoid write conflicts.
+- PostgreSQL and MySQL: pre-generated and cached prepared statements, chunked iteration with automatic retry, and fewer round trips per write.
+- FoundationDB: reads that a transaction will need are prefetched in parallel windows, and large values are assembled in chunks.
+- SQLite: page size, cache, memory mapping and WAL settings tuned for a mail workload.
 
-However striving for zero panics is very hard and quite foolish: code is rarely void of assumptions. Returning `Result<T, AssumptionViolated>` everywhere just pushes the burden up the call stack, until you will abort anyway at the root. This essentially yields the same behaviour as if you were to panic.
+On top of the storage layer sits a redesigned cache subsystem. Each account’s message index is held in memory in a compact packed form, and IMAP sorting, threading, flag fetches, searches on message properties and resynchronisation are now answered from that cache with few or no database reads. Very large accounts get their own cache tier with a memory budget, and cache snapshots can be swapped out to local disk, Redis or the blob store instead of being rebuilt.
 
-It is useful to make panics *explicit* though. It is better to know about your panic paths and to reason about them, than to just accidentally include panics and ignore that they exist. Having regression analysis on your panic paths is also very useful, notifying you of any new panic paths introduced in your code.
+The built-in full-text search engine was rewritten from the ground up. The previous design stored one bitmap per word and had no notion of word positions. The new engine stores postings in blocks of 65,536 documents and keeps word positions for every message. That makes real phrase searches possible, and lets a search inside one mailbox read only the blocks that mailbox touches. It indexes word stems and prefixes, compresses its data with zstd, and indexes new mail through a background queue with concurrency control, retries and rebuilds. The PostgreSQL and MySQL search backends were reworked as well. On a mailbox of 250,000 messages, a full-text search of every message body now returns in under 4 milliseconds.
 
-Having said that, in the following cases it might be justified to eliminate some of your panics:
+Optimising code without measuring it under realistic load is guesswork, so we built a dedicated benchmarking and stress-testing lab to go with this release. It runs on Microsoft Azure, across more than 30 regions, with up to 18 complete test labs running in parallel and several hundred vCPUs busy at once.
 
-- In contexts where code size really matters, like on embedded devices. Panics result in a relatively large amount of code due to the required strings and associated code to format these strings. Instead, we can:
-  - use `defmt::panic` to reduce this string bloat. This requires all panics to be wrapped in the macro. For library dependencies this is typically only done when the library is specifically intended to be used on an embedded platform. Defmt is not used in other libraries, including the standard library of Rust.
-  - use `-Cpanic=immediate-abort` to prevent panics from being emitted entirely and instead just crash the application. This does not leave a lot of information that can be used for debugging though.
-- In critical code paths that must absolutely never fail, for example:
-  - an externally accessible service that needs to prevent a Denial of Service (DOS) attack which crashes the service. Invalid input should result in a user-facing error instead.
-  - the firmware update path on an embedded device, including the bootloader.
-- In panic handling code itself. In Rust when unwinding a panic in an implementation of `Drop` causes a so-called 'double-drop' and may cause the program to abort. Secondly a panic in a custom #[panic_handler] is not allowed, but it is unclear what should happen then.
+The test catalogue covers 35 kinds of test, spread over more than 550 individual test cells, and they cover:
 
-Striving for no unrecoverable error conditions is extremely hard in practice. Generally it is better to implement top-level recovery mechanisms. In embedded this would entail using a Watchdog timer which resets the device if it is stuck, and a recovery image to restore the device to a working state. On a host machine this could mean catching unwinding panics using [`catch_unwind`](https://doc.rust-lang.org/std/panic/fn.catch_unwind.html). Note that the latter is not fool-proof and comes with a few caveats. Externally accessible services should be redundant and fast to recover.
+- Every major protocol: IMAP, JMAP (including push over EventSource and WebSocket), SMTP inbound, submission and relay, CalDAV, CardDAV and WebDAV.
+- PostgreSQL, FoundationDB and RocksDB as data stores, Redis as the in-memory store, S3 and the filesystem as blob stores, and a three-node cluster under mixed load.
+- Large datasets: 1.6 million messages and 750,000 calendar and contact items across 500 accounts, individual mailboxes of 1, 2 and 5 million messages, 100,000 accounts on a single server, mail queues of 10 million messages, and DMARC and TLS report floods of a million reports.
+- Storms and abuse: 20,000 new connections per second, mass logins, thousands of IDLE and push subscribers per account, hostile and malformed messages, slow-loris clients and oversized literals.
+- Six-hour soak tests that look for memory growth, cache drift and slow leaks, including one that pushed over 10 million messages through the MTA.
 
-In conclusion, it is useful to find unintentional panics.
+Runs were profiled throughout. CPU time was sampled with `perf` and turned into flame graphs, off-CPU analysis showed where threads waited on locks and I/O, the heap was profiled with jemalloc and heaptrack, and a special instrumented build counted every storage round trip, per command, so we could see exactly which requests hit the database more than they should. Each fix was then measured against the previous build on matched machines before it was accepted.
 
-## Prior art
+The first full round of this cycle turned up 64 problems, which were fixed and retested. The second round re-ran everything and fixed 33 more. Some examples of what the lab caught:
 
-Currently, ways to extract callgraphs or detect panics include:
+- Reopening a mailbox with 5 million messages went from 61 ms to 0.21 ms.
+- A JMAP query on an account with 5 million messages went from 3.3 seconds to 12 ms.
+- Peak inbound mail throughput on RocksDB nearly doubled, from 9,690 to 18,394 messages per second.
+- A memory issue where the process held up to 9.6 GB while the actual heap was under 0.4 GB was found and fixed. In six-hour soak tests memory now stays flat.
 
-- rustig (ELF debug info analysis)
-- findpanics (ELF debug info analysis)
-- cargo-callgraph (Rust HIR analyzer)
-- cargo-callgraph (rust-analyzer based exporter)
-- charon (Rust MIR exporter)
-- no-panic (Linker-based panic detection)
-- dont_panic (Linker-based panic detection)
+This lab is not a one-off effort for the release. It is now part of how Stalwart is tested internally: every future release goes through the same benchmark and stress-test rounds before it ships, so performance gains stay gained.
 
-You can download any of these projects, and with the exception of Charon (which is not explicitly meant for this usecase) it is very easy to get started.
+Internal numbers only tell you whether Stalwart got faster than it was. We also wanted to know how it compares to what most of the world runs. So we put Stalwart v1.0 head to head with the most widely deployed open-source mail stack: Postfix 3.11 for SMTP and Dovecot 2.4 for IMAP.
 
-Linker-based panic detection methods work by triggering an error in the linker when it tries to link in a special panic handler. This detection approach only works if **not a single panic** is included in your binary. It also only works on binaries and not on libraries.
+Both ran on identical Azure servers (8 AMD EPYC Zen 5 vCPUs, 32 GiB of RAM, local NVMe storage), loaded with the same 1,000 mailboxes plus three very large ones of up to 250,000 messages, and received exactly the same work: receiving mail, delivering it and serving it to IMAP clients. Encryption, password hashing and full-text search were configured the same way on both, and the two systems were measured alternately on the same hardware.
 
-ELF debug info analysis looks at the DWARF debug info that is included in ELF artifacts like binaries and Rust libraries compiled to object files. It is limited in what callgraph information it can provide: the panic machinery can be completely inlined or disappear during the linker phase.
+**Stalwart was faster in 35 of the 38 headline comparisons.**
 
-And finally we have HIR, MIR and rust-analyzer based approaches, which use the various Intermediate Representations (IRs) of your code generated by the compiler (and rust-analyzer) to extract the callgraph from. In a sense all these approaches take your original Rust code, have the compiler process it, and spit out what it thinks is happening. Theoretically these approaches work on any Rust crate.
+![How many times faster Stalwart or Postfix/Dovecot is, per test, on a log scale](https://stalw.art/_astro/factors.CRX73xS7_Z2eUmjA.svg)
 
-The HIR-based analysis can only analyze the code in your specific crate. This analysis can check if you explicitly write `panic!` in your own crate. However, it is unaware of any code in your dependencies, such as the standard library. Hence it can not trigger on panics that occur within dependencies. The compiler can also insert assertions like bound checks, which are not even a call to panic until very late in the code generation pass depending on your compiler flags.
+Some of the results:
 
-The MIR-based analysis is ideal, as it can theoretically see all code from dependencies, before they are optimized away, including panics originating in the standard library. Hence Call Graph Analyzer uses this approach. The only downside is that this analysis is done before LLVM is able to remove unreachable code, and hence we get some false positives.
+- IMAP: Stalwart is faster than Dovecot in 14 of 15 everyday client operations, by 1.4 to 19 times. A login with a full TLS handshake takes 5.1 ms instead of 28 ms, fetching a 1 MB message is 6 times faster, threading the INBOX 5 times faster, and moving or deleting 100 messages 18 to 19 times faster.
+- SMTP: Stalwart accepts a message 3.6 to 12 times faster than Postfix, and sustains 5,445 incoming messages per second against Postfix’s 723.
+- Delivery: a message is visible to an IMAP client 16 times sooner, and a client waiting in IDLE is notified in 3.3 ms instead of half a second.
+- Load: Stalwart serves 5.4 times more concurrent IMAP sessions per second and relays 3.8 times more mail before it starts to slow down.
 
-All these previous approaches take what the compiler is already doing when compiling your crate, and interrupt the compilation process to look at a snapshot of the compilation state to find out whether you are calling a panic.
+The gap grows with the size of the mailbox. On a 250,000-message mailbox, a full-text search of every message body takes 3.75 ms in Stalwart and 136 ms in Dovecot, and moving or deleting 25,000 messages finishes in about a tenth of a second instead of 24 to 34 seconds: more than 200 times faster.
 
-The rust-analyzer approach is slightly different, as it does not depend on the compiler at all. Rust-analyzer has duplicated the Rust-HIR-MIR pipeline from the compiler, which they adapted for their process. This separate pipeline for rust-analyzer is pretty fast, can be stored in memory and supports updating the state while you are actively writing and changing your Rust code. However, it can not always analyze code that rustc is happy to compile. Most notably it often struggles with complex proc_macros like we use a ton of in Rust Embedded. As an end-user you notice this when your code editor stops giving any helpful suggestions. (The team behind rust-analyzer is working hard to prevent this!) The upside of rust-analyzer is that it does not depend on the Rust compiler.
+![Typical latency on a 250,000-message mailbox, Stalwart against Dovecot](https://stalw.art/_astro/latency-250k.BYn_YJ9c_1hA5aG.svg)
 
-## How CGA works
+The three tests Dovecot won are all the same operation: marking every message in a mailbox as read at once.
 
-For our usecase we needed a method that:
+Only Postfix and Dovecot were tested, but they are not just any two products. They are the engine under nearly every popular self-hosted mail server: every open-source dockerized mail server with more than 10,000 stars on GitHub, including [docker-mailserver](https://github.com/docker-mailserver/docker-mailserver) and [mailcow](https://github.com/mailcow/mailcow-dockerized), runs Postfix and Dovecot under the hood, as does Mail-in-a-Box. Beating that combination on almost every benchmark means beating the stack behind most of the self-hosted mail on the internet. We are now comfortable saying it plainly: **Stalwart is the fastest mail server on the planet.**
 
-- detects any and all panics
-- allows configurable parts of the binary to panic
-- is compatible with async Rust (as all async blocks have an implicit panic path)
-- works well with Embedded Rust
+Don’t take our word for it. Every script, configuration, test scenario and raw result is in the [benchmarks repository](https://github.com/stalwartlabs/benchmarks), together with a methodology and a frank list of caveats, such as the differences in disk-sync behaviour between the two systems. Anyone with an Azure account can provision the same servers and run the whole suite. Benchmarks of Stalwart’s different storage backends and clustered setups are being prepared for the same repository.
 
-We decided on a MIR-based callgraph exporter, which became the Call Graph Analyzer (CGA). Next up, we will discuss the design and functionality of CGA.
+Performance was the headline, but v1.0 also brings a set of new features:
 
-### rustc-driver
+- Search inside documents: Stalwart now extracts and indexes the text of PDF, Microsoft Office (docx, xlsx, pptx), OpenDocument (odt, ods, odp), EPUB and RTF documents, both in e-mail attachments and in file storage. Searching for a phrase now finds the contract attached to last year’s message, not just the message that mentions it. The extractor is written from scratch in Rust, with no external document libraries, and processes every document under strict size and complexity limits, so a malicious or malformed file cannot exhaust the server.
+- Full-text search of file storage, plus an index queue with per-partition status, retries and rebuilds.
+- Metadata: JMAP Object Metadata for e-mails, mailboxes, calendars, contacts, files and more, and IMAP METADATA (RFC 5464).
+- Post-quantum DKIM2: composite ML-DSA-44 and Ed25519 signatures for DKIM2.
+- OAuth and OpenID Connect: OAuth Client ID Metadata Documents, per-client scopes for mail, contacts, calendars and files, a list of connected applications that users can revoke, and audience matching, opaque token validation and unscoped token policies for external identity providers.
+- Storage and operations: a built-in in-memory store for single-node deployments, more authentication methods for Azure Blob Storage, secondary LDAP servers for failover, a memory budget for buffered data, SSRF protection for every outbound HTTP request, and configurable client IP sources and trusted proxy hops.
+- AI models and an AI spam classifier in the Enterprise edition, with support for OpenAI-compatible, Anthropic, Gemini and Ollama models.
 
-CGA extracts the callgraph directly from MIR as a [rustc-driver](https://rustc-dev-guide.rust-lang.org/rustc-driver/intro.html). Clippy similarly is a rustc-driver. Like Clippy, CGA therefore depends on a specific version of the rust compiler, which gets us to the first real downside of CGA:
+The full list is in the [changelog](https://github.com/stalwartlabs/stalwart/blob/main/CHANGELOG.md).
 
-A note of caution: CGA compiles your crate with a specific (probably different) version of the rustc compiler, standard library, and potentially different compiler flags. Hence you will not get the *exact* callgraph as included in your binary.
+Finalising the database schema has a price that is paid once: Stalwart v1.0 uses a new database layout, and existing data has to be migrated to it. A v1.0 server will not open a store created by an earlier version.
 
-Having a specific (nightly) version of rustc as a dependency using [`rustc-private`](https://doc.rust-lang.org/unstable-book/language-features/rustc-private.html) also means that CGA can not be installed as a crate from [crates.io](https://crates.io). Instead the repository needs to be checked out locally, after which `cargo install --path .` needs to be run (which uses a specific version of the Rust toolchain automatically).
+We know that some past upgrades were bumpy, and we took that seriously. This migration was designed and tested to be as smooth as we could make it, and it is the last of its kind: the schema is now stable, and future releases will upgrade in place. There are two ways to get to v1.0.
 
-This user experience might be improved when [`rustc_public`](https://doc.rust-lang.org/nightly/nightly-rustc/rustc_public/index.html) contains everything that CGA needs. Though, that scenario isn't really likely. Instead, if CGA becomes popular enough, it might be maintained alongside rustc, just like Clippy currently has this special status. Any breaking change in rustc is also applied to Clippy, and you can install Clippy for your specific toolchain using Rustup. For more information on this, you can watch the excellent talk on ["Out of tree access to the compiler state" by Alona Enraght-Moony](https://www.youtube.com/watch?v=ExxxtADP-t8).
+For deployments running Stalwart v0.16, [stalwart-migrate](https://stalw.art/docs/migration/upgrade-0-16/) is the easiest route. It requires v0.16.27, so earlier 0.16 releases should be updated to it first. The tool converts your settings to the v1.0 schema and copies all data into a new, empty v1.0 store. It only reads from the old store, so the original deployment stays intact and can be restarted at any point before the switch.
 
-As a rustc-driver, the CGA binary has the same API as rustc itself. You can use `cargo` to run CGA using `cargo cga check`. Internally rustc will run as if you were to run `cargo check`. However CGA does some additional work to gather the call graph, which for a typical crate means that compilation with CGA is roughly 2x-3x as slow as running `cargo check`.
+It also migrates incrementally. The first copy runs while v0.16 keeps serving users, however long it takes. Each later run copies only what changed since the previous one, and the only downtime is the short final run, after v0.16 is stopped. Account and message identifiers, IMAP UIDs and change history are preserved, so IMAP and JMAP clients carry on without downloading anything again. Users who sign in with OAuth will need to sign in again, and the full-text index is rebuilt in the background after the switch.
 
-### MIR traversal
+For anyone running Stalwart v0.15 or earlier, or anyone who prefers to move users one at a time, the [migration guide](https://stalw.art/docs/migration/guide/) describes the second route. The [migration proxy](https://stalw.art/docs/migration/proxy/) sits in front of both the old and the new server and sends each user to whichever one holds their account, and [Vandelay](https://stalw.art/docs/migration/import-export/) copies accounts across one by one, incrementally. Each account is switched by flipping one entry in a mapping table, with no downtime for that user, and the old server keeps a full copy until you decide to retire it. The same procedure also works for moving from Dovecot and Postfix to Stalwart. The [migration overview](https://stalw.art/docs/migration/#upgrading-a-stalwart-016-deployment) compares the two approaches.
 
-When CGA is done running all the compiler passes that are normally part of `cargo check`, it forces the compiler to yield all so-called *roots* or *entrypoints* of your crate. Intuitively, this is any part of your crate that is accessible from the outside when compiled. These include:
+### What changed
 
-- fn main and variants thereof
-- the language _start symbol
-- functions that are marked `extern` which have a stable name using `no_mangle` or `export_name`, including interrupt handlers for Embedded Rust.
+The structure of your settings is largely the same. Around a hundred keys were renamed to follow consistent naming conventions, a few objects (OIDC directories, AI models, Azure storage, forwarded headers) were restructured, and stalwart-migrate converts all of it automatically. Two changes need attention before you upgrade:
 
-For this analysis we are explicitly not interested in all the functions that are compiled as part of `const` blocks, including `static` value initialization, as only the outcomes of these computations are included in the final binary.
+- Clusters need Redis. A cluster coordinator now requires a Redis-based in-memory store (Redis, Redis Cluster or Redis Sentinel). Earlier versions could fall back to the data store for this, but that was slow under load and has been removed. Single-node deployments get a built-in local in-memory store instead.
+- OAuth now follows the open public client profile. Stalwart now fully enforces the OAuth Profile for Open Public Clients, the emerging standard that lets any mail client sign in to any mail server with OAuth without being registered in advance. Stalwart’s own authorization server supports it out of the box. Many external identity providers do not yet support everything the profile requires, such as Dynamic Client Registration, and some clients do not yet request the required scopes.
 
-From these roots outward we perform a reachability analysis by walking through the MIR tree. Every time a function is called, that function is also explored. Thus all unused functions are not visited. In Rust, like in C++, a function with Generic arguments is [monomorphized](https://rustc-dev-guide.rust-lang.org/backend/monomorph.html) when it is called using the concrete types used to call it.
+If you use an external identity provider that is not conformant, Stalwart’s token checks can be relaxed through the [compatibility settings](https://stalw.art/docs/auth/backend/oidc#compatibility-settings) on the OIDC directory, at your own risk, since each one weakens a security check. These settings mainly keep web clients such as the WebUI working. What they cannot fix is a provider that lacks the profile itself, and that is going to matter soon: popular e-mail clients, including Apple Mail, are adopting the profile, and once they do, their users will not be able to authenticate against a non-conformant provider. If you depend on an external identity provider, now is a good time to ask them to support it.
 
-Thus we do not only gather the called functions, but the concrete instantiation of each function, as the implementations can differ wildly depending on the type arguments passed.
+A related change affects the WebUI. Instead of a fixed client id, it now identifies itself to the identity provider with a [Client ID Metadata Document](https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/), a URL that describes the client. Some identity providers do not support this yet. With those, administrators can register a client for the WebUI with the provider and set its id in [`oauthClientId`](https://stalw.art/docs/ref/object/application#oauthclientid), and the WebUI signs in as before. The details are in [client id of the WebUI](https://stalw.art/docs/auth/backend/oidc#client-id-of-the-webui).
 
-This process gets a little bit tedious when considering:
+If you run into a problem or have a question during the migration, post it on [support.stalw.art](https://support.stalw.art). We will be answering questions there daily throughout the migration period.
 
-- `dyn` objects, for which it is unclear which trait implementation is actually being called. CGA assumes all vtable entries are called for that function when it finds one. This gets especially fun large when a dyn object is constructed for standard library traits like the Debug trait.
-- function pointers can be created from Rust functions. We can not necessarily reason about what happens with these pointers. Thus we assume any created function pointer will be called at some later stage.
-- each async block has a panic path, implicitly. See the blogpost "Async Rust never left the MVP state" by Dion for more on this.
+## Thank you
 
-### Extracting a graph
+Five years ago this was one Rust library for parsing e-mail. Today it is a complete mail and collaboration server, and with v1.0 it is faster than anything else we have measured it against. None of it would have happened without the community: everyone who filed an issue, sent a patch, answered a question on the forum, or trusted Stalwart with their mail. Thank you.
 
-After walking through the MIR tree of your crate and its dependencies, we get a collection of callgraphs. We can now choose to either `extract` them to JSON or GraphViz dot files, or to `check` them for any panics or blacklisted functions.
-
-When extracting, all the callgraphs are put in your `/target` folder as `<crate>.callgraph.json`. We finally merge them together and export the global callgraph with separate roots using:
-
-```
-cargo cga extract -Tdot -o callgraph.dot
-```
-
-To quickly illustrate what this looks like, please consider the following example using dyn objects:
-
-```
-trait Test {
-    fn test(&self) {
-        panic!("Default impl")
-    }
-}
-
-struct StrictAdd;
-impl Test for StrictAdd {
-    fn test(&self) {
-        let _ = 2u64.strict_add(u64::MAX);
-    }
-}
-struct StrictSub;
-impl Test for StrictSub {
-    fn test(&self) {
-        let _ = 2u64.strict_sub(u64::MAX);
-    }
-}
-
-struct DefaultImpl;
-impl Test for DefaultImpl {}
-
-fn main() {
-    let object = StrictAdd;
-    let dyn_object: &dyn Test = &object;
-    dyn_object.test();
-}
-```
-
-This results in a graph with an arrow for every entry in the vtable:
-
-![Graphviz Callgraph example](https://media.tweedegolf.nl/images/graph.svg)
-
-*Image 1: Graphviz Callgraph example (you can zoom in for better readability)*
-
-As you can imagine, this quickly becomes quite large and unreadable. If you have a suggestion for a GUI application that can meaningfully display callgraphs, please [reach out](https://bsky.app/profile/wassasin) as that would be very helpful!
-
-### Linting and diagnostics
-
-Secondly, like Clippy, we can ask CGA to check our code for any panic paths by running:
-
-```
-cargo cga check
-```
-
-This will take the callgraph, find panic paths, and will try to give a helpful insight in how this panic path relates to your crate. One of the lints emitted for the above code looks like this:
-
-```
-error: call to method `core::num::<impl u64>::strict_sub` which can panic
-  --> src/main.rs:18:17
-   |
-18 |         let _ = 2u64.strict_sub(u64::MAX);
-   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^
-   |
-   = note: 3 different panics from this location
-   = note: backtrace (1 of 2):
-           0: std::rt::panic_fmt (called)
-           1: core::num::imp::overflow_panic::sub (called)
-           2: core::num::<impl u64>::strict_sub (called) <--
-           3: <totallysafe::StrictSub as totallysafe::Test>::test (possible vtable resolution)
-           4: <dyn totallysafe::Test as totallysafe::Test>::test - virtual#3 (called)
-           5: totallysafe::main (entrypoint)
-```
-
-Note that it shows the backtrace, along with the possible vtable resolution, and the last call from our current crate context. These diagnostics are generated *heuristically*, meaning that out of all the panic paths, we choose a single one for each callsite in our local crate. We try to choose the *best* of all these paths using a scoring mechanism.
-
-### White- and blacklisting
-
-For any serious crate that was not developed with minimizing panics in mind, the amount of lints generated by CGA is not really manageable. To help with this, CGA comes with a few configurable parameters.
-
-As an example, if you trust a function to not panic (even though panic paths are being emitted for it), you can add the function to the whitelist. Any panic path that includes that function will be ignored. These rules can match on both simplified function names as well as full canonical Rust paths with all generic parameters included.
-
-Alternatively, functions can be put on a blacklist. Besides panics, if you want a crate and its dependencies to **never** use some function, it is possible to exlude it. For example, you might want to exclude interaction with the filesystem, the network or processes.
-
-```
-blacklist = [
-    { path = "^std::process::" },
-    { path = "^std::fs::" },
-    { path = "^std::sys::" }
-]
-```
-
-*An example of a `cga.toml` configuration file*
-
-Then if we feed the following program to CGA:
-
-```
-fn test() {
-    let _ = std::process::Command::new("evil");
-}
-
-fn main() {
-    test();
-}
-```
-
-We get the following:
-
-```
-error: call to associated function `std::process::Command::new` which is blacklisted
- --> src/main.rs:7:13
-  |
-7 |     let _ = std::process::Command::new("evil");
-  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  |
-  = note: 101 different blacklisted functions from this location
-  = note: backtrace:
-          0: std::process::Command::new::<&str> (called) <--
-          1: fail_blacklist::test (called)
-          2: fail_blacklist::main (entrypoint)
-note: the lint level is defined here
- --> src/main.rs:3:11
-  |
-3 | #![forbid(cga::blacklisted)]
-  |           ^^^^^^^^^^^^^^^^
-
-error: call to drop of `std::process::Command` which can call blacklisted functions
- --> src/main.rs:7:47
-  |
-7 |     let _ = std::process::Command::new("evil");
-  |                                               ^
-  |
-  = note: 101 different blacklisted functions from this location
-  = note: backtrace (1 of 20283553):
-          0: std::sys::fs::unix::debug_assert_fd_is_open (called)
-          1: <std::os::fd::OwnedFd as std::ops::Drop>::drop (called)
-          2: drop of `std::os::fd::OwnedFd` (called)
-          3: drop of `std::sys::fd::unix::FileDesc` (called)
-          4: drop of `std::sys::process::unix::common::Stdio` (called)
-          5: drop of `std::option::Option<std::sys::process::unix::common::Stdio>` (called)
-          6: drop of `std::sys::process::unix::common::Command` (called)
-          7: drop of `std::process::Command` (called) <--
-          8: fail_blacklist::test (called)
-          9: fail_blacklist::main (entrypoint)
-```
-
-Note that this feature does not actually preclude a process from being spawned in any of your crates or dependencies: within Rust it will forever remain possible to link to some external object file or use assembly directly, which CGA can not analyze. Blacklisting with CGA is, however, an interesting capability.
-
-## Caveats
-
-Having detailed what CGA can and can not do, it is useful to know there are some caveats and downsides to the approach CGA uses.
-
-### Fragile
-
-Traversing monomorphized MIR is not trivial. Resolving vtables is quite finnicky; the compiler inserts shims sometimes and actual calls are inserted later; coroutines need to be unpacked to find the async paths; and there are implicit assertions which eventually also end up being a panic. All of which is to say: the analysis is hard and it is inevitable that some parts of it are not completely correct. When the toolchain is updated, the resulting MIR can vary dramatically, which also has an impact on the call graph. It might be that down the line some part of the analysis breaks if rustc works differently.
-
-This is to be expected: Rust MIR is unstable and will remain to be so for the foreseable future. Consequently CGA will be a bit fragile.
-
-### Optimizations
-
-Depending on your compiler flags but in particular your `opt-level`, the MIR CGA gathers contains panics that are unreachable.
-
-For example, the expression `1 + 1` has an implicit overflow bounds check included. If you were to const evaluate the expression, it is exceedingly obvious that the expression can never panic. With `opt-level=2` (optimize for speed) this expression is optimized to `2` by an earlier compiler pass before CGA gets the MIR. However with `opt-level="z"` (optimize for size) this panic path is included in the MIR. Instead, the optimization is left to LLVM to perform (which it does).
-
-Your compiler and cargo options really matter with regards to the callgraph being emitted, similarly to how they matter to the final binary generated by rustc and the linker.
-
-I advise people to use `opt-level=2` for CGA, even if the shipped binary uses something different, as *generally* no reachable panic will be missing with `opt-level=2` (thus fewer false positives and no false negatives).
-
-### Tooling expects rustc
-
-CGA has been tested on a few real-world binaries, and typically it works out of the gate. Sometimes however it does not. This is either because the project does not compile with `build-std` yet (which CGA requires), or because the `build.rs` expects the application to be built with stock `rustc` and not with a `rustc-driver` like CGA ([example](https://github.com/phil-opp/llvm-tools/blob/master/src/lib.rs#L19-L20)).
-
-If CGA does not work for your project, or if the callgraph does not seem to be correct, please [open an issue](https://github.com/OpenDevicePartnership/cga/issues/new)! The tooling can only evolve by testing it against real software.
-
-## Try it out
-
-With [Call Graph Analyzer (CGA)](https://github.com/opendevicepartnership/cga) you can extract callgraphs and detect panics. If you were wondering how many panics your application secretly contains, even though you are not using `unwrap`, give it a spin and [let us know](https://bsky.app/profile/wassasin.bsky.social) what you find!
-
-A special shoutout to Jyn for [this blogpost](https://jyn.dev/rustc-driver/) and the work by [Ferrocene](https://ferrocene.dev/), which heavily inspired our work on the Call Graph Analyzer.
+[Download Stalwart v1.0](https://github.com/stalwartlabs/stalwart/releases) and let us know what you think.
