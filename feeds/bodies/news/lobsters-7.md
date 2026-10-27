@@ -1,67 +1,78 @@
-Apple is blocking the compromised certificates automatically. Mac administrators can take optional steps for some command-line tools.
+This release was triggered by the
+[eMudhra](https://emudhra.we-have-a-problem.com) CA debacle and getting
+informed that Gram is vulnerable due to shipping the `rustls-webpki` and
+`webpki-roots` packages. Thus, I recommend everyone to upgrade to 3.4.0 as soon
+as possible. If you want to stay on an older version you should rebuild from
+source with updated webpki packages.
 
-Since 19 October 2026, Apple has been blocking the certificates of the compromised eMudhra intermediate Certification Authorities (CAs) that issue TLS certificates, and is making additional updates to this block.
+Although the release was ultimately due to that, it was getting time to tag a
+new release anyway. There have been a lot of fixes and some really great new
+features implemented, and I want to give a huge thank you to everyone who have
+been contributing and helping with the editor. One of the reasons why I have
+been holding off on the release is just that I have been so busy this week and
+haven't had time to highlight all the improvements as much as I would like to.
 
-- If you don't use Terminal as part of your workflow, you don't need to do anything. Your Apple devices now automatically block these certificates in Safari, Mail, and apps that use Apple's networking and security frameworks.
-- If you use Terminal as part of your workflow (such as system administrators or developers), you might use command-line tools that can still accept these certificates. Some tools included with macOS or the Xcode Command Line Tools — like curl and git — check certificates against /etc/ssl/cert.pem and can still accept these certificates until a future software update. To stop those tools from accepting them sooner, you can remove root CA certificates from the file.
+Here is a very incomplete list of highlights with this release. More complete
+changelog below..
 
-## What happened
+- Side by side view for Git diffs, contributed by @iskrant_x.
+- Ability to wrap the tab bar instead of scrolling horizontally, by @kbilkis.
+- Helix "Amp Jump" (gw) feature backported by @yilmazer.
+- Git commit history view accessible from the git panel (big thank you to @nicoco for working on this as well).
+- If a server binary is not found, suggest a command to install it (#485) by @xmort
 
-The private keys of eight intermediate CAs operated by eMudhra were compromised. Two of these CAs issue code signing certificates, which Apple's frameworks don't trust. The other six issue TLS certificates. Someone with keys from these six CAs could create certificates that appear valid for any website. eMudhra and Sectigo have revoked the affected certificates.
+...OK, it's already too many things, I'm getting lost. Check out the changelog for more!
 
-Each of the 6 TLS intermediate CAs has two certificates, for 12 in total:
+One thing that has changed that isn't entirely positive is that I have found and
+patched a lot more cases where the editor would download stuff behind our backs
+without consent. I am determined to close all of these gaps over time, but a
+consequence of this is that the editor is a bit more annoying to use now. The UI
+for allowing downloads or discovering why a language server isn't running is not
+good. I know. I am working on something better. A couple of us have also been
+experimenting with replacing or supplanting the Zed extension system with
+something more light-weight which would make installing and managing extensions
+better. I guess another reason why I didn't tag a release sooner is because I
+was hoping to fix some of these usability issues. It'll just have to wait until
+the next release. My apologies for any inconvenience caused by these changes.
 
-- A certificate issued by emSign Root TLS CA - G3, which chains to emSign ECC Root CA - G3
-- A certificate cross-signed by Sectigo, which chains to AAA Certificate Services
+Again a massive thank you to everyone who are contributing, hanging out in the
+XMPP chat channel or just using the editor.
 
-## What Apple is doing
+Downloads will as usual be available on
+[Codeberg](https://codeberg.org/GramEditor/gram/releases/tag/3.4.0).
 
-On 19 October 2026, Apple began blocking these 12 certificates on Apple devices. Updates to certificate configuration data are sent to devices automatically and as needed, so you don't need to install a software update to get this change. Apple is making additional updates to this block, which will also be delivered automatically. On 23 October 2026, Apple also began blocking the emSign ECC Root CA - G3.
+Cheers,
 
-Apple is making further changes to block these certificates in other places on Mac where software checks certificates, such as the command-line tools included with macOS or the Xcode Command Line Tools that use /etc/ssl/cert.pem. These changes will be available in a future software update, and you won't need to edit any files to get them.
+*@krig*
 
-## Do I need to edit /etc/ssl/cert.pem?
+## [3.4.0] - 2026-10-23
 
-Most users don't need to edit /etc/ssl/cert.pem. Safari, Mail, and apps that use Apple's networking and security frameworks don't use this file, and your Apple devices block these certificates in them automatically.
+## Added
 
-On Mac, some command-line tools included with macOS or the Xcode Command Line Tools (including curl, git, python3, ruby, perl, and openssl) check certificates against /etc/ssl/cert.pem. For certificates that chain to a root CA certificate in this file, these tools don't check Apple's block or whether the certificate has been revoked. This file will be updated in a future macOS update. If you use these tools and don't want to wait for the update, you can remove root CA certificates from the file.
-
-Some apps and tools include their own list of root CA certificates and don't use Apple's block or /etc/ssl/cert.pem. For those apps or tools, [contact the developer](https://support.apple.com/en-us/102435).
-
-### Remove root CA certificates from /etc/ssl/cert.pem
-
-Rather than wait for the upcoming software update, administrators can choose to remove the root CA certificates to which the blocked certificates chain from /etc/ssl/cert.pem.
-
-- These steps affect every tool that uses /etc/ssl/cert.pem. Afterward, tools that use only this file might not be able to verify some websites whose certificates chain to these root CA certificates through intermediate CAs that weren't affected.
-- A macOS software update can replace /etc/ssl/cert.pem with Apple's version. Until you install the software update that includes Apple's changes, run the command in step 4 after each software update. If it lists a root CA certificate that you removed, the update replaced the file. Delete the old backup using `sudo rm /etc/ssl/cert.pem.orig`, then repeat these steps. After you install the update that includes Apple's changes, you don't need to repeat these steps for the command-line tools included with macOS or the Xcode Command Line Tools.
-- You need an administrator account, or you can deploy the commands with your device management solution. Copy each command exactly as written. Learn what to do [if you get an alert about possible malware](https://support.apple.com/en-us/127377) when pasting the command into Terminal.
-
-To remove root CA certificates from /etc/ssl/cert.pem:
-
-1. Back up the file. If a backup already exists, this command keeps it:
-  - `[ -e /etc/ssl/cert.pem.orig ] || sudo cp -p /etc/ssl/cert.pem /etc/ssl/cert.pem.orig`
-2. Remove emSign ECC Root CA - G3. This command makes a copy of the file without emSign ECC Root CA - G3, checks that the copy isn't empty, and replaces the original. It shows nothing when it succeeds:
-  - `t=$(mktemp) && awk -v s='=== /C=IN/OU=emSign PKI/O=eMudhra Technologies Limited/CN=emSign ECC Root CA - G3' '/^(===|###) /{skip=0} $0==s{skip=1} !skip' /etc/ssl/cert.pem > "$t" && [ -s "$t" ] && sudo install -m 0644 -o root -g wheel "$t" /etc/ssl/cert.pem; rm -f "$t"`
-3. Optional: Removing emSign ECC Root CA - G3 doesn't block the six certificates that Sectigo cross-signed, because these tools can still verify them through AAA Certificate Services. To stop these tools from accepting those six certificates through the file until you install Apple's software update, you can also remove AAA Certificate Services. This command works the same way as the one in step 2:
-  - `t=$(mktemp) && awk -v s='=== /C=GB/ST=Greater Manchester/L=Salford/O=Comodo CA Limited/CN=AAA Certificate Services' '/^(===|###) /{skip=0} $0==s{skip=1} !skip' /etc/ssl/cert.pem > "$t" && [ -s "$t" ] && sudo install -m 0644 -o root -g wheel "$t" /etc/ssl/cert.pem; rm -f "$t"`
-4. Check the result. This command lists either root CA certificate if it's still in the file. If you removed both, it shows nothing. If the command shows an error, restore the backup from step 1.
-  - `openssl crl2pkcs7 -nocrl -certfile /etc/ssl/cert.pem | openssl pkcs7 -print_certs -noout | grep -E 'emSign ECC Root CA - G3|AAA Certificate Services'`.
-
-## Blocked certificates
-
-| **Certificate** | Issued by | SHA-256 fingerprint |
-| --- | --- | --- |
-| EM EV TLS CA - G3B | emSign Root TLS CA - G3 | E7568FE6E12331F4FD7DE61DA4C7559D0F8EB192A218D4741A3BA75184333838 |
-| EM OV TLS CA - G3B | emSign Root TLS CA - G3 | 98B896625C0C230ADEEC3EB2CF6AAD5001ECF9156A68644E82374CE5833BC25B |
-| EM DV TLS CA - G3B | emSign Root TLS CA - G3 | 42C4ACCD12C4F59597925E1A08A7A90102608543809308D50EC427E118BA1493 |
-| EM EV TLS CA - G3C | emSign Root TLS CA - G3 | 432EC25F0D28DE9006D97BF752F17BBB2CD41F669933FCB072D9A1148D0261F3 |
-| EM OV TLS CA - G3C | emSign Root TLS CA - G3 | CB6E15165AC802E9B3F993F16C25D41F4E81C21EBDE71AE1B012AC00BF9C7C3F |
-| EM DV TLS CA - G3C | emSign Root TLS CA - G3 | 0164D7CEAE5BB909C272AF151FF44B1177AE9B47D9424B94F1D9558C30934D19 |
-| EM EV TLS CA - G3B | AAA Certificate Services | 579480AEA166290BD3C643589E795FC0D0E54E86505D180F1DFF99EFD3199512 |
-| EM OV TLS CA - G3B | AAA Certificate Services | 5F1DED4DD590AF74631290CF073B122A2AAC6A1FA479778A0BD43579BD832699 |
-| EM DV TLS CA - G3B | AAA Certificate Services | 45A883F349AEDFD5F3A649B5498FFB121712BA8B448F3F2A91DBC5A766FCDDBE |
-| EM EV TLS CA - G3C | AAA Certificate Services | FD9D5C2DBBD4995AB69B8D50C439D9527B00529199C2FD01B2174EB58F07021F |
-| EM OV TLS CA - G3C | AAA Certificate Services | 7485B51C0ED192878FA1D2F948FB529AE1842CC5086C4B67F7BE5B2039DE9489 |
-| EM DV TLS CA - G3C | AAA Certificate Services | 62B7F9868263F72F6911FC78CEAF72C1979158B7368BF648683BB2AA39B02E72 |
-
-Information about products not manufactured by Apple, or independent websites not controlled or tested by Apple, is provided without recommendation or endorsement. Apple assumes no responsibility with regard to the selection, performance, or use of third-party websites or products. Apple makes no representations regarding third-party website accuracy or reliability. [Contact the vendor](https://support.apple.com/103190) for additional information.
+- Add 'open current file' button (#583) by @nicoco
+- Add 'refresh git history' button (#575) by @nicoco
+- Add Helix "Amp Jump" (g w) feature (zed#43733) (#659) by @yilmazer
+- Add Repology notes in docs (#470) by @koru
+- Add completion_menu_item_kind option to display text icons for completion items. (#623) by @CubeOfShame
+- Add code outline support for diff files (#524) by @jqslr
+- Add generate shell completions via cli by @ycna07
+- Add refs information to commit history views
+- Add setting to show pinned tabs in a separate row (zed#46573) (#633) by @kbilkis
+- Add setting to wrap tabs onto multiple rows (#643) by @kbilkis
+- Add settings-alias support (#581) by @nitbook
+- Add side-by-side Git diff view (#565) by @iskrant_x
+- Add smart sort for project panel: mod.rs sorts first (#541) by @patchunwrap
+- Add support for C23 keyword 'constexpr' (#522) by @mgrave
+- Add toggle to enable/disable git hooks + fix running commit-msg hook (#594) by @nicoco
+- Add tombi as an LSP and formatter for TOML (#626) (#616) by @psy-q
+- Allow disabling 'auto focus on paste' (#487) by @rockisch
+- Bundle OpenMoji as emoji fallback (#478)
+- Configure debug adapter permissions in language server config view
+- Generate color for each commit author
+- Handle '#' links in Markdown preview (#514) by @rockisch
+- Highlight TODO/NOTE/WARN: comments in builtin languages (#534) by @nitbook
+- If a server binary is not found, suggest a command to install it (#485) by @xmort
+- Implement clipboard file and image copy for MacOS (#487) by @rockisch
+- Language support for Typst via tinymist (#517) by @theDoctor
+- Refresh file history view on repository change
+- Rework show_tab_bar_buttons setting to allow always showing (#637) by @sir_nacnud

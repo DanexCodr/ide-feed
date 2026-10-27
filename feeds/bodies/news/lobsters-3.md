@@ -1,7 +1,7 @@
 **What is signed integer floor division?**  
 *Signed integer floor division* is where you do `a/b` and get a result that rounds towards `−∞`,  
 whereas standard (*“truncated”*) signed division rounds towards `0`.  
-As stated in Hacker's Delight: *“[I suspect that] floor division more often gives the result you want”*.  
+As stated in Hacker's Delight: *“[I suspect that] floor division more often gives the result you want”*.
 
 This article is about floor division where the **divisor is known at compile time**.
 
@@ -192,7 +192,7 @@ Finally, if you scroll to the bottom, you see after seven years, user *ufoguy* f
 By my benchmarks this gives a neat improvement, it runs **around 50% greater throughput** on most devices.
 
 What does *ufoguy* get for adding this?  
-No thanks, no up-vote, just a comment pointing out that this does not account for negative numbers.  
+No thanks, no up-vote, just a comment pointing out that this does not account for negative divisors.  
 A fair caveat. If we're going to make a fast general purpose lib, it might as well be flexible.
 
 Luckily, the general case was solved at least as far back as the 90s.  
@@ -242,7 +242,7 @@ This is the same as reflection around `-0.5`, hence the pivot point of the arcs 
 
 The big saving here comes from the fact that `a` is not only unsigned, but also only has a range of `0..2^63-1` (half of the usual range). This means that a mul-shift will work in all cases, even for *uncooperative divisors*.
 
-I've found one library in the wild that uses this technique, [PyPy ![](https://www.benjoffe.com/static/media/link-external.f2d3f5e2e0517a859106527b07648224.svg)](https://github.com/pypy/pypy/blob/ae52d3468efe6546a099374a7b505a9a0b12e31a/rpython/rtyper/rint.py#L400), but it falls back to div/mod algorithm for negative divisors.
+I've found one library in the wild that uses this technique, [PyPy ![](https://www.benjoffe.com/static/media/link-external.f2d3f5e2e0517a859106527b07648224.svg)](https://github.com/pypy/pypy/blob/release-pypy3.12-v8.0.1/rpython/jit/metainterp/optimizeopt/intdiv.py#L53), but it falls back to div/mod algorithm for negative divisors.
 
 If you're counting along, this looks like a **mul-shift plus 3 cycles**, a clear improvement.  
 On ARM it could theoretically be a mul-shift plus 2 cycles, as the right-shifts can fuse with the XORs, but in practice on the machines I've tested, these fused operations don't result in the speed gain that raw cycle-counting would suggest.
@@ -258,7 +258,7 @@ Below is an example of the simplicity of it in the best of cases:
 2. i32 *B* = 0x28F50000 // 687144960
 3. **return** (i64(*x*) * *A* + *B*) >> 37;
 
-Note that in that example above, I'm using an additive value of `0x28F50000`, which is different to the paper, which uses`M / 2` (where `M` is the multiplier).  
+Note that in that example above, I'm using an additive value of `0x28F50000`, which is different to the paper, which uses `A/2`.  
 This is the same hex-value with the bottom 2-bytes zeroed out, which makes for more compact ARM assembly. Not all divisors can have this optimisation applied, it must be made carefully.
 
 1. // MIT License Click to show
@@ -305,7 +305,7 @@ See the comment at the top of the download for how to build and run it.
 On ARM devices, this compiles to a single fused "multiply-accumulate" operation, followed by right-shift. Even on ARM32, it can use the `smlal` operation to multiply, add the constant, and obtain the upper 32-bit result, without ever needing any 64-bit emulation.
 
 Of course, x86-64 devices can run this fine: mul, add, shift.  
-32-bit x86 is where it becomes less clean (but not terrible). On this platform, the addition is performed on the lower 32-bit result, followed by `adc` to the upper 32-bit result (adds the "carry flag", which holds a "1" or "0" depending on whether the lower register overflowed or not).
+32-bit x86 is where it becomes less clean (but not terrible). On this platform, the addition is performed on the lower 32-bit result, followed by `adc` to the upper 32-bit result (adds the "carry flag", which holds a `1` or `0` depending on whether the lower register overflowed or not).
 
 So, what's the problem with this formula? Well, there's **two problems**...
 
@@ -496,7 +496,7 @@ On x86, round-up loses to sign-selected because its bias is a signed compare `(x
 These exceptions noted above (register-sized shifts) are somewhat common for small divisors, eg `5`, `6`, `9`, `14` etc., however, over the full set of possible 64-bit divisors, it is a vanishingly small set.  
 The Venn diagram below shows the distribution of divisors, and this tiny set is noted in the lower right.
 
-The problem of finding out which variant works for a given divisor boils down to the same problem as finding an unsigned divisor in a bit-width one-size smaller than usual, i.e.: 63, 31, 15, or 7; and others have written at length about this, hence I'd like to keep this section brief. The more important thing is the proof that the negative side works given the positive side is well studied *(see [Annexure A - Proof](https://www.benjoffe.com/fast-floordiv#proof)).*
+The problem of finding out which variant works for a given divisor boils down to the same problem as finding an unsigned divisor in a bit-width one-size smaller than usual, i.e.: `63`, `31`, `15`, or `7`; and others have written at length about this, hence I'd like to keep this section brief. The more important thing is the proof that the negative side works given the positive side is well studied *(see [Annexure A - Proof](https://www.benjoffe.com/fast-floordiv#proof)).*
 
 > “When it comes to signed floor division, there are no cooperative divisors, or uncooperative divisors, just **these united divisors**.”  
 > — Barack Obama, 2004 Democratic National Convention

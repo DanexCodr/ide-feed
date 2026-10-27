@@ -76,5 +76,3 @@ We also have a lot of work in the separate projects that are included in each Ph
 We always say Pharo is yours. It is yours because we made it for you, but most importantly, because it is made by the invaluable contributions of our great community (yourself).  
 A large community of people from all around the world contributed to Pharo 14 by making pull requests, reporting bugs, participating in discussion threads, providing feedback, and a lot of helpful tasks in all our community channels.  
 Thank you all for your contributions.
-
-[Discuss on Hacker News](https://news.ycombinator.com/item?id=50241925)

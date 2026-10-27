@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-27T04:08:59Z",
+  "updated": "2026-10-27T11:47:48Z",
   "items": [
     {
       "id": "devto-4858196",
@@ -50,27 +50,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4891584",
-      "title": "AI Made Coding Cheaper. So Why Is Building Software Still So Expensive?",
-      "desc": "By Harsh  | 4 min read",
-      "tag": "tutorial",
-      "published": "2026-10-21T19:42:55Z",
-      "order": 5,
-      "url": "https://dev.to/harsh2644/ai-made-coding-cheaper-so-why-is-building-software-still-so-expensive-59m",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F9oofpl3pmjs6z6obwdy3.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAgMEBf/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHnWgkvnQX/xAAYEAACAwAAAAAAAAAAAAAAAAABEQACEP/aAAgBAQABBQKBKxBrjjz/xAAYEQACAwAAAAAAAAAAAAAAAAAAARESMf/aAAgBAwEBPwGCqWH/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAWEAADAAAAAAAAAAAAAAAAAAAQIDH/2gAIAQEABj8CEb//xAAZEAEAAwEBAAAAAAAAAAAAAAABABARIVH/2gAIAQEAAT8hIx2dhzFvtqY6K//aAAwDAQACAAMAAAAQ/wCv/8QAFxEAAwEAAAAAAAAAAAAAAAAAAAERMf/aAAgBAwEBPxCHowP/xAAVEQEBAAAAAAAAAAAAAAAAAAABAP/aAAgBAgEBPxBYb//EABkQAQEBAQEBAAAAAAAAAAAAAAEAESExQf/aAAgBAQABPxCdN9Pch7IfRKWoWDsmHyW//9k=",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4825930",
       "title": "In Ruby, Objects Don't Have Methods. How Method Lookup Actually Works.",
       "desc": "By S M Tahosin | 7 min read",
       "tag": "tutorial",
       "published": "2026-10-21T09:57:18Z",
-      "order": 6,
+      "order": 5,
       "url": "https://dev.to/smtahosin/in-ruby-objects-dont-have-methods-how-method-lookup-actually-works-31g9",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fiili.io%2FnMfrPx1.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAgMAAQT/xAAVAQEBAAAAAAAAAAAAAAAAAAABAv/aAAwDAQACEAMQAAABxDZFDHLH/8QAGBAAAwEBAAAAAAAAAAAAAAAAABARITH/2gAIAQEAAQUCqhwqhN//xAAVEQEBAAAAAAAAAAAAAAAAAAAAEf/aAAgBAwEBPwGI/8QAFREBAQAAAAAAAAAAAAAAAAAAABH/2gAIAQIBAT8BV//EABgQAAIDAAAAAAAAAAAAAAAAAAAxECAh/9oACAEBAAY/AlOCp//EAB0QAAICAQUAAAAAAAAAAAAAAAABESExQVFxgZH/2gAIAQEAAT8hUdHaHGxxE5yLqwsMSt+Fsj//2gAMAwEAAgADAAAAECGP/8QAFxEAAwEAAAAAAAAAAAAAAAAAAAERMf/aAAgBAwEBPxCHjHB//8QAFhEAAwAAAAAAAAAAAAAAAAAAAAER/9oACAECAQE/EKxUf//EAB0QAQACAgMBAQAAAAAAAAAAAAEAETFBIVFhkcH/2gAIAQEAAT8Qo1Y+DNi/uIpLK8XnUexq8+wFAOMvUYWF/ko/I7bJVBXU/9k=",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4891584",
+      "title": "AI Made Coding Cheaper. So Why Is Building Software Still So Expensive?",
+      "desc": "By Harsh  | 4 min read",
+      "tag": "tutorial",
+      "published": "2026-10-21T19:42:55Z",
+      "order": 6,
+      "url": "https://dev.to/harsh2644/ai-made-coding-cheaper-so-why-is-building-software-still-so-expensive-59m",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F9oofpl3pmjs6z6obwdy3.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAgMEBf/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHnWgkvnQX/xAAYEAACAwAAAAAAAAAAAAAAAAABEQACEP/aAAgBAQABBQKBKxBrjjz/xAAYEQACAwAAAAAAAAAAAAAAAAAAARESMf/aAAgBAwEBPwGCqWH/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAWEAADAAAAAAAAAAAAAAAAAAAQIDH/2gAIAQEABj8CEb//xAAZEAEAAwEBAAAAAAAAAAAAAAABABARIVH/2gAIAQEAAT8hIx2dhzFvtqY6K//aAAwDAQACAAMAAAAQ/wCv/8QAFxEAAwEAAAAAAAAAAAAAAAAAAAERMf/aAAgBAwEBPxCHowP/xAAVEQEBAAAAAAAAAAAAAAAAAAABAP/aAAgBAgEBPxBYb//EABkQAQEBAQEBAAAAAAAAAAAAAAEAESExQf/aAAgBAQABPxCdN9Pch7IfRKWoWDsmHyW//9k=",
       "color": "#3B49DF"
     },
     {
@@ -146,27 +146,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4845471",
-      "title": "I argued with AI until it apologized for calling my course \"AI Slop\"",
-      "desc": "By EffessDev | 3 min read",
-      "tag": "tutorial",
-      "published": "2026-10-14T11:31:46Z",
-      "order": 13,
-      "url": "https://dev.to/effessdev/i-argued-with-ai-until-it-apologized-for-calling-my-course-ai-slop-350d",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fsv9mqip5csydm4a6snax.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAwEAAv/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAENKvRKdf/EABoQAAICAwAAAAAAAAAAAAAAAAABAhARMUH/2gAIAQEAAQUC4qZgWhyP/8QAFREBAQAAAAAAAAAAAAAAAAAAARD/2gAIAQMBAT8BZ//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABYQAAMAAAAAAAAAAAAAAAAAAAAgMf/aAAgBAQAGPwJ4f//EABsQAAICAwEAAAAAAAAAAAAAAAABESEQQVFh/9oACAEBAAE/IWw/sI0LwpNlAlUvE//aAAwDAQACAAMAAAAQ3K//xAAWEQEBAQAAAAAAAAAAAAAAAAABABH/2gAIAQMBAT8QekJl/8QAFxEAAwEAAAAAAAAAAAAAAAAAAAEhEf/aAAgBAgEBPxDaNw//xAAbEAEBAQEBAQEBAAAAAAAAAAABEQAhMWFBUf/aAAgBAQABPxAOUVmjB4P5qJsGWT3I9/BmnRPN0e8+4FUZiVCL93//2Q==",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4901412",
       "title": "926 Steps, Two Lobotomies, and Zero Nudges: Flight-Testing the Commitment Machine Across Gemini, Claude, and GPT-OSS",
       "desc": "By Randal L. Schwartz | 17 min read",
       "tag": "tutorial",
       "published": "2026-10-22T23:51:30Z",
-      "order": 14,
+      "order": 13,
       "url": "https://dev.to/gde/926-steps-two-lobotomies-and-zero-nudges-flight-testing-the-commitment-machine-across-gemini-55ca",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fr0i1iy0f3e5i20n3hb8p.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAQID/8QAFgEBAQEAAAAAAAAAAAAAAAAAAQAC/9oADAMBAAIQAxAAAAHFg26Sk//EABgQAAMBAQAAAAAAAAAAAAAAAAABAhEQ/9oACAEBAAEFAp7YnnNKen//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAUEAEAAAAAAAAAAAAAAAAAAAAw/9oACAEBAAY/Ag//xAAaEAADAAMBAAAAAAAAAAAAAAAAAREQIWFR/9oACAEBAAE/IVuFvwWIkE50XJDs/9oADAMBAAIAAwAAABAtD//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QP//EABURAQEAAAAAAAAAAAAAAAAAAAAB/9oACAECAQE/EFf/xAAcEAEAAgMAAwAAAAAAAAAAAAABABEhMUFhgZH/2gAIAQEAAT8QO6rY/Yp4E5VwOivUUVKtjY+xEXpHMgI1PGp//9k=",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4845471",
+      "title": "I argued with AI until it apologized for calling my course \"AI Slop\"",
+      "desc": "By EffessDev | 3 min read",
+      "tag": "tutorial",
+      "published": "2026-10-14T11:31:46Z",
+      "order": 14,
+      "url": "https://dev.to/effessdev/i-argued-with-ai-until-it-apologized-for-calling-my-course-ai-slop-350d",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fsv9mqip5csydm4a6snax.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAwEAAv/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAENKvRKdf/EABoQAAICAwAAAAAAAAAAAAAAAAABAhARMUH/2gAIAQEAAQUC4qZgWhyP/8QAFREBAQAAAAAAAAAAAAAAAAAAARD/2gAIAQMBAT8BZ//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABYQAAMAAAAAAAAAAAAAAAAAAAAgMf/aAAgBAQAGPwJ4f//EABsQAAICAwEAAAAAAAAAAAAAAAABESEQQVFh/9oACAEBAAE/IWw/sI0LwpNlAlUvE//aAAwDAQACAAMAAAAQ3K//xAAWEQEBAQAAAAAAAAAAAAAAAAABABH/2gAIAQMBAT8QekJl/8QAFxEAAwEAAAAAAAAAAAAAAAAAAAEhEf/aAAgBAgEBPxDaNw//xAAbEAEBAQEBAQEBAAAAAAAAAAABEQAhMWFBUf/aAAgBAQABPxAOUVmjB4P5qJsGWT3I9/BmnRPN0e8+4FUZiVCL93//2Q==",
       "color": "#3B49DF"
     },
     {
@@ -266,12 +266,24 @@
       "color": "#3B49DF"
     },
     {
+      "id": "devto-4869371",
+      "title": "How I finally understood the Liskov Substitution Principle",
+      "desc": "By Christian Vasquez | 4 min read",
+      "tag": "tutorial",
+      "published": "2026-10-26T22:03:26Z",
+      "order": 23,
+      "url": "https://dev.to/chrisvasqm/how-i-finally-understood-the-liskov-substitution-principle-19ek",
+      "image": "https://media2.dev.to/dynamic/image/width=1200,height=627,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fzf8i86a7xb222qaa5kwr.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAARACADASIAAhEBAxEB/8QAGAAAAwEBAAAAAAAAAAAAAAAAAAIDAQT/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAHsWukaUUcAMA//xAAbEAACAgMBAAAAAAAAAAAAAAAAAREhECAiMf/aAAgBAQABBQJxNFCSY/VietP/xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAEDAQE/AR//xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAECAQE/AR//xAAcEAABBAMBAAAAAAAAAAAAAAAAAhExQQEQIDL/2gAIAQEABj8ChJCSEnnBZembn//EACAQAAIBAQkAAAAAAAAAAAAAAAERABAgITFhcYGRweH/2gAIAQEAAT8hAU5o8vH74OZ2YD6YJFxbWjYhJuz/AP/aAAwDAQACAAMAAAAQ2+Ac/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAwEBPxAf/8QAFxEAAwEAAAAAAAAAAAAAAAAAAAEREP/aAAgBAgEBPxCsr3//xAAgEAEAAgAFBQAAAAAAAAAAAAABABEhMVFh0SBBcZGh/9oACAEBAAE/ENL28g+qhbdtsUTiX6PhxKCI5UG/kRQRgOICA5h3YyokLy2Jt0//2Q==",
+      "color": "#3B49DF"
+    },
+    {
       "id": "devto-4858002",
       "title": "Tuesday Isn't a Valid State Transition",
       "desc": "By Ken W Alger | 8 min read",
       "tag": "tutorial",
       "published": "2026-10-20T13:46:00Z",
-      "order": 23,
+      "order": 24,
       "url": "https://dev.to/kenwalger/tuesday-isnt-a-valid-state-transition-16ln",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Flhlmlfevv0rnolpw8kf7.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAgABA//EABYBAQEBAAAAAAAAAAAAAAAAAAABAv/aAAwDAQACEAMQAAABREddFif/xAAbEAACAwADAAAAAAAAAAAAAAABAgAREhAhMf/aAAgBAQABBQIu17admaoHlvP/xAAVEQEBAAAAAAAAAAAAAAAAAAAQEf/aAAgBAwEBPwGn/8QAFREBAQAAAAAAAAAAAAAAAAAAEBH/2gAIAQIBAT8Bh//EABYQAAMAAAAAAAAAAAAAAAAAABAgQf/aAAgBAQAGPwI1f//EABoQAQACAwEAAAAAAAAAAAAAAAEAEBEhMXH/2gAIAQEAAT8hIjU8YqZWPRGzlop//9oADAMBAAIAAwAAABAwn//EABcRAAMBAAAAAAAAAAAAAAAAAAABIRH/2gAIAQMBAT8Q0VU//8QAGBEBAAMBAAAAAAAAAAAAAAAAAQARITH/2gAIAQIBAT8QqHJY5P/EABsQAQEBAAMBAQAAAAAAAAAAAAERACExUUFx/9oACAEBAAE/EBB0fphkLP5vNKcE0ZSbFHJZFXtxw5OFrx3/2Q==",
@@ -287,18 +299,6 @@
       "url": "https://dev.to/johnnylemonny/the-hidden-cost-of-ai-generated-prs-why-most-teams-are-missing-silent-breakages-3g46",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F8q51f4enq0bh0honolcy.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAQIAAwT/xAAVAQEBAAAAAAAAAAAAAAAAAAAAAf/aAAwDAQACEAMQAAAB0CyQhcr/AP/EABgQAAMBAQAAAAAAAAAAAAAAAAAQESEB/9oACAEBAAEFAi7zXCL/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAXEAEAAwAAAAAAAAAAAAAAAAAAAREg/9oACAEBAAY/AlJ1/8QAGBABAQEBAQAAAAAAAAAAAAAAAQARIUH/2gAIAQEAAT8hjzS1xwksiALC/9oADAMBAAIAAwAAABCbz//EABYRAQEBAAAAAAAAAAAAAAAAAAABIf/aAAgBAwEBPxDVr//EABURAQEAAAAAAAAAAAAAAAAAAAEQ/9oACAECAQE/EGf/xAAcEAACAgMBAQAAAAAAAAAAAAABEQBhMUGBEFH/2gAIAQEAAT8QAgTeTczpiBvfhUrkCC9/VBKAyX2UT//Z",
-      "color": "#3B49DF"
-    },
-    {
-      "id": "devto-4873311",
-      "title": "Stop Shipping Marketing Pages Like Product Features",
-      "desc": "By Hadil Ben Abdallah | 8 min read",
-      "tag": "tutorial",
-      "published": "2026-10-20T09:02:59Z",
-      "order": 24,
-      "url": "https://dev.to/yassersoliman/stop-shipping-marketing-pages-like-product-features-374d",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fxbjnocjbgfyj4qmc0nsj.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAQACBf/EABUBAQEAAAAAAAAAAAAAAAAAAAEA/9oADAMBAAIQAxAAAAHoGpCQv//EABcQAAMBAAAAAAAAAAAAAAAAAAARIDH/2gAIAQEAAQUCZtI//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAHBAAAwABBQAAAAAAAAAAAAAAAAERIRBBUXGh/9oACAEBAAE/Ia49O0EpuWKtwkJo0eHlH//aAAwDAQACAAMAAAAQRf8A/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPxA//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPxA//8QAGhABAQEAAwEAAAAAAAAAAAAAAQARITFBYf/aAAgBAQABPxB2QHEdAi+NmTrZCCB6uEeS8wQywiUROxNG/9k=",
       "color": "#3B49DF"
     }
   ]

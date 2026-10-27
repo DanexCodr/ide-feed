@@ -1,13 +1,133 @@
-The [M-Vave FM-1](https://www.cuvave.com/product?id=fm-1) is exactly the kind of device I have a weakness for. I may not have an intended use for the frequency-modulation synthesizer, but when a low price meets a high coolness factor, I’m powerless to keep it out of my cart.
+I like TypeScript's type system. In particular, I like the combination of
+[Union Types](https://www.typescriptlang.org/docs/handbook/2/everyday-types.html#union-types)
+(aka anonymous Sum Types) and
+[Literal Types](https://www.typescriptlang.org/docs/handbook/2/everyday-types.html#literal-types)
+(aka Singleton Types).
 
-Initially billed as a pocket cousin of the famous Yamaha DX7 synthesizer, the FM-1 is a bargain at only $59.72 after fees. At release, it was a cool device that did what it said on the box, but not much else.
+Those features allow us to achieve API precision, while also minding
+conciseness:
 
-But in July, some intrepid tinkerers on Reddit’s[r/synthdiy](https://www.reddit.com/r/synthdiy/) board began reverse-engineering the FM-1’s stock firmware to expand the device’s abilities. By September, custom firmware began appearing. We’re not even through October, and there are already more community firmware projects available to install on the FM-1 than I could ever hope to cover.
+```typescript
+// Not very precise
+type Result = {
+  ok: boolean;
+  error?: string;
+  userRole?: string;
+  avatarSize?: number;
+};
 
-I decided to check a few of them out. And just in case you were wondering: Yes, it plays *Doom*.
+// Much more precise
+type Result =
+  | { ok: false; error: string }
+  | { ok: true; userRole: "ADMIN" | "GUEST"; avatarSize: 96 | 128 | 512 };
+```
 
-## Stock firmware and FM1 Open
+Let's compare that to Haskell without any language extensions:
 
-On October 17, M-Vave announced [FM](https://open.m-vave.com/fm1-workbench)[1 Open,](https://open.m-vave.com/fm1-workbench) a software package that encourages FM-1 owners to develop custom firmware for the synth-turned-whatever-else-you-can-imagine. Alongside the FM1 Open package came an SDK, a browser-based workbench, and version 15 of the stock firmware, now an open platform you can flash and build on. The unit’s 27 physical piano keys and modest 1.54-inch TFT display lend themselves well to a host of projects, musical or otherwise.
+```haskell
+data Result =
+  ResultError { resultError :: String }
+  | ResultOk { resultUserRole :: UserRole, resultAvatarSize :: AvatarSize }
 
-Normally, when an enthusiast community reverse-engineers a closed device, an official patch quickly follows. M-Vave has taken the opposite approach, though. The application source is published under [GPLv3](https://gplv3.fsf.org/), and the company even includes an in-browser emulator to test custom firmware prior to flashing actual hardware. There’s a caveat, however: The underlying synth engine that powers the stock FM-1 package is still distributed as a closed binary, so it’s the application layer of the stack that’s actually open. I don’t think that diminishes M-Vave’s gesture toward the community, but it’s worth noting.
+data UserRole = UserRoleAdmin | UserRoleGuest
+
+data AvatarSize = AvatarSize96 | AvatarSize128 | AvatarSize512
+```
+
+Unfortunately, Haskell falls short compared to TypeScript:
+
+So I went on the hunt for Haskell extensions that could help bridge those gaps.
+
+Here's one alternative that I found:
+
+```haskell
+{-# Language DataKinds, GADTs #-}
+
+import GHC.Base
+import GHC.TypeLits
+
+---
+
+type OneOfNat :: [Nat] -> Type
+
+data OneOfNat ns where
+  Here :: SNat n -> OneOfNat (n ': ns)
+  There :: OneOfNat ns -> OneOfNat (n ': ns)
+
+---
+
+type AvatarSize = OneOfNat [96, 128, 512]
+
+hello :: AvatarSize -> String
+hello size =
+  case size of
+    Here @96 _ -> "96"
+    There (Here @128 _) -> "128"
+    There (There (Here @512 _)) -> "512"
+
+---
+
+main = print $ hello $ There (Here SNat)
+```
+
+Here's another alternative:
+
+```haskell
+{-# Language DataKinds, UnboxedSums #-}
+
+import GHC.Base
+import GHC.TypeLits
+
+---
+
+type AvatarSize = (# SNat 96 | SNat 128 | SNat 512 #)
+
+hello :: AvatarSize -> String
+hello size =
+  case size of
+    (# SNat @96 | | #) -> "96"
+    (# | SNat @128 | #) -> "128"
+    (# | | SNat @512 #) -> "512"
+
+---
+
+main = print $ hello $ (# SNat @96 | | #)
+```
+
+I like this solution because the syntax is flat, compared to the previous nested
+`Here`s and `There`s.
+
+However,
+[unpacked sum types](https://gitlab.haskell.org/ghc/ghc/-/wikis/unpacked-sum-types)
+behave very differently from regular types.
+
+For example, we cannot do this:
+
+```haskell
+type family UOneOfNat ns where
+  UOneOfNat [a, b] = (# SNat a | SNat b #)
+  UOneOfNat [a, b, c] = (# SNat a | SNat b | SNat c #)
+
+type AvatarSize = UOneOfNat [96, 128, 512]
+```
+
+Because each unpacked sum type has a different kind based on its arity:
+
+```
+Main.hs:10:25: error: [GHC-83865]
+    • Couldn't match kind: '[LiftedRep]
+                     with: '[]
+      Expected kind ‘TYPE (SumRep [LiftedRep, LiftedRep])’,
+        but ‘(# SNat a | SNat b | SNat c #)’ has kind ‘TYPE
+                                                         (SumRep [LiftedRep, LiftedRep, LiftedRep])’
+    • In the type ‘(# SNat a | SNat b | SNat c #)’
+      In the type family declaration for ‘UOneOfNat’
+   |
+10 |   UOneOfNat [a, b, c] = (# SNat a | SNat b | SNat c #)
+   |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+```
+
+Moreover, neither alternative holds the desired semantics of the type union
+behaving like a set of types, i.e. normalizing duplicates. We could use
+[type-level Sets](https://hackage.haskell.org/package/type-level-sets-0.8.9.0/docs/Data-Type-Set.html)
+for this, but that only further complicates our representation.
