@@ -1,241 +1,80 @@
-We’ve identified multiple vulnerabilities in devices of the popular [SwitchBot](https://eu.switch-bot.com/) Lock Pro smart lock series.
-The most critical, a cryptographic flaw in their bluetooth communication, allows everyone to silently open smart locks in a software-only attack.
-No physical tampering is required.
-Below is a video of the attack in action.
+On October 19, the Go team initiated an expedited [security release](https://groups.google.com/g/golang-announce/c/66pojueaQek) to protect Go users and their applications from a critical public key infrastructure (PKI) compromise involving certificates issued by eMudhra.
 
-## Introduction[¶](https://neodyme.io/en/blog/switchbot#introduction)
+Within approximately seven and a half hours of being notified, we shipped a targeted patch, which was included in our first-ever [URGENT track](https://go.dev/doc/security/policy#urgent) security release.
 
-Smart locks have become very popular in recent years.
-Especially when it comes to AirBnB-style apartment sharing, but also in corporate environments and private accommodation, people enjoy having locks that don’t require physical keys.
-So when it came to selecting targets for our regular IoT hacking team event, smart locks were a natural choice.
+Here is the context behind the incident, why Go stepped in at the runtime level to protect our users and how our incident response unfolded.
 
-After some research we cam across the highly praised [Switchbot Lock Pro Combo](https://www.amazon.de/Lock-Pro-Touch-Fingerprint-Matter/dp/B0CR67GWML/?), including a key actuator, pin pad and smartphone app.
-It is one of the best-rated and most-sold smart locks on Amazon.
-For roughly 240€ (at the time of writing) it comes with a lot of features - and the Amazon reviewers are happy to share that it works as intended.
+## eMudhra Incident
 
-Features aside, our main interest was, of course, the device’s security.
-So we ordered one and had a look.
-Here is what we found out.
+On October 17, Mozilla added eight intermediate certificates (six used for TLS, and two used for code signing) issued by a root certificate controlled by eMudhra to OneCRL, effectively blocking their usage in Firefox. Soon after, a number of security researchers noticed this and began investigating what might’ve caused this.
 
-## Reversing the Lock[¶](https://neodyme.io/en/blog/switchbot#reversing-the-lock)
+On October 19, the Go Security team was made aware of these investigations and their conclusions, which showed that the keys associated with these intermediates were trivially weak, allowing recovery of the private keys in microseconds.
 
-As usual when inspecting IoT devices, we wanted to get our hand on the firmware.
-But before we dive into that, let’s first look into the target’s features and architecture.
+Due to the fact that the eMudhra root certificate was present in most trusted root programs, recovering the private keys would allow any attacker to sign arbitrary TLS certificates for any domain name, without the usual requirement to show proof of control of said domain name. This would allow an attacker to man-in-the-middle (MITM) TLS connections and present a valid certificate for a domain name they did not control, effectively allowing them to impersonate any TLS server the targeted machine attempted to connect to.
 
-### The Switchbot Pro Lock[¶](https://neodyme.io/en/blog/switchbot#the-switchbot-pro-lock)
+Go ships a TLS certificate verifier in the standard library. When users use [`net/http`](https://pkg.go.dev/net/http) or [`crypto/tls`](https://pkg.go.dev/crypto/tls) to connect to a TLS service, the verifier is called to check if the certificates the other side of the connection presents are valid. On Windows and macOS we delegate these checks to the platform APIs, and on Linux, which lacks platform APIs, we use our own verifier implementation.
 
-The bundle comes with two hardware devices, an actuator and a key pad. The lock can further be controlled and configured via a smartphone app.
+Since Linux does not have a uniform built-in mechanism to handle revocation checking, and in order to provide a timely fix for users on other platforms that might not receive platform updates, we decided the best way to protect Go users was to do an [URGENT track](https://go.dev/doc/security/policy#urgent) security release which similarly removed trust.
 
-The actuator is mounted onto the inside of the door and encloses the door’s key.
-When the door is supposed to open, the actuator simply turns the key in the lock.
+## Incident Timeline
 
-The key pad is kept outside the door and communicates with the actuator over [Bluetooth Low Energy](https://de.wikipedia.org/wiki/Bluetooth_Low_Energy) (BLE).
-A person can authenticate itself to the system either using a smart card/key fob, using a fingerprint, or - most commonly - by supplying a PIN.
-The whole system can also be added to a WiFi network, making it possible to control the lock over the Internet.
+A typical Go security release follows a multi-day process, with advanced pre-announcements in order to allow those who rely on Go to prepare. In this case, because we believed that private key exposure was imminent, our team chose to use the URGENT track for the first time in order to ship protections before active public exploitation could begin.
 
-Now that we have an idea of the feature set, we can start digging.
+**11:45 PDT**
 
-### Firmware Reversing[¶](https://neodyme.io/en/blog/switchbot#firmware-reversing)
+Our Security team was alerted by an independent external researcher, citing unreported actions by Mozilla and other organizations to remove trust in eight eMudhra intermediates. It became clear quickly that this was due to weak private keys they used.
 
-When hacking a device, it is usually a good idea to first get your hands on its firmware.
-There are various techniques for accomplishing this, [FLASH Dumping](https://neodyme.io/en/blog/drone_hacking_part_1/) for example.
-Before starting to desolder chips, however, it makes sense to scrape the web for firmware artifacts.
+**12:30 PDT**
 
-With SwitchBot we got lucky, as the Android app contained the URL for a public S3 bucket containing firmware files.
-Downloading and analysing these files we found two surprising architectural choices.
-First, the key pad on the **outside** of the door actually controls the actuator on the **inside**, not the other way around.
-Meaning that the key pad decides if a PIN, fingerprint or key fob is valid and then issues an “UNLOCK” command to the actuator.
-Secondly, the communication between the key pad and actuator relies on an unprotected, clear-text BLE connection.
-Authentication between key pad and actuator is done solely on the application level using a home-brewed mechanism.
+Mozilla independently reported the issue to our Security team, confirming the issue, and asking that we not immediately disclose the issue, but encouraging us to release a fix as soon as possible.
 
-While the first point already yields a significant attack surface (i.e. let’s dump the key pad and open the door), the second offers a code smell too good to pass up.
-So we focussed our main energy on exploiting the BLE communication between key pad and actuator.
+**14:00 PDT**
 
-### Key Pad Communications[¶](https://neodyme.io/en/blog/switchbot#key-pad-communications)
+We finalized a patch which blocked the usage of certificates which chained to the compromised intermediates, and thanks to the researcher who initially alerted us to the issue, had a set of certificates signed using the recovered keys to test against.
 
-Once the key pad and actuator are paired, they communicate using unprotected BLE.
-Meaning that all security of the system depends on application-level protections.
-So let’s find out how these protections work.
+**15:00 PDT**
 
-Upon pairing, the key pad and actuator agree on a *secret key*.
-Then, everytime the key pad becomes active, it requests a so-called “[nonce](https://en.wikipedia.org/wiki/Cryptographic_nonce)” value from the actuator.
-For our attack this does not matter.
-It is noteworthy however, that the nonce is supposed to provide “freshness” between invocations of the protocol but that this implementation uses the same nonce for an entire “session” which can last for multiple commands.
-After the nonce is received, the key pad encrypts a command, using the secret key and nonce, and sends said command over the BLE connection.
-Such a command could, for example, be “lock the door”.
+We began the process to release minor Go versions 1.27.3 and 1.26.10 containing our patch. Due to the urgent nature of this issue and its exploitability, and with the belief that the private keys would likely become publicly known within hours, we decided an immediate release was the most prudent option.
 
-The following diagram illustrates how the BLE communication works.
+**19:13 PDT**
 
-![Communication between key pad and actuator (simplified)](https://neodyme.io/blog/switchbot/Comms_Switchbot.png)
+We finalized the release and announced it publicly. At this time the underlying issue was still not widely known. In an effort to give other defenders a chance to protect as many users as possible without revealing to attackers how the issue could be exploited, our patch and communications were somewhat opaque, warning users that we were “blocking trust in a small set of intermediate certificates due to specific security concerns around their operation” and urging users to immediately upgrade to this release.
 
-*Communication between key pad and actuator (simplified)*
+In under seven and a half hours from initial notification, patched Go releases were live worldwide, giving users everything they needed to secure their deployments before the keys became public.
 
-Simply by looking at the communication diagram we can see a potential problem: We might be able to simply replay previous “unlock” commands that we have captured.
-However, that would require us to be within Bluetooth range, sniff the command, and then somehow replay it before the session ends.
-Since we aren’t writing an academic paper but do actual research: This is boring.
+By the morning of October 20, numerous independent researchers had publicly disclosed the weak keys.
 
-**We want to be able to open the lock, first shot, without any physical tampering and without leaving traces.**
+## Lessons Learned and Future Improvements
 
-And, as it turns out, we can accomplish this. But first need some more background on the implementation.
+This was our first ever URGENT track security release, and during the release process we ran into a number of issues which caused the release to take longer than expected.
 
-### Communication Protection[¶](https://neodyme.io/en/blog/switchbot#communication-protection)
+While we are happy we were able to get a release out the same day we were notified of the issue, in the modern security environment we feel that we should be able to provide releases in a more compressed timeline. The issues we ran into caused our release process to take just under four and a quarter hours from start to finish.
 
-So the key pad/actuator communication is protected using secret-key encryption and a nonce.
-Digging further into the implementation, and with the help of [community-developed libraries](https://github.com/jonghwanhyeon/python-switchbot), we found out how the encryption is done.
+These issues had previously not been problematic, since the typical release process is split up over a number of days.
 
-The commands are encrypted using the [AES](https://de.wikipedia.org/wiki/Advanced_Encryption_Standard) block cipher in counter (CTR) mode.
-Now, counter mode is an interesting choice, because it doesn’t actually offer any integrity protection.
-Furthermore, because of its design, turning a block cipher into a stream cipher, bit flips propagate 1:1 from ciphertext to plaintext.
+We’ve subsequently made a number of changes to improve our release efficiency, which should significantly reduce the time it takes us to push out a release, enhancing our ability to quickly respond to urgent security threats.
 
-![Counter mode encryption](https://neodyme.io/blog/switchbot/CTR.png)
+PRIVATE track security fixes are pre-announced three to seven days before their release. URGENT track fixes happen on a shorter time schedule, but we could have pre-announced the upcoming release when we began the release process, giving users at least a few hours to prepare.
 
-*Counter mode encryption*
+While on Windows and macOS we rely on the revocation mechanisms the platform APIs provide, on Linux we don’t currently have a similar mechanism. The lack of this support was one of our major drivers to issue an expedited security release, as we did not want to leave Linux users exposed to this issue longer than was necessary.
 
-Meaning that: If we change a bit in a ciphertext, upon decryption by the actuator, this exact bit will also be changed in the decrypted plaintext.
-This is a little-known, but often encountered vulnerability class.
-So, let’s exploit this fact and open some doors!
+Hence we are planning on prioritizing work to bring parity to revocation support on Linux, to help mitigate this class of issues in the future. Part of this work will involve investigating adding support for the [upki](https://github.com/rustls/upki) project, which aims to “provide reliable, privacy-preserving and efficient certificate revocation” for Linux (see [issue #82402](https://go.dev/issue/82402)).
 
-## Exploiting the Lock[¶](https://neodyme.io/en/blog/switchbot#exploiting-the-lock)
+## Upgrading and Verifying Your Deployments
 
-A key observation helps us to mount our attack.
-The key pad’s lock button always sends an encrypted LOCK command, even if the door is already locked.
-Exploiting the fact that AES CTR is used, we only need to compute the difference between an encrypted LOCK and UNLOCK command.
-When we XOR this difference (flipping all corresponding bits) into an encrypted LOCK command, the result will be a validly encrypted UNLOCK command.
-It’s important to note here that this difference has to be computed only once, as it is identical across sessions and devices!
-We therefore split the attack into a setup phase, run once, and an attack phase that opens a specific lock.
+If you run Go binaries which interact with network services using TLS (such as directly via `net/http` or `crypto/tls` or via a dependency such as gRPC), ensure you are running on the latest minor releases. Binaries rebuilt with Go 1.27.3 and 1.26.10 will automatically reject certificates issued by the compromised eMudhra intermediates.
 
-After the one-time setup, the attack works as follows:
+You can verify your current toolchain version using `go version` and you can check the version of Go a binary was built with using `go version -m <path_to_your_binary>`.
 
-- Press the lock button
-- Sniff an encrypted LOCK command send via BLE
-- Bit-flip the encrypted LOCK command into an encrypted UNLOCK command
-- Send the bit-flipped command to the actuator
-- The door opens
+The [govulncheck tool](https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck) can also be used to determine if a binary is affected by this issue:
 
-As we suspect a lot of vulnerable devices out there, we won’t publish our full exploit here.
-But using an individual example, you can see why our attack works.
-So, let’s work through it.
+```
+$ GOTOOLCHAIN=go1.27.3+auto go install golang.org/x/vuln/cmd/govulncheck@latest
+$ govulncheck -mode=binary <path_to_your_binary>
+```
 
-### Setup Phase[¶](https://neodyme.io/en/blog/switchbot#setup-phase)
+## Securing Go Deployments Everywhere
 
-Using one pair of encrypted LOCK and UNLOCK commands, intercepted via BLE, we can compute their XOR difference.
-This difference is identical across all sessions and all locks using the same firmware.
-Therefore, we can use this difference as a sort of “master key” to open all SwitchBot Pro locks.
+For us, securing Go and its users extends beyond fixing direct security vulnerabilities in the runtime and libraries we ship. In order to keep the ecosystem secure, we believe we also need to provide users with the right tools to write secure software, look towards the future of cryptographic algorithms and protocols, and proactively respond to ecosystem wide issues when we can.
 
-Sniffing an encrypted LOCK and UNLOCK command is done easily using our acquired lock.
-Then, we simply compute:
-
-### Attack Phase[¶](https://neodyme.io/en/blog/switchbot#attack-phase)
-
-Applying (XORing) this difference `diff` to the encryption of any LOCK command, independent of secret key and nonce, will yield an encrypted unlock command, which we can then send to the actuator.
-
-So, simply by applying our pre-computed, lock-independent, difference vector, we can turn *every* SwitchBot Pro LOCK command into an UNLOCK command.
-And we can always capture encrypted LOCK commands on any key pad, simply by pressing the lock button.
-Neat!
-
-### Proof of Concept Exploit[¶](https://neodyme.io/en/blog/switchbot#proof-of-concept-exploit)
-
-We’ve recorded our attack in action.
-The video shows the components and our Bluetooth antenna used for sniffing the encrypted LOCK command.
-On the left you can see the Python script applying the difference to the encrypted LOCK command and sending the crafted encrypted UNLOCK command.
-The right side of the screen shows that the attack worked:
-First, a LOCK command is issued by pressing the lock button.
-Then, the crafted UNLOCK command is send and the actuator turns the key, opening the door `\o/`.
-
-It all happens very fast, so maybe you have to re-watch a couple of times to grasp everything.
-
-### Responsible Disclosure and Insufficient Fix[¶](https://neodyme.io/en/blog/switchbot#responsible-disclosure-and-insufficient-fix)
-
-In accordance with our responsible disclosure guidelines, we notified the SwitchBot team of our findings.
-They were very responsive (kudos!) and seemed to take the vulnerability seriously.
-They awarded us a 100€ Amazon voucher for our work.
-
-Before they rolled out a firmware patch, they allowed us to have a look at the updated firmware files.
-
-After we reversed the new firmware, we discovered that they now append a “checksum” to every command.
-We reimplemented the checksum computation in Python:
-
-So the system now calculates an MD5 hash of the command, secret key and nonce.
-The first **two bytes** of this hash then serve as verification tag.
-This construction is sometimes referred to as [YOLO hash](https://blog.trailofbits.com/2024/08/21/yolo-is-not-a-valid-hash-construction/) and rarely a good idea.
-Here in particular, the truncation to two bytes allows us to, in principle, brute force all 65,536 possible verification tags.
-However, this is not necessary.
-
-Because, to our surprise, just the communication between the key pad and actuator got updated.
-The smartphone app still does not use a verification tag.
-Which means that our attack still works 1:1, we just need to compute (once!) the difference between a key pad’s encrypted LOCK command and a smartphone issued UNLOCK command.
-We can then mount our attack using this difference vector, as the actuator then thinks the UNLOCK command comes from a smartphone and does not check the verification tag.
-We have verified that this variant of our attack works.
-
-When we reported this bypass, SwitchBot provided the following context:
-
-> The test firmware pushed to you only includes updates for the Keypad and Lock. The APP has not yet been updated with the new encryption method. We are currently working on implementing encryption upgrades for both the APP and the backend, and the Lock will no longer be compatible with the old encryption method. We need to ensure that this update does not affect other products bound to the APP […].
-
-Backward compatibility is always challenging, especially when it comes to security and IoT devices out in the field.
-
-## Further Attack Surface[¶](https://neodyme.io/en/blog/switchbot#further-attack-surface)
-
-As we were happy with our full compromise, we did not look too much into other avenues of attack.
-Noteworthy, however, was that the key pad uses MIFARE Classic 1K key fobs.
-These are long broken and can be trivially cloned, e.g., using a [Flipper Zero](https://flipper.net/).
-In order to mount this cloning attack, you’d have to get close to a key fob first.
-
-Additionally, while testing the Bluetooth attack, we noticed that the key pad has a tamper detection.
-If it is removed from the wall, it will play a loud alarm sound and inform the owners via their smartphone.
-This is implemented using a Hall effect sensor on top of the key pad and can therefore be defeated using a strong magnet.
-We recommend Neodymium magnets for such purposes ;).
-
-![Switchbot Keypad Components](https://neodyme.io/blog/switchbot/keypad_tamper.png)
-
-*Switchbot Keypad Components*
-
-## Disclosure timeline[¶](https://neodyme.io/en/blog/switchbot#disclosure-timeline)
-
-| Date | Action |
-| --- | --- |
-| **15.07.2025** | Initial Report is sent |
-| **15.07.2025** | SwitchBot replies with additional questions |
-| **15.07.2025** | More context is provided |
-| **17.07.2025** | SwitchBot offers us to beta-test their patch |
-| **06.08.2025** | SwitchBot pushes the update to our account |
-| **13.08.2025** | We report our patch circumvention |
-| **18.08.2025** | We report multiple more patch circumventions |
-| **27.08.2025** | SwitchBot informs us, that it will take 6 months for them to update the rest of their ecosystem |
-| **12.09.2025** | SwitchBot sends us an Amazon voucher 🎉 |
-| **March 2026** | SwitchBot makes an updated version available |
-| **02.04.2026** | SwitchBot shares an updated version with us; we confirm that the described vulnerability does not work anymore |
-| **09.10.2026** | CVE published |
-
-## Fixed Versions[¶](https://neodyme.io/en/blog/switchbot#fixed-versions)
-
-According to SwitchBot, the following versions should have the relevant fixes installed.
-
-**Lock:**
-
-- SwitchBot Lock: V7.7 and later
-- SwitchBot Lock Pro: V3.7 and later
-- SwitchBot Lock WiFi: V15.21 and later
-- SwitchBot Lock Ultra: V2.8 and later
-- SwitchBot Lock Lite: V7.7 and later
-
-**Keypad:**
-
-- SwitchBot Keypad: V2.9 and later
-- SwitchBot Keypad Touch: V2.9 and later
-- SwitchBot Keypad Vision: V2.5 and later
-- SwitchBot Keypad Vision Pro: V1.0 and later
-
-**App:**
-SwitchBot App: V9.18 and later
-
-## Conclusion[¶](https://neodyme.io/en/blog/switchbot#conclusion)
-
-Security is hard and IoT devices often times lack good protections.
-We have to give credit to SwitchBot for even trying to secure their system.
-Many IoT manufacturers don’t even do that.
-Hacking this smart lock was a good reminder about the threats IoT devices can pose.
-Even the more expensive, highly sought after products, are not necessarily immune to attack.
-
-Vulnerabilities like these arise from developers’ mistaken assumptions.
-In fact, misusing crypto primitives like AES-CTR, aka. cryptographic failure, is one of the most common software security vulnerabilities according [OWASP](https://owasp.org/Top10/2025/).
-As it turns out, we [offer a cutting-edge Black Hat training on crypto vulnerabilities](https://blackhat.com/europe/training/schedule/index.html?track%5B%5D=crypto#black-hat-cryptography-attacks-tools-amp-techniques-54313) and [audits](https://neodyme.io/en/reports/) and [testing](https://neodyme.io/en/pentests/) to help with exactly that!
+We are grateful to the independent security researchers and the Mozilla security team for this rapid notification and coordination during this incident.

@@ -1,80 +1,78 @@
-On October 19, the Go team initiated an expedited [security release](https://groups.google.com/g/golang-announce/c/66pojueaQek) to protect Go users and their applications from a critical public key infrastructure (PKI) compromise involving certificates issued by eMudhra.
+This release was triggered by the
+[eMudhra](https://emudhra.we-have-a-problem.com) CA debacle and getting
+informed that Gram is vulnerable due to shipping the `rustls-webpki` and
+`webpki-roots` packages. Thus, I recommend everyone to upgrade to 3.4.0 as soon
+as possible. If you want to stay on an older version you should rebuild from
+source with updated webpki packages.
 
-Within approximately seven and a half hours of being notified, we shipped a targeted patch, which was included in our first-ever [URGENT track](https://go.dev/doc/security/policy#urgent) security release.
+Although the release was ultimately due to that, it was getting time to tag a
+new release anyway. There have been a lot of fixes and some really great new
+features implemented, and I want to give a huge thank you to everyone who have
+been contributing and helping with the editor. One of the reasons why I have
+been holding off on the release is just that I have been so busy this week and
+haven't had time to highlight all the improvements as much as I would like to.
 
-Here is the context behind the incident, why Go stepped in at the runtime level to protect our users and how our incident response unfolded.
+Here is a very incomplete list of highlights with this release. More complete
+changelog below..
 
-## eMudhra Incident
+- Side by side view for Git diffs, contributed by @iskrant_x.
+- Ability to wrap the tab bar instead of scrolling horizontally, by @kbilkis.
+- Helix "Amp Jump" (gw) feature backported by @yilmazer.
+- Git commit history view accessible from the git panel (big thank you to @nicoco for working on this as well).
+- If a server binary is not found, suggest a command to install it (#485) by @xmort
 
-On October 17, Mozilla added eight intermediate certificates (six used for TLS, and two used for code signing) issued by a root certificate controlled by eMudhra to OneCRL, effectively blocking their usage in Firefox. Soon after, a number of security researchers noticed this and began investigating what might’ve caused this.
+...OK, it's already too many things, I'm getting lost. Check out the changelog for more!
 
-On October 19, the Go Security team was made aware of these investigations and their conclusions, which showed that the keys associated with these intermediates were trivially weak, allowing recovery of the private keys in microseconds.
+One thing that has changed that isn't entirely positive is that I have found and
+patched a lot more cases where the editor would download stuff behind our backs
+without consent. I am determined to close all of these gaps over time, but a
+consequence of this is that the editor is a bit more annoying to use now. The UI
+for allowing downloads or discovering why a language server isn't running is not
+good. I know. I am working on something better. A couple of us have also been
+experimenting with replacing or supplanting the Zed extension system with
+something more light-weight which would make installing and managing extensions
+better. I guess another reason why I didn't tag a release sooner is because I
+was hoping to fix some of these usability issues. It'll just have to wait until
+the next release. My apologies for any inconvenience caused by these changes.
 
-Due to the fact that the eMudhra root certificate was present in most trusted root programs, recovering the private keys would allow any attacker to sign arbitrary TLS certificates for any domain name, without the usual requirement to show proof of control of said domain name. This would allow an attacker to man-in-the-middle (MITM) TLS connections and present a valid certificate for a domain name they did not control, effectively allowing them to impersonate any TLS server the targeted machine attempted to connect to.
+Again a massive thank you to everyone who are contributing, hanging out in the
+XMPP chat channel or just using the editor.
 
-Go ships a TLS certificate verifier in the standard library. When users use [`net/http`](https://pkg.go.dev/net/http) or [`crypto/tls`](https://pkg.go.dev/crypto/tls) to connect to a TLS service, the verifier is called to check if the certificates the other side of the connection presents are valid. On Windows and macOS we delegate these checks to the platform APIs, and on Linux, which lacks platform APIs, we use our own verifier implementation.
+Downloads will as usual be available on
+[Codeberg](https://codeberg.org/GramEditor/gram/releases/tag/3.4.0).
 
-Since Linux does not have a uniform built-in mechanism to handle revocation checking, and in order to provide a timely fix for users on other platforms that might not receive platform updates, we decided the best way to protect Go users was to do an [URGENT track](https://go.dev/doc/security/policy#urgent) security release which similarly removed trust.
+Cheers,
 
-## Incident Timeline
+*@krig*
 
-A typical Go security release follows a multi-day process, with advanced pre-announcements in order to allow those who rely on Go to prepare. In this case, because we believed that private key exposure was imminent, our team chose to use the URGENT track for the first time in order to ship protections before active public exploitation could begin.
+## [3.4.0] - 2026-10-23
 
-**11:45 PDT**
+## Added
 
-Our Security team was alerted by an independent external researcher, citing unreported actions by Mozilla and other organizations to remove trust in eight eMudhra intermediates. It became clear quickly that this was due to weak private keys they used.
-
-**12:30 PDT**
-
-Mozilla independently reported the issue to our Security team, confirming the issue, and asking that we not immediately disclose the issue, but encouraging us to release a fix as soon as possible.
-
-**14:00 PDT**
-
-We finalized a patch which blocked the usage of certificates which chained to the compromised intermediates, and thanks to the researcher who initially alerted us to the issue, had a set of certificates signed using the recovered keys to test against.
-
-**15:00 PDT**
-
-We began the process to release minor Go versions 1.27.3 and 1.26.10 containing our patch. Due to the urgent nature of this issue and its exploitability, and with the belief that the private keys would likely become publicly known within hours, we decided an immediate release was the most prudent option.
-
-**19:13 PDT**
-
-We finalized the release and announced it publicly. At this time the underlying issue was still not widely known. In an effort to give other defenders a chance to protect as many users as possible without revealing to attackers how the issue could be exploited, our patch and communications were somewhat opaque, warning users that we were “blocking trust in a small set of intermediate certificates due to specific security concerns around their operation” and urging users to immediately upgrade to this release.
-
-In under seven and a half hours from initial notification, patched Go releases were live worldwide, giving users everything they needed to secure their deployments before the keys became public.
-
-By the morning of October 20, numerous independent researchers had publicly disclosed the weak keys.
-
-## Lessons Learned and Future Improvements
-
-This was our first ever URGENT track security release, and during the release process we ran into a number of issues which caused the release to take longer than expected.
-
-While we are happy we were able to get a release out the same day we were notified of the issue, in the modern security environment we feel that we should be able to provide releases in a more compressed timeline. The issues we ran into caused our release process to take just under four and a quarter hours from start to finish.
-
-These issues had previously not been problematic, since the typical release process is split up over a number of days.
-
-We’ve subsequently made a number of changes to improve our release efficiency, which should significantly reduce the time it takes us to push out a release, enhancing our ability to quickly respond to urgent security threats.
-
-PRIVATE track security fixes are pre-announced three to seven days before their release. URGENT track fixes happen on a shorter time schedule, but we could have pre-announced the upcoming release when we began the release process, giving users at least a few hours to prepare.
-
-While on Windows and macOS we rely on the revocation mechanisms the platform APIs provide, on Linux we don’t currently have a similar mechanism. The lack of this support was one of our major drivers to issue an expedited security release, as we did not want to leave Linux users exposed to this issue longer than was necessary.
-
-Hence we are planning on prioritizing work to bring parity to revocation support on Linux, to help mitigate this class of issues in the future. Part of this work will involve investigating adding support for the [upki](https://github.com/rustls/upki) project, which aims to “provide reliable, privacy-preserving and efficient certificate revocation” for Linux (see [issue #82402](https://go.dev/issue/82402)).
-
-## Upgrading and Verifying Your Deployments
-
-If you run Go binaries which interact with network services using TLS (such as directly via `net/http` or `crypto/tls` or via a dependency such as gRPC), ensure you are running on the latest minor releases. Binaries rebuilt with Go 1.27.3 and 1.26.10 will automatically reject certificates issued by the compromised eMudhra intermediates.
-
-You can verify your current toolchain version using `go version` and you can check the version of Go a binary was built with using `go version -m <path_to_your_binary>`.
-
-The [govulncheck tool](https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck) can also be used to determine if a binary is affected by this issue:
-
-```
-$ GOTOOLCHAIN=go1.27.3+auto go install golang.org/x/vuln/cmd/govulncheck@latest
-$ govulncheck -mode=binary <path_to_your_binary>
-```
-
-## Securing Go Deployments Everywhere
-
-For us, securing Go and its users extends beyond fixing direct security vulnerabilities in the runtime and libraries we ship. In order to keep the ecosystem secure, we believe we also need to provide users with the right tools to write secure software, look towards the future of cryptographic algorithms and protocols, and proactively respond to ecosystem wide issues when we can.
-
-We are grateful to the independent security researchers and the Mozilla security team for this rapid notification and coordination during this incident.
+- Add 'open current file' button (#583) by @nicoco
+- Add 'refresh git history' button (#575) by @nicoco
+- Add Helix "Amp Jump" (g w) feature (zed#43733) (#659) by @yilmazer
+- Add Repology notes in docs (#470) by @koru
+- Add completion_menu_item_kind option to display text icons for completion items. (#623) by @CubeOfShame
+- Add code outline support for diff files (#524) by @jqslr
+- Add generate shell completions via cli by @ycna07
+- Add refs information to commit history views
+- Add setting to show pinned tabs in a separate row (zed#46573) (#633) by @kbilkis
+- Add setting to wrap tabs onto multiple rows (#643) by @kbilkis
+- Add settings-alias support (#581) by @nitbook
+- Add side-by-side Git diff view (#565) by @iskrant_x
+- Add smart sort for project panel: mod.rs sorts first (#541) by @patchunwrap
+- Add support for C23 keyword 'constexpr' (#522) by @mgrave
+- Add toggle to enable/disable git hooks + fix running commit-msg hook (#594) by @nicoco
+- Add tombi as an LSP and formatter for TOML (#626) (#616) by @psy-q
+- Allow disabling 'auto focus on paste' (#487) by @rockisch
+- Bundle OpenMoji as emoji fallback (#478)
+- Configure debug adapter permissions in language server config view
+- Generate color for each commit author
+- Handle '#' links in Markdown preview (#514) by @rockisch
+- Highlight TODO/NOTE/WARN: comments in builtin languages (#534) by @nitbook
+- If a server binary is not found, suggest a command to install it (#485) by @xmort
+- Implement clipboard file and image copy for MacOS (#487) by @rockisch
+- Language support for Typst via tinymist (#517) by @theDoctor
+- Refresh file history view on repository change
+- Rework show_tab_bar_buttons setting to allow always showing (#637) by @sir_nacnud

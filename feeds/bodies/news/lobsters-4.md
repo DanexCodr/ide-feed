@@ -51,5 +51,3 @@ Behold, a fully playable version of `REVERSI.EXE` dated `15-Nov-1985` running on
 ![alt text](https://blog.enlyth.com/_astro/image-4.BUOY9wBP_ZSDHhX.webp)
 
 And although using `otvdm` does feel like cheating, I thought it was cool enough to include in this post.
-
-[Discuss on Hacker News](https://news.ycombinator.com/item?id=50248055)

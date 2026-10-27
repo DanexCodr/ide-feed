@@ -1,78 +1,34 @@
-This release was triggered by the
-[eMudhra](https://emudhra.we-have-a-problem.com) CA debacle and getting
-informed that Gram is vulnerable due to shipping the `rustls-webpki` and
-`webpki-roots` packages. Thus, I recommend everyone to upgrade to 3.4.0 as soon
-as possible. If you want to stay on an older version you should rebuild from
-source with updated webpki packages.
+If you have questions or thoughts on the post I'd love to [hear about it!](https://brennenputh.me/contact/)
+      I'm currently looking for work in the northeastern US. I'll be graduating with a BS in both Computer Science and Cyber Operations at the end of the school year.
+      I have worked in web application development and Java, and I have experience in Rust, C++, Python, and various other languages.
+      If you're curious about what I've done in the past, I keep up a short list of projects [here](https://brennenputh.me/projects/) or [contact me](https://brennenputh.me/contact/) to give me a place to send my resume.
+      I figure anyone who reads my posts will have an interesting offer, so all leads are appreciated!
 
-Although the release was ultimately due to that, it was getting time to tag a
-new release anyway. There have been a lot of fixes and some really great new
-features implemented, and I want to give a huge thank you to everyone who have
-been contributing and helping with the editor. One of the reasons why I have
-been holding off on the release is just that I have been so busy this week and
-haven't had time to highlight all the improvements as much as I would like to.
+I read a lot of printed papers these days. While I enjoy reading on a laptop as much as the next guy, marking up a printed document engages me better. Also, there's something about sitting with a whiteboard and a printed document that makes me rightly feel like I'm doing something important. So I've been thinking about how to best allow others to enjoy this medium for content that I write.
 
-Here is a very incomplete list of highlights with this release. More complete
-changelog below..
+Luckily for me, printed documents were a major focus of web design a while ago. You can print any webpage you like, by hitting CTRL-P and hoping your printer driver decides to cooperate today.
+I tested this on my own webpage, foolishly thinking I would have a decent print job without any effort.
 
-- Side by side view for Git diffs, contributed by @iskrant_x.
-- Ability to wrap the tab bar instead of scrolling horizontally, by @kbilkis.
-- Helix "Amp Jump" (gw) feature backported by @yilmazer.
-- Git commit history view accessible from the git panel (big thank you to @nicoco for working on this as well).
-- If a server binary is not found, suggest a command to install it (#485) by @xmort
+It wasn't great, although you can at least see all the content. The text was too big by about 2 levels, the header looks awful when printed, and my links look awfully gray in black-and-white. Totally unacceptable.
 
-...OK, it's already too many things, I'm getting lost. Check out the changelog for more!
+### Making Things Printable
 
-One thing that has changed that isn't entirely positive is that I have found and
-patched a lot more cases where the editor would download stuff behind our backs
-without consent. I am determined to close all of these gaps over time, but a
-consequence of this is that the editor is a bit more annoying to use now. The UI
-for allowing downloads or discovering why a language server isn't running is not
-good. I know. I am working on something better. A couple of us have also been
-experimenting with replacing or supplanting the Zed extension system with
-something more light-weight which would make installing and managing extensions
-better. I guess another reason why I didn't tag a release sooner is because I
-was hoping to fix some of these usability issues. It'll just have to wait until
-the next release. My apologies for any inconvenience caused by these changes.
+**Edit 2026-10-26:** I feel it's relevant to say, this has almost entirely changed already because of feedback I received from people both on lobste.rs and HN about obvious things I'd missed. I'm currently simplifying my stylesheet as much as I can. Thanks!
 
-Again a massive thank you to everyone who are contributing, hanging out in the
-XMPP chat channel or just using the editor.
+Luckily, the web community has had this aforementioned focus on printing documents from HTML pages. CSS has selectors to allow styling specifically printed content, and they can be useful. Here's my print-related snippet for this page now:
 
-Downloads will as usual be available on
-[Codeberg](https://codeberg.org/GramEditor/gram/releases/tag/3.4.0).
+You can see the effects of this snippet by hitting CTRL-P or the print button on this page. Here's the functions this does for me, in order:
 
-Cheers,
+1. onlyPrint can be added as a class to allow elements which only show up in the printed document. Right now, that means tagging a small author attribution to the subtitle.
+2. noPrint is used to remove something from the printed website. I put it on the header, because it looks honestly very ugly in printed format.
+3. Adjusting font sizes for print is very important. The variable-scale text which I use on my website looks awful on a printed page. 12pt is a fairly well accepted size, so I figured it'll do. A slightly larger size for the headers makes sense as well.
+4. The giallo tweaks are for codeblocks. Honestly, codeblocks are still the ugliest part even after some tweaking. They want to come out as one chunk and not break over page borders, and if anyone has a solution to that I'd be greatly appreciative.
+5. Blue links, as much as I like them on the site, look awful in grayscale. Turning them the same color as other text is fine. Feel free to pull any code you like from the CSS, I'm not protective of it. I would personally love to experience more webpages that think about how printing works.
 
-*@krig*
+### Why You Should Do This
 
-## [3.4.0] - 2026-10-23
+After attempting to optimize my website in this way, I am sympathetic for those who wouldn't prioritize printing. Hiding and showing all the right things in print took me a decent chunk of my morning. My site isn't very complex. I also doubt how many people regularly print webpages out. I might be the only one.
 
-## Added
+Still, if all your website consists of is text, allowing people to experience the text in their favorite medium is never a bad thing. The digital medium allows a lot of flexibility. The road to good software is paved with kindnesses from software engineers to their users. One day, perhaps someone shall find this kindness and smile, even if just for a fleeting moment. And that will be worth it.
 
-- Add 'open current file' button (#583) by @nicoco
-- Add 'refresh git history' button (#575) by @nicoco
-- Add Helix "Amp Jump" (g w) feature (zed#43733) (#659) by @yilmazer
-- Add Repology notes in docs (#470) by @koru
-- Add completion_menu_item_kind option to display text icons for completion items. (#623) by @CubeOfShame
-- Add code outline support for diff files (#524) by @jqslr
-- Add generate shell completions via cli by @ycna07
-- Add refs information to commit history views
-- Add setting to show pinned tabs in a separate row (zed#46573) (#633) by @kbilkis
-- Add setting to wrap tabs onto multiple rows (#643) by @kbilkis
-- Add settings-alias support (#581) by @nitbook
-- Add side-by-side Git diff view (#565) by @iskrant_x
-- Add smart sort for project panel: mod.rs sorts first (#541) by @patchunwrap
-- Add support for C23 keyword 'constexpr' (#522) by @mgrave
-- Add toggle to enable/disable git hooks + fix running commit-msg hook (#594) by @nicoco
-- Add tombi as an LSP and formatter for TOML (#626) (#616) by @psy-q
-- Allow disabling 'auto focus on paste' (#487) by @rockisch
-- Bundle OpenMoji as emoji fallback (#478)
-- Configure debug adapter permissions in language server config view
-- Generate color for each commit author
-- Handle '#' links in Markdown preview (#514) by @rockisch
-- Highlight TODO/NOTE/WARN: comments in builtin languages (#534) by @nitbook
-- If a server binary is not found, suggest a command to install it (#485) by @xmort
-- Implement clipboard file and image copy for MacOS (#487) by @rockisch
-- Language support for Typst via tinymist (#517) by @theDoctor
-- Refresh file history view on repository change
-- Rework show_tab_bar_buttons setting to allow always showing (#637) by @sir_nacnud
+**Edit 2026-10-26:** I was informed by a friend that this post ended up on the front page of HN and lobste.rs after I submitted it. Fun! Despite the several flaws I am now informed of in my CSS, I hope this article at least pushes a few to consider this medium more carefully. Thanks all for reading!
