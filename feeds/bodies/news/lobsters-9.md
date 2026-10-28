@@ -1,636 +1,77 @@
-I'm impressed with the level of compatibility
-of the new memory-safe C/C++ compiler
-[Fil-C](https://fil-c.org)
-(filcc, fil++).
-Many libraries and applications that I've tried
-work under Fil-C without changes, and the exceptions haven't been hard to get working.
-
-I've accumulated miscellaneous notes on this page regarding usage of Fil-C.
-My selfish objective here is to protect various machines that I manage
-by switching them over to code compiled with Fil-C,
-but maybe you'll find something useful here too.
-
-**Is it affordable?**
-As some data points,
-I've posted a
-[graph](https://cr.yp.to/2025/20251028-filcc-vs-clang.html)
-showing nearly 9000 microbenchmarks of Fil-C vs. clang on cryptographic software (each run pinned to 1 core on a Zen 4).
-Typically code compiled with Fil-C takes between 1x and 4x as many cycles as the same code compiled with clang.
-
-**Can I use Fil-C to compile replacement packages for my Debian machine?**
-I'm working on
-[Filian](https://gitlab.cr.yp.to/djb/filian),
-which adapts Debian packages to use Fil-C.
-On a Debian 13 system,
-Filian downloads Fil-C, compiles Fil-C, installs Fil-C,
-downloads selected Debian source packages,
-compiles those packages with Fil-C,
-and installs those packages.
-
-**Are there other package managers that support compiling with Fil-C?**
-Yes:
-[Filnix](https://github.com/mbrock/filnix)
-from Mikael Brockman adapts
-[Nix](https://nixos.org/#) packages to use Fil-C.
-For example,
-an unprivileged user under Debian 12 with about 10GB of free disk space
-can download, compile, and install Fil-C,
-and run a Fil-C-compiled Nethack, as follows:
-
-```
-unshare --user --pid echo YES # just to test
-git clone https://github.com/nix-community/nix-user-chroot
-cd nix-user-chroot
-cargo build --release
-mkdir -m 0755 ~/nix
-~/nix-user-chroot/target/release/nix-user-chroot ~/nix \
-  bash -c 'curl -L https://nixos.org/nix/install | sh'
-env TERM=vt102 \
-  ~/nix-user-chroot/target/release/nix-user-chroot ~/nix \
-  ~/nix/store/*-nix-2*/bin/nix \
-  --extra-experimental-features 'nix-command flakes' \
-  run 'github:mbrock/filnix#nethack'
-```
-
-**Are binary packages available precompiled with Fil-C?**
-I'm not distributing Filian binaries for now,
-but if you run multiple Debian systems with synchronized package versions
-then you can compile once and share the binary packages.
-For Filnix, some binary packages are already cached via
-[Cachix](https://www.cachix.org/).
-You can also use various packages from the
-[/opt/fil](https://fil-c.org/install_optfil)
-binary distribution from the Fil-C author.
-
-**Is the supply chain safe?**
-As a starting point in answering this question,
-I've posted a
-[script](https://cr.yp.to/2025/filc-diffs-20251027.sh)
-to help auditors see how Fil-C differs from upstream sources (clang, glibc, ...).
-
-I think everything later on this page is superseded by Filian,
-except for some package notes that I haven't integrated into the Filian database yet.
-Filian definitely supersedes
-filian-install-packages version
-[20251030](https://cr.yp.to/2025/20251030-filian-install-packages)
-posted here,
-filian-install-compiler versions
-[20251029](https://cr.yp.to/2025/20251029-filian-install-compiler.sh),
-[20251030](https://cr.yp.to/2025/20251030-filian-install-compiler.sh),
-[20251104](https://cr.yp.to/2025/20251104-filian-install-compiler.sh)
-posted here,
-the
-[build-parallel](https://cr.yp.to/2025/build-parallel-20251023.py) script posted here,
-and the
-libgc replacement posted here.
-
-Timings below are from a mini-PC named phoenix except where otherwise mentioned.
-This mini-PC has a 6-core (12-thread) AMD Ryzen 5 7640HS (Zen 4) CPU, 12GB RAM, and 36GB swap.
-The OS is Debian 13.
-(I normally run LTS software,
-periodically upgrading from software that's 4–5 years old such as Debian 11 today
-to software that's 2–3 years old such as Debian 12 today;
-but some of the packages included in Fil-C expect newer utilities to be available.)
-
-Current recommendations for things to do at the beginning as root:
-
-```
-mkdir -p /var/empty
-apt install \
-  autoconf-dickey build-essential bison clang cmake flex gawk \
-  gettext ninja-build patchelf quilt ruby texinfo time
-```
-
-I created an unprivileged filc user.
-Everything else is as that user.
-
-I downloaded the Fil-C source package:
-
-```
-git clone https://github.com/pizlonator/fil-c.git
-cd fil-c
-```
-
-This isn't just the compiler;
-there's also glibc and quite a few higher-level libraries and applications.
-There are also binary Fil-C packages,
-but I've worked primarily with the source package at this point.
-
-I compiled Fil-C and glibc:
-
-```
-time ./build_all_fast_glibc.sh
-```
-
-There are also options to use musl instead of glibc,
-but musl is incompatible with some of the packages shipped with Fil-C:
-attr needs basename,
-elfutils needs argp_parse,
-sed's test suite needs the glibc variant of calloc,
-and
-vim's build needs iconv
-to be able to convert from CP932 to UTF-8.
-
-I had originally configured the server phoenix with only 12GB swap.
-I then had to restart ./build_all_fast_glibc.sh a few times
-because compiling the Fil-C compiler ran out of memory
-(from automatically parallelizing the compilation across 12 threads;
-presumably compiling clang on the same machine would have the same issue).
-Switching to 36GB swap made everything work with no restarts;
-monitoring showed that almost 19GB swap (plus 12GB RAM) was used at one point.
-A larger server, 128 cores with 512GB RAM, took 8 minutes for Fil-C plus 6 minutes for musl,
-with no restarts needed.
-
-Fil-C includes a
-./build_all_slow.sh
-that builds many more libraries and applications
-(sometimes with patches from the Fil-C author).
-I wrote a replacement script
-[https://cr.yp.to/2025/build-parallel-20251023.py](https://cr.yp.to/2025/build-parallel-20251023.py)
-with the following differences:
-
-On phoenix,
-running
-time PATH="$HOME/bin:$HOME/fil-c/build/bin:$HOME/fil-c/pizfix/bin:$PATH" ./build-parallel.py
-went through 61 targets in 101 minutes real time (467 minutes user time, 55 minutes system time),
-successfully compiling 60 of them.
-
-**libcap.**
-This is the one that didn't compile:
-/home/filc/fil-c/pizfix/bin/ld: /usr/libexec/gcc/x86_64-linux-gnu/14/liblto_plugin.so: error loading plugin: libc.so.6: cannot open shared object file: No such file or directory
-
-**util-linux.**
-I skipped this one.
-It does compile,
-but the compiled taskset utility needs to be patched to use
-sched_getaffinity and sched_setaffinity
-as library functions rather than via syscall,
-or Fil-C needs to be patched for those syscalls.
-This is an issue for build-parallel
-since build-parallel relies on taskset;
-maybe build-parallel should instead use Python's affinity functions.
-
-**
-attr, bash, benchmarks, binutils, bison, brotli, bzip2, bzip3, check, cmake, coreutils, cpython, curl, dash, diffutils, elfutils, emacs, expat, ffi, gettext, git,
-gmp, grep, icu, jpeg-6b, libarchive, libcap, libedit, libevent, libpipeline, libuev, libuv, lua, lz4, m4, make, mg, ncurses, nghttp2, openssh, openssl, pcre2, pcre,
-perl, pkgconf, procps, quickjs, sed, shadow, simdutf, sqlite, tcl, tmux, toybox, vim, wg14_signals, xml_parser, xz, zlib, zsh, zstd.**
-No problems encountered so far
-(given whatever patches were already applied from the Fil-C author!).
-The benchmarks package is supplied with Fil-C and does a few miscellaneous measurements.
-
-I did
-export PATH="$HOME/bin:$HOME/fil-c/build/bin:$HOME/fil-c/pizfix/bin:$PATH"
-before these.
-
-**boost 1.89.0**:
-Seems to mostly work.
-Most of the package is header-only;
-a few simple tests worked fine.
-
-I also looked a bit at the compiled parts.
-Running
-./bootstrap.sh --with-toolset=clang --prefix=$HOME
-ran into vfork,
-which Fil-C doesn't support,
-but editing
-tools/build/src/engine/execunix.cpp
-to use defined(__APPLE__) || defined(__FILC__)
-for the no-fork test got past this.
-
-Running ./b2 install --prefix=$HOME toolset=clang address-model=64 architecture=x86_64 binary-format=elf
-produced an error message since I should have said x86 instead of x86_64;
-Fil-C said it caught a safety issue in the b2 program after the error message:
-filc safety error: argument size mismatch (actual = 8, expected = 16).
-I didn't compile with debugging so Fil-C didn't say where this is in b2.
-
-**cdb-20251021**:
-Seems to work.
-One regression test, an artificial out-of-memory regression test,
-currently produces a different error message with Fil-C:
-filc panic: src/libpas/pas_compact_heap_reservation.c:65: pas_aligned_allocation_result pas_compact_heap_reservation_try_allocate(size_t, size_t):
-assertion page_result.result failed.
-
-**libcpucycles-20250925**:
-Seems to work.
-I commented out the first three lines of cpucycles/options.
-
-**libgc**:
-I replaced this with a small gcshim package
-([https://cr.yp.to/2025/gcshim-20251022.tar.gz](https://cr.yp.to/2025/gcshim-20251022.tar.gz))
-that simply calls malloc etc.
-So far this seems to be an adequate replacement.
-(Fil-C includes a garbage collector.)
-
-**libntruprime-20241021**:
-Seems to work after a few tweaks but I didn't collect full notes yet.
-chmod +t crypto_hashblocks/sha512/avx2 disables assembly and makes things compile;
-configured with --no-valgrind since Fil-C doesn't support valgrind;
-did a bit more tweaking to make cpuid work.
-
-**lpeg-1.1.0:**
-Compiles, maybe works (depends on lua, dependency of neovim):
-`cd
-PREFIX=$(dirname $(dirname $(which lua)))
-wget https://www.inf.puc-rio.br/~roberto/lpeg/lpeg-1.1.0.tar.gz
-tar -xf lpeg-1.1.0.tar.gz
-cd lpeg-1.1.0
-make CC=`which filcc` DLLFLAGS='-shared -fPIC' test
-cp lpeg.so $PREFIX/lib
-`
-
-**luv-1.51.0:**
-Compiles, maybe works (depends on lua, dependency of neovim):
-`cd
-PREFIX=$(dirname $(dirname $(which lua)))
-wget https://github.com/luvit/luv/releases/download/1.51.0-1/luv-1.51.0-1.tar.gz
-tar -xf luv-1.51.0-1.tar.gz
-cd luv-1.51.0-1
-mkdir build
-cd build
-LUA_DIR=$HOME/fil-c/projects/lua-5.4.7
-# lua install should probably do this:
-cp $LUA_DIR/lua.h $PREFIX/include/
-cp $LUA_DIR/lauxlib.h $PREFIX/include/
-cp $LUA_DIR/luaconf.h $PREFIX/include/
-cp $LUA_DIR/lualib.h $PREFIX/include/
-# and then:
-cmake -DCMAKE_C_COMPILER=`which filcc` -DCMAKE_INSTALL_PREFIX=$PREFIX -DWITH_LUA_ENGINE=Lua -DLUA_DIR=$HOME/fil-c/projects/lua-5.4.7/ ..
-make test
-make install
-`
-
-**mutt-2-2-15-rel** (depends on ncurses):
-`wget https://github.com/muttmua/mutt/archive/refs/tags/mutt-2-2-15-rel.tar.gz
-tar -xf mutt-2-2-15-rel.tar.gz
-cd mutt-mutt-2-2-15-rel
-CC=`which clang` ./prepare --prefix=$HOME/fil-c/pizfix --with-homespool
-make -j12 install
-`
-Seems to work, at least for reading email.
-
-**tig** (depends on ncurses and maybe more):
-`wget https://github.com/jonas/tig/releases/download/tig-2.6.0/tig-2.6.0.tar.gz
-tar -xf tig-2.6.0.tar.gz
-cd tig-2.6.0
-CC=`which filcc` ./configure --prefix=$(dirname $(dirname $(which git)))
-make -j12
-make test
-make -j12 install
-`
-Seems to work, at least for viewing the Fil-C repo.
-
-**w3m** (depends on gcshim and ncurses):
-Seems to work.
-I tried the Debian version:
-git clone https://salsa.debian.org/debian/w3m.git.
-I used CFLAGS=-Wno-incompatible-function-pointer-types
-(which is probably needed for clang anyway even without Fil-C).
-
-I've built and installed some replacement Debian packages using Fil-C as the compiler on a Debian 13 machine,
-as explained below.
-Hopefully this can rapidly scale to many packages,
-taking advantage of the basic compile-install-test knowledge already built into Debian source packages,
-although some packages will take more work because they need extra patches to work with Fil-C.
-
-**Structure.**
-Debian already understands how to have packages for multiple architectures (ABIs; Debian "ports") installed at once.
-For example,
-dpkg --add-architecture i386; apt update; apt install bash:i386
-installs a 32-bit version of bash,
-replacing the usual 64-bit version;
-you can do apt install bash:amd64 to revert to the 64-bit version.
-Meanwhile the 32-bit libraries and 64-bit libraries are installed in separate locations,
-basically
-/lib/i386-linux-gnu
-or
-/usr/lib/i386-linux-gnu
-vs.
-/lib/x86_64-linux-gnu
-or
-/usr/lib/x86_64-linux-gnu.
-(On Debian 11 and newer, and on Ubuntu 22.04 and newer,
-/lib is symlinked to /usr/lib.)
-
-I'm following this model for plugging Fil-C into Debian:
-the goal is for apt install bash:amd64fil0
-to install a Fil-C-compiled (amd64fil0) version of bash,
-replacing the usual (amd64) version of bash,
-while the amd64 and amd64fil0 libraries are installed in separate locations.
-
-[Filian uses amd64filc0,
-with libraries in /usr/lib/x86_64-linux-gnufilc0.]
-
-**The include-file complication.**
-Debian
-[expects](https://wiki.debian.org/Multiarch/LibraryPathOverview)
-library packages compiled for multiple ABIs
-to all provide the same include files:
-for example, /usr/include/ncurses.h
-is provided by libncurses-dev:i386, libncurses-dev:amd64, etc.
-This is safe because Debian forces
-libncurses-dev:i386 and libncurses-dev:amd64 and so on
-to all have the same version.
-An occasional package with ABI-dependent include files
-can still use /usr/include/x86_64-linux-gnu etc.
-
-Fil-C instead omits /usr/include
-in favor of a Fil-C-specific directory
-(which will typically be different from /usr/include:
-even if Fil-C is compiled with glibc,
-probably the glibc version won't be the same as in /usr/include).
-This difference is the top source of messiness below.
-I'm planning to tweak the Fil-C driver to use /usr/include on Debian.
-[This is done in Filian.]
-
-Something else I'm planning to tweak is Fil-C's glibc compilation,
-so that it uses the final system prefix.
-[This is also done in Filian.]
-The approach described below instead requires
-/home/filian/fil-c to stay in place
-for compiling and running programs.
-
-**Building Debian packages.**
-How does Debian package building work?
-First, more packages to install as root:
-
-`apt install dpkg-dev devscripts docbook2x \
-  dh-exec dh-python python3-setuptools fakeroot \
-  sbuild mmdebstrap uidmap piuparts
-`
-
-Debian has
-[multiple options](https://wiki.debian.org/PackagingTools#Package_build_tools)
-for building a package.
-The option that has the best isolation,
-and that Debian uses to continually build new packages for distribution,
-is sbuild,
-but for fast development I'll focus on directly using the lower-level
-dpkg-buildpackage.
-[Filian also uses dpkg-buildpackage for the moment.]
-
-**Baseline 1: using sbuild without Fil-C.**
-In case you do want to try sbuild,
-here's the basic setup,
-and then an example of building a small package (tinycdb):
-`mkdir -p ~/shared/sbuild
-time mmdebstrap --include=ca-certificates --skip=output/dev --variant=buildd unstable ~/shared/sbuild/unstable-amd64.tar.zst https://deb.debian.org/debian
-
-mkdir -p ~/.config/sbuild
-cat << "EOF" > ~/.config/sbuild/config.pl
-$chroot_mode = 'unshare';
-$external_commands = { "build-failed-commands" => [ [ '%SBUILD_SHELL' ] ] };
-$build_arch_all = 1;
-$build_source = 0;
-$source_only_changes = 1;
-$run_lintian = 1;
-$lintian_opts = ['--display-info', '--verbose', '--fail-on', 'error,warning', '--info'];
-$run_autopkgtest = 1;
-$run_piuparts = 1;
-$piuparts_opts = ['--no-eatmydata', '--distribution=%r', '--fake-essential-packages=systemd-sysv'];
-EOF
-
-mkdir -p ~/shared/packages
-cd ~/shared/packages
-apt source tinycdb
-cd tinycdb-*/
-time sbuild
-`
-
-**Baseline 2: using dpkg-buildpackage without Fil-C.**
-Here's what it looks like compiling the same small package with dpkg-buildpackage:
-`mkdir -p ~/shared/packages
-cd ~/shared/packages
-apt source tinycdb
-cd tinycdb-*/
-time dpkg-buildpackage -us -uc -b
-`
-
-**The goal: Using dpkg-buildpackage with Fil-C.**
-[Filian handles the following differently; see filian-onetime:]
-As root, teach dpkg basic features of the new architecture,
-imitating the current line
-amd64 x86_64 (amd64|x86_64) 64 little
-in the same file:
-
-`echo amd64fil0 x86_64+fil0 amd64fil0 64 little >> /usr/share/dpkg/cputable
-`
-
-[Not necessary with Filian:]
-Also, allow apt to install packages compiled for this architecture
-(beware that this will also later make apt update look for that architecture on servers,
-and whimper a bit for not finding it,
-but nothing breaks):
-
-```
-dpkg --add-architecture amd64fil0
-```
-
-[Not necessary with Filian:]
-Also, teach autoconf to accept amd64fil0
-(the third of these lines is what's critical for Debian builds):
-
-```
-sed -i '/| x86_64 / a| x86_64+fil0 \\' /usr/share/autoconf/build-aux/config.sub
-sed -i '/| x86_64 / a| x86_64+fil0 \\' /usr/share/libtool/build-aux/config.sub
-sed -i '/| x86_64 / a| x86_64+fil0 \\' /usr/share/misc/config.sub
-```
-
-[Handled by Filian's filian-install-compiler:]
-As a filian user,
-compile Fil-C and its standard library:
-
-```
-cd
-git clone https://github.com/pizlonator/fil-c.git
-cd fil-c
-time ./build_all_fast_glibc.sh
-```
-
-[Handled by Filian's filian-install-compiler:]
-As root,
-copy Fil-C and its standard library into system locations:
-
-```
-mkdir -p /usr/libexec/fil/amd64/compiler
-time cp -r /home/filian/fil-c/pizfix /usr/libexec/fil/amd64/
-rm -rf /usr/lib/x86_64+fil0-linux-gnu
-mv /usr/libexec/fil/amd64/pizfix/lib /usr/lib/x86_64+fil0-linux-gnu
-ln -s /usr/lib/x86_64+fil0-linux-gnu /usr/libexec/fil/amd64/pizfix/lib
-rm -rf /usr/include/x86_64+fil0-linux-gnu
-mv /usr/libexec/fil/amd64/pizfix/include /usr/include/x86_64+fil0-linux-gnu
-ln -s /usr/include/x86_64+fil0-linux-gnu /usr/libexec/fil/amd64/pizfix/include
-time cp -r /home/filian/fil-c/build/bin /usr/libexec/fil/amd64/compiler/
-time cp -r /home/filian/fil-c/build/include /usr/libexec/fil/amd64/compiler/
-time cp -r /home/filian/fil-c/build/lib /usr/libexec/fil/amd64/compiler/
-( echo '#!/bin/sh'
-  echo 'exec /usr/libexec/fil/amd64/compiler/bin/filcc "$@"' ) > /usr/bin/x86_64+fil0-linux-gnu-gcc
-chmod 755 /usr/bin/x86_64+fil0-linux-gnu-gcc
-( echo '#!/bin/sh'
-  echo 'exec /usr/libexec/fil/amd64/compiler/bin/fil++ "$@"' ) > /usr/bin/x86_64+fil0-linux-gnu-g++
-chmod 755 /usr/bin/x86_64+fil0-linux-gnu-g++
-ln -s /usr/libexec/fil/amd64/compiler/bin/llvm-objdump /usr/bin/x86_64+fil0-linux-gnu-objdump
-ln -s x86_64+fil0-linux-gnu-gcc /usr/bin/filcc
-ln -s x86_64+fil0-linux-gnu-g++ /usr/bin/fil++
-```
-
-[Not necessary with Filian's binutils patches:]
-Now, as user filian (or whichever other user),
-let's make a little helper script to adjust a Debian source package:
-
-```
-mkdir -p $HOME/bin
-( echo '#!/bin/sh'
-  echo 'sed -i '\''s/^ \([^"]*\)$/ pizlonated_\1/'\'' debian/*.symbols'
-  echo 'find . -name '\''*.map'\'' | while read fn'
-  echo 'do'
-  echo '  awk '\''{'
-  echo '    if ($1 == "local:") global = 0'
-  echo '    if ($1 == "}") global = 0'
-  echo '    if (global && NF > 0 && !index($0,"c++")) $1 = "pizlonated_"$1'
-  echo '    if ($1 == "global:") global = 1'
-  echo '    print'
-  echo '  }'\'' < $fn > $fn.tmp'
-  echo '  mv $fn.tmp $fn'
-  echo 'done'
-  echo 'find debian -name '\''*.install'\'' | while read fn'
-  echo 'do'
-  echo '  awk '\''{'
-  echo '    if (NF == 2 && $2 == "usr/include") $2 = $2"/${DEB_HOST_MULTIARCH}"'
-  echo '    if (NF == 1 && $1 == "usr/include") { $2 = $1"/${DEB_HOST_MULTIARCH}"; $1 = $1"/*" }'
-  echo '    print'
-  echo '  }'\'' < $fn > $fn.tmp'
-  echo '  mv $fn.tmp $fn'
-  echo 'done'
-) > $HOME/bin/fillet
-chmod 755 $HOME/bin/fillet
-```
-
-```
-mkdir -p ~/shared/packages
-cd ~/shared/packages
-apt source tinycdb
-cd tinycdb-*/
-$HOME/bin/fillet
-time env DPKG_GENSYMBOLS_CHECK_LEVEL=0 \
-  DEB_BUILD_OPTIONS='crossbuildcanrunhostbinaries nostrip' \
-  dpkg-buildpackage -d -us -uc -b -a amd64fil0
-```
-
-Explanation of the differences from a normal build:
-
-For me this worked and produced three ../*.deb packages.
-Installing them as root also worked:
-
-```
-apt install /home/filian/shared/packages/*.deb
-# some sanity checks:
-apt list | grep tinycdb
-# prints "tinycdb/stable 0.81-2 amd64" (available package)
-# and prints "tinycdb/now 0.81-2 amd64fil0 [installed,local]"
-dpkg -L tinycdb:amd64fil0
-# lists various files such as /usr/bin/cdb
-nm /usr/bin/cdb
-# shows various symbols including "pizlonated" (Fil-C) symbols
-ldd /usr/bin/cdb
-# shows dependence on libraries in /usr/libexec/fil
-/usr/bin/cdb -h
-# prints a help message: "cdb: Constant DataBase" etc.
-```
-
-Compiling a deliberately wrong test program
-with the newly installed library also works,
-and triggers Fil-C's run-time protection:
-
-```
-cd /root
-( echo '#include <cdb.h>'
-  echo 'int main() { cdb_init(0,0); return 0; }' ) > usecdb.c
-filcc -o usecdb usecdb.c -lcdb
-./usecdb < /bin/bash
-# ... "filc panic: thwarted a futile attempt to violate memory safety."
-```
-
-**libc-dev.**
-[Handled automatically in Filian:]
-Some packages depend on libc-dev,
-so let's build a fake libc-dev package
-(probably there's an easier way to do this):
-
-```
-FAKEPACKAGE=libc-dev
-mkdir -p ~/shared/packages/$FAKEPACKAGE/debian
-cd ~/shared/packages/$FAKEPACKAGE
-( echo $FAKEPACKAGE' (0.0) unstable; urgency=medium'
-  echo ''
-  echo '  * Initial Release.'
-  echo ''
-  echo ' -- djb <djb@cr.yp.to>  Sun, 26 Oct 2025 16:05:17 +0000'
-) > debian/changelog
-( echo 'Source: '$FAKEPACKAGE
-  echo 'Build-Depends: debhelper-compat (= 13)'
-  echo 'Maintainer: djb '
-  echo ''
-  echo 'Package: '$FAKEPACKAGE
-  echo 'Architecture: any'
-  echo 'Multi-Arch: same'
-  echo 'Description: fake '$FAKEPACKAGE
-) > debian/control
-( echo '#!/usr/bin/make -f'
-  echo ''
-  echo 'build-arch   build-indep   build \'
-  echo 'install-arch install-indep install \'
-  echo 'binary-arch  binary-indep  binary \'
-  echo ':'
-  echo 'Xdh $@' | tr X '\011'
-  echo ''
-  echo 'clean:'
-  echo 'Xdh_clean' | tr X '\011'
-) > debian/rules
-time env DPKG_GENSYMBOLS_CHECK_LEVEL=0 \
-  DEB_BUILD_OPTIONS='crossbuildcanrunhostbinaries nostrip' \
-  dpkg-buildpackage -d -us -uc -b -a amd64fil0
-```
-
-**ncurses.**
-
-```
-mkdir -p ~/shared/packages
-cd ~/shared/packages
-apt source ncurses
-cd ncurses-*/
-$HOME/bin/fillet
-time env DPKG_GENSYMBOLS_CHECK_LEVEL=0 \
-  DEB_BUILD_OPTIONS='crossbuildcanrunhostbinaries nostrip' \
-  dpkg-buildpackage -d -us -uc -b -a amd64fil0
-rm ../ncurses-*deb # apt won't let us touch the binaries
-```
-
-As root, install the above libraries:
-
-```
-apt install /home/filian/shared/packages/lib*.deb
-```
-
-**libmd.**
-Seems to work.
-At first this didn't install
-since the compiled version (for amd64fil0) was 1.1.0-2
-while the installed version (for amd64) was 1.1.0-2+b1.
-Debian requires the same version number across architectures
-(see above regarding include-file compatibility),
-so apt said that 1.1.0-2+b1 breaks 1.1.0-2.
-I resolved this by compiling and installing 1.1.0-2 for both amd64 and amd64fil0.
-This is a downgrade since "+b" refers to
-a "binNMU", a "binary-only non-maintainer upload",
-a patch beyond the official source;
-I don't know what the patch is.
-[Filian automatically synchronizes +b versions.]
-
-**readline.**
-Needs
-ln -s /usr/include/readline /usr/include/x86_64+fil0-linux-gnu/readline
-after installation.
-Could have tweaks in debian/rules
-(which seems to predate *.install),
-but this is in any case an example of the messiness that I'm planning to get rid of.
-[Filian cleans this up.]
+[Goodhart’s
+law](https://en.wikipedia.org/wiki/Goodhart%27s_law), that any measurable target stops being useful when people start
+optimizing for it, very much holds in database benchmarking. That is not
+new, of course. Famously, [TPC-D](https://www.tpc.org/tpcd/default5.asp) got retired when
+people optimized so much for it that the query runtimes converged
+towards zero due to excessive caching. [TPC-H](https://www.tpc.org/tpch/default5.asp) fixed that by
+declaring itself to be an ad-hoc benchmark, and explicitly forbidding
+things like exploiting knowledge about the workload or caching results
+(and a number of other optimizations).
+
+We now see the same problem with the [ClickBench](https://benchmark.clickhouse.com/) benchmark,
+heavily accelerated by today’s use of AI code generation. If you tell an
+AI to make the queries faster, it will make the queries faster,
+regardless of whether this is a generally plausible approach or not. For
+example, the pgrust implementation performs group-by aggregations on
+string columns purely on the hash value, ignoring the long string
+content. That is a great performance boost, of course, and works for
+this benchmark, but can produce wrong results. Is it faster? Yes. Is it
+a plausible optimization? Probably not. And it does many other things:
+For example, ClickBench repeats certain predicates across queries, and
+thus pgrust caches the predicate, completely eliminating the query cost
+the second time. Or for query Q17, which returns tuples grouped by
+userid, it makes use of the fact that a) tuples are roughly clustered by
+userid, and b) the query specifies a limit clause without order by. Thus
+any userid will do, and it never reads most of the data. A human would
+not do these tiny micro-optimizations, because they are unlikely to be
+relevant in general use cases, but an AI can of course look at each
+query in detail and tune for it.
+
+Part of the problem is, of course, ClickBench itself. The benchmark
+is not well specified in what is permitted and what is not, there is no
+update stream, the queries are very simple, share predicates, are
+underspecified, etc. But the fundamental problem is independent of that
+concrete benchmark: The moment we start aggressively optimizing for a
+specific benchmark, the benchmark stops being very useful. Historically,
+that pressure was reduced a bit by the requirement that systems be
+generally useful. That is, they did not just want to perform well in
+benchmarks but also to be useful for their customers. That is, of
+course, not a concern for vibe-coded execution engines.
+
+It is not clear what to do about it. Our [SQLStorm](https://github.com/SQL-Storm/SQLStorm) proposal tried
+to address this by having tens of thousands of queries, which makes
+overfitting harder. No human would fine-tune their system to such a huge
+workload. But with AI tools we could even investigate ten thousand
+queries in detail if needed, so that is not a real defense.
+
+I think that to be meaningful, a benchmark has to a) like TPC-H, be
+ad-hoc, and forbid exploiting prior knowledge and any form of
+intermediate result caching. If we don’t do that, execution times
+converge towards zero. And b) the benchmark has to include some form of
+update stream, as otherwise overly aggressive read-only or read-mostly
+systems will always outperform systems that offer full transactional
+support. And c) the benchmark has to be truly ad-hoc, in the sense that
+the systems tested have to be older than the benchmark. One way to fight
+Goodhart’s law would be to (automatically) come up with a new benchmark
+from time to time, and then measure the systems that existed before the
+benchmark. The caching/pre-computation problem still remains, of course,
+but at least that would prevent the over-aggressive adjustment to just
+one specific benchmark.
+
+Interestingly, the machine learning community has struggled with
+exactly the same problem for years, and we should probably borrow some
+of their ideas. Kaggle competitions, for example, rank submissions on a
+hidden test set that participants never see, which makes overfitting on
+the public data pointless. Similarly, benchmarks like [LiveBench](https://livebench.ai/) regularly release new
+questions to make sure that models cannot have seen them during
+training. For database benchmarking that could mean keeping the actual
+benchmark queries secret and only publishing a representative sample for
+development, or, even better, generating a fresh workload for every
+evaluation round. SQLStorm already uses generated queries, so producing
+a new query set from time to time would be fairly easy. We would
+probably want a more generic approach (higher variety in schemas, update
+streams, transactions, etc.), but that seems to be a direction that
+would help keep benchmarks meaningful.
+
+1. Andreas Kipf[October 27, 2026 at 12:20 PM](http://databasearchitects.blogspot.com/2026/10/the-benchmarking-crisis.html?showComment=1793100025032&m=1#c7594163995220893488)Great thoughts, Thomas. I completely agree with your point on overfitting. However, I'm not convinced that completely avoiding repetitions and disabling caching reflects real-world workloads, even if it creates a cleaner benchmark. Production traces from Redshift and Snowflake show heavy (sub-)query repetition. We ran into this ourselves and created Redbench, which replays cloud workload traces over TPC-H/DS or SQLStorm while preserving realistic query repetitions and table invalidations (updates): https://github.com/DataManagementLab/RedbenchReply[Delete](https://www.blogger.com/comment/delete/8891884956165580080/7594163995220893488)Replies![](http://www.blogger.com/img/blogger_logo_round_35.png)[Thomas Neumann](https://www.blogger.com/profile/15209393663505917383)[October 27, 2026 at 12:28 PM](http://databasearchitects.blogspot.com/2026/10/the-benchmarking-crisis.html?showComment=1793100482799&m=1#c5889371241973898906)The problem is that if you do allow result caching you no longer measure the engine performance. Of course you are right that many real-world workloads benefit from caching, but it distorts the measurement in a hard to control manner. And it makes comparisons between different "flavors" of databases difficult: A system that wants to supports high update rates probably cannot cache as aggressively, even if it wants to. While a pure analytical system can be much more aggressive with result reuse. Forbidding caching is the easier way out. Allowing caching but imposes concurrent changes might be okay, too, but that would probably push everybody towards incremental view maintenance.[Delete](https://www.blogger.com/comment/delete/8891884956165580080/5889371241973898906)RepliesReplyReply
+2. Michael Malis[October 27, 2026 at 9:52 PM](http://databasearchitects.blogspot.com/2026/10/the-benchmarking-crisis.html?showComment=1793134351221&m=1#c8511178192432430739)Hi Thomas, I'm the creator of pgrust. First of all I want to say I'm a huge fan of your work. I've found the research you and your team have published to be incredible. When I'm doing research in an area, the first thing I'll look for is if you have published something on the topic. Your research has directly inspired pgrust's JIT compiler design as well as our morsel based scheduler. One thing I would like to clarify. When we were implementing optimizations for pgrust, if we were uncertain if the optimization was too specialized to the benchmark, the rule of thumb we would use was "does another db implement this optimization". All three of the optimizations you mention are things ClickHouse does today: using a hash to compare strings, keeping a predicate cache, and walking granules. In particular, we made sure to use a 128-bit cryptographic hash with a salt so the probability of a collision is ~0. For benchmarks, I think we'll end up moving in a direction that looks similar to how LLMs are benchmarked today. Queries behind the benchmark are not visible. But in a world where things like Bespoke OLAP are possible, having the query set be visible ahead of time may not be a bad thingReply[Delete](https://www.blogger.com/comment/delete/8891884956165580080/8511178192432430739)Replies![](http://www.blogger.com/img/blogger_logo_round_35.png)[Thomas Neumann](https://www.blogger.com/profile/15209393663505917383)[October 28, 2026 at 5:57 AM](http://databasearchitects.blogspot.com/2026/10/the-benchmarking-crisis.html?showComment=1793163424003&m=1#c3961334139816292496)You are absolutely right that pgrust is not the only one that has fitted extremely well to the benchmark, I should have made that clear. ClickHouse does it, too. And to a certain degree our own system is also guilty. I tend to accept only changes that I consider correct and generally useful, but simply knowing that the benchmark does something influences your design. My PhD students wanted to pressure me into doing the group-by-hash, too, as it is very helpful for this benchmark. I have pushed back on that, as it risks wrong results. But if you absolutely want to maximize performance that is the right thing to do, of course. Coming back to my original point, I think we need more complex, more diverse, and simply changing benchmarks, potentially with hidden queries. Because that prevents optimizations that help only for a specific scenario and potentially hurt in others.[Delete](https://www.blogger.com/comment/delete/8891884956165580080/3961334139816292496)RepliesReplyMichael Malis[October 28, 2026 at 6:44 AM](http://databasearchitects.blogspot.com/2026/10/the-benchmarking-crisis.html?showComment=1793166261906&m=1#c2991558043186253251)I'm curious what you see the risk of the optimization is? Do you feel the same way about using a uuidv4 as a primary key? Incorrect results due to hardware issues are many, many orders of magnitude more likely than a 128-bit hash collision.[Delete](https://www.blogger.com/comment/delete/8891884956165580080/2991558043186253251)RepliesReply![](http://www.blogger.com/img/blogger_logo_round_35.png)[Michael Malis](https://www.blogger.com/profile/02134809885226229387)[October 28, 2026 at 6:58 AM](http://databasearchitects.blogspot.com/2026/10/the-benchmarking-crisis.html?showComment=1793167113324&m=1#c5331610435564375543)I believe Kafka also uses the same trick where it will use a 128-bit hash to deduplicate entries when compacting without looking at the underlying value[Delete](https://www.blogger.com/comment/delete/8891884956165580080/5331610435564375543)RepliesReply![](http://www.blogger.com/img/blogger_logo_round_35.png)[Thomas Neumann](https://www.blogger.com/profile/15209393663505917383)[October 28, 2026 at 7:22 AM](http://databasearchitects.blogspot.com/2026/10/the-benchmarking-crisis.html?showComment=1793168565559&m=1#c7286107463987120764)Collisions are unlikely, of course, but I feel that this is a violation of the user contract. The user has asked me to aggregate on a certain value, and if I do it on the hash instead I do not compute the same result, at least potentially. When the user explicitly asks for an uuid that is fine, then the choice is made by the user. (I would still check for primary key violations even in that case, though, historically there have been cases where the source of randomness in, e.g., VMs was not that random). And note that group by is even more dangerous than uuid because the strings in question are potentially user/attacker controlled. Thus, the likelyhood of collisions are potentially much higher than random. Sure, we can mitigate that with a randomized hash seed, but we are doing something dangerous and the user has not asked for it.[Delete](https://www.blogger.com/comment/delete/8891884956165580080/7286107463987120764)RepliesReplyReply

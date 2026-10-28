@@ -1,305 +1,476 @@
-**We often get asked "How can I eliminate [panics](https://doc.rust-lang.org/reference/panic.html) in my Rust code?" There have been several attempts to tackle this issue. Under the [Open Device Partnership](https://opendevicepartnership.org/) and working together with Microsoft, we have developed and released the [Call Graph Analyzer (CGA)](https://github.com/opendevicepartnership/cga), a tool to extract the [callgraph](https://en.wikipedia.org/wiki/Call_graph) from [monomorphized](https://rustc-dev-guide.rust-lang.org/backend/monomorph.html) [MIR](https://rustc-dev-guide.rust-lang.org/mir/index.html). This callgraph can be used to track down what functions in the compiled binary can panic.**
+It seems inevitable that compile-time dependent types will come to systems programming.  
+C++ has templates and `constexpr`. Rust has const generics. Zig has `comptime`. Even C has `_Generic`.
+However, these features tend to be highly restricted, lack a proper type system, or both.
 
-We often get asked "How can I eliminate [panics](https://doc.rust-lang.org/reference/panic.html) in my Rust code?" There have been several attempts to tackle this issue. Under the [Open Device Partnership](https://opendevicepartnership.org/) and working together with Microsoft, we have developed and released the [Call Graph Analyzer (CGA)](https://github.com/opendevicepartnership/cga), a tool to extract the [callgraph](https://en.wikipedia.org/wiki/Call_graph) from [monomorphized](https://rustc-dev-guide.rust-lang.org/backend/monomorph.html) [MIR](https://rustc-dev-guide.rust-lang.org/mir/index.html). This callgraph can be used to track down what functions in the compiled binary can panic.
+I’m working on [Syl](https://syl.dev/), a language which aims to encode compile-time computation in a modal type system.
+Syl is primarily inspired by András Kovács’ work on [two-level](https://andraskovacs.github.io/pdfs/2ltt.pdf) [type theory](https://andraskovacs.github.io/pdfs/2ltt_icfp24.pdf), as well as plans for [OxCaml](https://oxcaml.org/).
 
-For example, when you run `cargo cga check` on your code, you get:
+*The Syl compiler may be found on [GitHub](https://github.com/TheNumbat/Syl).*
 
-```
-error: call to method `core::num::<impl u64>::strict_sub` which can panic
-  --> src/main.rs:18:17
-   |
-18 |         let _ = 2u64.strict_sub(u64::MAX);
-   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^
-```
+## Modes
 
-In this blogpost we discuss why this new approach is both better and worse than pre-existing approaches at finding panics.
+In Syl, all values have a *mode* along with a type.
+Modes describe properties of values independent of their types.
+For example, [OxCaml uses modes](https://oxcaml.org/documentation/modes/intro/) to indicate whether a value is uniquely owned, may be written to, may be sent to another thread, etc.<sup>[1](https://thenumb.at/Syl-Intro/#fn:1)</sup>
 
-## Why eliminate panics though?
+Syl has two mode axes: *staticity* and *erasure*.
+On the staticity axis, a value may be either `static` or `dynamic`.
+On erasure, either `erased` or `unerased`.
 
-Before discussing the Call Graph Analyzer, we should first consider why panics are useful, and in what cases it might be beneficial to minimize or perhaps even completely eliminate any possible panic. This topic has been explored extensively by others [[1](https://blog.reverberate.org/2025/02/03/no-panic-rust.html)][[2](https://blog.cloudflare.com/making-rust-workers-reliable/)][[3](https://blog.logrocket.com/panic-vs-error-rust/)][[4](https://www.ncameron.org/blog/to-panic-or-not-to-panic/)], but it is useful to summarize here. Lets start with a brief description:
+- A static value is knowable at compile time; a dynamic value may not be.
+- An unerased value is knowable at runtime; an erased value may not be.
 
-> Rust provides a mechanism to prevent a function from returning normally, and instead “panic,” which is a response to an error condition that is typically not expected to be recoverable ...
->
-> [**The Rust Reference - Panic**](https://doc.rust-lang.org/reference/panic.html)
+For example, literals are `static unerased`, since they are clearly knowable at both compile time and runtime.
+You can check by writing a mode annotation:
 
-These unrecoverable error conditions may either be caused by a bug in the implementation of a function, or constitute violated entry conditions for a function (so a bug in the function itself or a mistake by the caller of that function).
-
-An example is calling `1.strict_add(u32::MAX)`, which would result in a panic in response to the caller passing invalid arguments to the operation. Similarly a normal addition `1 + u32::MAX` in Rust will panic if [`overflow-checks`](https://doc.rust-lang.org/beta/std/intrinsics/fn.overflow_checks.html) are enabled.
-
-Instead of panicking, error conditions can be dealt with by:
-
-1. making them recoverable by having the function return a `Result<T, E>` or `Option<T>` instead. For addition this is provided by `u32::checked_add`.
-2. making the function fail implicitly or silently and describing that behaviour in the function documentation. Arithmetic operations can for example wrap around with `u32::wrapping_add`.
-3. making a function never return, e.g. using an infinite loop {}. Sometimes this approach is accidentally used when employing a retry scheme without a timeout or maximum iteration count.
-
-However striving for zero panics is very hard and quite foolish: code is rarely void of assumptions. Returning `Result<T, AssumptionViolated>` everywhere just pushes the burden up the call stack, until you will abort anyway at the root. This essentially yields the same behaviour as if you were to panic.
-
-It is useful to make panics *explicit* though. It is better to know about your panic paths and to reason about them, than to just accidentally include panics and ignore that they exist. Having regression analysis on your panic paths is also very useful, notifying you of any new panic paths introduced in your code.
-
-Having said that, in the following cases it might be justified to eliminate some of your panics:
-
-- In contexts where code size really matters, like on embedded devices. Panics result in a relatively large amount of code due to the required strings and associated code to format these strings. Instead, we can:
-  - use `defmt::panic` to reduce this string bloat. This requires all panics to be wrapped in the macro. For library dependencies this is typically only done when the library is specifically intended to be used on an embedded platform. Defmt is not used in other libraries, including the standard library of Rust.
-  - use `-Cpanic=immediate-abort` to prevent panics from being emitted entirely and instead just crash the application. This does not leave a lot of information that can be used for debugging though.
-- In critical code paths that must absolutely never fail, for example:
-  - an externally accessible service that needs to prevent a Denial of Service (DOS) attack which crashes the service. Invalid input should result in a user-facing error instead.
-  - the firmware update path on an embedded device, including the bootloader.
-- In panic handling code itself. In Rust when unwinding a panic in an implementation of `Drop` causes a so-called 'double-drop' and may cause the program to abort. Secondly a panic in a custom #[panic_handler] is not allowed, but it is unclear what should happen then.
-
-Striving for no unrecoverable error conditions is extremely hard in practice. Generally it is better to implement top-level recovery mechanisms. In embedded this would entail using a Watchdog timer which resets the device if it is stuck, and a recovery image to restore the device to a working state. On a host machine this could mean catching unwinding panics using [`catch_unwind`](https://doc.rust-lang.org/std/panic/fn.catch_unwind.html). Note that the latter is not fool-proof and comes with a few caveats. Externally accessible services should be redundant and fast to recover.
-
-In conclusion, it is useful to find unintentional panics.
-
-## Prior art
-
-Currently, ways to extract callgraphs or detect panics include:
-
-- rustig (ELF debug info analysis)
-- findpanics (ELF debug info analysis)
-- cargo-callgraph (Rust HIR analyzer)
-- cargo-callgraph (rust-analyzer based exporter)
-- charon (Rust MIR exporter)
-- no-panic (Linker-based panic detection)
-- dont_panic (Linker-based panic detection)
-
-You can download any of these projects, and with the exception of Charon (which is not explicitly meant for this usecase) it is very easy to get started.
-
-Linker-based panic detection methods work by triggering an error in the linker when it tries to link in a special panic handler. This detection approach only works if **not a single panic** is included in your binary. It also only works on binaries and not on libraries.
-
-ELF debug info analysis looks at the DWARF debug info that is included in ELF artifacts like binaries and Rust libraries compiled to object files. It is limited in what callgraph information it can provide: the panic machinery can be completely inlined or disappear during the linker phase.
-
-And finally we have HIR, MIR and rust-analyzer based approaches, which use the various Intermediate Representations (IRs) of your code generated by the compiler (and rust-analyzer) to extract the callgraph from. In a sense all these approaches take your original Rust code, have the compiler process it, and spit out what it thinks is happening. Theoretically these approaches work on any Rust crate.
-
-The HIR-based analysis can only analyze the code in your specific crate. This analysis can check if you explicitly write `panic!` in your own crate. However, it is unaware of any code in your dependencies, such as the standard library. Hence it can not trigger on panics that occur within dependencies. The compiler can also insert assertions like bound checks, which are not even a call to panic until very late in the code generation pass depending on your compiler flags.
-
-The MIR-based analysis is ideal, as it can theoretically see all code from dependencies, before they are optimized away, including panics originating in the standard library. Hence Call Graph Analyzer uses this approach. The only downside is that this analysis is done before LLVM is able to remove unreachable code, and hence we get some false positives.
-
-All these previous approaches take what the compiler is already doing when compiling your crate, and interrupt the compilation process to look at a snapshot of the compilation state to find out whether you are calling a panic.
-
-The rust-analyzer approach is slightly different, as it does not depend on the compiler at all. Rust-analyzer has duplicated the Rust-HIR-MIR pipeline from the compiler, which they adapted for their process. This separate pipeline for rust-analyzer is pretty fast, can be stored in memory and supports updating the state while you are actively writing and changing your Rust code. However, it can not always analyze code that rustc is happy to compile. Most notably it often struggles with complex proc_macros like we use a ton of in Rust Embedded. As an end-user you notice this when your code editor stops giving any helpful suggestions. (The team behind rust-analyzer is working hard to prevent this!) The upside of rust-analyzer is that it does not depend on the Rust compiler.
-
-## How CGA works
-
-For our usecase we needed a method that:
-
-- detects any and all panics
-- allows configurable parts of the binary to panic
-- is compatible with async Rust (as all async blocks have an implicit panic path)
-- works well with Embedded Rust
-
-We decided on a MIR-based callgraph exporter, which became the Call Graph Analyzer (CGA). Next up, we will discuss the design and functionality of CGA.
-
-### rustc-driver
-
-CGA extracts the callgraph directly from MIR as a [rustc-driver](https://rustc-dev-guide.rust-lang.org/rustc-driver/intro.html). Clippy similarly is a rustc-driver. Like Clippy, CGA therefore depends on a specific version of the rust compiler, which gets us to the first real downside of CGA:
-
-A note of caution: CGA compiles your crate with a specific (probably different) version of the rustc compiler, standard library, and potentially different compiler flags. Hence you will not get the *exact* callgraph as included in your binary.
-
-Having a specific (nightly) version of rustc as a dependency using [`rustc-private`](https://doc.rust-lang.org/unstable-book/language-features/rustc-private.html) also means that CGA can not be installed as a crate from [crates.io](https://crates.io). Instead the repository needs to be checked out locally, after which `cargo install --path .` needs to be run (which uses a specific version of the Rust toolchain automatically).
-
-This user experience might be improved when [`rustc_public`](https://doc.rust-lang.org/nightly/nightly-rustc/rustc_public/index.html) contains everything that CGA needs. Though, that scenario isn't really likely. Instead, if CGA becomes popular enough, it might be maintained alongside rustc, just like Clippy currently has this special status. Any breaking change in rustc is also applied to Clippy, and you can install Clippy for your specific toolchain using Rustup. For more information on this, you can watch the excellent talk on ["Out of tree access to the compiler state" by Alona Enraght-Moony](https://www.youtube.com/watch?v=ExxxtADP-t8).
-
-As a rustc-driver, the CGA binary has the same API as rustc itself. You can use `cargo` to run CGA using `cargo cga check`. Internally rustc will run as if you were to run `cargo check`. However CGA does some additional work to gather the call graph, which for a typical crate means that compilation with CGA is roughly 2x-3x as slow as running `cargo check`.
-
-### MIR traversal
-
-When CGA is done running all the compiler passes that are normally part of `cargo check`, it forces the compiler to yield all so-called *roots* or *entrypoints* of your crate. Intuitively, this is any part of your crate that is accessible from the outside when compiled. These include:
-
-- fn main and variants thereof
-- the language _start symbol
-- functions that are marked `extern` which have a stable name using `no_mangle` or `export_name`, including interrupt handlers for Embedded Rust.
-
-For this analysis we are explicitly not interested in all the functions that are compiled as part of `const` blocks, including `static` value initialization, as only the outcomes of these computations are included in the final binary.
-
-From these roots outward we perform a reachability analysis by walking through the MIR tree. Every time a function is called, that function is also explored. Thus all unused functions are not visited. In Rust, like in C++, a function with Generic arguments is [monomorphized](https://rustc-dev-guide.rust-lang.org/backend/monomorph.html) when it is called using the concrete types used to call it.
-
-Thus we do not only gather the called functions, but the concrete instantiation of each function, as the implementations can differ wildly depending on the type arguments passed.
-
-This process gets a little bit tedious when considering:
-
-- `dyn` objects, for which it is unclear which trait implementation is actually being called. CGA assumes all vtable entries are called for that function when it finds one. This gets especially fun large when a dyn object is constructed for standard library traits like the Debug trait.
-- function pointers can be created from Rust functions. We can not necessarily reason about what happens with these pointers. Thus we assume any created function pointer will be called at some later stage.
-- each async block has a panic path, implicitly. See the blogpost "Async Rust never left the MVP state" by Dion for more on this.
-
-### Extracting a graph
-
-After walking through the MIR tree of your crate and its dependencies, we get a collection of callgraphs. We can now choose to either `extract` them to JSON or GraphViz dot files, or to `check` them for any panics or blacklisted functions.
-
-When extracting, all the callgraphs are put in your `/target` folder as `<crate>.callgraph.json`. We finally merge them together and export the global callgraph with separate roots using:
-
-```
-cargo cga extract -Tdot -o callgraph.dot
+```text
+let x = 0 @ static unerased;;
 ```
 
-To quickly illustrate what this looks like, please consider the following example using dyn objects:
+Each mode axis has a sub-moding relation.
+If you have a `static` value, it’s safe to forget that it is knowable at compile time and hence treat it as `dynamic`.
+Similarly, an `unerased` value may be treated as `erased`.
+Mode annotations may “weaken” the mode, but not “strengthen” it:
 
+```text
+let x = 0 @ dynamic;;
+
+let y = x @ static;;
+        ^^^^^^^^^^
+Error: Expected a static expression, but got dynamic.
 ```
-trait Test {
-    fn test(&self) {
-        panic!("Default impl")
+
+As you might expect, branching on a `dynamic` value causes the result to be `dynamic`.
+
+```text
+let x = 0 @ dynamic;;
+
+let y = (if x == 0 then 1 else 2) @ static;;
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+Error: Expected a static expression, but got dynamic.
+```
+
+As long as they don’t capture or branch on `dynamic` values, functions preserve staticity.<sup>[2](https://thenumb.at/Syl-Intro/#fn:2)</sup>
+
+```text
+let f = fn (x : int) -> x;;
+
+let x = (f 0) @ static;;
+
+let y = (f (1 @ dynamic)) @ static;;
+        ^^^^^^^^^^^^^^^^^
+Error: Expected a static expression, but got dynamic.
+```
+
+Functions that return `erased` values are themselves `erased`, so cannot be applied at runtime.
+
+```text
+let f = fn (x : unit) -> 1 @ erased;;
+
+let g = f @ unerased;;
+        ^
+Error: Expected an unerased expression, but got erased.
+```
+
+Now, what can we do with this information?
+When a value is knowable at compile time, surrounding code can be *monomorphized*.
+Functions of `static` parameters take advantage of this fact:
+
+```text
+let f = fn (static x : bool) -> print_bool x;;
+```
+
+Whenever we call `f x`, the compiler requires that both `f` and `x` have mode `static`.
+If they do, it selects a particular implementation of `f` specialized to the value of `x`.
+Concretely, `f true` would call a function that hard-codes `print_bool true`, and likewise for `f false`.
+
+In this example, we’re printing the value of `x` at runtime, so it needs to be `unerased`.
+That’s often unnecessary: if `x` only determines how to compile the body of `f`, it can be `erased`.
+
+```text
+let f = fn (erased x : bool) -> if erased x then print_int 0 else print_int 1;;
+```
+
+Here, `erased` also implies `static`, so `f` will be specialized on `x`.
+The `if erased` expression accepts a `static erased` condition and is guaranteed to resolve at compile time.
+Therefore, `f true` refers to a thunk with the body `print_int 0`, and likewise for `f false`.
+
+## Dependent Types
+
+On their own, the `static` and `erased` modes let us explicitly request specialization-based optimizations,
+but they don’t give us dependent types. Functions of `static` arguments do.
+
+```text
+let f = fn (erased x : bool) -> if erased x then 0 else true;;
+```
+
+Here, `if erased` allows us to return an integer if `x` is true and a boolean otherwise.
+Hence, `f` has a dependent function type, which encodes how the result type depends on the *value* of the input.
+
+```text
+f : erased bool as x -> if erased x then int else bool
+```
+
+Note `ty as name` gives the argument a name for use in the result.
+
+Applications can then determine the correct result type by evaluating `f`’s type.
+
+```text
+let x = (f true) : int;;
+
+let y = (f false) : bool;;
+```
+
+There is no distinct type grammar: type formers like `->` and type annotations are normal expressions.
+`int` and `bool` are just `erased` values of type `type`, and abstracting over them gives us polymorphism.
+
+```text
+let id = fn (erased t : type) -> fn (x : t) -> x;;
+
+let x = id int 0;;
+
+let y = id bool true;;
+```
+
+As we saw above, functions of `static` arguments are monomorphized.
+At runtime, `id int` refers to an identity function that directly operates on integers, and likewise for `id bool`.
+
+That is, Syl is **dependently typed at compile time and simply typed at runtime.**<sup>[3](https://thenumb.at/Syl-Intro/#fn:3)</sup>
+
+- Constructs that determine the shape of the runtime program require `static` information.
+- Types are always `erased`, so the runtime program cannot inspect types.
+
+Syl implements dependent typechecking similarly to existing languages, so we won’t discuss it in detail.
+However, the relationship between types and propositions in Syl differs from that of languages like Lean, Rocq, and Agda.
+
+### Proofs
+
+In particular, Syl supports general recursion in compile time computations and gives `type` type `type`.
+Allowing either of these features implies that constructing an expression of type `t` does **not** prove the proposition corresponding to `t`.
+
+For example, we can implement a function that ostensibly returns a value of any type:
+
+```text
+let magic =
+  fn (erased t : type) ->
+    fun loop (_ : unit) : t = loop () in
+    loop ()
+;;
+```
+
+Note `magic` could also be implemented using `type : type` via [Girard’s paradox](https://ncatlab.org/nlab/show/Burali-Forti%27s+paradox).
+
+Despite having type `erased type as t -> t`, this function never actually produces a value—it’s an infinite loop.
+The type describes what `magic t` would produce if it completed, but does not guarantee that it does.
+
+Although this type system would not be suitable for a theorem proving language, it does *not* rule out type safety or even useful proofs.
+It has two practical consequences:
+
+- Functions used in type-level computations may diverge, so typechecking is not decidable.
+- Functions don’t discharge universally quantified claims, so the compiler must evaluate all applications that produce proofs before relying on their results.<sup>[4](https://thenumb.at/Syl-Intro/#fn:4)</sup><sup>[5](https://thenumb.at/Syl-Intro/#fn:5)</sup>
+
+In return, we don’t need a totality checker (all `static` expressions may be used in types) or universe machinery (type-level programming is intuitive).
+
+### Totality
+
+Because Syl is a *programming language*, the point of compilation is to produce a runtime artifact satisfying the invariants enforced by the type system.
+Therefore, we only care about invocations of dependent functions that actually occur during compilation—it’s fine for others to diverge.
+
+Still, typechecking getting stuck during development is a poor user experience, so Syl also implements fuel limits.
+Given competent compile-time debugging tools, I think this is reasonable.
+
+```text
+fun f (erased _ : unit) : erased type = f ();;
+                                        ^
+Error: Recursion limit reached.
+
+let x = 1 : f ();;
+```
+
+Eschewing totality also means Syl can support explicitly partial functions at little additional cost.
+For example, here’s a division function that statically checks the divisor is non-zero:
+
+```text
+let safe_div =
+  fn (static d : int) ->
+    if erased d != 0
+    then fn (x : int) -> x / d
+    else unreachable
+;;
+```
+
+The `unreachable` keyword asserts that a branch does not appear in the runtime program.
+During dependent typechecking, the `else` branch is treated as a bottom value, so imposes no restrictions on the `then` branch.
+However, if `else` is reached while instantiating `safe_div`, we get an error:
+
+```text
+    ...
+    else unreachable
+         ^^^^^^^^^^^
+Error: Unreachable reached.
+;;
+
+let x = safe_div 0 1;;
+```
+
+Allowing partial functions reopens the door to inscrutable C++-style template instantiation errors.
+Luckily, explicit partiality means we can require users to provide error messages in unsupported cases, and combined with the lack of duck-typing at compile time, I think Syl can avoid most of the downsides.
+
+## Examples
+
+### Typed Interpreter
+
+The following program does not require the full power of dependent types—it’s often used as a motivating example for GADTs in OCaml or Haskell—but I think the comparison is illustrative.
+
+We’ll start by defining a variant to use as an index.
+
+```text
+let sort = variant { int, bool };;
+```
+
+*Notes: Both `sort` and its constructors `sort.int`/`sort.bool` are normal values. Variants are unboxed.*
+
+Then a function to convert a `sort` to the corresponding type.
+
+```text
+fun value (erased s : sort) : erased type =
+  match erased s {
+    .int -> int,
+    .bool -> bool,
+  }
+;;
+```
+
+*Note: like `if erased`, `match erased` allows an `erased` scrutinee and is resolved at compile time.*
+
+Next, an indexed expression type.
+The type is literally a recursive function with a `sort` argument:
+
+```text
+fun expr (erased s : sort) : erased type =
+  match erased s {
+    .int ->
+      variant {
+        lit : int,
+        add : &(expr sort.int ^ expr sort.int),
+        if_ : &(expr sort.bool ^ expr sort.int ^ expr sort.int),
+      },
+    .bool ->
+      variant {
+        lit : bool,
+        eq : &(expr sort.int ^ expr sort.int),
+      },
+  }
+;;
+```
+
+*Notes: `&` represents an indirection. `^` is the tuple type former.*
+
+Finally, the interpreter.
+In the `.int` branch, the compiler knows that only the `int`-returning constructors appear, and likewise for `.bool`.
+
+```text
+fun eval (erased s : sort) : expr s -> value s =
+  fn (e : expr s) ->
+    match erased s {
+      .int ->
+        match e {
+          .lit n -> n,
+          .add &(left, right) -> eval sort.int left + eval sort.int right,
+          .if_ &(condition, yes, no) ->
+            if eval sort.bool condition then eval sort.int yes else eval sort.int no,
+        },
+      .bool ->
+        match e {
+          .lit b -> b,
+          .eq &(left, right) -> eval sort.int left == eval sort.int right,
+        },
     }
-}
+;;
+```
 
-struct StrictAdd;
-impl Test for StrictAdd {
-    fn test(&self) {
-        let _ = 2u64.strict_add(u64::MAX);
+Functions of `static` arguments are monomorphized and `erased` branches are eliminated, so the interpreter compiles to the same structure you’d expect from template specialization in C++.<sup>[6](https://thenumb.at/Syl-Intro/#fn:6)</sup>
+
+### Length-Indexed Vector
+
+*Warning: the syntax here needs a lot of work.*
+
+Proper dependent types enable us to encode the length of lists in the type system.
+Let’s write an `append` function whose type shows that the output length is the sum of the input lengths.
+
+While we could index our list by an `int`, Syl lacks tools for reasoning about signed, fixed-width integers.
+Instead, let’s define our own Peano `nat` type.
+
+```text
+let nat =
+  fun nat (erased _ : unit) : erased type =
+    variant { zero, succ : &(nat ()) }
+  in
+  nat ()
+;;
+```
+
+*Note: there’s no `let rec`, so we define `nat` via a recursive function.*
+
+```text
+fun add (static nm : nat ^ nat) : nat =
+  match static nm {
+    (.zero, m) -> m,
+    (.succ &n, m) -> nat.succ box (add (n, m)),
+  }
+;;
+```
+
+*Notes: `match static` is like `match erased` but does not erase the contents of the scrutinee. We should use `erased` everywhere, but variant constructors are not yet mode-polymorphic. If all `nat`s were erased, the `box` indirection also wouldn’t be necessary.*
+
+Now the unboxed, length-indexed list.
+Note the lack of indirection.
+
+```text
+fun vec (erased t : type) : erased (erased nat -> erased type) =
+  fn (erased n : nat) ->
+    match erased n {
+      .zero -> variant { nil },
+      .succ &n -> variant { cons : t ^ vec t n },
     }
-}
-struct StrictSub;
-impl Test for StrictSub {
-    fn test(&self) {
-        let _ = 2u64.strict_sub(u64::MAX);
-    }
-}
-
-struct DefaultImpl;
-impl Test for DefaultImpl {}
-
-fn main() {
-    let object = StrictAdd;
-    let dyn_object: &dyn Test = &object;
-    dyn_object.test();
-}
+;;
 ```
 
-This results in a graph with an arrow for every entry in the vtable:
+Finally, the `append` function.
+Crucially, the compiler is able to infer that the `.cons` case has the correct return type by unfolding `add` and `vec`.
 
-![Graphviz Callgraph example](https://media.tweedegolf.nl/images/graph.svg)
-
-*Image 1: Graphviz Callgraph example (you can zoom in for better readability)*
-
-As you can imagine, this quickly becomes quite large and unreadable. If you have a suggestion for a GUI application that can meaningfully display callgraphs, please [reach out](https://bsky.app/profile/wassasin) as that would be very helpful!
-
-### Linting and diagnostics
-
-Secondly, like Clippy, we can ask CGA to check our code for any panic paths by running:
-
-```
-cargo cga check
-```
-
-This will take the callgraph, find panic paths, and will try to give a helpful insight in how this panic path relates to your crate. One of the lints emitted for the above code looks like this:
-
-```
-error: call to method `core::num::<impl u64>::strict_sub` which can panic
-  --> src/main.rs:18:17
-   |
-18 |         let _ = 2u64.strict_sub(u64::MAX);
-   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^
-   |
-   = note: 3 different panics from this location
-   = note: backtrace (1 of 2):
-           0: std::rt::panic_fmt (called)
-           1: core::num::imp::overflow_panic::sub (called)
-           2: core::num::<impl u64>::strict_sub (called) <--
-           3: <totallysafe::StrictSub as totallysafe::Test>::test (possible vtable resolution)
-           4: <dyn totallysafe::Test as totallysafe::Test>::test - virtual#3 (called)
-           5: totallysafe::main (entrypoint)
+```text
+fun append
+  (erased t : type) : (static nat as n
+                         -> static nat as m
+                         -> vec t n
+                         -> vec t m
+                         -> vec t (add (n, m))) =
+  fn (static n : nat) ->
+    fn (static m : nat) ->
+      fn (v1 : vec t n) ->
+        fn (v2 : vec t m) ->
+          match static n {
+            .zero -> v2,
+            .succ &n_minus_1 ->
+              match v1 {
+                .cons (x, xs) -> (vec t (add (n, m))).cons (x, append t n_minus_1 m xs v2),
+              },
+          }
+;;
 ```
 
-Note that it shows the backtrace, along with the possible vtable resolution, and the last call from our current crate context. These diagnostics are generated *heuristically*, meaning that out of all the panic paths, we choose a single one for each callsite in our local crate. We try to choose the *best* of all these paths using a scoring mechanism.
+*Notes: this is rather verbose since we don’t have n-ary function syntax. We also have to fully qualify the `vec` type `.cons` comes from because it’s not inferred yet.*
 
-### White- and blacklisting
+As above, all lengths are known at compile time, so the runtime program has semantics akin to a `constexpr` length computation in C++ (though the `unerased` lengths may be materialized).
 
-For any serious crate that was not developed with minimizing panics in mind, the amount of lints generated by CGA is not really manageable. To help with this, CGA comes with a few configurable parameters.
+## Extensions
 
-As an example, if you trust a function to not panic (even though panic paths are being emitted for it), you can add the function to the whitelist. Any panic path that includes that function will be ignored. These rules can match on both simplified function names as well as full canonical Rust paths with all generic parameters included.
+Many useful language features can be defined in user code using compile-time dependent types.
+Here are few promising (partially implemented) examples.
 
-Alternatively, functions can be put on a blacklist. Besides panics, if you want a crate and its dependencies to **never** use some function, it is possible to exlude it. For example, you might want to exclude interaction with the filesystem, the network or processes.
+### Higher-Kinded Types
 
-```
-blacklist = [
-    { path = "^std::process::" },
-    { path = "^std::fs::" },
-    { path = "^std::sys::" }
-]
-```
+Higher-kinded types are just `erased` functions on types.
+You can abstract over them like anything else.
 
-*An example of a `cga.toml` configuration file*
-
-Then if we feed the following program to CGA:
-
-```
-fn test() {
-    let _ = std::process::Command::new("evil");
-}
-
-fn main() {
-    test();
-}
+```text
+singleton :
+    erased (erased type -> erased type) as container ->
+    erased type as element ->
+    element ->
+    container element
 ```
 
-We get the following:
+This example already works, but as written, all you can do with `container` is apply it.
+We also need the ability to specify interfaces that connect types and values, leading to…
 
-```
-error: call to associated function `std::process::Command::new` which is blacklisted
- --> src/main.rs:7:13
-  |
-7 |     let _ = std::process::Command::new("evil");
-  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  |
-  = note: 101 different blacklisted functions from this location
-  = note: backtrace:
-          0: std::process::Command::new::<&str> (called) <--
-          1: fail_blacklist::test (called)
-          2: fail_blacklist::main (entrypoint)
-note: the lint level is defined here
- --> src/main.rs:3:11
-  |
-3 | #![forbid(cga::blacklisted)]
-  |           ^^^^^^^^^^^^^^^^
+### Modules and Functors
 
-error: call to drop of `std::process::Command` which can call blacklisted functions
- --> src/main.rs:7:47
-  |
-7 |     let _ = std::process::Command::new("evil");
-  |                                               ^
-  |
-  = note: 101 different blacklisted functions from this location
-  = note: backtrace (1 of 20283553):
-          0: std::sys::fs::unix::debug_assert_fd_is_open (called)
-          1: <std::os::fd::OwnedFd as std::ops::Drop>::drop (called)
-          2: drop of `std::os::fd::OwnedFd` (called)
-          3: drop of `std::sys::fd::unix::FileDesc` (called)
-          4: drop of `std::sys::process::unix::common::Stdio` (called)
-          5: drop of `std::option::Option<std::sys::process::unix::common::Stdio>` (called)
-          6: drop of `std::sys::process::unix::common::Command` (called)
-          7: drop of `std::process::Command` (called) <--
-          8: fail_blacklist::test (called)
-          9: fail_blacklist::main (entrypoint)
+Once Syl has [OxCaml-style modalities](https://oxcaml.org/documentation/modes/reference/#modalities)<sup>[7](https://thenumb.at/Syl-Intro/#fn:7)</sup>, you’ll be able to nest `erased`/`dynamic` values inside `unerased`/`static` values.
+Then dependent records can take the place of ML-style modules:
+
+```text
+let container = record {
+  ty : erased type -> erased type @@ erased,
+  create : erased type as element -> element -> ty element,
+};;
 ```
 
-Note that this feature does not actually preclude a process from being spawned in any of your crates or dependencies: within Rust it will forever remain possible to link to some external object file or use assembly directly, which CGA can not analyze. Blacklisting with CGA is, however, an interesting capability.
+Note `@@ erased` implies that all uses of `container.ty` see an `erased` value regardless of the erasure of `container`.
+Now we can give `singleton` an implementable type:
 
-## Caveats
+```text
+singleton :
+    static container as container ->
+    erased type as element ->
+    element ->
+    container.ty element
+```
 
-Having detailed what CGA can and can not do, it is useful to know there are some caveats and downsides to the approach CGA uses.
+Similarly, ML-style functors can be implemented as dependent functions:
 
-### Fragile
+```text
+fun pair (static c : container) : container = {
+  ty = (fn (erased element : type) ->
+         c.ty element ^ c.ty element),
+  create = (fn (erased element : type) ->
+             fn (e : element) ->
+               c.create element e, c.create element e),
+};;
+```
 
-Traversing monomorphized MIR is not trivial. Resolving vtables is quite finnicky; the compiler inserts shims sometimes and actual calls are inserted later; coroutines need to be unpacked to find the async paths; and there are implicit assertions which eventually also end up being a panic. All of which is to say: the analysis is hard and it is inevitable that some parts of it are not completely correct. When the toolchain is updated, the resulting MIR can vary dramatically, which also has an impact on the call graph. It might be that down the line some part of the analysis breaks if rustc works differently.
+Finally, with inferred arguments, records could provide most of the affordances of typeclasses or traits.
 
-This is to be expected: Rust MIR is unstable and will remain to be so for the foreseable future. Consequently CGA will be a bit fragile.
+### Imports
 
-### Optimizations
+We can even use static computation to describe how multi-file programs are built.
+The compiler just has to provide the following functions:
 
-Depending on your compiler flags but in particular your `opt-level`, the MIR CGA gathers contains panics that are unreachable.
+```text
+import_sig : erased string -> erased type
+import : erased string as path -> import_sig path
+```
 
-For example, the expression `1 + 1` has an implicit overflow bounds check included. If you were to const evaluate the expression, it is exceedingly obvious that the expression can never panic. With `opt-level=2` (optimize for speed) this expression is optimized to `2` by an earlier compiler pass before CGA gets the MIR. However with `opt-level="z"` (optimize for size) this panic path is included in the MIR. Instead, the optimization is left to LLVM to perform (which it does).
+If we treat file-level definitions as record fields, `import_sig` can infer a record type for a file and `import` can produce a value of that type.
+In fact, these functions could just as easily take code strings, letting us generate code at compile time!
 
-Your compiler and cargo options really matter with regards to the callgraph being emitted, similarly to how they matter to the final binary generated by rustc and the linker.
+### Reflection
 
-I advise people to use `opt-level=2` for CGA, even if the shipped binary uses something different, as *generally* no reachable panic will be missing with `opt-level=2` (thus fewer false positives and no false negatives).
+Syl already has rudimentary reflection via the built-in `repr` function, which returns metadata for a type.
 
-### Tooling expects rustc
+```text
+fun print_ty (erased t : type) : unit =
+  match erased repr t {
+    .unit -> print "unit",
+    .bool -> print "bool",
+    .int -> print "int",
+    _ -> unreachable,
+  }
+;;
+```
 
-CGA has been tested on a few real-world binaries, and typically it works out of the gate. Sometimes however it does not. This is either because the project does not compile with `build-std` yet (which CGA requires), or because the `build.rs` expects the application to be built with stock `rustc` and not with a `rustc-driver` like CGA ([example](https://github.com/phil-opp/llvm-tools/blob/master/src/lib.rs#L19-L20)).
+This facility could be straightforwardly extended to allow inspecting the structure of types, which could then be used to implement typed Rust or OCaml-style derivers.
 
-If CGA does not work for your project, or if the callgraph does not seem to be correct, please [open an issue](https://github.com/OpenDevicePartnership/cga/issues/new)! The tooling can only evolve by testing it against real software.
+### User-Defined Layouts
 
-## Try it out
+While fairly speculative, I think we should be able to define and manipulate types’ runtime layouts at compile time.
+With such a feature, users could safely describe interoperable niche optimizations, possibly in the style of [*Bit-Stealing Made Legal*](https://inria.hal.science/hal-04165615v1/document).
+This would also require some notion of “unaddressable” fields that do not allow creating pointers to them.
 
-With [Call Graph Analyzer (CGA)](https://github.com/opendevicepartnership/cga) you can extract callgraphs and detect panics. If you were wondering how many panics your application secretly contains, even though you are not using `unwrap`, give it a spin and [let us know](https://bsky.app/profile/wassasin.bsky.social) what you find!
+## Everything Else
 
-A special shoutout to Jyn for [this blogpost](https://jyn.dev/rustc-driver/) and the work by [Ferrocene](https://ferrocene.dev/), which heavily inspired our work on the Call Graph Analyzer.
+Syl’s design is far from complete.
+In particular, it needs stories for mode polymorphism, lifetimes, linearity, implicit parameters, and proofs.
+The compiler needs incremental compilation, useful error traces, and an LLVM backend.
+I hope to share more thoughts on these areas in the future.
+
+# Footnotes
+
+1. In the literature, modal type systems are presented in terms of modalities. We will describe modes as they appear in OxCaml, but you can translate by thinking of all values as `static unerased` until captured under a `dynamic` or `erased` modality. [↩︎](https://thenumb.at/Syl-Intro/#fnref:1)
+2. Currently, staticity has modal axiom K, which allows staticity-preserving functions to operate on dynamic arguments. I plan to replace the implicit application rule with mode polymorphism, which can also handle erasure. [↩︎](https://thenumb.at/Syl-Intro/#fnref:2)
+3. This is the core idea of [*Staged Compilation with Two-Level Type Theory*](https://andraskovacs.github.io/pdfs/2ltt.pdf), though it’s not presented as a modal type system. [↩︎](https://thenumb.at/Syl-Intro/#fnref:3)
+4. This idea is formally explored in [*Irrelevance, Heterogeneous Equality, and Call-by-value Dependent Type Systems*](https://www.cis.upenn.edu/~sweirich/papers/msfp12prog.pdf). Thanks to Chris for proofreading this post! [↩︎](https://thenumb.at/Syl-Intro/#fnref:4)
+5. Syl does not yet have equality types, but once it does, erasure will provide a natural mechanism for forcing proof-producing computations when their results are needed. For example, `assert erased b` could establish `b = true` in the proof context by checking it reduces to `true`. [↩︎](https://thenumb.at/Syl-Intro/#fnref:5)
+6. This isn’t a fair comparison, but it’s better! [C++](https://godbolt.org/z/zP3Y9PjMG) / [Syl](https://pastebin.com/BNrfcP8B). [↩︎](https://thenumb.at/Syl-Intro/#fnref:6)
+7. There exist ideas on how to make such modalities inferrable, but I don’t understand them yet. [↩︎](https://thenumb.at/Syl-Intro/#fnref:7)
