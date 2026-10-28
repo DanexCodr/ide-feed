@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-28T12:20:10Z",
+  "updated": "2026-10-28T22:19:55Z",
   "items": [
     {
       "id": "devto-4858196",
@@ -98,24 +98,12 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4852470",
-      "title": "Requests, Promises, Assertions, and Declarations: Rewriting Our AI Agent Workflow as a 1986 'Committed Speech' Machine",
-      "desc": "By Randal L. Schwartz | 26 min read",
-      "tag": "tutorial",
-      "published": "2026-10-14T19:53:12Z",
-      "order": 9,
-      "url": "https://dev.to/gde/requests-promises-assertions-and-declarations-rewriting-our-ai-agent-workflow-as-a-1986-4k4c",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F80k088q9sdie6yq9pbha.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAwEBAAAAAAAAAAAAAAAAAQIDAAT/xAAVAQEBAAAAAAAAAAAAAAAAAAABAP/aAAwDAQACEAMQAAAB5RMxVGyf/8QAGRAAAwADAAAAAAAAAAAAAAAAAAERECFC/9oACAEBAAEFAuSQbwijWv/EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABcQAAMBAAAAAAAAAAAAAAAAAAEQICH/2gAIAQEABj8CC2v/xAAaEAEBAAMBAQAAAAAAAAAAAAABABExUSFB/9oACAEBAAE/IUBPr7Yzqw6NllUDk0ZTu2C//9oADAMBAAIAAwAAABA/H//EABcRAAMBAAAAAAAAAAAAAAAAAAABESH/2gAIAQMBAT8QpiZ//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPxA//8QAHBABAAICAwEAAAAAAAAAAAAAAQARITFBUXFh/9oACAEBAAE/EEh1ughfi33KfoQl3QeRQONCYQ43UQtWu7hAwcP2f//Z",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4875822",
       "title": "Your agent's retry bug isn't an AI problem. It's a distributed-systems problem with an LLM on top.",
       "desc": "By Dimitris Kyrkos  | 3 min read",
       "tag": "tutorial",
       "published": "2026-10-19T06:42:45Z",
-      "order": 10,
+      "order": 9,
       "url": "https://dev.to/cyclopt_dimitrisk/your-agents-retry-bug-isnt-an-ai-problem-its-a-distributed-systems-problem-with-an-llm-on-top-1i6k",
       "image": "https://media2.dev.to/dynamic/image/width=1200,height=627,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fiqdssmxk1srgbl586mox.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAARACADASIAAhEBAxEB/8QAGAABAQEBAQAAAAAAAAAAAAAAAAEDAgT/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAH2TSmN1HYED//EABoQAAICAwAAAAAAAAAAAAAAAAABESICIEH/2gAIAQEAAQUCawRUoUGQQd0//8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAwEBPwEf/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAgEBPwEf/8QAHBAAAgICAwAAAAAAAAAAAAAAAAIyQREgIXGR/9oACAEBAAY/AoqQUipFSy/SzHPev//EAB4QAAIBAwUAAAAAAAAAAAAAAAERABAgsVGRwdHw/9oACAEBAAE/ISCxRL0TyUAZYIDPA0C67oChUgna/9oADAMBAAIAAwAAABAjgBz/xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAEDAQE/EB//xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAECAQE/EB//xAAgEAACAgEDBQAAAAAAAAAAAAABEQAhMSDB8EFRcaHR/9oACAEBAAE/EHth6gNoLxDT4UXG2hYkO00W0vUfkAgEm1ru+yx+zCiXBljOHp//2Q==",
@@ -127,7 +115,7 @@
       "desc": "By Ken W Alger | 11 min read",
       "tag": "tutorial",
       "published": "2026-10-22T13:34:00Z",
-      "order": 11,
+      "order": 10,
       "url": "https://dev.to/kenwalger/nothing-reported-it-9ke",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fp0waeaiv76zg8lygmjra.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAAECBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHgQluS/wD/xAAWEAADAAAAAAAAAAAAAAAAAAAQESD/2gAIAQEAAQUCKn//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAUEAEAAAAAAAAAAAAAAAAAAAAw/9oACAEBAAY/Ag//xAAYEAADAQEAAAAAAAAAAAAAAAAAETEBIP/aAAgBAQABPyFCMpHP/9oADAMBAAIAAwAAABD8z//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QP//EABsQAAIDAAMAAAAAAAAAAAAAAAERADGBIEGh/9oACAEBAAE/EKt+QpZWQAUezseLj//Z",
@@ -139,7 +127,7 @@
       "desc": "By Nathan Tarbert | 7 min read",
       "tag": "tutorial",
       "published": "2026-10-20T17:15:15Z",
-      "order": 12,
+      "order": 11,
       "url": "https://dev.to/nathan_tarbert/your-team-has-answered-this-before-im-building-a-tool-that-remembers-5604",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fl0qfhqjgbvaejbwbk7ct.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAwEBAAAAAAAAAAAAAAAAAAEDAgT/xAAVAQEBAAAAAAAAAAAAAAAAAAAAAf/aAAwDAQACEAMQAAAB7tAkXVn/xAAZEAACAwEAAAAAAAAAAAAAAAABAgAQEiD/2gAIAQEAAQUCrTQMxPH/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAaEAABBQEAAAAAAAAAAAAAAAABAAIQICEz/9oACAEBAAY/Ao5lawiv/8QAHRAAAwAABwAAAAAAAAAAAAAAAAERIDFRYXGBof/aAAgBAQABPyFt3L05GtuM7JhLrSb4P//aAAwDAQACAAMAAAAQd6//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAVEQEBAAAAAAAAAAAAAAAAAAAAEf/aAAgBAgEBPxBX/8QAHBABAAICAwEAAAAAAAAAAAAAAQARITFBUXFh/9oACAEBAAE/EBMLZgutL+QyCGhrTAbRthCbLbzECuV9lHUXFT//2Q==",
@@ -151,7 +139,7 @@
       "desc": "By Randal L. Schwartz | 17 min read",
       "tag": "tutorial",
       "published": "2026-10-22T23:51:30Z",
-      "order": 13,
+      "order": 12,
       "url": "https://dev.to/gde/926-steps-two-lobotomies-and-zero-nudges-flight-testing-the-commitment-machine-across-gemini-55ca",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fr0i1iy0f3e5i20n3hb8p.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAQID/8QAFgEBAQEAAAAAAAAAAAAAAAAAAQAC/9oADAMBAAIQAxAAAAHFg26Sk//EABgQAAMBAQAAAAAAAAAAAAAAAAABAhEQ/9oACAEBAAEFAp7YnnNKen//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAUEAEAAAAAAAAAAAAAAAAAAAAw/9oACAEBAAY/Ag//xAAaEAADAAMBAAAAAAAAAAAAAAAAAREQIWFR/9oACAEBAAE/IVuFvwWIkE50XJDs/9oADAMBAAIAAwAAABAtD//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QP//EABURAQEAAAAAAAAAAAAAAAAAAAAB/9oACAECAQE/EFf/xAAcEAEAAgMAAwAAAAAAAAAAAAABABEhMUFhgZH/2gAIAQEAAT8QO6rY/Yp4E5VwOivUUVKtjY+xEXpHMgI1PGp//9k=",
@@ -163,10 +151,22 @@
       "desc": "By Debashish Ghosal | 6 min read",
       "tag": "tutorial",
       "published": "2026-10-25T01:03:43Z",
-      "order": 14,
+      "order": 13,
       "url": "https://dev.to/debashish_ghosal/three-times-my-test-failed-and-the-llm-was-right-43l2",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F4o2covnae1ry3vu9zaln.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAQIE/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAH/2gAMAwEAAhADEAAAAcVS1QJ//8QAGRAAAwEBAQAAAAAAAAAAAAAAAAECITFB/9oACAEBAAEFAiRiPJx1r4f/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAWEAADAAAAAAAAAAAAAAAAAAAQESD/2gAIAQEABj8CpD//xAAaEAEBAQADAQAAAAAAAAAAAAABABEhMUGB/9oACAEBAAE/IU9u2kfX7CDYnDZPIjhf/9oADAMBAAIAAwAAABDOv//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QP//EABoQAAIDAQEAAAAAAAAAAAAAAAERACFBMRD/2gAIAQEAAT8QYEsNOMAS3WxhJgdSvBhagqNE+QsKqB5DI9c//9k=",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4878017",
+      "title": "Four Ways a Test Can Lie to You",
+      "desc": "By Ken W Alger | 12 min read",
+      "tag": "tutorial",
+      "published": "2026-10-28T13:32:00Z",
+      "order": 14,
+      "url": "https://dev.to/kenwalger/four-ways-a-test-can-lie-to-you-2ibf",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fjn2ygonhg2bm9uetvhqj.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAgME/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAH/2gAMAwEAAhADEAAAAcLkkU0D/8QAGBAAAgMAAAAAAAAAAAAAAAAAABEBECD/2gAIAQEAAQUCEKpx/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFhAAAwAAAAAAAAAAAAAAAAAAARAg/9oACAEBAAY/AqC//8QAGhAAAgMBAQAAAAAAAAAAAAAAACEBEDERcf/aAAgBAQABPyEmDZuHsUh3Tr8V/9oADAMBAAIAAwAAABAgj//EABURAQEAAAAAAAAAAAAAAAAAAAAB/9oACAEDAQE/EEf/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/ED//xAAcEAACAwEAAwAAAAAAAAAAAAAAAREhMWFRcYH/2gAIAQEAAT8QTSjtCTSFKdItMNNHr4JR9HfWeTs+hOZ9n//Z",
       "color": "#3B49DF"
     },
     {
@@ -299,6 +299,30 @@
       "url": "https://dev.to/kenwalger/tuesday-isnt-a-valid-state-transition-16ln",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Flhlmlfevv0rnolpw8kf7.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAgABA//EABYBAQEBAAAAAAAAAAAAAAAAAAABAv/aAAwDAQACEAMQAAABREddFif/xAAbEAACAwADAAAAAAAAAAAAAAABAgAREhAhMf/aAAgBAQABBQIu17admaoHlvP/xAAVEQEBAAAAAAAAAAAAAAAAAAAQEf/aAAgBAwEBPwGn/8QAFREBAQAAAAAAAAAAAAAAAAAAEBH/2gAIAQIBAT8Bh//EABYQAAMAAAAAAAAAAAAAAAAAABAgQf/aAAgBAQAGPwI1f//EABoQAQACAwEAAAAAAAAAAAAAAAEAEBEhMXH/2gAIAQEAAT8hIjU8YqZWPRGzlop//9oADAMBAAIAAwAAABAwn//EABcRAAMBAAAAAAAAAAAAAAAAAAABIRH/2gAIAQMBAT8Q0VU//8QAGBEBAAMBAAAAAAAAAAAAAAAAAQARITH/2gAIAQIBAT8QqHJY5P/EABsQAQEBAAMBAQAAAAAAAAAAAAERACExUUFx/9oACAEBAAE/EBB0fphkLP5vNKcE0ZSbFHJZFXtxw5OFrx3/2Q==",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4894386",
+      "title": "\"I'm 93% confident\" is a string, not a probability",
+      "desc": "By Dimitris Kyrkos  | 3 min read",
+      "tag": "tutorial",
+      "published": "2026-10-22T06:30:29Z",
+      "order": 26,
+      "url": "https://dev.to/cyclopt_dimitrisk/im-93-confident-is-a-string-not-a-probability-2ndc",
+      "image": "https://media2.dev.to/dynamic/image/width=1200,height=627,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fpkjgl413cn54sogjhsbv.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAARACADASIAAhEBAxEB/8QAGAABAAMBAAAAAAAAAAAAAAAAAAECAwT/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAHti4ztYaAQH//EABoQAAMBAQEBAAAAAAAAAAAAAAABAhIRICH/2gAIAQEAAQUCzJyTkmZGkZRiRfK8f//EABQRAQAAAAAAAAAAAAAAAAAAACD/2gAIAQMBAT8BH//EABQRAQAAAAAAAAAAAAAAAAAAACD/2gAIAQIBAT8BH//EABwQAAIBBQEAAAAAAAAAAAAAAAABMREyM5GhIP/aAAgBAQAGPwKxaMfDHwsWiCCCiXn/xAAeEAEAAgEEAwAAAAAAAAAAAAABABExECAh8EGBof/aAAgBAQABPyFFzek7BOkQVr4Ih5vDQAFxpM+Nv//aAAwDAQACAAMAAAAQo4Ac/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAwEBPxAf/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAgEBPxAf/8QAHxABAQACAAcBAAAAAAAAAAAAAREAISAxUWFxgZGh/9oACAEBAAE/EDBB1MBSpNZb8WkLuwx2o5LiXbISrdfcU5l9uQtUJ/Hnh//Z",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4846874",
+      "title": "The Hidden Cost of AI-Generated PRs: Why Most Teams Are Missing Silent Breakages",
+      "desc": "By 𝗝𝗼𝗵𝗻 | 5 min read",
+      "tag": "tutorial",
+      "published": "2026-10-20T14:30:00Z",
+      "order": 27,
+      "url": "https://dev.to/johnnylemonny/the-hidden-cost-of-ai-generated-prs-why-most-teams-are-missing-silent-breakages-3g46",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F8q51f4enq0bh0honolcy.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAQIAAwT/xAAVAQEBAAAAAAAAAAAAAAAAAAAAAf/aAAwDAQACEAMQAAAB0CyQhcr/AP/EABgQAAMBAQAAAAAAAAAAAAAAAAAQESEB/9oACAEBAAEFAi7zXCL/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAXEAEAAwAAAAAAAAAAAAAAAAAAAREg/9oACAEBAAY/AlJ1/8QAGBABAQEBAQAAAAAAAAAAAAAAAQARIUH/2gAIAQEAAT8hjzS1xwksiALC/9oADAMBAAIAAwAAABCbz//EABYRAQEBAAAAAAAAAAAAAAAAAAABIf/aAAgBAwEBPxDVr//EABURAQEAAAAAAAAAAAAAAAAAAAEQ/9oACAECAQE/EGf/xAAcEAACAgMBAQAAAAAAAAAAAAABEQBhMUGBEFH/2gAIAQEAAT8QAgTeTczpiBvfhUrkCC9/VBKAyX2UT//Z",
       "color": "#3B49DF"
     }
   ]

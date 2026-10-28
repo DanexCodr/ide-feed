@@ -1,77 +1,174 @@
-[Goodhart’s
-law](https://en.wikipedia.org/wiki/Goodhart%27s_law), that any measurable target stops being useful when people start
-optimizing for it, very much holds in database benchmarking. That is not
-new, of course. Famously, [TPC-D](https://www.tpc.org/tpcd/default5.asp) got retired when
-people optimized so much for it that the query runtimes converged
-towards zero due to excessive caching. [TPC-H](https://www.tpc.org/tpch/default5.asp) fixed that by
-declaring itself to be an ad-hoc benchmark, and explicitly forbidding
-things like exploiting knowledge about the workload or caching results
-(and a number of other optimizations).
+It has been about four months since I [returned to Zig](https://gracefulliberty.com/articles/return-to-zig) after being absent for a few years. In this time, I have written some software in Zig and reengaged with the community, online and in person. I decided to share some of that experience, including what I have liked about Zig so far and what I haven't. I'll include some comparisons to Rust along the way since that was my previous go-to language.
 
-We now see the same problem with the [ClickBench](https://benchmark.clickhouse.com/) benchmark,
-heavily accelerated by today’s use of AI code generation. If you tell an
-AI to make the queries faster, it will make the queries faster,
-regardless of whether this is a generally plausible approach or not. For
-example, the pgrust implementation performs group-by aggregations on
-string columns purely on the hash value, ignoring the long string
-content. That is a great performance boost, of course, and works for
-this benchmark, but can produce wrong results. Is it faster? Yes. Is it
-a plausible optimization? Probably not. And it does many other things:
-For example, ClickBench repeats certain predicates across queries, and
-thus pgrust caches the predicate, completely eliminating the query cost
-the second time. Or for query Q17, which returns tuples grouped by
-userid, it makes use of the fact that a) tuples are roughly clustered by
-userid, and b) the query specifies a limit clause without order by. Thus
-any userid will do, and it never reads most of the data. A human would
-not do these tiny micro-optimizations, because they are unlikely to be
-relevant in general use cases, but an AI can of course look at each
-query in detail and tune for it.
+## Projects
 
-Part of the problem is, of course, ClickBench itself. The benchmark
-is not well specified in what is permitted and what is not, there is no
-update stream, the queries are very simple, share predicates, are
-underspecified, etc. But the fundamental problem is independent of that
-concrete benchmark: The moment we start aggressively optimizing for a
-specific benchmark, the benchmark stops being very useful. Historically,
-that pressure was reduced a bit by the requirement that systems be
-generally useful. That is, they did not just want to perform well in
-benchmarks but also to be useful for their customers. That is, of
-course, not a concern for vibe-coded execution engines.
+The first project I started in Zig was [snurl](https://codeberg.org/liberty/snurl). It is a library for interacting with the smallnet (Gemini, Finger, Gopher, Spartan, and such). My goal has been to provide an alternative to curl for the smallnet, with similar testing and fuzzing requirements but on a smaller scale. I wanted to roughly follow [TigerStyle](https://tigerstyle.dev/) insofar as it made sense for the project.
 
-It is not clear what to do about it. Our [SQLStorm](https://github.com/SQL-Storm/SQLStorm) proposal tried
-to address this by having tens of thousands of queries, which makes
-overfitting harder. No human would fine-tune their system to such a huge
-workload. But with AI tools we could even investigate ten thousand
-queries in detail if needed, so that is not a real defense.
+Something I ran into early on was that the fuzzer didn't actually work. When getting excited about fuzzing in my last post, I didn't realize that the feature had not yet been completed. This isn't surprising, considering Zig's status, but it was disappointing, especially since the fuzzer is demonstrated in the generated `main.zig` file provided by `zig init`.<sup>[1](https://gracefulliberty.com/articles/four-months-of-zig/#fn-1)</sup>
 
-I think that to be meaningful, a benchmark has to a) like TPC-H, be
-ad-hoc, and forbid exploiting prior knowledge and any form of
-intermediate result caching. If we don’t do that, execution times
-converge towards zero. And b) the benchmark has to include some form of
-update stream, as otherwise overly aggressive read-only or read-mostly
-systems will always outperform systems that offer full transactional
-support. And c) the benchmark has to be truly ad-hoc, in the sense that
-the systems tested have to be older than the benchmark. One way to fight
-Goodhart’s law would be to (automatically) come up with a new benchmark
-from time to time, and then measure the systems that existed before the
-benchmark. The caching/pre-computation problem still remains, of course,
-but at least that would prevent the over-aggressive adjustment to just
-one specific benchmark.
+After this, I wrote a two programs which I have not published yet. The first is a small TUI typer racer. It was simpler than I expected to get a minimum version working so far. The second is an n-body simulator with stellar evolution using raylib.
 
-Interestingly, the machine learning community has struggled with
-exactly the same problem for years, and we should probably borrow some
-of their ideas. Kaggle competitions, for example, rank submissions on a
-hidden test set that participants never see, which makes overfitting on
-the public data pointless. Similarly, benchmarks like [LiveBench](https://livebench.ai/) regularly release new
-questions to make sure that models cannot have seen them during
-training. For database benchmarking that could mean keeping the actual
-benchmark queries secret and only publishing a representative sample for
-development, or, even better, generating a fresh workload for every
-evaluation round. SQLStorm already uses generated queries, so producing
-a new query set from time to time would be fairly easy. We would
-probably want a more generic approach (higher variety in schemas, update
-streams, transactions, etc.), but that seems to be a direction that
-would help keep benchmarks meaningful.
+## Zig Day
 
-1. Andreas Kipf[October 27, 2026 at 12:20 PM](http://databasearchitects.blogspot.com/2026/10/the-benchmarking-crisis.html?showComment=1793100025032&m=1#c7594163995220893488)Great thoughts, Thomas. I completely agree with your point on overfitting. However, I'm not convinced that completely avoiding repetitions and disabling caching reflects real-world workloads, even if it creates a cleaner benchmark. Production traces from Redshift and Snowflake show heavy (sub-)query repetition. We ran into this ourselves and created Redbench, which replays cloud workload traces over TPC-H/DS or SQLStorm while preserving realistic query repetitions and table invalidations (updates): https://github.com/DataManagementLab/RedbenchReply[Delete](https://www.blogger.com/comment/delete/8891884956165580080/7594163995220893488)Replies![](http://www.blogger.com/img/blogger_logo_round_35.png)[Thomas Neumann](https://www.blogger.com/profile/15209393663505917383)[October 27, 2026 at 12:28 PM](http://databasearchitects.blogspot.com/2026/10/the-benchmarking-crisis.html?showComment=1793100482799&m=1#c5889371241973898906)The problem is that if you do allow result caching you no longer measure the engine performance. Of course you are right that many real-world workloads benefit from caching, but it distorts the measurement in a hard to control manner. And it makes comparisons between different "flavors" of databases difficult: A system that wants to supports high update rates probably cannot cache as aggressively, even if it wants to. While a pure analytical system can be much more aggressive with result reuse. Forbidding caching is the easier way out. Allowing caching but imposes concurrent changes might be okay, too, but that would probably push everybody towards incremental view maintenance.[Delete](https://www.blogger.com/comment/delete/8891884956165580080/5889371241973898906)RepliesReplyReply
-2. Michael Malis[October 27, 2026 at 9:52 PM](http://databasearchitects.blogspot.com/2026/10/the-benchmarking-crisis.html?showComment=1793134351221&m=1#c8511178192432430739)Hi Thomas, I'm the creator of pgrust. First of all I want to say I'm a huge fan of your work. I've found the research you and your team have published to be incredible. When I'm doing research in an area, the first thing I'll look for is if you have published something on the topic. Your research has directly inspired pgrust's JIT compiler design as well as our morsel based scheduler. One thing I would like to clarify. When we were implementing optimizations for pgrust, if we were uncertain if the optimization was too specialized to the benchmark, the rule of thumb we would use was "does another db implement this optimization". All three of the optimizations you mention are things ClickHouse does today: using a hash to compare strings, keeping a predicate cache, and walking granules. In particular, we made sure to use a 128-bit cryptographic hash with a salt so the probability of a collision is ~0. For benchmarks, I think we'll end up moving in a direction that looks similar to how LLMs are benchmarked today. Queries behind the benchmark are not visible. But in a world where things like Bespoke OLAP are possible, having the query set be visible ahead of time may not be a bad thingReply[Delete](https://www.blogger.com/comment/delete/8891884956165580080/8511178192432430739)Replies![](http://www.blogger.com/img/blogger_logo_round_35.png)[Thomas Neumann](https://www.blogger.com/profile/15209393663505917383)[October 28, 2026 at 5:57 AM](http://databasearchitects.blogspot.com/2026/10/the-benchmarking-crisis.html?showComment=1793163424003&m=1#c3961334139816292496)You are absolutely right that pgrust is not the only one that has fitted extremely well to the benchmark, I should have made that clear. ClickHouse does it, too. And to a certain degree our own system is also guilty. I tend to accept only changes that I consider correct and generally useful, but simply knowing that the benchmark does something influences your design. My PhD students wanted to pressure me into doing the group-by-hash, too, as it is very helpful for this benchmark. I have pushed back on that, as it risks wrong results. But if you absolutely want to maximize performance that is the right thing to do, of course. Coming back to my original point, I think we need more complex, more diverse, and simply changing benchmarks, potentially with hidden queries. Because that prevents optimizations that help only for a specific scenario and potentially hurt in others.[Delete](https://www.blogger.com/comment/delete/8891884956165580080/3961334139816292496)RepliesReplyMichael Malis[October 28, 2026 at 6:44 AM](http://databasearchitects.blogspot.com/2026/10/the-benchmarking-crisis.html?showComment=1793166261906&m=1#c2991558043186253251)I'm curious what you see the risk of the optimization is? Do you feel the same way about using a uuidv4 as a primary key? Incorrect results due to hardware issues are many, many orders of magnitude more likely than a 128-bit hash collision.[Delete](https://www.blogger.com/comment/delete/8891884956165580080/2991558043186253251)RepliesReply![](http://www.blogger.com/img/blogger_logo_round_35.png)[Michael Malis](https://www.blogger.com/profile/02134809885226229387)[October 28, 2026 at 6:58 AM](http://databasearchitects.blogspot.com/2026/10/the-benchmarking-crisis.html?showComment=1793167113324&m=1#c5331610435564375543)I believe Kafka also uses the same trick where it will use a 128-bit hash to deduplicate entries when compacting without looking at the underlying value[Delete](https://www.blogger.com/comment/delete/8891884956165580080/5331610435564375543)RepliesReply![](http://www.blogger.com/img/blogger_logo_round_35.png)[Thomas Neumann](https://www.blogger.com/profile/15209393663505917383)[October 28, 2026 at 7:22 AM](http://databasearchitects.blogspot.com/2026/10/the-benchmarking-crisis.html?showComment=1793168565559&m=1#c7286107463987120764)Collisions are unlikely, of course, but I feel that this is a violation of the user contract. The user has asked me to aggregate on a certain value, and if I do it on the hash instead I do not compute the same result, at least potentially. When the user explicitly asks for an uuid that is fine, then the choice is made by the user. (I would still check for primary key violations even in that case, though, historically there have been cases where the source of randomness in, e.g., VMs was not that random). And note that group by is even more dangerous than uuid because the strings in question are potentially user/attacker controlled. Thus, the likelyhood of collisions are potentially much higher than random. Sure, we can mitigate that with a randomized hash seed, but we are doing something dangerous and the user has not asked for it.[Delete](https://www.blogger.com/comment/delete/8891884956165580080/7286107463987120764)RepliesReplyReply
+The most exciting opportunity in the last few months was the chance to go to a local Zig Day. I learned of Zig Day Seattle occurring on [Lobsters](https://lobste.rs) on August 20th. I was ecstatic to learn that there was a Zig Day in my area. Then I saw Andrew Kelley would be there and became more excited.
+
+Zig Days are local meetups where people interested in Zig hang out, work on their projects together, and talk about Zig. For this Zig Day, I decided to work on snurl. A friend, [Evin Yulo](https://yujiri.xyz) also decided to attend.
+
+The event itself occurred in the Bothell library, moved there from the Bellevue library after so many people signed up that capacity was overwhelmed. Having the creator of Zig at the event will do that.
+
+I love the format of these Zig Days and I'm glad they are a part of the community. Since they are run by local groups, it gives the whole Zig community a more interconnected feeling. It's a way to interact with other people who are interested in Zig in person. And, in this case, the creator of Zig itself.
+
+I got the chance to talk with other programmers about their projects. Hopefully some ideological cross-pollination occurred that will make all our projects stronger. I ended up working on snurl with evin, who started work on integrating Zig's standard library TLS implementation as alternative backend.
+
+I also briefly talked with Andrew Kelley. I hope Zig's built-in fuzzing gets fixed sometime soon!
+
+Ryan Hendrickson [wrote an excellent article](https://www.ryanjh.com/articles/my-first-zig-day/) outlining more of the events of that day from his perspective if you want more details.
+
+I will definitely be attending Zig Day Seattle again in the future. I may even head down to Portland to catch one before the next local one comes around. I enjoy the opportunity to connect with other people interested in Zig and its values.
+
+## What I've Liked
+
+### anyzig
+
+I love [anyzig](https://github.com/marler8997/anyzig). I've had to use zig master and 0.16.0 for different projects, and anyzig has made that doable.
+
+Unfortunately, it breaks outside of directories without a `build.zig.zon`, meaning if you have tooling that requires a `zig` command to work, it can only occur in project directories. This breaks autoformatting for my one-off Zig scripts. Maybe a default zig version could be provided in that case.
+
+### IO and Allocators
+
+I know it frustrates some people, but I love the fact that you have to pass IO and allocator parameters to functions in Zig.
+
+#### Allocators
+
+I'll start with allocators, since they've been around longer. For each Zig function you have to accept an explicit allocator parameter. This is different from most programming languages which either use a default allocator that may be changed globally or one changed by a local `context` (see Odin).
+
+I like being able to change allocators for different parts of code. You might want an arena allocator for some things but need a general purpose allocator for others. Sometimes a `FixedBufferAllocator` is all you need to perform an operation. Zig's style makes this all obvious to handle.
+
+I prefer Zig's system to Odin's implicit `context` system since Zig keeps things explicit. It's clear whether a function allocates memory or not, and hard to accidentally pass in the wrong allocator.
+
+This is also superior to Rust's hidden, infallible allocations that panic when memory is exhausted. They're working on adding explicit allocations, but this will be yet another feature tacked onto the language rather than something built from the ground up.
+
+It's much easier to reason about programs that allocate memory in Zig.
+
+#### IO
+
+The IO parameter is even more powerful, even if it is newer. It is well worth the breaking changes required to bring it about (even if I skipped the 0.15.0 -> 0.16.0 transition). In Zig, every function that interacts with the underlying operating system (with caveats) requires an "IO" parameter. This provides the context for input, output, and everything else. Porting Zig to new operating systems is mostly just porting IO.
+
+Practically, this is really nice for testing. When testing behavior, you just need to put in a testing IO instance that works as you need it to. You can change the input stream however you want, cause writes to fail, and anything else.
+
+Just like with allocation, passing an IO argument makes it clear which programs are pure and which ones are not. You can tell at a glace whether or not a program is going to modify something external.
+
+Zig has a really good track record of keeping things simple while also adding powerful features. Instead of adding 100 small features that do slightly different similar things, it tends to provide one major feature that supports all the various other use-cases. Low floor, high ceiling.
+
+### Comptime
+
+I love comptime. It's a seamless way to do metaprogramming and precomputation all in one. Other people have written more detailed accounts so I shall move on.
+
+### Build System
+
+[Zig's build system](https://ziglang.org/learn/build-system/) is stellar. So much so that companies like Uber have adopted it for their software written in other languages.
+
+One thing I like about it is that I can integrate other tools with it seamlessly in ways that Cargo complains about. This is especially important for one of my projects that involves code generation.
+
+### Dependency Culture
+
+Zig has an excellent dependency culture. The main ethos is simple: avoid. When you don't need a dependency, don't add one. However, when you do, it's often a battle-tested library that Zig can effortlessly integrate with translate-c. You can easily also vendor in external dependencies and audit their code.
+
+Most of my Zig programs have about one or two direct Zig dependencies, with zero indirect dependencies. This makes the codebase much easier to audit and control.
+
+This stands in stark contrast to Rust, where the smallest of my projects regularly have a few direct and dozens of indirect dependencies.
+
+This is thanks both to Zig's dependency culture and the fact that essential features like reflection, random number generation, clean error handling, and JSON parsing are built into the language or standard library rather than maintained as separate individual libraries. No need to depend on serde or syn in every program.
+
+Zig encourages careful consideration before adding dependencies, and I appreciate that.
+
+### Handling Errors Effortlessly
+
+Zig pushes programmers to handle errors correctly by default. The laziest way to handle errors in Zig is to use the `try` keyword and add `!` to the function's return type.
+
+This contrasts to Rust, which leads programmers to insert panics into their code. The issue is that it's often easier to panic when prototyping, and then leave that in the code longer than it should be. I've used production code written in Rust that panic instead of returning a proper error.
+
+In Rust you can use `?`, which is quicker than `unwrap`, but you also have to do something like `Result<Type, Box<dyn std::error::Error>`. That's a mouthful! Alternatively, you can use the anyhow crate and return `anyhow::Result`, which also provides some nice helper methods. But then you have to add a dependency for reasonable error handling. There's also Zig-style [composable errors](https://mcmah309.github.io/posts/the-missing-piece-in-rust-error-handling/) with yet another library.
+
+### Incremental Compilation
+
+The core team members at Zig have been doing amazing work at incremental compilation. If you run `zig build --watch -fincremental`, the compiler will watch for changes, check exactly what you changed, and then modify only what you've changed down to linking. No effort beyond what's required, so it's faster that human perception even for large codebases. Zig was designed from the ground up to support this behavior.
+
+This makes for a really nice workflow. I can just run the compiler in incremental mode right next to my text editor, and get updates on my code as I save. No time to get distracted with something else. With Rust projects 10+ seconds incremental compilation loops were common even in smaller projects. That's enough time to get distracted but not enough time to be productive doing something else, leaving annoying gaps that Zig eliminates.
+
+Rust is disadvantaged here. It's a stable language that needs to maintain backwards compatibility. This means it can't afford to break things in order to improve compilation speed, at least not to any large degree. Meanwhile, if it makes Zig better, the maintainers are willing to break just about anything to ensure the end result will be perfect.
+
+Currently, Zig only supports incremental compilation on x86_64 on Linux and macOS. If you use another operating system or architecture you won't have access to this feature yet, but in that case it's another thing to look out for!
+
+This makes Zig just a bit more wonderful to work with. I'll take it.
+
+## What I'd Like to See
+
+### Improved Stability
+
+Like every other user of Zig, I would like to see the standard library become more stable. I know that's one of the last tasks to do before 1.0, and there are many others before then, but it is frustrating to deal with the constant breakage in the ecosystem. My understanding is that that's why 0.17.0 took so long to be released.
+
+Andrew Kelley said at Zig Day that he would like to see 1.0 more than anyone. I believe him, so I will have patience and trust that the final version will be excellent.
+
+This is the one reason I still use Rust for some projects. Some cases require a stable programming language and the ecosystem that provides. But considering the impressive software that's being built in Zig these days, stability isn't everything. And there are projects for which the niceties of Zig outweigh its instability. I can't wait for 1.0.
+
+### Lifetime Support
+
+I would like to see more assistance with lifetimes in the Zig compiler. Specifically, I would like to see returning local variables to fail in debug mode, either as a kind of built-in lint (as Andrew Kelley has mentioned wanting to implement) or as literally invalidating that memory after the function returns. That way new users quickly learn to avoid that pattern. Currently, it's easy to unintentionally break your code this way, even if you think you understand lifetimes.
+
+Relatedly, the compiler currently accepts code that will be broken in the future. The compiler lets variables live the entire scope instead of the scope of a block. This means that if you stack-allocate a buffer and return it from a block, that buffer should be invalidated but isn't. My understanding is that this could silently break in a future Zig version.
+
+```
+// This works but will be invalid.
+const foo = blk: {
+	var buf: [1024]u8 = undefined;
+	const n = try writeToBuf(&buf);
+	break :blk buf[0..n];
+};
+```
+
+### More Documentation
+
+Zig is poorly documented. It has enough to get you started, but to continue onward you have to parse intention from sparse doc comments that are sometimes attached to functions. Examples are rare. I still haven't got Zig's standard library TLS working in snurl because neither I nor a friend can figure out how to set up the buffers correctly.
+
+Because of this lack of documentation, a lot of the knowledge for building solid Zig programs is distributed across the Web. If you're well integrated into Zig communities, having read the existing documentation, watched the presentations, and read the code, you can succeed. If you aren't that well integrated, however, it can be a challenge to work effectively.
+
+The benefit of this is that it encourages people to engage in [Zig communities](https://ziglang.org/community) (I'm an admin for the Matrix room, for example). While LLMs seek to demolish human collaboration, we need human-to-human collaboration now more than ever. However, we can still have that and nice documentation too. As we all know, people will still ask questions if you have things well-documented. And a good community knows how to point people towards good resources rather than just saying "RTFM".
+
+I would also be curious to see what the intersection of Zig and literate programming could be. My literate programming tool is written in Rust right now, but that might change.
+
+### Comptime Allocators
+
+I would love to parse JSON at compile time. For one of my projects, there is a JSON file that is stored inside the binary. It's static and could be parsed at compile time into a collection of structs.
+
+However, the standard library JSON parser requires an allocator. Because there are no allocators that work at compile time, this means that any JSON parsing must be done at runtime. So that's what I did with my project.
+
+I believe there is an intention of adding a JSON parser that does not require an allocator (the data already exists in the JSON string, after all). That will solve the immediate problem, but there are more general cases that may require an allocator. I believe `FixedBufferAllocator` worked at compile time before and served this purpose. It could do so again.
+
+### Better Bootstrapping
+
+Zig's bootstrapping story is impressive. [They erased the C++ version of their compiler and replaced it with a small WASM blob and WASM interpreter](https://ziglang.org/news/goodbye-cpp/). The WASM file is a stripped-down version of the compiler that compiles the full Zig compiler to C, which is then compiled by the system C compiler. It's an interesting approach and you should read the linked article if you want more details.
+
+The one caveat to this is that it requires the compiled binary blob checked into the source code. This is better than requiring the full previous compiler (like Rust), but it's not as good as having the full source available for every step of the process at all points. A malicious actor could still sneak something into the blob. More importantly, many distributions (like Debian) cannot properly package Zig at the moment because it's impossible to do so in a way that's compliant with their guidelines.
+
+Their original plan was to use the compiler's C backend to generate a C version of the compiler which would then be maintained separately. They would then have two different source versions. They decided this approach would be too difficult, unfortunately.
+
+Because of this, someone will have to make another Zig compiler in another language (probably C) that will improve the bootstrap process. This is explicitly not something the Zig Software Foundation wants to develop right now. This means that at the moment there is no way to bootstrap Zig fully from source.
+
+This issue isn't just a theoretical problem. Because Zig can't be packaged on Debian, I had to choose another language for one of my projects to ensure wider possible usage.
+
+Fortunately, this issue is temporary. Once Zig is stable, building an alternative compiler should be straightforward. Zig is designed to be a simple language where alternative implementations are humanly achievable, unlike [other languages](https://rust-lang.org/). Currently, the instability means any alternative compiler will be playing a constant game of catch-up, which is probably why the core team doesn't want to manage it while they're rapidly iterating.
+
+Alas, this may also require waiting for 1.0. May it come soon!
+
+## Moving Forward
+
+I will continue to use Zig. I'm excited about the direction it's going and I look forward to continuing to be a part of its community. So far, I've found no other programming language that I prefer more than Zig, even with its shortcomings. It's just stable enough that I don't have to make massive changes between releases. It will continue to be my go-to programming language for most projects.
+
+One of these projects is [ReTangled](https://codeberg.org/liberty/retangled). It was previously written in Rust but I grew tired of the massive dependency trees and want to take full advantage of Zig's build system.
+
+I've also been looking to contribute more to Zig directly. Between my limited time as a student, Zig's overflow of contributors already, and the poor documentation, this will be a challenge. But I want to contribute back, make an impact on the project, and become a better software engineer. Thankfully, improving contributor onboarding seems to be a priority for Andrew Kelley moving forward.
+
+I'll also be at future [Zig Days](https://zig.day/) in Seattle, if you want to meet and work on Zig projects together!
+
+1. It appears that the fuzzer currently works. As of 0.17.0, I no longer run into the crash I experienced before. [↩](https://gracefulliberty.com/articles/four-months-of-zig/#fr-1-1)
