@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-27T21:56:02Z",
+  "updated": "2026-10-28T04:37:09Z",
   "items": [
     {
       "id": "devto-4858196",
@@ -50,12 +50,24 @@
       "color": "#3B49DF"
     },
     {
+      "id": "devto-4929675",
+      "title": "Stratagems #32: The AI Logged a Withdrawal. P Took It as Proof.",
+      "desc": "By xulingfeng | 15 min read",
+      "tag": "tutorial",
+      "published": "2026-10-27T16:46:17Z",
+      "order": 5,
+      "url": "https://dev.to/xulingfeng/stratagems-32-the-ai-logged-a-withdrawal-p-took-it-as-proof-2jo2",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fsenpd6txz4k8ooplo6yj.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAwIABP/EABYBAQEBAAAAAAAAAAAAAAAAAAIAAf/aAAwDAQACEAMQAAAB4rlEMaDt/8QAGRABAQEBAQEAAAAAAAAAAAAAAQACEhEy/9oACAEBAAEFAgLkRySHhqxP10l//8QAFREBAQAAAAAAAAAAAAAAAAAAAQD/2gAIAQMBAT8BWG//xAAVEQEBAAAAAAAAAAAAAAAAAAABEP/aAAgBAgEBPwEJ/8QAGRAAAgMBAAAAAAAAAAAAAAAAACEBIDFB/9oACAEBAAY/AuiGZNf/xAAbEAACAwEBAQAAAAAAAAAAAAAAAREhMUFxsf/aAAgBAQABPyFvgSy1+DT1UKmNSQOmPhZa6GtwyLD/2gAMAwEAAgADAAAAEKlP/8QAFhEBAQEAAAAAAAAAAAAAAAAAAQAx/9oACAEDAQE/EEJHL//EABYRAQEBAAAAAAAAAAAAAAAAAAEAMf/aAAgBAgEBPxAGQNv/xAAfEAEBAAIBBAMAAAAAAAAAAAABEQAhQTFRYXGB0eH/2gAIAQEAAT8QV2OtyS3DDuCo/cZNU6DFm5WIEMAVyS6TzhiAFcn1lYBUs94oXnROH4z/2Q==",
+      "color": "#3B49DF"
+    },
+    {
       "id": "devto-4825930",
       "title": "In Ruby, Objects Don't Have Methods. How Method Lookup Actually Works.",
       "desc": "By S M Tahosin | 7 min read",
       "tag": "tutorial",
       "published": "2026-10-21T09:57:18Z",
-      "order": 5,
+      "order": 6,
       "url": "https://dev.to/smtahosin/in-ruby-objects-dont-have-methods-how-method-lookup-actually-works-31g9",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fiili.io%2FnMfrPx1.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAgMAAQT/xAAVAQEBAAAAAAAAAAAAAAAAAAABAv/aAAwDAQACEAMQAAABxDZFDHLH/8QAGBAAAwEBAAAAAAAAAAAAAAAAABARITH/2gAIAQEAAQUCqhwqhN//xAAVEQEBAAAAAAAAAAAAAAAAAAAAEf/aAAgBAwEBPwGI/8QAFREBAQAAAAAAAAAAAAAAAAAAABH/2gAIAQIBAT8BV//EABgQAAIDAAAAAAAAAAAAAAAAAAAxECAh/9oACAEBAAY/AlOCp//EAB0QAAICAQUAAAAAAAAAAAAAAAABESExQVFxgZH/2gAIAQEAAT8hUdHaHGxxE5yLqwsMSt+Fsj//2gAMAwEAAgADAAAAECGP/8QAFxEAAwEAAAAAAAAAAAAAAAAAAAERMf/aAAgBAwEBPxCHjHB//8QAFhEAAwAAAAAAAAAAAAAAAAAAAAER/9oACAECAQE/EKxUf//EAB0QAQACAgMBAQAAAAAAAAAAAAEAETFBIVFhkcH/2gAIAQEAAT8Qo1Y+DNi/uIpLK8XnUexq8+wFAOMvUYWF/ko/I7bJVBXU/9k=",
@@ -67,7 +79,7 @@
       "desc": "By Harsh  | 4 min read",
       "tag": "tutorial",
       "published": "2026-10-21T19:42:55Z",
-      "order": 6,
+      "order": 7,
       "url": "https://dev.to/harsh2644/ai-made-coding-cheaper-so-why-is-building-software-still-so-expensive-59m",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F9oofpl3pmjs6z6obwdy3.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAgMEBf/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHnWgkvnQX/xAAYEAACAwAAAAAAAAAAAAAAAAABEQACEP/aAAgBAQABBQKBKxBrjjz/xAAYEQACAwAAAAAAAAAAAAAAAAAAARESMf/aAAgBAwEBPwGCqWH/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAWEAADAAAAAAAAAAAAAAAAAAAQIDH/2gAIAQEABj8CEb//xAAZEAEAAwEBAAAAAAAAAAAAAAABABARIVH/2gAIAQEAAT8hIx2dhzFvtqY6K//aAAwDAQACAAMAAAAQ/wCv/8QAFxEAAwEAAAAAAAAAAAAAAAAAAAERMf/aAAgBAwEBPxCHowP/xAAVEQEBAAAAAAAAAAAAAAAAAAABAP/aAAgBAgEBPxBYb//EABkQAQEBAQEBAAAAAAAAAAAAAAEAESExQf/aAAgBAQABPxCdN9Pch7IfRKWoWDsmHyW//9k=",
@@ -79,22 +91,10 @@
       "desc": "By Sanidhya Goel | 6 min read",
       "tag": "tutorial",
       "published": "2026-10-23T10:47:46Z",
-      "order": 7,
+      "order": 8,
       "url": "https://dev.to/sanidhya_at_mlh/5-steps-on-how-to-not-loose-at-a-hackathon-3hd1",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fd6b30tt1bm9hvh7rq3e7.jpg",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAAMEAv/EABQBAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhADEAAAAUjJyhRo/8QAGRABAAMBAQAAAAAAAAAAAAAAAQACERAi/9oACAEBAAEFAo5MGMucfKV23//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABoQAQABBQAAAAAAAAAAAAAAAAABEBEhMWH/2gAIAQEABj8ClhusrI6//8QAGhABAAMBAQEAAAAAAAAAAAAAAQARMSFxUf/aAAgBAQABPyFVQ7vsSSjKHMaZAXx5Co9j2nxJah0Jso//2gAMAwEAAgADAAAAEBS//8QAFhEBAQEAAAAAAAAAAAAAAAAAABFh/9oACAEDAQE/ENV//8QAFREBAQAAAAAAAAAAAAAAAAAAAAH/2gAIAQIBAT8QSP/EABsQAQACAwEBAAAAAAAAAAAAAAEAESExQWGR/9oACAEBAAE/ENBB4wDyVBlwi7fI1JWREyre9zKkVHArXYzFT0RpRaJ9YrdYQv3sErQty61P/9k=",
-      "color": "#3B49DF"
-    },
-    {
-      "id": "devto-4929675",
-      "title": "Stratagems #32: The AI Logged a Withdrawal. P Took It as Proof.",
-      "desc": "By xulingfeng | 15 min read",
-      "tag": "tutorial",
-      "published": "2026-10-27T16:46:17Z",
-      "order": 8,
-      "url": "https://dev.to/xulingfeng/stratagems-32-the-ai-logged-a-withdrawal-p-took-it-as-proof-2jo2",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fsenpd6txz4k8ooplo6yj.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAwIABP/EABYBAQEBAAAAAAAAAAAAAAAAAAIAAf/aAAwDAQACEAMQAAAB4rlEMaDt/8QAGRABAQEBAQEAAAAAAAAAAAAAAQACEhEy/9oACAEBAAEFAgLkRySHhqxP10l//8QAFREBAQAAAAAAAAAAAAAAAAAAAQD/2gAIAQMBAT8BWG//xAAVEQEBAAAAAAAAAAAAAAAAAAABEP/aAAgBAgEBPwEJ/8QAGRAAAgMBAAAAAAAAAAAAAAAAACEBIDFB/9oACAEBAAY/AuiGZNf/xAAbEAACAwEBAQAAAAAAAAAAAAAAAREhMUFxsf/aAAgBAQABPyFvgSy1+DT1UKmNSQOmPhZa6GtwyLD/2gAMAwEAAgADAAAAEKlP/8QAFhEBAQEAAAAAAAAAAAAAAAAAAQAx/9oACAEDAQE/EEJHL//EABYRAQEBAAAAAAAAAAAAAAAAAAEAMf/aAAgBAgEBPxAGQNv/xAAfEAEBAAIBBAMAAAAAAAAAAAABEQAhQTFRYXGB0eH/2gAIAQEAAT8QV2OtyS3DDuCo/cZNU6DFm5WIEMAVyS6TzhiAFcn1lYBUs94oXnROH4z/2Q==",
       "color": "#3B49DF"
     },
     {
@@ -287,6 +287,18 @@
       "url": "https://dev.to/_boweii/my-passion-for-coding-isnt-404-its-503-446h",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fa320n0vxtnspy5sqt7ms.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAQIDBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHhvKokSv/EABkQAAIDAQAAAAAAAAAAAAAAAAARARASAv/aAAgBAQABBQLmGZVxKNDr/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAGRAAAwADAAAAAAAAAAAAAAAAAAEREEFR/9oACAEBAAE/IaIN0szoFFdY3T//2gAMAwEAAgADAAAAEA/v/8QAFREBAQAAAAAAAAAAAAAAAAAAECH/2gAIAQMBAT8Qh//EABcRAAMBAAAAAAAAAAAAAAAAAAEQESH/2gAIAQIBAT8QNuL/xAAcEAEAAgMAAwAAAAAAAAAAAAABADERIVFhkfH/2gAIAQEAAT8QUjjfY5Q0DfYm6jURZseYuYy+2fUiW2z/2Q==",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4931256",
+      "title": "From Code to Culture: Building 101 Indian Monuments in 3D",
+      "desc": "By amananandrai | 36 min read",
+      "tag": "tutorial",
+      "published": "2026-10-28T00:39:09Z",
+      "order": 25,
+      "url": "https://dev.to/amananandrai/101-indian-monuments-modelled-in-the-browser-g4f",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Ff5wouh2oemeu0fx5dto3.jpg",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAAEE/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEAMQAAAB3ywA/8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQABBQIP/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAGBAAAgMAAAAAAAAAAAAAAAAAAAEQIEH/2gAIAQEAAT8hQ5W0/9oADAMBAAIAAwAAABARz//EABURAQEAAAAAAAAAAAAAAAAAAAAB/9oACAEDAQE/EFf/xAAVEQEBAAAAAAAAAAAAAAAAAAAAAf/aAAgBAgEBPxBH/8QAGxABAQACAwEAAAAAAAAAAAAAAQARMRAhQXH/2gAIAQEAAT8QQ5lguw84eSOvkai//9k=",
       "color": "#3B49DF"
     }
   ]

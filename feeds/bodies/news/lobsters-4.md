@@ -1,25 +1,31 @@
-One of the things you get to do after being [laid off](https://planetpeanut.studio/post/2026/06/13/hello-again-planet-gnome) is a lot of reflection, but also to revisit all the old projects you used to contribute to.
+# Are you tired of your screenshares looking like this?
 
-One of them was [Pidgin](https://pidgin.im): **“the universal chat client”**.
+*OBS*
 
-I designed the original emoticon set for version 2 and helped redesign the user interface when the project was renamed from **Gaim** after a [legal dispute](https://en.wikipedia.org/wiki/Pidgin_(software)).
+## Don't you think they should look like this instead?
 
-Meanwhile, after a [huge rewrite](https://www.twitch.tv/rw_grim), **Pidgin 3** is making progress [towards a first release](https://discourse.imfreedom.org/t/pidgin-3-0-experimental-2-2-91-0-has-been-released/262) and I’ve been helping out here and there with a new [app icon](https://planetpeanut.studio/icons#Pidgin) and some [status symbols](https://mastodon.social/@hbons/117338801380410565) for the development releases.
+## You need WHIP.
 
-## Emoji
+Did you know OBS or FFmpeg can go directly into a video conference? You configure everything,
+           so you control exactly the quality you are going to get. WHIP support means these tools
+           now speak the protocol of video conferencing.
 
-I’ve been meaning to start live streaming my [weekly app icon](https://planetpeanut.studio/icons) work to share a look in the kitchen of the icon design process, but once I gathered the courage to start a test run, the experience wasn’t amazing.
+## Help! My video conferencing provider doesn't support WHIP. What can I do?
 
-I need something I can return to consistently without needing a new plan every time…
+Send them an angry email. Tell them you don't want their crappy
+          proprietary client. You want open standards that let you bring the tools
+          you prefer.
 
-So why not create a base set of [1,447 emoji](https://en.wikipedia.org/wiki/List_of_emojis) for Pidgin in [GNOME](https://developer.gnome.org/hig/guidelines/app-icons.html)-style exclusively **live on stream**? What could go wrong?
+## FAQ
 
-Here’s the [design file](https://www.figma.com/design/EZt7Rt0KKdzXVtga8pB2in) to keep me accountable, so I can’t sneakily make progress offline!
+[WHIP](https://www.rfc-editor.org/rfc/rfc9725.html) is an open standard for sending live video to a service using WebRTC.
+              Your provider gives you a server URL and a stream key, called a bearer token. Before to join a conference
+              call each client had to run custom code. That means FFmpeg/OBS would never be able to join.
 
-## Twitch
+A lack of control. Your browser is picking a bitrate, codec or resolution that doesn't match what you need.
 
-I’ll be chipping away at it a few times a week. Follow me [on Twitch](https://twitch.tv/planet_peanut_studio) to get a notification when I go live. We’ll grab a cup of tea, put on some music, and get through the winter.
+OBS and FFmpeg let you choose your resolution, frame rate, bitrate, and codec.
+              You can tune those settings for the content you're sharing and the hardware and connection you have.
 
-If you want to support my design work for Free and Open Source projects, I’m always looking for more [sponsors](https://planetpeanut.studio/sponsors).
-
-Or a “[sub](https://planetpeanut.studio/sponsors)” as the kids call it these days.
+OBS Virtual Camera sends your OBS scene to the conferencing app as a webcam.
+              You can pick the layout of your stream, but the conferencing app still handles encoding.

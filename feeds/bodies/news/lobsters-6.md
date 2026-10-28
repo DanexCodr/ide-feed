@@ -93,7 +93,7 @@ let f = fn (erased x : bool) -> if erased x then print_int 0 else print_int 1;;
 
 Here, `erased` also implies `static`, so `f` will be specialized on `x`.
 The `if erased` expression accepts a `static erased` condition and is guaranteed to resolve at compile time.
-Therefore, the body of `f true` is simply `print_int 0`, and likewise for `f false`.
+Therefore, `f true` refers to a thunk with the body `print_int 0`, and likewise for `f false`.
 
 ## Dependent Types
 

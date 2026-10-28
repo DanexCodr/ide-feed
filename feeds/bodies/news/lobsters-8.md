@@ -1,636 +1,436 @@
-I'm impressed with the level of compatibility
-of the new memory-safe C/C++ compiler
-[Fil-C](https://fil-c.org)
-(filcc, fil++).
-Many libraries and applications that I've tried
-work under Fil-C without changes, and the exceptions haven't been hard to get working.
+Project Zero compared two automated tools used by Google to find vulnerabilities in Chrome’s JavaScript engine, V8, on a regular basis. [Fuzzilli](https://github.com/googleprojectzero/fuzzilli) is a generative JavaScript engine fuzzer and [BigSleep](https://projectzero.google/2024/10/from-naptime-to-big-sleep.html) is an LLM-based bug finding system. In the past six months, BigSleep found more vulnerabilities than Fuzzilli (45 versus 37) with a 25% overlap in the specific bugs reported. Since this comparison methodology has a tendency to underestimate overlap, we also performed dedicated experiments to test theoretical overlap in vulnerabilities reported since 2023. These experiments estimated overlap at roughly 60%. Regardless of which value is accurate, a substantial portion of vulnerabilities were discoverable by only LLMs or only fuzzing. While it is extremely promising that LLMs have become able to find so many vulnerabilities so quickly, fuzzing and LLMs are still complementary approaches. We recommend vendors perform both fuzzing and agentic analysis of their code to maximize the number of vulnerabilities that get reported before they impact users.
+more
 
-I've accumulated miscellaneous notes on this page regarding usage of Fil-C.
-My selfish objective here is to protect various machines that I manage
-by switching them over to code compiled with Fil-C,
-but maybe you'll find something useful here too.
+## Introduction
 
-**Is it affordable?**
-As some data points,
-I've posted a
-[graph](https://cr.yp.to/2025/20251028-filcc-vs-clang.html)
-showing nearly 9000 microbenchmarks of Fil-C vs. clang on cryptographic software (each run pinned to 1 core on a Zen 4).
-Typically code compiled with Fil-C takes between 1x and 4x as many cycles as the same code compiled with clang.
+Fuzzing has long been successfully applied to software projects such as Chrome or V8 (Chrome’s JavaScript engine) to detect bugs. Recently, the arrival of powerful LLMs able to read, reason about, and write code is causing a transformative change to software development and software security. With [hundreds, sometimes thousands of new bugs and vulnerabilities](https://blog.google/security/chrome-stronger-with-every-update/) having been discovered in well-fuzzed targets, a natural question arises: how do new LLMs compare to “traditional” fuzzers? Are they starting to replace them or do the two approaches complement each other? To help answer this, we look at three key questions:
 
-**Can I use Fil-C to compile replacement packages for my Debian machine?**
-I'm working on
-[Filian](https://gitlab.cr.yp.to/djb/filian),
-which adapts Debian packages to use Fil-C.
-On a Debian 13 system,
-Filian downloads Fil-C, compiles Fil-C, installs Fil-C,
-downloads selected Debian source packages,
-compiles those packages with Fil-C,
-and installs those packages.
+1. How many bugs does each approach find in the real world?
+2. What is the overlap between the two approaches?
+3. What is the “shape” of bugs discovered by one system but not the other?
 
-**Are there other package managers that support compiling with Fil-C?**
-Yes:
-[Filnix](https://github.com/mbrock/filnix)
-from Mikael Brockman adapts
-[Nix](https://nixos.org/#) packages to use Fil-C.
-For example,
-an unprivileged user under Debian 12 with about 10GB of free disk space
-can download, compile, and install Fil-C,
-and run a Fil-C-compiled Nethack, as follows:
+For this blog post, we will limit ourselves to two concrete systems: [Fuzzilli](https://github.com/googleprojectzero/fuzzilli), a JavaScript engine fuzzer, and [BigSleep](https://projectzero.google/2024/10/from-naptime-to-big-sleep.html), an agentic bug finding system. Both of these systems run in production and automatically look for bugs in newly added code, which makes them fairly directly comparable. Specifically, Fuzzilli runs continuously across many instances, with the first ones usually picking up new changes within a few hours, while BigSleep currently runs once per day and is prompted to review new commits and write proof-of-concept testcases for any bugs it discovers. Both systems report bugs through [Clusterfuzz](https://github.com/google/clusterfuzz), which will do basic crash triaging, then file bug reports in [Chrome’s issue tracker.](https://issues.chromium.org/home)
 
-```
-unshare --user --pid echo YES # just to test
-git clone https://github.com/nix-community/nix-user-chroot
-cd nix-user-chroot
-cargo build --release
-mkdir -m 0755 ~/nix
-~/nix-user-chroot/target/release/nix-user-chroot ~/nix \
-  bash -c 'curl -L https://nixos.org/nix/install | sh'
-env TERM=vt102 \
-  ~/nix-user-chroot/target/release/nix-user-chroot ~/nix \
-  ~/nix/store/*-nix-2*/bin/nix \
-  --extra-experimental-features 'nix-command flakes' \
-  run 'github:mbrock/filnix#nethack'
-```
+We also limit ourselves to V8 as a target, a high-performance JavaScript and WebAssembly engine with a sophisticated and mature testing and fuzzing setup. In particular, Fuzzilli is a special-purpose fuzzing tool designed to find bugs in these engines. The usually complicated nature of these bugs makes for an interesting “playground” to compare the two approaches’ ability to find deep and complex bugs in well-tested software. We leave it to future work to perform similar analysis on a broader set of targets, fuzzers, and agentic bug finding systems.
 
-**Are binary packages available precompiled with Fil-C?**
-I'm not distributing Filian binaries for now,
-but if you run multiple Debian systems with synchronized package versions
-then you can compile once and share the binary packages.
-For Filnix, some binary packages are already cached via
-[Cachix](https://www.cachix.org/).
-You can also use various packages from the
-[/opt/fil](https://fil-c.org/install_optfil)
-binary distribution from the Fil-C author.
+We will now look into each of the three main questions in a dedicated section. Each section will first summarize the general approach, then describe the methodology in detail (often as bullet points, so you can skip those blocks if you don’t care too much about the details) before exploring the results. We conclude with an attempt at interpreting the results to get a picture of the current state of fuzzing vs. AI.
 
-**Is the supply chain safe?**
-As a starting point in answering this question,
-I've posted a
-[script](https://cr.yp.to/2025/filc-diffs-20251027.sh)
-to help auditors see how Fil-C differs from upstream sources (clang, glibc, ...).
+# Part 1: Production Statistics
 
-I think everything later on this page is superseded by Filian,
-except for some package notes that I haven't integrated into the Filian database yet.
-Filian definitely supersedes
-filian-install-packages version
-[20251030](https://cr.yp.to/2025/20251030-filian-install-packages)
-posted here,
-filian-install-compiler versions
-[20251029](https://cr.yp.to/2025/20251029-filian-install-compiler.sh),
-[20251030](https://cr.yp.to/2025/20251030-filian-install-compiler.sh),
-[20251104](https://cr.yp.to/2025/20251104-filian-install-compiler.sh)
-posted here,
-the
-[build-parallel](https://cr.yp.to/2025/build-parallel-20251023.py) script posted here,
-and the
-libgc replacement posted here.
+This is the simplest part to analyze, although with some caveats we’ll see in a bit. The basic idea is to query issues from [Chromium’s bugtracker](http://issues.chromium.org/) (where V8 bugs are tracked) and extract various statistics from there. This is especially easy since there’s a dedicated hotlist for each of the two systems. We limit our analysis to the six months from April to September 2026 as the automatic BigSleep pipeline only became active in April this year. As such, our raw data comes from the following two bug tracker queries:
 
-Timings below are from a mini-PC named phoenix except where otherwise mentioned.
-This mini-PC has a 6-core (12-thread) AMD Ryzen 5 7640HS (Zen 4) CPU, 12GB RAM, and 36GB swap.
-The OS is Debian 13.
-(I normally run LTS software,
-periodically upgrading from software that's 4–5 years old such as Debian 11 today
-to software that's 2–3 years old such as Debian 12 today;
-but some of the packages included in Fil-C expect newer utilities to be available.)
+- Fuzzilli: [hotlistid:5433121 created:2026-04-01..2026-09-30](https://issues.chromium.org/issues?q=hotlistid:5433121%20created:2026-04-01..2026-09-30)
+- BigSleep: [hotlistid:8067258 created:2026-04-01..2026-09-30](https://issues.chromium.org/issues?q=hotlistid:8067258%20created:2026-04-01..2026-09-30)
 
-Current recommendations for things to do at the beginning as root:
+From there, the raw numbers of bug reports are:
 
-```
-mkdir -p /var/empty
-apt install \
-  autoconf-dickey build-essential bison clang cmake flex gawk \
-  gettext ninja-build patchelf quilt ruby texinfo time
-```
+- Fuzzilli: 316
+- BigSleep: 441
 
-I created an unprivileged filc user.
-Everything else is as that user.
+Small win for BigSleep. However, this includes all types of bugs, and BigSleep initially also found a lot of configuration and integration issues in V8, for example [crbug.com/503869331](https://crbug.com/503869331) where the [unsafe flag blocking mechanism](https://source.chromium.org/chromium/chromium/src/+/main:v8/src/flags/flag-definitions.h;l=4303;drc=4bd243831302ef96b70f7e159e5685bb2eba306f) didn’t work properly yet. These are legitimate issues, but less relevant for our comparison since there’s little real-world security impact. One easy way to get rid of these is to look specifically at vulnerabilities by limiting the results to `type:vulnerability`:
 
-I downloaded the Fil-C source package:
+- Fuzzilli: 178
+- BigSleep: 95
 
-```
-git clone https://github.com/pizlonator/fil-c.git
-cd fil-c
-```
+Suddenly a clear win for the fuzzers? Not quite. There are still some problems with this data, notably duplicates and unactionable reports (e.g. bugs [closed as WAI](https://issues.chromium.org/issues?q=hotlistid:\(8067258%20%7C%205433121\)%20status:intended_behavior)). At first, this seems like a simple thing to fix: just include another constraint such as `status:(fixed | verified)`. Unfortunately, things are a bit more complicated. Take for example Fuzzilli bug [crbug.com/511935486](https://crbug.com/511935486). The events on this bug are basically:
 
-This isn't just the compiler;
-there's also glibc and quite a few higher-level libraries and applications.
-There are also binary Fil-C packages,
-but I've worked primarily with the source package at this point.
+- The bug is filed by Clusterfuzz on May 11 and assigned to an engineer
+- The bug is closed by Clusterfuzz as the testcase no longer reproduces later that same day
 
-I compiled Fil-C and glibc:
+As such, this bug received zero developer interactions. Most likely what happened here is that this bug was a duplicate of another bug, [crbug.com/511210507](https://crbug.com/511210507), but Clusterfuzz didn’t realize it as the crash signature (derived from the stack trace) was slightly different. When the other bug received a fix, the testcase stopped reproducing on Clusterfuzz, which closed the issue.
 
-```
-time ./build_all_fast_glibc.sh
-```
+Maybe the best thing we can do is to look at “actionable” bugs, defined as those that are not marked as duplicates or WAI *and* that received at least one fix commit referencing them. Then, looking at only `Type-Vuln` bugs filters out a lot of the less-relevant BigSleep bugs, even though these were “actionable”. With that, the final picture looks like this:
 
-There are also options to use musl instead of glibc,
-but musl is incompatible with some of the packages shipped with Fil-C:
-attr needs basename,
-elfutils needs argp_parse,
-sed's test suite needs the glibc variant of calloc,
-and
-vim's build needs iconv
-to be able to convert from CP932 to UTF-8.
+![](https://projectzero.google/images/2026-10-27-fuzzing-v-AI-image1.png)
 
-I had originally configured the server phoenix with only 12GB swap.
-I then had to restart ./build_all_fast_glibc.sh a few times
-because compiling the Fil-C compiler ran out of memory
-(from automatically parallelizing the compilation across 12 threads;
-presumably compiling clang on the same machine would have the same issue).
-Switching to 36GB swap made everything work with no restarts;
-monitoring showed that almost 19GB swap (plus 12GB RAM) was used at one point.
-A larger server, 128 cores with 512GB RAM, took 8 minutes for Fil-C plus 6 minutes for musl,
-with no restarts needed.
+So in terms of vulnerabilities, it’s roughly a tie (small advantage BigSleep) at the moment: 45 vs. 37.
 
-Fil-C includes a
-./build_all_slow.sh
-that builds many more libraries and applications
-(sometimes with patches from the Fil-C author).
-I wrote a replacement script
-[https://cr.yp.to/2025/build-parallel-20251023.py](https://cr.yp.to/2025/build-parallel-20251023.py)
-with the following differences:
+This naturally raises the question of cost: how expensive is each of the two approaches and what does that mean in terms of cost-per-bug? Unfortunately, it’s challenging to make a comparison at this stage in the research. While some effort has been dedicated to making Clusterfuzz more efficient, similar effort has not been expended for Big Sleep and neither system is particularly calibrated for an optimal cost-per-bug ratio.
 
-On phoenix,
-running
-time PATH="$HOME/bin:$HOME/fil-c/build/bin:$HOME/fil-c/pizfix/bin:$PATH" ./build-parallel.py
-went through 61 targets in 101 minutes real time (467 minutes user time, 55 minutes system time),
-successfully compiling 60 of them.
+# Part 2: Overlap
 
-**libcap.**
-This is the one that didn't compile:
-/home/filc/fil-c/pizfix/bin/ld: /usr/libexec/gcc/x86_64-linux-gnu/14/liblto_plugin.so: error loading plugin: libc.so.6: cannot open shared object file: No such file or directory
+The next question is how much these approaches overlap each other. For this, our approach is twofold: we first attempt to find an answer in the bugtracker, by trying to identify bugs discovered by both systems. Next, we run a dedicated experiment in which we let BigSleep try to rediscover old Fuzzilli bugs.
 
-**util-linux.**
-I skipped this one.
-It does compile,
-but the compiled taskset utility needs to be patched to use
-sched_getaffinity and sched_setaffinity
-as library functions rather than via syscall,
-or Fil-C needs to be patched for those syscalls.
-This is an issue for build-parallel
-since build-parallel relies on taskset;
-maybe build-parallel should instead use Python's affinity functions.
+## Bugtracker Overlap
 
-**
-attr, bash, benchmarks, binutils, bison, brotli, bzip2, bzip3, check, cmake, coreutils, cpython, curl, dash, diffutils, elfutils, emacs, expat, ffi, gettext, git,
-gmp, grep, icu, jpeg-6b, libarchive, libcap, libedit, libevent, libpipeline, libuev, libuv, lua, lz4, m4, make, mg, ncurses, nghttp2, openssh, openssl, pcre2, pcre,
-perl, pkgconf, procps, quickjs, sed, shadow, simdutf, sqlite, tcl, tmux, toybox, vim, wg14_signals, xml_parser, xz, zlib, zsh, zstd.**
-No problems encountered so far
-(given whatever patches were already applied from the Fil-C author!).
-The benchmarks package is supplied with Fil-C and does a few miscellaneous measurements.
+The basic idea is to see which bugs were found by both systems, so we’re effectively looking for duplicate bug reports. Similar to part 1, there are a few steps we need to take to ensure we get a somewhat accurate picture:
 
-I did
-export PATH="$HOME/bin:$HOME/fil-c/build/bin:$HOME/fil-c/pizfix/bin:$PATH"
-before these.
+- First, we look for bugs filed by one system that get deduplicated into a bug filed by the other. For example [crbug.com/522410841](https://crbug.com/522410841) which is a duplicate of [crbug.com/522860268](https://crbug.com/522860268). This is a clear overlap.
+- Next, we need to take into account that many “unactionable” reports (those with zero associated fixes) are often duplicates. For those reports, we need to find the commit that fixed them, then look at the bug associated with that commit, and treat these two bugs as duplicates. This can be a multi-prong relationship: both bug X found by BigSleep and bug Y found by Fuzzilli might be a duplicate of bug Z reported by someone/something else. In that case, that bug still counts as overlap.
+- Then, we need to realize that many duplicates never receive a bugtracker entry since they are already deduplicated at the Clusterfuzz level (since both Fuzzilli and BigSleep rely on Clusterfuzz for basic triage and bug filing). As such, we need to query Clusterfuzz’s underlying database to find more duplicates.
+- Finally, we need to decide what to do with separate bugs that get fixed by the same CL, for example the four bugs fixed by [crrev.com/c/7965120](https://crrev.com/c/7965120). While this can legitimately happen for distinct bugs, it’s probably more likely for the bugs to be duplicates (such as in this case), and so we count them as such.
 
-**boost 1.89.0**:
-Seems to mostly work.
-Most of the package is header-only;
-a few simple tests worked fine.
+With all the different types of deduplication, we get this final picture:
 
-I also looked a bit at the compiled parts.
-Running
-./bootstrap.sh --with-toolset=clang --prefix=$HOME
-ran into vfork,
-which Fil-C doesn't support,
-but editing
-tools/build/src/engine/execunix.cpp
-to use defined(__APPLE__) || defined(__FILC__)
-for the no-fork test got past this.
+![](https://projectzero.google/images/2026-10-27-fuzzing-v-AI-image2.png)
 
-Running ./b2 install --prefix=$HOME toolset=clang address-model=64 architecture=x86_64 binary-format=elf
-produced an error message since I should have said x86 instead of x86_64;
-Fil-C said it caught a safety issue in the b2 program after the error message:
-filc safety error: argument size mismatch (actual = 8, expected = 16).
-I didn't compile with debugging so Fil-C didn't say where this is in b2.
+Again, looking at just the actionable vulnerability reports (likely the best measure), we see an overlap of roughly 25% (20 out of a total of 81), with a slight majority of these found first by Fuzzilli and later by BigSleep.
 
-**cdb-20251021**:
-Seems to work.
-One regression test, an artificial out-of-memory regression test,
-currently produces a different error message with Fil-C:
-filc panic: src/libpas/pas_compact_heap_reservation.c:65: pas_aligned_allocation_result pas_compact_heap_reservation_try_allocate(size_t, size_t):
-assertion page_result.result failed.
+## Overlap Experiment
 
-**libcpucycles-20250925**:
-Seems to work.
-I commented out the first three lines of cpucycles/options.
+The second way to measure the overlap is to run a dedicated experiment in which we try to re-discover bugs found by one system in the past using the other. Specifically, here we try to re-discover old Fuzzilli bugs using a BigSleep setup that’s as close to the production configuration as possible. For each bug we collect the commit that (likely) introduced the bug, and ask the agent to review those changes just as in the production CI environment. Note that the other direction, trying to rediscover past BigSleep bugs with Fuzzilli is more difficult to set up, since fuzzers cannot easily be given a similar “starting point”. Moreover, for many of these bugs we already know the outcome of such an experiment: the majority of “historic” BigSleep bugs (e.g. [those from 2025](https://issues.chromium.org/issues?q=hotlistid:8067258%20componentid:1456824%2B%20created%3C2026-01-01)) were found after fuzzers like Fuzzilli had already been fuzzing vulnerable builds for months, sometimes years. So they would most likely also not rediscover them in an experiment (except perhaps in a few cases where Fuzzilli was since updated to support new language features). Similarly, in production, BigSleep only reports crashes with a delay of 1-2 days (as there’s currently only one run per day). As such, fuzzers also get a head-start there.
 
-**libgc**:
-I replaced this with a small gcshim package
-([https://cr.yp.to/2025/gcshim-20251022.tar.gz](https://cr.yp.to/2025/gcshim-20251022.tar.gz))
-that simply calls malloc etc.
-So far this seems to be an adequate replacement.
-(Fil-C includes a garbage collector.)
+In more detail, here is how the experiment is set up:
 
-**libntruprime-20241021**:
-Seems to work after a few tweaks but I didn't collect full notes yet.
-chmod +t crypto_hashblocks/sha512/avx2 disables assembly and makes things compile;
-configured with --no-valgrind since Fil-C doesn't support valgrind;
-did a bit more tweaking to make cpuid work.
+- We start with a list of historic Fuzzilli bugs (from early 2023 until mid-2026) by querying the bug tracker hotlist. This gives us [around 1150 raw bugs](https://issues.chromium.org/issues?q=hotlistid:5433121%20status:\(fixed%20%7C%20verified\)%20created%3C2026-08-01).
+- We restrict this to only `type:vulnerability` as these are the types of bugs we care most about and will remove some “noise” as above. We are left with roughly 600 vulnerabilities.
+- Next, we filter this list down to bugs that reproduce in the environment used by the agent. This involves two parts:
+  - Bugs that reproduce on an x64 debug+asan build of the d8 shell as [provided by Chrome’s public build infrastructure](https://commondatastorage.googleapis.com/v8-asan/index.html?prefix=linux-debug/). This is important because many bugs only reproduce in special builds, for example because they are architecture-specific or need certain compile-time features.
+  - Bugs that can be reproduced without special flags. The problem here is that fuzzers often set custom flags, either to enable in-development features (e.g. `--experimental-wasm-jspi` in [crbug.com/361123483](http://crbug.com/361123483)) or to turn on different fuzzing modes that make certain types of bugs easier to discover (e.g. `--deopt-every-n-times` in [crbug.com/362784006](https://crbug.com/362784006)). However, we can’t let the agent set arbitrary flags on historic V8 builds as these didn’t have a “safe-flags only” mode (leading to many false-positive crashes), and we also don’t want to tell the agent which flags it should use for a given challenge as that would be a hint. As such, for simplicity we limit ourselves to bugs that can reproduce with a standard set of flags (`--fuzzing`, `--jit-fuzzing`, `--expose-gc`) and only allow the agent to set those.
+- We end up with 132 historic bugs.
+- We now perform some deduplication similar to what we did above to identify implicit duplicates, which we remove. This leaves us with a final number of 112 bugs.
+- For a realistic comparison, we then convert these bugs into “code review challenges” similar to the ones used by the production BigSleep pipeline. For that, we try to identify the commit that (likely) introduced the bug, for example based on bisection. We note that this skews the comparison against BigSleep for two reasons:
+  - We likely sometimes identify the wrong commit that is unrelated to the bug in question, making the task harder or even impossible.
+  - We only have one commit per bug, while in the real world, the agent might discover the bug from another, subsequent commit that touches a similar part of the codebase.
+- We now run the agent for 25 attempts on each commit. The agent is asked to find bugs related to the commit and prove their existence by writing a testcase that crashes the vulnerable build. The attempt is terminated once a crash is found, so each attempt can report at most one bug. We use essentially the same configuration that was used in production BigSleep at that time, including the same underlying model: [Gemini 3.6 flash](https://deepmind.google/models/model-cards/gemini-3-6-flash).
+- Finally, we run some post-processing on the results to check if the agent found the “right” bug or an unrelated one. For that, we check that the testcase crashes the pre-fix revision but *not* the post-fix revision. This is imperfect but fairly easy to implement.
 
-**lpeg-1.1.0:**
-Compiles, maybe works (depends on lua, dependency of neovim):
-`cd
-PREFIX=$(dirname $(dirname $(which lua)))
-wget https://www.inf.puc-rio.br/~roberto/lpeg/lpeg-1.1.0.tar.gz
-tar -xf lpeg-1.1.0.tar.gz
-cd lpeg-1.1.0
-make CC=`which filcc` DLLFLAGS='-shared -fPIC' test
-cp lpeg.so $PREFIX/lib
-`
+Here are the results from the experiment:
 
-**luv-1.51.0:**
-Compiles, maybe works (depends on lua, dependency of neovim):
-`cd
-PREFIX=$(dirname $(dirname $(which lua)))
-wget https://github.com/luvit/luv/releases/download/1.51.0-1/luv-1.51.0-1.tar.gz
-tar -xf luv-1.51.0-1.tar.gz
-cd luv-1.51.0-1
-mkdir build
-cd build
-LUA_DIR=$HOME/fil-c/projects/lua-5.4.7
-# lua install should probably do this:
-cp $LUA_DIR/lua.h $PREFIX/include/
-cp $LUA_DIR/lauxlib.h $PREFIX/include/
-cp $LUA_DIR/luaconf.h $PREFIX/include/
-cp $LUA_DIR/lualib.h $PREFIX/include/
-# and then:
-cmake -DCMAKE_C_COMPILER=`which filcc` -DCMAKE_INSTALL_PREFIX=$PREFIX -DWITH_LUA_ENGINE=Lua -DLUA_DIR=$HOME/fil-c/projects/lua-5.4.7/ ..
-make test
-make install
-`
+![](https://projectzero.google/images/2026-10-27-fuzzing-v-AI-image3.png)
 
-**mutt-2-2-15-rel** (depends on ncurses):
-`wget https://github.com/muttmua/mutt/archive/refs/tags/mutt-2-2-15-rel.tar.gz
-tar -xf mutt-2-2-15-rel.tar.gz
-cd mutt-mutt-2-2-15-rel
-CC=`which clang` ./prepare --prefix=$HOME/fil-c/pizfix --with-homespool
-make -j12 install
-`
-Seems to work, at least for reading email.
+Starting from just the commits that (likely) introduced the bugs, BigSleep was able to re-discover ~62% of the original bugs, while finding a different (but by now fixed) bug for another ~12% of commits. On around 26% of the commits it failed to find any bugs.
 
-**tig** (depends on ncurses and maybe more):
-`wget https://github.com/jonas/tig/releases/download/tig-2.6.0/tig-2.6.0.tar.gz
-tar -xf tig-2.6.0.tar.gz
-cd tig-2.6.0
-CC=`which filcc` ./configure --prefix=$(dirname $(dirname $(which git)))
-make -j12
-make test
-make -j12 install
-`
-Seems to work, at least for viewing the Fil-C repo.
+### Memorization
 
-**w3m** (depends on gcshim and ncurses):
-Seems to work.
-I tried the Debian version:
-git clone https://salsa.debian.org/debian/w3m.git.
-I used CFLAGS=-Wno-incompatible-function-pointer-types
-(which is probably needed for clang anyway even without Fil-C).
+One thing to worry about with experiments such as this one is memorization: the LLM remembering specific bugs from its (pre-)training data and as such having an easier time “re-discovering” them during evaluation. We can try to get some idea of the effect of this by looking at the success rates for bugs from different time spans, e.g. every half-year period for which we have bugs in the data set. If there was memorization, we’d expect higher success rates (both for a single attempt and for the combined run) on bugs prior to the learning data cutoff of the model. Here are the results for our experiment:
 
-I've built and installed some replacement Debian packages using Fil-C as the compiler on a Debian 13 machine,
-as explained below.
-Hopefully this can rapidly scale to many packages,
-taking advantage of the basic compile-install-test knowledge already built into Debian source packages,
-although some packages will take more work because they need extra patches to work with Fil-C.
+![](https://projectzero.google/images/2026-10-27-fuzzing-v-AI-image4.png)
 
-**Structure.**
-Debian already understands how to have packages for multiple architectures (ABIs; Debian "ports") installed at once.
-For example,
-dpkg --add-architecture i386; apt update; apt install bash:i386
-installs a 32-bit version of bash,
-replacing the usual 64-bit version;
-you can do apt install bash:amd64 to revert to the 64-bit version.
-Meanwhile the 32-bit libraries and 64-bit libraries are installed in separate locations,
-basically
-/lib/i386-linux-gnu
-or
-/usr/lib/i386-linux-gnu
-vs.
-/lib/x86_64-linux-gnu
-or
-/usr/lib/x86_64-linux-gnu.
-(On Debian 11 and newer, and on Ubuntu 22.04 and newer,
-/lib is symlinked to /usr/lib.)
+For the model used in this experiment (Gemini 3.6 flash), the [knowledge cutoff date is March 2026](https://deepmind.google/models/model-cards/gemini-3-6-flash/#intended-usage-and-limitations). Combining that with the fact that in early 2026, Chrome bugs would only become publicly visible after ~3 months, the effective knowledge cutoff for Fuzzilli bugs should be around Jan 2026. Looking at the data, there seems to be no statistically significant amount of memorization pre-2026. We note, however, that this may be different for other models or future model generations and as such recommend that this be re-evaluated for similar experiments in the future.
 
-I'm following this model for plugging Fil-C into Debian:
-the goal is for apt install bash:amd64fil0
-to install a Fil-C-compiled (amd64fil0) version of bash,
-replacing the usual (amd64) version of bash,
-while the amd64 and amd64fil0 libraries are installed in separate locations.
+### Difficulty
 
-[Filian uses amd64filc0,
-with libraries in /usr/lib/x86_64-linux-gnufilc0.]
+A follow-up question we might ask is how the overlap compares with “difficulty”. For example, in the best case a system like BigSleep would easily find issues that fuzzers struggle with and vice versa. In that case, budget that was previously spent on long fuzzing sessions may now be re-allocated and put to different uses. Here are the results of analysing this, where “bug difficulty” is measured by the time it took Fuzzilli to discover the bug:
 
-**The include-file complication.**
-Debian
-[expects](https://wiki.debian.org/Multiarch/LibraryPathOverview)
-library packages compiled for multiple ABIs
-to all provide the same include files:
-for example, /usr/include/ncurses.h
-is provided by libncurses-dev:i386, libncurses-dev:amd64, etc.
-This is safe because Debian forces
-libncurses-dev:i386 and libncurses-dev:amd64 and so on
-to all have the same version.
-An occasional package with ABI-dependent include files
-can still use /usr/include/x86_64-linux-gnu etc.
+![](https://projectzero.google/images/2026-10-27-fuzzing-v-AI-image5.png)
 
-Fil-C instead omits /usr/include
-in favor of a Fil-C-specific directory
-(which will typically be different from /usr/include:
-even if Fil-C is compiled with glibc,
-probably the glibc version won't be the same as in /usr/include).
-This difference is the top source of messiness below.
-I'm planning to tweak the Fil-C driver to use /usr/include on Debian.
-[This is done in Filian.]
+While we do get a statistically significant result here (although not of particularly great magnitude), it actually points in the other direction! Bugs that are hard to find for a fuzzer are likely *also* hard to find for an AI agent. As such, those fuzzers should probably be kept running for now.
 
-Something else I'm planning to tweak is Fil-C's glibc compilation,
-so that it uses the final system prefix.
-[This is also done in Filian.]
-The approach described below instead requires
-/home/filian/fil-c to stay in place
-for compiling and running programs.
+### Components
 
-**Building Debian packages.**
-How does Debian package building work?
-First, more packages to install as root:
+Another thing we can look at is a per-component breakdown of the bugs and their rediscovery rates:
 
-`apt install dpkg-dev devscripts docbook2x \
-  dh-exec dh-python python3-setuptools fakeroot \
-  sbuild mmdebstrap uidmap piuparts
-`
+![](https://projectzero.google/images/2026-10-27-fuzzing-v-AI-image6.png)
 
-Debian has
-[multiple options](https://wiki.debian.org/PackagingTools#Package_build_tools)
-for building a package.
-The option that has the best isolation,
-and that Debian uses to continually build new packages for distribution,
-is sbuild,
-but for fast development I'll focus on directly using the lower-level
-dpkg-buildpackage.
-[Filian also uses dpkg-buildpackage for the moment.]
+Interestingly, the overlap is significantly smaller for compiler bugs. This is the area where Fuzzilli probably specializes most in, which may explain the results. Later on (in part 3), we’ll also develop another hypothesis for why (some) bugs in the compilers may be more difficult to rediscover for BigSleep.
 
-**Baseline 1: using sbuild without Fil-C.**
-In case you do want to try sbuild,
-here's the basic setup,
-and then an example of building a small package (tinycdb):
-`mkdir -p ~/shared/sbuild
-time mmdebstrap --include=ca-certificates --skip=output/dev --variant=buildd unstable ~/shared/sbuild/unstable-amd64.tar.zst https://deb.debian.org/debian
+### Prompting
 
-mkdir -p ~/.config/sbuild
-cat << "EOF" > ~/.config/sbuild/config.pl
-$chroot_mode = 'unshare';
-$external_commands = { "build-failed-commands" => [ [ '%SBUILD_SHELL' ] ] };
-$build_arch_all = 1;
-$build_source = 0;
-$source_only_changes = 1;
-$run_lintian = 1;
-$lintian_opts = ['--display-info', '--verbose', '--fail-on', 'error,warning', '--info'];
-$run_autopkgtest = 1;
-$run_piuparts = 1;
-$piuparts_opts = ['--no-eatmydata', '--distribution=%r', '--fake-essential-packages=systemd-sysv'];
-EOF
+A final question is how much the specific prompting played a role in the performance of the AI agent. For that, we run two quick follow-up experiments, only on the bugs that weren’t previously re-discovered and with different prompts:
 
-mkdir -p ~/shared/packages
-cd ~/shared/packages
-apt source tinycdb
-cd tinycdb-*/
-time sbuild
-`
+1. Instead of starting from commits, we start from the vulnerable file or function. This may be an easier starting point but is still a fairly realistic setup since both can for example be obtained by extracting modified files and functions from a given commit.
+2. Instead of asking the agent to find memory corruption vulnerabilities (what we care most about), we specifically tell it that assertion failures and similar crashes are also desirable.
 
-**Baseline 2: using dpkg-buildpackage without Fil-C.**
-Here's what it looks like compiling the same small package with dpkg-buildpackage:
-`mkdir -p ~/shared/packages
-cd ~/shared/packages
-apt source tinycdb
-cd tinycdb-*/
-time dpkg-buildpackage -us -uc -b
-`
+Running these two experiments with only 5 attempts per bug (instead of the 25 used in the main experiment), the agent re-discovered 10 additional bugs in total: 8 from the different starting points and 7 with the rephrased prompt (with 5 found in both runs).
 
-**The goal: Using dpkg-buildpackage with Fil-C.**
-[Filian handles the following differently; see filian-onetime:]
-As root, teach dpkg basic features of the new architecture,
-imitating the current line
-amd64 x86_64 (amd64|x86_64) 64 little
-in the same file:
+In total, combining these results with our original experiment, we get the following picture:
 
-`echo amd64fil0 x86_64+fil0 amd64fil0 64 little >> /usr/share/dpkg/cputable
-`
+![](https://projectzero.google/images/2026-10-27-fuzzing-v-AI-image7.png)
 
-[Not necessary with Filian:]
-Also, allow apt to install packages compiled for this architecture
-(beware that this will also later make apt update look for that architecture on servers,
-and whimper a bit for not finding it,
-but nothing breaks):
+So the share of “correct” bugs found climbs to ~70%, and we find some kind of bug for ~84% of starting points. However, for fairness it should be noted that equivalent tweaks to a fuzzer could likely also result in higher discovery rates for certain bugs, so the results of this follow-up experiment should be treated with some caution.
+
+## Summary
+
+The main results from our two angles are:
+
+1. In production, the overlap is noticeable but not substantial at around 25%.
+2. In our experiment, overlap was around 60% of historic Fuzzilli bugs (70% with additional runs that used different prompts).
+3. The overlap is not uniformly distributed:
+  1. Bugs that are difficult for a fuzzer to find are more likely to also be difficult to find for an agent, so there’s more overlap on “easy” bugs.
+  2. The overlap seems to be smaller in the JIT Compilers and higher in the rest of the engine.
+
+From just the experiment, we might expect a higher overlap in production. However, there are probably a few factors that prevent(ed) this:
+
+- There’s a limited time window for overlaps: once a bug reported by either system is fixed, the other system no longer has a chance to rediscover it (as the bug won’t reproduce on Clusterfuzz and will therefore be discarded).
+- Our experiment only looked at a subset of Fuzzilli bugs that reproduce on a standard x64 d8 fuzzer build and without special flags. In production, each system has access to slightly different and specialized builds, as well as different runtime flag constraints, and there the overlap is potentially smaller.
+- Pipeline hiccups such as overloaded servers or bugs in the automation likely prevented a number of commits from being reviewed by BigSleep in the last months, so bugs introduced by them may have been missed.
+- Since its introduction in April, the model underlying the BigSleep pipeline has been upgraded multiple times. Earlier models likely performed worse, and we expect future models to perform better.
+
+# Part 3: Shape of Bugs
+
+In this section, we will first look at three case studies of bugs found by one system but not the other, then attempt to draw conclusions from these and other bugs.
+
+## BigSleep: Chrome Bug 449760249 (October 2025)
+
+This [bug](https://crbug.com/449760249) is a nice example of BigSleep benefiting from the underlying model’s reasoning capabilities to discover a variant that was (likely) too complex to trigger by a fuzzer in a reasonable amount of time. It’s also a good example to show the general working of an agentic bug finding system.
+
+### Background: TDZ and Hole Check Elision
+
+Before diving into the bug specifics, we first need to look at some JavaScript internals, specifically variable initialization. In JavaScript, variables declared with the `let` or `const` keywords cannot be used before they are initialized, and attempting to do so will lead to an exception (`”ReferenceError: Cannot access 'foobar' before initialization”`). In V8’s terminology, these variables reside in a “temporal dead zone” (TDZ) until they are initialized. Internally, V8 sets variables in the TDZ to a special sentinel value, `the_hole`, and then checks for this value when accessing the variable’s content.
+
+To limit the performance impact of these hole-checks, V8’s bytecode compiler implements an optimization (behind the [default-enabled --ignition-elide-redundant-tdz-checks flag](https://source.chromium.org/chromium/chromium/src/+/main:v8/src/flags/flag-definitions.h;l=1215;drc=424b93eb76684237b932b5d79315d00b85297548)) to identify redundant checks and subsequently remove them. The idea here is to identify “dominating” checks where it can then be guaranteed that a hole-check has already been performed for a given variable on all possible paths leading to the current position.
+
+This is a security-relevant optimization as an incorrectly removed hole-check would result in the internal `the_hole` value leaking to JavaScript code, a condition that [has historically been exploitable](https://crbug.com/40057710) (although [new mitigations](https://crbug.com/434179415) for this bug class have since shipped).
+
+### The Original Vulnerability
+
+The original bug ([issue 40071027](https://crbug.com/40071027) - discovered two years earlier by Fuzzilli!) involved `do-while` loops containing a `break` statement. In a `do-while` loop, the loop condition evaluates after the body. If the condition contains an assignment to a variable, the bytecode compiler will mark the variable as initialized. However, if a `break` statement executes in the loop body in the first iteration, then the condition will never execute. The bytecode compiler originally failed to account for this, leading to an incorrectly omitted hole check and subsequent leak of `the_hole` value.
+
+To fix this, the implementation of [`BytecodeGenerator::VisitDoWhileStatement`](https://source.chromium.org/chromium/chromium/src/+/main:v8/src/interpreter/bytecode-generator.cc;l=3153;drc=7a23bdae2d6c30b956f4f5803e3b7431a6632667) was modified in the following way:
 
 ```
-dpkg --add-architecture amd64fil0
+- VisitForTest(stmt->cond(), ...);
++ if (!loop_builder.break_labels()->empty()) {
++   HoleCheckElisionScope elider(this);
++   VisitForTest(stmt->cond(), ...);
++ } else {
++   VisitForTest(stmt->cond(), ...);
++ }
 ```
 
-[Not necessary with Filian:]
-Also, teach autoconf to accept amd64fil0
-(the third of these lines is what's critical for Debian builds):
+Specifically, the patch works by creating a [`HoleCheckElisionScope`](https://source.chromium.org/chromium/chromium/src/+/main:v8/src/interpreter/bytecode-generator.cc;l=445;drc=7a23bdae2d6c30b956f4f5803e3b7431a6632667) for processing the condition code in case the loop contains break statements. This means that any updates to the TDZ state of variables will be discarded once the scope object is destroyed. As such, code after the loop will see the previous TDZ state (which is the correct behavior in this case).
+
+### Discovery of the Variant
+
+The BigSleep agent began its analysis by examining the patch to `VisitDoWhileStatement`, realizing that the fix relied on `loop_builder.break_labels()->empty()` to decide if a protective `HoleCheckElisionScope` was required. It then began creating and testing various hypotheses for scenarios in which no `break` statement was registered with a given loop but the condition would still be skipped at runtime. For example, it hypothesized that a try-catch in combination with a `throw` inside the loop might confuse the hole-check elision logic. It then investigated how try-catch was implemented in the bytecode compiler and concluded that this was handled correctly.
+
+Eventually, the agent started investigating [labeled breaks](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/label), which allow directly breaking out of inner loops. It hypothesized that these might not be handled correctly and continued to investigate how these were being processed, for example by studying the logic in `BytecodeGenerator::VisitBreakStatement`. This time, it seemed to have identified a real flaw: in the case of nested breaks, the inner loop was apparently not being informed of the existence of a break statement! It therefore formulated the following vulnerability hypothesis:
+
+1. If a labeled break inside a do-while loop targets an outer scope, the inner do-while loop’s LoopBuilder is not notified.
+2. Consequently, loop_builder.break_labels()->empty() remains true.
+3. Therefore, when generating the code for the loop condition, the HoleCheckElisionScope introduced by the patch is not used.
+4. The condition is bypassed at runtime, but the bytecode compiler erroneously removed a later hole-check, leading to a leak of the_hole to JavaScript.
+
+The agent then began writing a testcase to prove the existence of this bug. The initial attempt with simply two nested loops and a label failed, however, as the bytecode compiler would [add another protective scope object for the labeled block](https://source.chromium.org/chromium/chromium/src/+/main:v8/src/interpreter/bytecode-generator.cc;l=2099;drc=77ce2c33f61b01daac3d9e4299b3d0805bee6461). To work around this, the agent decided to use a `switch` statement. When handling a `switch` statement, the bytecode compiler uses a `HoleCheckElisionMergeScope` to compute the intersection of initialization states across all branches. By ensuring that the variable was initialized in a `default` case, the merge logic then concluded that the variable was correctly initialized on all paths.
+
+### Proof of Concept
+
+With that, the agent had everything in place to produce a testcase to demonstrate the vulnerability. Below is the agent’s PoC:
 
 ```
-sed -i '/| x86_64 / a| x86_64+fil0 \\' /usr/share/autoconf/build-aux/config.sub
-sed -i '/| x86_64 / a| x86_64+fil0 \\' /usr/share/libtool/build-aux/config.sub
-sed -i '/| x86_64 / a| x86_64+fil0 \\' /usr/share/misc/config.sub
-```
-
-[Handled by Filian's filian-install-compiler:]
-As a filian user,
-compile Fil-C and its standard library:
-
-```
-cd
-git clone https://github.com/pizlonator/fil-c.git
-cd fil-c
-time ./build_all_fast_glibc.sh
-```
-
-[Handled by Filian's filian-install-compiler:]
-As root,
-copy Fil-C and its standard library into system locations:
-
-```
-mkdir -p /usr/libexec/fil/amd64/compiler
-time cp -r /home/filian/fil-c/pizfix /usr/libexec/fil/amd64/
-rm -rf /usr/lib/x86_64+fil0-linux-gnu
-mv /usr/libexec/fil/amd64/pizfix/lib /usr/lib/x86_64+fil0-linux-gnu
-ln -s /usr/lib/x86_64+fil0-linux-gnu /usr/libexec/fil/amd64/pizfix/lib
-rm -rf /usr/include/x86_64+fil0-linux-gnu
-mv /usr/libexec/fil/amd64/pizfix/include /usr/include/x86_64+fil0-linux-gnu
-ln -s /usr/include/x86_64+fil0-linux-gnu /usr/libexec/fil/amd64/pizfix/include
-time cp -r /home/filian/fil-c/build/bin /usr/libexec/fil/amd64/compiler/
-time cp -r /home/filian/fil-c/build/include /usr/libexec/fil/amd64/compiler/
-time cp -r /home/filian/fil-c/build/lib /usr/libexec/fil/amd64/compiler/
-( echo '#!/bin/sh'
-  echo 'exec /usr/libexec/fil/amd64/compiler/bin/filcc "$@"' ) > /usr/bin/x86_64+fil0-linux-gnu-gcc
-chmod 755 /usr/bin/x86_64+fil0-linux-gnu-gcc
-( echo '#!/bin/sh'
-  echo 'exec /usr/libexec/fil/amd64/compiler/bin/fil++ "$@"' ) > /usr/bin/x86_64+fil0-linux-gnu-g++
-chmod 755 /usr/bin/x86_64+fil0-linux-gnu-g++
-ln -s /usr/libexec/fil/amd64/compiler/bin/llvm-objdump /usr/bin/x86_64+fil0-linux-gnu-objdump
-ln -s x86_64+fil0-linux-gnu-gcc /usr/bin/filcc
-ln -s x86_64+fil0-linux-gnu-g++ /usr/bin/fil++
-```
-
-[Not necessary with Filian's binutils patches:]
-Now, as user filian (or whichever other user),
-let's make a little helper script to adjust a Debian source package:
+// Flags: --ignition-elide-redundant-tdz-checks
+function trigger(cond) {
+  {
+    target: switch(1) {
+      case 1:
+        do {
+          // Labeled break targeting the switch. The do-while LoopBuilder remains unaware.
+          if (cond) break target;
+        } while((x=1) && false); // Condition performs a check/assignment on x.
+        break;
+      default:
+        x=1; // Ensure x is considered initialized across all switch branches for merging.
+    }
+    // Generator incorrectly believes x is checked/initialized. Elides TDZ check.
+    x + 1;
+    let x;
+  }
+ }
+ trigger(true);
 
 ```
-mkdir -p $HOME/bin
-( echo '#!/bin/sh'
-  echo 'sed -i '\''s/^ \([^"]*\)$/ pizlonated_\1/'\'' debian/*.symbols'
-  echo 'find . -name '\''*.map'\'' | while read fn'
-  echo 'do'
-  echo '  awk '\''{'
-  echo '    if ($1 == "local:") global = 0'
-  echo '    if ($1 == "}") global = 0'
-  echo '    if (global && NF > 0 && !index($0,"c++")) $1 = "pizlonated_"$1'
-  echo '    if ($1 == "global:") global = 1'
-  echo '    print'
-  echo '  }'\'' < $fn > $fn.tmp'
-  echo '  mv $fn.tmp $fn'
-  echo 'done'
-  echo 'find debian -name '\''*.install'\'' | while read fn'
-  echo 'do'
-  echo '  awk '\''{'
-  echo '    if (NF == 2 && $2 == "usr/include") $2 = $2"/${DEB_HOST_MULTIARCH}"'
-  echo '    if (NF == 1 && $1 == "usr/include") { $2 = $1"/${DEB_HOST_MULTIARCH}"; $1 = $1"/*" }'
-  echo '    print'
-  echo '  }'\'' < $fn > $fn.tmp'
-  echo '  mv $fn.tmp $fn'
-  echo 'done'
-) > $HOME/bin/fillet
-chmod 755 $HOME/bin/fillet
-```
+
+Here is how this testcase works:
+
+1. trigger(true) executes, entering case 1 of the switch.
+2. The do-while loop executes break target.
+3. Control flow jumps to the end of the switch, bypassing the do-while condition where x is assigned.
+4. At runtime, x remains uninitialized (holding the_hole).
+5. Because the TDZ check was elided at compile time, the engine leaks the internal the_hole value to JavaScript code in the x + 1 expression, leading to a potentially exploitable condition.
+
+We can see how this bug would be difficult for a fuzzer to find since the testcase is quite complex. While a coverage-guided fuzzer would have received rewards for triggering individual code paths (such as the handling of labeled break, the switch statement, the do-while loop, etc. in the parser), there is no additional reward for putting these together “in the right way” and so ending up with a testcase like this is quite difficult.
+
+## BigSleep: Chrome Bug 443765373 (September 2025)
+
+This [bug](https://crbug.com/443765373) is an example of a relatively simple bug type that is challenging to discover with standard fuzzing approaches.
+
+### Background: Exception handling in V8
+
+To understand this bug, it is necessary to briefly look into exception handling in V8. Take the following example JavaScript code:
 
 ```
-mkdir -p ~/shared/packages
-cd ~/shared/packages
-apt source tinycdb
-cd tinycdb-*/
-$HOME/bin/fillet
-time env DPKG_GENSYMBOLS_CHECK_LEVEL=0 \
-  DEB_BUILD_OPTIONS='crossbuildcanrunhostbinaries nostrip' \
-  dpkg-buildpackage -d -us -uc -b -a amd64fil0
+function simple() {
+  try {
+    throw 42;
+  } catch (e) {
+    return e;
+  }
+}
 ```
 
-Explanation of the differences from a normal build:
-
-For me this worked and produced three ../*.deb packages.
-Installing them as root also worked:
+Here, we have a function consisting of a try-catch block in which an exception is raised. Running this in d8 with `--print-bytecode`, we can see the internal bytecode that the engine generates to execute the JavaScript code:
 
 ```
-apt install /home/filian/shared/packages/*.deb
-# some sanity checks:
-apt list | grep tinycdb
-# prints "tinycdb/stable 0.81-2 amd64" (available package)
-# and prints "tinycdb/now 0.81-2 amd64fil0 [installed,local]"
-dpkg -L tinycdb:amd64fil0
-# lists various files such as /usr/bin/cdb
-nm /usr/bin/cdb
-# shows various symbols including "pizlonated" (Fil-C) symbols
-ldd /usr/bin/cdb
-# shows dependence on libraries in /usr/libexec/fil
-/usr/bin/cdb -h
-# prints a help message: "cdb: Constant DataBase" etc.
+[generated bytecode for function: simple]
+         0x2ad5001000e4 @    0 : 1b ff f9  Mov <context>, r0
+         0x2ad5001000e7 @    3 : 0d 2a     LdaSmi [42]
+         0x2ad5001000e9 @    5 : b5        Throw
+         0x2ad5001000ea @    6 : d1        Star1
+         0x2ad5001000eb @    7 : 8d f8 00  CreateCatchContext r1, [0]
+         0x2ad5001000ee @   10 : d2        ...
+         ...
+         0x2ad5001000f7 @   19 : b7        Return
+Handler Table (size = 16)
+   from   to       hdlr (prediction,   data)
+  (   3,   6)  ->     6 (prediction=1, data=0)
 ```
 
-Compiling a deliberately wrong test program
-with the newly installed library also works,
-and triggers Fil-C's run-time protection:
+For the purpose of this bug, the relevant part is mostly the last line of the output. Here, the bytecode essentially says “if there is an exception while the PC is between offset 3 and 6 in this bytecode, then execution should continue at offset 6 (the start of the exception handler)”.
+
+### The Bug
+
+The agent spotted the bug while looking at the following function, responsible for writing the handler table data structure in memory:
 
 ```
-cd /root
-( echo '#include <cdb.h>'
-  echo 'int main() { cdb_init(0,0); return 0; }' ) > usecdb.c
-filcc -o usecdb usecdb.c -lcdb
-./usecdb < /bin/bash
-# ... "filc panic: thwarted a futile attempt to violate memory safety."
+void HandlerTable::SetRangeHandler(int index, int handler_offset,
+                                   CatchPrediction prediction) {
+  int value = HandlerOffsetField::encode(handler_offset) |
+              HandlerWasUsedField::encode(false) |
+              HandlerPredictionField::encode(prediction);
+  int offset = index * kRangeEntrySize + kRangeHandlerIndex;
+  Memory<int32_t>(raw_encoded_data_ + offset * sizeof(int32_t)) = value;
+}
 ```
 
-**libc-dev.**
-[Handled automatically in Filian:]
-Some packages depend on libc-dev,
-so let's build a fake libc-dev package
-(probably there's an easier way to do this):
+Here, the `int` offset is being combined with a few other bits of data into a new `int` value. As such, the `handler_offset` cannot have the full integer range in the new field, possibly leading to integer truncation issues. The agent then investigated the specific bounds of these values and realized that the `HandlerOffsetField` had only 28 bits (allowing for 256MB) while the maximum bytecode size was 512MB! From there it was relatively simple to craft a testcase that crashes, simply by creating a huge function (resulting in >256MB of bytecode) with an exception handler at the end, then triggering an exception inside of it. The result is a jump to a wrong bytecode offset, a primitive that’s easily exploited. Here is the relevant part of the testcase:
 
 ```
-FAKEPACKAGE=libc-dev
-mkdir -p ~/shared/packages/$FAKEPACKAGE/debian
-cd ~/shared/packages/$FAKEPACKAGE
-( echo $FAKEPACKAGE' (0.0) unstable; urgency=medium'
-  echo ''
-  echo '  * Initial Release.'
-  echo ''
-  echo ' -- djb <djb@cr.yp.to>  Sun, 26 Oct 2025 16:05:17 +0000'
-) > debian/changelog
-( echo 'Source: '$FAKEPACKAGE
-  echo 'Build-Depends: debhelper-compat (= 13)'
-  echo 'Maintainer: djb '
-  echo ''
-  echo 'Package: '$FAKEPACKAGE
-  echo 'Architecture: any'
-  echo 'Multi-Arch: same'
-  echo 'Description: fake '$FAKEPACKAGE
-) > debian/control
-( echo '#!/usr/bin/make -f'
-  echo ''
-  echo 'build-arch   build-indep   build \'
-  echo 'install-arch install-indep install \'
-  echo 'binary-arch  binary-indep  binary \'
-  echo ':'
-  echo 'Xdh $@' | tr X '\011'
-  echo ''
-  echo 'clean:'
-  echo 'Xdh_clean' | tr X '\011'
-) > debian/rules
-time env DPKG_GENSYMBOLS_CHECK_LEVEL=0 \
-  DEB_BUILD_OPTIONS='crossbuildcanrunhostbinaries nostrip' \
-  dpkg-buildpackage -d -us -uc -b -a amd64fil0
-```
+// yield statements turn into a large chunk of bytecode
+let kNumYields = 500000;
 
-**ncurses.**
+let body = `
+  if ("foo" === "bar") {
+    ${"yield* 42;".repeat(kNumYields)}
+  }
+  try {
+    throw 42;
+  } catch (e) {
+     // Will never get here
+  }
+`;
 
 ```
-mkdir -p ~/shared/packages
-cd ~/shared/packages
-apt source ncurses
-cd ncurses-*/
-$HOME/bin/fillet
-time env DPKG_GENSYMBOLS_CHECK_LEVEL=0 \
-  DEB_BUILD_OPTIONS='crossbuildcanrunhostbinaries nostrip' \
-  dpkg-buildpackage -d -us -uc -b -a amd64fil0
-rm ../ncurses-*deb # apt won't let us touch the binaries
-```
 
-As root, install the above libraries:
+Such a testcase would again be difficult to craft by a fuzzer as the fuzzer isn’t rewarded for creating large code (at least not with generic coverage feedback). In fact, the fuzzer is likely even actively discouraged from finding this bug since generating and executing large bytecode takes some time (in debug builds, the testcase generated by the agent needs a few seconds to trigger) and would therefore probably have led to timeouts during fuzzing.
+
+## Fuzzilli: Chrome Bug 40076141 (November 2023)
+
+This [bug](https://crbug.com/40076141) is a good example of a type of bug that is likely difficult to find just by looking at (one part) of the source code. It was originally discovered by Fuzzilli and *not* rediscovered by any of the experiments from part 2.
+
+### Background: Value Representation in V8
+
+Consider the following piece of JavaScript code:
 
 ```
-apt install /home/filian/shared/packages/lib*.deb
+let i = 42;
+let f = 13.37;
+let s = "foobar"
+i = s;
 ```
 
-**libmd.**
-Seems to work.
-At first this didn't install
-since the compiled version (for amd64fil0) was 1.1.0-2
-while the installed version (for amd64) was 1.1.0-2+b1.
-Debian requires the same version number across architectures
-(see above regarding include-file compatibility),
-so apt said that 1.1.0-2+b1 breaks 1.1.0-2.
-I resolved this by compiling and installing 1.1.0-2 for both amd64 and amd64fil0.
-This is a downgrade since "+b" refers to
-a "binNMU", a "binary-only non-maintainer upload",
-a patch beyond the official source;
-I don't know what the patch is.
-[Filian automatically synchronizes +b versions.]
+Here we create multiple variables holding values of different types. Note, however, that we never declare the type of a variable, and that variables can hold values of different types throughout their lifetime (`i` first contains an integer, later a string). What we see here is that JavaScript is a *dynamically typed* language, and so variables (and also object fields, etc.) have no fixed type. However, the actual runtime values still need to have a type: the engine somehow needs to know that `foobar` is a string value and that certain operations (e.g. substring search) can therefore be performed on it. Conceptually, this is possible by representing runtime values with a struct such as
 
-**readline.**
-Needs
-ln -s /usr/include/readline /usr/include/x86_64+fil0-linux-gnu/readline
-after installation.
-Could have tweaks in debian/rules
-(which seems to predate *.install),
-but this is in any case an example of the messiness that I'm planning to get rid of.
-[Filian cleans this up.]
+```
+enum JSType {
+    JS_TYPE_INT,
+    JS_TYPE_FLOAT,
+    JS_TYPE_STRING,
+    ...
+};
+
+struct JSValue {
+    JSType type;
+    // Either the raw value or a pointer to another object, e.g a JSString.
+    uintptr_t value;  
+};
+```
+
+However, this is somewhat inefficient since we now need something like 16 bytes to represent a simple 4-byte integer at runtime. As such, modern JS engines use clever tagging schemas, which rely on unused pointer bits to encode type information. Specifically, in V8 the `JSValue` type is a tagged pointer (or just `tagged` for short) which stores one bit of type information in the least-significant bit:
+
+- If the bit is one, then the value minus 1 is a pointer to another object. This works because objects are aligned and so cannot start at an uneven address.
+- If the bit is zero, then the next 31 bits contain a raw integer value (also called a small integer - Smi)
+
+As such, to figure out the type of a value at runtime, the engine first looks at the least-significant bit. If that is zero, the value can be “untagged” to obtain the integer value by right-shifting by one. On the other hand, if the bit is one, the value is a valid pointer to an object that contains further type information. For more details on V8’s pointer tagging scheme see also [this blog post](https://v8.dev/blog/pointer-compression#value-tagging-in-v8).
+
+### The Testcase
+
+Let’s start by looking at the testcase produced by the fuzzer, which isn’t overly long:
+
+```
+function f0() {
+    let v2 = 1;
+    for (let i3 = v2; i3 >= v2; i3 += v2) {
+        v2 = v2 && i3;
+    }
+}
+f0();
+```
+
+The bug is caused during optimization of the loop by the Maglev compiler, specifically due to a conflict between two stages of the compiler pipeline: the initial graph builder and the later MaglevPhiRepresentationSelector.
+
+### The Graph Builder
+
+The graph builder is responsible for building the initial Maglev intermediate representation (IR) of the code. For that, it consumes both the input code (in the form of V8 bytecode) as well as runtime feedback that was collected while the code executed in lower tiers such as the interpreter. When processing the loop in this testcase, the following happens:
+
+1. Both i3 and v2 are modified during the loop. Since the IR uses static single-assignment (SSA) form, these turn into Phi nodes, which make the code look like every variable only has a single assignment :)
+2. For the i3 >= v2 comparison, the runtime feedback states that i3 was so far always a Smi and therefore speculates that this will be the case in the future. It guards this assumption by emitting a CheckedSmiUntag, which will extract the raw int from the tagged value and will bail out to the interpreter if the input is ever not a Smi.
+3. For the following operations on v2, the compiler can then rely on the existing check and emit UnsafeSmiUntag nodes, which avoid the runtime checks but are only safe to use if the input is guaranteed to be a Smi.
+
+The resulting code for the loop now looks roughly like this (in Maglev pseudocode):
+
+```
+loop:
+  i3 <- Phi(1, i3_next)                   // loop variable, tagged
+  v2 <- Phi(1, v2_next)                   // loop variable, tagged
+
+  i3_int <- CheckedSmiUntag(i3)           // deopt if i3 is not a Smi
+  v2_int <- CheckedSmiUntag(v2)           // deopt if v2 is not a Smi
+  if i3_int < v2_int: break
+
+  v2_next <- Phi(i3, v2)                  // result of `v2 && i3`: "known Smi"
+  v2_next_int <- UnsafeSmiUntag(v2_next)  // no (re-)check needed
+  i3_next_int = i3_int + v2_next_int
+  i3_next <- Int32ToNumber(i3_next_int)   // tag the int32 result for the phi
+```
+
+### The MaglevPhiRepresentationSelector
+
+The purpose of this optimizer is to identify Phi nodes where all inputs have the same raw representation (e.g. int32), and if so convert the Phi to that representation to avoid future untagging operations. For the code above, the code sees that both inputs to `i3` are int32 and therefore decides to convert the Phi to int32 representation. Following `CheckedSmiUntag` operations then become a no-op and can be removed, while consumers that need a tagged value now require a conversion step. With that, the final code now looks like this:
+
+```
+loop:
+  i3 <- Phi(1, i3_next)                   // all inputs int32, so i3 becomes a raw int32
+  v2 <- Phi(1, v2_next)                   // stays tagged
+
+  v2_int <- CheckedSmiUntag(v2)
+  if i3 < v2_int: break                   // CheckedSmiUntag(i3) removed as a no-op
+
+  i3_tagged = Int32ToNumber(i3)           // HeapNumber if i3 >= 2^30!
+  v2_next <- Phi(i3_tagged, v2)           // stays tagged, needs tagged inputs
+  v2_next_int <- UnsafeSmiUntag(v2_next)  // HeapNumber pointer treated as a Smi
+  i3_next <- i3 + v2_next_int             // tagging no longer needed here
+```
+
+### The Conflict
+
+The bug now occurs because of two optimizations interacting badly with each other:
+
+1. The graph builder uses UnsafeSmiUntag as it believes that the value must be a Smi at this point
+2. The representation selector removes a CheckedSmiUntag as it believes it is no longer required
+
+Specifically, what can happen now is that eventually, `i3` becomes larger than the maximum Smi value. At that point, `Int32ToNumber` can no longer fit the integer into a `Smi` and instead allocates a `HeapNumber` object (a container holding a larger number, basically). At this point, however, the `UnsafeSmiUntag` is no longer safe as the input is now a pointer. This leads to a corrupted pointer value being extracted and subsequently to memory corruption. Note that in the original code, this could not have happened as the `HeapNumber` would’ve been rejected by the `CheckedSmiUntag(i3)`.
+
+What may have made this bug difficult to find for BigSleep is the fact that both optimizations are *correct in isolation*. As such, looking at just one of them would’ve made it difficult to spot the issue. The agent would somehow have needed to hypothesize about the other optimization or stumbled upon the relevant code by chance (or exhaustive search).
+
+## Overview
+
+Looking at the examples above as well as other bugs found by LLMs, we can see a few clear examples of bugs where an LLM has the advantage:
+
+- Bugs that require complex logic to trigger but can be found through progressive logical reasoning and experimentation with the target program, such as crbug.com/449760249 discussed above. This is likely the strongest advantage.
+- Bugs that require specific “magic” values (e.g. edge-case integers, specific strings, etc.), such as crbug.com/443765373 discussed above.
+- Bugs that require new (or less common) features that a fuzzer may not be aware of. Examples include crbug.com/436181695, where the fuzzer didn’t support the new await using syntax yet, and in fact also crbug.com/449760249 above where Fuzzilli lacked support for labeled breaks at the time.
+- Bugs that require a non-standard harness, custom flags, or special helper tools/functions that a fuzzer is not configured to use (e.g. crbug.com/516833326 which required --expose-fast-api and the d8.test.FastCAPI API).
+
+On the other hand, here are some advantages that fuzzers enjoy (for now):
+
+- They can find “non-local” bugs reasonably well if not too many individual pieces are required. crbug.com/40076141 discussed above is an example for such a bug.
+- They can find bugs that are hard to spot by reasoning about the source code alone. One clear example would be bugs caused by (incorrect) C++ compiler optimizations such as crbug.com/500771385. Another potential example is bugs such as crbug.com/414840455, which are related to handling dead code in V8’s compilers. This is likely an unusual state and therefore may be hard to reason about. BigSleep missed a few of these in our experiments.
+- They are immune to certain biases affecting the agentic approaches, such as the choice of starting point (e.g. commits), the exact prompt phrasing, or the bug types seen (and not seen) during training. They do suffer from other types of biases though (e.g. the weights of individual mutators and generators).
+- They don’t get distracted by “shallow” bugs, whereas BigSleep missed a few bugs because it found easier ones instead. This is probably somewhat self-correcting though as the shallow bugs would eventually get fixed, giving the agent another chance to discover the deeper bug.
+
+There is probably also a category of bugs that are hard to find for both approaches: bugs that are very non-local (bad for the agent) *and* require complex testcases (bad for the fuzzer) to trigger. In this case, a fuzzer would probably discover the individual pieces of the testcase (through coverage feedback) but won’t be able to find the right combination to trigger the bug (as in our first example). A code-reviewing agent, on the other hand, may struggle with the large search space of code fragments that may interact badly with each other (as in our last example). This is only a hypothesis, however, and would require further experiments and data to validate.
+
+# Part 4: Conclusion
+
+In this blog post, we’ve compared coverage-guided fuzzers with vulnerability-discovery agents that read and reason about the source code. Specifically, we’ve looked at Fuzzilli and BigSleep, which both run as automated pipelines on V8 to discover newly introduced bugs. Looking at the data from those pipelines, we saw a roughly equal share of vulnerabilities found in the last 6 months (around 40 each), and a moderate overlap in discovered bugs of around 25%. However, in a dedicated experiment, overlap was closer to 60%. For now, this means that the two approaches remain complementary, and specialized fuzzing continues to provide value by finding bugs quickly and identifying certain kinds of issues that are otherwise hard to spot. At the same time, LLMs only very recently became capable of finding bugs in software like V8 at all, and have made tremendous progress since. The model used for our experiment is by now already outdated and outperformed by newer generations. Looking to the future, we expect further model improvements, potentially coupled with better prompting and more flexible harnesses (that e.g. allow the model to build, improve, and run fuzzers itself instead of being limited to pure code auditing), to lead to a growing share of bugs being discovered by agentic systems.

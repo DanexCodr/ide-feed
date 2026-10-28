@@ -1,80 +1,34 @@
-On October 19, the Go team initiated an expedited [security release](https://groups.google.com/g/golang-announce/c/66pojueaQek) to protect Go users and their applications from a critical public key infrastructure (PKI) compromise involving certificates issued by eMudhra.
+If you have questions or thoughts on the post I'd love to [hear about it!](https://brennenputh.me/contact/)
+      I'm currently looking for work in the northeastern US. I'll be graduating with a BS in both Computer Science and Cyber Operations at the end of the school year.
+      I have worked in web application development and Java, and I have experience in Rust, C++, Python, and various other languages.
+      If you're curious about what I've done in the past, I keep up a short list of projects [here](https://brennenputh.me/projects/) or [contact me](https://brennenputh.me/contact/) to give me a place to send my resume.
+      I figure anyone who reads my posts will have an interesting offer, so all leads are appreciated!
 
-Within approximately seven and a half hours of being notified, we shipped a targeted patch, which was included in our first-ever [URGENT track](https://go.dev/doc/security/policy#urgent) security release.
+I read a lot of printed papers these days. While I enjoy reading on a laptop as much as the next guy, marking up a printed document engages me better. Also, there's something about sitting with a whiteboard and a printed document that makes me rightly feel like I'm doing something important. So I've been thinking about how to best allow others to enjoy this medium for content that I write.
 
-Here is the context behind the incident, why Go stepped in at the runtime level to protect our users and how our incident response unfolded.
+Luckily for me, printed documents were a major focus of web design a while ago. You can print any webpage you like, by hitting CTRL-P and hoping your printer driver decides to cooperate today.
+I tested this on my own webpage, foolishly thinking I would have a decent print job without any effort.
 
-## eMudhra Incident
+It wasn't great, although you can at least see all the content. The text was too big by about 2 levels, the header looks awful when printed, and my links look awfully gray in black-and-white. Totally unacceptable.
 
-On October 17, Mozilla added eight intermediate certificates (six used for TLS, and two used for code signing) issued by a root certificate controlled by eMudhra to OneCRL, effectively blocking their usage in Firefox. Soon after, a number of security researchers noticed this and began investigating what might’ve caused this.
+### Making Things Printable
 
-On October 19, the Go Security team was made aware of these investigations and their conclusions, which showed that the keys associated with these intermediates were trivially weak, allowing recovery of the private keys in microseconds.
+**Edit 2026-10-26:** I feel it's relevant to say, this has almost entirely changed already because of feedback I received from people both on lobste.rs and HN about obvious things I'd missed. I'm currently simplifying my stylesheet as much as I can. Thanks!
 
-Due to the fact that the eMudhra root certificate was present in most trusted root programs, recovering the private keys would allow any attacker to sign arbitrary TLS certificates for any domain name, without the usual requirement to show proof of control of said domain name. This would allow an attacker to man-in-the-middle (MITM) TLS connections and present a valid certificate for a domain name they did not control, effectively allowing them to impersonate any TLS server the targeted machine attempted to connect to.
+Luckily, the web community has had this aforementioned focus on printing documents from HTML pages. CSS has selectors to allow styling specifically printed content, and they can be useful. Here's my print-related snippet for this page now:
 
-Go ships a TLS certificate verifier in the standard library. When users use [`net/http`](https://pkg.go.dev/net/http) or [`crypto/tls`](https://pkg.go.dev/crypto/tls) to connect to a TLS service, the verifier is called to check if the certificates the other side of the connection presents are valid. On Windows and macOS we delegate these checks to the platform APIs, and on Linux, which lacks platform APIs, we use our own verifier implementation.
+You can see the effects of this snippet by hitting CTRL-P or the print button on this page. Here's the functions this does for me, in order:
 
-Since Linux does not have a uniform built-in mechanism to handle revocation checking, and in order to provide a timely fix for users on other platforms that might not receive platform updates, we decided the best way to protect Go users was to do an [URGENT track](https://go.dev/doc/security/policy#urgent) security release which similarly removed trust.
+1. onlyPrint can be added as a class to allow elements which only show up in the printed document. Right now, that means tagging a small author attribution to the subtitle.
+2. noPrint is used to remove something from the printed website. I put it on the header, because it looks honestly very ugly in printed format.
+3. Adjusting font sizes for print is very important. The variable-scale text which I use on my website looks awful on a printed page. 12pt is a fairly well accepted size, so I figured it'll do. A slightly larger size for the headers makes sense as well.
+4. The giallo tweaks are for codeblocks. Honestly, codeblocks are still the ugliest part even after some tweaking. They want to come out as one chunk and not break over page borders, and if anyone has a solution to that I'd be greatly appreciative.
+5. Blue links, as much as I like them on the site, look awful in grayscale. Turning them the same color as other text is fine. Feel free to pull any code you like from the CSS, I'm not protective of it. I would personally love to experience more webpages that think about how printing works.
 
-## Incident Timeline
+### Why You Should Do This
 
-A typical Go security release follows a multi-day process, with advanced pre-announcements in order to allow those who rely on Go to prepare. In this case, because we believed that private key exposure was imminent, our team chose to use the URGENT track for the first time in order to ship protections before active public exploitation could begin.
+After attempting to optimize my website in this way, I am sympathetic for those who wouldn't prioritize printing. Hiding and showing all the right things in print took me a decent chunk of my morning. My site isn't very complex. I also doubt how many people regularly print webpages out. I might be the only one.
 
-**11:45 PDT**
+Still, if all your website consists of is text, allowing people to experience the text in their favorite medium is never a bad thing. The digital medium allows a lot of flexibility. The road to good software is paved with kindnesses from software engineers to their users. One day, perhaps someone shall find this kindness and smile, even if just for a fleeting moment. And that will be worth it.
 
-Our Security team was alerted by an independent external researcher, citing unreported actions by Mozilla and other organizations to remove trust in eight eMudhra intermediates. It became clear quickly that this was due to weak private keys they used.
-
-**12:30 PDT**
-
-Mozilla independently reported the issue to our Security team, confirming the issue, and asking that we not immediately disclose the issue, but encouraging us to release a fix as soon as possible.
-
-**14:00 PDT**
-
-We finalized a patch which blocked the usage of certificates which chained to the compromised intermediates, and thanks to the researcher who initially alerted us to the issue, had a set of certificates signed using the recovered keys to test against.
-
-**15:00 PDT**
-
-We began the process to release minor Go versions 1.27.3 and 1.26.10 containing our patch. Due to the urgent nature of this issue and its exploitability, and with the belief that the private keys would likely become publicly known within hours, we decided an immediate release was the most prudent option.
-
-**19:13 PDT**
-
-We finalized the release and announced it publicly. At this time the underlying issue was still not widely known. In an effort to give other defenders a chance to protect as many users as possible without revealing to attackers how the issue could be exploited, our patch and communications were somewhat opaque, warning users that we were “blocking trust in a small set of intermediate certificates due to specific security concerns around their operation” and urging users to immediately upgrade to this release.
-
-In under seven and a half hours from initial notification, patched Go releases were live worldwide, giving users everything they needed to secure their deployments before the keys became public.
-
-By the morning of October 20, numerous independent researchers had publicly disclosed the weak keys.
-
-## Lessons Learned and Future Improvements
-
-This was our first ever URGENT track security release, and during the release process we ran into a number of issues which caused the release to take longer than expected.
-
-While we are happy we were able to get a release out the same day we were notified of the issue, in the modern security environment we feel that we should be able to provide releases in a more compressed timeline. The issues we ran into caused our release process to take just under four and a quarter hours from start to finish.
-
-These issues had previously not been problematic, since the typical release process is split up over a number of days.
-
-We’ve subsequently made a number of changes to improve our release efficiency, which should significantly reduce the time it takes us to push out a release, enhancing our ability to quickly respond to urgent security threats.
-
-PRIVATE track security fixes are pre-announced three to seven days before their release. URGENT track fixes happen on a shorter time schedule, but we could have pre-announced the upcoming release when we began the release process, giving users at least a few hours to prepare.
-
-While on Windows and macOS we rely on the revocation mechanisms the platform APIs provide, on Linux we don’t currently have a similar mechanism. The lack of this support was one of our major drivers to issue an expedited security release, as we did not want to leave Linux users exposed to this issue longer than was necessary.
-
-Hence we are planning on prioritizing work to bring parity to revocation support on Linux, to help mitigate this class of issues in the future. Part of this work will involve investigating adding support for the [upki](https://github.com/rustls/upki) project, which aims to “provide reliable, privacy-preserving and efficient certificate revocation” for Linux (see [issue #82402](https://go.dev/issue/82402)).
-
-## Upgrading and Verifying Your Deployments
-
-If you run Go binaries which interact with network services using TLS (such as directly via `net/http` or `crypto/tls` or via a dependency such as gRPC), ensure you are running on the latest minor releases. Binaries rebuilt with Go 1.27.3 and 1.26.10 will automatically reject certificates issued by the compromised eMudhra intermediates.
-
-You can verify your current toolchain version using `go version` and you can check the version of Go a binary was built with using `go version -m <path_to_your_binary>`.
-
-The [govulncheck tool](https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck) can also be used to determine if a binary is affected by this issue:
-
-```
-$ GOTOOLCHAIN=go1.27.3+auto go install golang.org/x/vuln/cmd/govulncheck@latest
-$ govulncheck -mode=binary <path_to_your_binary>
-```
-
-## Securing Go Deployments Everywhere
-
-For us, securing Go and its users extends beyond fixing direct security vulnerabilities in the runtime and libraries we ship. In order to keep the ecosystem secure, we believe we also need to provide users with the right tools to write secure software, look towards the future of cryptographic algorithms and protocols, and proactively respond to ecosystem wide issues when we can.
-
-We are grateful to the independent security researchers and the Mozilla security team for this rapid notification and coordination during this incident.
+**Edit 2026-10-26:** I was informed by a friend that this post ended up on the front page of HN and lobste.rs after I submitted it. Fun! Despite the several flaws I am now informed of in my CSS, I hope this article at least pushes a few to consider this medium more carefully. Thanks all for reading!
