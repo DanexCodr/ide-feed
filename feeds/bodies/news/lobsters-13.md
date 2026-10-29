@@ -1,140 +1,43 @@
-We are excited to announce the release of [Hoot](https://spritely.institute/hoot) 0.10.0!  Hoot
-is a Scheme to WebAssembly compiler backend for
-[Guile](https://gnu.org/software/guile), as well as a general purpose
-WebAssembly toolchain.  In other words, *Scheme in the browser!*
+Earlier this month Deno announced its whole team is joining Cloudflare. In the [announcement](https://deno.com/blog/cloudflare), Ryan Dahl, who created Node.js and started Deno in 2018, also explains that development of the Deno runtime will stop after one year. That leaves the web with two major general-purpose runtimes, the OpenJS Foundation’s Node.js and Anthropic’s Bun, alongside Cloudflare’s runtime, [workerd](https://blog.cloudflare.com/workerd-open-source-workers-runtime/), which is built primarily for its own Workers platform. As someone who studies web dev tools, this concerns me.
 
-This release contains new features and bug fixes and since the [0.9.0
-release](https://spritely.institute/news/hoot-0-9-0-released.html) back in May.
+Remember Internet Explorer 6? Microsoft released it in 2001; it won roughly [nine in ten browser users](https://en.wikipedia.org/wiki/Internet_Explorer_6), and then MS largely stopped working on it. With no serious rival, there was no reason to improve and so, for about five years, developers were forced to write for one browser’s quirks rather than for open standards, and “[best viewed in Internet Explorer](https://en.wikipedia.org/wiki/Browser_wars)” badges were everywhere.
 
-## Use Hoot in the upcoming Lisp Game Jam!
+When this situation became intolerable the market responded with alternatives. Mozilla’s Firefox grew out of the wreckage of Netscape, and Apple built Safari on an open-source engine called WebKit. Then Google’s Chrome arrived in 2008. Competition returned, and the pace of improvement returned with it.
 
-On Friday (October 30th 2026), the [autumn edition of the Lisp Game
-Jam](https://itch.io/jam/autumn-lisp-game-jam-2026) will begin!  It's
-a 10-day long game jam where participants make games using their
-favorite flavor of Lisp.
+But this recovery carried the seeds of the next consolidation. In 2013, Google forked WebKit into its own engine, Blink. That same year, Opera abandoned the Presto engine it had built for nearly two decades and switched to Blink. In 2018, Microsoft announced that Edge would give up its own engine and run on Chromium too. Today, nearly every browser people use is built on one of three engines, and one of them, Google’s, powers the large majority.
 
-Does making a small web game in Scheme using Hoot sound appealing to
-you?  Well, then we have just the thing to get you started: the [Hoot
-game jam
-template!](https://codeberg.org/spritely/hoot-game-jam-template) This
-template project has everything you need to start making an HTML5 game
-with Hoot quickly.
+The server side has its own version of this consolidation story. Node.js, the runtime that brought JavaScript to servers, [stagnated under the company that sponsored it](https://lwn.net/Articles/627932/) so that in 2014, frustrated contributors forked it as io.js. This competitive pressure worked. The two projects reunited in 2015 under a neutral foundation, and Node has been community-governed ever since.
 
-The template repository includes:
+We see over and over that choice is necessary for the health of the internet and when the number of independent implementations shrinks the web becomes more fragile. In fact, this general precept was the inspiration for Deno. In Deno’s launch post, Dahl explains that he lunched this product to add features he considered critical such as [a web browser for command-line scripts](https://deno.com/blog/v1#a-web-browser-for-command-line-scripts), [first-class TypeScript support](https://deno.com/blog/v1#first-class-typescript-support), [promises all the way down](https://deno.com/blog/v1#promises-all-the-way-down), and [Rust APIs](https://deno.com/blog/v1#rust-apis). Deno [never overtook Node](https://www.infoq.com/news/2026/03/state-of-js-survey-2025), but it pushed the whole field forward. In fact, many of the features Dahl had outlined are now [built into Node](https://nodejs.org/api/permissions.html).
 
-- Bindings to the necessary web APIs to make an interactive game with HTML5 canvas
-- A Makefile for compiling, running a development web server, and generating a .zip bundle for uploading to itch.io
-- A very simple Breakout-like example game that demonstrates how to put all the pieces together
+Deno’s exit leaves a short(er) list of Javascript runtimes. Beyond the smattering of independent options, of the main runtimes two of the three alternatives to Node now belong to companies whose core business is something else. While some developers on [Hacker News](https://news.ycombinator.com/item?id=50019911) say they felt misled, the reality is that venture backed companies have to make a return of some kind and being acquired is always one of the likely outcomes.
 
-For more inspiration, here are some games made with Hoot for past
-jams:
+## **Monoculture spreading to the server**
 
-Now, onto the release notes!
+Here’s what I’m worried about: the monoculture that took over browsers is now consolidating the server. Every major server runtime borrows its engine from a browser. Node, Deno and Cloudflare’s runtime all run on Google’s V8, the engine inside Chrome. Bun runs on Apple’s JavaScriptCore, the engine inside Safari. This is bad.
 
-## Compiler changes
+A web standard [traditionally needs](https://www.w3.org/wiki/ImplementationReport)[two independent implementations](https://tc39.es/process-document/) before it counts as a standard. The Ecma Technical Committee 39 rule exists because a spec written for one product tends to describe that product and only that product. Server runtimes have their own standards effort, a group called [WinterTC](https://www.w3.org/blog/2025/collaborating-across-w3c-and-ecma-for-web-interoperable-server-runtimes-through-wintertc/), which defines shared APIs so code can run anywhere. With fewer independent voices at that table, the most widely deployed runtime’s behavior becomes the standard by default, and not necessarily by merit.
 
-- Added module name to contextualize duplicate import errors.
-- Added support for library versioning for R6RS compatibility.
-- Fixed default version for define-module libraries.
-- Fixed locate-library not respecting configured load extensions. Previously, we were using Guile's load extension parameter instead of Hoot's own.
+Another problem is that monocultures fail together. The web has seen this before. In 2014, a single bug called [Heartbleed](https://heartbleed.com) in OpenSSL, the encryption library shared by most secure websites, affected most of the web. The resulting fix was a patch + new forks including LibreSSL and Google’s BoringSSL. V8 carries the same risk, which a decade ago resulted in a [V8 flaw](https://nodejs.org/en/blog/vulnerability/june-2016-security-releases) shipped as a Chrome fix. Diversity doesn’t prevent bugs, but it does limit the blast radius.
 
-## Runtime changes
+And then there’s the issue of features and progress. Deno made the idea of [permission-based security for server code](https://docs.deno.com/runtime/fundamentals/security) mainstream, and its competition helped push Node toward [built-in TypeScript support](https://nodejs.org/api/typescript.html) and [better tools](https://nodejs.org/api/test.html). Bun arguably did the same for [speed](https://devclass.com/2022/07/06/zig-based-bun-appears-in-beta-an-incredibly-fast-all-in-one-javascript-runtime/). Every challenger that disappears takes some of that pressure with it. A number of developers on Hacker News [voiced](https://news.ycombinator.com/item?id=50035683) this concern, such as this from psuedosavant:
 
-- Added %struct-ref and %struct-set! primitives for accessing record types defined using the interpreter.
-- Stopped raising errors when importing an undefined symbol in the runtime module system. Guile is lax about this so Hoot being strict caused compatibility issues.
-- Fixed optional argument parsing in primitive-eval.
-- Fixed keyword argument parsing for procedures with both optional and keyword arguments in primitive-eval.
-- Fixed error messages regarding runtime module registry to include the correct CLI flag: -fruntime-modules.
+> It was successful for the Node community, but not for Deno the runtime or business. Deno launched with many features Node didn’t have, but that it has now adopted: ES Modules, fetch(), .ts file support, web streams, web crypto, a built-in test runner, file watching, etc. Node’s APIs didn’t even use Promises/async/await, they were all callback-based.
+>
+> Ultimately, it was easier for the Node ecosystem to adopt those changes into Node than it was to migrate to a different JS runtime like Deno. Bun would likely not exist without Deno too.
 
-## Scheme changes
+Here at RedMonk, we’re often talking about [consolidation](https://redmonk.com/sogrady/2024/02/07/pendulum-return/)—a circumstance which isn’t necessarily bad but comes with some downsides. After all, Linux became the default server operating system, and the internet flourished on top of it. In this respect the contraction of JS runtimes isn’t terrible, but when it comes to the infrastructure the internet runs on, it is important to be deliberate. For one thing, consolidation puts a lot of pressure on the OpenJS foundation, which can protect governance, but it can’t create competition.
 
-- Added partial implementation of SRFI-13: String Libraries. It's just a set of re-exports, very similar to Guile, but Guile's SRFI-13 module is not declarative and is thus rejected by Hoot's compiler.
-- Added partial implementation of SRFI-60: Integers as Bits.
-- Added define-macro, defmacro, delete, list->symbol, and symbol to (guile).
-- Exported define-syntax-parameter and syntax-parameterize, symbol-append, integer-length, and gensym from (guile).
-- Added list->bitvector and bitvector to (hoot bitvectors) and re-exported them in (guile).
-- Implemented get-bytevector-all in (rnrs io ports).
-- Made bytevector=? a publicly exported procedure from (hoot bytevectors) and (rnrs bytevectors).
-- Added define-syntax-parameter and syntax-parameterize primitives.
-- Improved (ice-9 exceptions) exports to more closely match Guile.
-- Added (rnrs) module.
-- Added (rnrs base) module.
-- Added (rnrs syntax-case) module.
-- Added (rnrs r5rs) module.
-- Added (rnrs hashtables) module.
-- Added (rnrs files) module.
-- Added (rnrs enums) module.
-- Added (rnrs exceptions) module.
-- Added (rnrs arithmetic fixnums) module.
-- Added (rnrs records inspection) module.
-- Added (rnrs records procedural) module.
-- Added (rnrs records syntactic) module.
-- Added (rnrs io simple) module.
-- Added (rnrs io ports) module.
-- Added port-has-position? to (hoot ports) for R6RS compatibility.
-- Added stubs for centered division to (hoot numbers) and a stub for integer-length to (hoot bitwise) for R6RS compatibility (eventually).
-- Rewrote (rnrs bytevectors) as an R6RS module with version (6).
-- Fixed number->string to round floating point decimal part to an even digit.
-- Fixed number->string for floating point numbers ±2^N, where 52 <= N <= 1023.
-- Fixed incorrect bytevector copy in number->string floating point conversion algorithm.
-- Fixed min/max macros not working when given zero arguments.
-- Fixed the parameters to the log procedure in (guile).
-- Fixed the implementation of negate in guile. It was doing entirely the wrong thing.
+> ICYMI: Ende is a spiritual successor to Deno, stripped of distractions to simply be a secure runtime for TypeScript applications.Read the docs for more, official homepage is on the way.docs.ende.sh/runtime
+>
+> — [Ende (@ende.sh)](https://bsky.app/profile/did:plc:nrg5n2uwwgys4atu5j3rvpy3?ref_src=embed) [2026-10-26T15:34:39.550Z](https://bsky.app/profile/did:plc:nrg5n2uwwgys4atu5j3rvpy3/post/3mys2cr24ks2l?ref_src=embed)
 
-## CLI changes
+Independent forks of Deno have appeared and show both the energy and the risk inherent in the endeavor. [Ende](https://github.com/theende/ende) shipped its first release in mid-October after dropping Node compatibility, while [Dodo](https://github.com/are-we-dodo-yet/dodo) has no releases yet and must be built from source. Linux, conversely, has many independent distributions and many companies funding its core, which is precisely the diversity JavaScript runtimes now lack.
 
-- Port numbers are now validated to be exact integers in the range [1, 65535].
-- Actually complain about invalid option or unknown subcommand. Previously, the code that was supposed to do this was unreachable.
-- Add --experimental-wasm-exnref feature flag when running hoot compile --run=node for continued compatibility with supported NodeJS versions that don't have the new Wasm exnref feature enabled by default.
-- Fixed build-time disabling of hoot server. In past releases, the hoot CLI script would still attempt to load should-be-optional libraries that ./configure had already determined to be missing. Thanks to mcc for discovering this blunder.
+When I spoke with James Snell, principal engineer at Cloudflare and longtime Node.js Technical Steering Committee member, he had this to say:
 
-## Documentation changes
+> No choice is never a good thing. That’s why I love the fact that we have Bun and Deno, along with Node. I love the fact that we have JSR and npmx trying different things. We have to have these choices in the ecosystem to move everything forward. It humors me to no end whenever one of these new things comes up and someone says, Well, no, this is the thing that’s gonna kill everything else, and it’s like, no, that’s not what we’re doing here. We’re not going to unseat anything, but having that choice is exactly what moves everything forward.
 
-- Improved instructions in "Building from source" section of the manual.
-- Dependencies are now mentioned in the "Advanced path" section of the README.
-- Updated project template README to say Guix is not required (though it's still the easiest option).
+The web survived Internet Explorer 6 because people kept building and funding alternatives—indeed they became necessary. I worry the current trajectory of JS runtimes is beginning to smell a bit like IE6. The lesson of the last 25 years is that innovation requires a diverse set of builders competing around a diverse set of implementations. It will be interesting to see what emerges to fill the gap.
 
-## Browser compatibility
-
-- Compatible with Safari 26 or later.
-- Compatible with Firefox 121 or later.
-- Compatible with Chrome 119 or later.
-
-## Get Hoot
-
-Hoot is available in GNU Guix:
-
-```
-$ guix pull
-$ guix install guile guile-hoot
-```
-
-Also, Hoot is now available in
-[Debian](https://tracker.debian.org/pkg/guile-hoot), though it will
-take awhile for this release to make it there.
-
-Otherwise, Hoot can be built from source via our release tarball.  See
-the [Hoot homepage](https://spritely.institute/hoot) for a download link and GPG signature.
-
-Documentation for Hoot 0.10.0, including build instructions, can be
-found
-[here](https://spritely.institute/files/docs/guile-hoot/0.10.0/index.html).
-
-## Get in touch
-
-For bug reports, pull requests, or just to follow along with
-development, check out the [Hoot project on
-Codeberg](https://codeberg.org/spritely/hoot).
-
-If you build something cool with Hoot, let us know on our [community
-forum](https://community.spritely.institute)!
-
-Thanks to Z572, stdh, Walter Lewis, and Jelle Licht for their
-contributions to this release.
-
-Until next time, happy hooting! 🦉
-
-## Thanks to our supporters
-
-Your support makes our work possible!  If you like what we do, please
-consider [becoming a Spritely supporter today](https://spritely.institute/donate)!
+**Disclaimer:** Cloudflare, Microsoft, and Google are RedMonk clients.

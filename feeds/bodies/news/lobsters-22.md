@@ -1,92 +1,177 @@
-A lot of software spends its time mapping strings to values. A web server must identify the HTTP method (`GET`, `POST`, …). It must recognize header names. A URL parser must recognize the protocol (`http`, `https`, `ftp`, …). A compiler must recognize keywords.
+Last year, the Redox team [received a grant](https://nlnet.nl/project/RedoxOS-ringbuffer/) to develop io_uring-like Ring Buffer support at the system task level,
+as a first step towards ring buffer communications between the application and the majority of system services.
+This phase of the work finished up in September, as the last pieces were put in place.
 
-In C++, the default approach is to put the strings in a `std::unordered_map`.
+We want to thank the [NLnet Foundation](https://nlnet.nl/), the NGI Zero Commons Fund, and Horizon Europe for their generous support.
+The NGI Zero Commons Fund is reaching its end, but NLnet is now accepting applications for grants from new funds,
+[Restack](https://nlnet.nl/restack/) and [Code Supply](https://nlnet.nl/codesupply/),
+as well as some [smaller theme funds](https://nlnet.nl/themes/).
+[Apply for funding before November 3rd 2026!](https://nlnet.nl/news/2026/20260903-call.html) (and then every two months after that).
 
-```
-std::unordered_map<std::string_view, Method> methods = {
-    {"GET", Method::GET}, {"POST", Method::POST}, {"PUT", Method::PUT},
-    {"DELETE", Method::DELETE}, {"PATCH", Method::PATCH}};
-```
+The team has done a fantastic job, and I want to congratulate Ibuki, Anhad and Jacob, and thank them for their time and effort.
 
-It works. But notice something: the keys are known when you write the code. They never change. And yet we pay at runtime as if they could change at any time: we hash the whole string, we pick a bucket, we follow a pointer, we compare, maybe we walk a list.
+In addition to implementing the Ring Buffer machinery for our system services and drivers that can support it,
+an `io_uring` and `liburing`-like API for applications was completed and demonstrated.
+There was also substantial work done on support crates, including an async executor for drivers.
 
-## Perfect hashing
+And there was some very exciting work on various performance improvements,
+to allow much faster switching between applications and their system services.
+But I will let the team tell you all the technical details.
 
-A hash function maps keys to slots. When two keys land in the same slot, we have a collision, and we must deal with it. Collisions are what make hash tables complicated and slow.
+– Ron Williams
 
-If you know all of your keys ahead of time, you can construct a hash function designed for your keys, a function that never produces a collision. It is called a perfect hash function. The idea is old: the GNU `gperf` tool has been doing it since 1989. You give it a list of keywords, and it generates C code.
+## Ring Buffers Overview
 
-We follow the same design as `gperf`. The slot for a key is computed as follows.
+– Anhad Singh
 
-```
-slot = (length + asso[key[i]] + asso[key[j]] + ...) % table_size
-```
+Historically asynchronous I/O on Linux was done through the kernel’s native AIO interface. AIO is mainly useful for unbuffered (`O_DIRECT`) *file* I/O, and buffered requests silently block<sup>[1](https://www.redox-os.org/news/nlnet-rb-summary/#fn:1)</sup>. Developers also raised concerns about its complexity and performance<sup>[1](https://www.redox-os.org/news/nlnet-rb-summary/#fn:1)</sup> <sup>[2](https://www.redox-os.org/news/nlnet-rb-summary/#fn:2)</sup>. There is also POSIX AIO, but developers often consider its implementation lackluster and slow<sup>[1](https://www.redox-os.org/news/nlnet-rb-summary/#fn:1)</sup>. To address these problems, several alternative asynchronous mechanisms such as [fibrils](https://lwn.net/Articles/219954/) and [syslets/threadlets](https://lwn.net/Articles/223899/) were proposed but were never merged into the mainline Linux kernel. In early 2019, [Jens Axboe](https://github.com/axboe) proposed and developed the io_uring interface, designed to be an efficient, extensible and “easy to use, hard to misuse.” In its early days, io_uring did have a few security issues and memory leaks, but these have since been addressed<sup>[3](https://www.redox-os.org/news/nlnet-rb-summary/#fn:3)</sup>. It was merged in Linux 5.1 and is widely used today.
 
-We add the length of the key to a few small values taken from an association table (`asso`) indexed by the characters at a few selected positions. Usually, one or two positions are enough. The table size is a power of two, so the modulo is a single bitwise AND.
+The Linux io_uring interface allows the user to submit one or more I/O operations to the kernel, which are then processed in an asynchronous fashion without blocking the userspace process. Redox, being a microkernel, handles I/O in userspace *scheme* processes rather than in the kernel. Each *file description* stores a handle to its scheme, so an I/O system call on that file can forward the request to the scheme. The async I/O interface developed in this project, called Redox Rings, uses a mechanism similar to io_uring. However, unlike io_uring which is used to submit operations to the kernel, the Redox Rings interface is used by the application to directly submit requests to the appropriate scheme asynchronously without blocking the application. Additionally, the interface allows I/O requests to be issued without any memory copies, by having a separate shared memory region between the scheme and the application (which can be requested as DMA-capable memory).
 
-Consider the four HTTP methods `GET`, `PUT`, `POST` and `DELETE`. We use only the first character. Set `asso['G'] = 0`, `asso['P'] = 1` and `asso['D'] = 0`. Then `GET` goes in slot 3 + 0 = 3, `PUT` goes in slot 3 + 1 = 4, `POST` goes in slot 4 + 1 = 5 and `DELETE` goes in slot 6 + 0 = 6. No collision.
+For portability, the Redox Rings API is designed to be similar to that of [liburing](https://github.com/axboe/liburing) and can also be used for general inter-process communication. For example it is used for communication between the RedoxFS filesystem service and NVMed which is the storage driver. The addition of this API has allowed several parts of Redox to reap significant performance improvements!
 
-To look up `PUT`, we compute the slot (4), and we compare `PUT` with the one key stored in slot 4. One hash, one comparison. If you look up `PATCH`, which is not in the set, you land in slot 5 + 1 = 6, you compare with `DELETE`, and you are done: not found. There is no probing, no chain to walk.
+### Terminology
 
-How do we find the association values? We sort the characters by how many keys they touch. We then take them one at a time and try 0, 1, 2, … until we find a value that does not cause a collision. We never revise a value once it is set. It is a greedy algorithm with bounded work. The bound matters because we do all of this at compile time, and C++ compilers limit how much work a `constexpr` function may do.
+A ring buffer is a circular queue backed by an array. The interface makes use of two ring buffers which are shared between the application and the scheme:
 
-## Doing it in C++
+- SQ: submission queue, where the application writes requests and the scheme reads them
+- CQ: completion queue, where the scheme writes responses and the application reads them
+- SQE / CQE: submission queue entry / completion queue entry, entries in the SQ and CQ, respectively
+- Buffer pool: A contiguous block of memory, shared between the application and the scheme, from which data buffers are allocated
+- Data buffer: For a request, we currently support a single data buffer, which is a slice of the contiguous buffer pool, defined by an offset and length
 
-With [our library](https://github.com/ConstexprCore/perfect_hash), you write ordinary C++23. There is no external tool to run.
+Since each queue has exactly one producer and consumer, each index is only ever modified by one side. This eliminates the cost of having a shared locking mechanism.
 
-```
-#include <ConstexprCore/perfect_hash.h>
-using namespace ConstexprCore;
-enum class Method { GET, POST, PUT, DELETE, PATCH };
-constexpr auto methods = make_perfect_map<
-    kv<"GET",    Method::GET>,
-    kv<"POST",   Method::POST>,
-    kv<"PUT",    Method::PUT>,
-    kv<"DELETE", Method::DELETE>,
-    kv<"PATCH",  Method::PATCH>
->();
-```
+## The “redox-ring API”
 
-The map is a compile-time constant. The compiler searches for the perfect hash function when it compiles your code. At runtime, computing the hash can take as few as four instructions: load one byte of the key, load one byte from the association table, add the length, apply a mask.
+– Ibuki Omatsu
 
-## Comparing strings quickly
+We’ve introduced the first ring buffer implementation to Redox OS. Unlike Linux’s io_uring, the submission queue (SQ) and completion queue (CQ) are shared exclusively between userspace processes and are never accessed by the kernel.
 
-Computing the hash is cheap. But we still need to check that the string we are looking up matches the key stored in the slot. And comparing strings can be expensive: the textbook approach is a loop over the bytes with a branch for each byte. You can easily end up with dozens of instructions and several branches, and the branches are hard to predict when the strings vary.
+`redox-rings` is a new crate for ring buffer communication between userspace processes, also providing data structures for FFI use cases. It uses futexes as the main synchronization mechanism, with optional pipe file descriptor support.
 
-Instead, we treat the key as a vector. Our processors, whether ARM or x64, have 16-byte registers. So we load 16 bytes unconditionally, even if the key is only three bytes long. We then use a shuffle instruction (`tbl` on ARM NEON) to zero the bytes past the end of the key. The stored keys are zero-padded at compile time. A single vector comparison handles the whole key. We go from about forty instructions and eight branches to five instructions and no branch.
+Based on its FFI support, we’ve introduced the “redox-ring API” in relibc, inspired by Linux’s liburing.
 
-But wait: is it safe to read 16 bytes when you only have three? Reading past the end of a buffer is fine as long as you do not cross into another memory page, and pages are at least 4 kilobytes. So we check whether the address is within 16 bytes of the end of its page. If it is, we take a slower path. Otherwise, we do the wide load. We traded several unpredictable branches for a single branch that is almost always taken the same way.
+liburing is a library for Linux’s io_uring, providing helpers for setting up and tearing down io_uring instances, as well as a simplified interface for submitting I/O requests.
 
-## How fast is it?
+Similarly, the redox-ring API allows applications to communicate with daemons that support ring buffers using custom protocols.
 
-I ran the benchmarks on an Apple M3 Max with AppleClang 15. We look up the keys in random order and we report the time per lookup. Let us first consider the 20 standard HTTP header names.
+### Key functions
 
-![HTTP header names, nanoseconds per lookup](https://lemire.me/blog/wp-content/uploads/2026/10/perfect-hash-http-headers.webp)
+The API provides functions for managing ring buffers, shared memory, and requests.
 
-We need about 1.3 ns per lookup, or about 5 cycles. The classic `gperf` needs 7.7 ns. Abseil’s `flat_hash_map`, an excellent hash table, needs 10.9 ns. And `std::unordered_map` needs 16.6 ns. We are thirteen times faster than the standard library.
+- redox_ring_queue_init_with_path() initializes a ring buffer connection to a daemon.
+- redox_ring_alloc_buf() and redox_ring_alloc_sized() allocate buffers from the shared memory pool.
+- redox_ring_get_sqe() obtains a submission queue entry (SQE) for preparing a request.
+- redox_ring_submit() submits pending requests to the daemon.
+- redox_ring_wait_cqe() waits for a completion queue entry (CQE), blocking if none is available.
+- redox_ring_cqe_seen() marks a CQE as processed.
 
-It is not one lucky key set. Here are the results over several sets of keys, from 6 URL protocols to the 100 tickers of the S&P 100.
+The API also provides functions for registering file descriptors, freeing allocated buffers, and tearing down ring buffer instances.
 
-![Seven key sets, nanoseconds per lookup](https://lemire.me/blog/wp-content/uploads/2026/10/perfect-hash-keysets.webp)
+## Memory Management and Shared Buffers
 
-We stay between 1.2 ns and 2 ns per lookup. We are 3 to 6 times faster than `gperf`, and 7 to 13 times faster than `std::unordered_map`. Notice how `gperf` struggles with the JavaScript reserved words: there we are 17 times faster.
+– Ibuki Omatsu
 
-Why is `std::unordered_map` so much slower? The C++ standard essentially requires a chained hash table. A lookup hashes the whole string by calling a function, follows a pointer to a heap-allocated node and walks a list. Our lookup does a few loads and has no function call. The processor can retire over 8.6 instructions per cycle with our code, which is about as good as it gets on this chip, and it almost never mispredicts a branch.
+The `redox-rings` implementation uses shared memory to exchange SQEs, CQEs, and I/O data between applications and daemons.
 
-![Cost of one lookup](https://lemire.me/blog/wp-content/uploads/2026/10/perfect-hash-lookup-cost.webp)
+During initialization, the SQ, CQ, and data buffer pool are mapped into the application’s address space using the `fmap` syscall with `MAP_SHARED`. This allows both sides to access the same memory without copying I/O data between processes.
 
-On an Apple M4, with the URL protocols, we exceed one billion lookups per second.
+### Buffer allocation
 
-## Conclusion
+The redox-ring API supports two buffer allocation strategies:
 
-If your keys are known at compile time, you should not pay for collision handling at runtime. A perfect hash function gets you down to one comparison. With some care, a lookup costs about five cycles. The library is a single header you can drop in your project: [github.com/ConstexprCore/perfect_hash](https://github.com/ConstexprCore/perfect_hash).
+- Fixed-size allocation: Uses a simple allocator that divides the shared memory pool into fixed-size chunks and maintains a list of available offsets.
+- Dynamic allocation: Uses the redox-buffer-pool crate to allocate buffers of varying sizes and alignments. The allocator uses B-trees to manage free and occupied memory regions.
 
-This is joint work with Francisco Geiman Thiesen (Microsoft). We presented it at P99 CONF 2026. You can [watch the talk on YouTube](https://www.youtube.com/watch?v=_LG7ZeS5j5A).
+Both allocation strategies return a pointer to the allocated buffer and its offset within the shared memory pool.
 
-The [benchmark numbers and the plotting script](https://github.com/lemire/Code-used-on-Daniel-Lemire-s-blog/tree/master/2026/10/perfect_hash) are available.
+Once an operation has completed, the application can release its buffer, allowing the memory to be reused.
 
-1. ![](https://secure.gravatar.com/avatar/529d518998afe67e6b5fa7e8c704b4a081f7410f0348789ac76d74f19a306b07?s=112&d=mm&r=g) **The Alchemist** says: .comment-author [October 28, 2026 at 11:25 am](https://lemire.me/blog/2026/10/26/billion-query-per-second-lookup-tables-in-c/#comment-678596) .comment-metadata .comment-meta Love your work! Correct me if I’m wrong, but you can’t check set membership using perfect hash, so if someone sends an unknown HTTP operation, it’ll hash to the wrong value. Is there a way to avoid this? A Bloom filter would tell if only if it does _not_ exist in the set. WDYT? .comment-content [Reply](https://lemire.me/blog/2026/10/26/billion-query-per-second-lookup-tables-in-c/?replytocom=678596#respond) .comment-body .children
-  1. ![](https://secure.gravatar.com/avatar/a0c6c34cf4a45ff5083d5ea541e7f27c5e4457ac393889e077af10688f6b3831?s=112&d=mm&r=g) **[Daniel Lemire](https://lemire.me/en/)** says: .comment-author [October 28, 2026 at 2:59 pm](https://lemire.me/blog/2026/10/26/billion-query-per-second-lookup-tables-in-c/#comment-678599) .comment-metadata .comment-meta You do need to compare with the expected key, you can’t avoid that. .comment-content [Reply](https://lemire.me/blog/2026/10/26/billion-query-per-second-lookup-tables-in-c/?replytocom=678599#respond) .comment-body
-2. ![](https://secure.gravatar.com/avatar/72ba9a7c51f12f09e225588fb811b94bc6c5dc182fd4813047ec6b88fd8fb1d5?s=112&d=mm&r=g) **Yannick** says: .comment-author [October 28, 2026 at 2:27 pm](https://lemire.me/blog/2026/10/26/billion-query-per-second-lookup-tables-in-c/#comment-678597) .comment-metadata .comment-meta > But wait: is it safe to read 16 bytes when you only have three? Reading past the end of a buffer is fine as long as you do not cross into another memory page, and pages are at least 4 kilobytes. I’d like to point out that while this may work *in practice, on a given target architecture*, it is technically undefined behavior as far as the C++ standard is concerned. It can produce any other result on conforming implementations of the C++ abstract machine (for example, but not limited to, gcc/clang with -fsanitizers, or fil-c, or any implementation that uses fat pointers). .comment-content [Reply](https://lemire.me/blog/2026/10/26/billion-query-per-second-lookup-tables-in-c/?replytocom=678597#respond) .comment-body
-3. ![](https://secure.gravatar.com/avatar/19e7c3fd4273f8dd66deaf4d6176f42df7f0d2cad92b948755aea6ad545e6e36?s=112&d=mm&r=g) **Patrick** says: .comment-author [October 28, 2026 at 2:52 pm](https://lemire.me/blog/2026/10/26/billion-query-per-second-lookup-tables-in-c/#comment-678598) .comment-metadata .comment-meta Oh you do have to compare the key after you arrive at the perfect hash bucket. An infinite number of strings will hash to that place, so you can’t avoid the final comparison. .comment-content [Reply](https://lemire.me/blog/2026/10/26/billion-query-per-second-lookup-tables-in-c/?replytocom=678598#respond) .comment-body .children
-  1. ![](https://secure.gravatar.com/avatar/a0c6c34cf4a45ff5083d5ea541e7f27c5e4457ac393889e077af10688f6b3831?s=112&d=mm&r=g) **[Daniel Lemire](https://lemire.me/en/)** says: .comment-author [October 28, 2026 at 2:59 pm](https://lemire.me/blog/2026/10/26/billion-query-per-second-lookup-tables-in-c/#comment-678600) .comment-metadata .comment-meta That’s correct. .comment-content [Reply](https://lemire.me/blog/2026/10/26/billion-query-per-second-lookup-tables-in-c/?replytocom=678600#respond) .comment-body
+## Session Creation and Management
+
+– Anhad Singh
+
+The `redox_ring_queue_init_with_path` function opens the scheme ring handle and uses the `SYS_CALL` system call on it to set up the ring buffer session with the given parameters. This returns file descriptors for the SQ, CQ, and shared buffer pool, which are mapped into the application’s address space. The application can then use the queues directly to submit requests and receive completions. On the scheme side, the worker task waits for entries in the SQ, processes them asynchronously and notifies the application on completion.
+
+## Example: Writing to RamFS
+
+– Ibuki Omatsu
+
+Ring buffer support was added to RamFS and NVMed. We also added tests that communicate with these storage daemons through the redox-ring API.
+
+For example, writing data to RamFS involves the following steps:
+
+1. Open the target file and initialize a ring buffer instance to RamFS using redox_ring_queue_init_with_path().
+2. Register the file descriptor so that subsequent requests can reference it by index.
+3. Allocate a shared memory buffer and write the data into it.
+4. Obtain an SQE and specify the write operation, file index, buffer offset, data length, and file offset.
+5. Submit the prepared SQEs using redox_ring_submit(). Multiple requests can be submitted in a single batch.
+6. Wait for CQEs, check the results, and release the buffers associated with completed requests.
+
+Once all operations have completed, the application tears down the ring buffer connection.
+
+## Async Executor
+
+– Anhad Singh
+
+We developed an async executor for device drivers, with a single interrupt vector and an SQ/CQ pair per core architecture. A single core is used at the moment, and multi-thread-per-core support is in progress. Furthermore, we updated NVMe driver to use the async executor, and more devices such as virtio are expected to follow.
+
+With the executor, schemes that support Redox Rings can handle each I/O request in its own async task, with a worker thread spawned for each session between the application and the scheme. On teardown, the worker task is stopped, pending I/O operations are cancelled and shared resources are cleaned up.
+
+![Ring Buffers Benchmark](https://www.redox-os.org/img/nlnet-rb-summary/ring-buffers-benchmark.png)
+
+**Figure 1:** Comparison between the `redox_syscall` and `redox_ring` benchmarks, showing that `redox_ring` is 14-15x faster. The `redox_syscall` benchmark performs I/O via synchronous system calls, while the `redox_ring` benchmark uses the new Redox Ring interface.
+
+## Kernel and IPC optimizations
+
+– Jacob Lorentzon
+
+While it has substantially improved over the years, IPC is still quite slow on Redox, and this is important to optimize as ring buffers can only offset this overhead to a certain extent. This has been a focus of our work to improve system performance.
+
+### Infrastructure
+
+The `acid` test suite for Redox was expanded to include more targeted benchmarks that measure IPC latency, in particular `acid ipc_latency_simultaneous`, and also `acid heavy_forking`.
+Support was also added for repeating measurements and collecting more proper statistics (although still less feature-complete than e.g. `hyperfine`), making it easier to know whether changes in metrics are statistically significant and by how much.
+
+### Miscellaneous refactors
+
+Various single-digit speedups were attained from kernel refactors, such as eliminating redundant locking, hashmap lookups, and by adding a lower-overhead call for IPC, similar to seL4’s “reply-wait”.
+
+### Fast path switching without vector registers
+
+Another source of overhead, from the flamegraphs, was found to be `XSAVE` and `XRSTOR`, a few hundred cycles combined (tested on an AMD Ryzen 9 5950X).
+These instructions save/restore vector registers, which is ~600 bytes on the CPU tested, and likely similar on other CPUs with AVX2 (which only userspace uses).
+
+The optimization made here is that the kernel zeroes the vector registers *if the caller and callee entered the kernel through syscalls*, rather than saving/restoring (using `vzeroall`, `ldmxcsr` etc. as required for correctness).
+
+Context switching can be triggered both by preemption, i.e. timer interrupts, and voluntarily from syscalls.
+After Redox destabilized its syscall ABI, instead preferring the `libredox` symbols provided by `relibc`, all syscalls will first go through a function call.
+Since the System V ABI clobbers all vector registers *for all function calls*, it is almost zero-cost to also define Redox’s syscall ABI to do so.
+Luckily, the generated assembly code for `relibc` was almost identical.
+
+### Direct switching
+
+A major bottleneck during IPC is invoking the scheduler, as can be seen from various flamegraphs.
+The scheduler needs to access multiple data structures, primarily `BTreeMap` that takes up a large fraction of the overhead, and it also needs to acquire lots of locks, often blocking.
+
+Direct context switching was implemented in [kernel MR 694](https://gitlab.redox-os.org/redox-os/kernel/-/merge_requests/694), resulting in a 15-20% IPC latency reduction.
+It separates the *current context* (reference) into the *scheduled context* and the *running context*, where the former is the context owning the current timeslice, and the latter is the context whose registers/memory/file table is currently active.
+When direct switching has not occurred, these always coincide.
+Consequently, a client process calling a scheme (typically using our `SYS_CALL` syscall) can completely bypass the scheduler and switch directly to the scheme, if ready, where the kernel will then prioritize returning to the *scheduled context* the next time the scheme yields.
+This mimics the behavior of how complex syscalls are handled in monolithic kernels, and should also be more cache-efficient, among other efficiencies.
+
+### Huge pages
+
+The kernel previously only supported 4k pages.
+This is still the case on non-x86, and for all userspace cases, but now the kernel physmap will be mapped as 2M when possible.
+TLB usage can thus theoretically be reduced by up to 512x for heavy CoW, and in practice, the highest obtained L1DTLB-miss rate from `acid heavy_forking` [was -75%](https://gitlab.redox-os.org/redox-os/kernel/-/merge_requests/711).
+
+## Future improvements
+
+– Jacob Lorentzon
+
+IPC roundtrip latency has been reduced from ~5800 cycles to ~2700 cycles, but this is still high compared to fast µkernels like seL4.
+Additional optimizations could be to reduce locking, and reduce the syscall entry overhead, but primarily to simplify the IPC primitive and remove possibly unnecessary parts such as request buffers.
+While not as applicable for nonlegacy applications, automatic page-borrowing of clients’ buffers (in `UserScheme`) is also a major source of overhead and in a benchmark similar to `dd bs=4k if=/dev/zero of=/dev/null`, the overhead is at least ~32k cycles per call.
+However, while the existing benchmarks are useful as an approximate lower bound on latency, more investigation will be required to determine the distribution of overheads for more realistic workloads, both with and without userspace ring buffers.

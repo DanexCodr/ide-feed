@@ -1,74 +1,87 @@
-We found that several PDF implementations generate their AES-256 file keys from state spaces small enough to enumerate. In MuPDF, only 9 bits of random state affect the actual AES-256 key. Other PDF editors like Foxit base their AES-256 key on time based randomness and thus also lead to keys that are trivial to recover.
+On October 20 and 21, an attacker tried to exploit a GitLab vulnerability (CVE-2026-97229) on our instance, a week after the fix was released. The attack came close to working. We have found no evidence that it succeeded, but we cannot rule it out, so we treated the instance as compromised and rebuilt it from scratch. Our checks show that the aports repository, packages, and the October 21 releases were not tampered with.
 
-![MuPDF AES-256 key recovery worksheets on a desk](https://v12.sh/cdn/_astro/cover.CF5x0X6B_1N5vR.webp)
+GitLab is being tested before we open it to the public again. All passwords have been reset, so when it is back you will need to set a new one with “Forgot your password?” on the sign-in page. We will post exactly what you need to do when it reopens. In the meantime: if you used the same password for your gitlab.alpinelinux.org account anywhere else, change it there. We have seen automated login attempts against our GitLab with passwords leaked from other sites.
 
-## Introduction
+If you have questions or concerns please reach out to us at infra@alpinelinux.org.
 
-PDF encryption protects the strings and datastreams in a PDF document, including metadata unless it is explicitly left unencrypted. The password protection mechanism has gone through a bunch of revisions over the years, moving from RC4 to AES and hardening password hashing against brute force attacks. The current version, revision 6, uses AES-256.
+## What happened
 
-When a PDF is encrypted with AES-256, the password does not encrypt the document directly. The implementation generates a random 32-byte file key, which encrypts the content. The password and a salt are then hashed to derive a separate key, which encrypts this random 32-byte file key. Revision 6 makes this hashing deliberately slow; the older AES-256 revision 5 does not.
+**The vulnerability:**
+CVE-2026-97229 is a critical (CVSS 10.0) vulnerability in how GitLab evaluates regular expressions in CI configuration. The underlying bug is in Onigmo, the regular expression engine built into Ruby. [GitLab published fixed releases on October 12](https://docs.gitlab.com/releases/patches/patch-release-gitlab-19-4-2-released/), but the fix itself is a set of patches to the Ruby that GitLab bundles in its own packages and container images. Upstream Ruby [shipped the fix on October 23](https://www.ruby-lang.org/en/news/2026/10/23/ruby-3-3-13-released/), in Ruby 3.3.13, 3.4.12 and 4.0.9.
 
-A PDF can have a user password for viewing and an owner password for changing permissions. Either unlocks the same file key, so the restrictions are up to the reader: with the viewing password, you can also make an unrestricted copy.
+**The attack:**
+On October 20 and 21, a newly registered account sent crafted CI configurations to our GitLab instance, which was still running 19.3.4 and did not have the October 12 fix. This crashed GitLab worker processes 8 times. In 4 of those crashes the attacker got partway through the exploit and failed at the next step. The attacker also downloaded our GitLab container image, which suggests they were tuning the exploit to our exact build. We have found no evidence that the attacker ran code on the server, but we cannot rule it out.
 
-We found that this randomness is often generated very insecurely, allowing passwordless decryption of protected PDFs.
+**Our upgrade didn’t fix the vulnerability:**
+Upgrading to GitLab 19.3.6 on October 22 didn’t fix the vulnerability. The fix isn’t in GitLab’s own code but in a patch to Ruby, which GitLab applies only in its official packages. Our image used standard Ruby, so it didn’t get the patch.
 
-## MuPDF
+If you run GitLab with your own Ruby (from source or in your own container image) rather than GitLab’s packages, upgrading GitLab is not enough: you also need Ruby 3.3.13, 3.4.12, 4.0.9 or later.
 
-MuPDF versions before 1.28.5 use an implementation of the [drand48 family](https://pubs.opengroup.org/onlinepubs/7908799/xsh/drand48.html) to generate their random numbers. This generator is seeded once, using the current epoch in seconds:
+If you use our [alpinelinux/gitlab](https://hub.docker.com/r/alpinelinux/gitlab) container image, pull `alpinelinux/gitlab:19.3.6` again. The image published on October 27 contains Ruby 3.3.13. Any 19.3.6 image you pulled before October 27, and all older tags, are vulnerable.
 
-The generator is a 48-bit linear congruential generator:
+### Incident Timeline
 
-`fz_srand48()` writes the state as three 16-bit words. The low word is the constant `0x330e`, and the 32-bit timestamp occupies state bits 16 to 47:
+| Date | Event |
+| --- | --- |
+| Oct 28 | GitLab rebuild complete; all passwords reset and GitLab's secret keys replaced |
+| Oct 27 | GitLab closed to everyone except developers and build servers; rebuild started |
+| Oct 26 | Found the instance still vulnerable after the upgrade |
+| Oct 25 to 26 | Attacker returns and tries to get back in; attempts fail |
+| Oct 24 | aports, packages and Oct 21 releases verified against outside records |
+| Oct 23 | Attacker's account blocked; Ruby releases the fix |
+| Oct 22 | Upgraded to GitLab 19.3.6 |
+| Oct 21 | Main attack; GitLab crashes, 502 errors and failed CI jobs |
+| Oct 20 | Attacker registers an account and starts probing |
+| Oct 13 | CVE-2026-97229 published; we upgraded to GitLab 19.3.4 instead of 19.3.5 (which had the fix) by mistake |
+| Oct 12 | GitLab releases the fix |
 
-When MuPDF needs to generate a key, it calls `fz_memrnd()`, which will repeatedly take a random number, step the random number generator forward, and then use the lowest byte of this random number as a random byte.
+## What we know and what we can’t rule out
 
-The shift discards state bits 0 to 16, and the cast to `unsigned char` discards everything above bit 24. Every output byte therefore comes from bits 17 to 24 of the LCG state.
+**What we found**
 
-The issue is that the higher bits of the state never affect the lower bits. Multiplication and addition can carry bits upward, but not downward. Since each output byte comes from bits 17 to 24, anything above bit 24 can be ignored, even after stepping the generator forward.
+- Alpine releases and packages were not modified. The October 21 stable releases (3.21.9, 3.22.7, 3.23.7, 3.24.3), including their ISO images and the minirootfs tarballs the official alpine Docker images are built from, and all packages built from October 20 to 24 came from aports commits we verified against records outside GitLab. See the FAQ below for details.
+- No signing keys were exposed. The keys that sign Alpine packages and releases are not, and never have been, stored on the GitLab server.
+- No evidence that the attacker’s code ran: timing probes showed no delays, and we found no unexpected files, keys, hooks or processes.
+- No private data was returned to the attacker through any web or API request we can see.
 
-That leaves 25 bits that can affect the output. The bottom 16 are always initialized to `0x330e`, so only nine bits from the timestamp matter. Timestamps that differ by 512 seconds produce exactly the same byte stream.
+**Why we can’t be sure**
 
-Since the possible keyspace is so small, we can just brute-force this by generating all possible 32-byte keys and trial decrypting:
+- A successful exploit would leave no crash and no trace in the web logs.
+- Some logs from the attack day are gone (background job logs, the old container’s filesystem).
+- We had no logging of outbound network connections, and our hosting provider keeps none either.
 
-MuPDF uses the same generator for the document `/ID`, which is stored in the trailer in plaintext. When writing a new document, it will first draw 32 bytes from the same LCG and then immediately sample the decryption key after, so `/ID` can be used as an additional check.
+**What could have been exposed if the attack succeeded**
 
-Searching all 512 streams in a very unoptimized python implementation using pure brute force takes about 11 milliseconds. On a test document:
+- Email addresses, names and IP addresses of all users
+- Password hashes
+- 2FA secrets, CI/CD variables and runner tokens
+- Webhook, integration and push mirror credentials
+- Personal access tokens (stored as hashes)
+- Private repositories, and confidential issues and merge requests
 
-That key decrypts the document without either password.
+## FAQ
 
-## Foxit
+### Why did we rebuild GitLab if we were able to mitigate the attack?
 
-Foxit PDF Reader 2026.1.3.36551 derives the file key as a hash of the current timestamp, 32 uninitialized bytes, and a constant. In practice these uninitialized bytes are zero filled and do not add any randomness.
+Because we cannot rule out code execution, and the evidence we would need to confirm it no longer exists, we took the harder route and rebuilt the GitLab instance from scratch. This removes any foothold a possibly successful exploit could have left behind.
 
-Or as an equivalent python snippet:
+While GitLab is closed, our package mirrors, cgit, and mailing lists/IRC are available as normal.
 
-The `/Perms` permissions block contains known plaintext, so the candidate check is one hash and one AES block decryption, with no password hashing and no document decryption:
+### Are Alpine packages and releases affected?
 
-Our Rust implementation searches timestamps downward from the current time, using Rayon for multithreading. On a Ryzen 9 7950X with 32 threads it sustains 370 to 376 million timestamps per second:
+We have found no sign of tampering in aports or the releases.
 
-| Target timestamp | Candidates tested | Search time |
-| --- | --- | --- |
-| Ten years ago | 315,573,571 | 0.84 s |
-| Unix epoch | 1,792,610,110 | 4.85 s |
+Every aports commit added October 20 to 22 arrived through a recorded push by a known developer. We checked this against records the attacker could not reach: a developer’s clone and all 45 builders. Every package built from October 20 to 24, on every architecture, came from commits as published on git.alpinelinux.org. The October 21 releases (3.21.9, 3.22.7, 3.23.7, 3.24.3) were built from those same verified commits.
 
-The second row covers every timestamp from 1970 to the present. In practice, for a document that was relatively recently generated, this will be in the order of milliseconds.
+We ran these checks on October 24, covering commits from October 20 to 22 and packages built up to October 24. Our GitLab stayed vulnerable until we closed it on October 27, so we are extending the same checks to that date.
 
-### Where did this key derivation come from
+### Is Alpine’s ruby package affected?
 
-This exact pattern popped up in a couple different PDF editing suites, so we were curious where they got it from. It was already present in PDFium’s [initial public commit](https://github.com/chromium/pdfium/blob/5110c4743751145c4ae1934cd1d83bc6c55bb43f/core/src/fpdfapi/fpdf_parser/fpdf_parser_encrypt.cpp#L504-L531) from May 2014. The [file header credits Foxit for the original code](https://github.com/chromium/pdfium/blob/5110c4743751145c4ae1934cd1d83bc6c55bb43f/core/src/fpdfapi/fpdf_parser/fpdf_parser_encrypt.cpp#L1-L5), so this code appears to have come from Foxit. Other editors may have picked it up through PDFium:
+The bug is in Ruby’s regular expression engine, so any program that compiles regular expressions from untrusted input is exposed, not only GitLab. Alpine 3.22, 3.23, 3.24 and edge ship Ruby 3.4.12, and Alpine 3.21 ships Ruby 3.3.13; both include the fix. Run `apk upgrade` to get it.
 
-The 32-byte middle value is `m_EncryptKey`, which is the uninitialized contents of the key buffer being hashed into itself. Assuming these bytes are zero filled, this is exactly the key derivation Foxit still uses today.
+### What are we changing in response to this event?
 
-## OpenPDF and iText
-
-OpenPDF 3.0.5 and iText 9.7.1 both route cryptographic randomness through an `IVGenerator` class, an ARC4 stream seeded with a millisecond timestamp and the JVM’s free memory:
-
-The same stream generates the file key and 32 bytes of salts stored in plaintext in `/U` and `/O`. We can check guesses for the timestamp and free memory against these salts, then recover the key from the adjacent bytes.
-
-While there is significantly more variance here than in the MuPDF and Foxit examples, this once again shows that the promise of 256 bit security is undermined by insecure randomness sources and lower-than-advertised state space.
-
-## Conclusion
-
-In each of these implementations, the file key is generated from a non-cryptographically secure source of randomness. What was supposed to be a security upgrade over older file keys derived from the user’s password instead led to weaker keys in practice. These issues were disclosed to the vendors and, in MuPDF’s case, fixed. Previously published copies cannot be retroactively protected, however, so these bugs may still have an impact.
-
-We published our [decryptors for MuPDF and Foxit](https://github.com/v12-security/pocs/tree/main/pdf_decryptors).
+- Fixed Ruby: the rebuilt instance runs a Ruby with the fix (3.3.13 or later).
+- Faster patching: apply critical GitLab security releases within a day, and check each release for Ruby or other component patches our own build must apply.
+- Better logging: record outbound connections from the GitLab host and database connections, and keep logs longer than 14 days.
+- Signed release tags, so releases can be verified independently of GitLab.

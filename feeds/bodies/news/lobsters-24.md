@@ -1,310 +1,140 @@
-The Nim Team is happy to announce version 2.4.0, our new stable release.
+We are excited to announce the release of [Hoot](https://spritely.institute/hoot) 0.10.0!  Hoot
+is a Scheme to WebAssembly compiler backend for
+[Guile](https://gnu.org/software/guile), as well as a general purpose
+WebAssembly toolchain.  In other words, *Scheme in the browser!*
 
-After a way-too-long period of development, Nim 2.4 has finally become a reality. This is a major update
-shipping major new features:
+This release contains new features and bug fixes and since the [0.9.0
+release](https://spritely.institute/news/hoot-0-9-0-released.html) back in May.
 
-1. --strings:sso for improved string processing efficiency.
-2. --ic:on for parallel, incremental rebuilds.
-3. --mm:yrc, a new cycle collection algorithm that supports cycles spanning multiple threads.
-4. More convenient sum types.
-5. Cyclic module dependencies: still not encouraged, but fair game once you declare them with {.cyclic.}.
+## Use Hoot in the upcoming Lisp Game Jam!
 
-If you’re still on Nim 1.6, take a look at the [version 2.0 release article](https://nim-lang.org/blog/2023/08/01/nim-v20-released.html) to see all the features you’re missing.
-If you’ve been using Nim 2.0, the [version 2.2 release article](https://nim-lang.org/blog/2024/10/02/nim-220-2010.html) shows the improvements available in Nim 2.2.
-If you want to stay on Nim 2.2 for now, we also released [version 2.2.14](https://nim-lang.org/blog/2026/10/28/nim-2214.html) today, a patch release with many bugfixes and security fixes.
+On Friday (October 30th 2026), the [autumn edition of the Lisp Game
+Jam](https://itch.io/jam/autumn-lisp-game-jam-2026) will begin!  It's
+a 10-day long game jam where participants make games using their
+favorite flavor of Lisp.
 
-## Installing Nim 2.4.0
+Does making a small web game in Scheme using Hoot sound appealing to
+you?  Well, then we have just the thing to get you started: the [Hoot
+game jam
+template!](https://codeberg.org/spritely/hoot-game-jam-template) This
+template project has everything you need to start making an HTML5 game
+with Hoot quickly.
 
-Check out if the package manager of your OS already ships version 2.4.0 or
-install it as described [here](https://nim-lang.org/install.html).
+The template repository includes:
 
-If you have installed a previous version of Nim using `choosenim`,
-getting Nim 2.4.0 is as easy as:
+- Bindings to the necessary web APIs to make an interactive game with HTML5 canvas
+- A Makefile for compiling, running a development web server, and generating a .zip bundle for uploading to itch.io
+- A very simple Breakout-like example game that demonstrates how to put all the pieces together
 
-```
-$ choosenim update self
-$ choosenim update stable
-```
+For more inspiration, here are some games made with Hoot for past
+jams:
 
-**NOTE:** We recommend that you install and use the latest version of `choosenim`, v0.8.16, available in [our choosenim repo](https://github.com/nim-lang/choosenim).
+Now, onto the release notes!
 
-Alternatively, you can download Nim 2.4.0 from
-[our nightlies builds](https://github.com/nim-lang/nightlies/releases/tag/2026-10-28-version-2-4-14991af742d0833503741fd9a0918133d1bcf8a4).
+## Compiler changes
 
-## Release highlights
+- Added module name to contextualize duplicate import errors.
+- Added support for library versioning for R6RS compatibility.
+- Fixed default version for define-module libraries.
+- Fixed locate-library not respecting configured load extensions. Previously, we were using Guile's load extension parameter instead of Hoot's own.
 
-### Strings based on the small-string optimization (SSO)
+## Runtime changes
 
-SSO-based strings come with a new low-level strings API that you have to use in order to use this switch effectively.
+- Added %struct-ref and %struct-set! primitives for accessing record types defined using the interpreter.
+- Stopped raising errors when importing an undefined symbol in the runtime module system. Guile is lax about this so Hoot being strict caused compatibility issues.
+- Fixed optional argument parsing in primitive-eval.
+- Fixed keyword argument parsing for procedures with both optional and keyword arguments in primitive-eval.
+- Fixed error messages regarding runtime module registry to include the correct CLI flag: -fruntime-modules.
 
-Nim’s new strings API is compatible with Nimony’s, so porting is always beneficial, even if `--strings:sso` might not improve the performance of your code.
-See it as a worthwhile, future-proof refactoring in its own right.
+## Scheme changes
 
-The general idea behind this API is to deprecate the operation `addr myString[offset]` and to replace it with operations that clarify the *intent*. Reading
-is distinguished from writing.
+- Added partial implementation of SRFI-13: String Libraries. It's just a set of re-exports, very similar to Guile, but Guile's SRFI-13 module is not declarative and is thus rejected by Hoot's compiler.
+- Added partial implementation of SRFI-60: Integers as Bits.
+- Added define-macro, defmacro, delete, list->symbol, and symbol to (guile).
+- Exported define-syntax-parameter and syntax-parameterize, symbol-append, integer-length, and gensym from (guile).
+- Added list->bitvector and bitvector to (hoot bitvectors) and re-exported them in (guile).
+- Implemented get-bytevector-all in (rnrs io ports).
+- Made bytevector=? a publicly exported procedure from (hoot bytevectors) and (rnrs bytevectors).
+- Added define-syntax-parameter and syntax-parameterize primitives.
+- Improved (ice-9 exceptions) exports to more closely match Guile.
+- Added (rnrs) module.
+- Added (rnrs base) module.
+- Added (rnrs syntax-case) module.
+- Added (rnrs r5rs) module.
+- Added (rnrs hashtables) module.
+- Added (rnrs files) module.
+- Added (rnrs enums) module.
+- Added (rnrs exceptions) module.
+- Added (rnrs arithmetic fixnums) module.
+- Added (rnrs records inspection) module.
+- Added (rnrs records procedural) module.
+- Added (rnrs records syntactic) module.
+- Added (rnrs io simple) module.
+- Added (rnrs io ports) module.
+- Added port-has-position? to (hoot ports) for R6RS compatibility.
+- Added stubs for centered division to (hoot numbers) and a stub for integer-length to (hoot bitwise) for R6RS compatibility (eventually).
+- Rewrote (rnrs bytevectors) as an R6RS module with version (6).
+- Fixed number->string to round floating point decimal part to an even digit.
+- Fixed number->string for floating point numbers ±2^N, where 52 <= N <= 1023.
+- Fixed incorrect bytevector copy in number->string floating point conversion algorithm.
+- Fixed min/max macros not working when given zero arguments.
+- Fixed the parameters to the log procedure in (guile).
+- Fixed the implementation of negate in guile. It was doing entirely the wrong thing.
 
-Here is our porting guide:
+## CLI changes
 
-| Purpose | Use | Notes |
-| --- | --- | --- |
-| Read-only raw pointer | `readRawData(s, start = 0)` | valid while `s` is alive & untouched |
-| Raw pointer that survives moves/copies | `readRawDataStable(s, start = 0)` | takes `var string`; promotes small strings to heap first |
-| Bulk write into a string | `beginStore(s, newLen, start = 0)` … `endStore(s)` | sets length, ensures unique ownership, returns writable ptr |
+- Port numbers are now validated to be exact integers in the range [1, 65535].
+- Actually complain about invalid option or unknown subcommand. Previously, the code that was supposed to do this was unreachable.
+- Add --experimental-wasm-exnref feature flag when running hoot compile --run=node for continued compatibility with supported NodeJS versions that don't have the new Wasm exnref feature enabled by default.
+- Fixed build-time disabling of hoot server. In past releases, the hoot CLI script would still attempt to load should-be-optional libraries that ./configure had already determined to be missing. Thanks to mcc for discovering this blunder.
 
-Rules of thumb:
+## Documentation changes
 
-- Reading bytes (memcpy out of a string, memmem, scanning): replace addr s[i] / unsafeAddr s[i] with readRawData(s, i).
-- Writing bytes in bulk (memcpy/fread into a string): replace setLen + addr s[oldLen] with beginStore(s, newLen, start) followed by endStore(s). beginStore already sets the length and does the copy-on-write / unique-ownership dance, so an explicit prepareMutation is no longer needed.
-- A pointer that must outlive the current scope (e.g. a cursor stored next to its buffer): use readRawDataStable, which forces the string onto the heap so the payload address is stable.
-- Single-element write s[i] = c still works unchanged. The compiler lowers it to nimStrPutV3, which handles COW internally. You no longer need prepareMutation(s) before an indexed assignment.
+- Improved instructions in "Building from source" section of the manual.
+- Dependencies are now mentioned in the "Advanced path" section of the README.
+- Updated project template README to say Guix is not required (though it's still the easiest option).
 
-#### Before / after examples
+## Browser compatibility
 
-Bulk copy *into* a string:
+- Compatible with Safari 26 or later.
+- Compatible with Firefox 121 or later.
+- Compatible with Chrome 119 or later.
 
-```
-# before
-result.setLen newLen
-copyMem(addr result[oldLen], buf, buflen)
+## Get Hoot
 
-# after
-copyMem(beginStore(result, newLen, oldLen), buf, buflen)
-endStore(result)
-```
-
-Reading bytes *out of* a string:
-
-```
-# before
-copyMem(dest, addr(s.data[s.pos]), n)
-
-# after
-copyMem(dest, readRawData(s.data, s.pos), n)
-```
-
-Read into a slice of a string:
-
-```
-# before
-prepareMutation(buffer)                       # COW literal guard under ARC
-result = s.readData(addr buffer[slice.a], count)
-
-# after
-result = s.readData(beginStore(buffer, slice.b + 1 - slice.a, slice.a), count)
-endStore(buffer)
-```
-
-#### `cstring` conversions
-
-- Converting string → cstring still works, but the C string is only valid as long as the source string is alive and unmodified.
-- If you need a stable, NUL-terminated buffer to hand to C, keep the owning string alive and derive the pointer from it (via readRawDataStable / the normal cstring conversion) rather than caching the pointer past a move.
-
-#### Migration checklist
-
-1. Grep your code for addr s[, unsafeAddr s[, addr(...data[, and any cached pointer/cstring into a string.
-2. Replace read accesses with readRawData (or readRawDataStable if the pointer escapes the current scope / must survive a move).
-3. Replace setLen + raw write with beginStore / endStore.
-4. Drop now-redundant prepareMutation calls before indexed writes and beginStore.
-5. Don’t assume addr s[0] is stable across add, reassignment, or passing the string by value.
-6. Build once with --strings:sso and once without to confirm the code compiles and behaves identically under both.
-
-Because the helper API has identical signatures on every string backend, code
-written this way keeps working under refc/ARC/ORC without SSO; you can port
-incrementally and flip `--strings:sso` on when ready.
-
-#### Once again, in order to avoid confusion:
-
-**Updating your code is not required, but beneficial. The new API works for all `mm` switches and is also offered by Nimony/Nim 3.**
-
-### Parallel and incremental builds (IC)
-
-IC is finally shipping! Use it with the switch `--ic:on`. Parallel builds are based on multi-processing, not multi-threading. Hence macros that make use of global `.compileTime` variables might need to get patched before you can enjoy the benefits of much faster rebuilds.
-
-For an example of the required porting effort, see my [PR here](https://github.com/guzba/nimsimd/pull/38) that allows PolyWorld to be built with `--ic:on`!
-
-Depending on the shape of your import graphs, even **cold** builds might be faster with IC turned on, as the build exploits more parallelism. For example, compiling the Nim compiler itself takes 31s with `--ic:off` on a machine with 16 physical cores, and 25s with `--ic:on`.
-
-### YRC – the missing piece of Nim’s MM story
-
-YRC (“ürk”) is the thread-safe variant of Nim’s ORC. Use `--mm:yrc` when you need shared refs and cycles across threads. It offers the same API as ORC. Where it fits:
-
-| mm-switch | Thread-safe | Can handle cycles |
-| --- | --- | --- |
-| **ARC** | No | No |
-| **Atomic ARC** | Yes | No |
-| **ORC** | No | Yes |
-| **YRC** | **Yes** | **Yes** |
-
-ORC can only handle cycles that stay inside one thread. YRC lifts that: cycles can span threads. For acyclic data it uses atomic reference counting; for cyclic data it uses a write barrier that only runs at pointer assignments. There is no stop-the-world phase and no arbitrary safepoints. Any thread can run the cycle collector when needed (there is no dedicated GC thread), which helps locality and suits embedded systems where every thread counts.
-
-Nothing is free. In our orcbench, YRC is about 2.0× slower than ORC and it uses twice as much memory, too. Still, we think that’s a good trade: you no longer have to worry about cycles crossing thread boundaries. The cost is a constant factor of two; the payoff grows with every core you put to work on shared data.
-
-### Sum types
-
-Nim always offered Ada-inspired “discriminated unions”, for example:
+Hoot is available in GNU Guix:
 
 ```
-type
-  NodeKind = enum  # the different node types
-    IntLit,        # a leaf with an integer value
-    FloatLit,      # a leaf with a float value
-    StringLit,     # a leaf with a string value
-    AddOp,         # an addition
-    SubOp,         # a subtraction
-    IfStmt         # an if statement
-  Node = ref object
-    case kind: NodeKind
-    of IntLit: intVal: int
-    of FloatLit: floatVal: float
-    of StringLit: strVal: string
-    of AddOp, SubOp:
-      leftOp, rightOp: Node
-    of IfStmt:
-      condition, thenPart, elsePart: Node
+$ guix pull
+$ guix install guile guile-hoot
 ```
 
-While this works, people complained about the lack of concise notation for years. So version 2.4 finally offers something better:
+Also, Hoot is now available in
+[Debian](https://tracker.debian.org/pkg/guile-hoot), though it will
+take awhile for this release to make it there.
 
-```
-type
-  Node = ref object
-    case
-    of IntLit: intVal: int
-    of FloatLit: floatVal: float
-    of StringLit: strVal: string
-    of AddOp, SubOp:
-      leftOp, rightOp: Node
-    of IfStmt:
-      condition, thenPart, elsePart: Node
-```
+Otherwise, Hoot can be built from source via our release tarball.  See
+the [Hoot homepage](https://spritely.institute/hoot) for a download link and GPG signature.
 
-There is no `NodeKind` enum anymore and no `kind` field: the branch names are introduced by the
-type declaration itself. Under the hood a sum type is still a case object with a hidden
-discriminator, so the memory layout and the performance are the same as before. (However, in
-the future the pattern matching allows for the runtime checks to be eliminated!)
+Documentation for Hoot 0.10.0, including build instructions, can be
+found
+[here](https://spritely.institute/files/docs/guile-hoot/0.10.0/index.html).
 
-A branch name constructs the object, with named arguments for the fields of its branch:
+## Get in touch
 
-```
-let n = AddOp(leftOp: IntLit(intVal: 40), rightOp: IntLit(intVal: 2))
-```
+For bug reports, pull requests, or just to follow along with
+development, check out the [Hoot project on
+Codeberg](https://codeberg.org/spritely/hoot).
 
-Generic sum types work too. The instance is inferred from the field values or from the
-expected type:
+If you build something cool with Hoot, let us know on our [community
+forum](https://community.spritely.institute)!
 
-```
-type
-  Opt[T] = object
-    case
-    of None: discard
-    of Some: val: T
+Thanks to Z572, stdh, Walter Lewis, and Jelle Licht for their
+contributions to this release.
 
-let a = Some(val: "abc")      # Opt[string]
-let b: Opt[int] = None()      # the expected type selects the instance
-```
+Until next time, happy hooting! 🦉
 
-The fields can only be accessed via pattern matching, so accessing the field of the wrong branch,
-the classic `FieldDefect`, cannot happen anymore. The fields are bound to the names that
-follow the branch name:
+## Thanks to our supporters
 
-```
-proc eval(n: Node): int =
-  case n
-  of IntLit(v): v
-  of AddOp(a, b): eval(a) + eval(b)
-  of SubOp(a, b): eval(a) - eval(b)
-  else: raiseAssert "not an arithmetic expression"
-```
-
-`_` skips a field, `{AddOp, SubOp}(a, b)` matches several branches that share their fields, and
-the `case` has to cover all branches or have an `else`. If the matched expression is a mutable
-location, the bindings are views into the object and can be assigned to:
-
-```
-type
-  Shape = object
-    case
-    of Circle: radius: float
-    of Rect: w, h: float
-
-var shapes = @[Circle(radius: 1.0), Rect(w: 1.0, h: 2.0)]
-for i in 0 ..< shapes.len:
-  case shapes[i]
-  of Circle(r): r = r * 2       # updates shapes[i].radius
-  of Rect(w, _): w = 3.0
-```
-
-Otherwise the fields are bound by value. If you really need to access a field outside of a `case`,
-there is an escape hatch: `{.cast(uncheckedAccess).}: echo n.intVal`.
-
-Classic case objects continue to work and are not deprecated.
-
-### `owned` type modifier
-
-This feature has to be enabled with `--experimental:ownedRefs` and I can promise you that we will 
-break your code again if you use the feature.
-
-`owned ref T` (and `owned` closures) mark the location that holds the unique *owning* edge to an
-object. This is checked statically: an owned location cannot be copied, only moved, and only fresh
-values like object constructions can initialize it. Any number of ordinary references to the same
-object can exist and keep it alive; the runtime representation is the same as that of `ref T`,
-so code with and without the feature interoperates.
-
-```
-{.experimental: "ownedRefs".}
-type
-  Node = ref object
-    next: owned Node
-    data: int
-```
-
-The point of the exercise is cycle collection: owned edges form a forest, so a type whose
-references are all `owned` or `.cursor` can never be part of a cycle and stays out of the cycle
-collector under ORC and YRC. See the [experimental manual](https://nim-lang.org/docs/manual_experimental.html#owned-references)
-for the details.
-
-### Cyclic module dependencies
-
-Nim always allowed modules to import each other, but in a cycle a module only saw the declarations
-of the other module that came before the `import`. In practice that meant juggling the order of
-imports and declarations, or moving all types into a `types.nim` module.
-
-Import cycles are still a design smell as they turn the import DAG into a general graph,
-but sometimes they are the natural structure, and then the compiler should not stand in your way.
-
-You can annotate the imports of a cycle with the `cyclic` pragma:
-
-```
-# module a
-import b {.cyclic.}
-
-type
-  A* = object
-    b*: B          # a type of `b`, even though `b` imports `a`
-
-proc isEven*(n: int): bool = n == 0 or isOdd(n - 1)
-```
-
-```
-# module b
-import a {.cyclic.}
-
-type
-  B* = object
-    x*: int
-    a*: ref A
-
-proc isOdd*(n: int): bool = n != 0 and isEven(n - 1)
-```
-
-The modules connected by such imports form a *cycle group* that is checked phase by phase: first
-the imports of all modules, then all type sections, then the routines (their bodies come later),
-then the rest of each module. So types can refer to each other across modules, and the procs of
-the modules can call each other, regardless of the order of the declarations.
-
-It is good practice to annotate the imports on both sides of a cycle. Import cycles without the
-annotation still work as before, but are deprecated; compile with
-`--warning:ImplicitCyclicImport:on` to find them. The precise rules are described in the
-[manual](https://nim-lang.org/docs/manual.html#modules-cyclic-imports).
-
-A complete list of changes is available [here](https://github.com/nim-lang/Nim/compare/v2.2.0...v2.4.0).
+Your support makes our work possible!  If you like what we do, please
+consider [becoming a Spritely supporter today](https://spritely.institute/donate)!
