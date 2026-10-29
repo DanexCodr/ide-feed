@@ -283,15 +283,17 @@ This naive approach was of course already mitigated by the Chromium developers. 
 8  
 9  
 10  
-edge  
-chrome-extension  
-chrome  
-chrome-untrusted  
-chrome-distiller  
-chrome-error  
-chrome-native  
-chrome-search  
-devtools  
+11  
+edge://  
+chrome-extension://  
+chrome://  
+chrome-untrusted://  
+chrome-distiller://  
+chrome-error://  
+chrome-native://  
+chrome-search://  
+devtools://  
+
 // more...
 
 *↓ **Path:** [chromium/third_party/blink/renderer/core/frame/local_frame.cc](https://source.chromium.org/chromium/chromium/src/+/refs/tags/148.0.7778.97:third_party/blink/renderer/core/frame/local_frame.cc)*

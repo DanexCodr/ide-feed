@@ -1,166 +1,127 @@
-The following subscription-only content has been made available to you 
-by an LWN subscriber.  Thousands of subscribers depend on LWN for the 
-best news from the Linux and free software communities.  If you enjoy this 
-article, please consider [subscribing to LWN](https://lwn.net/subscribe/).  Thank you
-for visiting LWN.net!
+We've open-sourced our [Accessible Components Library](https://tetralogical.com/resources/accessible-components-library/), and, as you might expect, this includes the HTML, CSS, and JavaScript code. But, we thought, "Why stop there?" So, we've also published our documentation, including the accessibility requirements, test scenarios, and even the working automated tests which validate each one.
 
-           By **Joe Brockmeier**  
-October 26, 2026
+Here's what we've released, how it works, and why automated tests are worth the effort. One caveat: these components are opinionated and built for our needs. Feel free to reuse or adapt them, but test them in your product before relying on them. They're not a production-ready design system.
 
-Python's [experimental
-just-in-time (JIT) compiler](https://docs.python.org/3.13/whatsnew/3.13.html#an-experimental-just-in-time-jit-compiler), which was added to CPython in 2024 for the [3.13 release](https://www.python.org/downloads/release/python-3130/),
-is on its way out. In June, the Python steering council [announced](https://discuss.python.org/t/an-announcement-from-the-steering-council-regarding-the-jit-project/107638)
-that it was pausing work on the JIT in CPython's main branch until there was an
-accepted [Python Enhancement
-Proposal](https://peps.python.org/pep-0001) (PEP) that addressed concerns about maintenance, compatibility, and
-set clear success metrics as well as a timeline for completion. After creating
-[PEP 836](https://peps.python.org/pep-0836/) ("JIT Go Brrr: The
-Path to a Supported JIT Compiler for CPython")
-to try to meet the council's request, and after months of discussion, the
-JIT maintainers have withdrawn the PEP. For now, it appears that development on
-the once-promising project has come to an end.
-The JIT was [added to CPython by Brandt
-Bucher](https://github.com/python/cpython/pull/113465) in early 2024. Generally, such a major feature would be expected to
-land only after the council had approved a [standards-track PEP](https://peps.python.org/pep-0001/#pep-types:~:text=A%20Standards%20Track%20PEP). Bucher had given
-a talk ([YouTube video](https://www.youtube.com/watch?v=HxSHIpEQRjs),
-[slides](https://github.com/brandtbucher/brandtbucher/blob/master/2023/10/10/a_jit_compiler_for_cpython.pdf))
-about the JIT at a Python core developer sprint, and [announced
-his intent](https://github.com/python/cpython/pull/113465#issuecomment-1911279536) to merge the feature—but he had not taken the step of
-authoring or submitting a PEP for its approval. He was [prodded
-into doing so](https://github.com/python/cpython/pull/113465#issuecomment-1969415137) by steering council member Thomas Wouters, who was also
-serving as the release manager for Python 3.13.
-Bucher and Savannah Ostrowski drafted [PEP 744](https://peps.python.org/pep-0744/) ("JIT Compilation"),
-which was an [informational
-PEP](https://peps.python.org/pep-0001/#pep-types:~:text=An%20Informational%20PEP%20describes%20a%20Python%20design%20issue)—meaning it only provides information to the Python community and
-does not represent formal consensus to proceed on a feature or project. LWN [covered](https://lwn.net/Articles/970397/) the discussion of
-PEP 744 in April 2024, and later covered Bucher's [talk on the JIT](https://lwn.net/Articles/977855/) at
-PyCon US 2024, as well as the [follow-up talk](https://lwn.net/Articles/1029307/) at
-PyCon US 2025.
-PEP it up
-Work on the JIT had been proceeding on the basis of PEP 744 until this
-June, when the council had put forward its formal request for the JIT maintainers to
-create a standards-track PEP. One might wonder, [as
-Antoine Pitrou did](https://discuss.python.org/t/an-announcement-from-the-steering-council-regarding-the-jit-project/107638/2), why the council had decided that it was time to speak up
-and ask for a new PEP. Wouters [said](https://discuss.python.org/t/an-announcement-from-the-steering-council-regarding-the-jit-project/107638/4)
-that there was no "single triggering event for this request", but that
-the council had been discussing the topic for a while and indicated that it was
-looking to ensure the JIT work did not interfere with other projects. "There's been work
-trying to get the JIT to play nice with instrumentation, debugging, and
-profiling. There's also external JITs (like CinderX), JIT-adjacent things (like
-Numba and PyTorch's compile), and discussions about a tier 3 JIT." The
-council had waited until after the Python 3.15 beta release "to be clear
-that we're OK with the status quo for 3.15".
-The council asked for a PEP that would make the case for the JIT "as a supported,
-non-experimental part of CPython: its guarantees, its maintenance commitments,
-and its impact on redistributors". The council set a deadline of six months
-for the PEP to be submitted and accepted; failing that, the council would
-require the JIT code to be removed from the CPython main branch.
- middle-ad 
-Bucher, Ostrowski, and Ken Jin drafted PEP 836 and [published
-it on the Python forum](https://discuss.python.org/t/pep-836-jit-go-brrr-the-path-to-a-supported-jit-compiler-for-cpython/108010) for community feedback on July 3. It generated
-quite a bit of discussion, some favorable and some critical. One of the key
-themes in the comments, such as [this
-one](https://discuss.python.org/t/pep-836-jit-go-brrr-the-path-to-a-supported-jit-compiler-for-cpython/108010/19) by Wouters, and [this
-comment](https://discuss.python.org/t/pep-836-jit-go-brrr-the-path-to-a-supported-jit-compiler-for-cpython/108010/28) by Mark Shannon, was that the draft felt like it should be two separate
-PEPs. Shannon, for example, thought that the PEP should only
-cover goals for accepting the JIT work and felt that it should leave out
-implementation details. There were also quite a few calls for additional
-information.
-Bucher [pushed
-back](https://discuss.python.org/t/pep-836-jit-go-brrr-the-path-to-a-supported-jit-compiler-for-cpython/108010/21) a bit on the suggestion that it should be two PEPs, and Ostrowski [defended](https://discuss.python.org/t/pep-836-jit-go-brrr-the-path-to-a-supported-jit-compiler-for-cpython/108010/22)
-the structure of the PEP as it was. "Outlining goals like we have in the PEP
-without being able to share the plan and everything we've thought through
-alongside it would make me uncomfortable. To me, goals without plans behind them
-aren't really goals at all."
-When we [last looked at this
-topic](https://lwn.net/Articles/1090385/) in September, the discussion about the PEP had slowed down without a
-commitment to develop new PEPs or a formal statement from the council. The last
-word from the council at that time, in the form of a [summary
-of its August 6 meeting](https://discuss.python.org/t/2026-08-06-python-steering-council-meeting-summary/108612), was that it had met with the PEP authors and
-was "discussing the state of the PEP and whether it answered the questions
-the SC asked in its request for a PEP".
-Experimentation in main
-On September 21, Wouters [posted](https://discuss.python.org/t/pep-836-jit-go-brrr-the-path-to-a-supported-jit-compiler-for-cpython/108010/53)
-a statement from the steering council, minus Ostrowski (who is currently a
-member of the steering council but did not participate since she is a co-author
-of the PEP), that summarized its position. The statement
-said that PEP did answer all of the questions that were highlighted in the
-council's request, "although perhaps some less convincingly than
-others".
-The council wished to make clear that it was not
-looking for the criteria that the JIT should meet to be a supported feature, or
-whether it should be considered such. Instead, the council was evaluating
-whether the JIT should continue as an experiment in CPython's main branch.
+## What we've released
 
-Part of the problem with allowing experimentation in main is the lack of unified
-design, and the uncertainty that core developers, package maintainers and users
-face as the experimentation changes behaviours and API surfaces.
+As part of our efforts to provide useful [resources](https://tetralogical.com/resources) to the accessibility community, we've released version 1.0.0, which includes eight components. We will be releasing more in the future, but for now you can check out:
 
-The council said that the PEP was not specific enough about support plans, performance
-criteria, and too vague or too optimistic about a number of other areas. The
-statement included a ten-point list of items that the council wanted "to see
-either spelled out in the PEP, or at least discussed and rejected". The
-council's list expressed concerns ranging from memory impact to security. For
-example, on the topic of platform parity, the council wanted to ensure that the
-JIT was designed to be easily adopted for new platforms. It wanted assurance
-that the JIT's design would not be tied to specific platform or require
-platform-specific knowledge to maintain.
-Another area that the council called out was user impact. It said that the
-PEP was "overly optimistic" about user-visible differences with the JIT
-enabled. There were many cases where users depend on idiosyncrasies in the
-interpreter design, "as we've seen with other Python implementations or even
-just between major Python versions", and it wanted clarification on how
-those differences would be handled. Would they be considered bugs, how would
-situations be handled if a difference in behavior was unavoidable, and so
-on.
-Security was "an underserved area in the PEP", according to the
-council; it suggested that a discussion with the [Python security response
-team](https://devguide.python.org/security/psrt/) was in order and that a security review should be part of the criteria
-for supported status as well.
-PEP 836 specified a [compatibility
-review](https://peps.python.org/pep-0836/#compatibility-review) milestone to correspond with the first Python 3.17 release
-candidate—which would be expected sometime in August 2028—that
-would involve running the test suites of the top PyPI packages to see if the JIT
-broke them. The council wanted that timeline moved up significantly. "We
-think that's way, way too late, and the compatibility review should be an
-ongoing and continuous process starting as soon as possible".
+Each component ships with working examples, the HTML, CSS, and JavaScript behind it, and documentation which explains:
 
-The council also worried about the JIT's design decisions being made
-"without critical review by the larger group of developers ultimately
-responsible for [CPython] development, maintenance and support". The bottom
-line, it said, was that PEP 836 "mostly answers the questions we
-asked" with no missing pieces, but it wanted more discussion on those topics
-so it could "gauge community support and consensus before we're asked to
-pronounce on this PEP".
-Jin [replied](https://discuss.python.org/t/pep-836-jit-go-brrr-the-path-to-a-supported-jit-compiler-for-cpython/108010/55)
-a few days later to thank the council for its detailed feedback and said that the
-group would work on its suggestions.
-Withdrawn
-After some consideration, it appears, the PEP's authors have decided not to
-continue pursing the council's approval. On October 19, Ostrowski (who is
-also release manager for Python 3.16 and 3.17) [announced](https://discuss.python.org/t/pep-836-jit-go-brrr-the-path-to-a-supported-jit-compiler-for-cpython/108010/57)
-that the PEP was being withdrawn:
+- What problem it solves
+- When to use it
+- When not to use it
+- Where to use it
+- Accessibility requirements
+  - Test scenarios
+  - Assistive technology compatibility
 
-The Steering Council rightly sets a high bar for a proposal of this scope, and
-we don't feel we have the personal bandwidth to carry the current version
-forward. We continue to believe in the technical direction outlined in the PEP,
-including free-threaded support and a method-based frontend, and remain
-optimistic about the JIT's potential in CPython. We'll make the reference
-implementation available and link it from the withdrawn PEP so others who are
-interested can explore and build on that.
+The accessibility requirements are the part which we think separates what we're doing from other component libraries. For every component, we've documented the applicable success criteria from the [Web Content Accessibility Guidelines (WCAG) 2.2](https://www.w3.org/TR/WCAG22/), at levels A, AA, and AAA. We've also added our own recommendations for things WCAG doesn't cover, such as usability when using high contrast themes.
 
-Barry Scott [asked](https://discuss.python.org/t/pep-836-jit-go-brrr-the-path-to-a-supported-jit-compiler-for-cpython/108010/59)
-if that meant that work on the JIT was stopped. Brett Cannon [replied](https://discuss.python.org/t/pep-836-jit-go-brrr-the-path-to-a-supported-jit-compiler-for-cpython/108010/61)
-that the work would be stopped in the main repository, but it would be up to the
-community whether the work would continue elsewhere. Dunc Graham [suggested](https://discuss.python.org/t/pep-836-jit-go-brrr-the-path-to-a-supported-jit-compiler-for-cpython/108010/62)
-that there might be time for an alternative PEP to be submitted before the
-council's deadline. Cannon [said](https://discuss.python.org/t/pep-836-jit-go-brrr-the-path-to-a-supported-jit-compiler-for-cpython/108010/63)
-that was not likely, "as all the people actively driving the JIT were either
-authors on that PEP or contributors to it".
-With the PEP withdrawn, the JIT will likely be removed from CPython main
-fairly soon to ensure that any problems caused by its removal can be addressed
-early in the [Python 3.16
-development cycle](https://peps.python.org/pep-0826/). It is unclear whether the original drivers of the JIT
-work intend to continue working on it at all, or if it will simply be left for others to
-pick up if there is enough community interest. I have emailed the PEP authors
-for clarification, but have not yet received a reply.
+Because WCAG can be challenging to navigate, we've grouped the requirements into ten themes, including:
+
+- Adaptability
+- Animation and movement
+- Assistive technologies and semantics
+- Colour and contrast
+- Consistency and predictability
+- Images and media
+- Input assistance
+- Keyboard
+- Navigation
+- Pointer and touch
+
+This should make it easier to quickly understand how a component meets the needs of the people who use it.
+
+Because there's always some technical jargon and caveats, we've also published our:
+
+- Glossary, in case you come across some terms which are confusing
+- Assistive technology compatibility notes, which document some browser and tooling quirks we've run into
+
+## Turning requirements into automated tests
+
+Documenting requirements is useful, but a document can't tell you whether a component actually meets them all. So, we converted each requirement into a test scenario using [Gherkin](https://cucumber.io/docs/gherkin/reference/) syntax, and we wrote working [Cucumber](https://cucumber.io/) tests which validate them.
+
+Gherkin is great because it describes complicated automated tests in plain language, using `Given`, `When`, and `Then` to describe each step. This makes it easier for non-developers to understand what the test is doing, and even help write tests. We've written about Gherkin before, and why it helps to [annotate designs using common language](https://tetralogical.com/blog/2025/09/23/annotating-designs-using-common-language/).
+
+Each of our Gherkin scenarios includes the following:
+
+- Tags: used to run a subset of tests. For example, you might only want to run level A and AA tests, and ignore any recommendations
+- Rule: the WCAG success criterion it relates to, or whether it's a recommendation
+- Scenario: a description of what the test is checking for
+- Test steps: the Given, When, and Then steps which describe exactly how it's tested
+
+For example, here's our scenario for 1.4.10 Reflow on the [breadcrumbs](https://tetralogical.com/resources/accessible-components-library/breadcrumbs) component:
+
+```gherkin
+@1.4.10 @aa @automatic
+Rule: 1.4.10 Reflow, Level AA
+  Scenario: Content reflows without horizontal scrolling at 320px wide
+    Given I load the sample "https://tetralogical.com/resources/accessible-components-library/breadcrumbs/examples/default.html"
+    When I view the rendered '.tl-breadcrumbs'
+    And I set the viewport to 320px wide
+    Then it should reflow without requiring horizontal scrolling
+```
+
+This matters because you don't need to be able to read all the complex JavaScript code to understand what the test is doing. A designer, a tester, a product manager and a developer can all read the same scenario, and all agree on what it means to pass or fail. And, even if you don't use JavaScript on your project, because Cucumber is available in most mainstream programming languages, you can still use the Gherkin feature files and write your own tests to validate them.
+
+All of our test scenarios are written from a collection of shared steps, which was a lot of work at the beginning, because we had to write the underlying code to validate each one. But, each step is reusable, so scaling is easy.
+
+We've published a [full list of our test steps](https://tetralogical.com/resources/accessible-components-library/test-steps/) which work out of the box. This list is generated from the actual step definitions we use in the repository, so it's kept in sync automatically. This means any time we add a new one, you'll also get it for free.
+
+## What the automated tests check
+
+Behind each test step is JavaScript code that controls a real browser using [Playwright](https://playwright.dev/). The tests load the sample from a URL, and then interact with it the same way a real person would, by clicking things or focusing them using a keyboard. Then, they pull information from the browser, like the states and properties of the elements, and verify whether the things that were supposed to happen actually happened.
+
+This is where our tests go much further than off-the-shelf accessibility checkers. A lot of these tools are valuable, and we do recommend using them, but they mostly inspect static markup. They often tell you about things like a button having no accessible name, but they don't often tell you about more complicated scenarios, like whether a focus indicator is hidden behind another element.
+
+## Things which can't be automated
+
+*Most* of our tests are automated, which has taken a bit of creativity at times. But, not everything can be reliably automated, and we'd be a bit suspicious of any tool that claims it can be. For example, an automated test can easily confirm whether a form field has an associated label. However, it's a lot more difficult to assess whether the label actually makes sense to the person reading it, because that relies on context. Arguably, we could capture screenshots and code snippets, and throw them over a wall to a large language model to assess whether something is readable. But, we think that it's ok to have some things reviewed by a human, because it's *for* humans.
+
+In version 1.0.0, 97% of our scenarios are fully automated. For the remaining 3%, rather than just skipping them, we've added functionality which gathers the information a reviewer needs from the browser, and creates a list of what needs to be checked manually. Every test run produces a JSON report of what passed and failed in the automated tests, plus a Markdown checklist of what still needs verifying by a human.
+
+Finally, all the assistive technology testing on each component is manual. Even if a component passes all the automated and manual tests and is technically compliant, it doesn't guarantee that there won't be any quirks with a particular screen reader or browser. So, we manually check each component, and if something is broken, we fix it.
+
+## Why automated testing matters
+
+In [our strategy work with large organisations](https://tetralogical.com/blog/2026/09/14/sustainable-accessibility-compliance-capability-culture/), we often find they struggle with [sustainable accessibility](https://tetralogical.com/blog/2021/01/07/sustainable-accessibility/). It's common for organisations to pay for an assessment, and then fix the issues. But, a few releases later, everything has quietly regressed, and nobody notices until a customer complains, or they pay for another accessibility assessment, which can get expensive.
+
+Having automated tests breaks this cycle. You can plug them into your continuous integration (CI) pipeline, and have the tests run against every pull request, so you find out quickly when something is broken.
+
+Here's why we think automated tests are so valuable:
+
+- **Immediate feedback**: a developer can run all the tests on their own device in about 30 seconds, and know straight away if they've broken something
+- **Regression protection**: every pull request runs all the tests as part of CI, so anybody reviewing your code can quickly check for regressions
+- **Shared language**: the scenarios are written in plain English, so accessibility requirements stop being technical, and become acceptance criteria the whole team can read
+- **Traceability**: Each scenario is tagged with a success criterion and conformance level, so it's easy to run a subset of tests, or search to see what's covered
+- **Coding standards**: Linting rules and CI checks are built in, so regardless of who writes the code, it should always feel familiar
+- **More time to spend on usability**: Because the mechanical checks are automated, people can spend more time on real-world testing, rather than inspecting the Document Object Model (DOM) for the hundredth time to see if a button is labelled
+
+## How the library is maintained
+
+We've published the [Accessible Components Library](https://tetralogical.com/resources/accessible-components-library/) in its own repository on GitHub, and in the [resources](https://tetralogical.com/resources) section on our website.
+
+However, the cool part is that our website pulls all the documentation and tests directly from GitHub, so there's a single source of truth. The two can't drift apart or end up out of sync. So, if we want to add a new component to our website, we have to publish it to the repository first. This means you get it too, along with any tests and documentation that go with it.
+
+We'll be releasing more components in the coming months. We've released a small set for now, so we can gather feedback and iron out any teething problems. So, make sure to star the repository to get any updates when they land.
+
+## Try it yourself
+
+We've released the library under the [ISC licence](https://github.com/TetraLogical/accessible-components-library/blob/main/LICENSE), so you're free to use, copy, modify, or share any of the code and documentation, as long as you don't remove the copyright notice.
+
+If you want to run the tests, the [README](https://github.com/TetraLogical/accessible-components-library/tree/main) in the repository explains how to install and run the tests.
+
+If you want to fork it and expand it yourself, the [development guide](https://github.com/TetraLogical/accessible-components-library/blob/main/DEVELOPMENT.md) explains how the repository is put together, and how you can add your own components and tests.
+
+If you spot a bug, or have ideas and opinions, please [open an issue on GitHub](https://github.com/TetraLogical/accessible-components-library/issues).
+
+We're not accepting pull requests at the moment, as each component needs a full set of requirements, tests, and assistive technology checks, which we need to keep in sync with the code. And, because these are the components we use in our own work, we're keeping things opinionated and in-house, at least for now.
+
+## Thank you
+
+It might come as no surprise that this is a lot of work. And, while my name is on this blog post, and on the deployment commit of version 1.0.0, this project has been a labour of love for several TetraLogical colleagues, both past and present including:
+
+## Next steps
+
+Browse the [Accessible Components Library](https://tetralogical.com/resources/accessible-components-library/), or find out how our [Consultancy](https://tetralogical.com/services/consultancy/) and [Training](https://tetralogical.com/services/training/) services can help your team build accessibility testing into the way you work.

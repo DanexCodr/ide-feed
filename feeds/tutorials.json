@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-28T22:19:55Z",
+  "updated": "2026-10-29T04:51:27Z",
   "items": [
     {
       "id": "devto-4858196",
@@ -266,27 +266,39 @@
       "color": "#3B49DF"
     },
     {
+      "id": "devto-4919175",
+      "title": "Python 3.14's concurrent.interpreters module turns a 3.6-second GIL bottleneck into 0.9 seconds",
+      "desc": "By Alex Georgiev | 8 min read",
+      "tag": "tutorial",
+      "published": "2026-10-26T11:00:00Z",
+      "order": 23,
+      "url": "https://dev.to/alexgeorgiev17/python-314s-concurrentinterpreters-module-turns-a-36-second-gil-bottleneck-into-09-seconds-219",
+      "image": "https://media2.dev.to/dynamic/image/width=1200,height=627,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fuedye7tw0if5gejxoawi.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAARACADASIAAhEBAxEB/8QAGAABAQEBAQAAAAAAAAAAAAAAAAECAwT/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAH2TYzdw6AQP//EABsQAAMAAgMAAAAAAAAAAAAAAAABAhESIDJC/9oACAEBAAEFAnKMSYgUwPtqao9cP//EABQRAQAAAAAAAAAAAAAAAAAAACD/2gAIAQMBAT8BH//EABQRAQAAAAAAAAAAAAAAAAAAACD/2gAIAQIBAT8BH//EAB0QAAICAQUAAAAAAAAAAAAAAAAyAZEQIDGBoeH/2gAIAQEABj8CWKEihOhIrHhsLzp//8QAHhAAAgICAgMAAAAAAAAAAAAAAAERITFhIEGRwfH/2gAIAQEAAT8hRdHusOoWPYEnB4zCL/BpeCElS6TTj//aAAwDAQACAAMAAAAQQ4Ac/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAwEBPxAf/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAgEBPxAf/8QAIRAAAgEDAwUAAAAAAAAAAAAAAREAITFhIEFRcZGx0fH/2gAIAQEAAT8QWUVn4gvCOBXAT1oRSMhEfC0F0O5gZVDrD4aBMuwBDGn/2Q==",
+      "color": "#3B49DF"
+    },
+    {
       "id": "devto-4931256",
       "title": "From Code to Culture: Building 101 Indian Monuments in 3D",
       "desc": "By amananandrai | 36 min read",
       "tag": "tutorial",
       "published": "2026-10-28T00:39:09Z",
-      "order": 23,
+      "order": 24,
       "url": "https://dev.to/amananandrai/101-indian-monuments-modelled-in-the-browser-g4f",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Ff5wouh2oemeu0fx5dto3.jpg",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAAEE/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEAMQAAAB3ywA/8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQABBQIP/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAGBAAAgMAAAAAAAAAAAAAAAAAAAEQIEH/2gAIAQEAAT8hQ5W0/9oADAMBAAIAAwAAABARz//EABURAQEAAAAAAAAAAAAAAAAAAAAB/9oACAEDAQE/EFf/xAAVEQEBAAAAAAAAAAAAAAAAAAAAAf/aAAgBAgEBPxBH/8QAGxABAQACAwEAAAAAAAAAAAAAAQARMRAhQXH/2gAIAQEAAT8QQ5lguw84eSOvkai//9k=",
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4919175",
-      "title": "Python 3.14's concurrent.interpreters module turns a 3.6-second GIL bottleneck into 0.9 seconds",
-      "desc": "By Alex Georgiev | 8 min read",
+      "id": "devto-4921112",
+      "title": "Your secrets don't need a git commit to leak into an AI tool",
+      "desc": "By Dimitris Kyrkos  | 3 min read",
       "tag": "tutorial",
-      "published": "2026-10-26T11:00:00Z",
-      "order": 24,
-      "url": "https://dev.to/alexgeorgiev17/python-314s-concurrentinterpreters-module-turns-a-36-second-gil-bottleneck-into-09-seconds-219",
-      "image": "https://media2.dev.to/dynamic/image/width=1200,height=627,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fuedye7tw0if5gejxoawi.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAARACADASIAAhEBAxEB/8QAGAABAQEBAQAAAAAAAAAAAAAAAAECAwT/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAH2TYzdw6AQP//EABsQAAMAAgMAAAAAAAAAAAAAAAABAhESIDJC/9oACAEBAAEFAnKMSYgUwPtqao9cP//EABQRAQAAAAAAAAAAAAAAAAAAACD/2gAIAQMBAT8BH//EABQRAQAAAAAAAAAAAAAAAAAAACD/2gAIAQIBAT8BH//EAB0QAAICAQUAAAAAAAAAAAAAAAAyAZEQIDGBoeH/2gAIAQEABj8CWKEihOhIrHhsLzp//8QAHhAAAgICAgMAAAAAAAAAAAAAAAERITFhIEGRwfH/2gAIAQEAAT8hRdHusOoWPYEnB4zCL/BpeCElS6TTj//aAAwDAQACAAMAAAAQQ4Ac/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAwEBPxAf/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAgEBPxAf/8QAIRAAAgEDAwUAAAAAAAAAAAAAAREAITFhIEFRcZGx0fH/2gAIAQEAAT8QWUVn4gvCOBXAT1oRSMhEfC0F0O5gZVDrD4aBMuwBDGn/2Q==",
+      "published": "2026-10-26T10:47:57Z",
+      "order": 25,
+      "url": "https://dev.to/cyclopt_dimitrisk/your-secrets-dont-need-a-git-commit-to-leak-into-an-ai-tool-be2",
+      "image": "https://media2.dev.to/dynamic/image/width=1200,height=627,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fxt2i8uqhs43rkydwpuhy.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAARACADASIAAhEBAxEB/8QAGAABAQEBAQAAAAAAAAAAAAAAAAIDAQT/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAH2TrRhW0lgcD//xAAaEAEAAwADAAAAAAAAAAAAAAABAAIiEBEg/9oACAEBAAEFAkqOZmBVjDjvXj//xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAEDAQE/AR//xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAECAQE/AR//xAAaEAADAQADAAAAAAAAAAAAAAAAAjIRECBB/9oACAEBAAY/ApUlCUJU95zOv//EAB0QAAIBBAMAAAAAAAAAAAAAAAARIQEQUcEgYYH/2gAIAQEAAT8hTBRF3DXJROhhPtsgk3x//9oADAMBAAIAAwAAABAxwBz/xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAEDAQE/EB//xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAECAQE/EB//xAAdEAEAAQQDAQAAAAAAAAAAAAABEQAhMaEQIGHB/9oACAEBAAE/EMFYSyAmqF3XLaogZjZLW1T6M0TAH5TrRMhkVIBFhlDPCwXzwnnX/9k=",
       "color": "#3B49DF"
     },
     {
@@ -295,10 +307,22 @@
       "desc": "By Ken W Alger | 8 min read",
       "tag": "tutorial",
       "published": "2026-10-20T13:46:00Z",
-      "order": 25,
+      "order": 26,
       "url": "https://dev.to/kenwalger/tuesday-isnt-a-valid-state-transition-16ln",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Flhlmlfevv0rnolpw8kf7.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAgABA//EABYBAQEBAAAAAAAAAAAAAAAAAAABAv/aAAwDAQACEAMQAAABREddFif/xAAbEAACAwADAAAAAAAAAAAAAAABAgAREhAhMf/aAAgBAQABBQIu17admaoHlvP/xAAVEQEBAAAAAAAAAAAAAAAAAAAQEf/aAAgBAwEBPwGn/8QAFREBAQAAAAAAAAAAAAAAAAAAEBH/2gAIAQIBAT8Bh//EABYQAAMAAAAAAAAAAAAAAAAAABAgQf/aAAgBAQAGPwI1f//EABoQAQACAwEAAAAAAAAAAAAAAAEAEBEhMXH/2gAIAQEAAT8hIjU8YqZWPRGzlop//9oADAMBAAIAAwAAABAwn//EABcRAAMBAAAAAAAAAAAAAAAAAAABIRH/2gAIAQMBAT8Q0VU//8QAGBEBAAMBAAAAAAAAAAAAAAAAAQARITH/2gAIAQIBAT8QqHJY5P/EABsQAQEBAAMBAQAAAAAAAAAAAAERACExUUFx/9oACAEBAAE/EBB0fphkLP5vNKcE0ZSbFHJZFXtxw5OFrx3/2Q==",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4929802",
+      "title": "Are You a Python Developer or a Python Expert? 7 Tests I Failed Building 3 Desktop Apps",
+      "desc": "By Akhouri Anmol Kumar | 6 min read",
+      "tag": "tutorial",
+      "published": "2026-10-28T10:13:29Z",
+      "order": 27,
+      "url": "https://dev.to/akhourianmolkumar/are-you-a-python-developer-or-a-python-expert-7-tests-i-failed-building-3-desktop-apps-2fp4",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fz79ftelq3gss34zn235x.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAAECAwT/xAAVAQEBAAAAAAAAAAAAAAAAAAABAv/aAAwDAQACEAMQAAABy1iRMnL/AP/EABgQAQEBAQEAAAAAAAAAAAAAAAEAEBEh/9oACAEBAAEFAvJ3rKxn/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFREBAQAAAAAAAAAAAAAAAAAAABH/2gAIAQIBAT8Bqv/EABQQAQAAAAAAAAAAAAAAAAAAADD/2gAIAQEABj8CD//EABsQAAIDAAMAAAAAAAAAAAAAAAABESExEEFR/9oACAEBAAE/IVW5F8wSIErsa18IP//aAAwDAQACAAMAAAAQyi//xAAWEQEBAQAAAAAAAAAAAAAAAAAAARH/2gAIAQMBAT8QkY//xAAVEQEBAAAAAAAAAAAAAAAAAAABAP/aAAgBAgEBPxBiL//EABsQAQEBAQADAQAAAAAAAAAAAAERACEQUWGh/9oACAEBAAE/ECi9J2JjKq/SL+YkbpswgC4Q7qoiel8A29u//9k=",
       "color": "#3B49DF"
     },
     {
@@ -311,18 +335,6 @@
       "url": "https://dev.to/cyclopt_dimitrisk/im-93-confident-is-a-string-not-a-probability-2ndc",
       "image": "https://media2.dev.to/dynamic/image/width=1200,height=627,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fpkjgl413cn54sogjhsbv.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAARACADASIAAhEBAxEB/8QAGAABAAMBAAAAAAAAAAAAAAAAAAECAwT/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAHti4ztYaAQH//EABoQAAMBAQEBAAAAAAAAAAAAAAABAhIRICH/2gAIAQEAAQUCzJyTkmZGkZRiRfK8f//EABQRAQAAAAAAAAAAAAAAAAAAACD/2gAIAQMBAT8BH//EABQRAQAAAAAAAAAAAAAAAAAAACD/2gAIAQIBAT8BH//EABwQAAIBBQEAAAAAAAAAAAAAAAABMREyM5GhIP/aAAgBAQAGPwKxaMfDHwsWiCCCiXn/xAAeEAEAAgEEAwAAAAAAAAAAAAABABExECAh8EGBof/aAAgBAQABPyFFzek7BOkQVr4Ih5vDQAFxpM+Nv//aAAwDAQACAAMAAAAQo4Ac/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAwEBPxAf/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAgEBPxAf/8QAHxABAQACAAcBAAAAAAAAAAAAAREAISAxUWFxgZGh/9oACAEBAAE/EDBB1MBSpNZb8WkLuwx2o5LiXbISrdfcU5l9uQtUJ/Hnh//Z",
-      "color": "#3B49DF"
-    },
-    {
-      "id": "devto-4846874",
-      "title": "The Hidden Cost of AI-Generated PRs: Why Most Teams Are Missing Silent Breakages",
-      "desc": "By 𝗝𝗼𝗵𝗻 | 5 min read",
-      "tag": "tutorial",
-      "published": "2026-10-20T14:30:00Z",
-      "order": 27,
-      "url": "https://dev.to/johnnylemonny/the-hidden-cost-of-ai-generated-prs-why-most-teams-are-missing-silent-breakages-3g46",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F8q51f4enq0bh0honolcy.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAQIAAwT/xAAVAQEBAAAAAAAAAAAAAAAAAAAAAf/aAAwDAQACEAMQAAAB0CyQhcr/AP/EABgQAAMBAQAAAAAAAAAAAAAAAAAQESEB/9oACAEBAAEFAi7zXCL/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAXEAEAAwAAAAAAAAAAAAAAAAAAAREg/9oACAEBAAY/AlJ1/8QAGBABAQEBAQAAAAAAAAAAAAAAAQARIUH/2gAIAQEAAT8hjzS1xwksiALC/9oADAMBAAIAAwAAABCbz//EABYRAQEBAAAAAAAAAAAAAAAAAAABIf/aAAgBAwEBPxDVr//EABURAQEAAAAAAAAAAAAAAAAAAAEQ/9oACAECAQE/EGf/xAAcEAACAgMBAQAAAAAAAAAAAAABEQBhMUGBEFH/2gAIAQEAAT8QAgTeTczpiBvfhUrkCC9/VBKAyX2UT//Z",
       "color": "#3B49DF"
     }
   ]

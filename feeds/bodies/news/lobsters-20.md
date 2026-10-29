@@ -1,31 +1,77 @@
-A while ago, I was working for a customer (who shall remain unnamed here, but let’s call it *Intel*) doing system simulation software. I worked on this project for a year or so. I ran full x86 systems completely simulated. During that time I was chasing some nasty bugs in the simulated usb-disk device that caused my Windows boot to end up in a blue screen.
+[Goodhart’s
+law](https://en.wikipedia.org/wiki/Goodhart%27s_law), that any measurable target stops being useful when people start
+optimizing for it, very much holds in database benchmarking. That is not
+new, of course. Famously, [TPC-D](https://www.tpc.org/tpcd/default5.asp) got retired when
+people optimized so much for it that the query runtimes converged
+towards zero due to excessive caching. [TPC-H](https://www.tpc.org/tpch/default5.asp) fixed that by
+declaring itself to be an ad-hoc benchmark, and explicitly forbidding
+things like exploiting knowledge about the workload or caching results
+(and a number of other optimizations).
 
-![](https://daniel.haxx.se/blog/wp-content/uploads/2011/09/BUGCODE_USB_DRIVER.png)
+We now see the same problem with the [ClickBench](https://benchmark.clickhouse.com/) benchmark,
+heavily accelerated by today’s use of AI code generation. If you tell an
+AI to make the queries faster, it will make the queries faster,
+regardless of whether this is a generally plausible approach or not. For
+example, the pgrust implementation performs group-by aggregations on
+string columns purely on the hash value, ignoring the long string
+content. That is a great performance boost, of course, and works for
+this benchmark, but can produce wrong results. Is it faster? Yes. Is it
+a plausible optimization? Probably not. And it does many other things:
+For example, ClickBench repeats certain predicates across queries, and
+thus pgrust caches the predicate, completely eliminating the query cost
+the second time. Or for query Q17, which returns tuples grouped by
+userid, it makes use of the fact that a) tuples are roughly clustered by
+userid, and b) the query specifies a limit clause without order by. Thus
+any userid will do, and it never reads most of the data. A human would
+not do these tiny micro-optimizations, because they are unlikely to be
+relevant in general use cases, but an AI can of course look at each
+query in detail and tune for it.
 
-I struggled to figure out why Windows 7 would write 0xABADBABE to EHCI register index 0x1C – which is a reserved register – during boot some 10 milliseconds before the blue screen appears, and I was convinced that it was due to a flaw in the EHCI simulation code and thus was the first indication of the failure. If I didn’t have any simulated usb-disk inserted that write wouldn’t occur, and similarly that write would occur even if I inserted the usb-disk much later – like even after Windows 7 had started and I was passed the login screen.
+Part of the problem is, of course, ClickBench itself. The benchmark
+is not well specified in what is permitted and what is not, there is no
+update stream, the queries are very simple, share predicates, are
+underspecified, etc. But the fundamental problem is independent of that
+concrete benchmark: The moment we start aggressively optimizing for a
+specific benchmark, the benchmark stops being very useful. Historically,
+that pressure was reduced a bit by the requirement that systems be
+generally useful. That is, they did not just want to perform well in
+benchmarks but also to be useful for their customers. That is, of
+course, not a concern for vibe-coded execution engines.
 
-An interesting exercise is to grep for this (little-endian so twist it around!) 32 bit pattern in a freshly installed windows 7 file system – I found it on no less than 16 places in a 20GB file system. This [bgrep](https://github.com/tmbinc/bgrep) utility was handy for this.
+It is not clear what to do about it. Our [SQLStorm](https://github.com/SQL-Storm/SQLStorm) proposal tried
+to address this by having tens of thousands of queries, which makes
+overfitting harder. No human would fine-tune their system to such a huge
+workload. But with AI tools we could even investigate ten thousand
+queries in detail if needed, so that is not a real defense.
 
-To properly disassemble that code, I hacked up a quick [bcut](https://github.com/bagder/bcut) tool so that I could cut out a suitable piece of the 20GB file to pass to objdump, as objdump very inconveniently does *not* offer an option to skip an arbitrary amount from the beginning of a file! Also, as it is not really possible to easily tell on which byte x86 code starts at, I had to be able to fine-adjust the beginning of the cut so that objdump would show correctly (this is x86-64):
+I think that to be meaningful, a benchmark has to a) like TPC-H, be
+ad-hoc, and forbid exploiting prior knowledge and any form of
+intermediate result caching. If we don’t do that, execution times
+converge towards zero. And b) the benchmark has to include some form of
+update stream, as otherwise overly aggressive read-only or read-mostly
+systems will always outperform systems that offer full transactional
+support. And c) the benchmark has to be truly ad-hoc, in the sense that
+the systems tested have to be older than the benchmark. One way to fight
+Goodhart’s law would be to (automatically) come up with a new benchmark
+from time to time, and then measure the systems that existed before the
+benchmark. The caching/pre-computation problem still remains, of course,
+but at least that would prevent the over-aggressive adjustment to just
+one specific benchmark.
 
-```
-      callq  *0x9061(%rip)        # 0x9080
-      mov    0x40(%rsi),%r11d
-      mov    %rsi,0x58(%rdi)
-      mov    %r11d,(%rdi)
-      mov    0x40(%rsi),%eax
-      mov    %rsi,0x60(%rdi)
-      mov    %eax,0x4(%rdi)
-      mov    0xa0(%r13),%rax
-      movl   $0xabadbabe,0x1c(%rax)
-```
+Interestingly, the machine learning community has struggled with
+exactly the same problem for years, and we should probably borrow some
+of their ideas. Kaggle competitions, for example, rank submissions on a
+hidden test set that participants never see, which makes overfitting on
+the public data pointless. Similarly, benchmarks like [LiveBench](https://livebench.ai/) regularly release new
+questions to make sure that models cannot have seen them during
+training. For database benchmarking that could mean keeping the actual
+benchmark queries secret and only publishing a representative sample for
+development, or, even better, generating a fresh workload for every
+evaluation round. SQLStorm already uses generated queries, so producing
+a new query set from time to time would be fairly easy. We would
+probably want a more generic approach (higher variety in schemas, update
+streams, transactions, etc.), but that seems to be a direction that
+would help keep benchmarks meaningful.
 
-But then, reading that code never gave me enough clues to figure out why the offending MOV is made.
-
-Thanks to a friend with a good eye and useful resources, I finally learned that Windows does this write on purpose to offer some kind of break-point for a debugger. It always does this (assuming a USB device or something is attached)!
-
-A red herring as far as I’m concerned. Nothing to bother about, just MOV on! I simply made the simulation accept this.
-
-Oh. You want to know what happened to the blue screen? It had nothing at all to do with the bad babe constant, but turned out to be because the ehci driver finds out that some USB data structs the controller fills in get pointers that point to memory outside of the area the driver has mapped for this purpose. In other words it was a really hard to track down bug in the simulated device.
-
-1. ![](https://secure.gravatar.com/avatar/55052f2a9816ed3a4bae16f56948c91f46aec27b4486353bcd8c1b7a6794358d?s=68&d=monsterid&r=g) **José Antonio G. de O.** says: .comment-author [December 1, 2011 at 22:13](https://daniel.haxx.se/blog/2011/10/28/whos-0xabadbabe-and-why/#comment-8848) .comment-metadata .comment-meta It’s typically the kind of information I really like to read ! Once, I used myself such so-called magic number 0xA340B747 to authenticate my genuine 3″1/2 floppy disks in a stealth way 🙂 By the time, the competition between the respective flagships of Airbus and Boeing inspired me ! By the way, I didn’t found any reference in Wikipedia of this specific use of 0xabadbabe in the below articles : [http://en.wikipedia.org/wiki/Hexspeak](http://en.wikipedia.org/wiki/Hexspeak) [http://en.wikipedia.org/wiki/Magic_number_(programming)](http://en.wikipedia.org/wiki/Magic_number_(programming)) Who knows… Maybe it could help someone, someday ? 😉 .comment-content .comment-body
+1. Andreas Kipf[October 27, 2026 at 12:20 PM](http://databasearchitects.blogspot.com/2026/10/the-benchmarking-crisis.html?showComment=1793100025032&m=1#c7594163995220893488)Great thoughts, Thomas. I completely agree with your point on overfitting. However, I'm not convinced that completely avoiding repetitions and disabling caching reflects real-world workloads, even if it creates a cleaner benchmark. Production traces from Redshift and Snowflake show heavy (sub-)query repetition. We ran into this ourselves and created Redbench, which replays cloud workload traces over TPC-H/DS or SQLStorm while preserving realistic query repetitions and table invalidations (updates): https://github.com/DataManagementLab/RedbenchReply[Delete](https://www.blogger.com/comment/delete/8891884956165580080/7594163995220893488)Replies![](http://www.blogger.com/img/blogger_logo_round_35.png)[Thomas Neumann](https://www.blogger.com/profile/15209393663505917383)[October 27, 2026 at 12:28 PM](http://databasearchitects.blogspot.com/2026/10/the-benchmarking-crisis.html?showComment=1793100482799&m=1#c5889371241973898906)The problem is that if you do allow result caching you no longer measure the engine performance. Of course you are right that many real-world workloads benefit from caching, but it distorts the measurement in a hard to control manner. And it makes comparisons between different "flavors" of databases difficult: A system that wants to supports high update rates probably cannot cache as aggressively, even if it wants to. While a pure analytical system can be much more aggressive with result reuse. Forbidding caching is the easier way out. Allowing caching but imposes concurrent changes might be okay, too, but that would probably push everybody towards incremental view maintenance.[Delete](https://www.blogger.com/comment/delete/8891884956165580080/5889371241973898906)RepliesReplyReply
+2. Michael Malis[October 27, 2026 at 9:52 PM](http://databasearchitects.blogspot.com/2026/10/the-benchmarking-crisis.html?showComment=1793134351221&m=1#c8511178192432430739)Hi Thomas, I'm the creator of pgrust. First of all I want to say I'm a huge fan of your work. I've found the research you and your team have published to be incredible. When I'm doing research in an area, the first thing I'll look for is if you have published something on the topic. Your research has directly inspired pgrust's JIT compiler design as well as our morsel based scheduler. One thing I would like to clarify. When we were implementing optimizations for pgrust, if we were uncertain if the optimization was too specialized to the benchmark, the rule of thumb we would use was "does another db implement this optimization". All three of the optimizations you mention are things ClickHouse does today: using a hash to compare strings, keeping a predicate cache, and walking granules. In particular, we made sure to use a 128-bit cryptographic hash with a salt so the probability of a collision is ~0. For benchmarks, I think we'll end up moving in a direction that looks similar to how LLMs are benchmarked today. Queries behind the benchmark are not visible. But in a world where things like Bespoke OLAP are possible, having the query set be visible ahead of time may not be a bad thingReply[Delete](https://www.blogger.com/comment/delete/8891884956165580080/8511178192432430739)Replies![](http://www.blogger.com/img/blogger_logo_round_35.png)[Thomas Neumann](https://www.blogger.com/profile/15209393663505917383)[October 28, 2026 at 5:57 AM](http://databasearchitects.blogspot.com/2026/10/the-benchmarking-crisis.html?showComment=1793163424003&m=1#c3961334139816292496)You are absolutely right that pgrust is not the only one that has fitted extremely well to the benchmark, I should have made that clear. ClickHouse does it, too. And to a certain degree our own system is also guilty. I tend to accept only changes that I consider correct and generally useful, but simply knowing that the benchmark does something influences your design. My PhD students wanted to pressure me into doing the group-by-hash, too, as it is very helpful for this benchmark. I have pushed back on that, as it risks wrong results. But if you absolutely want to maximize performance that is the right thing to do, of course. Coming back to my original point, I think we need more complex, more diverse, and simply changing benchmarks, potentially with hidden queries. Because that prevents optimizations that help only for a specific scenario and potentially hurt in others.[Delete](https://www.blogger.com/comment/delete/8891884956165580080/3961334139816292496)RepliesReplyMichael Malis[October 28, 2026 at 6:44 AM](http://databasearchitects.blogspot.com/2026/10/the-benchmarking-crisis.html?showComment=1793166261906&m=1#c2991558043186253251)I'm curious what you see the risk of the optimization is? Do you feel the same way about using a uuidv4 as a primary key? Incorrect results due to hardware issues are many, many orders of magnitude more likely than a 128-bit hash collision.[Delete](https://www.blogger.com/comment/delete/8891884956165580080/2991558043186253251)RepliesReply![](http://www.blogger.com/img/blogger_logo_round_35.png)[Michael Malis](https://www.blogger.com/profile/02134809885226229387)[October 28, 2026 at 6:58 AM](http://databasearchitects.blogspot.com/2026/10/the-benchmarking-crisis.html?showComment=1793167113324&m=1#c5331610435564375543)I believe Kafka also uses the same trick where it will use a 128-bit hash to deduplicate entries when compacting without looking at the underlying value[Delete](https://www.blogger.com/comment/delete/8891884956165580080/5331610435564375543)RepliesReply![](http://www.blogger.com/img/blogger_logo_round_35.png)[Thomas Neumann](https://www.blogger.com/profile/15209393663505917383)[October 28, 2026 at 7:22 AM](http://databasearchitects.blogspot.com/2026/10/the-benchmarking-crisis.html?showComment=1793168565559&m=1#c7286107463987120764)Collisions are unlikely, of course, but I feel that this is a violation of the user contract. The user has asked me to aggregate on a certain value, and if I do it on the hash instead I do not compute the same result, at least potentially. When the user explicitly asks for an uuid that is fine, then the choice is made by the user. (I would still check for primary key violations even in that case, though, historically there have been cases where the source of randomness in, e.g., VMs was not that random). And note that group by is even more dangerous than uuid because the strings in question are potentially user/attacker controlled. Thus, the likelyhood of collisions are potentially much higher than random. Sure, we can mitigate that with a randomized hash seed, but we are doing something dangerous and the user has not asked for it.[Delete](https://www.blogger.com/comment/delete/8891884956165580080/7286107463987120764)RepliesReplyReply
