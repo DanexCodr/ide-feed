@@ -1,140 +1,175 @@
-We are excited to announce the release of [Hoot](https://spritely.institute/hoot) 0.10.0!  Hoot
-is a Scheme to WebAssembly compiler backend for
-[Guile](https://gnu.org/software/guile), as well as a general purpose
-WebAssembly toolchain.  In other words, *Scheme in the browser!*
+I recently started writing C again for the first time since 2018, and handling errors has been an especially difficult adjustment coming from languages like Go and Zig that coddle me with their wonderful `defer` and `errdefer`. Then I read some [emails from John Carmack on inlined code](https://cbarrete.com/carmack.html) that gave me an epiphany on writing cleaner error handling code, and now I want to share it with the world.
 
-This release contains new features and bug fixes and since the [0.9.0
-release](https://spritely.institute/news/hoot-0-9-0-released.html) back in May.
+# But First Let’s Defer
 
-## Use Hoot in the upcoming Lisp Game Jam!
-
-On Friday (October 30th 2026), the [autumn edition of the Lisp Game
-Jam](https://itch.io/jam/autumn-lisp-game-jam-2026) will begin!  It's
-a 10-day long game jam where participants make games using their
-favorite flavor of Lisp.
-
-Does making a small web game in Scheme using Hoot sound appealing to
-you?  Well, then we have just the thing to get you started: the [Hoot
-game jam
-template!](https://codeberg.org/spritely/hoot-game-jam-template) This
-template project has everything you need to start making an HTML5 game
-with Hoot quickly.
-
-The template repository includes:
-
-- Bindings to the necessary web APIs to make an interactive game with HTML5 canvas
-- A Makefile for compiling, running a development web server, and generating a .zip bundle for uploading to itch.io
-- A very simple Breakout-like example game that demonstrates how to put all the pieces together
-
-For more inspiration, here are some games made with Hoot for past
-jams:
-
-Now, onto the release notes!
-
-## Compiler changes
-
-- Added module name to contextualize duplicate import errors.
-- Added support for library versioning for R6RS compatibility.
-- Fixed default version for define-module libraries.
-- Fixed locate-library not respecting configured load extensions. Previously, we were using Guile's load extension parameter instead of Hoot's own.
-
-## Runtime changes
-
-- Added %struct-ref and %struct-set! primitives for accessing record types defined using the interpreter.
-- Stopped raising errors when importing an undefined symbol in the runtime module system. Guile is lax about this so Hoot being strict caused compatibility issues.
-- Fixed optional argument parsing in primitive-eval.
-- Fixed keyword argument parsing for procedures with both optional and keyword arguments in primitive-eval.
-- Fixed error messages regarding runtime module registry to include the correct CLI flag: -fruntime-modules.
-
-## Scheme changes
-
-- Added partial implementation of SRFI-13: String Libraries. It's just a set of re-exports, very similar to Guile, but Guile's SRFI-13 module is not declarative and is thus rejected by Hoot's compiler.
-- Added partial implementation of SRFI-60: Integers as Bits.
-- Added define-macro, defmacro, delete, list->symbol, and symbol to (guile).
-- Exported define-syntax-parameter and syntax-parameterize, symbol-append, integer-length, and gensym from (guile).
-- Added list->bitvector and bitvector to (hoot bitvectors) and re-exported them in (guile).
-- Implemented get-bytevector-all in (rnrs io ports).
-- Made bytevector=? a publicly exported procedure from (hoot bytevectors) and (rnrs bytevectors).
-- Added define-syntax-parameter and syntax-parameterize primitives.
-- Improved (ice-9 exceptions) exports to more closely match Guile.
-- Added (rnrs) module.
-- Added (rnrs base) module.
-- Added (rnrs syntax-case) module.
-- Added (rnrs r5rs) module.
-- Added (rnrs hashtables) module.
-- Added (rnrs files) module.
-- Added (rnrs enums) module.
-- Added (rnrs exceptions) module.
-- Added (rnrs arithmetic fixnums) module.
-- Added (rnrs records inspection) module.
-- Added (rnrs records procedural) module.
-- Added (rnrs records syntactic) module.
-- Added (rnrs io simple) module.
-- Added (rnrs io ports) module.
-- Added port-has-position? to (hoot ports) for R6RS compatibility.
-- Added stubs for centered division to (hoot numbers) and a stub for integer-length to (hoot bitwise) for R6RS compatibility (eventually).
-- Rewrote (rnrs bytevectors) as an R6RS module with version (6).
-- Fixed number->string to round floating point decimal part to an even digit.
-- Fixed number->string for floating point numbers ±2^N, where 52 <= N <= 1023.
-- Fixed incorrect bytevector copy in number->string floating point conversion algorithm.
-- Fixed min/max macros not working when given zero arguments.
-- Fixed the parameters to the log procedure in (guile).
-- Fixed the implementation of negate in guile. It was doing entirely the wrong thing.
-
-## CLI changes
-
-- Port numbers are now validated to be exact integers in the range [1, 65535].
-- Actually complain about invalid option or unknown subcommand. Previously, the code that was supposed to do this was unreachable.
-- Add --experimental-wasm-exnref feature flag when running hoot compile --run=node for continued compatibility with supported NodeJS versions that don't have the new Wasm exnref feature enabled by default.
-- Fixed build-time disabling of hoot server. In past releases, the hoot CLI script would still attempt to load should-be-optional libraries that ./configure had already determined to be missing. Thanks to mcc for discovering this blunder.
-
-## Documentation changes
-
-- Improved instructions in "Building from source" section of the manual.
-- Dependencies are now mentioned in the "Advanced path" section of the README.
-- Updated project template README to say Guix is not required (though it's still the easiest option).
-
-## Browser compatibility
-
-- Compatible with Safari 26 or later.
-- Compatible with Firefox 121 or later.
-- Compatible with Chrome 119 or later.
-
-## Get Hoot
-
-Hoot is available in GNU Guix:
+I write Go all day at my dayjob, and error handling is pretty trivial. When there’s an error we wrap it and bubble it up, and let some top dog up the call stack figure out what they want to do with it. If there is resource cleanup involved, it’s made easy with `defer`:
 
 ```
-$ guix pull
-$ guix install guile guile-hoot
+type Doer interface {
+    MightError(int) error
+    Lock()
+    Unlock()
+}
+
+func SomeFunc(d Doer) error {
+    d.Lock()
+    defer d.Unlock()
+
+    if err := d.MightError(3); err != nil {
+        return errors.Wrap(err, "Doer.MightError()")
+    }
+
+    // the rest of this very important function has been hidden from you for esoteric reasons
+}
 ```
 
-Also, Hoot is now available in
-[Debian](https://tracker.debian.org/pkg/guile-hoot), though it will
-take awhile for this release to make it there.
+Sometimes there’s more complicated handling, but in 99% of scenarios it’s that simple because Go doesn’t have manual memory allocation and you don’t need to worry about cleaning it up when there’s an error.
 
-Otherwise, Hoot can be built from source via our release tarball.  See
-the [Hoot homepage](https://spritely.institute/hoot) for a download link and GPG signature.
+Zig on the other hand does require you to manually manage memory, which I find a little more difficult because I’m not experienced enough for it to be second nature like it is when I write Go. Here’s a snippet from my toy multiplexer that uses `errdefer`:
 
-Documentation for Hoot 0.10.0, including build instructions, can be
-found
-[here](https://spritely.institute/files/docs/guile-hoot/0.10.0/index.html).
+```
+fn init(allocator: std.mem.Allocator, env_map: *std.process.Environ.Map, cfg: Config) !Model {
+    const sh = env_map.get("SHELL") orelse "/bin/sh";
+    const shell_z = try std.fmt.allocPrintSentinel(allocator, "{s}", .{sh}, 0);
+    errdefer allocator.free(shell_z);
 
-## Get in touch
+    const posix_block = try env_map.createPosixBlock(allocator, .{});
+    errdefer posix_block.deinit(allocator);
 
-For bug reports, pull requests, or just to follow along with
-development, check out the [Hoot project on
-Codeberg](https://codeberg.org/spritely/hoot).
+    const tabs: []Tab = try allocator.alloc(Tab, cfg.commands.len);
+    errdefer allocator.free(tabs);
 
-If you build something cool with Hoot, let us know on our [community
-forum](https://community.spritely.institute)!
+    const pipes: []Pipe = try allocator.alloc(Pipe, cfg.commands.len);
+    errdefer allocator.free(pipes);
 
-Thanks to Z572, stdh, Walter Lewis, and Jelle Licht for their
-contributions to this release.
+    // all done with allocations (and errors)
+    errdefer comptime unreachable;
 
-Until next time, happy hooting! 🦉
+    // the rest of this function has been stolen by bilgerats
+}
+```
 
-## Thanks to our supporters
+I’m allocating memory for several types, and because any one of the allocations can fail I need to handle freeing up each succesful memory allocation that preceded the failure. Zig’s `errdefer` makes this easy, there’s no manual tracking of what needs to be freed at any point, because the deferred statements will execute in reverse order if the function returns an error. Also I’m following the [Reserve First](https://matklad.github.io/2025/08/16/reserve-first.html) pattern, which is where I learned `errdefer comptime unreachable` from.
 
-Your support makes our work possible!  If you like what we do, please
-consider [becoming a Spritely supporter today](https://spritely.institute/donate)!
+# This is the C Part
+
+Now, enter C. There’s no `defer` or `errdefer`. I’ve painted myself into a corner with some ugly code a few times because I’m so used to those tools that I don’t regularly plan ahead for what my error handling control flow will look like. Until recently I’ve been writing code that looks like this:
+
+```
+struct S {
+    int foo;
+};
+
+S** some_func(const char** paths, const size_t n) {
+    struct S** s = calloc(n, sizeof(S*));
+    if (s == NULL) {
+        return NULL;
+    }
+
+    for (int i = 0; i < n; i++) {
+        s[i] = malloc(sizeof(S));
+        if (s[i] == NULL) {
+            for (int j = 0; j < i; j++) {
+                free(s[j]);
+            }
+            free(s);
+
+            return NULL;
+        }
+
+        int fd = open(paths[i], O_RDONLY);
+        if (fd == -1) {
+            for (int j = 0; j <= i; j++) { // note the <= instead of <
+                free(s[j]);
+            }
+            free(s);
+
+            return NULL;
+        }
+
+        struct stat buffer;
+        if (fstat(fd, &buffer) == -1) {
+            for (int j = 0; j <= i; j++) {
+                free(s[j]);
+            }
+            free(s);
+            close(fd);
+
+            return NULL;
+        }
+        *(s[i]) = (struct S){ .foo = buffer.st_size };
+
+        close(fd);
+    }
+
+    return s;
+}
+```
+
+Do you see how resource cleanup is slightly different across each error handling if-block? Yuck! Yeah yeah yeah, I know it’s a terrible, contrived example, and nobody would ever write C like this. Except me like 3 weeks ago. I knew something was wrong when I wrote code like this, but I was hopelessly `defer`-brained in a world where `defer` hadn’t been born yet. Some classmates had mentioned using `goto` but I couldn’t really wrap my head around it. (We can’t share code with eachother otherwise the university would have us killed).
+
+Then when I read those [John Carmack emails](https://cbarrete.com/carmack.html) something clicked. Carmack doesn’t mention `goto` explicitly, but these two thoughts in particular were the special sauce I needed to help me understand (emphasis mine):
+
+A quote from Henry Spencer describing control flow in some flight software:
+
+> It disallowed both subroutine calls and backward branches, except for the one at the bottom of the main loop. **Control flow went forward only**. Sometimes one piece of code had to leave a note for a later piece telling it what to do, but this worked out well for testing: all data was allocated statically, and monitoring those variables gave a clear picture of most everything the software was doing.
+
+And Carmack on moving code out of large conditional blocks (emphasis mine):
+
+> Enclosing pages of code inside a conditional or loop statement does have readability and awareness drawbacks, so leaving that code in a separate function may still be justified, but in some cases it is still possible to **move the code to another place where its execution wouldn’t be conditional**, or just **execute it at all times** and inhibit the results in some way with a very small conditional block.
+
+Ohmygodigetitnow. Instead of having multiple exit points scattered throughout my function, each performing their own resource cleanup, I can put all resource cleanup behind a single exit point at the very end of the function. Guarding cleanup behind the default return, only reachable using a `goto`, is kinda like a psuedo-`errdefer`. Hooray! Hooray for John Carmack and Henry Spencer!! Now let’s rewrite the function above using this brand new discovery:
+
+```
+struct S {
+    int foo;
+};
+
+S** some_func(const char** paths, const size_t n) {
+    struct S** s = calloc(n, sizeof(S*));
+    if (s == NULL) {
+        return NULL;
+    }
+
+    for (int i = 0; i < n; i++) {
+        s[i] = NULL;
+    }
+
+    for (int i = 0; i < n; i++) {
+        int fd = open(paths[i], O_RDONLY);
+        if (fd == -1) {
+            goto free_mem;
+        }
+
+        struct stat buffer;
+        int fstat_ok = fstat(fd, &buffer);
+        close(fd);
+        if (fstat_ok == -1) {
+            goto free_mem;
+        }
+
+        s[i] = malloc(sizeof(S));
+        if (s[i] == NULL) {
+            goto free_mem;
+        }
+
+        *(s[i]) = (struct S){ .foo = buffer.st_size };
+    }
+
+    return s;
+
+free_mem:
+    for (int i = 0; i < n; i++) {
+        free(s[i]);
+    }
+    free(s);
+
+    return NULL;
+}
+```
+
+I’d say that’s much simpler to read! And it should be less prone to bugs from expanded responsibilities over time, because there’s only one spot where resource cleanup needs to be modified. You could also use multiple labels to split cleanup into sections, if you only wanted to cleanup a subset of resources. I’m sure this is an obvious concept to most seasoned C programmers, but I’m real happy I learned something new that’ll help me write better code.
+
+**Update**: after sharing this post on IRC, I got some helpful feedback about using `calloc` instead of `malloc` when doing allocations that might overflow (i.e. `n * sizeof(T)`), and some restructuring of the for loop in the second C example that makes the code even simpler.
+
+This pattern is also mentioned in the [Linux kernel coding style guide](https://www.kernel.org/doc/html/v7.3/process/coding-style.html#centralized-exiting-of-functions).

@@ -1,207 +1,310 @@
-In async Rust the `Future::poll` method is called to progress the state of the future, which reports its progress via the `Poll` enum. This enum contains two variants:
+The Nim Team is happy to announce version 2.4.0, our new stable release.
 
-- Poll::Pending: means that the future is not yet ready to produce a value, and poll will need to be invoked again later.
-- Poll::Ready(T): means the future is ready to yield some value T.
+After a way-too-long period of development, Nim 2.4 has finally become a reality. This is a major update
+shipping major new features:
 
-Futures are called that because they will eventually resolve to a value, *in the future*. But that’s value singular, not values plural. The stdlib documentation does not clearly make this guarantee (though it should), and the ecosystem doesn’t always implement this correctly (though it also should). But the intent is clear: one future should only ever yield one value.
+1. --strings:sso for improved string processing efficiency.
+2. --ic:on for parallel, incremental rebuilds.
+3. --mm:yrc, a new cycle collection algorithm that supports cycles spanning multiple threads.
+4. More convenient sum types.
+5. Cyclic module dependencies: still not encouraged, but fair game once you declare them with {.cyclic.}.
 
-Now what should happen when you try and call `Future::poll` again after it has already yielded a value? The `Future` trait docs have the following to say:
+If you’re still on Nim 1.6, take a look at the [version 2.0 release article](https://nim-lang.org/blog/2023/08/01/nim-v20-released.html) to see all the features you’re missing.
+If you’ve been using Nim 2.0, the [version 2.2 release article](https://nim-lang.org/blog/2024/10/02/nim-220-2010.html) shows the improvements available in Nim 2.2.
+If you want to stay on Nim 2.2 for now, we also released [version 2.2.14](https://nim-lang.org/blog/2026/10/28/nim-2214.html) today, a patch release with many bugfixes and security fixes.
 
-> Once a future has completed (returned `Ready` from `poll`), calling its `poll` method again may panic, block forever, or cause other kinds of problems; the `Future` trait places no requirements on the effects of such a call. However, as the `poll` method is not marked `unsafe`, Rust’s usual rules apply […].
+## Installing Nim 2.4.0
 
-The docs state here that if you call `Future::poll` again after it’s yielded
-`Poll::Ready`, that’s unsupported and there aren’t many limits on the future’s
-behavior. The most common behavior here is to `panic!`, which is the behavior
-for all `async` blocks and functions. Which is a shame, since being able to call
-`Future::poll` again after it’s yielded `Ready` before is actually quite useful
-and something I frequently wish I was able to do.
+Check out if the package manager of your OS already ships version 2.4.0 or
+install it as described [here](https://nim-lang.org/install.html).
 
-## MaybeDone
+If you have installed a previous version of Nim using `choosenim`,
+getting Nim 2.4.0 is as easy as:
 
-Not everyone writing Rust writes async Rust, and not everyone writing async Rust will write async concurrency primitives. But those who do will be familiar with the `MaybeDone` type. It’s a simple wrapper around some `Future` whose only job it is to either hold a `Future` or if it's completed hold its `Future::Output`. While not simple, assuming you're familiar enough with async Rust it should be easy enough to follow:
-
-```rust
-use pin_project::pin_project;
-use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll};
-
-#[pin_project(project = DoneState)]
-enum MaybeDone<F: Future> {
-    Future(#[pin] F),
-    Done(Option<F::Output>),
-}
-
-impl<F: Future> MaybeDone<F> {
-    pub fn take(self: Pin<&mut Self>) -> Option<F::Output> {
-        match self.project() {
-            DoneState::Done(output) => output.take(),
-            DoneState::Future(_) => None,
-        }
-    }
-}
-
-impl<F: Future> Future for MaybeDone<F> {
-    type Output = ();
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
-        match self.as_mut().project() {
-            DoneState::Future(future) => match future.poll(cx) {
-                Poll::Pending => Poll::Pending,
-                Poll::Ready(output) => {
-                    self.set(Self::Done(Some(output)));
-                    Poll::Ready(())
-                }
-            },
-            DoneState::Done(_) => Poll::Ready(()),
-        }
-    }
-}
+```
+$ choosenim update self
+$ choosenim update stable
 ```
 
-In essence what this provides is a slot that holds either a future, or its final resolved value. And in doing so it also performs another trick: it replaces the output of the future with the unit type and adds a new method `take` to actually extract the value of the future.
+**NOTE:** We recommend that you install and use the latest version of `choosenim`, v0.8.16, available in [our choosenim repo](https://github.com/nim-lang/choosenim).
 
-When attempting to call `Future::poll` again after it has returned `Poll::Ready(())` once before, it will always continue to return `Poll::Ready(())`. And if you call the `take` method again after having received `Some(Future::Output)` before, it will keep returning `None` forever after.
+Alternatively, you can download Nim 2.4.0 from
+[our nightlies builds](https://github.com/nim-lang/nightlies/releases/tag/2026-10-28-version-2-4-14991af742d0833503741fd9a0918133d1bcf8a4).
 
-What is a relatively straightforward way of creating a slot that holds either a future or its output value has an interesting side effect of actually being able to communicate the state of the future even after it has yielded a value once. If a caller observes `Poll::Ready(())` + `None`, that means the future is done and will not be yielding a value again.
+## Release highlights
 
-## Fixing Poll
+### Strings based on the small-string optimization (SSO)
 
-`MaybeDone` isn’t the only API in the `futures` crate which tracks the done state of a
-future. The `FusedFuture` trait provides an `is_terminated` method, and its `Fuse`
-adapter keeps returning `Poll::Pending` once the inner future has returned
-`Poll::Ready`. However this unfortunately abuses `Poll::Pending`, whose docs state:
+SSO-based strings come with a new low-level strings API that you have to use in order to use this switch effectively.
 
-> When a function returns `Pending`, the function *must* also ensure that the current task is scheduled to be awoken when progress can be made.
+Nim’s new strings API is compatible with Nimony’s, so porting is always beneficial, even if `--strings:sso` might not improve the performance of your code.
+See it as a worthwhile, future-proof refactoring in its own right.
 
-This definition is incompatible with how `Fuse` uses `Pending`, and so bringing
-it into the stdlib would require redefining `Pending` to mean both “pending” and
-“done”. This feels bad, because if you forget to call `is_terminated` first, the
-future will hang forever. There are other hacky schemes we could apply instead,
-but the right way to fix this would be by making the `Done` state a part of
-`Poll` itself:
+The general idea behind this API is to deprecate the operation `addr myString[offset]` and to replace it with operations that clarify the *intent*. Reading
+is distinguished from writing.
 
-```rust
-pub enum Poll<T> {
-    Ready(T),
-    Pending,
-    Done,    // ← new
-}
+Here is our porting guide:
+
+| Purpose | Use | Notes |
+| --- | --- | --- |
+| Read-only raw pointer | `readRawData(s, start = 0)` | valid while `s` is alive & untouched |
+| Raw pointer that survives moves/copies | `readRawDataStable(s, start = 0)` | takes `var string`; promotes small strings to heap first |
+| Bulk write into a string | `beginStore(s, newLen, start = 0)` … `endStore(s)` | sets length, ensures unique ownership, returns writable ptr |
+
+Rules of thumb:
+
+- Reading bytes (memcpy out of a string, memmem, scanning): replace addr s[i] / unsafeAddr s[i] with readRawData(s, i).
+- Writing bytes in bulk (memcpy/fread into a string): replace setLen + addr s[oldLen] with beginStore(s, newLen, start) followed by endStore(s). beginStore already sets the length and does the copy-on-write / unique-ownership dance, so an explicit prepareMutation is no longer needed.
+- A pointer that must outlive the current scope (e.g. a cursor stored next to its buffer): use readRawDataStable, which forces the string onto the heap so the payload address is stable.
+- Single-element write s[i] = c still works unchanged. The compiler lowers it to nimStrPutV3, which handles COW internally. You no longer need prepareMutation(s) before an indexed assignment.
+
+#### Before / after examples
+
+Bulk copy *into* a string:
+
+```
+# before
+result.setLen newLen
+copyMem(addr result[oldLen], buf, buflen)
+
+# after
+copyMem(beginStore(result, newLen, oldLen), buf, buflen)
+endStore(result)
 ```
 
-Unfortunately we can’t make this change since `Poll` is not marked
-`#[non_exhaustive]`. Which is a shame since instead of panicking or hanging,
-futures would actually have an opportunity to share that they have nothing more
-to report. This would change the responsibility of what to do with that
-information from the callee to the caller. The caller might still choose to
-panic, but it could also forward the `Done` state, or in concurrency operations
-like `join` it could now be used to track which futures have completed, without
-needing `MaybeDone`.
+Reading bytes *out of* a string:
 
-This would also have the benefit that it removes the implicit dependency of the
-async effect on the panic effect. The compiler can guarantee that calling
-`.await` never polls after getting `Ready`, and so it doesn’t need to handle the
-`Done` state. With this in place, `async` functions and blocks would no longer
-need to inject unwinding support on every path, reducing the codegen size which
-especially benefits embedded targets. It would also work well with the
-`no_panic` crate on crates.io, or an eventual function/block-level no-panic
-annotation.
+```
+# before
+copyMem(dest, addr(s.data[s.pos]), n)
 
-## Fixing CoroutineState
-
-The `CoroutineState` enum has the same problems as the `Poll` enum, in that it cannot express a final `Done` state. But unlike `Poll`, the `Coroutine` trait and `CoroutineState` enum aren't stable and so can be fixed without any breakage.
-
-Since `Coroutine` is used internally in compiler desugarings, these changes might still not be easy. But at least we don’t have to repeat the same mistakes we've made for async with iteration as well.
-
-To better illustrate the problem with `CoroutineState`, here is how it is defined today:
-
-```rust
-pub enum CoroutineState<Y, R> {
-    Yielded(Y),
-    Complete(R),
-}
+# after
+copyMem(dest, readRawData(s.data, s.pos), n)
 ```
 
-[The documentation](https://doc.rust-lang.org/std/ops/enum.CoroutineState.html) has the following to say about the `Complete` variant:
+Read into a slice of a string:
 
-> Once a coroutine has returned `Complete` it is considered a programmer error to call `resume` again.
+```
+# before
+prepareMutation(buffer)                       # COW literal guard under ARC
+result = s.readData(addr buffer[slice.a], count)
 
-`resume` here refers to `Coroutine::resume`, which drives the progress of the coroutine similar to `Iterator::next` and `Future::poll`. But just like with futures (and unlike iterators<sup>[1](https://blog.yoshuawuyts.com/the-future-trait-has-a-missing-state#unlike)</sup>), coroutines are unable to express a “done” state.
-
-Technically `Iterator::next` returning `None` is no guarantee that `None` will keep being returned. But at the very least returning `None` repeatedly is fine and expected, and so it’s a valid way of encoding a “Done” state, which is what `FusedIterator` does.
-
-This means that we cannot define a generic `FusedCoroutine` trait like we have with [`FusedIterator`](https://doc.rust-lang.org/std/iter/trait.FusedIterator.html). Since `Complete(R)` takes a generic param we could of course require that `Complete(Option<R>)`, but that would again be dancing around the problem. This is a problem we know we have, we know how to solve, and so we should solve:
-
-```rust
-pub enum CoroutineState<Y, R> {
-    Yielded(Y),
-    Complete(R),
-    Done,         // ← new
-}
+# after
+result = s.readData(beginStore(buffer, slice.b + 1 - slice.a, slice.a), count)
+endStore(buffer)
 ```
 
-This does leave us with some confusing names. `Complete` here is not the same as `Done`. So I would propose we name the variants after the operations they represent, just like we’ve done with `ControlFlow` (`Break|Continue`):
+#### `cstring` conversions
 
-```rust
-pub enum CoroutineState<Y, R> {
-    Yield(Y),   // ← renamed 
-    Return(R),  // ← renamed
-    Done,    
-}
+- Converting string → cstring still works, but the C string is only valid as long as the source string is alive and unmodified.
+- If you need a stable, NUL-terminated buffer to hand to C, keep the owning string alive and derive the pointer from it (via readRawDataStable / the normal cstring conversion) rather than caching the pointer past a move.
+
+#### Migration checklist
+
+1. Grep your code for addr s[, unsafeAddr s[, addr(...data[, and any cached pointer/cstring into a string.
+2. Replace read accesses with readRawData (or readRawDataStable if the pointer escapes the current scope / must survive a move).
+3. Replace setLen + raw write with beginStore / endStore.
+4. Drop now-redundant prepareMutation calls before indexed writes and beginStore.
+5. Don’t assume addr s[0] is stable across add, reassignment, or passing the string by value.
+6. Build once with --strings:sso and once without to confirm the code compiles and behaves identically under both.
+
+Because the helper API has identical signatures on every string backend, code
+written this way keeps working under refc/ARC/ORC without SSO; you can port
+incrementally and flip `--strings:sso` on when ready.
+
+#### Once again, in order to avoid confusion:
+
+**Updating your code is not required, but beneficial. The new API works for all `mm` switches and is also offered by Nimony/Nim 3.**
+
+### Parallel and incremental builds (IC)
+
+IC is finally shipping! Use it with the switch `--ic:on`. Parallel builds are based on multi-processing, not multi-threading. Hence macros that make use of global `.compileTime` variables might need to get patched before you can enjoy the benefits of much faster rebuilds.
+
+For an example of the required porting effort, see my [PR here](https://github.com/guzba/nimsimd/pull/38) that allows PolyWorld to be built with `--ic:on`!
+
+Depending on the shape of your import graphs, even **cold** builds might be faster with IC turned on, as the build exploits more parallelism. For example, compiling the Nim compiler itself takes 31s with `--ic:off` on a machine with 16 physical cores, and 25s with `--ic:on`.
+
+### YRC – the missing piece of Nim’s MM story
+
+YRC (“ürk”) is the thread-safe variant of Nim’s ORC. Use `--mm:yrc` when you need shared refs and cycles across threads. It offers the same API as ORC. Where it fits:
+
+| mm-switch | Thread-safe | Can handle cycles |
+| --- | --- | --- |
+| **ARC** | No | No |
+| **Atomic ARC** | Yes | No |
+| **ORC** | No | Yes |
+| **YRC** | **Yes** | **Yes** |
+
+ORC can only handle cycles that stay inside one thread. YRC lifts that: cycles can span threads. For acyclic data it uses atomic reference counting; for cyclic data it uses a write barrier that only runs at pointer assignments. There is no stop-the-world phase and no arbitrary safepoints. Any thread can run the cycle collector when needed (there is no dedicated GC thread), which helps locality and suits embedded systems where every thread counts.
+
+Nothing is free. In our orcbench, YRC is about 2.0× slower than ORC and it uses twice as much memory, too. Still, we think that’s a good trade: you no longer have to worry about cycles crossing thread boundaries. The cost is a constant factor of two; the payoff grows with every core you put to work on shared data.
+
+### Sum types
+
+Nim always offered Ada-inspired “discriminated unions”, for example:
+
+```
+type
+  NodeKind = enum  # the different node types
+    IntLit,        # a leaf with an integer value
+    FloatLit,      # a leaf with a float value
+    StringLit,     # a leaf with a string value
+    AddOp,         # an addition
+    SubOp,         # a subtraction
+    IfStmt         # an if statement
+  Node = ref object
+    case kind: NodeKind
+    of IntLit: intVal: int
+    of FloatLit: floatVal: float
+    of StringLit: strVal: string
+    of AddOp, SubOp:
+      leftOp, rightOp: Node
+    of IfStmt:
+      condition, thenPart, elsePart: Node
 ```
 
-## Even more states
+While this works, people complained about the lack of concise notation for years. So version 2.4 finally offers something better:
 
-So far we’ve covered the three future states: `Ready`, `Pending`, and `Done`.
-These are the three states we communicate *externally*. But internally there
-is one more state: `Start` or `Init`. This is the state a future is in *before*
-it is first polled. But since we never yield that state, it’s internal-only.
+```
+type
+  Node = ref object
+    case
+    of IntLit: intVal: int
+    of FloatLit: floatVal: float
+    of StringLit: strVal: string
+    of AddOp, SubOp:
+      leftOp, rightOp: Node
+    of IfStmt:
+      condition, thenPart, elsePart: Node
+```
 
-Another state we haven’t covered here is the state *before* the future or
-coroutine is initialized. In async Rust `.await` calls the
-`IntoFuture::into_future` method before polling the future, just like when
-iterating the `for..in` notation calls `IntoIterator::into_iter` before calling
-`Iterator::next`.
+There is no `NodeKind` enum anymore and no `kind` field: the branch names are introduced by the
+type declaration itself. Under the hood a sum type is still a case object with a hidden
+discriminator, so the memory layout and the performance are the same as before. (However, in
+the future the pattern matching allows for the runtime checks to be eliminated!)
 
-I’m not sure what to call this pre-state, but its purpose is to capture inputs
-without needing to instantiate locals. Unfortunately `async {}` currently
-returns `impl Future` rather than `impl IntoFuture`. In [the gen auto-trait
-problem](https://blog.yoshuawuyts.com/gen-auto-trait-problem) I explained how
-that would help us create more precise bounds and solve a number of `Send`/`Sync`
-interactions. While changing the desugaring of `async {}` is tricky, `gen {}` is
-still unstable and is much easier to change.
+A branch name constructs the object, with named arguments for the fields of its branch:
 
-Finally, in [Never Snooze a Future](https://jacko.io/snooze.html) Jack O’Connor
-describes what ought to be an invalid future state: “Snoozed”. A future is
-snoozed when it is ready to make progress, but it’s not polled. I think of this as
-a way of translating the [“bbbs”
-scenario](https://rust-lang.github.io/wg-async/vision/submitted_stories/status_quo/barbara_battles_buffered_streams.html)<sup>[1](https://blog.yoshuawuyts.com/the-future-trait-has-a-missing-state#bbbs)</sup>
-into a liveness property.
+```
+let n = AddOp(leftOp: IntLit(intVal: 40), rightOp: IntLit(intVal: 2))
+```
 
-Barbara Battles Buffered Streams
+Generic sum types work too. The instance is inferred from the field values or from the
+expected type:
 
-Futures [naturally form
-trees](https://blog.yoshuawuyts.com/tree-structured-concurrency/index). The
-“snoozed” state applies when some child future’s waker is called, and its parent is
-polled but the child isn’t. This leads to a rule that we can apply recursively
-to every future: *“When a future is polled, it must also poll all child futures
-that have had their waker called.”* If every future follows this rule, no future
-will ever be snoozed.
+```
+type
+  Opt[T] = object
+    case
+    of None: discard
+    of Some: val: T
 
-## Conclusion
+let a = Some(val: "abc")      # Opt[string]
+let b: Opt[int] = None()      # the expected type selects the instance
+```
 
-The fact that futures are unable to signal being done is a problem, and one
-which has no good workarounds. Types like `MaybeDone` can work around this
-limitation on use, but do so by introducing redundant bookkeeping.
+The fields can only be accessed via pattern matching, so accessing the field of the wrong branch,
+the classic `FieldDefect`, cannot happen anymore. The fields are bound to the names that
+follow the branch name:
 
-Tracking the completion status of futures is necessary for the implementation of
-nearly all async concurrency operations. Instead `async {}` blocks desugar to
-futures which panic when polled again after completion. This creates problems in
-constrained environments like embedded and web where code size matters.
+```
+proc eval(n: Node): int =
+  case n
+  of IntLit(v): v
+  of AddOp(a, b): eval(a) + eval(b)
+  of SubOp(a, b): eval(a) - eval(b)
+  else: raiseAssert "not an arithmetic expression"
+```
 
-We cannot fix the `Future` trait without deprecating the existing `Future::poll`
-method. This post is the fourth entry in my series analyzing problems with the
-`Future` trait, and even so I don’t think that’s enough yet to warrant replacing
-what we have. What we can do however is make sure we don’t repeat the mistakes
-we made in `Future`, for example by fixing the `Coroutine` trait and `gen`
-keyword.
+`_` skips a field, `{AddOp, SubOp}(a, b)` matches several branches that share their fields, and
+the `case` has to cover all branches or have an `else`. If the matched expression is a mutable
+location, the bindings are views into the object and can be assigned to:
+
+```
+type
+  Shape = object
+    case
+    of Circle: radius: float
+    of Rect: w, h: float
+
+var shapes = @[Circle(radius: 1.0), Rect(w: 1.0, h: 2.0)]
+for i in 0 ..< shapes.len:
+  case shapes[i]
+  of Circle(r): r = r * 2       # updates shapes[i].radius
+  of Rect(w, _): w = 3.0
+```
+
+Otherwise the fields are bound by value. If you really need to access a field outside of a `case`,
+there is an escape hatch: `{.cast(uncheckedAccess).}: echo n.intVal`.
+
+Classic case objects continue to work and are not deprecated.
+
+### `owned` type modifier
+
+This feature has to be enabled with `--experimental:ownedRefs` and I can promise you that we will 
+break your code again if you use the feature.
+
+`owned ref T` (and `owned` closures) mark the location that holds the unique *owning* edge to an
+object. This is checked statically: an owned location cannot be copied, only moved, and only fresh
+values like object constructions can initialize it. Any number of ordinary references to the same
+object can exist and keep it alive; the runtime representation is the same as that of `ref T`,
+so code with and without the feature interoperates.
+
+```
+{.experimental: "ownedRefs".}
+type
+  Node = ref object
+    next: owned Node
+    data: int
+```
+
+The point of the exercise is cycle collection: owned edges form a forest, so a type whose
+references are all `owned` or `.cursor` can never be part of a cycle and stays out of the cycle
+collector under ORC and YRC. See the [experimental manual](https://nim-lang.org/docs/manual_experimental.html#owned-references)
+for the details.
+
+### Cyclic module dependencies
+
+Nim always allowed modules to import each other, but in a cycle a module only saw the declarations
+of the other module that came before the `import`. In practice that meant juggling the order of
+imports and declarations, or moving all types into a `types.nim` module.
+
+Import cycles are still a design smell as they turn the import DAG into a general graph,
+but sometimes they are the natural structure, and then the compiler should not stand in your way.
+
+You can annotate the imports of a cycle with the `cyclic` pragma:
+
+```
+# module a
+import b {.cyclic.}
+
+type
+  A* = object
+    b*: B          # a type of `b`, even though `b` imports `a`
+
+proc isEven*(n: int): bool = n == 0 or isOdd(n - 1)
+```
+
+```
+# module b
+import a {.cyclic.}
+
+type
+  B* = object
+    x*: int
+    a*: ref A
+
+proc isOdd*(n: int): bool = n != 0 and isEven(n - 1)
+```
+
+The modules connected by such imports form a *cycle group* that is checked phase by phase: first
+the imports of all modules, then all type sections, then the routines (their bodies come later),
+then the rest of each module. So types can refer to each other across modules, and the procs of
+the modules can call each other, regardless of the order of the declarations.
+
+It is good practice to annotate the imports on both sides of a cycle. Import cycles without the
+annotation still work as before, but are deprecated; compile with
+`--warning:ImplicitCyclicImport:on` to find them. The precise rules are described in the
+[manual](https://nim-lang.org/docs/manual.html#modules-cyclic-imports).
+
+A complete list of changes is available [here](https://github.com/nim-lang/Nim/compare/v2.2.0...v2.4.0).

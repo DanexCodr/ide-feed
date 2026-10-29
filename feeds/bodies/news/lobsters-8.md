@@ -72,5 +72,3 @@ While there is significantly more variance here than in the MuPDF and Foxit exam
 In each of these implementations, the file key is generated from a non-cryptographically secure source of randomness. What was supposed to be a security upgrade over older file keys derived from the user’s password instead led to weaker keys in practice. These issues were disclosed to the vendors and, in MuPDF’s case, fixed. Previously published copies cannot be retroactively protected, however, so these bugs may still have an impact.
 
 We published our [decryptors for MuPDF and Foxit](https://github.com/v12-security/pocs/tree/main/pdf_decryptors).
-
-[Discuss on Hacker News](https://news.ycombinator.com/item?id=50280722)
