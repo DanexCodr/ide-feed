@@ -1,271 +1,169 @@
-> *"A 100%-functional tmux in Rust — the whole multiplexer,
-> server and client, running."*
->
-> *"Not a wrapper. Not control mode. The multiplexer itself."*
->
-> *"Ported against the C, verified against the C — byte for byte, 1661/1661 gated parity cases passing."*
+[yarr](https://github.com/nkanaev/yarr) is an open source RSS reader written in Go. I use it myself in my homelab and I was interested one day how yarr loads and renders this content.
 
-**ztmux** is a from-source port of [tmux](https://github.com/tmux/tmux) to Rust — the whole
-program: the server, the client, the grid/screen model, the input parser, layouts, the
-command language, formats, and the terminal back end. It is **not** a wrapper around the
-`tmux` binary and it is **not** control mode (`tmux -CC`); it is tmux, reimplemented. The
-port stands on the upstream **tmux C sources**, vendored under
-[`vendor/`](https://github.com/MenkeTechnologies/ztmux/blob/main/vendor/VENDOR.md) as a plain, read-only, SHA-pinned copy — the source of truth
-every module is diffed against. Correctness is measured, not claimed — a
-[parity suite](https://github.com/MenkeTechnologies/ztmux/blob/main/parity/PARITY_ROADMAP.md) runs identical inputs through the real `tmux` and
-`ztmux` and diffs them byte-for-byte, and an anti-drift gate fails the build if a Rust
-function is added whose name has no counterpart in the tmux C source.
-
-A terminal multiplexer keeps your shells alive: split panes, detach and reattach, script
-the whole thing. tmux is the reference implementation, ~30 years of C. ztmux ports that C
-to Rust one subsystem at a time, holding behavior identical to upstream at every step. It
-opens its own socket namespace (`ztmux-<uid>`) so it never collides with a running tmux.
-
-**Status: 100% functional.** The port builds, runs, and self-hosts — `ztmux new-session`,
-splits, detach/reattach, the command language, formats, and layouts all work — and the
-parity suite is green at **1661/1661 gated (100%)** against the vendored tmux, with
-**nothing quarantined** — the twelve cases that a Linux-only divergence had held out of the
-gate were root-caused and now gate with the rest
-([`parity/quarantine.txt`](https://github.com/MenkeTechnologies/ztmux/blob/main/parity/quarantine.txt) is empty). Every
-divergence the suite has ever caught has been root-caused and fixed or is recorded there;
-surface that is still unported, or that no case can reach yet, is tracked openly in
-[`docs/BUGS.md`](https://github.com/MenkeTechnologies/ztmux/blob/main/docs/BUGS.md) and [`parity/known_gaps/`](https://github.com/MenkeTechnologies/ztmux/blob/main/parity/known_gaps) rather than
-being counted as passing.
-
-On top of the port, ztmux ships original subcommands with no tmux counterpart — live
-dashboards and JSON-emitting inspectors for the running server (`ztmux --help`, and `[0x08]`).
-
-> Distinct from [`ztmux-core`](https://github.com/MenkeTechnologies/ztmux-core), a native
-> tmux *client* engine that speaks the wire protocol to an existing server for GUI hosts.
-> **This** repo is the whole server + client. The two pair: ztmux and ztmux-core pin the
-> identical `PROTOCOL_VERSION = 8` (`src/ported/tmux_protocol_h.rs` here,
-> `src/transport.rs` there), so a GUI drives this server over the same wire protocol —
-> and because both ends are MenkeTechnologies-owned, upstream tmux's release cadence can
-> never break that contract.
-
-Requires a Rust toolchain and a terminfo database (ncurses). No C libraries: the event
-loop is Rust (`src/extensions/event_loop`, replacing tmux's libevent) and terminfo is read by
-`terminfo-lean`, so there is nothing to `pkg-config`, no `-dev` package to install and no
-Homebrew prefix to find.
+Taking a look at their source we can see how. When you add an RSS feed, each post within the feed is treated as an "item" within yarr's object model. These are processed with the aptly named `handleItem` function.
 
 ```
-cargo build --release
-cargo run --release -- new-session       # start a server + session, like `tmux`
+func (s *Server) handleItem(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+        ...
+	switch r.Method {
+	case http.MethodGet:
+		item := s.db(r).GetItem(id)
+                ...
+		item.Content = sanitizer.Sanitize(item.Link, item.Content)
+		for i, link := range item.MediaLinks {
+			item.MediaLinks[i].Description = sanitizer.Sanitize(item.Link, link.Description)
+		}
+                ...
 ```
 
-The binary is `ztmux`, and it links no C library beyond libc.
-
-ztmux is the whole multiplexer, so it can stand in for `tmux` itself. Shadowing is opt-in,
-and `ztmux shadow` is the whole opt-in:
+When this loads the post from a remote url it first passes the content through the `Sanitize` function. This one is rather self explanatory.
 
 ```
-ztmux shadow                  # install ~/.ztmux/{bin,man,completions}, print the shell lines
-eval "$(ztmux shadow)"        # …apply them here, or paste them into ~/.zshrc
-ztmux shadow -n               # print the lines without installing anything
+// Sanitize returns safe HTML.
+func Sanitize(baseURL, input string) string {
+	tokenizer := html.NewTokenizer(bytes.NewBufferString(input))
+	...
+	attrNames, htmlAttributes := sanitizeAttributes(baseURL, tagName, token.Attr)
 ```
 
-It installs a `tmux` shim beside a `ztmux` one in `~/.ztmux/bin` (or a directory you name),
-the man pages in `~/.ztmux/man` (`ztmux.1`, `ztmuxall.1`, and a `tmux.1` copy, so `man tmux`
-reads this port's page), and the zsh completion in `~/.ztmux/completions` — `_ztmux`, plus a
-`_tmux` wrapper that shadows the system one by file name, so the shimmed `tmux` completes
-every tmux command *and* every ztmux extension. All of it is compiled into the binary, so
-the install needs nothing from the source tree.
+The sanitised content is returned in the `"content"` value of the response after it is serialised to JSON.
+![image](https://bear-images.sfo2.cdn.digitaloceanspaces.com/0x67673068/image-1.webp)
+And from here dynamically rendered into the DOM.
 
-stdout is shell code only (the summary goes to stderr), so the same output both `eval`s and
-pastes; a `PATH`/`MANPATH` line the environment already satisfies is printed commented out,
-and `--all` prints every line uncommented. A real (non-symlink) file keeping a shim's name
-is never clobbered, so `ztmux shadow /usr/local/bin` cannot replace an installed `tmux`.
-Re-run it after a rebuild moves the binary, and `ztmux doctor` reports the install — PATH,
-which `tmux` a command line actually reaches, MANPATH, and the completion — once it exists.
-
-One reference, vendored under [`vendor/`](https://github.com/MenkeTechnologies/ztmux/blob/main/vendor/VENDOR.md) as a plain committed copy
-(the clone is self-contained and never depends on an upstream staying alive):
-
-| Path | Upstream | Role |
-| --- | --- | --- |
-| `vendor/tmux/` | [tmux/tmux](https://github.com/tmux/tmux) (C) | **Source of truth.** Every ported module is diffed against its C counterpart. |
-| `src/` | — | **The port.** The crate we own and evolve. Edit here. |
-
-`Cargo.toml` declares its own `[workspace]` excluding `vendor/`, so Cargo never walks into
-the reference. Every ported function carries a back-link comment to its C origin, e.g.:
+With this model in mind, it was clear that if there was a gap in the sanitisation logic it would lead to XSS. So I took a closer look at how the function was implemented. This in itself is beyond explaining thoroughly for the purposes of this post as much of it is quite irrelevant to the vulnerability, so I will summarise it simply as recursive parsing of the HTML nodes sanitising from children first (in fact I'd say they are likely further flaws lurking here...). But onto the vulnerability in question, first we observe in `getTagAllowList` that `iframe` is an allowed tag, and `src` an allowed attribute.
 
 ```
-// vendor/tmux/grid.c:320  grid_create()
-pub fn grid_create(sx: u32, sy: u32, hlimit: u32) -> *mut grid {
+ func getTagAllowList() map[string][]string {
+     ...
+     whitelist["iframe"] = []string{"width", "height", "frameborder", "src", "allowfullscreen"}
+     return whitelist
+ }
 ```
 
-The port began as a faithful but almost-entirely-`unsafe` mechanical transpile. "Done
-right" is turning that working skeleton into good Rust without ever drifting from tmux:
-
-1. Start from a working skeleton — a running program to refactor, not a blank page.
-2. Shrink the `unsafe` surface — replace raw-pointer intrusive lists and C-isms with safe Rust where behavior allows.
-3. Verify against C at every step — a module isn't "ported" until it matches the C reference (see [0x04]).
-4. Keep it green — cargo build and cargo clippy stay clean as code comes over.
-
-ztmux is a port of tmux, so "correct" means **tmux itself**. The parity suite runs the same
-inputs through the real `tmux` (reference) and `ztmux` (port) and compares byte-for-byte —
-the same shape as the sibling ports ([zshrs](https://github.com/MenkeTechnologies/zshrs) vs
-`zsh`, [strykelang](https://github.com/MenkeTechnologies/strykelang) vs `perl`).
+Furthermore in the function responsible for sanitising attributes we observe there is a special case for handling the `src` attribute of iFrames in `isValidIframeSource`:
 
 ```
-bash parity/run_parity.sh --summary                       # ztmux vs tmux, every case
-bash parity/verify_one.sh parity/cases/NAME.sh            # one case, in isolation (takes a PATH)
-bash parity/run_known_gaps.sh                             # the inverted runner: "GAP" is the pass
+func sanitizeAttributes(baseURL string, node *html.Node) []string {
+	var attrNames []string
+	var attrs []html.Attribute
+	tagName := node.Data
+
+	for _, attribute := range node.Attr {
+		// attribute names are case-insensitive; the parser may preserve
+		// the original casing, while the allowlist is lowercase.
+		key := strings.ToLower(attribute.Key)
+		value := attribute.Val
+
+		if !isValidAttribute(tagName, key) {
+			continue
+		}
+
+		if (tagName == "img" || tagName == "source") && key == "srcset" {
+			value = sanitizeSrcsetAttr(baseURL, value)
+		}
+
+		if isExternalResourceAttribute(key) {
+			if tagName == "iframe" {
+				if isValidIframeSource(baseURL, attribute.Val) { // here!!!
+					value = attribute.Val
+				} else {
+					continue
+				}
+			} else if tagName == "img" && key == "src" && isValidDataAttribute(attribute.Val) {
+				value = attribute.Val
+			} else {
+				value = htmlutil.AbsoluteUrl(value, baseURL)
+				if value == "" {
+					continue
+				}
+				if !hasValidURIScheme(value) || isBlockedResource(value) {
+					continue
+				}
+			}
+		}
 ```
 
-The runner uses `target/release/ztmux` and builds it only when that file is **absent**, so
-rebuild after changing the port or the run measures the previous binary.
-
-Cases live in `parity/cases/` as tmux FORMAT strings (`#{e|+|:2,3}`) or shell scenarios.
-It earns its keep: it root-caused a `#{l:…}` server crash to a dropped pointer increment in
-`format_unescape`, fixed even-horizontal layout rounding and `#{pane_current_command}` on
-macOS, regex backreferences, `#{!:}`, named buffers, loop variables, and the last layout
-divergences — each pinned to a single case and then ported correctly. The latest round, an
-audit of every format variable the C installs against the whole corpus, found the `#{W:…}`
-window loop missing its entire neighbour block and a one-keypress server crash in
-`customize-mode`. The round after it closed out the Linux-only theme-colour divergence that
-had kept twelve render cases out of the gate since August: a pane's environment was missing
-the `COLORTERM=truecolor` the C sets in `environ_for_session`, so on a Linux terminfo where
-`tmux-256color` carries neither `Tc` nor `RGB` a nested server's client never picked up the
-RGB feature and every default theme colour fell back to its 8-colour form. It now stands at
-**1661/1661 gated cases passing (100%), byte-for-byte vs the vendored tmux**, with
-**nothing quarantined** ([`parity/quarantine.txt`](https://github.com/MenkeTechnologies/ztmux/blob/main/parity/quarantine.txt) is empty; the
-mechanism stays, and the count still travels next to the percentage on the summary line and
-in the JSON). That is a
-statement about what the suite measures, not a claim that nothing differs:
-`parity/known_gaps/` holds behaviour that is deliberately still unported, and
-`docs/BUGS.md` keeps an open list. 77 of the cases compare what an ATTACHED CLIENT
-draws, by nesting a second server inside a pane of the first and attaching a client to it —
-the only way this suite can see rendering at all. (That count is every case carrying an
-inner socket and an `attach`; a 78th nests a server without a client, to watch
-`kill-server` tear it down.) That technique is where most of the recent divergences were
-hiding:
-copy-mode line numbers going stale on a cursor move, `display-menu -b` being parsed and
-discarded, VS16 emoji measuring one column narrow, and OSC 8 hyperlinks being absent from
-every build. See
-[`parity/PARITY_ROADMAP.md`](https://github.com/MenkeTechnologies/ztmux/blob/main/parity/PARITY_ROADMAP.md) and the bug log
-[`docs/BUGS.md`](https://github.com/MenkeTechnologies/ztmux/blob/main/docs/BUGS.md).
-
-A port can be faked by inventing Rust-only "helper" functions that don't exist in tmux,
-inflating apparent completeness. `tests/ported_fn_names_match_c.rs` **fails the build** when
-a free `fn` is added to `src/` whose name has no counterpart in `vendor/tmux`. Pre-existing
-exceptions (libc wrappers, Rust glue) are frozen in
-`tests/data/fake_fn_allowlist.txt` — an audit trail to burn down, not a free pass. The
-[port report](https://menketechnologies.github.io/ztmux/port_report.html) tracks C→Rust
-coverage per function.
-
-Two more gates check the *shape* of the port rather than its names:
-`tests/no_c_alloc_for_rust_types.rs` fails the build when a struct holding an owned Rust type
-(`Vec`, `String`, `CString`, `Box`) is allocated with `xcalloc`, since all-zero bytes are not a
-valid value for any of them; and `tests/no_key_code_truncation.rs` fails on any
-`match key as u<N>`, which silently drops the high bits of a 64-bit `key_code` and once let a
-mouse event alias an ASCII command letter. Alongside them, `tests/server_survives_bad_targets.rs`
-drives the real binary on a private socket and asserts the server survives commands whose target
-resolves to nothing, `tests/structured_output_under_c_locale.rs` pins the `-o json` path under a
-non-UTF-8 client, and `tests/extension_flags_reach_the_verb.rs` pins that an extension's flags
-arrive at the verb that implements it.
+This function is as follows:
 
 ```
-ztmux/
-├── Cargo.toml         # the ztmux crate (own workspace root; excludes vendor/)
-├── build.rs           # lalrpop (command grammar); no C libraries to link
-├── src/               # THE PORT — edit here
-│   └── extensions/    # original ztmux code (see [0x08]); not a port
-│       ├── event_loop/  # the event loop in Rust (replaces libevent)
-│       └── pkg/         # znative, the plugin manager (see docs/ZNATIVE.md)
-├── plugin-abi/        # ztnative.rs — the native plugin ABI, one copied file
-├── examples/          # eight installable plugins (native + TPM script)
-├── completions/       # _ztmux zsh completion (generated by scripts/)
-├── man/man1/          # ztmux.1 and ztmuxall.1 (installed by `ztmux shadow`)
-├── parity/            # ztmux-vs-tmux byte-for-byte suite + roadmap
-│   └── known_gaps/    # proven-unported behaviour, expected to diverge
-├── regress/           # 32 of tmux's own regression scripts, run against ztmux
-├── fuzz/              # cargo-fuzz target + differential fuzzing vs real tmux
-├── scripts/           # gen_port_report.py, annotate_c_links.py, bench_vs_tmux.sh
-├── tests/             # anti-drift gate + allowlist
-├── docs/              # GH Pages hub: index / report / port_report
-├── vendor/
-│   └── tmux/          # C source of truth  (read-only reference)
-└── COPYING            # ISC (upstream notices)
+func isValidIframeSource(baseURL, src string) bool {
+	whitelist := []string{
+		"bandcamp.com",
+		"cdn.embedly.com",
+		"invidio.us",
+		"player.bilibili.com",
+		"player.vimeo.com",
+		"soundcloud.com",
+		"vk.com",
+		"w.soundcloud.com",
+		"www.dailymotion.com",
+		"www.youtube-nocookie.com",
+		"www.youtube.com",
+	}
+
+	domain := htmlutil.URLDomain(src)
+	// allow iframe from same origin
+	if htmlutil.URLDomain(baseURL) == domain {
+		return true
+	}
+	return slices.Contains(whitelist, domain)
+}
+
+...
+
+func URLDomain(val string) string {
+	if u, err := url.Parse(val); err == nil {
+		return u.Host
+	}
+	return val
+}
 ```
 
-1. Pick a subsystem (a .rs module under src/).
-2. Open its C counterpart in vendor/tmux/.
-3. Bring the Rust toward correct, idiomatic, memory-safe Rust — replacing the raw-pointer / unsafe C-isms with safe equivalents where behavior allows.
-4. Keep it building (cargo build) and lint-clean (cargo clippy), and green against the parity suite (bash parity/run_parity.sh) at every step.
+tldr, it takes the provided URL (the one in the iFrame src), extracts the host part of the Url, checks it either matches the yarr base URL or an entry in the defined whitelist and rejects it if not.
 
-Beyond the port, ztmux adds original subcommands with no upstream counterpart, under
-[`src/extensions/`](https://github.com/MenkeTechnologies/ztmux/blob/main/src/extensions). They live apart from the ported core — and are exempt
-from the anti-drift gate (`[0x05]`) — precisely because they are *not* tmux. Each is either a
-read-only query over the running server (built on the same structured `list-* -o json`
-output) or a small mutating helper, and every one accepts `-o json` / `--json` for scripting.
-There are **114** today — `ztmux verbs` lists every one with its description, and `man ztmux`
-documents each under EXTENSIONS.
+The URL is parsed with net/url. The package descriptions states
 
-They fall into a few families:
+> Package url parses URLs and implements query escaping.
+> See RFC 3986. This package generally follows RFC 3986, except where it deviates for compatibility reasons. RFC 6874 followed for IPv6 zone literals.
 
-- Inspection — one-shot, pipeable views of the live server: process tables (ps, pstree, mem, state, elapsed, cmd, startcmd, nested, tty), geometry (size, density, layouts, solo, zoom, winsize), directories and repositories (cwd, project, git, remote, ahead, changes, stash, commit, conflicts, vcs, worktree, submodules, gone, tag, dedup, writable), network (ssh, net, ports), clients (who, readonly, idle, viewers, connected, constrain, keytable, control, utf8), sessions and windows (age, fanout, groups, linked, alerts, marks, env, destroy, autolock, autoname, titlebar), and configuration (hooks, keys, monitor, remain, sync, limit, visual, mouse).
-- Pane contents — reading what the panes actually hold: peek (every pane's visible screen under a header), grep (the lines matching a pattern), finder (panes whose command, path or title match), info (everything about one resolved pane), titles (what each program advertised), history (panes ranked by scrollback held) and piped (panes whose output is teed to a command).
-- Summaries and streams — stats (one-shot server rollup), graph (the session→window→pane tree as DOT/Mermaid/HTML) and events (server lifecycle changes as newline-delimited JSON, for a watcher).
-- Live TUIs — dashboard (full-screen server monitor), switcher (fuzzy session/window/ pane picker), watch (top-like per-pane process monitor).
-- Discovery — verbs [filter] lists every verb ztmux answers to (ported commands, aliases, extensions, console builtins) with a one-line description, grouped by kind: ztmux verbs pane narrows to the pane-related ones, -o json emits {verb, kind, description} rows. It is built from the command table and the extension list themselves, and needs no server. banner prints the ztmux banner — the logo, the verb totals, and the socket's live session/window/pane/client counts, or that no server is running — which is also the console's opening screen.
-- Setup — shadow installs the ~/.ztmux shadow (a tmux shim, the man pages, the zsh completion) and prints the PATH/MANPATH/fpath lines that activate it, so eval "$(ztmux shadow)" makes tmux this port; doctor health-checks the build, the terminal, that install, the socket, the reachable server and the resource limits, exiting non-zero on warnings or errors so it drops into a CI gate. See [0x01].
-- Console — repl runs every line as ztmux <line> against the selected socket, with a reedline editor: Tab completes the command word (every command, alias, extension and builtin), a --prefixed word against that verb's own flags, an option's fixed value set (-o → json|jsonl|csv|tsv|table|yaml), an extension's subcommand, and a shell builtin's path arguments against the filesystem. verbs [filter] lists every verb with its description, banner redraws the opening banner, and the shell builtins — cd, pwd, dir, cat, echo, export, printenv, unset, mkdir, touch, rm, cp, mv, ln — run in the console process, so the directory and environment they set are inherited by every line spawned afterwards (cd ~/src/app then new-window opens the window there). History persists to ~/.ztmux/repl_history, and non-terminal stdin falls back to a plain line reader so echo list-sessions | ztmux repl stays scriptable. The editor is keyed emacs or vi, from the first source that names a mode: $ZTMUX_REPL_EDIT_MODE (vi/emacs, for a one-off console), @ztmux-repl-edit-mode (set -g @ztmux-repl-edit-mode vi), the server's status-keys, then $VISUAL/$EDITOR naming a vi editor — so a vi-keyed tmux config keys the console the same way without extra setup, and help prints the mode in use and where it came from. Reach it from inside a session with bind : display-popup -E "ztmux repl".
-- Diagnostics — every abnormal server exit leaves a ~/.ztmux/server-crash-<pid>.txt or server-panic-<pid>.txt with the backtrace, written whether or not the server was started with -v, because the server that hits the bug is usually one that has been up for days. The same recorder logs each key-table destruction to ~/.ztmux/key-tables.log with the caller's backtrace and the table's binding, default and reference counts — added to name the code path behind a server that lost every binding (docs/BUGS.md, Open).
-- Actions — prune, equalize, revive, clearall, retitle, bcast, layout, and pick (batch sync/unmark/clear over a multi-pane mark set).
-- Automation — triggers runs any ztmux command when a regex matches a pane's output (rules in ~/.ztmux/triggers.json, armed with ztmux triggers arm), reviving tmux's removed monitor-content as a general sense→act loop. Add rules without touching the JSON via the inline wizard: ztmux triggers wizard (or ztmux triggers add <name> <pane> <match> <action>).
-- Plugins — znative installs and loads tmux plugins from one content-addressed store: one znative load owner/repo line in .tmux.conf, self-installing on the first server start and zero-network on every one after. It loads ordinary TPM script plugins unmodified (a repo's *.tmux file, run with a tmux shim on PATH so it drives this server), and native Rust plugins — a cdylib the server dlopens through the versioned `ztnative` C ABI — one copied file, no crate dependency — registering real tmux commands, #{…} format variables, and hook subscriptions, with no subprocess in the loop. tmux has never had a plugin ABI; this is one. The port always wins (a plugin cannot shadow a tmux command or format), and unloading purges every registration before the dlclose. See `docs/ZNATIVE.md` and `examples/` — eight installable plugins, three of them native rewrites of TPM plugins (prefix-highlight, sensible, continuum).
-- Ratatui UI (on by default) — original interactive surfaces rendered with ratatui rather than tmux's server draw: a which-key hint bar on the prefix, a floating command palette that completes the whole command line, not just the verb: every slot is read off the port's own data, so a command's flags come from the args_parse template it is validated against and each slot's meaning from its usage string. Tab offers command names and aliases, extension verbs and their subcommands, flags after - (and --), and then the value the slot wants — panes, windows, sessions and clients from the live server, paste buffers, key names and key tables, environment variables, options narrowed to the command's scope with their on/off or choice values, layouts, and filesystem paths. Also ratatui clock and display-panes, edit-scrollback-in-`$EDITOR` (prefix e), and multi-pane selective sync — mark panes (prefix C-s), sync the set (prefix y). Sync state is shown on the pane border — synced (red), selected (orange), trigger-armed (cyan) — which output can never overwrite. Opt into zellij-style pane frames with @ztmux-zellij-mode on (off by default): every pane is inset by a one-cell ring (like zellij, so a program can never draw on the frame) and gets a rounded box with its name in the top border; the box recolours for sync state. In this mode prefix + toggles a zellij-style pane stack — the focused pane fills the column, the rest collapse to one-row title bars (ztmux stack / :stack). A zellij-style tab bar of windows along the top (session badge, active tab highlighted) is a separate toggle — ztmux tabs on / :tabs — which restyles the status line and restores your prior status settings on tabs off. A zellij-style session manager (ztmux sessions / :sessions) opens a ratatui list of sessions: type to filter, Enter switches, Ctrl-r renames, Ctrl-x kills (with confirm), Ctrl-n makes a new one. prefix C-f toggles a floating pane — a real pane on a floating layout cell, drawn above the tiled layout, so it moves and resizes like any other pane (move-pane -P centre, move-pane -X10 -Y4, resize-pane -x50% -y50%); prefix C-f toggles focus between it and the pane you came from, creating one if none exists. prefix * opens one directly, and prefix { / } / M-{ / M-} snap it to a corner at half size. With mouse on it is fully draggable: drag its top border to move it, any other border or corner to resize, and Alt-drag anywhere on it to move it. Panes underneath are clipped around it, so output from a tiled pane does not draw over the float, and a tiled border crossing it is drawn under it. A client redraw composites every visible cell — pane content, borders, pane status lines, floats — into a cached scene of spans first, then writes the spans out, so a float never costs a second pass over the terminal. Rendered screens are compared against the vendored tmux through a real VT emulator, not just the model state. Setting @ztmux-float-autohide (set -wg @ztmux-float-autohide 1, or the pane menu's Auto-Hide Floating Panes) switches to the zellij model instead: floating panes disappear while a tiled pane has focus and come back on prefix C-f. Off by default, so the upstream tmux behaviour of keeping the float on screen is what you get unless you ask. ztmux modal on (opt-in) installs zellij-style modal keybindings: Ctrl-p pane mode, Ctrl-t tab, Ctrl-n resize, Ctrl-s scroll, Ctrl-o session, Ctrl-g lock — each a sticky key table entered without a prefix; the hint bar (turned on automatically) shows the current mode's keys. modal off removes the entry keys and restores the prefix. Since the Ctrl-* keys are intercepted globally (the zellij trade-off), it is off by default. ztmux resurrect save / ztmux resurrect restore persist the whole server across restarts (zellij-style resurrectable sessions): save writes every session/window/pane — layout, cwd, running command and its full command line — to ~/.ztmux/resurrect/, and restore recreates them (windows at their saved indexes, panes in their saved directories, exact tiled geometry, and floating panes back at their exact size and position). Restore works pane by pane: a live pane is left alone, a missing pane is split into its window, a missing window is added to its session, and only a missing session is created — so it fills gaps in a running server and is safe to repeat. Every pane that was running something is re-launched from its saved command line — a pane idling at a prompt saved none, so nothing is typed into it, and the shell itself is never re-run. @ztmux-resurrect-processes narrows that to a named list (~name matches anywhere in the command line) or turns it off with false. resurrect list shows saved snapshots. For continuum-style automatic persistence, set -g @ztmux-resurrect-auto on: the first client to attach spawns a detached daemon that re-saves every 15 minutes (pidfile-guarded, one per server); add set -g @ztmux-resurrect-restore on and it also restores the last snapshot once on a fresh server start. ztmux open / :open (also in the pane menu) scans the current pane for URLs and file paths and shows a ratatui picker — Enter opens the selection (a URL in open/xdg-open, a file in $EDITOR at its file:line, a directory revealed), y copies it (tmux buffer + OS clipboard). Like tmux-open / tmux-urlview, built in. Settings (all set -g): @ztmux-ratatui off disables the whole ratatui renderer for a classic plain-tmux server (on by default; takes effect on the next redraw); @ztmux-hint on shows the prefix hint bar (off by default); @ztmux-zellij-mode on enables the framed/inset mode (off by default; @ztmux-pane-names is a back-compat alias); @ztmux-pane-name-format overrides the frame name with a tmux format (e.g. #{pane_index}: #{pane_current_command}). With @ztmux-ratatui off the default draw path and the byte-for-byte parity suite are untouched.
+And with this comes the trick that enables the polyglot payload. In RFC 3986 the character sequence marks the beginning of the authority section (which contains the host accessed by `URLDomain`).
 
-Run `ztmux --help` for the current list, or `man ztmux` for the full reference — each
-extension has its own entry under the EXTENSIONS section, and the zsh completion
-([`completions/_ztmux`](https://github.com/MenkeTechnologies/ztmux/blob/main/completions/_ztmux)) describes every one inline.
+![image](https://bear-images.sfo2.cdn.digitaloceanspaces.com/0x67673068/image-2.webp)
 
-The port has to be measured against the thing it replaces, not described.
-[`scripts/bench_vs_tmux.sh`](https://github.com/MenkeTechnologies/ztmux/blob/main/scripts/bench_vs_tmux.sh) runs both binaries back to back on
-the same machine, same 80x24 geometry, same commands, and prints the table below. Every
-number here came out of that script; re-run it and it prints your machine's numbers
-instead.
+We combine this with the fact that iFrames will happily process `javascript:` URIs in their src to arrive at `javascript://www.youtube.com/%0a<arbitrary-js>`. net/url sees the authority www.youtube.com, extracts the host (here it is the entire authority) matches it to the whitelist and approves. Yet in the web browser, when this is processed as a `javascript:` URI everything after the colon is treated as JavaScript code (after a round of URL decoding). Therefore we arrive at:
 
 ```
-./scripts/bench_vs_tmux.sh                   # release ztmux vs the tmux in PATH
-REPS=60 WINDOWS=20 ./scripts/bench_vs_tmux.sh
+<iframe src="javascript://www.youtube.com/%0a<arbitrary-js>"></iframe>
 ```
 
-ztmux 3.7.47 vs tmux 3.7c, Darwin arm64, best of 60 reps (2026-09-03):
+which is processed as
 
-| measurement | ztmux | tmux | ratio |
-| --- | --- | --- | --- |
-| cold start (`new-session -d`) | 25.42 ms | 24.73 ms | 1.03x |
-| warm round trip (`list-sessions`) | 10.55 ms | 9.37 ms | 1.13x |
-| server RSS, 1 window | 6272 KiB | 4160 KiB | 1.51x |
-| server RSS, 20 windows | 6464 KiB | 4192 KiB | 1.54x |
-| binary on disk | 7.9 MiB | 977 KiB | 8.24x |
-| binary, stripped | 5.9 MiB | — | — |
+```
+//www.youtube.com/
+<arbitrary-js>
+```
 
-How to read it:
+note '//' doubles as a JavaScript comment here (and %0a a newline on decoding) - a different meaning in each grammar.
 
-- Cold start is a dead socket to an answered new-session: fork, daemonize, build the session/window/pane, reply to the client. Within a millisecond of the C.
-- Round trip is client connect, command dispatch, reply, exit against a live server. ztmux pays about 1.2 ms more per command.
-- RSS is the server's resident set, not the client's. ztmux carries roughly 2 MiB more at rest; the slope is what matters and both are nearly flat — 19 extra windows cost ztmux 192 KiB and tmux 32 KiB.
-- Binary size is not a like-for-like comparison. Homebrew's tmux dynamically links libutf8proc, libncursesw, libevent_core and libjemalloc (otool -L), so their code is not counted in its 977 KiB; ztmux links only libSystem, libiconv and CoreFoundation, and the release profile keeps debug = "line-tables-only" for usable backtraces — stripping recovers 2.0 MiB.
+The final piece is the permissive sandbox policy applied to iFrames by default
 
-**The two latency rows are the ones that move.** A second run of the same script on the same
-machine six days later (2026-09-09) reproduced the memory and size rows within a few percent
-— ztmux 6192/6432 KiB against tmux 4016/4128 KiB, the same two binaries on disk — but the
-timings came out ztmux 53.06 ms / tmux 71.70 ms cold and 12.73 ms / 9.10 ms warm: cold start
-*faster* than the C that run, having been a hair slower in the one above. Both runs are real;
-what they show is that on a busy laptop the cold-start row is dominated by whatever else is
-scheduling, and a single run of it should not be read as a ranking. The memory and size rows
-are the reproducible ones.
+```
+func extraAttributes(tagName string) ([]string, []html.Attribute) {
+	switch tagName {
+...
+	case "iframe":
+		return []string{"sandbox", "loading"}, []html.Attribute{
+			{Key: "sandbox", Val: "allow-scripts allow-same-origin allow-popups"},
+			{Key: "loading", Val: "lazy"},
+		}
+...
+	default:
+		return nil, nil
+	}
+}
+```
 
-Both binaries are timed with `-f /dev/null` and `/bin/cat` as the pane command, so no user
-config and no login shell lands in the measurement. That exclusion is deliberate and it is
-the largest term in practice: with a real `~/.tmux.conf` sourced, cold start on this
-machine measured 8.4 s for ztmux and 7.0 s for tmux — config, not multiplexer. Latency is
-reported as the best of N rather than the median because process-startup noise on a loaded
-machine is one-sided; the medians move by tens of milliseconds between runs for both
-binaries while the minima are stable to about 1 ms.
+Putting it all together, an RSS feed can XSS any yarr user who loads their post, here a simple demo (rewriting the parent DOM because no alerts with that policy (: )
 
-MIT — see [LICENSE](https://github.com/MenkeTechnologies/ztmux/blob/main/LICENSE). ztmux is a derivative work of tmux (Nicholas Marriott et al.),
-ISC; the original notices are retained in [COPYING](https://github.com/MenkeTechnologies/ztmux/blob/main/COPYING) and under [`vendor/`](https://github.com/MenkeTechnologies/ztmux/blob/main/vendor).
+I notified the maintainers of yarr about this finding but didn't get a response. With that said I don't see much immediate impact given yarr's account-less nature, at most spying on what other RSS feeds your subscribers are looking at. Nevertheless it was a fun little finding, thanks for reading.

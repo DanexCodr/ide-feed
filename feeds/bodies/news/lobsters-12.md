@@ -1,87 +1,19 @@
-On October 20 and 21, an attacker tried to exploit a GitLab vulnerability (CVE-2026-97229) on our instance, a week after the fix was released. The attack came close to working. We have found no evidence that it succeeded, but we cannot rule it out, so we treated the instance as compromised and rebuilt it from scratch. Our checks show that the aports repository, packages, and the October 21 releases were not tampered with.
+This blog post is about touch screen Macs, but I’ll start by talking about touch screen cars. Vehicle manufacturers have increasingly replaced physical controls in cars with touch screens, and it hasn’t gone well, because the touch screens frustrate drivers. As a resident of the Upper Midwest who drives wearing gloves in the winter, I suspect that the idea for touch screens came from somewhere warmer than the traditional home of the automotive industry, Detroit. For further reading on the serious, indeed dangerous problems with touch screens in cars, I found a couple of recent articles from [Popular Mechanics](https://www.popularmechanics.com/cars/car-technology/a64543699/touch-screens-making-cars-worse/) and [The Conversation](https://theconversation.com/yes-those-big-touchscreens-in-cars-are-dangerous-and-buttons-are-coming-back-272704).
 
-GitLab is being tested before we open it to the public again. All passwords have been reset, so when it is back you will need to set a new one with “Forgot your password?” on the sign-in page. We will post exactly what you need to do when it reopens. In the meantime: if you used the same password for your gitlab.alpinelinux.org account anywhere else, change it there. We have seen automated login attempts against our GitLab with passwords leaked from other sites.
+Smartphones have become ubiquitous, bringing ubiquitous familiarity with touch screen interfaces. Nonetheless, a touch screen is not the best interface for all purposes. In the case of cars, familiarity breeds contempt! The introduction of touch screens to smartphones was inspired by the physical limitations of the devices. The largest iPhone ever made, the new iPhone Duo, is still significantly smaller when unfolded than the smallest MacBook. Needless to say, the original 2007 iPhone was tiny compared to a MacBook. Mobile phones with a physical keyboard must have a correspondingly smaller screen, so manufacturers eliminated the physical keyboard to maximize screen size, relying entirely on a touch screen interface, including a software keyboard. In this case, touch screens were well motivated.
 
-If you have questions or concerns please reach out to us at infra@alpinelinux.org.
+Over the years I’ve owned many different computing devices of various sizes; from Apple: iMac, Mac Pro, Mac mini, MacBook Pro, iPhone, iPad. I’ve never once tried to control a Mac by touching its screen, not even absentmindedly. I simply never developed that habit. Many other people, however, when first introduced to a Mac, having only used touch screen computers such as smartphones and tablets, habitually attempt to control the Mac by touching its screen. This habit or expectation is cited as justification by defenders of touch screen Macs. In a [Wired interview](https://www.wired.com/story/the-inside-story-of-why-apple-finally-brought-a-touch-display-to-the-mac/) yesterday, Apple Senior Vice President of Worldwide Marketing Greg Joswiak said, “There’s a generation of young creators and young people using our MacBook Pros that expect to touch.” In my opinion, such an expectation is a terrible reason to introduce touch screen Macs. The habit of touching Mac screens can be broken and is worth breaking, because for most purposes the traditional Mac interface of a keyboard and indirect pointing device (mouse or trackpad) is so much more powerful and productive than the touch screen of an iPhone or iPad.
 
-## What happened
+Before you cite the ungodly AAPL market capitalization as proof that Joz’s opinion trumps mine, consider how Apple is the same company that gave us howlers such as the trash can Mac Pro, Touch Bar, butterfly keyboard, Liquid Glass, and gave a gold statue to Trump. I’m not even making any claims about the future profitability of touch screen Macs. I just think it’s a poor design.
 
-**The vulnerability:**
-CVE-2026-97229 is a critical (CVSS 10.0) vulnerability in how GitLab evaluates regular expressions in CI configuration. The underlying bug is in Onigmo, the regular expression engine built into Ruby. [GitLab published fixed releases on October 12](https://docs.gitlab.com/releases/patches/patch-release-gitlab-19-4-2-released/), but the fix itself is a set of patches to the Ruby that GitLab bundles in its own packages and container images. Upstream Ruby [shipped the fix on October 23](https://www.ruby-lang.org/en/news/2026/10/23/ruby-3-3-13-released/), in Ruby 3.3.13, 3.4.12 and 4.0.9.
+Ironically, people like me who were introduced to computers before the smartphone era are ridiculed as “resistant to change,” yet I’ve managed to learn how to use iPhones and iPads (the latter without a keyboard), so why can’t people who were introduced to computers during the smartphone era learn how to use Macs? Let me quote from a blog post I wrote earlier this year, [If computers are the future, why are computer users expected to be permanently illiterate?](https://lapcatsoftware.com/articles/2026/3/5.html)
 
-**The attack:**
-On October 20 and 21, a newly registered account sent crafted CI configurations to our GitLab instance, which was still running 19.3.4 and did not have the October 12 fix. This crashed GitLab worker processes 8 times. In 4 of those crashes the attacker got partway through the exploit and failed at the next step. The attacker also downloaded our GitLab container image, which suggests they were tuning the exploit to our exact build. We have found no evidence that the attacker ran code on the server, but we cannot rule it out.
+> The iPhone seems to have engendered a culture of anti-intellectualism and learned helplessness so pervasive that users have become evangelists for their own disempowerment. They demand that all software be “intuitive,” by which they mean idiot-proof, so simple that a n00b can use the software effortlessly and effectively. A suggestion to read the fine manual is greeted with charges of user hostility. Those who habitually, endlessly scroll YouTube or social media would balk at investing a little time to master the computing tools they use daily. Perhaps they would be surprised to learn that the supposedly intuitive 1984 Macintosh came with [170 page manual](https://archive.org/details/1984macintoshmanual/). A common conceit is that the Mac was easier to use than other computers out of the box; the reality is that the Mac was easier to use *after* the initial learning curve. The system went out of its way to establish internal consistency and interoperability, but the user first had to make sense of the system and its principles.
 
-**Our upgrade didn’t fix the vulnerability:**
-Upgrading to GitLab 19.3.6 on October 22 didn’t fix the vulnerability. The fix isn’t in GitLab’s own code but in a patch to Ruby, which GitLab applies only in its official packages. Our image used standard Ruby, so it didn’t get the patch.
+A MacBook Pro is bulkier than an iPhone, can’t fit in your hand or your pocket. That’s a disadvantage. Thankfully, a MacBook Pro has many advantages that outweigh the disadvantages. The larger screen size, the physical keyboard, and the less restrictive operating system allow Mac users to perform the same tasks with vastly greater ease than on iPhone or iPad and, moreover, to perform tasks not even possible on iPhone or iPad. It’s a shame to introduce new users to Mac by telling them to use it in the same way they used their old familiar devices, which are strictly limited by both hardware and software. A Mac is a terrible thing to waste! Not only functionally but also financially, since Macs on average have higher prices and longer effective lifespans than iOS devices. Steve Jobs (long before iPhone) called computers “bicycles for our mind.” I feel that adding touch screens to Macs is like adding training wheels to our bicycles. Some kids are given training wheels temporarily, but the ultimate goal is to outgrow training wheels, not to grow into them. The difficulty of learning to ride a bike without training wheels pays off in short order, giving the rider greater speed and maneuverability. In what dystopia would we consider training wheels the future of biking? (I suppose the same dystopia that would remove the steering wheel from our cars.)
 
-If you run GitLab with your own Ruby (from source or in your own container image) rather than GitLab’s packages, upgrading GitLab is not enough: you also need Ruby 3.3.13, 3.4.12, 4.0.9 or later.
+In general, Hacker News comments tend to be appalling. Occasionally, though, there’s a diamond in the rough. I’d like to end by quoting [one of those](https://news.ycombinator.com/item?id=50277746). Admittedly, I haven’t independently verified the veracity of the comment, but it seems truthy enough to cite, at least as fodder for debate:
 
-If you use our [alpinelinux/gitlab](https://hub.docker.com/r/alpinelinux/gitlab) container image, pull `alpinelinux/gitlab:19.3.6` again. The image published on October 27 contains Ruby 3.3.13. Any 19.3.6 image you pulled before October 27, and all older tags, are vulnerable.
-
-### Incident Timeline
-
-| Date | Event |
-| --- | --- |
-| Oct 28 | GitLab rebuild complete; all passwords reset and GitLab's secret keys replaced |
-| Oct 27 | GitLab closed to everyone except developers and build servers; rebuild started |
-| Oct 26 | Found the instance still vulnerable after the upgrade |
-| Oct 25 to 26 | Attacker returns and tries to get back in; attempts fail |
-| Oct 24 | aports, packages and Oct 21 releases verified against outside records |
-| Oct 23 | Attacker's account blocked; Ruby releases the fix |
-| Oct 22 | Upgraded to GitLab 19.3.6 |
-| Oct 21 | Main attack; GitLab crashes, 502 errors and failed CI jobs |
-| Oct 20 | Attacker registers an account and starts probing |
-| Oct 13 | CVE-2026-97229 published; we upgraded to GitLab 19.3.4 instead of 19.3.5 (which had the fix) by mistake |
-| Oct 12 | GitLab releases the fix |
-
-## What we know and what we can’t rule out
-
-**What we found**
-
-- Alpine releases and packages were not modified. The October 21 stable releases (3.21.9, 3.22.7, 3.23.7, 3.24.3), including their ISO images and the minirootfs tarballs the official alpine Docker images are built from, and all packages built from October 20 to 24 came from aports commits we verified against records outside GitLab. See the FAQ below for details.
-- No signing keys were exposed. The keys that sign Alpine packages and releases are not, and never have been, stored on the GitLab server.
-- No evidence that the attacker’s code ran: timing probes showed no delays, and we found no unexpected files, keys, hooks or processes.
-- No private data was returned to the attacker through any web or API request we can see.
-
-**Why we can’t be sure**
-
-- A successful exploit would leave no crash and no trace in the web logs.
-- Some logs from the attack day are gone (background job logs, the old container’s filesystem).
-- We had no logging of outbound network connections, and our hosting provider keeps none either.
-
-**What could have been exposed if the attack succeeded**
-
-- Email addresses, names and IP addresses of all users
-- Password hashes
-- 2FA secrets, CI/CD variables and runner tokens
-- Webhook, integration and push mirror credentials
-- Personal access tokens (stored as hashes)
-- Private repositories, and confidential issues and merge requests
-
-## FAQ
-
-### Why did we rebuild GitLab if we were able to mitigate the attack?
-
-Because we cannot rule out code execution, and the evidence we would need to confirm it no longer exists, we took the harder route and rebuilt the GitLab instance from scratch. This removes any foothold a possibly successful exploit could have left behind.
-
-While GitLab is closed, our package mirrors, cgit, and mailing lists/IRC are available as normal.
-
-### Are Alpine packages and releases affected?
-
-We have found no sign of tampering in aports or the releases.
-
-Every aports commit added October 20 to 22 arrived through a recorded push by a known developer. We checked this against records the attacker could not reach: a developer’s clone and all 45 builders. Every package built from October 20 to 24, on every architecture, came from commits as published on git.alpinelinux.org. The October 21 releases (3.21.9, 3.22.7, 3.23.7, 3.24.3) were built from those same verified commits.
-
-We ran these checks on October 24, covering commits from October 20 to 22 and packages built up to October 24. Our GitLab stayed vulnerable until we closed it on October 27, so we are extending the same checks to that date.
-
-### Is Alpine’s ruby package affected?
-
-The bug is in Ruby’s regular expression engine, so any program that compiles regular expressions from untrusted input is exposed, not only GitLab. Alpine 3.22, 3.23, 3.24 and edge ship Ruby 3.4.12, and Alpine 3.21 ships Ruby 3.3.13; both include the fix. Run `apk upgrade` to get it.
-
-### What are we changing in response to this event?
-
-- Fixed Ruby: the rebuilt instance runs a Ruby with the fix (3.3.13 or later).
-- Faster patching: apply critical GitLab security releases within a day, and check each release for Ruby or other component patches our own build must apply.
-- Better logging: record outbound connections from the GitLab host and database connections, and keep logs longer than 14 days.
-- Signed release tags, so releases can be verified independently of GitLab.
+> I bought a laptop for a relative and didn't realise it doesn't have touchscreen. They complained for a day and I often saw them try to touch the screen and then being disappointed it doesn't work. Week later they never mentioned it again and use the laptop just fine.
+>
+> When I was buying them a second one and asked about touchscreen, they said they don't care anymore for it, so second laptop also was without touchscreen.

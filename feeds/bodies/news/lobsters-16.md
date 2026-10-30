@@ -1,43 +1,17 @@
-Earlier this month Deno announced its whole team is joining Cloudflare. In the [announcement](https://deno.com/blog/cloudflare), Ryan Dahl, who created Node.js and started Deno in 2018, also explains that development of the Deno runtime will stop after one year. That leaves the web with two major general-purpose runtimes, the OpenJS Foundation’s Node.js and Anthropic’s Bun, alongside Cloudflare’s runtime, [workerd](https://blog.cloudflare.com/workerd-open-source-workers-runtime/), which is built primarily for its own Workers platform. As someone who studies web dev tools, this concerns me.
+Today we're launching SLCR (Sliceable, Linked, Checkable Requirements,
+pronounced *slicer*), an open format for writing software requirements for
+both people and coding agents. We're the team at Wack, and we built SLCR
+because our own agents kept drifting from the spec over time. If you work on
+a long-lived codebase and you're handing more of the implementation to agents,
+SLCR gives you a way to check that what comes back still matches what you
+asked for.
 
-Remember Internet Explorer 6? Microsoft released it in 2001; it won roughly [nine in ten browser users](https://en.wikipedia.org/wiki/Internet_Explorer_6), and then MS largely stopped working on it. With no serious rival, there was no reason to improve and so, for about five years, developers were forced to write for one browser’s quirks rather than for open standards, and “[best viewed in Internet Explorer](https://en.wikipedia.org/wiki/Browser_wars)” badges were everywhere.
+You can try it today. The
+[getting started tutorial](https://slcr.dev/docs/getting-started/tutorial) takes you from
+installing the CLI to your first spec, and the
+[agent skill](https://slcr.dev/docs/getting-started/installation#install-the-agent-skill)
+teaches your agents to read and write SLCR.
 
-When this situation became intolerable the market responded with alternatives. Mozilla’s Firefox grew out of the wreckage of Netscape, and Apple built Safari on an open-source engine called WebKit. Then Google’s Chrome arrived in 2008. Competition returned, and the pace of improvement returned with it.
-
-But this recovery carried the seeds of the next consolidation. In 2013, Google forked WebKit into its own engine, Blink. That same year, Opera abandoned the Presto engine it had built for nearly two decades and switched to Blink. In 2018, Microsoft announced that Edge would give up its own engine and run on Chromium too. Today, nearly every browser people use is built on one of three engines, and one of them, Google’s, powers the large majority.
-
-The server side has its own version of this consolidation story. Node.js, the runtime that brought JavaScript to servers, [stagnated under the company that sponsored it](https://lwn.net/Articles/627932/) so that in 2014, frustrated contributors forked it as io.js. This competitive pressure worked. The two projects reunited in 2015 under a neutral foundation, and Node has been community-governed ever since.
-
-We see over and over that choice is necessary for the health of the internet and when the number of independent implementations shrinks the web becomes more fragile. In fact, this general precept was the inspiration for Deno. In Deno’s launch post, Dahl explains that he lunched this product to add features he considered critical such as [a web browser for command-line scripts](https://deno.com/blog/v1#a-web-browser-for-command-line-scripts), [first-class TypeScript support](https://deno.com/blog/v1#first-class-typescript-support), [promises all the way down](https://deno.com/blog/v1#promises-all-the-way-down), and [Rust APIs](https://deno.com/blog/v1#rust-apis). Deno [never overtook Node](https://www.infoq.com/news/2026/03/state-of-js-survey-2025), but it pushed the whole field forward. In fact, many of the features Dahl had outlined are now [built into Node](https://nodejs.org/api/permissions.html).
-
-Deno’s exit leaves a short(er) list of Javascript runtimes. Beyond the smattering of independent options, of the main runtimes two of the three alternatives to Node now belong to companies whose core business is something else. While some developers on [Hacker News](https://news.ycombinator.com/item?id=50019911) say they felt misled, the reality is that venture backed companies have to make a return of some kind and being acquired is always one of the likely outcomes.
-
-## **Monoculture spreading to the server**
-
-Here’s what I’m worried about: the monoculture that took over browsers is now consolidating the server. Every major server runtime borrows its engine from a browser. Node, Deno and Cloudflare’s runtime all run on Google’s V8, the engine inside Chrome. Bun runs on Apple’s JavaScriptCore, the engine inside Safari. This is bad.
-
-A web standard [traditionally needs](https://www.w3.org/wiki/ImplementationReport)[two independent implementations](https://tc39.es/process-document/) before it counts as a standard. The Ecma Technical Committee 39 rule exists because a spec written for one product tends to describe that product and only that product. Server runtimes have their own standards effort, a group called [WinterTC](https://www.w3.org/blog/2025/collaborating-across-w3c-and-ecma-for-web-interoperable-server-runtimes-through-wintertc/), which defines shared APIs so code can run anywhere. With fewer independent voices at that table, the most widely deployed runtime’s behavior becomes the standard by default, and not necessarily by merit.
-
-Another problem is that monocultures fail together. The web has seen this before. In 2014, a single bug called [Heartbleed](https://heartbleed.com) in OpenSSL, the encryption library shared by most secure websites, affected most of the web. The resulting fix was a patch + new forks including LibreSSL and Google’s BoringSSL. V8 carries the same risk, which a decade ago resulted in a [V8 flaw](https://nodejs.org/en/blog/vulnerability/june-2016-security-releases) shipped as a Chrome fix. Diversity doesn’t prevent bugs, but it does limit the blast radius.
-
-And then there’s the issue of features and progress. Deno made the idea of [permission-based security for server code](https://docs.deno.com/runtime/fundamentals/security) mainstream, and its competition helped push Node toward [built-in TypeScript support](https://nodejs.org/api/typescript.html) and [better tools](https://nodejs.org/api/test.html). Bun arguably did the same for [speed](https://devclass.com/2022/07/06/zig-based-bun-appears-in-beta-an-incredibly-fast-all-in-one-javascript-runtime/). Every challenger that disappears takes some of that pressure with it. A number of developers on Hacker News [voiced](https://news.ycombinator.com/item?id=50035683) this concern, such as this from psuedosavant:
-
-> It was successful for the Node community, but not for Deno the runtime or business. Deno launched with many features Node didn’t have, but that it has now adopted: ES Modules, fetch(), .ts file support, web streams, web crypto, a built-in test runner, file watching, etc. Node’s APIs didn’t even use Promises/async/await, they were all callback-based.
->
-> Ultimately, it was easier for the Node ecosystem to adopt those changes into Node than it was to migrate to a different JS runtime like Deno. Bun would likely not exist without Deno too.
-
-Here at RedMonk, we’re often talking about [consolidation](https://redmonk.com/sogrady/2024/02/07/pendulum-return/)—a circumstance which isn’t necessarily bad but comes with some downsides. After all, Linux became the default server operating system, and the internet flourished on top of it. In this respect the contraction of JS runtimes isn’t terrible, but when it comes to the infrastructure the internet runs on, it is important to be deliberate. For one thing, consolidation puts a lot of pressure on the OpenJS foundation, which can protect governance, but it can’t create competition.
-
-> ICYMI: Ende is a spiritual successor to Deno, stripped of distractions to simply be a secure runtime for TypeScript applications.Read the docs for more, official homepage is on the way.docs.ende.sh/runtime
->
-> — [Ende (@ende.sh)](https://bsky.app/profile/did:plc:nrg5n2uwwgys4atu5j3rvpy3?ref_src=embed) [2026-10-26T15:34:39.550Z](https://bsky.app/profile/did:plc:nrg5n2uwwgys4atu5j3rvpy3/post/3mys2cr24ks2l?ref_src=embed)
-
-Independent forks of Deno have appeared and show both the energy and the risk inherent in the endeavor. [Ende](https://github.com/theende/ende) shipped its first release in mid-October after dropping Node compatibility, while [Dodo](https://github.com/are-we-dodo-yet/dodo) has no releases yet and must be built from source. Linux, conversely, has many independent distributions and many companies funding its core, which is precisely the diversity JavaScript runtimes now lack.
-
-When I spoke with James Snell, principal engineer at Cloudflare and longtime Node.js Technical Steering Committee member, he had this to say:
-
-> No choice is never a good thing. That’s why I love the fact that we have Bun and Deno, along with Node. I love the fact that we have JSR and npmx trying different things. We have to have these choices in the ecosystem to move everything forward. It humors me to no end whenever one of these new things comes up and someone says, Well, no, this is the thing that’s gonna kill everything else, and it’s like, no, that’s not what we’re doing here. We’re not going to unseat anything, but having that choice is exactly what moves everything forward.
-
-The web survived Internet Explorer 6 because people kept building and funding alternatives—indeed they became necessary. I worry the current trajectory of JS runtimes is beginning to smell a bit like IE6. The lesson of the last 25 years is that innovation requires a diverse set of builders competing around a diverse set of implementations. It will be interesting to see what emerges to fill the gap.
-
-**Disclaimer:** Cloudflare, Microsoft, and Google are RedMonk clients.
+Everything is open source, and the [GitHub repo⁠ (external site)](https://github.com/wack/slcr)
+is where the work happens. If something breaks or doesn't fit how your team
+works, open an issue there and tell us about it. Pull requests are welcome too!

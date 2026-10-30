@@ -1,207 +1,43 @@
-In async Rust the `Future::poll` method is called to progress the state of the future, which reports its progress via the `Poll` enum. This enum contains two variants:
+Earlier this month Deno announced its whole team is joining Cloudflare. In the [announcement](https://deno.com/blog/cloudflare), Ryan Dahl, who created Node.js and started Deno in 2018, also explains that development of the Deno runtime will stop after one year. That leaves the web with two major general-purpose runtimes, the OpenJS Foundation’s Node.js and Anthropic’s Bun, alongside Cloudflare’s runtime, [workerd](https://blog.cloudflare.com/workerd-open-source-workers-runtime/), which is built primarily for its own Workers platform. As someone who studies web dev tools, this concerns me.
 
-- Poll::Pending: means that the future is not yet ready to produce a value, and poll will need to be invoked again later.
-- Poll::Ready(T): means the future is ready to yield some value T.
+Remember Internet Explorer 6? Microsoft released it in 2001; it won roughly [nine in ten browser users](https://en.wikipedia.org/wiki/Internet_Explorer_6), and then MS largely stopped working on it. With no serious rival, there was no reason to improve and so, for about five years, developers were forced to write for one browser’s quirks rather than for open standards, and “[best viewed in Internet Explorer](https://en.wikipedia.org/wiki/Browser_wars)” badges were everywhere.
 
-Futures are called that because they will eventually resolve to a value, *in the future*. But that’s value singular, not values plural. The stdlib documentation does not clearly make this guarantee (though it should), and the ecosystem doesn’t always implement this correctly (though it also should). But the intent is clear: one future should only ever yield one value.
+When this situation became intolerable the market responded with alternatives. Mozilla’s Firefox grew out of the wreckage of Netscape, and Apple built Safari on an open-source engine called WebKit. Then Google’s Chrome arrived in 2008. Competition returned, and the pace of improvement returned with it.
 
-Now what should happen when you try and call `Future::poll` again after it has already yielded a value? The `Future` trait docs have the following to say:
+But this recovery carried the seeds of the next consolidation. In 2013, Google forked WebKit into its own engine, Blink. That same year, Opera abandoned the Presto engine it had built for nearly two decades and switched to Blink. In 2018, Microsoft announced that Edge would give up its own engine and run on Chromium too. Today, nearly every browser people use is built on one of three engines, and one of them, Google’s, powers the large majority.
 
-> Once a future has completed (returned `Ready` from `poll`), calling its `poll` method again may panic, block forever, or cause other kinds of problems; the `Future` trait places no requirements on the effects of such a call. However, as the `poll` method is not marked `unsafe`, Rust’s usual rules apply […].
+The server side has its own version of this consolidation story. Node.js, the runtime that brought JavaScript to servers, [stagnated under the company that sponsored it](https://lwn.net/Articles/627932/) so that in 2014, frustrated contributors forked it as io.js. This competitive pressure worked. The two projects reunited in 2015 under a neutral foundation, and Node has been community-governed ever since.
 
-The docs state here that if you call `Future::poll` again after it’s yielded
-`Poll::Ready`, that’s unsupported and there aren’t many limits on the future’s
-behavior. The most common behavior here is to `panic!`, which is the behavior
-for all `async` blocks and functions. Which is a shame, since being able to call
-`Future::poll` again after it’s yielded `Ready` before is actually quite useful
-and something I frequently wish I was able to do.
+We see over and over that choice is necessary for the health of the internet and when the number of independent implementations shrinks the web becomes more fragile. In fact, this general precept was the inspiration for Deno. In Deno’s launch post, Dahl explains that he lunched this product to add features he considered critical such as [a web browser for command-line scripts](https://deno.com/blog/v1#a-web-browser-for-command-line-scripts), [first-class TypeScript support](https://deno.com/blog/v1#first-class-typescript-support), [promises all the way down](https://deno.com/blog/v1#promises-all-the-way-down), and [Rust APIs](https://deno.com/blog/v1#rust-apis). Deno [never overtook Node](https://www.infoq.com/news/2026/03/state-of-js-survey-2025), but it pushed the whole field forward. In fact, many of the features Dahl had outlined are now [built into Node](https://nodejs.org/api/permissions.html).
 
-## MaybeDone
+Deno’s exit leaves a short(er) list of Javascript runtimes. Beyond the smattering of independent options, of the main runtimes two of the three alternatives to Node now belong to companies whose core business is something else. While some developers on [Hacker News](https://news.ycombinator.com/item?id=50019911) say they felt misled, the reality is that venture backed companies have to make a return of some kind and being acquired is always one of the likely outcomes.
 
-Not everyone writing Rust writes async Rust, and not everyone writing async Rust will write async concurrency primitives. But those who do will be familiar with the `MaybeDone` type. It’s a simple wrapper around some `Future` whose only job it is to either hold a `Future` or if it's completed hold its `Future::Output`. While not simple, assuming you're familiar enough with async Rust it should be easy enough to follow:
+## **Monoculture spreading to the server**
 
-```rust
-use pin_project::pin_project;
-use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll};
+Here’s what I’m worried about: the monoculture that took over browsers is now consolidating the server. Every major server runtime borrows its engine from a browser. Node, Deno and Cloudflare’s runtime all run on Google’s V8, the engine inside Chrome. Bun runs on Apple’s JavaScriptCore, the engine inside Safari. This is bad.
 
-#[pin_project(project = DoneState)]
-enum MaybeDone<F: Future> {
-    Future(#[pin] F),
-    Done(Option<F::Output>),
-}
+A web standard [traditionally needs](https://www.w3.org/wiki/ImplementationReport)[two independent implementations](https://tc39.es/process-document/) before it counts as a standard. The Ecma Technical Committee 39 rule exists because a spec written for one product tends to describe that product and only that product. Server runtimes have their own standards effort, a group called [WinterTC](https://www.w3.org/blog/2025/collaborating-across-w3c-and-ecma-for-web-interoperable-server-runtimes-through-wintertc/), which defines shared APIs so code can run anywhere. With fewer independent voices at that table, the most widely deployed runtime’s behavior becomes the standard by default, and not necessarily by merit.
 
-impl<F: Future> MaybeDone<F> {
-    pub fn take(self: Pin<&mut Self>) -> Option<F::Output> {
-        match self.project() {
-            DoneState::Done(output) => output.take(),
-            DoneState::Future(_) => None,
-        }
-    }
-}
+Another problem is that monocultures fail together. The web has seen this before. In 2014, a single bug called [Heartbleed](https://heartbleed.com) in OpenSSL, the encryption library shared by most secure websites, affected most of the web. The resulting fix was a patch + new forks including LibreSSL and Google’s BoringSSL. V8 carries the same risk, which a decade ago resulted in a [V8 flaw](https://nodejs.org/en/blog/vulnerability/june-2016-security-releases) shipped as a Chrome fix. Diversity doesn’t prevent bugs, but it does limit the blast radius.
 
-impl<F: Future> Future for MaybeDone<F> {
-    type Output = ();
+And then there’s the issue of features and progress. Deno made the idea of [permission-based security for server code](https://docs.deno.com/runtime/fundamentals/security) mainstream, and its competition helped push Node toward [built-in TypeScript support](https://nodejs.org/api/typescript.html) and [better tools](https://nodejs.org/api/test.html). Bun arguably did the same for [speed](https://devclass.com/2022/07/06/zig-based-bun-appears-in-beta-an-incredibly-fast-all-in-one-javascript-runtime/). Every challenger that disappears takes some of that pressure with it. A number of developers on Hacker News [voiced](https://news.ycombinator.com/item?id=50035683) this concern, such as this from psuedosavant:
 
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
-        match self.as_mut().project() {
-            DoneState::Future(future) => match future.poll(cx) {
-                Poll::Pending => Poll::Pending,
-                Poll::Ready(output) => {
-                    self.set(Self::Done(Some(output)));
-                    Poll::Ready(())
-                }
-            },
-            DoneState::Done(_) => Poll::Ready(()),
-        }
-    }
-}
-```
+> It was successful for the Node community, but not for Deno the runtime or business. Deno launched with many features Node didn’t have, but that it has now adopted: ES Modules, fetch(), .ts file support, web streams, web crypto, a built-in test runner, file watching, etc. Node’s APIs didn’t even use Promises/async/await, they were all callback-based.
+>
+> Ultimately, it was easier for the Node ecosystem to adopt those changes into Node than it was to migrate to a different JS runtime like Deno. Bun would likely not exist without Deno too.
 
-In essence what this provides is a slot that holds either a future, or its final resolved value. And in doing so it also performs another trick: it replaces the output of the future with the unit type and adds a new method `take` to actually extract the value of the future.
+Here at RedMonk, we’re often talking about [consolidation](https://redmonk.com/sogrady/2024/02/07/pendulum-return/)—a circumstance which isn’t necessarily bad but comes with some downsides. After all, Linux became the default server operating system, and the internet flourished on top of it. In this respect the contraction of JS runtimes isn’t terrible, but when it comes to the infrastructure the internet runs on, it is important to be deliberate. For one thing, consolidation puts a lot of pressure on the OpenJS foundation, which can protect governance, but it can’t create competition.
 
-When attempting to call `Future::poll` again after it has returned `Poll::Ready(())` once before, it will always continue to return `Poll::Ready(())`. And if you call the `take` method again after having received `Some(Future::Output)` before, it will keep returning `None` forever after.
+> ICYMI: Ende is a spiritual successor to Deno, stripped of distractions to simply be a secure runtime for TypeScript applications.Read the docs for more, official homepage is on the way.docs.ende.sh/runtime
+>
+> — [Ende (@ende.sh)](https://bsky.app/profile/did:plc:nrg5n2uwwgys4atu5j3rvpy3?ref_src=embed) [2026-10-26T15:34:39.550Z](https://bsky.app/profile/did:plc:nrg5n2uwwgys4atu5j3rvpy3/post/3mys2cr24ks2l?ref_src=embed)
 
-What is a relatively straightforward way of creating a slot that holds either a future or its output value has an interesting side effect of actually being able to communicate the state of the future even after it has yielded a value once. If a caller observes `Poll::Ready(())` + `None`, that means the future is done and will not be yielding a value again.
+Independent forks of Deno have appeared and show both the energy and the risk inherent in the endeavor. [Ende](https://github.com/theende/ende) shipped its first release in mid-October after dropping Node compatibility, while [Dodo](https://github.com/are-we-dodo-yet/dodo) has no releases yet and must be built from source. Linux, conversely, has many independent distributions and many companies funding its core, which is precisely the diversity JavaScript runtimes now lack.
 
-## Fixing Poll
+When I spoke with James Snell, principal engineer at Cloudflare and longtime Node.js Technical Steering Committee member, he had this to say:
 
-`MaybeDone` isn’t the only API in the `futures` crate which tracks the done state of a
-future. The `FusedFuture` trait provides an `is_terminated` method, and its `Fuse`
-adapter keeps returning `Poll::Pending` once the inner future has returned
-`Poll::Ready`. However this unfortunately abuses `Poll::Pending`, whose docs state:
+> No choice is never a good thing. That’s why I love the fact that we have Bun and Deno, along with Node. I love the fact that we have JSR and npmx trying different things. We have to have these choices in the ecosystem to move everything forward. It humors me to no end whenever one of these new things comes up and someone says, Well, no, this is the thing that’s gonna kill everything else, and it’s like, no, that’s not what we’re doing here. We’re not going to unseat anything, but having that choice is exactly what moves everything forward.
 
-> When a function returns `Pending`, the function *must* also ensure that the current task is scheduled to be awoken when progress can be made.
+The web survived Internet Explorer 6 because people kept building and funding alternatives—indeed they became necessary. I worry the current trajectory of JS runtimes is beginning to smell a bit like IE6. The lesson of the last 25 years is that innovation requires a diverse set of builders competing around a diverse set of implementations. It will be interesting to see what emerges to fill the gap.
 
-This definition is incompatible with how `Fuse` uses `Pending`, and so bringing
-it into the stdlib would require redefining `Pending` to mean both “pending” and
-“done”. This feels bad, because if you forget to call `is_terminated` first, the
-future will hang forever. There are other hacky schemes we could apply instead,
-but the right way to fix this would be by making the `Done` state a part of
-`Poll` itself:
-
-```rust
-pub enum Poll<T> {
-    Ready(T),
-    Pending,
-    Done,    // ← new
-}
-```
-
-Unfortunately we can’t make this change since `Poll` is not marked
-`#[non_exhaustive]`. Which is a shame since instead of panicking or hanging,
-futures would actually have an opportunity to share that they have nothing more
-to report. This would change the responsibility of what to do with that
-information from the callee to the caller. The caller might still choose to
-panic, but it could also forward the `Done` state, or in concurrency operations
-like `join` it could now be used to track which futures have completed, without
-needing `MaybeDone`.
-
-This would also have the benefit that it removes the implicit dependency of the
-async effect on the panic effect. The compiler can guarantee that calling
-`.await` never polls after getting `Ready`, and so it doesn’t need to handle the
-`Done` state. With this in place, `async` functions and blocks would no longer
-need to inject unwinding support on every path, reducing the codegen size which
-especially benefits embedded targets. It would also work well with the
-`no_panic` crate on crates.io, or an eventual function/block-level no-panic
-annotation.
-
-## Fixing CoroutineState
-
-The `CoroutineState` enum has the same problems as the `Poll` enum, in that it cannot express a final `Done` state. But unlike `Poll`, the `Coroutine` trait and `CoroutineState` enum aren't stable and so can be fixed without any breakage.
-
-Since `Coroutine` is used internally in compiler desugarings, these changes might still not be easy. But at least we don’t have to repeat the same mistakes we've made for async with iteration as well.
-
-To better illustrate the problem with `CoroutineState`, here is how it is defined today:
-
-```rust
-pub enum CoroutineState<Y, R> {
-    Yielded(Y),
-    Complete(R),
-}
-```
-
-[The documentation](https://doc.rust-lang.org/std/ops/enum.CoroutineState.html) has the following to say about the `Complete` variant:
-
-> Once a coroutine has returned `Complete` it is considered a programmer error to call `resume` again.
-
-`resume` here refers to `Coroutine::resume`, which drives the progress of the coroutine similar to `Iterator::next` and `Future::poll`. But just like with futures (and unlike iterators<sup>[1](https://blog.yoshuawuyts.com/the-future-trait-has-a-missing-state#unlike)</sup>), coroutines are unable to express a “done” state.
-
-Technically `Iterator::next` returning `None` is no guarantee that `None` will keep being returned. But at the very least returning `None` repeatedly is fine and expected, and so it’s a valid way of encoding a “Done” state, which is what `FusedIterator` does.
-
-This means that we cannot define a generic `FusedCoroutine` trait like we have with [`FusedIterator`](https://doc.rust-lang.org/std/iter/trait.FusedIterator.html). Since `Complete(R)` takes a generic param we could of course require that `Complete(Option<R>)`, but that would again be dancing around the problem. This is a problem we know we have, we know how to solve, and so we should solve:
-
-```rust
-pub enum CoroutineState<Y, R> {
-    Yielded(Y),
-    Complete(R),
-    Done,         // ← new
-}
-```
-
-This does leave us with some confusing names. `Complete` here is not the same as `Done`. So I would propose we name the variants after the operations they represent, just like we’ve done with `ControlFlow` (`Break|Continue`):
-
-```rust
-pub enum CoroutineState<Y, R> {
-    Yield(Y),   // ← renamed 
-    Return(R),  // ← renamed
-    Done,    
-}
-```
-
-## Even more states
-
-So far we’ve covered the three future states: `Ready`, `Pending`, and `Done`.
-These are the three states we communicate *externally*. But internally there
-is one more state: `Start` or `Init`. This is the state a future is in *before*
-it is first polled. But since we never yield that state, it’s internal-only.
-
-Another state we haven’t covered here is the state *before* the future or
-coroutine is initialized. In async Rust `.await` calls the
-`IntoFuture::into_future` method before polling the future, just like when
-iterating the `for..in` notation calls `IntoIterator::into_iter` before calling
-`Iterator::next`.
-
-I’m not sure what to call this pre-state, but its purpose is to capture inputs
-without needing to instantiate locals. Unfortunately `async {}` currently
-returns `impl Future` rather than `impl IntoFuture`. In [the gen auto-trait
-problem](https://blog.yoshuawuyts.com/gen-auto-trait-problem) I explained how
-that would help us create more precise bounds and solve a number of `Send`/`Sync`
-interactions. While changing the desugaring of `async {}` is tricky, `gen {}` is
-still unstable and is much easier to change.
-
-Finally, in [Never Snooze a Future](https://jacko.io/snooze.html) Jack O’Connor
-describes what ought to be an invalid future state: “Snoozed”. A future is
-snoozed when it is ready to make progress, but it’s not polled. I think of this as
-a way of translating the [“bbbs”
-scenario](https://rust-lang.github.io/wg-async/vision/submitted_stories/status_quo/barbara_battles_buffered_streams.html)<sup>[1](https://blog.yoshuawuyts.com/the-future-trait-has-a-missing-state#bbbs)</sup>
-into a liveness property.
-
-Barbara Battles Buffered Streams
-
-Futures [naturally form
-trees](https://blog.yoshuawuyts.com/tree-structured-concurrency). The
-“snoozed” state applies when some child future’s waker is called, and its parent is
-polled but the child isn’t. This leads to a rule that we can apply recursively
-to every future: *“When a future is polled, it must also poll all child futures
-that have had their waker called.”* If every future follows this rule, no future
-will ever be snoozed.
-
-## Conclusion
-
-The fact that futures are unable to signal being done is a problem, and one
-which has no good workarounds. Types like `MaybeDone` can work around this
-limitation on use, but do so by introducing redundant bookkeeping.
-
-Tracking the completion status of futures is necessary for the implementation of
-nearly all async concurrency operations. Instead `async {}` blocks desugar to
-futures which panic when polled again after completion. This creates problems in
-constrained environments like embedded and web where code size matters.
-
-We cannot fix the `Future` trait without deprecating the existing `Future::poll`
-method. This post is the fourth entry in my series analyzing problems with the
-`Future` trait, and even so I don’t think that’s enough yet to warrant replacing
-what we have. What we can do however is make sure we don’t repeat the mistakes
-we made in `Future`, for example by fixing the `Coroutine` trait and `gen`
-keyword.
+**Disclaimer:** Cloudflare, Microsoft, and Google are RedMonk clients.

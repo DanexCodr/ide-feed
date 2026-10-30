@@ -1,48 +1,55 @@
-I don’t know why I started to put this together. These machines fascinate me,
-because so much of early computing/hacker type culture happened on them. I
-started writing a table, but realised a timeline would be more intuitive. In
-this graph, the price is for a minimal configuration and adjusted for inflation.
-The time is the memory cycle time, a decent proxy for speed.
+Programming used to be a very different experience from the one we know today. In fact, the first programmers didn’t write code at all; the six women who worked on the ENIAC, one of the world’s first computers, at the University of Pennsylvania in 1946 did it by physically configuring switches, cables, and plugboards.
 
-![history-of-pdp-computers.png](https://entropicthoughts.com/image/history-of-pdp-computers.png)
+A few years later, MIT engineers programmed the Whirlwind by punching code onto paper tape that was then loaded into the computer’s memory—making it among the first “stored-program” machines. Later, they and others moved on to punch cards, one for each line of code.
 
-Some notes:
+By the early 1960s, programmers with interactive computers could use a “line editor” to type their code on teletypes—large, noisy keyboard-and-printer machines. They’d type one line of code at a time, and their work would be saved on a spinning hard disk the size of a modern washing machine. But there was still no such thing as the now-familiar full-screen text editors that allow programmers to see and modify many lines at a time on a display.
 
-- The pdp-1 was created mostly as an experiment. At the time, industrial control systems used either humans or complicated contraptions of logic boards to make decisions. Some engineers at dec wanted to see if there was a customer base willing to use general-purpose computers instead.1<sup>1</sup> But it wasn’t called a computer then, because the word “computer” back then meant big mainframe systems that ran batch calculations.
-- The pdp-4 was a variant of pdp-1 that was a little slower and much cheaper. It was not compatible with the pdp-1. The pdp-4 was upgraded with new chip technology and became the pdp-7, which was then optimised further for cost and speed and became the pdp-9.
-- The pdp-5 was created when they realised the pdp-1 and pdp-4 machines were overkill for industrial control systems. By being smaller, it could be much cheaper, at the cost of compatibility with pdp-1 and pdp-4. It was still intended for roughly the same market. The chip upgrade turned it into the pdp-8.
-- The pdp-6 was a completely different beast, aimed at a different market. It supported having tonnes of directly-addressable memory, as well as memory protection, so it could be used as a time-sharing system. The amount of memory made it run Lisp well.2<sup>2</sup> The smaller machines could also run Lisp, but not large Lisp programs. With the chip upgrade, it became the pdp-10.
-- The pdp-11 was a new architecture again, intended to subsume all the previous models, to avoid running three incompatible lines in parallel. There were many variants of the pdp-11, with various performance characteristics and corresponding price points. However, even its most powerful configuration wasn’t powerful enough to attract many pdp-10 users.
-- The vax came much later, but it’s included in the table anyway because it is what eventually subsumed the pdp-10. The vax was somewhat compatible with the pdp-11, but they served different markets.
+One of the first such tools, EMACS, turns 50 this year, and it is still widely used.
 
-There is a noticeable split in the hacker culture between users of the smaller
-(18 bit and less) and larger (32 bits and more) computers, exemplified by the
-contrast between Unix and Emacs. Unix was first created on pdp-7, then ported
-to pdp-11, then distributed to other pdp-11 users. The fact that it needed
-to run on these smaller machines, and still handle time sharing, shaped much of
-its implementation and interface. The same thing is true of the C language and
-standard library. Then we have something like Emacs, which was created on the
-massive pdp-10, and gained popularity with other pdp-10 users. It had plenty
-of hardware resources to use, and it did. The same thing is true of many Lisp
-variants.
+EMACS first ran on the early video terminals at the MIT Artificial Intelligence Laboratory in 1976, but its core concepts were so powerful that it was rewritten for many operating systems in the decades that followed. Apple even distributed it with Mac OS X. Beyond that, the software-­sharing community that started around EMACS helped give rise to the modern-day free software movement and the GNU/Linux operating system.
 
-What decided whether you became a small-computer hacker or large-computer hacker
-was what your employer could afford. Unix was created at Bell Labs, a private
-company that tried to do more with less. Emacs, in contrast, was built at mit,
-which at the time was flush with darpa money. This is why Richard Gabriel
-calls it [“mit/Stanford style” and “New Jersey approach”](https://www.dreamsongs.com/RiseOfWorseIsBetter.html).
+EMACS’s roots begin with the TECO text editor (originally the “Tape Editor and Corrector”) that Dan Murphy ’65 created in 1962 for the pioneering PDP-1 computer at MIT. The program’s commands were uppercase letters: A user would type “I” to insert text, “D” to delete a character, and so on. When tape gave way as a storage medium to files on a huge shared disk, the “T” in “TECO” came to stand for “Text.” And as years passed, TECO became a full language that programmers could use to create new commands, called macros, for editing their code.
 
-Some other examples of things that were developed on the pdp-11 includes
-Usenet, `vi`, rsx-11 (another operating system whose lineage continues into
-Windows nt), `make`, the idea of a shell with composable commands, plus tiny
-programming languages like `awk`. Things that were made with the pdp-10
-includes Scheme, TeX, Zork, email, and Microsoft basic.
+In the fall of 1971, Carl Mikkelsen ’76 created Control-R, an add-on program for TECO that took advantage of “glass teletype” terminals with video displays. Control-R immediately displayed changes to the file being edited on screen; the programmer no longer needed to reprint each line to see the changes. The drawback: The display could show only a few lines of code at a time.
 
-What do I want to say with this? I don’t know.
+> **“Experienced and sophisticated users found EMACS to be eminently more usable than any of the previous forms of editing.”**
 
-But
-it wasn’t called a computer then, because the word “computer” back then meant
-big mainframe systems that ran batch calculations.
+Then, in 1976, Richard M. Stallman, a researcher at the MIT AI Lab, saw a full-screen editor—called E—on a visit to Stanford’s AI Lab. Inspired, he returned to MIT and set out to improve Control-R. The most important change to the program’s underlying structure: Every key ran its own macro when pressed, making Control-R far easier to customize. The lab’s hackers took to Stallman’s code with gusto and started changing and adding commands.
 
-The smaller machines could also run Lisp, but not
-large Lisp programs.
+That created an issue for Guy Steele Jr., SM ’77, PhD ’80. A graduate student in the lab, Steele frequently needed to help other lab members debug their programs. “I noticed that it was much harder for me to help someone who was using one of these packages rather than straight TECO,” he recalls. “Eventually, it occurred to me to try [to] broker consensus on a standard set of Control-R commands that everyone could agree to use.”
+
+David Moon ’75, another member of the lab, helped out. Stallman jumped in as well, and eventually he took over. Together, the group assigned a standard set of commands that made use of the Meta key found on many of the lab’s early keyboards: Meta-F would move the cursor forward a word, Meta-B would move it back a word, and so on. They called the result EMACS, short for “Editor Macros” or “Editing Macros.” “My goal was not to construct a great new text editor,” says Steele. “I was trying to address a social problem.”
+
+Nevertheless, EMACS *was* a great new text editor. Whereas Control-R could be tricky, EMACS users with “no technical experience at all” could learn to edit letters, emails, and even programs “within minutes or an hour,” according to a history by Bernard S. Greenberg, SM ’74. Meanwhile, “experienced and sophisticated users found EMACS to be eminently more usable than any of the previous forms of editing.”
+
+Stallman started distributing EMACS to anyone who sent him a magnetic tape and a postage-paid return envelope. “EMACS does not cost anything; instead, you are joining the EMACS software-sharing commune,” he wrote in the 1981 manual. “The conditions of membership are that you must send back any improvements you make to EMACS.”
+
+Greenberg, meanwhile, decided to write his own version for Multics, an early operating system by that time owned by his employer, Honeywell. Greenberg’s EMACS won first prize at the International Honeywell Software Conference in 1980, and Honeywell started selling it. Honeywell wasn’t alone in marketing a version of EMACS: James Arthur Gosling, a Carnegie Mellon graduate who went on to lead the development of the Java programming language, made a version that he eventually sold as a commercial product.
+
+This transition from free to paid software ultimately spurred Stallman to launch a project to create an operating system that could be freely shared and improved by its users. He modeled this effort, called the GNU Project, after the increasingly popular Unix operating system from Bell Labs. “GNU” was short for “GNU’s Not Unix,” alluding to the fact that, unlike Unix, it would be free.
+
+The project’s first major application was GNU Emacs (now restyled in lowercase). The GNU/Linux operating system was still years away, so, despite the project’s aim to create an entirely free operating system, GNU Emacs initally ran on Unix. It would eventually run on a range of operating systems, including Linux but also other Unix-based systems. When Apple launched Mac OS X, the first release of its Unix-based operating system, in 2001, GNU Emacs was included.
+
+Apple stopped shipping GNU Emacs in 2019, but the company still has a program called mg (“Micro GNU Emacs”). Though it supports most EMACS commands, it lacks an integrated programming language, making it what some call an “ersatz EMACS.”
+
+Meanwhile, much of Apple’s OS still has hidden support for EMACS commands. The keyboard has no Meta key, but Control-Option-B will move back one word, and Control-Option-F will move one forward.
+
+### Keep Reading
+
+### Most Popular
+
+### Don’t be fooled—LLMs don’t reason
+
+Ten years after AlphaGo’s match against Go champion Lee Sedol, today’s AI still isn’t tapping into the machinery that made that win possible.
+
+### “We were looking at it wrong”: The explosive claim that’s upended the AI world
+
+An exclusive interview with Nick Cammarata, the researcher whose 26,000-word viral blog post has AI safety folks celebrating.
+
+### Stay connected
+
+## Get the latest updates from  
+MIT Technology Review
+
+Discover special offers, top stories,
+            upcoming events, and more.
