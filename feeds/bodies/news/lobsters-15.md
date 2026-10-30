@@ -1,74 +1,48 @@
-We found that several PDF implementations generate their AES-256 file keys from state spaces small enough to enumerate. In MuPDF, only 9 bits of random state affect the actual AES-256 key. Other PDF editors like Foxit base their AES-256 key on time based randomness and thus also lead to keys that are trivial to recover.
+I don’t know why I started to put this together. These machines fascinate me,
+because so much of early computing/hacker type culture happened on them. I
+started writing a table, but realised a timeline would be more intuitive. In
+this graph, the price is for a minimal configuration and adjusted for inflation.
+The time is the memory cycle time, a decent proxy for speed.
 
-![MuPDF AES-256 key recovery worksheets on a desk](https://v12.sh/cdn/_astro/cover.CF5x0X6B_1N5vR.webp)
+![history-of-pdp-computers.png](https://entropicthoughts.com/image/history-of-pdp-computers.png)
 
-## Introduction
+Some notes:
 
-PDF encryption protects the strings and datastreams in a PDF document, including metadata unless it is explicitly left unencrypted. The password protection mechanism has gone through a bunch of revisions over the years, moving from RC4 to AES and hardening password hashing against brute force attacks. The current version, revision 6, uses AES-256.
+- The pdp-1 was created mostly as an experiment. At the time, industrial control systems used either humans or complicated contraptions of logic boards to make decisions. Some engineers at dec wanted to see if there was a customer base willing to use general-purpose computers instead.1<sup>1</sup> But it wasn’t called a computer then, because the word “computer” back then meant big mainframe systems that ran batch calculations.
+- The pdp-4 was a variant of pdp-1 that was a little slower and much cheaper. It was not compatible with the pdp-1. The pdp-4 was upgraded with new chip technology and became the pdp-7, which was then optimised further for cost and speed and became the pdp-9.
+- The pdp-5 was created when they realised the pdp-1 and pdp-4 machines were overkill for industrial control systems. By being smaller, it could be much cheaper, at the cost of compatibility with pdp-1 and pdp-4. It was still intended for roughly the same market. The chip upgrade turned it into the pdp-8.
+- The pdp-6 was a completely different beast, aimed at a different market. It supported having tonnes of directly-addressable memory, as well as memory protection, so it could be used as a time-sharing system. The amount of memory made it run Lisp well.2<sup>2</sup> The smaller machines could also run Lisp, but not large Lisp programs. With the chip upgrade, it became the pdp-10.
+- The pdp-11 was a new architecture again, intended to subsume all the previous models, to avoid running three incompatible lines in parallel. There were many variants of the pdp-11, with various performance characteristics and corresponding price points. However, even its most powerful configuration wasn’t powerful enough to attract many pdp-10 users.
+- The vax came much later, but it’s included in the table anyway because it is what eventually subsumed the pdp-10. The vax was somewhat compatible with the pdp-11, but they served different markets.
 
-When a PDF is encrypted with AES-256, the password does not encrypt the document directly. The implementation generates a random 32-byte file key, which encrypts the content. The password and a salt are then hashed to derive a separate key, which encrypts this random 32-byte file key. Revision 6 makes this hashing deliberately slow; the older AES-256 revision 5 does not.
+There is a noticeable split in the hacker culture between users of the smaller
+(18 bit and less) and larger (32 bits and more) computers, exemplified by the
+contrast between Unix and Emacs. Unix was first created on pdp-7, then ported
+to pdp-11, then distributed to other pdp-11 users. The fact that it needed
+to run on these smaller machines, and still handle time sharing, shaped much of
+its implementation and interface. The same thing is true of the C language and
+standard library. Then we have something like Emacs, which was created on the
+massive pdp-10, and gained popularity with other pdp-10 users. It had plenty
+of hardware resources to use, and it did. The same thing is true of many Lisp
+variants.
 
-A PDF can have a user password for viewing and an owner password for changing permissions. Either unlocks the same file key, so the restrictions are up to the reader: with the viewing password, you can also make an unrestricted copy.
+What decided whether you became a small-computer hacker or large-computer hacker
+was what your employer could afford. Unix was created at Bell Labs, a private
+company that tried to do more with less. Emacs, in contrast, was built at mit,
+which at the time was flush with darpa money. This is why Richard Gabriel
+calls it [“mit/Stanford style” and “New Jersey approach”](https://www.dreamsongs.com/RiseOfWorseIsBetter.html).
 
-We found that this randomness is often generated very insecurely, allowing passwordless decryption of protected PDFs.
+Some other examples of things that were developed on the pdp-11 includes
+Usenet, `vi`, rsx-11 (another operating system whose lineage continues into
+Windows nt), `make`, the idea of a shell with composable commands, plus tiny
+programming languages like `awk`. Things that were made with the pdp-10
+includes Scheme, TeX, Zork, email, and Microsoft basic.
 
-## MuPDF
+What do I want to say with this? I don’t know.
 
-MuPDF versions before 1.28.5 use an implementation of the [drand48 family](https://pubs.opengroup.org/onlinepubs/7908799/xsh/drand48.html) to generate their random numbers. This generator is seeded once, using the current epoch in seconds:
+But
+it wasn’t called a computer then, because the word “computer” back then meant
+big mainframe systems that ran batch calculations.
 
-The generator is a 48-bit linear congruential generator:
-
-`fz_srand48()` writes the state as three 16-bit words. The low word is the constant `0x330e`, and the 32-bit timestamp occupies state bits 16 to 47:
-
-When MuPDF needs to generate a key, it calls `fz_memrnd()`, which will repeatedly take a random number, step the random number generator forward, and then use the lowest byte of this random number as a random byte.
-
-The shift discards state bits 0 to 16, and the cast to `unsigned char` discards everything above bit 24. Every output byte therefore comes from bits 17 to 24 of the LCG state.
-
-The issue is that the higher bits of the state never affect the lower bits. Multiplication and addition can carry bits upward, but not downward. Since each output byte comes from bits 17 to 24, anything above bit 24 can be ignored, even after stepping the generator forward.
-
-That leaves 25 bits that can affect the output. The bottom 16 are always initialized to `0x330e`, so only nine bits from the timestamp matter. Timestamps that differ by 512 seconds produce exactly the same byte stream.
-
-Since the possible keyspace is so small, we can just brute-force this by generating all possible 32-byte keys and trial decrypting:
-
-MuPDF uses the same generator for the document `/ID`, which is stored in the trailer in plaintext. When writing a new document, it will first draw 32 bytes from the same LCG and then immediately sample the decryption key after, so `/ID` can be used as an additional check.
-
-Searching all 512 streams in a very unoptimized python implementation using pure brute force takes about 11 milliseconds. On a test document:
-
-That key decrypts the document without either password.
-
-## Foxit
-
-Foxit PDF Reader 2026.1.3.36551 derives the file key as a hash of the current timestamp, 32 uninitialized bytes, and a constant. In practice these uninitialized bytes are zero filled and do not add any randomness.
-
-Or as an equivalent python snippet:
-
-The `/Perms` permissions block contains known plaintext, so the candidate check is one hash and one AES block decryption, with no password hashing and no document decryption:
-
-Our Rust implementation searches timestamps downward from the current time, using Rayon for multithreading. On a Ryzen 9 7950X with 32 threads it sustains 370 to 376 million timestamps per second:
-
-| Target timestamp | Candidates tested | Search time |
-| --- | --- | --- |
-| Ten years ago | 315,573,571 | 0.84 s |
-| Unix epoch | 1,792,610,110 | 4.85 s |
-
-The second row covers every timestamp from 1970 to the present. In practice, for a document that was relatively recently generated, this will be in the order of milliseconds.
-
-### Where did this key derivation come from
-
-This exact pattern popped up in a couple different PDF editing suites, so we were curious where they got it from. It was already present in PDFium’s [initial public commit](https://github.com/chromium/pdfium/blob/5110c4743751145c4ae1934cd1d83bc6c55bb43f/core/src/fpdfapi/fpdf_parser/fpdf_parser_encrypt.cpp#L504-L531) from May 2014. The [file header credits Foxit for the original code](https://github.com/chromium/pdfium/blob/5110c4743751145c4ae1934cd1d83bc6c55bb43f/core/src/fpdfapi/fpdf_parser/fpdf_parser_encrypt.cpp#L1-L5), so this code appears to have come from Foxit. Other editors may have picked it up through PDFium:
-
-The 32-byte middle value is `m_EncryptKey`, which is the uninitialized contents of the key buffer being hashed into itself. Assuming these bytes are zero filled, this is exactly the key derivation Foxit still uses today.
-
-## OpenPDF and iText
-
-OpenPDF 3.0.5 and iText 9.7.1 both route cryptographic randomness through an `IVGenerator` class, an ARC4 stream seeded with a millisecond timestamp and the JVM’s free memory:
-
-The same stream generates the file key and 32 bytes of salts stored in plaintext in `/U` and `/O`. We can check guesses for the timestamp and free memory against these salts, then recover the key from the adjacent bytes.
-
-While there is significantly more variance here than in the MuPDF and Foxit examples, this once again shows that the promise of 256 bit security is undermined by insecure randomness sources and lower-than-advertised state space.
-
-## Conclusion
-
-In each of these implementations, the file key is generated from a non-cryptographically secure source of randomness. What was supposed to be a security upgrade over older file keys derived from the user’s password instead led to weaker keys in practice. These issues were disclosed to the vendors and, in MuPDF’s case, fixed. Previously published copies cannot be retroactively protected, however, so these bugs may still have an impact.
-
-We published our [decryptors for MuPDF and Foxit](https://github.com/v12-security/pocs/tree/main/pdf_decryptors).
+The smaller machines could also run Lisp, but not
+large Lisp programs.

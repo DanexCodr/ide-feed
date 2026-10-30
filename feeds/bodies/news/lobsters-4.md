@@ -1,102 +1,18 @@
-Qwenputer is a pretty fun experimental model. It's a stock Qwen 3.5 4B with one addition: a RISC-V CPU embedded within the weights that uses the model's own Gated DeltaNet attention layers as RAM. (To learn how GDN works, [here's a handy guide](https://divagr.com/attention-lab/delta).) This 'CPU' runs completely within the forward passes of the model, and can run arithmetic operations, C and MicroPython code without any external runtime or tool usage whatsoever.
+The [eMudhra incident](https://emudhra.we-have-a-problem.com/) has shown how the modern Web PKI ecosystem [reacts](https://bugzilla.mozilla.org/show_bug.cgi?id=2083449) to a CA compromise. All things considered, I think it went smoothly—all the web browsers I use picked up the revocations swiftly. But it has also been a clusterfuck, with eMudhra trying to downplay their responsibilities and refusing to elaborate on how exactly the failure occurred. There's also a long tail of TLS clients that don't have a great way to handle revocations, or are otherwise [not getting their trust stores updated](https://emudhra.we-have-a-problem.com/apple.html) in a timely manner.
 
-To be very clear, it is not a plugin, a tool or a sandbox. This blog will explain exactly how this model works, and how the model utilises GDN layers as RAM, and how I also slotted in an experimental in-model file storage.
+The C2PA ecosystem tries to solve a very similar problem to Web PKI, but it is comparatively in its infancy. The media verification tools you'll find in search result top-spots today don't support revocation-checking at all.
 
-I also wrote up two follow-ups built on top of Qwenputer: how [hybrid models can learn to hide their reasoning in their RNN state and evade CoT monitoring](https://divagr.com/blog/hybrid-models-can-hide-reasoning-in-their-rnn-state), and how [compiled weights like these can work as inbuilt monitoring tools that the model itself can't tamper with](https://divagr.com/blog/building-oversight-tools-into-a-models-weights).
+So how would the C2PA ecosystem react to a similar compromise? Let's find out!
 
-You can grab Qwenputer from [Hugging Face](https://huggingface.co/divagr1925/Qwen3.5-4B-Qwenputer) or [ModelScope](https://www.modelscope.ai/models/Spartan1925/Qwen3.5-4B-Qwenputer), and the code is on [GitHub](https://github.com/divagr18/qwenputer).
+| 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 | openssl cms -verify -inform PEM \ -CAfile <( curl -fsSL "https://pki.goog/c2pa/root-g3.crt" \| openssl x509 -inform DER ) \ << EOF -----BEGIN CMS----- MIILJwYJKoZIhvcNAQcCoIILGDCCCxQCAQExDTALBglghkgBZQMEAgEwgf4GCSqG SIb3DQEHAaCB8ASB7XRoZSBsZWFmIGNlcnQncyBwcml2YXRlIGtleSBpcyA0Lg0K DQppLmUuDQoNCi0tLS0tQkVHSU4gUFJJVkFURSBLRVktLS0tLQ0KTUVFQ0FRQXdF d1lIS29aSXpqMENBUVlJS29aSXpqMERBUWNFSnpBbEFnRUJCQ0FBQUFBQUFBQUFB QUFBQUFBQQ0KQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQkE9PQ0KLS0tLS1FTkQg UFJJVkFURSBLRVktLS0tLQ0KDQpJJ20gc3VyZSB0aGlzIGlzIGZpbmUuDQoNCn5y ZXRyMGlkDQoNCqCCCEAwggIuMIIBs6ADAgECAhRRkrgBE4UqJdBnVQbsUbqo8ZzW DzAKBggqhkjOPQQDAzBDMQswCQYDVQQGEwJVUzETMBEGA1UECgwKR29vZ2xlIExM QzEfMB0GA1UEAwwWR29vZ2xlIEMyUEEgUm9vdCBDQSBHMzAgFw0yNTA1MDgyMjMy MjFaGA8yMDUwMDUwODIyMzIyMVowQzELMAkGA1UEBhMCVVMxEzARBgNVBAoMCkdv b2dsZSBMTEMxHzAdBgNVBAMMFkdvb2dsZSBDMlBBIFJvb3QgQ0EgRzMwdjAQBgcq hkjOPQIBBgUrgQQAIgNiAASG/1/+O4pw+l7cWbt4AhIy5LJL60HGfRpgcLzcn6oC wVZEQY32no8384Gii4/Ok4VHG+uVahaYAjenWVfI+DgTd6DtI0KGCilQimKEa7qq WE/ystd/enxuEjkVNDYxoXajZjBkMBIGA1UdEwEB/wQIMAYBAf8CAQIwDgYDVR0P AQH/BAQDAgEGMB8GA1UdIwQYMBaAFJxc2IlTQ+da1YHbA94ZfwQqKi2qMB0GA1Ud DgQWBBScXNiJU0PnWtWB2wPeGX8EKiotqjAKBggqhkjOPQQDAwNpADBmAjEAjJUR 7lt1QySToG2ERbL1BIQxvvgE7Irz/ymAxfQ0/AuWjWKQs1jvyi/6TbW9msRlAjEA 1D3Wa4NeA+MAwCTMCUqLfZn1UEHfvKdO94pULuh9NbRkV8ghhilZRHX4LibbJGQ5 MIIC2zCCAmCgAwIBAgIUT8ox+CYy5uawPWuDq5i51htFNyIwCgYIKoZIzj0EAwMw QzELMAkGA1UEBhMCVVMxEzARBgNVBAoMCkdvb2dsZSBMTEMxHzAdBgNVBAMMFkdv b2dsZSBDMlBBIFJvb3QgQ0EgRzMwHhcNMjUwNzMxMjEzNDQ5WhcNMzAwNzMxMjEz NDQ5WjBOMQswCQYDVQQGEwJVUzETMBEGA1UECgwKR29vZ2xlIExMQzEqMCgGA1UE AwwhR29vZ2xlIEMyUEEgTW9iaWxlIEEgMVAgSUNBIEczIEw0MHYwEAYHKoZIzj0C AQYFK4EEACIDYgAEdzciiVSAygXEOnYGN0w4CgRDWYMqsvolc2lpCyZnyDx5Q2po V0vuiK+ts9r+jhQtTsd1ZMU5Gyx5h5z/vuOwzJcytaIoxjXu9qnrT9zvHb/cnWAb w0yF6OQygtc8XHsfo4IBCDCCAQQwDgYDVR0PAQH/BAQDAgEGMB8GA1UdJQQYMBYG CCsGAQUFBwMEBgorBgEEAYPoXgIBMBIGA1UdEwEB/wQIMAYBAf8CAQAwFwYDVR0g BBAwDjAMBgorBgEEAYPoXgEBMGQGCCsGAQUFBwEBBFgwVjAsBggrBgEFBQcwAoYg aHR0cDovL3BraS5nb29nL2MycGEvcm9vdC1nMy5jcnQwJgYIKwYBBQUHMAGGGmh0 dHA6Ly9jMnBhLW9jc3AucGtpLmdvb2cvMB8GA1UdIwQYMBaAFJxc2IlTQ+da1YHb A94ZfwQqKi2qMB0GA1UdDgQWBBRTbbVy6CE+Y6GLWxV8Yf3X3xIxmzAKBggqhkjO PQQDAwNpADBmAjEA+inCNKzYg71/IAwvgTN9KCkYNuBcB1Xhk6gYujZdRzgPHw3o cmWxXH+QFnlYQrcMAjEA6nTiBHlgqcsQAAvFUE/iWvLjjNEfEiQU9kAmdbG77Naf w9UC5rMVEBH+xS2SqWnqMIIDKzCCArKgAwIBAgIUAM211uiU3M/jKFIlebqZ/jDj T40wCgYIKoZIzj0EAwMwTjELMAkGA1UEBhMCVVMxEzARBgNVBAoMCkdvb2dsZSBM TEMxKjAoBgNVBAMMIUdvb2dsZSBDMlBBIE1vYmlsZSBBIDFQIElDQSBHMyBMNDAe Fw0yNjEwMjkxNzEyNDRaFw0yNjExMjgxNzEyNDNaMFoxCzAJBgNVBAYTAlVTMRMw EQYDVQQKEwpHb29nbGUgTExDMR4wHAYDVQQLExVHb29nbGUgUGhvdG9zIEFuZHJv aWQxFjAUBgNVBAMTDUdvb2dsZSBQaG90b3MwWTATBgcqhkjOPQIBBggqhkjOPQMB BwNCAATiU0o1MtCPu6At3mWe5ivQAx/i23hVlu9QkwJEawMIUuDxV1pMYzzHGd/u X9qGLXZO/JbD8w7gBVxCwj8YTtjGo4IBYDCCAVwwDgYDVR0PAQH/BAQDAgbAMB8G A1UdJQQYMBYGCCsGAQUFBwMEBgorBgEEAYPoXgIBMAwGA1UdEwEB/wQCMAAwHQYD VR0OBBYEFIakFPWEVO/LdP6Mb2fIWtP+qgCmMB8GA1UdIwQYMBaAFFNttXLoIT5j oYtbFXxh/dffEjGbMHIGCCsGAQUFBwEBBGYwZDAmBggrBgEFBQcwAYYaaHR0cDov L2MycGEtb2NzcC5wa2kuZ29vZy8wOgYIKwYBBQUHMAKGLmh0dHA6Ly9wa2kuZ29v Zy9jMnBhL21vYmlsZS1hLTFwLWljYS1nMy1sNC5jcnQwFwYDVR0gBBAwDjAMBgor BgEEAYPoXgEBMBkGCSsGAQQBg+heAwQMBgorBgEEAYPoXgMKMDMGCSsGAQQBg+he BAQmDCQwMTk3YWU0ZC01Yzg1LTczOWYtOTFhZS03MGIwNTIzNDI1YTcwCgYIKoZI zj0EAwMDZwAwZAIwRY1wCEyg6Gb/4ASs4/iL0P0FHUzqIRi/R3m720dr422j4xjj GOFt2Jl8Pd26gABTAjA/UklPGjzCLOjPXyoAoYC8NyVTjLvMGuJPrRQyZp6sYhP5 kGD4v4pD2J4fTzBl5QExggG5MIIBtQIBATBmME4xCzAJBgNVBAYTAlVTMRMwEQYD VQQKDApHb29nbGUgTExDMSowKAYDVQQDDCFHb29nbGUgQzJQQSBNb2JpbGUgQSAx UCBJQ0EgRzMgTDQCFADNtdbolNzP4yhSJXm6mf4w40+NMAsGCWCGSAFlAwQCAaCB 5DAYBgkqhkiG9w0BCQMxCwYJKoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjEw MjkxODU4MDNaMC8GCSqGSIb3DQEJBDEiBCBr2PQzGjwSYJ7hpRMk65RGHQKfbvMd A3k0o31kdPrbcjB5BgkqhkiG9w0BCQ8xbDBqMAsGCWCGSAFlAwQBKjALBglghkgB ZQMEARYwCwYJYIZIAWUDBAECMAoGCCqGSIb3DQMHMA4GCCqGSIb3DQMCAgIAgDAN BggqhkiG9w0DAgIBQDAHBgUrDgMCBzANBggqhkiG9w0DAgIBKDAKBggqhkjOPQQD AgRIMEYCIQD+Ikz8MzZ1PerfRQniA3xMFIWxVYF8dciJHo0kL1SWdQIhAOWbO2HP 93aBMOmUEihsc6Y0cfOSOe254d7ibV4MDzyp -----END CMS----- EOF |
+| --- | --- |
 
-## The RNN inside Qwen3.5 can be exact RAM
+The above demonstrates a S/MIME encrypted message, with a signature that chains to Google's C2PA root CA, which is in the official [C2PA trust list](https://github.com/c2pa-org/conformance-public/blob/295f13bf4d8f483046f13a32a808a7ca3b1742f9/trust-list/C2PA-TRUST-LIST.pem#L101-L115).
 
-Qwen3-Next and Qwen 3.5 (the model Qwenputer is built on) use a pretty neat trick. 3 out of 4 attention layers in the model use Gated DeltaNet, a linear RNN, as the attention mechanism ([more on that here](https://divagr.com/attention-lab/delta)). Each head keeps a state matrix, and the delta rule keeps this updated.
+The vulnerabilities I exploited to produce this chain are not eligible for bug bounty rewards, and are in fact already publicly known. But in the spirit of our little experiment I'm not going to elaborate.
 
-Now, here's where our fun experiment starts. I found out that by setting the gate to 1,<sup>[1](https://divagr.com/blog/qwenputer#footnote-1)</sup><sup>1</sup> Each Gated DeltaNet head keeps a state matrix, its memory. At every token, before writing anything new, it multiplies the whole state by the gate, a number between 0 and 1. That's how the RNN forgets: a gate of 0.9 fades everything stored a little on every token, and a gate of 1 means nothing ever fades. the write strength (beta) to 1,<sup>[2](https://divagr.com/blog/qwenputer#footnote-2)</sup><sup>2</sup> After the gate, the head nudges one direction of the state towards a new value, and the write strength beta sets how far. A beta of 1 means the old value along that direction is replaced completely instead of blended. and using one-hot key encoding,<sup>[3](https://divagr.com/blog/qwenputer#footnote-3)</sup><sup>3</sup> A one-hot key is a vector of zeros with a single 1 in it, so it points at exactly one row of the state, the way a memory address points at one cell. every write we perform will overwrite exactly one row, and every one-hot query can retrieve an exact value. This means that the GDN layers themselves can work exactly as RAM, at a far lower cost than using normal attention as RAM, since a GDN head's state stays the same size however long the conversation gets, unlike attention's KV cache.
+The astute observer will note that my demo is "not the same" as the eMudhra compromise, because it's *merely* a leaf cert that has a private key of 4, rather than a trusted intermediate.
 
-The idea that the delta rule acts as a memory isn't new: Schlag et al. (2021) showed that linear attention with the delta rule works as an associative memory, or "fast weights".<sup>[4](https://divagr.com/blog/qwenputer#footnote-4)</sup><sup>4</sup> Imanol Schlag, Kazuki Irie and Jürgen Schmidhuber, "[Linear Transformers Are Secretly Fast Weight Programmers](https://arxiv.org/abs/2102.11174)", ICML 2021. The new thing here is making it exact and addressable, inside a production model, reliably enough to run a whole CPU on it.
+I can get Google's intermediate to sign any leaf key I like (via an undisclosed method), and that "4" key is just how I'm proving it.
 
-This is the base on which this entire model is built. As it stands, default Qwen 3.5 does not keep exact values in the GDN. With this modification, we unlock the next part of this experiment.
-
-## Compiling a computer into layers
-
-Since we have a fully functional, cheap and fast RAM now, we can go ahead with compiling a working CPU into the model weights. Luckily, there's no training involved: a compiler sets every weight directly. You describe the CPU as a circuit, a long list of small steps like "read this register", "add these two numbers" or "jump if zero", and the compiler turns each step into a piece of a transformer layer: attention heads that look things up, feed-forward units that do the arithmetic, and DeltaNet heads that hold the RAM. The CPU then runs as the model decodes.
-
-Each instruction becomes a few generated tokens: one names the memory row to write (ADDR), the next carries the value (VAL), and a STEP token ends the instruction. Those tokens are the CPU's execution trace, so while Qwen is generating them, the CPU is actually running.
-
-## The CPU
-
-The CPU is a 32-bit RISC-V core (RV32IM, plus the Zba extension and a small bignum unit for big-number arithmetic), and it takes up 11 layers in front of Qwen's 32. As it stands, it passes the official riscv-tests, its programs match qemu, and it has run 18 million instructions free-running without a single error.<sup>[5](https://divagr.com/blog/qwenputer#footnote-5)</sup><sup>5</sup> Free-running means the CPU keeps going on its own outputs for the whole run, with no reference machine correcting it between steps.
-
-This CPU can also run C and MicroPython code in the forward passes quite well (although a bit slowly). It is not a Linux-class chip yet, but it implements the full RV32IM instruction set.
-
-## How Qwen uses it
-
-Qwen 3.5 4B is able to use this CPU quite well, without any post-training required. The CPU is used completely internally, and not invoked through any external tool calls.
-
-In order to make the model use this reliably, I decided to go the cheap way: by piggybacking on the tool call format that models are quite well-trained on, Qwen sends the CPU its instructions and reads back the results. **No external tool calls or runtime are used.** Once our CPU receives the instructions, the computer layers run, and then write the tool response. We use a small driver called RvChat to load the firmware into the GDN state, and this keeps the trace tokens out of Qwen's layers.
-
-Qwen's original weights stay exactly as they are. The computer weights are added on top of them, in extra dims and layers.
-
-## Does it work?
-
-I think the main question here on your mind after reading through my incessant ranting will be: does this actually work?
-
-On the DeepMind sets:
-
-- div_big: Qwenputer scores 97.5%, versus 95% by giving Qwen 3.5 4B a Python tool and 72.5% for base Qwen.
-- mul_big: Qwenputer scores 97.5%, versus 100% with a Python tool and 55% for base Qwen.
-- mul_div_multiple_longer: Qwenputer scores 100%, versus 97.5% with a Python tool and 90% for base Qwen.
-- add_or_sub_big: Qwenputer scores 97.5%, the same as with a Python tool, and 87.5% for base Qwen.
-
-On NUPA's long-integer arithmetic, Qwenputer goes from 48.6% to 100%, the same as giving Qwen a Python tool.
-
-The numbers the CPU prints are exact, too: I replayed about 230,000 of its output positions against a reference machine and found zero mismatches. And bolting a computer onto Qwen doesn't change how it talks: its normal text stays within noise of base Qwen (KL 6e-4, against a noise floor of 5e-4).
-
-## A hard drive? In this economy?
-
-Because a CPU inside a language model clearly wasn't cursed enough, I decided the prudent thing would be to give it a filesystem too.
-
-Since we already have a functional RAM, this was mostly trivial. On the model side, it's exposed via internal put / append / get / list / delete operations. **Once again, no actual tool calls.** When Qwen 'saves' a file, the compiled layers hash its name into one of 1,024 slots in a directory kept in the DeltaNet state, and store the text itself in other heads, with eight tokens per row, chained together. In scenarios where two names end up landing on the same slot, it just checks the next one. Finding a file again takes roughly two or three steps instead of a scan, and it holds up to 512 files, which comes out to about 53,000 tokens of text.
-
-Fun thing is, this is quite persistent. You can save the state at the end of a conversation, load it into the next one, and the files are still there. Using this filesystem, Qwen gets facts that changed between chats right 90% of the time, against 30% when you paste the old chats back in, and it's on par with giving Qwen memory tools run by Python (83.3% vs 78.9%). This one is still experimental, and its code lives on the [rv-store branch](https://github.com/divagr18/qwenputer/tree/rv-store/experimental/riscv), with the model on [Hugging Face](https://huggingface.co/divagr1925/Qwen3.5-4B-Qwenputer-Filesystem) and [ModelScope](https://www.modelscope.ai/models/Spartan1925/Qwen3.5-4B-Qwenputer-Filesystem).
-
-## Limits and what's next
-
-Qwenputer is very much an experiment, so a few limitations. The extra layers and wider hidden size make the checkpoint 18.8 GB, roughly double base Qwen, although most of it is zero padding. It also needs a small driver (RvChat) to boot the firmware and keep the trace tokens out of Qwen's layers, so it doesn't run with a plain `generate()` call yet. And it's a bit slow, with every CPU instruction costing a few decoded tokens, so a big calculation takes seconds rather than milliseconds. The batched executor I used for the benchmarks runs about 3,200 CPU tokens a second on an L4.
-
-Next up, I want Qwen to write Python and run it on the MicroPython inside its own weights, through a `python()` tool that works the same way `calc` does. Making the CPU faster is the other big one.
-
-## Beyond arithmetic
-
-Exact control over the RNN layers is useful for a **lot** more than arithmetic. It also makes Qwenputer a really nice testbed for AI safety research, and I wrote up two follow-ups: how [hybrid models like Qwen 3.5 can learn to hide their reasoning in their RNN state and evade CoT monitoring](https://divagr.com/blog/hybrid-models-can-hide-reasoning-in-their-rnn-state), and how [compiled weights can work as monitorability tools](https://divagr.com/blog/building-oversight-tools-into-a-models-weights), like an in-weight monitor the model can't switch off, or answer keys for interpretability.
-
-## Try it
-
-If you want to play with it yourself, the model runs on a single 24 GB GPU. You'll need [uv](https://docs.astral.sh/uv/) and the Hugging Face CLI. You **don't** need a tool server or a Python sandbox for the calculations: the CPU runs them inside the model.
-
-```bash
-git clone https://github.com/divagr18/qwenputer && cd qwenputer/experimental/riscv && uv sync --extra hf
-hf download divagr1925/Qwen3.5-4B-Qwenputer --local-dir qwenputer-rv
-uv run python -m chipformer.rv.chat qwenputer-rv --firmware tests/data/rv/calc-bridge.elf \
-    --ask "Use calc: what is 123456789 * 987654321?"
-```
-
-Everything is open: the [code on GitHub](https://github.com/divagr18/qwenputer), and both models on Hugging Face ([Qwenputer](https://huggingface.co/divagr1925/Qwen3.5-4B-Qwenputer), [Filesystem](https://huggingface.co/divagr1925/Qwen3.5-4B-Qwenputer-Filesystem)) and ModelScope ([Qwenputer](https://www.modelscope.ai/models/Spartan1925/Qwen3.5-4B-Qwenputer), [Filesystem](https://www.modelscope.ai/models/Spartan1925/Qwen3.5-4B-Qwenputer-Filesystem)).
-
-If you use it in your work, you can cite it as:
-
-```bibtex
-@software{agrawal2026qwenputer,
-  author  = {Agrawal, Divyansh},
-  title   = {{Qwenputer}: a computer compiled into the weights of a pretrained language model},
-  year    = {2026},
-  url     = {https://github.com/divagr18/qwenputer}
-}
-```
-
-## Notes
-
-1. Each Gated DeltaNet head keeps a state matrix, its memory. At every token, before writing anything new, it multiplies the whole state by the gate, a number between 0 and 1. That's how the RNN forgets: a gate of 0.9 fades everything stored a little on every token, and a gate of 1 means nothing ever fades. ↩
-2. After the gate, the head nudges one direction of the state towards a new value, and the write strength beta sets how far. A beta of 1 means the old value along that direction is replaced completely instead of blended. ↩
-3. A one-hot key is a vector of zeros with a single 1 in it, so it points at exactly one row of the state, the way a memory address points at one cell. ↩
-4. Imanol Schlag, Kazuki Irie and Jürgen Schmidhuber, "Linear Transformers Are Secretly Fast Weight Programmers", ICML 2021. ↩
-5. Free-running means the CPU keeps going on its own outputs for the whole run, with no reference machine correcting it between steps. ↩
+In the context of TLS that's kinda how cert issuance works normally, but it completely breaks the C2PA [trust model](https://spec.c2pa.org/specifications/specifications/2.4/specs/C2PA_Specification.html#_trust_model).

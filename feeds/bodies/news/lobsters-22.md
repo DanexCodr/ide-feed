@@ -1,177 +1,207 @@
-Last year, the Redox team [received a grant](https://nlnet.nl/project/RedoxOS-ringbuffer/) to develop io_uring-like Ring Buffer support at the system task level,
-as a first step towards ring buffer communications between the application and the majority of system services.
-This phase of the work finished up in September, as the last pieces were put in place.
-
-We want to thank the [NLnet Foundation](https://nlnet.nl/), the NGI Zero Commons Fund, and Horizon Europe for their generous support.
-The NGI Zero Commons Fund is reaching its end, but NLnet is now accepting applications for grants from new funds,
-[Restack](https://nlnet.nl/restack/) and [Code Supply](https://nlnet.nl/codesupply/),
-as well as some [smaller theme funds](https://nlnet.nl/themes/).
-[Apply for funding before November 3rd 2026!](https://nlnet.nl/news/2026/20260903-call.html) (and then every two months after that).
-
-The team has done a fantastic job, and I want to congratulate Ibuki, Anhad and Jacob, and thank them for their time and effort.
-
-In addition to implementing the Ring Buffer machinery for our system services and drivers that can support it,
-an `io_uring` and `liburing`-like API for applications was completed and demonstrated.
-There was also substantial work done on support crates, including an async executor for drivers.
-
-And there was some very exciting work on various performance improvements,
-to allow much faster switching between applications and their system services.
-But I will let the team tell you all the technical details.
-
-– Ron Williams
-
-## Ring Buffers Overview
-
-– Anhad Singh
-
-Historically asynchronous I/O on Linux was done through the kernel’s native AIO interface. AIO is mainly useful for unbuffered (`O_DIRECT`) *file* I/O, and buffered requests silently block<sup>[1](https://www.redox-os.org/news/nlnet-rb-summary/#fn:1)</sup>. Developers also raised concerns about its complexity and performance<sup>[1](https://www.redox-os.org/news/nlnet-rb-summary/#fn:1)</sup> <sup>[2](https://www.redox-os.org/news/nlnet-rb-summary/#fn:2)</sup>. There is also POSIX AIO, but developers often consider its implementation lackluster and slow<sup>[1](https://www.redox-os.org/news/nlnet-rb-summary/#fn:1)</sup>. To address these problems, several alternative asynchronous mechanisms such as [fibrils](https://lwn.net/Articles/219954/) and [syslets/threadlets](https://lwn.net/Articles/223899/) were proposed but were never merged into the mainline Linux kernel. In early 2019, [Jens Axboe](https://github.com/axboe) proposed and developed the io_uring interface, designed to be an efficient, extensible and “easy to use, hard to misuse.” In its early days, io_uring did have a few security issues and memory leaks, but these have since been addressed<sup>[3](https://www.redox-os.org/news/nlnet-rb-summary/#fn:3)</sup>. It was merged in Linux 5.1 and is widely used today.
-
-The Linux io_uring interface allows the user to submit one or more I/O operations to the kernel, which are then processed in an asynchronous fashion without blocking the userspace process. Redox, being a microkernel, handles I/O in userspace *scheme* processes rather than in the kernel. Each *file description* stores a handle to its scheme, so an I/O system call on that file can forward the request to the scheme. The async I/O interface developed in this project, called Redox Rings, uses a mechanism similar to io_uring. However, unlike io_uring which is used to submit operations to the kernel, the Redox Rings interface is used by the application to directly submit requests to the appropriate scheme asynchronously without blocking the application. Additionally, the interface allows I/O requests to be issued without any memory copies, by having a separate shared memory region between the scheme and the application (which can be requested as DMA-capable memory).
-
-For portability, the Redox Rings API is designed to be similar to that of [liburing](https://github.com/axboe/liburing) and can also be used for general inter-process communication. For example it is used for communication between the RedoxFS filesystem service and NVMed which is the storage driver. The addition of this API has allowed several parts of Redox to reap significant performance improvements!
-
-### Terminology
-
-A ring buffer is a circular queue backed by an array. The interface makes use of two ring buffers which are shared between the application and the scheme:
-
-- SQ: submission queue, where the application writes requests and the scheme reads them
-- CQ: completion queue, where the scheme writes responses and the application reads them
-- SQE / CQE: submission queue entry / completion queue entry, entries in the SQ and CQ, respectively
-- Buffer pool: A contiguous block of memory, shared between the application and the scheme, from which data buffers are allocated
-- Data buffer: For a request, we currently support a single data buffer, which is a slice of the contiguous buffer pool, defined by an offset and length
-
-Since each queue has exactly one producer and consumer, each index is only ever modified by one side. This eliminates the cost of having a shared locking mechanism.
-
-## The “redox-ring API”
-
-– Ibuki Omatsu
-
-We’ve introduced the first ring buffer implementation to Redox OS. Unlike Linux’s io_uring, the submission queue (SQ) and completion queue (CQ) are shared exclusively between userspace processes and are never accessed by the kernel.
-
-`redox-rings` is a new crate for ring buffer communication between userspace processes, also providing data structures for FFI use cases. It uses futexes as the main synchronization mechanism, with optional pipe file descriptor support.
-
-Based on its FFI support, we’ve introduced the “redox-ring API” in relibc, inspired by Linux’s liburing.
-
-liburing is a library for Linux’s io_uring, providing helpers for setting up and tearing down io_uring instances, as well as a simplified interface for submitting I/O requests.
-
-Similarly, the redox-ring API allows applications to communicate with daemons that support ring buffers using custom protocols.
-
-### Key functions
-
-The API provides functions for managing ring buffers, shared memory, and requests.
-
-- redox_ring_queue_init_with_path() initializes a ring buffer connection to a daemon.
-- redox_ring_alloc_buf() and redox_ring_alloc_sized() allocate buffers from the shared memory pool.
-- redox_ring_get_sqe() obtains a submission queue entry (SQE) for preparing a request.
-- redox_ring_submit() submits pending requests to the daemon.
-- redox_ring_wait_cqe() waits for a completion queue entry (CQE), blocking if none is available.
-- redox_ring_cqe_seen() marks a CQE as processed.
-
-The API also provides functions for registering file descriptors, freeing allocated buffers, and tearing down ring buffer instances.
-
-## Memory Management and Shared Buffers
-
-– Ibuki Omatsu
-
-The `redox-rings` implementation uses shared memory to exchange SQEs, CQEs, and I/O data between applications and daemons.
-
-During initialization, the SQ, CQ, and data buffer pool are mapped into the application’s address space using the `fmap` syscall with `MAP_SHARED`. This allows both sides to access the same memory without copying I/O data between processes.
-
-### Buffer allocation
-
-The redox-ring API supports two buffer allocation strategies:
-
-- Fixed-size allocation: Uses a simple allocator that divides the shared memory pool into fixed-size chunks and maintains a list of available offsets.
-- Dynamic allocation: Uses the redox-buffer-pool crate to allocate buffers of varying sizes and alignments. The allocator uses B-trees to manage free and occupied memory regions.
-
-Both allocation strategies return a pointer to the allocated buffer and its offset within the shared memory pool.
-
-Once an operation has completed, the application can release its buffer, allowing the memory to be reused.
-
-## Session Creation and Management
-
-– Anhad Singh
-
-The `redox_ring_queue_init_with_path` function opens the scheme ring handle and uses the `SYS_CALL` system call on it to set up the ring buffer session with the given parameters. This returns file descriptors for the SQ, CQ, and shared buffer pool, which are mapped into the application’s address space. The application can then use the queues directly to submit requests and receive completions. On the scheme side, the worker task waits for entries in the SQ, processes them asynchronously and notifies the application on completion.
-
-## Example: Writing to RamFS
-
-– Ibuki Omatsu
-
-Ring buffer support was added to RamFS and NVMed. We also added tests that communicate with these storage daemons through the redox-ring API.
-
-For example, writing data to RamFS involves the following steps:
-
-1. Open the target file and initialize a ring buffer instance to RamFS using redox_ring_queue_init_with_path().
-2. Register the file descriptor so that subsequent requests can reference it by index.
-3. Allocate a shared memory buffer and write the data into it.
-4. Obtain an SQE and specify the write operation, file index, buffer offset, data length, and file offset.
-5. Submit the prepared SQEs using redox_ring_submit(). Multiple requests can be submitted in a single batch.
-6. Wait for CQEs, check the results, and release the buffers associated with completed requests.
-
-Once all operations have completed, the application tears down the ring buffer connection.
-
-## Async Executor
-
-– Anhad Singh
-
-We developed an async executor for device drivers, with a single interrupt vector and an SQ/CQ pair per core architecture. A single core is used at the moment, and multi-thread-per-core support is in progress. Furthermore, we updated NVMe driver to use the async executor, and more devices such as virtio are expected to follow.
-
-With the executor, schemes that support Redox Rings can handle each I/O request in its own async task, with a worker thread spawned for each session between the application and the scheme. On teardown, the worker task is stopped, pending I/O operations are cancelled and shared resources are cleaned up.
-
-![Ring Buffers Benchmark](https://www.redox-os.org/img/nlnet-rb-summary/ring-buffers-benchmark.png)
-
-**Figure 1:** Comparison between the `redox_syscall` and `redox_ring` benchmarks, showing that `redox_ring` is 14-15x faster. The `redox_syscall` benchmark performs I/O via synchronous system calls, while the `redox_ring` benchmark uses the new Redox Ring interface.
-
-## Kernel and IPC optimizations
-
-– Jacob Lorentzon
-
-While it has substantially improved over the years, IPC is still quite slow on Redox, and this is important to optimize as ring buffers can only offset this overhead to a certain extent. This has been a focus of our work to improve system performance.
-
-### Infrastructure
-
-The `acid` test suite for Redox was expanded to include more targeted benchmarks that measure IPC latency, in particular `acid ipc_latency_simultaneous`, and also `acid heavy_forking`.
-Support was also added for repeating measurements and collecting more proper statistics (although still less feature-complete than e.g. `hyperfine`), making it easier to know whether changes in metrics are statistically significant and by how much.
-
-### Miscellaneous refactors
-
-Various single-digit speedups were attained from kernel refactors, such as eliminating redundant locking, hashmap lookups, and by adding a lower-overhead call for IPC, similar to seL4’s “reply-wait”.
-
-### Fast path switching without vector registers
-
-Another source of overhead, from the flamegraphs, was found to be `XSAVE` and `XRSTOR`, a few hundred cycles combined (tested on an AMD Ryzen 9 5950X).
-These instructions save/restore vector registers, which is ~600 bytes on the CPU tested, and likely similar on other CPUs with AVX2 (which only userspace uses).
-
-The optimization made here is that the kernel zeroes the vector registers *if the caller and callee entered the kernel through syscalls*, rather than saving/restoring (using `vzeroall`, `ldmxcsr` etc. as required for correctness).
-
-Context switching can be triggered both by preemption, i.e. timer interrupts, and voluntarily from syscalls.
-After Redox destabilized its syscall ABI, instead preferring the `libredox` symbols provided by `relibc`, all syscalls will first go through a function call.
-Since the System V ABI clobbers all vector registers *for all function calls*, it is almost zero-cost to also define Redox’s syscall ABI to do so.
-Luckily, the generated assembly code for `relibc` was almost identical.
-
-### Direct switching
-
-A major bottleneck during IPC is invoking the scheduler, as can be seen from various flamegraphs.
-The scheduler needs to access multiple data structures, primarily `BTreeMap` that takes up a large fraction of the overhead, and it also needs to acquire lots of locks, often blocking.
-
-Direct context switching was implemented in [kernel MR 694](https://gitlab.redox-os.org/redox-os/kernel/-/merge_requests/694), resulting in a 15-20% IPC latency reduction.
-It separates the *current context* (reference) into the *scheduled context* and the *running context*, where the former is the context owning the current timeslice, and the latter is the context whose registers/memory/file table is currently active.
-When direct switching has not occurred, these always coincide.
-Consequently, a client process calling a scheme (typically using our `SYS_CALL` syscall) can completely bypass the scheduler and switch directly to the scheme, if ready, where the kernel will then prioritize returning to the *scheduled context* the next time the scheme yields.
-This mimics the behavior of how complex syscalls are handled in monolithic kernels, and should also be more cache-efficient, among other efficiencies.
-
-### Huge pages
-
-The kernel previously only supported 4k pages.
-This is still the case on non-x86, and for all userspace cases, but now the kernel physmap will be mapped as 2M when possible.
-TLB usage can thus theoretically be reduced by up to 512x for heavy CoW, and in practice, the highest obtained L1DTLB-miss rate from `acid heavy_forking` [was -75%](https://gitlab.redox-os.org/redox-os/kernel/-/merge_requests/711).
-
-## Future improvements
-
-– Jacob Lorentzon
-
-IPC roundtrip latency has been reduced from ~5800 cycles to ~2700 cycles, but this is still high compared to fast µkernels like seL4.
-Additional optimizations could be to reduce locking, and reduce the syscall entry overhead, but primarily to simplify the IPC primitive and remove possibly unnecessary parts such as request buffers.
-While not as applicable for nonlegacy applications, automatic page-borrowing of clients’ buffers (in `UserScheme`) is also a major source of overhead and in a benchmark similar to `dd bs=4k if=/dev/zero of=/dev/null`, the overhead is at least ~32k cycles per call.
-However, while the existing benchmarks are useful as an approximate lower bound on latency, more investigation will be required to determine the distribution of overheads for more realistic workloads, both with and without userspace ring buffers.
+In async Rust the `Future::poll` method is called to progress the state of the future, which reports its progress via the `Poll` enum. This enum contains two variants:
+
+- Poll::Pending: means that the future is not yet ready to produce a value, and poll will need to be invoked again later.
+- Poll::Ready(T): means the future is ready to yield some value T.
+
+Futures are called that because they will eventually resolve to a value, *in the future*. But that’s value singular, not values plural. The stdlib documentation does not clearly make this guarantee (though it should), and the ecosystem doesn’t always implement this correctly (though it also should). But the intent is clear: one future should only ever yield one value.
+
+Now what should happen when you try and call `Future::poll` again after it has already yielded a value? The `Future` trait docs have the following to say:
+
+> Once a future has completed (returned `Ready` from `poll`), calling its `poll` method again may panic, block forever, or cause other kinds of problems; the `Future` trait places no requirements on the effects of such a call. However, as the `poll` method is not marked `unsafe`, Rust’s usual rules apply […].
+
+The docs state here that if you call `Future::poll` again after it’s yielded
+`Poll::Ready`, that’s unsupported and there aren’t many limits on the future’s
+behavior. The most common behavior here is to `panic!`, which is the behavior
+for all `async` blocks and functions. Which is a shame, since being able to call
+`Future::poll` again after it’s yielded `Ready` before is actually quite useful
+and something I frequently wish I was able to do.
+
+## MaybeDone
+
+Not everyone writing Rust writes async Rust, and not everyone writing async Rust will write async concurrency primitives. But those who do will be familiar with the `MaybeDone` type. It’s a simple wrapper around some `Future` whose only job it is to either hold a `Future` or if it's completed hold its `Future::Output`. While not simple, assuming you're familiar enough with async Rust it should be easy enough to follow:
+
+```rust
+use pin_project::pin_project;
+use std::future::Future;
+use std::pin::Pin;
+use std::task::{Context, Poll};
+
+#[pin_project(project = DoneState)]
+enum MaybeDone<F: Future> {
+    Future(#[pin] F),
+    Done(Option<F::Output>),
+}
+
+impl<F: Future> MaybeDone<F> {
+    pub fn take(self: Pin<&mut Self>) -> Option<F::Output> {
+        match self.project() {
+            DoneState::Done(output) => output.take(),
+            DoneState::Future(_) => None,
+        }
+    }
+}
+
+impl<F: Future> Future for MaybeDone<F> {
+    type Output = ();
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+        match self.as_mut().project() {
+            DoneState::Future(future) => match future.poll(cx) {
+                Poll::Pending => Poll::Pending,
+                Poll::Ready(output) => {
+                    self.set(Self::Done(Some(output)));
+                    Poll::Ready(())
+                }
+            },
+            DoneState::Done(_) => Poll::Ready(()),
+        }
+    }
+}
+```
+
+In essence what this provides is a slot that holds either a future, or its final resolved value. And in doing so it also performs another trick: it replaces the output of the future with the unit type and adds a new method `take` to actually extract the value of the future.
+
+When attempting to call `Future::poll` again after it has returned `Poll::Ready(())` once before, it will always continue to return `Poll::Ready(())`. And if you call the `take` method again after having received `Some(Future::Output)` before, it will keep returning `None` forever after.
+
+What is a relatively straightforward way of creating a slot that holds either a future or its output value has an interesting side effect of actually being able to communicate the state of the future even after it has yielded a value once. If a caller observes `Poll::Ready(())` + `None`, that means the future is done and will not be yielding a value again.
+
+## Fixing Poll
+
+`MaybeDone` isn’t the only API in the `futures` crate which tracks the done state of a
+future. The `FusedFuture` trait provides an `is_terminated` method, and its `Fuse`
+adapter keeps returning `Poll::Pending` once the inner future has returned
+`Poll::Ready`. However this unfortunately abuses `Poll::Pending`, whose docs state:
+
+> When a function returns `Pending`, the function *must* also ensure that the current task is scheduled to be awoken when progress can be made.
+
+This definition is incompatible with how `Fuse` uses `Pending`, and so bringing
+it into the stdlib would require redefining `Pending` to mean both “pending” and
+“done”. This feels bad, because if you forget to call `is_terminated` first, the
+future will hang forever. There are other hacky schemes we could apply instead,
+but the right way to fix this would be by making the `Done` state a part of
+`Poll` itself:
+
+```rust
+pub enum Poll<T> {
+    Ready(T),
+    Pending,
+    Done,    // ← new
+}
+```
+
+Unfortunately we can’t make this change since `Poll` is not marked
+`#[non_exhaustive]`. Which is a shame since instead of panicking or hanging,
+futures would actually have an opportunity to share that they have nothing more
+to report. This would change the responsibility of what to do with that
+information from the callee to the caller. The caller might still choose to
+panic, but it could also forward the `Done` state, or in concurrency operations
+like `join` it could now be used to track which futures have completed, without
+needing `MaybeDone`.
+
+This would also have the benefit that it removes the implicit dependency of the
+async effect on the panic effect. The compiler can guarantee that calling
+`.await` never polls after getting `Ready`, and so it doesn’t need to handle the
+`Done` state. With this in place, `async` functions and blocks would no longer
+need to inject unwinding support on every path, reducing the codegen size which
+especially benefits embedded targets. It would also work well with the
+`no_panic` crate on crates.io, or an eventual function/block-level no-panic
+annotation.
+
+## Fixing CoroutineState
+
+The `CoroutineState` enum has the same problems as the `Poll` enum, in that it cannot express a final `Done` state. But unlike `Poll`, the `Coroutine` trait and `CoroutineState` enum aren't stable and so can be fixed without any breakage.
+
+Since `Coroutine` is used internally in compiler desugarings, these changes might still not be easy. But at least we don’t have to repeat the same mistakes we've made for async with iteration as well.
+
+To better illustrate the problem with `CoroutineState`, here is how it is defined today:
+
+```rust
+pub enum CoroutineState<Y, R> {
+    Yielded(Y),
+    Complete(R),
+}
+```
+
+[The documentation](https://doc.rust-lang.org/std/ops/enum.CoroutineState.html) has the following to say about the `Complete` variant:
+
+> Once a coroutine has returned `Complete` it is considered a programmer error to call `resume` again.
+
+`resume` here refers to `Coroutine::resume`, which drives the progress of the coroutine similar to `Iterator::next` and `Future::poll`. But just like with futures (and unlike iterators<sup>[1](https://blog.yoshuawuyts.com/the-future-trait-has-a-missing-state#unlike)</sup>), coroutines are unable to express a “done” state.
+
+Technically `Iterator::next` returning `None` is no guarantee that `None` will keep being returned. But at the very least returning `None` repeatedly is fine and expected, and so it’s a valid way of encoding a “Done” state, which is what `FusedIterator` does.
+
+This means that we cannot define a generic `FusedCoroutine` trait like we have with [`FusedIterator`](https://doc.rust-lang.org/std/iter/trait.FusedIterator.html). Since `Complete(R)` takes a generic param we could of course require that `Complete(Option<R>)`, but that would again be dancing around the problem. This is a problem we know we have, we know how to solve, and so we should solve:
+
+```rust
+pub enum CoroutineState<Y, R> {
+    Yielded(Y),
+    Complete(R),
+    Done,         // ← new
+}
+```
+
+This does leave us with some confusing names. `Complete` here is not the same as `Done`. So I would propose we name the variants after the operations they represent, just like we’ve done with `ControlFlow` (`Break|Continue`):
+
+```rust
+pub enum CoroutineState<Y, R> {
+    Yield(Y),   // ← renamed 
+    Return(R),  // ← renamed
+    Done,    
+}
+```
+
+## Even more states
+
+So far we’ve covered the three future states: `Ready`, `Pending`, and `Done`.
+These are the three states we communicate *externally*. But internally there
+is one more state: `Start` or `Init`. This is the state a future is in *before*
+it is first polled. But since we never yield that state, it’s internal-only.
+
+Another state we haven’t covered here is the state *before* the future or
+coroutine is initialized. In async Rust `.await` calls the
+`IntoFuture::into_future` method before polling the future, just like when
+iterating the `for..in` notation calls `IntoIterator::into_iter` before calling
+`Iterator::next`.
+
+I’m not sure what to call this pre-state, but its purpose is to capture inputs
+without needing to instantiate locals. Unfortunately `async {}` currently
+returns `impl Future` rather than `impl IntoFuture`. In [the gen auto-trait
+problem](https://blog.yoshuawuyts.com/gen-auto-trait-problem) I explained how
+that would help us create more precise bounds and solve a number of `Send`/`Sync`
+interactions. While changing the desugaring of `async {}` is tricky, `gen {}` is
+still unstable and is much easier to change.
+
+Finally, in [Never Snooze a Future](https://jacko.io/snooze.html) Jack O’Connor
+describes what ought to be an invalid future state: “Snoozed”. A future is
+snoozed when it is ready to make progress, but it’s not polled. I think of this as
+a way of translating the [“bbbs”
+scenario](https://rust-lang.github.io/wg-async/vision/submitted_stories/status_quo/barbara_battles_buffered_streams.html)<sup>[1](https://blog.yoshuawuyts.com/the-future-trait-has-a-missing-state#bbbs)</sup>
+into a liveness property.
+
+Barbara Battles Buffered Streams
+
+Futures [naturally form
+trees](https://blog.yoshuawuyts.com/tree-structured-concurrency). The
+“snoozed” state applies when some child future’s waker is called, and its parent is
+polled but the child isn’t. This leads to a rule that we can apply recursively
+to every future: *“When a future is polled, it must also poll all child futures
+that have had their waker called.”* If every future follows this rule, no future
+will ever be snoozed.
+
+## Conclusion
+
+The fact that futures are unable to signal being done is a problem, and one
+which has no good workarounds. Types like `MaybeDone` can work around this
+limitation on use, but do so by introducing redundant bookkeeping.
+
+Tracking the completion status of futures is necessary for the implementation of
+nearly all async concurrency operations. Instead `async {}` blocks desugar to
+futures which panic when polled again after completion. This creates problems in
+constrained environments like embedded and web where code size matters.
+
+We cannot fix the `Future` trait without deprecating the existing `Future::poll`
+method. This post is the fourth entry in my series analyzing problems with the
+`Future` trait, and even so I don’t think that’s enough yet to warrant replacing
+what we have. What we can do however is make sure we don’t repeat the mistakes
+we made in `Future`, for example by fixing the `Coroutine` trait and `gen`
+keyword.
