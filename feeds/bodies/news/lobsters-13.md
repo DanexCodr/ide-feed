@@ -1,102 +1,83 @@
-Qwenputer is a pretty fun experimental model. It's a stock Qwen 3.5 4B with one addition: a RISC-V CPU embedded within the weights that uses the model's own Gated DeltaNet attention layers as RAM. (To learn how GDN works, [here's a handy guide](https://divagr.com/attention-lab/delta).) This 'CPU' runs completely within the forward passes of the model, and can run arithmetic operations, C and MicroPython code without any external runtime or tool usage whatsoever.
+While reading the draft Go 1.28 release notes, I noticed a change in the HTTP/2 server. With this change, the goroutine responsible for serving a connection can exit when there is no work to do, instead of waiting. A new goroutine takes over when needed. At first, it seemed like a small change, but I wondered how much memory it could save on a server with thousands of open connections.
 
-To be very clear, it is not a plugin, a tool or a sandbox. This blog will explain exactly how this model works, and how the model utilises GDN layers as RAM, and how I also slotted in an experimental in-model file storage.
+I decided to measure it rather than guess. I wanted to see how it affected process memory usage, goroutine counts, and Go runtime memory metrics.
 
-I also wrote up two follow-ups built on top of Qwenputer: how [hybrid models can learn to hide their reasoning in their RNN state and evade CoT monitoring](https://divagr.com/blog/hybrid-models-can-hide-reasoning-in-their-rnn-state), and how [compiled weights like these can work as inbuilt monitoring tools that the model itself can't tamper with](https://divagr.com/blog/building-oversight-tools-into-a-models-weights).
+## What is HTTP/2 parking?[#](https://abdolirad.me/articles/go-1-28-http2-parking-memory/#what-is-http2-parking)
 
-You can grab Qwenputer from [Hugging Face](https://huggingface.co/divagr1925/Qwen3.5-4B-Qwenputer) or [ModelScope](https://www.modelscope.ai/models/Spartan1925/Qwen3.5-4B-Qwenputer), and the code is on [GitHub](https://github.com/divagr18/qwenputer).
+An HTTP/2 connection can stay open even when it has no active streams. In the older server behavior, a goroutine runs the connection’s `serveLoop` and waits there when nothing new is ready. The Go 1.28 development code adds an internal mechanism called *parking*. When `serveLoop` has no work ready to process, and the implementation’s safety conditions are met, that goroutine can exit. When new work arrives, a new goroutine runs `serveLoop` again.
 
-## The RNN inside Qwen3.5 can be exact RAM
+Parking is not limited to connections with no active streams. A handler can still be running while `serveLoop` has nothing immediate to process. If those safety conditions are met, the serving goroutine can be parked. That does not mean every active connection, or every running handler, can be parked.
 
-Qwen3-Next and Qwen 3.5 (the model Qwenputer is built on) use a pretty neat trick. 3 out of 4 attention layers in the model use Gated DeltaNet, a linear RNN, as the attention mechanism ([more on that here](https://divagr.com/attention-lab/delta)). Each head keeps a state matrix, and the delta rule keeps this updated.
+The word *parking* comes from the Go implementation, including names such as `tryPark` and the temporary `GODEBUG` setting `http2serveparking`. It is not a public API, and the draft release notes do not use this name for the change. The change is how the server manages the goroutine for a connection, not how application code handles requests.
 
-Now, here's where our fun experiment starts. I found out that by setting the gate to 1,<sup>[1](https://divagr.com/blog/qwenputer#footnote-1)</sup><sup>1</sup> Each Gated DeltaNet head keeps a state matrix, its memory. At every token, before writing anything new, it multiplies the whole state by the gate, a number between 0 and 1. That's how the RNN forgets: a gate of 0.9 fades everything stored a little on every token, and a gate of 1 means nothing ever fades. the write strength (beta) to 1,<sup>[2](https://divagr.com/blog/qwenputer#footnote-2)</sup><sup>2</sup> After the gate, the head nudges one direction of the state towards a new value, and the write strength beta sets how far. A beta of 1 means the old value along that direction is replaced completely instead of blended. and using one-hot key encoding,<sup>[3](https://divagr.com/blog/qwenputer#footnote-3)</sup><sup>3</sup> A one-hot key is a vector of zeros with a single 1 in it, so it points at exactly one row of the state, the way a memory address points at one cell. every write we perform will overwrite exactly one row, and every one-hot query can retrieve an exact value. This means that the GDN layers themselves can work exactly as RAM, at a far lower cost than using normal attention as RAM, since a GDN head's state stays the same size however long the conversation gets, unlike attention's KV cache.
+This also gave me a useful way to test the change. I could run the same Go 1.28 server binary with parking enabled and disabled, instead of relying only on a Go 1.27 versus Go 1.28 comparison.
 
-The idea that the delta rule acts as a memory isn't new: Schlag et al. (2021) showed that linear attention with the delta rule works as an associative memory, or "fast weights".<sup>[4](https://divagr.com/blog/qwenputer#footnote-4)</sup><sup>4</sup> Imanol Schlag, Kazuki Irie and Jürgen Schmidhuber, "[Linear Transformers Are Secretly Fast Weight Programmers](https://arxiv.org/abs/2102.11174)", ICML 2021. The new thing here is making it exact and addressable, inside a production model, reliably enough to run a whole CPU on it.
+## How I tested it[#](https://abdolirad.me/articles/go-1-28-http2-parking-memory/#how-i-tested-it)
 
-This is the base on which this entire model is built. As it stands, default Qwen 3.5 does not keep exact values in the GDN. With this modification, we unlock the next part of this experiment.
+I used the same benchmark code and machine for three configurations:
 
-## Compiling a computer into layers
+1. Go 1.27.2, as an older-version reference.
+2. Go 1.28 development build, parking enabled, as the default behavior of the tested revision.
+3. The same Go 1.28 binary, parking disabled, using GODEBUG=http2serveparking=0.
 
-Since we have a fully functional, cheap and fast RAM now, we can go ahead with compiling a working CPU into the model weights. Luckily, there's no training involved: a compiler sets every weight directly. You describe the CPU as a circuit, a long list of small steps like "read this register", "add these two numbers" or "jump if zero", and the compiler turns each step into a piece of a transformer layer: attention heads that look things up, feed-forward units that do the arithmetic, and DeltaNet heads that hold the RAM. The CPU then runs as the model decodes.
+The tested Go 1.28 revision was `5c51011e82ed754af072baaf4338ff35e76fe705`. The benchmark source was pinned to commit `86753bd4d1f79621a4f3c6927c8239419e54bde2`.
 
-Each instruction becomes a few generated tokens: one names the memory row to write (ADDR), the next carries the value (VAL), and a STEP token ends the instruction. Those tokens are the CPU's execution trace, so while Qwen is generating them, the CPU is actually running.
+For each configuration, I measured the server with **0, 1,000, and 5,000 idle HTTP/2 connections**. Each complete run used ten rounds for every case and connection count. I repeated the full experiment three times on the same Linux machine. The benchmark collected short sample windows after the connections had settled, and the published results use medians rather than a single sample.
 
-## The CPU
+The test machine used an Intel Core i7-1265U, Linux 6.18.56, and about 32 GiB of RAM. The benchmark configuration set `GOMAXPROCS=12` and `GOGC=100`. I kept the natural garbage collection behavior rather than forcing a collection before each measurement.
 
-The CPU is a 32-bit RISC-V core (RV32IM, plus the Zba extension and a small bignum unit for big-number arithmetic), and it takes up 11 layers in front of Qwen's 32. As it stands, it passes the official riscv-tests, its programs match qemu, and it has run 18 million instructions free-running without a single error.<sup>[5](https://divagr.com/blog/qwenputer#footnote-5)</sup><sup>5</sup> Free-running means the CPU keeps going on its own outputs for the whole run, with no reference machine correcting it between steps.
+I looked at four metrics. **RSS** measures resident memory for the server process as reported by Linux. **Goroutines** shows how many goroutines the Go runtime reports. **StackInuse** describes memory in use by goroutine stacks. **HeapAlloc** is the amount of allocated heap memory reported by the runtime. These values are related, but they do not measure the same thing.
 
-This CPU can also run C and MicroPython code in the forward passes quite well (although a bit slowly). It is not a Linux-class chip yet, but it implements the full RV32IM instruction set.
+## RSS: the clearest change[#](https://abdolirad.me/articles/go-1-28-http2-parking-memory/#rss-the-clearest-change)
 
-## How Qwen uses it
+The largest difference appeared at 5,000 idle connections. The table below shows median RSS from each complete run, in MiB:
 
-Qwen 3.5 4B is able to use this CPU quite well, without any post-training required. The CPU is used completely internally, and not invoked through any external tool calls.
+| Run | Go 1.27.2 | Go 1.28, parking off | Go 1.28, parking on | Saved by parking |
+| --- | --- | --- | --- | --- |
+| 1 | 249.89 | 218.28 | 129.19 | 89.08 |
+| 2 | 247.18 | 223.73 | 131.11 | 92.62 |
+| 3 | 245.60 | 217.94 | 133.25 | 84.70 |
 
-In order to make the model use this reliably, I decided to go the cheap way: by piggybacking on the tool call format that models are quite well-trained on, Qwen sends the CPU its instructions and reads back the results. **No external tool calls or runtime are used.** Once our CPU receives the instructions, the computer layers run, and then write the tool response. We use a small driver called RvChat to load the firmware into the GDN state, and this keeps the trace tokens out of Qwen's layers.
+Compared with the **same Go 1.28 binary with parking disabled**, enabling parking reduced RSS by **84.7 to 92.6 MiB**, or about **38.9% to 41.4%**, across the three runs. At 1,000 idle connections, the reduction was smaller but still clear, at about **15.7 to 16.6 MiB**.
 
-Qwen's original weights stay exactly as they are. The computer weights are added on top of them, in extra dims and layers.
+![Median server RSS at different numbers of idle HTTP/2 connections](https://abdolirad.me/articles/go-1-28-http2-parking-memory/01-rss-scaling.svg)
 
-## Does it work?
+The zero-connection baseline stayed close to 8.5 to 8.7 MiB across the configurations. I also calculated baseline-adjusted RSS by subtracting each configuration’s zero-connection median. That helps show the growth associated with idle connections, but the main comparison above uses the observed process RSS.
 
-I think the main question here on your mind after reading through my incessant ranting will be: does this actually work?
+![RSS reduction with parking enabled](https://abdolirad.me/articles/go-1-28-http2-parking-memory/02-rss-savings.svg)
 
-On the DeepMind sets:
+## Fewer goroutines, less stack memory[#](https://abdolirad.me/articles/go-1-28-http2-parking-memory/#fewer-goroutines-less-stack-memory)
 
-- div_big: Qwenputer scores 97.5%, versus 95% by giving Qwen 3.5 4B a Python tool and 72.5% for base Qwen.
-- mul_big: Qwenputer scores 97.5%, versus 100% with a Python tool and 55% for base Qwen.
-- mul_div_multiple_longer: Qwenputer scores 100%, versus 97.5% with a Python tool and 90% for base Qwen.
-- add_or_sub_big: Qwenputer scores 97.5%, the same as with a Python tool, and 87.5% for base Qwen.
+The goroutine counts helped explain the shape of the result. With 5,000 idle connections, Go 1.28 reported about **10,007 goroutines with parking disabled** and **5,007 with parking enabled**. That is a difference of exactly **5,000 goroutines** in this benchmark. At 1,000 idle connections, the difference was 1,000 goroutines.
 
-On NUPA's long-integer arithmetic, Qwenputer goes from 48.6% to 100%, the same as giving Qwen a Python tool.
+![Goroutine counts by idle connection count](https://abdolirad.me/articles/go-1-28-http2-parking-memory/03-goroutines.svg)
 
-The numbers the CPU prints are exact, too: I replayed about 230,000 of its output positions against a reference machine and found zero mismatches. And bolting a computer onto Qwen doesn't change how it talks: its normal text stays within noise of base Qwen (KL 6e-4, against a noise floor of 5e-4).
+The stack numbers moved in the same direction. At 5,000 connections, **StackInuse** was about **99 MiB with parking disabled** and about **21 MiB with parking enabled**. The reduction was close to **78 MiB** in all three complete runs.
 
-## A hard drive? In this economy?
+![Stack and heap memory at 5,000 idle connections](https://abdolirad.me/articles/go-1-28-http2-parking-memory/04-memory-breakdown.svg)
 
-Because a CPU inside a language model clearly wasn't cursed enough, I decided the prudent thing would be to give it a filesystem too.
+This does not mean that every byte saved in RSS came from stacks. RSS includes more than Go stacks, and changes in heap allocation, runtime state, and the operating system can affect it. It does show that the lower goroutine and stack counts are consistent with the parking mechanism.
 
-Since we already have a functional RAM, this was mostly trivial. On the model side, it's exposed via internal put / append / get / list / delete operations. **Once again, no actual tool calls.** When Qwen 'saves' a file, the compiled layers hash its name into one of 1,024 slots in a directory kept in the DeltaNet state, and store the text itself in other heads, with eight tokens per row, chained together. In scenarios where two names end up landing on the same slot, it just checks the next one. Finding a file again takes roughly two or three steps instead of a scan, and it holds up to 512 files, which comes out to about 53,000 tokens of text.
+## HeapAlloc did not tell the same simple story[#](https://abdolirad.me/articles/go-1-28-http2-parking-memory/#heapalloc-did-not-tell-the-same-simple-story)
 
-Fun thing is, this is quite persistent. You can save the state at the end of a conversation, load it into the next one, and the files are still there. Using this filesystem, Qwen gets facts that changed between chats right 90% of the time, against 30% when you paste the old chats back in, and it's on par with giving Qwen memory tools run by Python (83.3% vs 78.9%). This one is still experimental, and its code lives on the [rv-store branch](https://github.com/divagr18/qwenputer/tree/rv-store/experimental/riscv), with the model on [Hugging Face](https://huggingface.co/divagr1925/Qwen3.5-4B-Qwenputer-Filesystem) and [ModelScope](https://www.modelscope.ai/models/Spartan1925/Qwen3.5-4B-Qwenputer-Filesystem).
+HeapAlloc was less consistent. In some runs, parking enabled used less heap than parking disabled. In another run, it used slightly more. This is a good reminder that one memory metric cannot stand in for another.
 
-## Limits and what's next
+For this experiment, **RSS, goroutine count, and StackInuse** provide a clearer picture of the difference. I would not describe the change as a fixed heap saving or claim that a certain percentage of total memory always disappears.
 
-Qwenputer is very much an experiment, so a few limitations. The extra layers and wider hidden size make the checkpoint 18.8 GB, roughly double base Qwen, although most of it is zero padding. It also needs a small driver (RvChat) to boot the firmware and keep the trace tokens out of Qwen's layers, so it doesn't run with a plain `generate()` call yet. And it's a bit slow, with every CPU instruction costing a few decoded tokens, so a big calculation takes seconds rather than milliseconds. The batched executor I used for the benchmarks runs about 3,200 CPU tokens a second on an L4.
+## Limits of this benchmark[#](https://abdolirad.me/articles/go-1-28-http2-parking-memory/#limits-of-this-benchmark)
 
-Next up, I want Qwen to write Python and run it on the MicroPython inside its own weights, through a `python()` tool that works the same way `calc` does. Making the CPU faster is the other big one.
+These measurements come from one machine, one benchmark design, and a specific **development revision** of Go 1.28. They are not results from a final Go 1.28 release. I tested mostly idle connections, not a mix of real traffic, active streams, and application workloads.
 
-## Beyond arithmetic
+The benchmark kept the Go 1.28 server binary the same when switching parking on and off. That makes the parking comparison more useful, but it still does not remove all system noise. The three full runs show a repeatable direction and a range, not a universal guarantee.
 
-Exact control over the RNN layers is useful for a **lot** more than arithmetic. It also makes Qwenputer a really nice testbed for AI safety research, and I wrote up two follow-ups: how [hybrid models like Qwen 3.5 can learn to hide their reasoning in their RNN state and evade CoT monitoring](https://divagr.com/blog/hybrid-models-can-hide-reasoning-in-their-rnn-state), and how [compiled weights can work as monitorability tools](https://divagr.com/blog/building-oversight-tools-into-a-models-weights), like an in-weight monitor the model can't switch off, or answer keys for interpretability.
+The `GODEBUG=http2serveparking=0` setting I used for this comparison is temporary and undocumented. I would not treat it as a stable option for future releases.
 
-## Try it
+I have kept the [benchmark source at a fixed commit](https://github.com/atkrad/benchmarks/tree/86753bd4d1f79621a4f3c6927c8239419e54bde2) and the [tested Go revision](https://github.com/golang/go/commit/5c51011e82ed754af072baaf4338ff35e76fe705) linked here so the details can be checked later.
 
-If you want to play with it yourself, the model runs on a single 24 GB GPU. You'll need [uv](https://docs.astral.sh/uv/) and the Hugging Face CLI. You **don't** need a tool server or a Python sandbox for the calculations: the CPU runs them inside the model.
+## Conclusion[#](https://abdolirad.me/articles/go-1-28-http2-parking-memory/#conclusion)
 
-```bash
-git clone https://github.com/divagr18/qwenputer && cd qwenputer/experimental/riscv && uv sync --extra hf
-hf download divagr1925/Qwen3.5-4B-Qwenputer --local-dir qwenputer-rv
-uv run python -m chipformer.rv.chat qwenputer-rv --firmware tests/data/rv/calc-bridge.elf \
-    --ask "Use calc: what is 123456789 * 987654321?"
-```
+In this benchmark, HTTP/2 parking made a clear difference in memory usage. With 5,000 idle connections, the same Go 1.28 server binary used around 85 to 93 MiB less RSS when parking was enabled. It also had 5,000 fewer goroutines and used about 78 MiB less stack memory.
 
-Everything is open: the [code on GitHub](https://github.com/divagr18/qwenputer), and both models on Hugging Face ([Qwenputer](https://huggingface.co/divagr1925/Qwen3.5-4B-Qwenputer), [Filesystem](https://huggingface.co/divagr1925/Qwen3.5-4B-Qwenputer-Filesystem)) and ModelScope ([Qwenputer](https://www.modelscope.ai/models/Spartan1925/Qwen3.5-4B-Qwenputer), [Filesystem](https://www.modelscope.ai/models/Spartan1925/Qwen3.5-4B-Qwenputer-Filesystem)).
+What I found most interesting was how much memory an otherwise quiet connection can keep around. Changing what the server does while it waits can matter as much as optimizing the work it performs.
 
-If you use it in your work, you can cite it as:
-
-```bibtex
-@software{agrawal2026qwenputer,
-  author  = {Agrawal, Divyansh},
-  title   = {{Qwenputer}: a computer compiled into the weights of a pretrained language model},
-  year    = {2026},
-  url     = {https://github.com/divagr18/qwenputer}
-}
-```
-
-## Notes
-
-1. Each Gated DeltaNet head keeps a state matrix, its memory. At every token, before writing anything new, it multiplies the whole state by the gate, a number between 0 and 1. That's how the RNN forgets: a gate of 0.9 fades everything stored a little on every token, and a gate of 1 means nothing ever fades. ↩
-2. After the gate, the head nudges one direction of the state towards a new value, and the write strength beta sets how far. A beta of 1 means the old value along that direction is replaced completely instead of blended. ↩
-3. A one-hot key is a vector of zeros with a single 1 in it, so it points at exactly one row of the state, the way a memory address points at one cell. ↩
-4. Imanol Schlag, Kazuki Irie and Jürgen Schmidhuber, "Linear Transformers Are Secretly Fast Weight Programmers", ICML 2021. ↩
-5. Free-running means the CPU keeps going on its own outputs for the whole run, with no reference machine correcting it between steps. ↩
+I would not apply these numbers to every Go service. Still, for servers that keep many idle HTTP/2 connections open, this is a change worth understanding and measuring with a real workload.

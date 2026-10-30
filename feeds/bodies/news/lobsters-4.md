@@ -2,6 +2,8 @@ From curl 8.12 through 8.16, config files could slice variable values and includ
 
 Curl 8.17.0 added a five-level include cap that breaks this reduction.
 
+**Update 2026-10-30**: Jonathan Tremesaygues wrote me: *I couldn't help but implement “99 Bottles of Beer on the Wall”* [99_bottles.tar.gz](https://seriot.ch/resources/99_bottles.tar.gz)
+
 A counter value `n` is represented by `n` copies of `x`.
 
 Each instruction state uses one or more config files, with file names acting as labels, and `expand-config` selecting the next file.

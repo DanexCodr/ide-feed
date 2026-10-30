@@ -1,350 +1,353 @@
-There is an old Norse board game, which in Sweden is played under the name
-*Starve the Fox*, or just *the Fox Game*. According to Wikipedia, *Fox and
-Geese* is a simplified version of it played in English speaking countries.
+# Shrinking NixOS Ram footprint and resource requirements to the bare minimum.
 
-In *Starve the Fox*, one player plays as the foxes, and one player plays as the
-sheep. The rules are asymmetric, and obviously the game is almost always won by
-the fox player …
+A few people were surprised by how low you can go with NixOS, so i thought I would do a write up as I did not realise this was anything special, I kept notes when doing it but not for the intention of writing a blog article so i might miss small tweaks I did here and there.
 
-… or is it? Let’s find out.
+I initially set aside half a day for this; it actually took closer to 3 days.
 
-# [Game rules](https://entropicthoughts.com/what-the-fox-say#game-rules)
+This guide is not very focused on saving disk space. If you want a disk space saving guide that has already been done by someone else here: [https://nixcademy.com/posts/minimizing-nixos-images/](https://nixcademy.com/posts/minimizing-nixos-images/) this has its own set of challenges and drawbacks so if you want to layer them together, be my guest ![:)](https://lowendspirit.com/plugins/emojiextender/emoji/twitter/smile.png) I have decided not to implement the disk-minimising options into the TierHive NixOS template as I feel it is too likely to cause a default that end users are unlikely to expect.
 
-This is what the board looks like in its starting position.
+Here we go:
 
-![what-the-fox-say_01.png](https://entropicthoughts.com/image/what-the-fox-say_01.png)
+# NixOS 26.05 idling at around 96MB and rebuilding in 512MB
 
-The orange circles with the letter F in them are the two pieces the fox player
-starts with. The white circles with the letter S in them are the 20 pieces the
-sheep player starts with. Green circles represent empty locations pieces can
-move into. The fox and the sheep players take turns moving one piece of their
-own. Pieces can only move one step at a time, along the lines on the board, and
-cannot pass through each other or occupy the same location.
+Stock deployment before any changes and with cloud-init, it runs on 1024MB RAM, JUST!, it sat at 288MB used with 89 kernel modules loaded, and a plain same-release rebuild needed 896MB (at 768 nix-build got OOM-killed at 505MB anon).
 
-After that, though, rules are asymmetric. First, the rules for the sheep player:
+It now idles at 96MB used on a 512MB VPS with 54 modules, and a full channel update plus rebuild, including a kernel switch to 7.3 if you want to do that, It finishes at 512MB with a 371MB peak and no OOM. All numbers are from my own runs sometimes I recorded exact numbers others I left out the KB's and only recorded the MB's ![:)](https://lowendspirit.com/plugins/emojiextender/emoji/twitter/smile.png) , measured a few minutes after the second boot with nobody logged in using my own build environment testing tools (I never log in to templates before use so they are clean)
 
-The fox player moves first at the start of the game.1<sup>1</sup> Though my analysis
-indicates that the first-move advantage is very small in this game, so it
-probably doesn’t matter too much who wins. Its rules are:
+Roughly in the order and things done on this template (even the harmless fails):
 
-It doesn’t take much to realise that this is a *loopy* game, meaning it can get
-into positions where the best moves for both players are to shuffle their pieces
-back and forth, repeating previous positions over and over and not making any
-progress. I have only heard rules explained in the presence of children, and
-they don’t specify what happens in such situations. In the analysis below, I’ve
-considered the game a draw after a stretch of 40 moves with no progress.
-Progress is easily measured in terms of sheep rank, since sheep cannot go
-backward.
+- sysctl.vm.mem_profiling=never on the cmdline. The NixOS kernel ships with allocation profiling enabled by default and the tracking tables cost about 6MB (3.9MB vmalloc, 1.9MB slab). the bare mem_profiling=never which is left in isn't a valid parameter; the kernel juts hands it to userspace and nothing changes, it needs the sysctl. prefix.
+- kfence.sample_interval=0 gets back the 2MB KFENCE pool.
+- damon_stat.enabled=N and audit=0 get rid of the kdamond and kauditd threads.
+- initcall_blacklist=ksm_init,tpm_init,init_tis drops ksmd (1.4MB) and the TPM bits (0.3MB plus a kthread). No TPM in these guests and KSM inside a guest is pointless. (For TierHive anyway)
+- psi=0 ras=cec_disable nowatchdog nmi_watchdog=0 cryptomgr.notests 8250.nr_uarts=1 are all small, mostly fewer kthreads and less noise. On a 2GB test VM the whole cmd line set took non-cache memory from 128.0 to 121MB and kthreads from 64 to 59.
+- transparent_hugepage=never was one of the biggest single wins. With THP on madvise the kernel bumps vm.min_free_kbytes to 41108 (3710 without THP at 896MB), which is reserved memory you never get to use. Turning it off freed 52MB at 2GB and gave 103MB more available at 896MB, obviously in high end or production there are reasons not to do this, but day to day use, you probably wont notice any difference.
+- Blacklisted the hardware a KVM guest never has or doesn't need: floppy, intel_agp, i2c_piix4, psmouse, mousedev, joydev, serio_raw, evdev, button (using tiny_power_button already handles ACPI shutdown), the rapl/cstate/uncore lot, kvm, cfg80211 (networkd was pulling it in for nl80211), ata_generic/pata_acpi, qemu_fw_cfg, dmi_sysfs, vga16fb.
+- Blacklisted virtio_console as well, nothing uses the agent channel and it was holding an 8MB kmalloc-4k slab.
+- vsock, vmci and virtiofs get install <mod> /bin/false rather than a blacklist. They get requested at switch-root with no device present, and with a plain blacklist vmw_vmci just loaded instead.
+- Blacklisted virtio_gpu and let the VNC console run on plain vgacon through virtio-vga. That one was really for a 6.18.59 fix/workaround, it does not follow to 7.3 but thats optional I guess.
+- Initrd cut down to virtio_pci virtio_blk ext4 with includeDefaultModules = false, without importing the qemu-guest profile.
+- Trimmed the kernel module tree with a small derivation that replaces system.modulesTree. It drops sound, GPU, wifi, USB, physical NIC, SCSI/ATA HBA drivers and so on, always keeping the deps of anything it keeps. 162MB down to 45MB on disk, and udev has nothing silly left to autoload. It runs inside nixos-rebuild so kernel updates get the same treatment for free.
+- Disabled systemd-resolved, 8.3MB PSS and it was listening for LLMNR/mDNS on 0.0.0.0:5355. cloud-init writes a plain resolv.conf instead.
+- Swapped systemd-timesyncd (4.6MB) for a oneshot busybox ntpd -n -q on a timer, at boot and hourly, so nothing stays resident (won't work everywhere but on most KVM hosts it should be fine)
+- services.openssh.startWhenNeeded = true so sshd is socket activated and the 3.9MB listener only exists while someone is connected. (Perfect for NAT but if you are sitting with port 22 listening for connections on a public IP you might want to skip this)
+- Disabled systemd-oomd (1.8MB).
+- A tiny oneshot drops LLDP=no into the cloud-init generated .network files, which stops the networkd LLDP socket and af_packet loading at idle.
+- What's left resident is systemd, udevd, nsncd, networkd, journald, logind, dbus-broker and one getty, about 40MB of userland PSS.
+- zram with zstd at memoryPercent = 100 capped at 512MB, no disk swap. This, plus the next one, is what makes rebuilding in 512MB possible.
+- vm.swappiness = 180 so the kernel would rather compress cold anon pages into zram than throw away page cache, vm.page-cluster = 0 since read-ahead on zram is wasted memory, and vm.watermark_scale_factor = 125 with vm.watermark_boost_factor = 0 so kswapd starts earlier and the rebuild doesn't stall in direct reclaim. During a rebuild at 512MB zram peaked at 116MB of real RAM.
+- Tuned the Boehm GC that Nix uses, set system wide with environment.variables so nixos-rebuild picks it up. Evaluating the module system On a 2GB VM nix-instantiate '<nixpkgs/nixos>' -A system peaked at 599MB stock (Nix 2.34 pre-grows its heap to 25% of RAM, capped at 384MB). GC_INITIAL_HEAP_SIZE=33554432 took it to 597, adding GC_FREE_SPACE_DIVISOR=8 to 562, adding GC_FORCE_UNMAP_ON_GCOLLECT=1 to 548MB. I couldn't find anything else that meaningfully moves eval memory.
+- Trimmed the closure, which is mostly disk but means less to pull and manage on update: environment.defaultPackages = [ ], documentation off, xdg mime/icons/sounds off, fontconfig off, lvm and bcache off, systemd-importd suppressed (it drags in gnupg, openldap and cyrus-sasl, about 18MB), nixos-option off (man-db and groff, about 11MB), nixos-install/enter/build-vms off, and su.forwardXAuth forced off to lose xauth. Closure went from 963MB to 910MB and the compressed image from 607MB to 477MB.
 
-I don’t remember playing this game when I was young, but it was a favourite of
-my wife’s late grandfather, and that half of her family knows it well. It is
-common wisdom in her family that the fox player needs to blunder badly for the
-sheep to win. Her entire family believes the game is heavily tilted in favour of
-the fox. I have played the game a few times, and indeed it has been easier for
-me to win when playing as fox.
+The one thing 512MB still struggles with is jumping releases (26.05 to unstable). On a 4GB disk the first attempt went on for about 30 minutes before nix-build got OOM-killed, the old generation kept running fine, and running it again finished because everything was already downloaded. If you're doing a release jump give it more RAM for the duration or expect to run it twice and dont bother waiting 30 minutes, just kill it after 5/10 and run it a second time, that said this was to a pre release as thats all I could find to jump too so maybe that had something to do with it.
 
-I have an unhealthy relationship with strategy games like these. I simply *must*
-put them through computer analysis to figure them out. I don’t know why. It’s
-just something that happens. I used to write tree search algorithms manually,
-but I have realised that [OpenSpiel provides a generic tree search
-supporting most of the things](https://openspiel.readthedocs.io/en/latest/intro.html) I’ve ever found myself needing to support, so I
-can write the game rules in Python and hook into OpenSpiel to analyse it.
+Full config below. Some of tierhive.nix is platform stuff (cloud-init, password resets, reserved blocks) rather than RAM related, but it's the complete working files.
 
-Well, consider the rules above. How often do you think the fox wins, between two
-equal players? Write down your guess, and you’ll learn how good your sense of
-this is.
-
-The first stop for a problem like this is plain Monte Carlo tree search (mcts)
-with random rollouts to the end for leaf scoring. In un-optimised Python, this
-managed to perform about 1,000 search iterations per second when playing *Starve
-the Fox*. I gave this algorithm a thinking budget of just under a second, and
-played against it, both as the fox player and the sheep player. In those games,
-it seemed clear that the fox would win most of the time.2<sup>2</sup> Unless the sheep
-forced a draw, which they can do as long as there’s enough of them, thanks to
-the loopy nature of the game. The algorithm playing itself got a similar
-result: around 85 % of games were won by the foxen.
-
-With so much corroborating evidence, I was close to calling the experiment
-finished. I didn’t expect deeper search to improve things by much, because the
-branching factor is relatively low, in part thanks to the constraints on sheep
-movement.
-
-But then just to be sure, I tried one last game. I played as fox, and the
-computer played sheep with a search budget of 8,000 iterations. Although it
-still didn’t play particularly well, it managed to exploit two of my blunders,
-and actually get into a winning position. With the sheep! That caught my
-interest, and it meant the experiment wasn’t over at all, but might actually
-need deeper search to more accurately reflect the strategy possible.
-
-I didn’t realise it right away, but what happened in that high search budget
-game was that we learned something about the nature of *Starve the Fox*.
-
-The sheep side requires deeper thinking than the fox side to play well. Since
-the sheep, in isolated conflicts with foxes, are so underpowered, *they must
-move the mass of the entire flock in coordination to beat the foxes*, and with
-one movement per turn, that requires strategising over many turns.3<sup>3</sup> In fact,
-the sheep player isn’t really moving sheep as much as they’re moving the holes
-in the flock to make sure the holes stay away from the sheep closest to the
-foxen. This is a *fantastic* property of the game, because it (a) is
-thematically smashing, and (b) means a child can play an adult and both
-still have fun; the child gets to play the fox side and the adult just has to
-think harder.
-
-However, I didn’t want to wait for 16,000 iterations or whatever’s needed for
-the plain mcts to play a very strong game. One of the more expensive parts of
-that search algorithm are the random rollouts to score leaves in the search
-tree. A trick to make leaf scoring faster is to cut off the rollouts well before
-the game ends4<sup>4</sup> The depth at which to truncate rollouts depends on both the
-complexity of the game and the quality of the rollout policy. For completely
-random rollouts, it may even be desirable to cut them off at depth zero – i.e.
-not perform any random moves at all, because they make the scored state less
-representative of the end state than the earlier leaf node was. In the case of
-*Starve the Fox*, stopping the rollout after 8 plies seemed to yield the best
-results with the first draft of the heuristic function, but it’s possible with a
-stronger heuristic function shorter rollouts would be even better, because they
-buy time for more tree search at the cost of not evaluating as far into the
-future., and then use a heuristic function to score the positions in games that
-haven’t yet terminated when the rollout is truncated. The heuristic value is
-scaled to be smaller in magnitude than the score given to a terminated game, so
-that the tree search will prioritise the win/loss signal over the heuristic when
-it can see both.
-
-But this means a heuristic function is needed. A primitive one might be based on
-material, like “number of sheep alive” or based on progress, like “total rank
-gained by sheep”. A more sophisticated one might include both of those
-variables, and more. If we didn’t have computers, we’d probably be best off by
-picking out [the top three variables and weighing them equally](https://entropicthoughts.com/arithmetic-models-better-than-you-think).
-
-But we have computers, so we can do better. What we do is play the weak tree
-search5<sup>5</sup> Search budget of maybe 0.5 seconds per ply, scoring leaves by random
-rollouts to the end. against itself a bunch of times. From each of those games
-we sample one random position6<sup>6</sup> Only one position to avoid having to deal with
-the strong correlation between consecutive positions in the same game., record
-how the game ended, and then train a regression model to predict the game
-outcome based on the game state in those sampled positions. The weights we get
-out of the regression minimise square loss, which is probably what we want for a
-heuristic function.
-
-Once we have those weights, we can create a new generation of the tree search
-using the same search budget, but with truncated rollouts and applying the
-learned heuristic function. This gets to play against the previous generation to
-confirm it is indeed better, and if it is, it plays itself a bunch of times
-again, and we sample new positions, and fit the regression again. Since it’s
-playing better than the previous generation, it will find ways to win from
-positions where the previous generation did not. Thus, the heuristic function’s
-prediction of outcome – assuming skilled play on both sides – will become more
-accurate.
-
-We repeat that a few times, and what we get is a decently strong opponent, even
-at short thinking time budgets. Well, at least it reliably sweeps the floor with
-me, regardless of which side it plays.
-
-Maybe the trained weights tells us something about what good positions look
-like, which might help us get better at the game, too. Since we haven’t seen the
-link function7<sup>7</sup> It’s a hyperbolic tangent to map the raw score (real number,
-infinite support) onto the range [−1, +1] indicating “sure loss” and “sure win”
-respectively, with a draw having value zero. But we’d also need the bias term
-(roughly +1) to convert it into the final value, which isn’t really a
-probability but almost., we can’t do anything with the absolute values of these
-weights, but their relative sizes are more interesting anyway.
-
-- Number of sheep eaten so far: favours the fox with +0.036 per sheep
-- Number of sheep that can be eaten, fox to move: favours the fox with +0.096 per sheep
-- Number of sheep that can be eaten, sheep to move: favours the fox with +0.035 per sheep
-- Number of candidate moves of the fox player: favours the fox with +0.021 per move
-- Number of ranks gained by sheep in total: favours the sheep with +0.0034 per rank
-- Number of sheep in the pen: favours the sheep with +0.017 per sheep
-
-Although it’s tempting, it would be improper to interpret these right away,
-because the heuristic function trained here includes one more thing. It’s also
-trained weights for specific locations on the board, which answers the question
-of how valuable it is for a player to occupy specific positions on the board, in
-general.
-
-The values of the board positions absorb some of the coefficients from the
-variables above. For example, the list above indicates the value of a sheep in
-the pen as 0.017, but the least valuable pen position has value 0.11, compared
-to the average outside-pen position with value 0.09. Thus, the value of a sheep
-in the pen (compared to having it outside the pen) is never less than
-0.11−0.09+0.017=0.04. On average it is 0.08, which is much higher than the list
-above would make us believe.
-
-Here are the rest of the board values for the sheep player.
+**configuration.nix**
 
 ```
+{ config, lib, pkgs, ... }:
 
-7               0.21  0.13  0.21              | 0.18
-6               0.11  0.16  0.11              | 0.13
-5   0.08  0.16  0.14  0.13  0.14  0.16  0.08  | 0.13
-4   0.05  0.12  0.10  0.13  0.10  0.12  0.05  | 0.10
-3   0.12  0.11  0.10  0.13  0.10  0.11  0.12  | 0.11
-2               0.02  0.05  0.02              | 0.03
-1               0.06  0.12  0.06              | 0.08
-     a     b     c     d     e     f     g    | mean
+{
+  imports = [
+    ./hardware-configuration.nix
+    ./tierhive.nix
+  ];
+
+  environment.systemPackages = with pkgs; [ curl rsync ];
+
+  system.stateVersion = "26.05";
+}
 ```
 
-This tells us that a sheep in the `c7` position is worth 0.23, with most of the
-value coming from the position itself, and only a small amount coming from the
-general value of the *number of sheep in the pen* variable. Here are some other observations:
-
-- All positions in rank 2 are bad, because sheep there are exposed to being eaten, and not contributing to the goal either.
-- Positions along the edges but not in the corner, like b3, c3, c6, and d7 are generally worse than their corner neighbours, because of the risk of being eaten.
-- A position like a5 is bad because a sheep stuck in there only has one move, and it is blocked by a fox at c5. I suppose a4 is bad for similar reasons: it doesn’t leave the sheep much choice about where to go. (That said, a5 has one redeeming quality: it protects a sheep at the more valuable b5 position from being eaten.)
-- Other than ranks 2 and 4, which both are outside the pen and have a heightened risk of being eaten, the value of the ranks increases as they get closer to the pen.
-- I am surprised that the d6 cell is so valuable for sheep! I don’t know why. Possibly related to mobility.
-
-These position values also help us interpret the macro-scale variables from
-before:
-
-- The average value of a sheep gaining a rank is 0.02 favouring the sheep.
-- The average value of having a sheep in the pen (compared to outside) is 0.08 favouring the sheep.
-- The average value of starting a turn being able to eat a sheep is 0.20 favouring the fox.
-- The average value of an eaten sheep is 0.15 favouring the fox.
-
-The value of an eaten sheep is a nice, intuitive scale for these values. We can
-express all the others in terms of *sheep value*, similar to how in chess they
-measure things in pawn value. Under that conversion, the sheep player needs to
-gain a total of nine ranks to offset the loss of a sheep.
-
-It may also seem like it is a good trade (net sheep value +0.07) to sacrifice a
-sheep to get two others into the pen. However, intentionally sacrificing a sheep
-means putting it into a position where the fox is able to eat it, which is worse
-than just having lost a sheep. The trade actually has net sheep value −0.27. I
-don’t know why an imminent feeding is worse for the sheep than an eaten sheep,
-but I suspect it’s because it allows the fox to jump two positions, and thus
-move quicker across the board.8<sup>8</sup> And logic would have us conclude that this
-ability to move two places (in isolation, separate from any eating that would
-happen as a side effect) is, on average, worth a whopping 0.2 sheep value!
-
-Enough about sheep. The individual-position values for the fox player are
+**hardware-configuration.nix**
 
 ```
+{ config, lib, pkgs, modulesPath, ... }:
 
-7               0.30  0.30  0.30              | 0.30
-6               0.29  0.30  0.29              | 0.29
-5   0.33  0.41  0.37  0.36  0.37  0.41  0.33  | 0.37
-4   0.34  0.37  0.39  0.37  0.39  0.37  0.34  | 0.37
-3   0.34  0.37  0.34  0.35  0.34  0.37  0.34  | 0.35
-2               0.32  0.31  0.32              | 0.32
-1               0.33  0.29  0.33              | 0.32
-     a     b     c     d     e     f     g    | mean
+{
+  boot.initrd.includeDefaultModules = false;
+  boot.initrd.availableKernelModules = [ "virtio_pci" "virtio_blk" "ext4" ];
+  boot.initrd.kernelModules = [ ];
+  boot.kernelModules = [ ];
+  boot.extraModulePackages = [ ];
+
+  fileSystems."/" = {
+    device = "/dev/disk/by-label/nixos";
+    fsType = "ext4";
+  };
+
+  swapDevices = [ ];
+
+  nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
+}
 ```
 
-These position values are flatter across the board, with an average
-corresponding to 2.3 sheep value – each living fox is worth just over two living
-sheep. There is some advantage for the fox to be out in the middle of the field,
-in ranks 4 and 5. The fox does not want to find itself inside the pen, because
-then sheep in the field get the opportunity to rearrange themselves with
-impunity. The foxes should, all else equal, stick around in the middle 5×2
-rectangle bounded by `b4` and `f5`.
+**tierhive.nix**
 
-It seems that `b5` (and its mirror image `f5`) are some of the most valuable
-points for both fox and sheep and I’m not sure why.
+```
+# TierHive VPS platform settings: network, DNS and hostname come from the panel via cloud-init on first boot.
+{ config, lib, pkgs, ... }:
 
-Let’s say we still don’t feel like we’ve learned enough, and want to improve
-even more at the game. We have game records from when the algorithm
-played itself, where all kinds of interesting situations have shown up. What we
-can do is create *Starve the Fox* puzzles. These would be used like tsumego or
-chess puzzles: they plop the player down in an interesting situation with a
-given objective, and then the player must figure out the one next move that
-achieves the objective. Here are some examples of situations that make for good
-puzzles:
+let
+  # Kernel module tree without drivers for hardware a KVM VPS never has; kept modules always keep their dependencies.
+  kernel = config.boot.kernelPackages.kernel;
+  moduleTreeRemove = [
+    "kernel/sound/*"
+    "kernel/drivers/accel/*" "kernel/drivers/accessibility/*" "kernel/drivers/atm/*" "kernel/drivers/auxdisplay/*" "kernel/drivers/bcma/*"
+    "kernel/drivers/bluetooth/*" "kernel/drivers/bus/*" "kernel/drivers/clk/*" "kernel/drivers/comedi/*" "kernel/drivers/counter/*"
+    "kernel/drivers/cpufreq/*" "kernel/drivers/crypto/*" "kernel/drivers/cxl/*" "kernel/drivers/dca/*" "kernel/drivers/devfreq/*"
+    "kernel/drivers/dma/*" "kernel/drivers/edac/*" "kernel/drivers/extcon/*" "kernel/drivers/firewire/*" "kernel/drivers/fpga/*"
+    "kernel/drivers/fsi/*" "kernel/drivers/fwctl/*" "kernel/drivers/gnss/*" "kernel/drivers/gpio/*" "kernel/drivers/greybus/*"
+    "kernel/drivers/hid/*" "kernel/drivers/hsi/*" "kernel/drivers/hv/*" "kernel/drivers/hwmon/*" "kernel/drivers/hwtracing/*"
+    "kernel/drivers/i2c/*" "kernel/drivers/i3c/*" "kernel/drivers/iio/*" "kernel/drivers/infiniband/hw/*" "kernel/drivers/ipack/*"
+    "kernel/drivers/leds/*" "kernel/drivers/macintosh/*" "kernel/drivers/mailbox/*" "kernel/drivers/mcb/*" "kernel/drivers/media/*"
+    "kernel/drivers/memstick/*" "kernel/drivers/message/*" "kernel/drivers/mfd/*" "kernel/drivers/mmc/*" "kernel/drivers/most/*"
+    "kernel/drivers/mtd/*" "kernel/drivers/mux/*" "kernel/drivers/nfc/*" "kernel/drivers/ntb/*" "kernel/drivers/nvdimm/*"
+    "kernel/drivers/nvmem/*" "kernel/drivers/parport/*" "kernel/drivers/pcmcia/*" "kernel/drivers/peci/*" "kernel/drivers/perf/*"
+    "kernel/drivers/phy/*" "kernel/drivers/pinctrl/*" "kernel/drivers/platform/*" "kernel/drivers/power/*" "kernel/drivers/powercap/*"
+    "kernel/drivers/rapidio/*" "kernel/drivers/ras/*" "kernel/drivers/regulator/*" "kernel/drivers/reset/*" "kernel/drivers/rpmsg/*"
+    "kernel/drivers/siox/*" "kernel/drivers/slimbus/*" "kernel/drivers/soc/*" "kernel/drivers/soundwire/*" "kernel/drivers/spi/*"
+    "kernel/drivers/spmi/*" "kernel/drivers/ssb/*" "kernel/drivers/staging/*" "kernel/drivers/tee/*" "kernel/drivers/thermal/*"
+    "kernel/drivers/thunderbolt/*" "kernel/drivers/ufs/*" "kernel/drivers/usb/*" "kernel/drivers/w1/*" "kernel/drivers/xen/*"
+    "kernel/drivers/video/fbdev/*" "kernel/drivers/video/backlight/*" "kernel/drivers/gpu/drm/*/*"
+    "kernel/drivers/input/joystick/*" "kernel/drivers/input/touchscreen/*" "kernel/drivers/input/tablet/*"
+    "kernel/drivers/input/gameport/*" "kernel/drivers/input/rmi4/*"
+    "kernel/drivers/net/ethernet/*" "kernel/drivers/net/wireless/*" "kernel/drivers/net/wwan/*" "kernel/drivers/net/usb/*"
+    "kernel/drivers/net/arcnet/*" "kernel/drivers/net/fddi/*" "kernel/drivers/net/hamradio/*" "kernel/drivers/net/hippi/*"
+    "kernel/drivers/net/ieee802154/*" "kernel/drivers/net/wan/*" "kernel/drivers/net/plip/*" "kernel/drivers/net/fjes/*"
+    "kernel/drivers/net/hyperv/*" "kernel/drivers/net/vmxnet3/*" "kernel/drivers/net/xen-netback/*" "kernel/drivers/net/xen-netfront.ko*"
+    "kernel/drivers/net/thunderbolt/*" "kernel/drivers/net/mhi_net.ko*" "kernel/drivers/net/dsa/*" "kernel/drivers/net/rionet.ko*"
+    "kernel/drivers/net/ntb_netdev.ko*" "kernel/drivers/net/sungem_phy.ko*"
+    "kernel/drivers/block/floppy.ko*" "kernel/drivers/block/mtip32xx/*" "kernel/drivers/block/xen-blk*"
+    "kernel/drivers/scsi/*" "kernel/drivers/ata/*" "kernel/drivers/watchdog/*" "kernel/drivers/rtc/*"
+  ];
+  moduleTreeKeep = [
+    "kernel/drivers/gpu/drm/virtio/*"
+    "kernel/drivers/scsi/scsi_mod.ko*" "kernel/drivers/scsi/scsi_common.ko*" "kernel/drivers/scsi/sd_mod.ko*" "kernel/drivers/scsi/sr_mod.ko*"
+    "kernel/drivers/scsi/sg.ko*" "kernel/drivers/scsi/st.ko*" "kernel/drivers/scsi/ch.ko*" "kernel/drivers/scsi/ses.ko*"
+    "kernel/drivers/scsi/raid_class.ko*" "kernel/drivers/scsi/virtio_scsi.ko*" "kernel/drivers/scsi/scsi_transport_*"
+    "kernel/drivers/scsi/iscsi_tcp.ko*" "kernel/drivers/scsi/libiscsi.ko*" "kernel/drivers/scsi/libiscsi_tcp.ko*"
+    "kernel/drivers/scsi/iscsi_boot_sysfs.ko*"
+    "kernel/drivers/ata/libata.ko*" "kernel/drivers/ata/ata_piix.ko*" "kernel/drivers/ata/ahci.ko*" "kernel/drivers/ata/libahci.ko*"
+    "kernel/drivers/watchdog/watchdog.ko*" "kernel/drivers/watchdog/i6300esb.ko*" "kernel/drivers/watchdog/softdog.ko*"
+    "kernel/drivers/rtc/rtc-cmos.ko*"
+  ];
+  modulesSrc = lib.getOutput "modules" kernel;
+  trimmedModules = pkgs.runCommand "${kernel.name}-modules-tierhive" { nativeBuildInputs = [ pkgs.kmod ]; } ''
+    set -f
+    remove="${lib.concatStringsSep " " moduleTreeRemove}"
+    keep="${lib.concatStringsSep " " moduleTreeKeep}"
+    ver=$(ls ${modulesSrc}/lib/modules)
+    src=${modulesSrc}/lib/modules/$ver
+    dst=$out/lib/modules/$ver
+    match() { local f=$1 p; for p in $2; do case $f in $p) return 0;; esac; done; return 1; }
+    declare -A want
+    while IFS= read -r line; do
+      m=''${line%%:*}
+      if match "$m" "$remove" && ! match "$m" "$keep"; then continue; fi
+      want[$m]=1
+      for d in ''${line#*:}; do want[$d]=1; done
+    done < $src/modules.dep
+    for m in "''${!want[@]}"; do mkdir -p "$dst/$(dirname "$m")"; cp "$src/$m" "$dst/$m"; done
+    cp $src/modules.builtin $src/modules.builtin.modinfo $dst/
+    while IFS= read -r o; do
+      for m in "$o" "$o.xz" "$o.zst" "$o.gz"; do [ -n "''${want[$m]:-}" ] && { echo "$o"; break; }; done
+    done < $src/modules.order > $dst/modules.order
+    depmod -b $out -a $ver
+  '';
+in
+{
+  boot.loader.grub.enable = true;
+  boot.loader.grub.device = "/dev/vda";
 
-- Sheep to play: trap a fox within N turns.
-- Fox to play: survive a forced trap for N turns.
-- Fox to play: eat a sheep without getting trapped within N turns.
-- Sheep to play: prevent a sheep loss for N turns.
-- Sheep to play: fill the pen within N turns.
-- Fox to play: prevent the pen from being filled for N turns.
+  boot.kernelParams = [
+    "sysctl.vm.mem_profiling=never" "damon_stat.enabled=N" "kfence.sample_interval=0" "audit=0"
+    "initcall_blacklist=ksm_init,tpm_init,init_tis" "psi=0" "ras=cec_disable" "nowatchdog" "nmi_watchdog=0"
+    "cryptomgr.notests" "8250.nr_uarts=1" "transparent_hugepage=never"
+  ];
+  system.modulesTree = lib.mkForce ([ trimmedModules ] ++ config.boot.extraModulePackages);
+  boot.blacklistedKernelModules = [
+    "virtio_console" "floppy" "intel_agp" "i2c_piix4" "psmouse" "mousedev" "joydev" "serio_raw" "mac_hid"
+    "input_leds" "evdev" "button" "rapl" "intel_rapl_msr" "intel_rapl_common" "intel_cstate" "intel_uncore"
+    "kvm_intel" "kvm_amd" "kvm" "cfg80211" "ata_generic" "pata_acpi" "qemu_fw_cfg" "dmi_sysfs" "vga16fb" "virtio_gpu"
+  ];
+  boot.extraModprobeConfig = lib.concatMapStrings (m: "install ${m} ${pkgs.coreutils}/bin/false\n") [
+    "vsock" "vmw_vsock_virtio_transport" "vsock_loopback" "vmw_vsock_vmci_transport" "vmw_vmci" "virtiofs"
+  ];
 
-The parameter N controls both the difficulty of the puzzle9<sup>9</sup> And I have to
-admit I have failed some where N=1, i.e. I just needed to spot the direct
-capture or whatever the case may be … and the compute cost to find the right
-situations in the self-play records. A cheap filter can quickly eliminate most
-positions as uninteresting, but then many of the puzzle types require a complete
-search to depth N before we know that the situation would make for a proper
-puzzle. For example, “eat a sheep without getting trapped” means we first have
-to find a situation in which a sheep can be eaten, and then also make sure there
-is no follow-up trap within the same N turns. Such a follow-up would be a
-refutation to the solution: the sheep wouldn’t be lost, it would merely be
-sacrificed to trap the fox.
+  boot.kernel.sysctl = {
+    "kernel.panic_on_oops" = 1;
+    "kernel.panic" = 10;
+    "vm.swappiness" = 180;
+    "vm.page-cluster" = 0;
+    "vm.watermark_scale_factor" = 125;
+    "vm.watermark_boost_factor" = 0;
+  };
 
-I only tried generating puzzles with N lower than four, but that alone gave some
-2000 puzzles. If I worked through all of those, I’m sure I would end up playing
-a much meaner sheep game. Alas, of all the things I could get skilled at, this
-is very low on my not-so-well prioritised list.
+  services.udev.extraRules = ''
+    ACTION=="add|change", KERNEL=="vd[a-z]*", ENV{DEVTYPE}=="disk", ATTR{queue/scheduler}="none", ATTR{queue/read_ahead_kb}="128"
+  '';
 
-But in case someone else is interested in spending time to get good at *Starving
-the Fox*, [here’s a decent set of puzzles](https://xkqr.org/fox-game-puzzles/) to get you started.
+  zramSwap = {
+    enable = true;
+    algorithm = "zstd";
+    memoryPercent = 100;
+    memoryMax = 536870912;
+  };
 
-As a meta-reflection, this is the sort of project I would not have attempted
-before the developments we’ve seen to language model harnesses in the past year
-or so. Even if the language models themselves have not gotten better, the
-harnesses have gotten better at pushing them into actively producing feedback,
-which in turn lets them generate code satisfying specifications more reliably.
+  networking.hostName = "";
+  networking.useDHCP = false;
+  networking.resolvconf.enable = false;
+  services.resolved.enable = false;
+  systemd.oomd.enable = false;
 
-But satisfying specifications doesn’t mean good code. It’s generated over 3,000
-lines of Python implementation, 1,000 lines of tests, and 500 lines of html,
-all in the dense code style modern language models tend to generate. It’d expand
-to a total of over 6,000 lines if formatted like a human. The code is
-unnecessarily complex and rigid. If I cared, I could refactor it to much higher
-quality, shrinking it in size maybe to around 4500 lines, which seems
-appropriate for this size of functionality when the code is well-written. That’d
-be a [complexity reduction of 25 %](https://entropicthoughts.com/llms-and-almost-good-code).
+  services.timesyncd.enable = false;
+  systemd.services.tierhive-ntp = {
+    description = "One-shot clock sync";
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+    serviceConfig.Type = "oneshot";
+    serviceConfig.ExecStart = "${pkgs.busybox}/bin/ntpd -n -q ${lib.concatMapStringsSep " " (s: "-p ${s}") config.networking.timeServers}";
+  };
+  systemd.timers.tierhive-ntp = {
+    wantedBy = [ "timers.target" ];
+    timerConfig.OnBootSec = "30s";
+    timerConfig.OnCalendar = "*-*-* *:17:00";
+  };
 
-But for this? I don’t care about that. I don’t care about the code. I would not
-be sad if this code disappeared tomorrow. I would also never end up manually
-writing 4,500 lines of code to learn more about an old Nordic board game. I like
-programming, but I have much more interesting programming projects on my plate.
+  environment.etc."systemd/journald.conf.d/10-tierhive.conf".text = ''
+    [Journal]
+    SystemMaxUse=50M
+  '';
 
-Oh, I almost forgot. Under these rules, with a strong-ish search, the sheep
-win about 50 % of the time. When they cannot win, they can usually force a draw,
-which appens 35 % of the time. The fox wins 15 % of the time.
+  environment.variables = {
+    GC_INITIAL_HEAP_SIZE = "33554432";
+    GC_FREE_SPACE_DIVISOR = "8";
+    GC_FORCE_UNMAP_ON_GCOLLECT = "1";
+  };
 
-This is not a solution – we don’t know if perfect play means the sheep always
-win, or the fox always wins, but the fox is certainly not so overpowered as my
-wife’s family assumes.
+  environment.defaultPackages = [ ];
+  xdg.mime.enable = false;
+  xdg.icons.enable = false;
+  xdg.sounds.enable = false;
+  fonts.fontconfig.enable = false;
+  services.lvm.enable = false;
+  boot.bcache.enable = false;
+  systemd.suppressedSystemUnits = [ "systemd-importd.service" "sys-kernel-config.mount" ];
+  system.tools.nixos-option.enable = false;
+  system.tools.nixos-build-vms.enable = false;
+  system.tools.nixos-install.enable = false;
+  system.tools.nixos-enter.enable = false;
+  security.pam.services.su.forwardXAuth = lib.mkForce false;
 
-Though my analysis
-indicates that the first-move advantage is very small in this game, so it
-probably doesn’t matter too much who wins.
+  documentation.enable = false;
+  documentation.man.enable = false;
+  documentation.nixos.enable = false;
 
-Unless the sheep
-forced a draw, which they can do as long as there’s enough of them, thanks to
-the loopy nature of the game.
+  services.openssh = {
+    enable = true;
+    startWhenNeeded = true;
+    settings.PermitRootLogin = null;
+    settings.PasswordAuthentication = null;
+    settings.KbdInteractiveAuthentication = false;
+    extraConfig = "Include /etc/ssh/sshd_config.d/*.conf";
+  };
+  security.pam.services.sshd.unixAuth = lib.mkForce true;
+  systemd.tmpfiles.rules = [ "d /etc/ssh/sshd_config.d 0755 root root -" ];
 
-In fact,
-the sheep player isn’t really moving sheep as much as they’re moving the holes
-in the flock to make sure the holes stay away from the sheep closest to the
-foxen.
+  environment.etc.fstab.mode = "0644";
 
-The depth at which to truncate rollouts depends on both the
-complexity of the game and the quality of the rollout policy. For completely
-random rollouts, it may even be desirable to cut them off at depth zero – i.e.
-not perform any random moves at all, because they make the scored state less
-representative of the end state than the earlier leaf node was. In the case of
-*Starve the Fox*, stopping the rollout after 8 plies seemed to yield the best
-results with the first draft of the heuristic function, but it’s possible with a
-stronger heuristic function shorter rollouts would be even better, because they
-buy time for more tree search at the cost of not evaluating as far into the
-future.
+  services.cloud-init = {
+    enable = true;
+    network.enable = true;
+    settings = {
+      datasource_list = [ "NoCloud" ];
+      system_info = {
+        distro = "nixos";
+        network.renderers = [ "networkd" ];
+        paths.templates_dir = "${pkgs.cloud-init}/${pkgs.python3.sitePackages}/etc/cloud/templates";
+      };
+      unverified_modules = [ "resolv_conf" ];
+      ssh_deletekeys = false;
+      ssh_genkeytypes = [ ];
+      cloud_init_modules = [ "seed_random" "bootcmd" "write_files" "growpart" "resizefs" "set_hostname" "update_hostname" "update_etc_hosts" "resolv_conf" "users_groups" "ssh" ];
+      cloud_config_modules = [ "set_passwords" "runcmd" ];
+      cloud_final_modules = [ "package_update_upgrade_install" "write_files_deferred" "scripts_vendor" "scripts_per_once" "scripts_per_boot" "scripts_per_instance" "scripts_user" "keys_to_console" "final_message" ];
+    };
+  };
+  systemd.services.cloud-init-local.unitConfig.ConditionPathExists = "!/etc/cloud/cloud-init.disabled";
+  systemd.services.cloud-init.unitConfig.ConditionPathExists = "!/etc/cloud/cloud-init.disabled";
+  systemd.services.cloud-config.unitConfig.ConditionPathExists = "!/etc/cloud/cloud-init.disabled";
+  systemd.services.cloud-final.unitConfig.ConditionPathExists = "!/etc/cloud/cloud-init.disabled";
 
-Search budget of maybe 0.5 seconds per ply, scoring leaves by random
-rollouts to the end.
+  systemd.services.tierhive-lldp-off = {
+    description = "Disable LLDP reception on the cloud-init network files";
+    unitConfig.DefaultDependencies = false;
+    after = [ "cloud-init-local.service" ];
+    before = [ "systemd-networkd.service" ];
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig.Type = "oneshot";
+    script = ''
+      for f in /etc/systemd/network/10-cloud-init-*.network; do
+        [ -e "$f" ] || continue
+        [ -e "$f.d/10-tierhive-lldp.conf" ] && continue
+        mkdir -p "$f.d"
+        printf '[Network]\nLLDP=no\n' > "$f.d/10-tierhive-lldp.conf"
+      done
+    '';
+  };
 
-Only one position to avoid having to deal with
-the strong correlation between consecutive positions in the same game.
+  systemd.services.tierhive-reserved-blocks = {
+    description = "Set root fs reserved blocks to 0.01% after first-boot grow";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "cloud-init.service" ];
+    unitConfig.ConditionPathExists = "!/var/lib/tierhive/reserved-blocks.done";
+    path = [ pkgs.e2fsprogs pkgs.util-linux pkgs.gawk ];
+    serviceConfig.Type = "oneshot";
+    script = ''
+      dev=$(findmnt -no SOURCE /)
+      blocks=$(tune2fs -l "$dev" | awk -F: '/^Block count/{gsub(/ /,"",$2); print $2}')
+      tune2fs -r $((blocks / 10000)) "$dev"
+      mkdir -p /var/lib/tierhive
+      touch /var/lib/tierhive/reserved-blocks.done
+    '';
+  };
+}
+```
 
-It’s a hyperbolic tangent to map the raw score (real number,
-infinite support) onto the range [−1, +1] indicating “sure loss” and “sure win”
-respectively, with a draw having value zero. But we’d also need the bias term
-(roughly +1) to convert it into the final value, which isn’t really a
-probability but almost.
+Have a play and a tweak and report back, maybe this can go further ![:)](https://lowendspirit.com/plugins/emojiextender/emoji/twitter/smile.png)
 
-And logic would have us conclude that this
-ability to move two places (in isolation, separate from any eating that would
-happen as a side effect) is, on average, worth a whopping 0.2 sheep value!
+[TierHive](https://tierhive.com/r/9596718DBBE7)- Hourly VPS - NAT Native - /24 per customer - DE, UK, SG, CA x2, USA x5, FR x3, AU, PL, NL, JP, BR, ZA  
 
-And I have to
-admit I have failed some where N=1, i.e. I just needed to spot the direct
-capture or whatever the case may be …
+**FREE** tokens on sign up, try **before** you buy. | Static Hosting Free for life: [https://tierhive.com/static-hosting/](https://tierhive.com/static-hosting/)
+
+- nixos
+
+## Comments
+
+- [![snake](https://secure.gravatar.com/avatar/2f8ecb21625483f524153974a840d0d9/?default=https%3A%2F%2Fvanillicon.com%2F1b16ca878a178877e3749dcb244b7c73_200.png&rating=g&size=200)](https://lowendspirit.com/profile/snake)[snake](https://lowendspirit.com/profile/snake) ![](https://lowendspirit.com/uploads/karmastore/1784994234-8115.png)![](https://lowendspirit.com/uploads/karmastore/1784906748-5321.png)![](https://lowendspirit.com/uploads/karmastore/1784906532-7650.png) [2:50PM](https://lowendspirit.com/discussion/comment/244672/#Comment_244672) awesome!
+- [![terrorgen](https://lowendspirit.com/uploads/userpics/339/nQUOUF3VOA4XN.png)](https://lowendspirit.com/profile/terrorgen)[terrorgen](https://lowendspirit.com/profile/terrorgen) OG ![](https://lowendspirit.com/uploads/karmastore/1784895335-4907.png)![](https://lowendspirit.com/uploads/karmastore/1785186964-5216.png)![](https://lowendspirit.com/uploads/karmastore/1784906532-7650.png)![](https://lowendspirit.com/uploads/karmastore/1784993753-7115.png)![](https://lowendspirit.com/uploads/karmastore/1784994234-8115.png)![](https://lowendspirit.com/uploads/karmastore/1785351904-8590.png) [5:15PM](https://lowendspirit.com/discussion/comment/244689/#Comment_244689) Learned something new that I have never looked into before. Thanks! DM us for private tracker invite.
+
+- ![DragonWebHost](https://lowendspirit.com/uploads/editor/qs/341dgq9ycx9m.webp)
+- ![TPUG WORLD OF COMMODORE 2026](https://lowendspirit.com/uploads/editor/ga/lvvrnzob39de.webp)
+- ![DNSCry.pt](https://lowendspirit.com/uploads/editor/iz/iybjxakfq4gu.webp)
+- ![](https://lowendspirit.com/uploads/editor/v2/1fakis7vf2ok.webp)
+- ![Fast, Solid and Stable Global 32 Locations Hosting](https://lowendspirit.com/uploads/editor/y6/za4k16c9zetx.webp)
+- ![OnePoundEmail](https://lowendspirit.com/uploads/editor/tg/3i1dai8a5a0m.webp)
+- ![OnePoundEmail 31% OFF For Halloween!](https://lowendspirit.com/uploads/editor/j8/oirzu6csgjka.webp)
+- ![Caliber Node VPS 1 — Dallas VPS, 1 GB RAM, 10 GB NVMe, $15/year including renewals with code LES1G.](https://lowendspirit.com/uploads/editor/cs/6tho7rrmok7z.webp)
+- ![Servury - Anonymous VPS/VDS](https://lowendspirit.com/uploads/editor/ul/xzlsv3wzx1cu.webp)
+- ![](https://lowendspirit.com/uploads/editor/7m/1bhj8v7k7qep.webp)
+- ![Caliber Node Cloud Apps — managed app hosting. Your apps, made simple. Get started.](https://lowendspirit.com/uploads/editor/f4/5n41i07w2ewy.webp)
+- ![AlpineBSD](https://lowendspirit.com/uploads/editor/t6/2knww2m39wdh.webp)
+- ![](https://lowendspirit.com/uploads/editor/yw/zfuuifvfg8or.webp)
+- ![KVM VPS from $0.10 per month.](https://lowendspirit.com/uploads/editor/19/5jcidyx4pdiu.webp)
+- ![](https://lowendspirit.com/uploads/editor/k8/ysn76pg25npz.webp)
+- ![](https://lowendspirit.com/uploads/editor/3y/nfw4159m3vmd.webp)
+- ![Amadex](https://lowendspirit.com/uploads/editor/hr/jaj4085d25dm.webp)
+- ![Kopya](https://lowendspirit.com/uploads/editor/u1/1o731btryyov.webp)
+- ![Kopya](https://lowendspirit.com/uploads/editor/d0/lu6bjxtpycma.webp)
+- ![](https://lowendspirit.com/uploads/editor/j6/uj1u2dy899hn.webp)
+- ![We Frankz](https://lowendspirit.com/uploads/editor/bt/71qchx6a561z.webp)
+- ![HetrixTools ](https://lowendspirit.com/uploads/editor/47/no0qfdtsmyjr.webp)
