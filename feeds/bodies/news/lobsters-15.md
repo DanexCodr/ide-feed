@@ -24,7 +24,9 @@ Visit [`tangled.org`](https://tangled.org/timeline) and experience the new UI yo
 
 [WCAG 2.2 accessibility guidelines](https://www.w3.org/WAI/WCAG22/Understanding/) don’t recommend a minimum font size. [1.4.4 Resize Text](https://www.w3.org/TR/WCAG22/#resize-text) does require that text can be resized up to 200% “without loss of content or functionality”.
 
-Tangled uses pixel units in CSS for font size. That means the UI won’t adapt to the browser default setting. I can *force* a minimum `16px` font size and look what happens.
+Tangled uses pixel units in CSS for font size<sup>†</sup>. That means the UI won’t adapt to the browser default setting. I can *force* a minimum `16px` font size and look what happens.
+
+**<sup>†</sup> Correction:** I was wrong about pixel units everywhere (I misread the computed values), it’s `font-size: 16px` on the `<html>` element that blocks the relative units from scaling properly with browser settings (an easier fix).
 
 Text lines get too close for comfort. Characters are starting to get clipped. See the “g” descender in “Tangled” for example.
 
@@ -43,7 +45,9 @@ I’ll provide two suggestions for free though:
 1. Use relative units for font sizes
 2. Use unit-less numbers for line height
 
-Frankly, what Tangled’s redesign suggests to me is that nobody involved with the process gave accessibility enough thought (if any). That may sound harsh but it’s usually the reality from my experience. Whatever the case, Tangled must do better in this area.
+(Edit: see correction above, the fix is even easier.)
+
+Frankly, what Tangled’s redesign suggests to me is that nobody involved with the process gave accessibility enough thought <del>(if any)</del> *(edit: that part was unfair, there was some effort but far from adequate testing)*. That may sound harsh but it’s usually the reality from my experience. Whatever the case, Tangled must do better in this area.
 
 If I may answer a few predictable but hypothetical comments.
 

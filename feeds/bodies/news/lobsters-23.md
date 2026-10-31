@@ -1,83 +1,61 @@
-While reading the draft Go 1.28 release notes, I noticed a change in the HTTP/2 server. With this change, the goroutine responsible for serving a connection can exit when there is no work to do, instead of waiting. A new goroutine takes over when needed. At first, it seemed like a small change, but I wondered how much memory it could save on a server with thousands of open connections.
+From curl 8.12 through 8.16, config files could slice variable values and include other config files without an explicit depth cap. Together, these features let curl simulate any two-counter Minsky program. Under the usual idealization of unbounded strings and resources, this construction was Turing-complete.
 
-I decided to measure it rather than guess. I wanted to see how it affected process memory usage, goroutine counts, and Go runtime memory metrics.
+Curl 8.17.0 added a five-level include cap that breaks this reduction.
 
-## What is HTTP/2 parking?[#](https://abdolirad.me/articles/go-1-28-http2-parking-memory/#what-is-http2-parking)
+**Update 2026-10-30**: Jonathan Tremesaygues wrote me: *I couldn't help but implement “99 Bottles of Beer on the Wall”* [99_bottles.tar.gz](https://seriot.ch/resources/99_bottles.tar.gz): `curl -q -s -K 99_bottles/main.conf`
 
-An HTTP/2 connection can stay open even when it has no active streams. In the older server behavior, a goroutine runs the connection’s `serveLoop` and waits there when nothing new is ready. The Go 1.28 development code adds an internal mechanism called *parking*. When `serveLoop` has no work ready to process, and the implementation’s safety conditions are met, that goroutine can exit. When new work arrives, a new goroutine runs `serveLoop` again.
+A counter value `n` is represented by `n` copies of `x`.
 
-Parking is not limited to connections with no active streams. A handler can still be running while `serveLoop` has nothing immediate to process. If those safety conditions are met, the serving goroutine can be parked. That does not mean every active connection, or every running handler, can be parked.
+Each instruction state uses one or more config files, with file names acting as labels, and `expand-config` selecting the next file.
 
-The word *parking* comes from the Go implementation, including names such as `tryPark` and the temporary `GODEBUG` setting `http2serveparking`. It is not a public API, and the draft release notes do not use this name for the change. The change is how the server manages the goroutine for a connection, not how application code handles requests.
+Syntax:
 
-This also gave me a useful way to test the change. I could run the same Go 1.28 server binary with parking enabled and disabled, instead of relying only on a Go 1.27 versus Go 1.28 comparison.
+- {{b}} expands the current value
+- [0-0] keeps only the first byte (x or empty)
+- [1-] keeps everything except the first byte
+- empty slices yield empty strings (doc)
 
-## How I tested it[#](https://abdolirad.me/articles/go-1-28-http2-parking-memory/#how-i-tested-it)
+| Minsky | Curl config |
+| --- | --- |
+| Register `R` | Variable `r` (`R` is the number of `x` bytes) |
+| `INC(R)` | `expand-variable = "r={{r}}x"` |
+| `DEC(R)` | `expand-variable = "r[1-]={{r}}"` |
+| `JZ(R, _, _x)` | `expand-variable = "t[0-0]={{r}}"` `expand-config = "state_{{t}}.conf"` |
+| `JMP(S)` | `expand-config = "S.conf"` |
+| Halt | No further `expand-config` |
 
-I used the same benchmark code and machine for three configurations:
+With that, we can compile any two-counter program into curl config files.
 
-1. Go 1.27.2, as an older-version reference.
-2. Go 1.28 development build, parking enabled, as the default behavior of the tested revision.
-3. The same Go 1.28 binary, parking disabled, using GODEBUG=http2serveparking=0.
+Four files in [curl_addition.zip](https://seriot.ch/resources/curl_addition.zip) compute 2 + 3.
 
-The tested Go 1.28 revision was `5c51011e82ed754af072baaf4338ff35e76fe705`. The benchmark source was pinned to commit `86753bd4d1f79621a4f3c6927c8239419e54bde2`.
+![](https://seriot.ch/resources/curl_config.png)
 
-For each configuration, I measured the server with **0, 1,000, and 5,000 idle HTTP/2 connections**. Each complete run used ten rounds for every case and connection count. I repeated the full experiment three times on the same Linux machine. The benchmark collected short sample windows after the connections had settled, and the published results use medians rather than a single sample.
+Build a local curl 8.12.0 binary if needed:
 
-The test machine used an Intel Core i7-1265U, Linux 6.18.56, and about 32 GiB of RAM. The benchmark configuration set `GOMAXPROCS=12` and `GOGC=100`. I kept the natural garbage collection behavior rather than forcing a collection before each measurement.
+```
+mkdir -p /tmp/curl-tc-build
+cd /tmp/curl-tc-build
+curl -fsSLO https://curl.se/download/curl-8.12.0.tar.gz
+tar -xzf curl-8.12.0.tar.gz
+cd curl-8.12.0
+./configure --without-ssl --disable-shared --disable-manual --disable-docs
+make -j4
+```
 
-I looked at four metrics. **RSS** measures resident memory for the server process as reported by Linux. **Goroutines** shows how many goroutines the Go runtime reports. **StackInuse** describes memory in use by goroutine stacks. **HeapAlloc** is the amount of allocated heap memory reported by the runtime. These values are related, but they do not measure the same thing.
+Then, from the `addition/` directory, run:
 
-## RSS: the clearest change[#](https://abdolirad.me/articles/go-1-28-http2-parking-memory/#rss-the-clearest-change)
+```
+/tmp/curl-tc-build/curl-8.12.0/src/curl -q -s -K main.conf
+```
 
-The largest difference appeared at 5,000 idle connections. The table below shows median RSS from each complete run, in MiB:
+Expected output:
 
-| Run | Go 1.27.2 | Go 1.28, parking off | Go 1.28, parking on | Saved by parking |
-| --- | --- | --- | --- | --- |
-| 1 | 249.89 | 218.28 | 129.19 | 89.08 |
-| 2 | 247.18 | 223.73 | 131.11 | 92.62 |
-| 3 | 245.60 | 217.94 | 133.25 | 84.70 |
+```
+A=xxxxx B=
+```
 
-Compared with the **same Go 1.28 binary with parking disabled**, enabling parking reduced RSS by **84.7 to 92.6 MiB**, or about **38.9% to 41.4%**, across the three runs. At 1,000 idle connections, the reduction was smaller but still clear, at about **15.7 to 16.6 MiB**.
+The reduction assumes unbounded counters and unbounded steps. The real binary has neither:
 
-![Median server RSS at different numbers of idle HTTP/2 connections](https://abdolirad.me/articles/go-1-28-http2-parking-memory/01-rss-scaling.svg)
+The [pull request](https://github.com/curl/curl/pull/19168) says the cap prevents a config file from including itself indefinitely. Its [regression test](https://github.com/curl/curl/blob/curl-8_17_0/tests/data/test774) does exactly that and expects an error. The public explanation does not discuss Turing completeness or why the cap is five.
 
-The zero-connection baseline stayed close to 8.5 to 8.7 MiB across the configurations. I also calculated baseline-adjusted RSS by subtracting each configuration’s zero-connection median. That helps show the growth associated with idle connections, but the main comparison above uses the observed process RSS.
-
-![RSS reduction with parking enabled](https://abdolirad.me/articles/go-1-28-http2-parking-memory/02-rss-savings.svg)
-
-## Fewer goroutines, less stack memory[#](https://abdolirad.me/articles/go-1-28-http2-parking-memory/#fewer-goroutines-less-stack-memory)
-
-The goroutine counts helped explain the shape of the result. With 5,000 idle connections, Go 1.28 reported about **10,007 goroutines with parking disabled** and **5,007 with parking enabled**. That is a difference of exactly **5,000 goroutines** in this benchmark. At 1,000 idle connections, the difference was 1,000 goroutines.
-
-![Goroutine counts by idle connection count](https://abdolirad.me/articles/go-1-28-http2-parking-memory/03-goroutines.svg)
-
-The stack numbers moved in the same direction. At 5,000 connections, **StackInuse** was about **99 MiB with parking disabled** and about **21 MiB with parking enabled**. The reduction was close to **78 MiB** in all three complete runs.
-
-![Stack and heap memory at 5,000 idle connections](https://abdolirad.me/articles/go-1-28-http2-parking-memory/04-memory-breakdown.svg)
-
-This does not mean that every byte saved in RSS came from stacks. RSS includes more than Go stacks, and changes in heap allocation, runtime state, and the operating system can affect it. It does show that the lower goroutine and stack counts are consistent with the parking mechanism.
-
-## HeapAlloc did not tell the same simple story[#](https://abdolirad.me/articles/go-1-28-http2-parking-memory/#heapalloc-did-not-tell-the-same-simple-story)
-
-HeapAlloc was less consistent. In some runs, parking enabled used less heap than parking disabled. In another run, it used slightly more. This is a good reminder that one memory metric cannot stand in for another.
-
-For this experiment, **RSS, goroutine count, and StackInuse** provide a clearer picture of the difference. I would not describe the change as a fixed heap saving or claim that a certain percentage of total memory always disappears.
-
-## Limits of this benchmark[#](https://abdolirad.me/articles/go-1-28-http2-parking-memory/#limits-of-this-benchmark)
-
-These measurements come from one machine, one benchmark design, and a specific **development revision** of Go 1.28. They are not results from a final Go 1.28 release. I tested mostly idle connections, not a mix of real traffic, active streams, and application workloads.
-
-The benchmark kept the Go 1.28 server binary the same when switching parking on and off. That makes the parking comparison more useful, but it still does not remove all system noise. The three full runs show a repeatable direction and a range, not a universal guarantee.
-
-The `GODEBUG=http2serveparking=0` setting I used for this comparison is temporary and undocumented. I would not treat it as a stable option for future releases.
-
-I have kept the [benchmark source at a fixed commit](https://github.com/atkrad/benchmarks/tree/86753bd4d1f79621a4f3c6927c8239419e54bde2) and the [tested Go revision](https://github.com/golang/go/commit/5c51011e82ed754af072baaf4338ff35e76fe705) linked here so the details can be checked later.
-
-## Conclusion[#](https://abdolirad.me/articles/go-1-28-http2-parking-memory/#conclusion)
-
-In this benchmark, HTTP/2 parking made a clear difference in memory usage. With 5,000 idle connections, the same Go 1.28 server binary used around 85 to 93 MiB less RSS when parking was enabled. It also had 5,000 fewer goroutines and used about 78 MiB less stack memory.
-
-What I found most interesting was how much memory an otherwise quiet connection can keep around. Changing what the server does while it waits can matter as much as optimizing the work it performs.
-
-I would not apply these numbers to every Go service. Still, for servers that keep many idle HTTP/2 connections open, this is a change worth understanding and measuring with a real workload.
+A Bash `while` loop can complement bounded curl by invoking a config once per step and carrying the counters and instruction label between invocations. The repetition then comes from Bash, so this is a composition rather than curl-alone Turing completeness.

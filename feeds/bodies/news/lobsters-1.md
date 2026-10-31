@@ -92,7 +92,7 @@ diff --git a/test_date.py b/test_date.py
 +++ b/test_date.py
 @@ -0,0 +1,5 @@
 +def test_can_access():
-+   assert test_can_access(
++   assert can_access(
 +       date(2007, 1, 1),
 +       date(2026, 1, 1)
 +   )
@@ -112,7 +112,7 @@ diff --git a/test_date.py b/test_date.py
 +++ b/test_date.py
 @@ -0,0 +1,5 @@
 +def test_can_access():
-+   assert test_can_access(
++   assert can_access(
 +       date(2008, 12, 31),
 +       date(2026, 1, 1)
 +   )
