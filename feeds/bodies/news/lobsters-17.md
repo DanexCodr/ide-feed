@@ -1,103 +1,64 @@
-*Published May, 2002 in Embedded Systems Programming.*
+This story starts with a little tragedy. See, I’ve got these old webpages I love to go back and look on every now and then. There’s websites that have been online unchanged for years and years, or decades, and there’s something a little cozy about checking in on them every now and then to see an old friend is still doing okay. Sometimes, of course, tragedy strikes.
 
-What are the top ten ways to protect congressional pages?  
+There was this fansite called teapuppies.com for an old anime series and and toy line called *Ochaken*. It’s about these cute cartoon dog characters who have tea leaves for ears, each of them named after a different kind of tea.<sup>[1](http://blog.mistys-internet.website/post/2026/10/29/if-you-love-a-website-back-it-up/#fn:ears)</sup> The site had been online since 2004 and had basically not changed since 2005, but it was nice just having it around. Except when I went to visit it a few weeks ago, and discovered that not only was the site gone but the domain is now being used to serve online gambling ads.
 
-            10. If our representatives are so enamored of 700 mile fences, well, build one around Congress.
+I work in web archiving, by the way. Which is to say that I should have known the site would go offline someday, *and* that I have the tools to have done something about it. I could have archived that site while it was still around, but I didn’t. This post is here to beg you to do what I didn’t think to, and to teach you how.
 
-Whoops. Wrong publication.
+You see, when I talk to a lot of people about web archiving, they always seem to believe it’s something *they* couldn’t do. It’s something a big organization like the Internet Archive does, and if you want a webpage to be saved you just have to wait and hope it gets done. But that’s not true! What I really want everyone to know is that *you* have control over the world around you, *you* can take action to preserve things and make things better. And not just *can*, but *should*! Don’t just wait for someone else to act - get out there and and make it happen! Got a favourite site? Back it up! Got some information you don’t want to get lost? Back it up! Favourite post somewhere? All together now. Back! It! Up!
 
-If David Letterman can have a Top Ten list, so can I. But instead of ragging on Mel Gibson or making fun of any of a vast number of Congressional scandals, I'll hit embedded systems. What are, in my opinion, the top ten reasons embedded projects get into trouble?
+All of the tools I’ll be showing off in this post use standard web archiving formats like [WARC](https://en.wikipedia.org/wiki/WARC_(file_format))<sup>[2](http://blog.mistys-internet.website/post/2026/10/29/if-you-love-a-website-back-it-up/#fn:warc)</sup>. You don’t have to worry about any of the technical details<sup>[3](http://blog.mistys-internet.website/post/2026/10/29/if-you-love-a-website-back-it-up/#fn:details)</sup>, but I’m telling you that because it means there are a lot of really great tools to do whatever you want with them. Here, just as an example, is an entire archived website embedded right in this blog post:
 
-# 10 - Not Enough Resources
+You can even click through all the links, look at all of the images, the works. It’s an entire website right in a post! (And if you don’t trust me to keep this up, and you want the web archive to host somewhere else? You can download it for yourself right from there. Just click the kebab menu and choose “download archive”, and you can do whatever you like with it. In fact, please do!)
 
-Firmware is the most expensive thing in the universe.
+By the way, for disclosure: the tools I’m going to mention in this blog post are made by the company I work for, but that’s not because they’ll pay my salary (most of them are free!). I just happen to think these are the best tools there are for personal web archiving.
 
-Ex-Lockheed CEO Norman Augustine, in his wonderful book "Augustine's Laws" (1997, American Institute of Aeronautics; ISBN: 1563472406) wrote about how defense contractors were in a bind in the late 70s. They found themselves unable to add anything to fighter aircraft, because increasing a plane's weight means decreasing performance. Business requirements - more profits - meant that regardless of the physics of flight they had to add features. Desperate for something hideously expensive yet weightless, they found. firmware! Today firmware in high performance aircraft consumes about half the total price of the plane. A success by any standard, except perhaps for the taxpayers. Indeed, retired USAF Colonel Everest Riccioni has suggested firmware-stuffed fighter airplanes and smart missiles are now so expensive that the US is unilaterally disarming (http://www.pogo.org/p/defense/do-010801-unilateraldisarm.html).
+### Option 1 - ArchiveWeb.page browser extension
 
-Face it: firmware is expensive, and getting more costly as it gets bigger. One hard-to-believe analysis (April 2004 Proceedings of the* First Conference on Computing Frontiers*) claims that embedded software doubles in size every 10 months. Couple that with the exponential relationship between schedule and size and it's pretty clear that within a few years firmware development will pretty-nearly consume the entire world's GDP.
+By far the easiest personal web archiving tool is the [ArchiveWeb.page](https://archiveweb.page/guide) browser extension for Chrome. This doesn’t take much in the way of setup or technical skills, and it works for anything: a single page, an entire website, a social media post or profile. So long as you can see it in a web browser, you can save it. All you really need to do is:
 
-Yet software people can't get reasonable sums of money for anything but bare necessities. While our EE pals routinely cadge $50k logic analyzers we're unable to justify a few grand for a compiler. How many of you, dear readers, have been successful getting approval for quality tools like static analyzers? Free/Open Source tools bring giant smiles to the head CPA. The statement "Just port GNU" is an early indicator of a looming disaster.
+1. Install the browser extension.
+2. Visit the first page you want to archive.
+3. Click the ArchiveWeb.page icon in the toolbar, then click “Start Archiving”.
+4. If your page has any interactive elements, click on those to make sure all their data loads.
+5. Visit any other pages you want captured in the same collection and let the extension grab them.
+6. Click the ArchiveWeb.page icon in the toolbar, then click “Stop Archiving”.
 
-# 9 - Starting Coding Too Soon
+You’re done! *You just archived a web page!* Now that it’s all saved, you can preview it and see how it went by clicking the extension’s icon and then the home icon to open the extension dashboard. From there, you can click on your archiving session to preview the pages you archived, load them in browser, and see if they work. (I’ll go into more details on how you can look at web archives and share them with others later in this post.)
 
-Agile methods have shaken up the world of software development. Most value code over documents, which all too often is incorrectly seen as justification for typing , "void main()" much too early.
+### Option 2 - archiveweb.page app
 
-Especially in the embedded world, we don't dare shortchange careful analysis. Early design decisions are often not malleable. Select an underpowered CPU or build hardware with too little memory and the project immediately headed towards disaster. Poorly structured code may never meet real-time requirements. Should the system use an RTOS? Maybe a hierarchical state machine makes the most sense. These sorts of design decisions profoundly influence the project and are tremendously expensive to change late in the project.
+If you don’t want to install a browser extension, or you don’t have Chrome installed, you can also grab the [standalone archiveweb.page app](https://archiveweb.page/). This is basically the same thing as the browser extension above, it just has its own web browser built in. It also opens straight to the menu that lets you browse your web archives, so it’s a handy way to look at your web archives locally. Pretty much everything else I described above applies.
 
-Sometimes the boss reinforces this early-coding behavior. When he sees us already testing code in the first week of the project he sees progress. Or, what looks like progress. "Wow - did you see that the team already has the thing working? We'll be shipping six months ahead of schedule!"
+### Option 3 - Browsertrix
 
-# 8 - The use of C
+The above options are great for single pages or sites that are small enough for you to browse manually. But if you’ve got a webpage that’s big enough that it’s going to be annoying visiting all of the pages by hand, you probably want to look at a *web crawler* tool for web archiving. There are a bunch of options out there, but the easiest to use as an individual is probably [Browsertrix](https://webrecorder.net/browsertrix/). A web crawler is basically an automation tool built around a web browser; you provide instructions on what page to start from and what pages it should visit, and it will go ahead and click links to automatically find pages so that it can archive the page as completely as possible. The web archive I embedded above was done using Browsertrix on pretty close to its default settings: I just told it I wanted to do a site crawl for the entire domain `https://teapuppies.mistys-internet.website`, and it worked it out from there:
 
-C is the perfect language for developers who love to spend a lot of time debugging.
+![Screenshot of the Browsertrix interface, depicting a crawl scope of "Pages on the same domain"](http://blog.mistys-internet.website/images/webarchiving/domaincrawl.png)
 
-Flame away.
+But, depending, on what you’re looking for, it has options which can be customized to narrow down what content it archives. For example, if you decided you only want pages for the episodes, you could tell it to only capture anything at the `/episodes/` section of the website:
 
-C is no worse than most languages. But there are a few - Ada, SPARK, and (reputedly, though I have not seen reliable data) Eiffel - that intrinsically lead to better code.
+![Screenshot of the Browsertrix interface, depicting a crawl scope of "Pages in the same directory" with a seed of https://teapuppies.mistys-internet.website/episodes/](http://blog.mistys-internet.website/images/webarchiving/directory.png)
 
-Ada, for instance, is still the favored language for safety-critical applications. Lots of research (for instance: http://www.stsc.hill.af.mil/crosstalk/2003/11/0311German.html) shows that Ada code has half or fewer bugs than C code. SPARK, a relative new-comer, achieves a sixth of Ada's error rate. One might argue that since Ada and SPARK are often used in high-reliability applications more effort goes into getting the software right. However, Ada programs can be produced for half the cost of C (http://www.adaic.com/whyada/ada-vs-c/cada_art.html).
+Or even just a single page and anything that page links to:
 
-I do like coding in C. It's a powerful language that's relatively easy to master. The *disciplined* use of C, coupled with the right tools, can lead to greatly reduced error rates. Problem is, we tend to furiously type some code into the editor and rush to start debugging. That's impossible in Ada et al, which force one to think very carefully about each line of code. It's important to augment C with resources similar to those used by SPARK and Ada developers, like static analyzers, Lint, and complexity checkers, as well as the routine use of code inspections.
+![Screenshot of the Browsertrix interface, depicting a crawl scope of "Single page" and the checkbox "Include directly linked pages" selected](http://blog.mistys-internet.website/images/webarchiving/singlepagewithlinks.png)
 
-So you can change #8 to the *misuse* of C. But the original title is more fun.
+There are a *lot* more options than I can go into in a quick overview - it’s a comprehensive tool with a lot of options. But if you’re looking to archive a whole website, or a complete social media profile, I’d recommend giving it a try.
 
-# 7 - Bad science
+Unlike the other tools, which you mainly run on your own computer, Browsertrix is primarily a web app. It’s also the only paid tool in this post - there’s a seven day trial, but after that you do have to pay per use. Since it’s open source, though, technically inclined users can run their own copies on their computer or deploy a copy somewhere if they like.
 
-Bad science means one of two things. First, and most common, poor analysis of the real-world events the system monitors or controls. I remember working on a system many years ago when we discovered, to our horror, that lead sulphide IR detectors were more sensitive to ambient temperature than infra-red light. That necessitated a major redesign of the system's electronics and mechanics. Yet this was a well-known effect we should have known about. Then there are the systems that don't have enough A/D resolution, precision and/or accuracy to make meaningful measurements. Poor filter selection can produce noisy data.
+## Viewing your archived webpage
 
-The second type is when one stumbles onto something that's truly new, or something not widely known. Penzias and Wilson ran into this in 1965 as they tried and tried to eliminate the puzzling noise in a receiver. only to eventually find that they had discovered the cosmic microwave background radiation.
+Once you’ve actually backed the site up, you can *replay* it to use it in your browser just like a live webpage. It’s kind of like having your own private version of the wayback machine. You can test it out yourself for your own private use using the interface built into the version of archiveweb.page you used, but if you want to share it with someone else you have a few options. If you want to share it with someone privately, you can send them the WARC/WACZ file and let them load it into the ArchiveWeb.page app or the [ReplayWeb.page](https://replayweb.page) website. If you want to share it with the world, though, you can set up a website with your web archive on it.
 
-It's pretty hard to stick to a schedule when uncovering fundamental physics. But most of the time the science is known; we simply have to understand and apply that knowledge.
+This post is using the [ReplayWeb.page](https://replayweb.page/docs/embedding/) embedded viewer, which is open source and can be embedded inside any other web page you want. You don’t have run any kind of app on your server to do this; as long as you have the ability to upload the archive and a little bit of JavaScript, you can easily add a copy of the replay interface into any web page or blog post.
 
-# 6 - Poorly defined process
+## Preserving the data once you have it
 
-While there is certainly an art to developing embedded systems, that doesn't mean there's no discipline. A painter routinely cleans his brushes; a musician keeps her piano tuned. Many novelists craft a fixed number of pages per day.
+Since everything you backed up is bundled inside a single WACZ file, it’s really easy to keep safe - or share with someone else. Lots of copies keeps stuff safe, after all; if you think you have friends who’d like to hold on to a copy of whatever site you’ve backed it up, pass it along and share the duty of preserving it!
 
-There's plenty of debate about process today, but no one advocates the lack of one. CMM, XP, SCRUM, PSP and dozens of others each claim to be The One True Way for certain classes of products. Pick one. Or pick three and combine best practices from each. But use a disciplined approach that meets the needs of your company and situation.
+If any of this sounds interesting to you, I’d encourage you to at least give it a try. I’d *love* for the world to be filled with thousands upon thousands of little web archives, with people and community groups archiving and sharing the things that matter to them for themselves. If you’re finding any of this overwhelming, and you’re not sure where to get started, *please reach out to me* - I’m very happy to give you a hand.
 
-There are indisputable facts we know, but all too often ignore. Inspections and design reviews are much cheaper and more effective than relying on testing alone. Unmanaged complexity leads to lots of bugs. Small functions are more correct than big ones.
-
-There's a large lore of techniques which work. Ignore them at your peril!
-
-# 5 - Vague requirements
-
-Next to the emphasis on testing, perhaps the greatest contribution the agile movement has made is to highlight the difficulty of eliciting requirements. For any reasonably-sized project it's somewhere between extremely hard to impossible to correctly discern all aspects of a system's features.
-
-But that's no excuse for shortchanging the process of developing a reasonably-complete specification. If we don't know what the system is supposed to do, we will not deliver something the customer wants. Yes, it's reasonable to develop incrementally with frequent deliverables so stakeholders can audit the application's functionality, and to continuously hold the schedule to scrutiny. Yes, inevitable changes will occur. But we must start with a pretty clear idea of where we're going.
-
-Requirements do change. We groan and complain, but such evolution is a fact of life in this business. Our goal is to satisfy the customer, so such changes are in fact a good thing. But companies will fail without a reasonable change control procedure. Accepting a modification without evaluating its impact is lousy engineering and worse business. Instead, chant: "Mr. Customer - we love you. Whatever you want is fine! But. here's the cost in time and money."
-
-# 4 - Weak managers or team leads
-
-Managers or team leads who don't keep their people on track sabotage projects. Letting the developers ignore standards, skip using Lint or other static analyzers is simply unacceptable. No relentless focus on quality? These are all signs the manager isn't managing. They must track code size and performance, the schedule versus current status, keep a wary eye on the progress of consultants, and much more.
-
-Management is very hard. It makes coding look easy. Perturb a system five times the same way and you'll get five identical responses. Perturb a person five times the same way and expect five very different results. Management is every bit as much of an art as is engineering.
-
-Most people shirk from confrontation, yet it's a critical tool, hopefully exercised gently, to guide straying people back on course.
-
-# 3 - Inadequate testing
-
-Considering that a few lines of nested conditionals can yield dozens of possible states it's clear just how difficult it is to create a comprehensive set of tests. Yet without great tests to prove the project's correctness we'll ship something that's rife with teeming bugs.
-
-Yet embedded systems defy conventional test techniques. How do you build automatic tests for a system which has buttons some human must push and an LCD someone has to watch? A small number of companies use virtualization. Some build test harnesses to simulate I/O. But any rigorous test program is expensive.
-
-Worse, testing is often left to the end of the project, which is probably running late. With management desperate to ship, what gets cut?
-
-Design a proper test program at the project's outset and update it continuously as the program evolves. Test incrementally, constantly and completely.
-
-# 2 - Writing optimistic code
-
-The inquiry board investigating the 1996 half-billion dollar failure of Ariane 5 recommended (among other findings) that the engineers take into account that software can fail. Developers had an implicit assumption that, unlike hardware which is subject to structural problems, software, once tested, is perfect.
-
-Programming is a human process subject to human imperfections. The usual tools, which are usually not used, can capture and correct all sorts of unexpected circumstances. These tools include checking pointer values. Range checking data passed to functions. Using asserts and exception handlers. Checking outputs (I have a collection of amusing pictures of embedded systems displaying insane results, like an outdoor thermometer showing 505 degrees, and a parking meter demanding $8 million in quarters).
-
-For very good reasons of efficiency C does not check, well, pretty much anything. It's up to us to add those that are needed.
-
-My wife once asked why, when dealing with a kid problem, I look at all the possible lousy outcomes of any decision. Engineers are trained in worst case analysis, which sometimes spills over to personal issues. What can go wrong? How will we deal with that problem?
-
-# 1 - Unrealistic schedules
-
-Scheduling is hard. Worse, it's a process that will always be inherently full of conflict. The boss wants the project in half the estimated time for what may be very good reasons, like shipping the product to stave off bankruptcy. Or maybe just to save money; firmware is the most expensive thing in the universe, so it's not surprising that some want to chop the effort in half.
-
-Capricious schedules are unrealistic. All too often, though, the supposedly accurate ones we prepare are equally unrealistic. Unless we create them carefully, spending the time required to get accurate numbers (for instance, see http://www.processimpact.com/articles/delphi.html) then we're doing the company a disservice.
-
-Yet there are some good reasons for seemingly-arbitrary schedule. That "show" deadline may actually have some solid business justification. A well-constructed schedule shows time required for each feature. Negotiate with the boss to subset the feature list to meet the - possibly very important - deadline.
+1. The appeal to me is, I hope, obvious. [↩](http://blog.mistys-internet.website/post/2026/10/29/if-you-love-a-website-back-it-up/#fnref:ears)
+2. Most of the tools I’m mentioning also use the [WACZ](https://specs.webrecorder.net/wacz/1.1.1/) format, which packages up WARC files along with extra metadata. [↩](http://blog.mistys-internet.website/post/2026/10/29/if-you-love-a-website-back-it-up/#fnref:warc)
+3. For those who want a *little* extra technical detail, though: one of the things that makes WARC special is that it records complete information about requests and responses, including all headers. This gives WARC a much more complete view of the whole process of visiting a website, and makes it possible to archive even complicated sites with client-side JavaScript that make a ton of requests. [↩](http://blog.mistys-internet.website/post/2026/10/29/if-you-love-a-website-back-it-up/#fnref:details)

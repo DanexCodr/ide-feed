@@ -123,5 +123,3 @@ are private repos, a CLI, SDKs for different languages and skills for your
 agent.
 
 Until then, enjoy every part of this launch equally.
-
-[Discuss on Hacker News](https://news.ycombinator.com/item?id=50305573)

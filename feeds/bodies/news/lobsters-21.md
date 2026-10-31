@@ -1,19 +1,64 @@
-This blog post is about touch screen Macs, but I’ll start by talking about touch screen cars. Vehicle manufacturers have increasingly replaced physical controls in cars with touch screens, and it hasn’t gone well, because the touch screens frustrate drivers. As a resident of the Upper Midwest who drives wearing gloves in the winter, I suspect that the idea for touch screens came from somewhere warmer than the traditional home of the automotive industry, Detroit. For further reading on the serious, indeed dangerous problems with touch screens in cars, I found a couple of recent articles from [Popular Mechanics](https://www.popularmechanics.com/cars/car-technology/a64543699/touch-screens-making-cars-worse/) and [The Conversation](https://theconversation.com/yes-those-big-touchscreens-in-cars-are-dangerous-and-buttons-are-coming-back-272704).
+Not me, this is just friendly advice from a struggling user.
 
-Smartphones have become ubiquitous, bringing ubiquitous familiarity with touch screen interfaces. Nonetheless, a touch screen is not the best interface for all purposes. In the case of cars, familiarity breeds contempt! The introduction of touch screens to smartphones was inspired by the physical limitations of the devices. The largest iPhone ever made, the new iPhone Duo, is still significantly smaller when unfolded than the smallest MacBook. Needless to say, the original 2007 iPhone was tiny compared to a MacBook. Mobile phones with a physical keyboard must have a correspondingly smaller screen, so manufacturers eliminated the physical keyboard to maximize screen size, relying entirely on a touch screen interface, including a software keyboard. In this case, touch screens were well motivated.
+Alongside [Codeberg](https://codeberg.org/) I’d consider [Tangled](https://tangled.org/) to be a real GitHub replacement. [We desperately need to leave GitHub behind.](https://dbushell.com/2026/04/29/github-is-sinking/) It’s difficult to recommend any tech these days. I used to spread the gospel of Proton and [that backfired](https://dbushell.com/notes/2026-10-30T07:29Z/). From what I’ve seen, Tangled seem to be saying and doing the right things so far. I have trepidations about their [venture capital funding](https://tangled.org/blog/seed/) (see [Deno’s demise](https://dbushell.com/notes/2026-10-10T10:30Z/)) but pessimism is no fun.
 
-Over the years I’ve owned many different computing devices of various sizes; from Apple: iMac, Mac Pro, Mac mini, MacBook Pro, iPhone, iPad. I’ve never once tried to control a Mac by touching its screen, not even absentmindedly. I simply never developed that habit. Many other people, however, when first introduced to a Mac, having only used touch screen computers such as smartphones and tablets, habitually attempt to control the Mac by touching its screen. This habit or expectation is cited as justification by defenders of touch screen Macs. In a [Wired interview](https://www.wired.com/story/the-inside-story-of-why-apple-finally-brought-a-touch-display-to-the-mac/) yesterday, Apple Senior Vice President of Worldwide Marketing Greg Joswiak said, “There’s a generation of young creators and young people using our MacBook Pros that expect to touch.” In my opinion, such an expectation is a terrible reason to introduce touch screen Macs. The habit of touching Mac screens can be broken and is worth breaking, because for most purposes the traditional Mac interface of a keyboard and indirect pointing device (mouse or trackpad) is so much more powerful and productive than the touch screen of an iPhone or iPad.
+Tangled’s recent blog post on [federated code forges](https://tangled.org/blog/forge/) piqued my interest. [I self-host Forgejo](https://dbushell.com/2025/08/15/self-hosted-forgejo-actions-runner/) and a big downside is that no one else can participate easily. [Forgejo federation](https://forgejo.codeberg.page/faq/#what-about-forge-federation) is under development. Maybe the two can co-exist? But that’s not what I’m here to discuss.
 
-Before you cite the ungodly AAPL market capitalization as proof that Joz’s opinion trumps mine, consider how Apple is the same company that gave us howlers such as the trash can Mac Pro, Touch Bar, butterfly keyboard, Liquid Glass, and gave a gold statue to Trump. I’m not even making any claims about the future profitability of touch screen Macs. I just think it’s a poor design.
+## Tangled’s new look
 
-Ironically, people like me who were introduced to computers before the smartphone era are ridiculed as “resistant to change,” yet I’ve managed to learn how to use iPhones and iPads (the latter without a keyboard), so why can’t people who were introduced to computers during the smartphone era learn how to use Macs? Let me quote from a blog post I wrote earlier this year, [If computers are the future, why are computer users expected to be permanently illiterate?](https://lapcatsoftware.com/articles/2026/3/5.html)
+In the same post Tangled revealed their new UI design.
 
-> The iPhone seems to have engendered a culture of anti-intellectualism and learned helplessness so pervasive that users have become evangelists for their own disempowerment. They demand that all software be “intuitive,” by which they mean idiot-proof, so simple that a n00b can use the software effortlessly and effectively. A suggestion to read the fine manual is greeted with charges of user hostility. Those who habitually, endlessly scroll YouTube or social media would balk at investing a little time to master the computing tools they use daily. Perhaps they would be surprised to learn that the supposedly intuitive 1984 Macintosh came with [170 page manual](https://archive.org/details/1984macintoshmanual/). A common conceit is that the Mac was easier to use than other computers out of the box; the reality is that the Mac was easier to use *after* the initial learning curve. The system went out of its way to establish internal consistency and interoperability, but the user first had to make sense of the system and its principles.
-
-A MacBook Pro is bulkier than an iPhone, can’t fit in your hand or your pocket. That’s a disadvantage. Thankfully, a MacBook Pro has many advantages that outweigh the disadvantages. The larger screen size, the physical keyboard, and the less restrictive operating system allow Mac users to perform the same tasks with vastly greater ease than on iPhone or iPad and, moreover, to perform tasks not even possible on iPhone or iPad. It’s a shame to introduce new users to Mac by telling them to use it in the same way they used their old familiar devices, which are strictly limited by both hardware and software. A Mac is a terrible thing to waste! Not only functionally but also financially, since Macs on average have higher prices and longer effective lifespans than iOS devices. Steve Jobs (long before iPhone) called computers “bicycles for our mind.” I feel that adding touch screens to Macs is like adding training wheels to our bicycles. Some kids are given training wheels temporarily, but the ultimate goal is to outgrow training wheels, not to grow into them. The difficulty of learning to ride a bike without training wheels pays off in short order, giving the rider greater speed and maneuverability. In what dystopia would we consider training wheels the future of biking? (I suppose the same dystopia that would remove the steering wheel from our cars.)
-
-In general, Hacker News comments tend to be appalling. Occasionally, though, there’s a diamond in the rough. I’d like to end by quoting [one of those](https://news.ycombinator.com/item?id=50277746). Admittedly, I haven’t independently verified the veracity of the comment, but it seems truthy enough to cite, at least as fodder for debate:
-
-> I bought a laptop for a relative and didn't realise it doesn't have touchscreen. They complained for a day and I often saw them try to touch the screen and then being disappointed it doesn't work. Week later they never mentioned it again and use the laptop just fine.
+> We’ve redone the UI on top of our new architecture (described further below), in Svelte. Things should now be quicker, visually consistent and prettier! The keen eyed of you might’ve also spotted that we’ve swapped out Inter for Timeless Sans.
 >
-> When I was buying them a second one and asked about touchscreen, they said they don't care anymore for it, so second laptop also was without touchscreen.
+> [The federated code forge](https://tangled.org/blog/forge/#a-fresh-look) - Anirudh (Tangled CEO)
+
+I quiped on Bluesky: [“keen eyed? eagle-eyed maybe!”](https://bsky.app/profile/did:plc:rgrzo7xept2yb2auooex4rlg/post/3mz5zpy3yus2j) — the new font size is exceedingly tiny. It’s coded as `12px` with `16px` line height. Tangled is practically unusable for me at this size. It was small before but I could zoom in. The way the new front-end is designed and built doesn’t leave much room for personal remedy. This is not just a subjective opinion there are real accessibility failures here.
+
+## Font failure
+
+Below is a screenshot from Tangled’s new user interface design.
+
+Visit [`tangled.org`](https://tangled.org/timeline) and experience the new UI yourself.
+
+12 pixels is too small for any meaningful text (which is typically all text). Maybe you feel the size is totally fine? That’s fine for you. But it’s not fine for a *significant* number of people. You won’t find any accessibility expert happy with that size. (Low-DPI displays may even struggle to render the font legibly.)
+
+[WCAG 2.2 accessibility guidelines](https://www.w3.org/WAI/WCAG22/Understanding/) don’t recommend a minimum font size. [1.4.4 Resize Text](https://www.w3.org/TR/WCAG22/#resize-text) does require that text can be resized up to 200% “without loss of content or functionality”.
+
+Tangled uses pixel units in CSS for font size. That means the UI won’t adapt to the browser default setting. I can *force* a minimum `16px` font size and look what happens.
+
+Text lines get too close for comfort. Characters are starting to get clipped. See the “g” descender in “Tangled” for example.
+
+And if I force a 200% resize at `24px` this happens.
+
+Oh dear! Text that is [“clipped, truncated or obscured”](https://www.w3.org/WAI/WCAG22/Techniques/failures/F69) is a failure.
+
+Remember that the WCAG guidelines are a floor. Nothing can be perfectly accessible, but a `12px` font size and basic front-end failures are a concern. A proper audit would reveal other issues (e.g. with how media/container queries adapt to font size).
+
+## Expect better
+
+I’m not posting this to seek employment myself or to provide answers. I want to remind readers that accessibility concerns affect everyone. Serious projects should seek professional expertise. It’s disappointing to see yet another tech start-up fail the basics.
+
+I’ll provide two suggestions for free though:
+
+1. Use relative units for font sizes
+2. Use unit-less numbers for line height
+
+Frankly, what Tangled’s redesign suggests to me is that nobody involved with the process gave accessibility enough thought (if any). That may sound harsh but it’s usually the reality from my experience. Whatever the case, Tangled must do better in this area.
+
+If I may answer a few predictable but hypothetical comments.
+
+> This is just v1. Things will improve.
+
+I’m sure they will and maybe even pushed by my criticism. The struggle is that accessibility concerns must be integral to design from day one, not an afterthought to patch.
+
+> It’s open source, where’s your merge request?
+
+Sorry, once a project crosses the line into venture capital “open source” takes on a different meaning. If people want to contribute that’s their prerogative. Personally, I’m not in the habit of giving away professional expertise for free to a for-profit business. Such expectations are especially a problem for accessibility specialists (of which I am not).
+
+> Aha! What about this accessibility failure on your website?!
+
+That’s a bit embarrassing, but thanks for the heads-up!
+
+It’s far easier to hire an accessibility expert before you ship but it’s never too late to retroactively make improvements. I’ve been making accessibility improvements on my own website for decades.
+
+I like Tangled and I want to see it do well. Maybe someone will share a [milkshake duck](https://en.wikipedia.org/wiki/Milkshake_Duck) or they donate to [fascist Linux](https://brennan.day/normalized-fascism-in-open-source-12-million-given-to-dhh/) and I’ll eat my words. I really hope not! I hope Tangled improves so that those lingering in GitHub’s slop graveyard have fewer excuses to hang around.

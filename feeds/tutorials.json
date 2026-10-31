@@ -1,28 +1,28 @@
 {
-  "updated": "2026-10-31T11:52:26Z",
+  "updated": "2026-10-31T16:58:58Z",
   "items": [
-    {
-      "id": "devto-4893750",
-      "title": "Don't Be a Proxy Between Me and Your AI",
-      "desc": "By Adam - The Developer ✨ | 7 min read",
-      "tag": "tutorial",
-      "published": "2026-10-22T04:31:09Z",
-      "order": 1,
-      "url": "https://dev.to/adamthedeveloper/dont-be-a-proxy-between-me-and-your-ai-mcn",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fobwbf432qy2unuy63rod.jpg",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAgMB/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEAMQAAABlEoFRh//xAAaEAADAAMBAAAAAAAAAAAAAAAAARECEBIx/9oACAEBAAEFAuitiZS3JvS9/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFRABAQAAAAAAAAAAAAAAAAAAIBH/2gAIAQEABj8CEH//xAAaEAADAAMBAAAAAAAAAAAAAAAAAREhQXFR/9oACAEBAAE/IXOcDu1R6F4KVohzSs7B9MGR/9oADAMBAAIAAwAAABClH//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QP//EABoQAQEBAQEBAQAAAAAAAAAAAAERADEhQXH/2gAIAQEAAT8QQqV52czCEHys8ncy1U/dUFW5YmcA3ro3qnFSVFkzRnw+b//Z",
-      "color": "#3B49DF"
-    },
     {
       "id": "devto-4943245",
       "title": "Yes, {} + [] = 0. No, JavaScript Isn’t Broken",
       "desc": "By Sylwia Laskowska | 5 min read",
       "tag": "tutorial",
       "published": "2026-10-29T20:08:53Z",
-      "order": 2,
+      "order": 1,
       "url": "https://dev.to/sylwia-lask/yes-0-no-javascript-isnt-broken-14ob",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Folm3zyjvpymz88fwvzrw.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAgMBBAX/xAAVAQEBAAAAAAAAAAAAAAAAAAAAAf/aAAwDAQACEAMQAAABUSgltMzoP//EABoQAAMBAAMAAAAAAAAAAAAAAAABAhADERL/2gAIAQEAAQUCXklFJEck48muj//EABYRAQEBAAAAAAAAAAAAAAAAAAABEf/aAAgBAwEBPwGxr//EABYRAQEBAAAAAAAAAAAAAAAAAAABEf/aAAgBAgEBPwGMf//EABcQAQEBAQAAAAAAAAAAAAAAAABxESD/2gAIAQEABj8Caic//8QAGxABAAICAwAAAAAAAAAAAAAAAQARIUExYaH/2gAIAQEAAT8hsXBNf2cnHaKLB0gYFioJbTEvU//aAAwDAQACAAMAAAAQBr//xAAWEQADAAAAAAAAAAAAAAAAAAAAARH/2gAIAQMBAT8Qoh0f/8QAFxEAAwEAAAAAAAAAAAAAAAAAAAERMf/aAAgBAgEBPxBoxRp//8QAHRABAAIDAAMBAAAAAAAAAAAAAQARITFBobHR8P/aAAgBAQABPxDIAMaut/JWiqjvI/ZZQW22PHvuB1qWVCpmS7++Y1d2WztOSnMTXdT/2Q==",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4893750",
+      "title": "Don't Be a Proxy Between Me and Your AI",
+      "desc": "By Adam - The Developer ✨ | 7 min read",
+      "tag": "tutorial",
+      "published": "2026-10-22T04:31:09Z",
+      "order": 2,
+      "url": "https://dev.to/adamthedeveloper/dont-be-a-proxy-between-me-and-your-ai-mcn",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fobwbf432qy2unuy63rod.jpg",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAgMB/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEAMQAAABlEoFRh//xAAaEAADAAMBAAAAAAAAAAAAAAAAARECEBIx/9oACAEBAAEFAuitiZS3JvS9/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFRABAQAAAAAAAAAAAAAAAAAAIBH/2gAIAQEABj8CEH//xAAaEAADAAMBAAAAAAAAAAAAAAAAAREhQXFR/9oACAEBAAE/IXOcDu1R6F4KVohzSs7B9MGR/9oADAMBAAIAAwAAABClH//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QP//EABoQAQEBAQEBAQAAAAAAAAAAAAERADEhQXH/2gAIAQEAAT8QQqV52czCEHys8ncy1U/dUFW5YmcA3ro3qnFSVFkzRnw+b//Z",
       "color": "#3B49DF"
     },
     {
