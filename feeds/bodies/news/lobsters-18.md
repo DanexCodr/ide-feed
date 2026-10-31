@@ -1,169 +1,42 @@
-[yarr](https://github.com/nkanaev/yarr) is an open source RSS reader written in Go. I use it myself in my homelab and I was interested one day how yarr loads and renders this content.
+AI models can now identify software vulnerabilities as effectively as top security researchers, and at a speed and scale that was not possible a year ago. This is ultimately [great news for defenders](https://blog.mozilla.org/en/firefox/ai-security-zero-day-vulnerabilities/): the defects in software like Firefox are finite, and it seems likely that increasingly powerful models will soon be able to find them all.
 
-Taking a look at their source we can see how. When you add an RSS feed, each post within the feed is treated as an "item" within yarr's object model. These are processed with the aptly named `handleItem` function.
+The Firefox team has worked tirelessly since February to identify and fix subtle bugs with early access to frontier models from Anthropic and OpenAI. To date, we have shipped more than seven times the number of security fixes compared to the same period in 2025. This result is a testament to the dedication of the Firefox team and the impact of labs putting these capabilities in defenders’ hands first.
 
-```
-func (s *Server) handleItem(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-        ...
-	switch r.Method {
-	case http.MethodGet:
-		item := s.db(r).GetItem(id)
-                ...
-		item.Content = sanitizer.Sanitize(item.Link, item.Content)
-		for i, link := range item.MediaLinks {
-			item.MediaLinks[i].Description = sanitizer.Sanitize(item.Link, link.Description)
-		}
-                ...
-```
+This head start has allowed us to apply successive generations of frontier models to the Firefox codebase, each one helping us dig deeper. Attackers now have access to some cyber-capable models, but these models are several generations behind, and the depth of bugs they can find in Firefox has largely been picked clean.
 
-When this loads the post from a remote url it first passes the content through the `Sanitize` function. This one is rather self explanatory.
+## **The patch gap**
 
-```
-// Sanitize returns safe HTML.
-func Sanitize(baseURL, input string) string {
-	tokenizer := html.NewTokenizer(bytes.NewBufferString(input))
-	...
-	attrNames, htmlAttributes := sanitizeAttributes(baseURL, tagName, token.Attr)
-```
+Ongoing access to frontier models allows Firefox to stay ahead of attackers, but can be undermined if attackers can indirectly learn about the findings of those frontier models. In particular, it is sometimes possible to work backwards from a security fix to identify the vulnerability in the original unpatched code. If an attacker can observe an upcoming browser update before most users have received it, there is a brief period during which they could reverse-engineer an incoming security fix and attack the prior version.
 
-The sanitised content is returned in the `"content"` value of the response after it is serialised to JSON.
-![image](https://bear-images.sfo2.cdn.digitaloceanspaces.com/0x67673068/image-1.webp)
-And from here dynamically rendered into the DOM.
+The *patch gap*, or the window in time between the appearance of a security fix in the code and the full deployment of that code to most users, affects any critical software that ships to end-user devices like operating systems and web browsers.
 
-With this model in mind, it was clear that if there was a gap in the sanitisation logic it would lead to XSS. So I took a closer look at how the function was implemented. This in itself is beyond explaining thoroughly for the purposes of this post as much of it is quite irrelevant to the vulnerability, so I will summarise it simply as recursive parsing of the HTML nodes sanitising from children first (in fact I'd say they are likely further flaws lurking here...). But onto the vulnerability in question, first we observe in `getTagAllowList` that `iframe` is an allowed tag, and `src` an allowed attribute.
+![](https://blog.mozilla.org/wp-content/blogs.dir/278/files/2026/10/patch-gap-simple-pill-2048x506.png)
 
-```
- func getTagAllowList() map[string][]string {
-     ...
-     whitelist["iframe"] = []string{"width", "height", "frameborder", "src", "allowfullscreen"}
-     return whitelist
- }
-```
+Browsers like Firefox and Chrome use every means at their disposal to make this period short, but new versions need at least a few days of pre-release testing to ensure builds deployed to hundreds of millions of users are sufficiently stable across different hardware configurations. Moreover, users don’t always update the moment a new version becomes available. This inherently creates a patch gap¹.
 
-Furthermore in the function responsible for sanitising attributes we observe there is a special case for handling the `src` attribute of iFrames in `isValidIframeSource`:
+Patch-gapping is a decades-old threat, but has traditionally required speed and expertise beyond the reach of most attackers. Today though, AI models can dramatically accelerate this process and lower the barrier to entry, and we’ve seen evidence that models like GLM 5.3 can exploit some of the fixes for bugs originally uncovered by more advanced models. This makes patch-gapping a more practical threat.
 
-```
-func sanitizeAttributes(baseURL string, node *html.Node) []string {
-	var attrNames []string
-	var attrs []html.Attribute
-	tagName := node.Data
+Firefox has already taken steps to narrow the patch gap and make it more difficult to exploit:
 
-	for _, attribute := range node.Attr {
-		// attribute names are case-insensitive; the parser may preserve
-		// the original casing, while the allowlist is lowercase.
-		key := strings.ToLower(attribute.Key)
-		value := attribute.Val
+- Shipping faster: Earlier this year, we cut the release cycle time in half so that new builds ship to users every week.
+- Holding back tests: We’ve observed that GLM 5.3 is much less effective at patch-gapping when a regression test is not present, so we’ve reintroduced a practice of keeping these confidential until after the fix has shipped.
+- Commit scanning: We’re scanning all new commits that land in the Firefox codebase to catch any newly-introduced bugs before they reach release.
 
-		if !isValidAttribute(tagName, key) {
-			continue
-		}
+## **A new approach**
 
-		if (tagName == "img" || tagName == "source") && key == "srcset" {
-			value = sanitizeSrcsetAttr(baseURL, value)
-		}
+We are also introducing a more structural defense to neutralize patch-gapping no matter how quick or clever. Firefox has a defense-in-depth architecture with multiple layers of sandboxing, so that an attacker generally needs to exploit vulnerabilities in multiple separate parts of the code to compromise the browser. In the simplest case, an attacker needs to chain together, at minimum², a *renderer exploit* with a *sandbox escape*. With one but not the other, the attack fails.
 
-		if isExternalResourceAttribute(key) {
-			if tagName == "iframe" {
-				if isValidIframeSource(baseURL, attribute.Val) { // here!!!
-					value = attribute.Val
-				} else {
-					continue
-				}
-			} else if tagName == "img" && key == "src" && isValidDataAttribute(attribute.Val) {
-				value = attribute.Val
-			} else {
-				value = htmlutil.AbsoluteUrl(value, baseURL)
-				if value == "" {
-					continue
-				}
-				if !hasValidURIScheme(value) || isBlockedResource(value) {
-					continue
-				}
-			}
-		}
-```
+This creates an opportunity for us to group classes of fixes together and ensure that their respective patch gaps do not overlap. In other words: at any given time, only one of the multiple ingredients needed to compromise the browser would be available in the patch gap, and attackers would need to find at least one novel vulnerability from scratch that had evaded frontier-powered efforts to date.
 
-This function is as follows:
+![](https://blog.mozilla.org/wp-content/blogs.dir/278/files/2026/10/tick-tock.min-1-2048x455.png)
 
-```
-func isValidIframeSource(baseURL, src string) bool {
-	whitelist := []string{
-		"bandcamp.com",
-		"cdn.embedly.com",
-		"invidio.us",
-		"player.bilibili.com",
-		"player.vimeo.com",
-		"soundcloud.com",
-		"vk.com",
-		"w.soundcloud.com",
-		"www.dailymotion.com",
-		"www.youtube-nocookie.com",
-		"www.youtube.com",
-	}
+We will be applying this approach in Firefox. Getting it right requires some coordination across our engineering processes that may take some time, and we want to be careful and deliberate about such changes to avoid slowing down the critical work our engineers are doing to drive vulnerabilities to zero. Nevertheless, we believe that time-based separation of the patch gap across different layers of defense will be an increasingly important tool over the coming months as attackers gain more powerful automated cyber capabilities.
 
-	domain := htmlutil.URLDomain(src)
-	// allow iframe from same origin
-	if htmlutil.URLDomain(baseURL) == domain {
-		return true
-	}
-	return slices.Contains(whitelist, domain)
-}
+## **The path forward**
 
-...
+The month of October has seen a sharp increase in vulnerability disclosures and exploit activity across the internet as both defenders and attackers get their hands on more capable models. Firefox is fortunate to enter this moment ahead of the curve, with greatly reduced exposure to these new capabilities. The patch gap threat has increased, but we have the tools to structurally address it. We are in this position thanks to years of investment in sandboxing, ongoing red-teaming, and an engineering team capable of fixing security bugs at over seven times the previous rate.
 
-func URLDomain(val string) string {
-	if u, err := url.Parse(val); err == nil {
-		return u.Host
-	}
-	return val
-}
-```
+Unfortunately, much of the software that powers the internet has not had the luxury of these preparations, and is now more deeply exposed. Addressing this is an urgent and significant undertaking that requires everyone across the industry to step up and work together. There is no turning back the clock on already-discovered vulnerabilities and already-proliferated capabilities, and the only path forward is to aggressively find and fix the bugs that have been hiding for years, now in plain sight.
 
-tldr, it takes the provided URL (the one in the iFrame src), extracts the host part of the Url, checks it either matches the yarr base URL or an entry in the defined whitelist and rejects it if not.
-
-The URL is parsed with net/url. The package descriptions states
-
-> Package url parses URLs and implements query escaping.
-> See RFC 3986. This package generally follows RFC 3986, except where it deviates for compatibility reasons. RFC 6874 followed for IPv6 zone literals.
-
-And with this comes the trick that enables the polyglot payload. In RFC 3986 the character sequence marks the beginning of the authority section (which contains the host accessed by `URLDomain`).
-
-![image](https://bear-images.sfo2.cdn.digitaloceanspaces.com/0x67673068/image-2.webp)
-
-We combine this with the fact that iFrames will happily process `javascript:` URIs in their src to arrive at `javascript://www.youtube.com/%0a<arbitrary-js>`. net/url sees the authority www.youtube.com, extracts the host (here it is the entire authority) matches it to the whitelist and approves. Yet in the web browser, when this is processed as a `javascript:` URI everything after the colon is treated as JavaScript code (after a round of URL decoding). Therefore we arrive at:
-
-```
-<iframe src="javascript://www.youtube.com/%0a<arbitrary-js>"></iframe>
-```
-
-which is processed as
-
-```
-//www.youtube.com/
-<arbitrary-js>
-```
-
-note '//' doubles as a JavaScript comment here (and %0a a newline on decoding) - a different meaning in each grammar.
-
-The final piece is the permissive sandbox policy applied to iFrames by default
-
-```
-func extraAttributes(tagName string) ([]string, []html.Attribute) {
-	switch tagName {
-...
-	case "iframe":
-		return []string{"sandbox", "loading"}, []html.Attribute{
-			{Key: "sandbox", Val: "allow-scripts allow-same-origin allow-popups"},
-			{Key: "loading", Val: "lazy"},
-		}
-...
-	default:
-		return nil, nil
-	}
-}
-```
-
-Putting it all together, an RSS feed can XSS any yarr user who loads their post, here a simple demo (rewriting the parent DOM because no alerts with that policy (: )
-
-I notified the maintainers of yarr about this finding but didn't get a response. With that said I don't see much immediate impact given yarr's account-less nature, at most spying on what other RSS feeds your subscribers are looking at. Nevertheless it was a fun little finding, thanks for reading.
+**¹** The open-source codebases behind Firefox and Chrome make it somewhat easier to inspect the fixes, but modern tooling is increasingly capable of reverse-engineering source code from binaries, so concealing the source code is at best a speed bump for attackers. Firefox is proudly open-source and we have no intent to change this.  
+**²** Many components in Firefox have additional layers of sandboxing to isolate bugs in the code from even reaching the renderer process, including both process-level isolation of some components and [in-process isolation](https://blog.mozilla.org/attack-and-defense/2021/12/06/webassembly-and-back-again-fine-grained-sandboxing-in-firefox-95/) of others.

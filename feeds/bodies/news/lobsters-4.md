@@ -1,61 +1,113 @@
-From curl 8.12 through 8.16, config files could slice variable values and include other config files without an explicit depth cap. Together, these features let curl simulate any two-counter Minsky program. Under the usual idealization of unbounded strings and resources, this construction was Turing-complete.
+When looking through a piece of source code recently, I stumbled across this method from [Guava](https://github.com/google/guava) – a popular Java library from Google.
 
-Curl 8.17.0 added a five-level include cap that breaks this reduction.
+![Guava's whitespace matcher implementation](https://serce.me/images/whitespace/whitespace.png)
 
-**Update 2026-10-30**: Jonathan Tremesaygues wrote me: *I couldn't help but implement “99 Bottles of Beer on the Wall”* [99_bottles.tar.gz](https://seriot.ch/resources/99_bottles.tar.gz)
+As you might've guessed from the name, this method checks whether a given character is a whitespace character. Yet the code looks a lot more complex than a simple `c == ' '` check. This made me curious and sent me down a small rabbit hole trying to understand where all this complexity was coming from. If you're curious how this code works too, this article is for you.
 
-A counter value `n` is represented by `n` copies of `x`.
+The first thing one needs when inspecting a function that checks whether a character is whitespace is to define what whitespace actually is. While the `SPACE (U+0020)` is probably the best-known whitespace character, it's not the only one. If you've been writing code for a while, you can probably name a few more – the non-breaking space `NO-BREAK SPACE (U+00A0)`, a tab `CHARACTER TABULATION (U+0009)`, a newline `LINE FEED (U+000A)`.
 
-Each instruction state uses one or more config files, with file names acting as labels, and `expand-config` selecting the next file.
+Well, there are more. Unicode defines a [`White_Space` property](https://www.unicode.org/Public/17.0.0/ucd/PropList.txt) that gives us a list of 25 characters. Here they are – meticulously copied `	,
+,,,, ,, , , , , , , , , , , , , , , , , ,　`.
 
-Syntax:
+Each of these characters has a different purpose. `FIGURE SPACE (U+2007)`, for example, has the same width as a digit in a table, while `THIN SPACE (U+2009)` and `HAIR SPACE (U+200A)` provide progressively smaller gaps. `NO-BREAK SPACE (U+00A0)` has the width of an ordinary space, but keeps the surrounding text together when wrapping a line.
 
-- {{b}} expands the current value
-- [0-0] keeps only the first byte (x or empty)
-- [1-] keeps everything except the first byte
-- empty slices yield empty strings (doc)
+It's not always easy to tell whether a character is in the whitespace set from the name or by looking at the glyph either. For instance, `ZERO WIDTH SPACE (U+200B)` isn't a whitespace character at all. Despite the name, it's a format character that can indicate a word or line break opportunity without adding a visible gap.
 
-| Minsky | Curl config |
-| --- | --- |
-| Register `R` | Variable `r` (`R` is the number of `x` bytes) |
-| `INC(R)` | `expand-variable = "r={{r}}x"` |
-| `DEC(R)` | `expand-variable = "r[1-]={{r}}"` |
-| `JZ(R, _, _x)` | `expand-variable = "t[0-0]={{r}}"` `expand-config = "state_{{t}}.conf"` |
-| `JMP(S)` | `expand-config = "S.conf"` |
-| Halt | No further `expand-config` |
+There are also some less obvious members of the set too. `OGHAM SPACE MARK (U+1680)` can actually be rendered as a visible horizontal line. In Ogham fonts with a stemline, the space continues that line between letters (e.g. ᚛ᚆᚓᚂᚂᚑ ᚒᚑᚏᚂᚇ᚜), while in stemless fonts, it's blank. So even the assumption that whitespace must look empty isn't always true.
 
-With that, we can compile any two-counter program into curl config files.
+Having a single definition of whitespace is only useful if everyone can agree on it. But even within a single runtime, some libraries might disagree on what whitespace is.
 
-Four files in [curl_addition.zip](https://seriot.ch/resources/curl_addition.zip) compute 2 + 3.
+Consider the `NO-BREAK SPACE (U+00A0)` I mentioned above. It's included in Unicode's `White_Space` property, but Java explicitly [excludes it](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Character.html#isWhitespace(char)), along with two other non-breaking spaces. The javadoc usefully highlights that the method checks for whitespace *according to Java*, rather than according to the Unicode property we had a look at before.
 
-![](https://seriot.ch/resources/curl_config.png)
-
-Build a local curl 8.12.0 binary if needed:
-
-```
-mkdir -p /tmp/curl-tc-build
-cd /tmp/curl-tc-build
-curl -fsSLO https://curl.se/download/curl-8.12.0.tar.gz
-tar -xzf curl-8.12.0.tar.gz
-cd curl-8.12.0
-./configure --without-ssl --disable-shared --disable-manual --disable-docs
-make -j4
+```java
+Character.isWhitespace(' ');      // true
+Character.isWhitespace('\u00A0'); // false
 ```
 
-Then, from the `addition/` directory, run:
+![Java isWhitespace screenshot](https://serce.me/images/whitespace/javaspace.png)
 
+But what about other runtimes? Looking at two more popular ones, Python and JavaScript, we can see that there isn't a single authoritative list of characters everyone agrees on. Python, for example, has a convenient `str.isspace()` method. And unlike Java, it considers `U+00A0` a whitespace character.
+
+So possibly Python just follows Unicode's `White_Space` property? Not quite.
+
+```Python
+"\u00A0".isspace()  # True
+"\u0085".isspace()  # True
+"\u001C".isspace()  # True
+"\uFEFF".isspace()  # False
 ```
-/tmp/curl-tc-build/curl-8.12.0/src/curl -q -s -K main.conf
+
+The interesting one here is `FILE SEPARATOR (U+001C)`. It's an ASCII control character originally intended to separate pieces of information, and it isn't included in Unicode's White_Space property. So Python recognises 29 whitespace characters, rather than Unicode's 25.
+
+JavaScript takes yet another approach. It doesn't have an equivalent of the `Character.isWhitespace()` method, but we can use the `\s` character class in a regular expression:
+
+```JavaScript
+/\s/.test("\u00A0");  // true
+/\s/.test("\u0085");  // false
+/\s/.test("\uFEFF");  // true
 ```
 
-Expected output:
+The odd one out above is `NEXT LINE (U+0085)`. Unicode explicitly includes it in `White_Space`, and Python accepts it too, but JavaScript doesn't. Instead, JavaScript recognises `ZERO WIDTH NO-BREAK SPACE (U+FEFF)`, which Unicode doesn't include in the set.
 
+I haven't looked through any other runtimes, but something tells me the inconsistencies won't stop at these three.
+
+What adds more complexity is that Unicode is not frozen in time, and is constantly evolving. And this affects the definition of whitespace. For example, [Unicode 6.3](https://www.unicode.org/versions/Unicode6.3.0/) had reclassified `MONGOLIAN VOWEL SEPARATOR (U+180E)` from a space separator to a format character, removing its `White_Space` property. The Unicode whitespace set had changed from 26 characters to 25 as a result. For runtimes and libraries that strive for backwards compatibility, these changes can be a pretty significant challenge as you'd want the standard library of a language to be as stable as it can be.
+
+Let's say we've finally agreed on the set of characters we want to check – the current set of Unicode whitespace characters. A naive way to implement this would be to go through the list of characters and check whether any of them matches. While this would work, it's definitely not the most efficient approach.
+
+So what [Guava's implementation](https://github.com/google/guava/blob/master/guava/src/com/google/common/base/CharMatcher.java) that we saw at the beginning of the article did was implement a perfect hash function – a hash function that guarantees no hash collisions for the characters in the known set.
+
+```java
+static final String TABLE = "\u2002...";
+
+@Override
+public boolean matches(char c) {
+    int slot = (1682554634 * c) >>> 27;
+    return TABLE.charAt(slot) == c;
+}
 ```
-A=xxxxx B=
+
+Above, `TABLE` is a string of 32 characters – effectively a hash table mapping each index (the key) to a character (the value). It contains all 25 Unicode whitespace characters, with some duplicates filling the remaining positions.
+
+The most interesting part here is calculating the index. The multiplication `1682554634 * c` produces a 32-bit integer, and `>>> 27` shifts it 27 bits to the right, isolating the five most significant bits – a number in the [0, 32) range which can be used to look up the table. Of course, there are more possible characters than table entries, that's why the final `== c` check is needed to check that the character we found is the one we were looking up.
+
+You can click on the characters below to see how the table is populated.
+
+The magic `1682554634` number does look magical, and it's unclear to me how it was chosen (please do share if you know the answer). But it's not the only possible multiplier, and you can find all suitable options by running a simple brute-force search.
+
+```java
+static final char[] ALL_CHARS = (
+        "\u2002\u3000\r\u0085"
+        + "\u200A\u2005\u2000"
+        + "\u2029\u000B\u2008"
+        + "\u2003\u205F\u1680"
+        + "\u0009\u0020\u2006"
+        + "\u2001\u202F\u00A0"
+        + "\u000C\u2009\u2004"
+        + "\u2028\n\u2007"
+).toCharArray();
+
+public static void main(String[] a) {
+    var slots = new BitSet(32);
+    outer:
+    for (int mul = 1; mul != 0; mul++) {
+        slots.clear();
+        for (char c : ALL_CHARS) {
+            int index = (mul * c) >>> 27;
+            if (slots.get(index)) {
+                continue outer;
+            }
+            slots.set(index);
+        }
+        System.out.println(mul);
+    }
+}
 ```
 
-The reduction assumes unbounded counters and unbounded steps. The real binary has neither:
+Interestingly, anyone willing to dive deeper can trace how Guava arrived at this implementation by looking through the git history. It transitioned from a simpler matcher to a [mod-79](https://github.com/google/guava/commit/49ae40b145bebb8bd06a967edc03cb285577d0cc) version which has an interesting observation about the Unicode character set but had a downside of involving a division operation, then followed by a [perfect hash function](https://github.com/google/guava/commit/31e1f16989ec41b360b074caebdc58e0117ecf68).
 
-The [pull request](https://github.com/curl/curl/pull/19168) says the cap prevents a config file from including itself indefinitely. Its [regression test](https://github.com/curl/curl/blob/curl-8_17_0/tests/data/test774) does exactly that and expects an error. The public explanation does not discuss Turing completeness or why the cap is five.
+And if you're interested in other applications for perfect hashing – somewhat serendipitously just as I was writing this article, Daniel Lemire [published a blog](https://lemire.me/blog/2026/10/26/billion-query-per-second-lookup-tables-in-c/) on the same topic where he gives an example of using perfect hashing for checking HTTP methods.
 
-A Bash `while` loop can complement bounded curl by invoking a config once per step and carrying the counters and instruction label between invocations. The repetition then comes from Bash, so this is a composition rather than curl-alone Turing completeness.
+When I first saw the whitespace-checking code in Guava, it sparked my curiosity, and as a result I learned a few things about Unicode and saw an interesting application of a perfect hash function – something you don't see used that often in the wild.
+
+I hope you've learned something interesting from this article too. And if you find something that sparks your curiosity, please do write a blog post and share it. I do feel that these write-ups are becoming increasingly rare in the AI-first world, where there's rarely a reason to peek under the hood of a function as simple as `isWhitespace`.

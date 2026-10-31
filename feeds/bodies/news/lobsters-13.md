@@ -1,83 +1,438 @@
-While reading the draft Go 1.28 release notes, I noticed a change in the HTTP/2 server. With this change, the goroutine responsible for serving a connection can exit when there is no work to do, instead of waiting. A new goroutine takes over when needed. At first, it seemed like a small change, but I wondered how much memory it could save on a server with thousands of open connections.
+We have seen in a [previous post](https://xoranth.net/verb-parse/) that switch statements are more complex than they seem.
+The compiler is able to implement them as a decision tree (even though maybe it shouldn't).
+Is that everything it can do?
 
-I decided to measure it rather than guess. I wanted to see how it affected process memory usage, goroutine counts, and Go runtime memory metrics.
+*In this post, I'll focus on `gcc`. All optimizations, except the bitset lowering, translate to clang. I'll be using the `-O3` optimization flag unless indicated otherwise.*
 
-## What is HTTP/2 parking?[#](https://abdolirad.me/articles/go-1-28-http2-parking-memory/#what-is-http2-parking)
+*I've also slightly edited `gcc` code and removed certain assertions for brevity.*
 
-An HTTP/2 connection can stay open even when it has no active streams. In the older server behavior, a goroutine runs the connection’s `serveLoop` and waits there when nothing new is ready. The Go 1.28 development code adds an internal mechanism called *parking*. When `serveLoop` has no work ready to process, and the implementation’s safety conditions are met, that goroutine can exit. When new work arrives, a new goroutine runs `serveLoop` again.
+### Examples
 
-Parking is not limited to connections with no active streams. A handler can still be running while `serveLoop` has nothing immediate to process. If those safety conditions are met, the serving goroutine can be parked. That does not mean every active connection, or every running handler, can be parked.
+Let us start with a simple example. 
+A function that takes two integers `x` and `val`. Depending on the value of `x`, it calls a corresponding function (`f0`, `f1`, and so forth) with `val` as an argument and returns the result.
+Were we to implement this manually, we'd would use an array of function pointers, where the input serves as the index into the array.
 
-The word *parking* comes from the Go implementation, including names such as `tryPark` and the temporary `GODEBUG` setting `http2serveparking`. It is not a public API, and the draft release notes do not use this name for the change. The change is how the server manages the goroutine for a connection, not how application code handles requests.
+```asm
+compact:
+	mov	eax, edi
+	mov	edi, esi
+	cmp	eax, 4
+	ja	.L2
+	jmp	[QWORD PTR .L4[0+rax*8]]
+.L4:
+	.quad	.L8
+	.quad	.L7
+	.quad	.L6
+	.quad	.L5
+	.quad	.L3
+.L5:
+	jmp	f3
+.L3:
+	jmp	f4
+.L8:
+	jmp	f0
+.L7:
+	jmp	f1
+.L6:
+	jmp	f2
+.L2:
+	xor	eax, eax
+	ret
+```
 
-This also gave me a useful way to test the change. I could run the same Go 1.28 server binary with parking enabled and disabled, instead of relying only on a Go 1.27 versus Go 1.28 comparison.
+The compiler agrees with this approach, and transforms the switch statement into a jump table.
 
-## How I tested it[#](https://abdolirad.me/articles/go-1-28-http2-parking-memory/#how-i-tested-it)
+Moreover, it is able to identify when the values are offset by a constant:
 
-I used the same benchmark code and machine for three configurations:
+```asm
+compact:
+	lea	eax, [rdi-97]
+	cmp	eax, 4
+	ja	.L2
+	mov	edi, esi
+	jmp	[QWORD PTR .L4[0+rax*8]]
+.L4:
+	.quad	.L8
+	.quad	.L7
+	.quad	.L6
+	.quad	.L5
+	.quad	.L3
+.L5:
+	jmp	f3
+.L3:
+	jmp	f4
+.L8:
+	jmp	f0
+.L7:
+	jmp	f1
+.L6:
+	jmp	f2
+.L2:
+	xor	eax, eax
+	ret
+```
 
-1. Go 1.27.2, as an older-version reference.
-2. Go 1.28 development build, parking enabled, as the default behavior of the tested revision.
-3. The same Go 1.28 binary, parking disabled, using GODEBUG=http2serveparking=0.
+Our intuition suggests that the more sparse the values, the less advantageous the jump table conversion is.
 
-The tested Go 1.28 revision was `5c51011e82ed754af072baaf4338ff35e76fe705`. The benchmark source was pinned to commit `86753bd4d1f79621a4f3c6927c8239419e54bde2`.
+Through experimentation, we find that `gcc` considers the threshold to be around eight jump table entries per `case` label.
 
-For each configuration, I measured the server with **0, 1,000, and 5,000 idle HTTP/2 connections**. Each complete run used ten rounds for every case and connection count. I repeated the full experiment three times on the same Linux machine. The benchmark collected short sample windows after the connections had settled, and the published results use medians rather than a single sample.
+In other words, the following function compiles to a jump table:
 
-The test machine used an Intel Core i7-1265U, Linux 6.18.56, and about 32 GiB of RAM. The benchmark configuration set `GOMAXPROCS=12` and `GOGC=100`. I kept the natural garbage collection behavior rather than forcing a collection before each measurement.
+```asm
+compact_7:
+	mov	eax, edi
+	mov	edi, esi
+	cmp	eax, 34
+	ja	.L2
+	jmp	[QWORD PTR .L4[0+rax*8]]
+.L4:
+	.quad	.L8
+	.quad	.L2
+	; ...
+	.quad	.L2
+	.quad	.L7
+	.quad	.L2
+	; ...
+	.quad	.L2
+	.quad	.L6
+	.quad	.L2
+	; ...
+	.quad	.L2
+	.quad	.L5
+	.quad	.L2
+	; ...
+	.quad	.L2
+	.quad	.L3
+.L2:
+	xor	eax, eax
+	ret
+.L8:
+	jmp	f0
+.L7:
+	jmp	f1
+.L6:
+	jmp	f2
+.L5:
+	jmp	f3
+.L3:
+	jmp	f4
+```
 
-I looked at four metrics. **RSS** measures resident memory for the server process as reported by Linux. **Goroutines** shows how many goroutines the Go runtime reports. **StackInuse** describes memory in use by goroutine stacks. **HeapAlloc** is the amount of allocated heap memory reported by the runtime. These values are related, but they do not measure the same thing.
+But this other function is expanded as a tree of comparisons:
 
-## RSS: the clearest change[#](https://abdolirad.me/articles/go-1-28-http2-parking-memory/#rss-the-clearest-change)
+```asm
+sparse_8:
+	mov	eax, edi
+	mov	edi, esi
+	cmp	eax, 16
+	je	.L2
+	jle	.L10
+	cmp	eax, 24
+	je	.L7
+	cmp	eax, 40
+	jne	.L1
+	jmp	f4
+.L10:
+	test	eax, eax
+	je	.L4
+	cmp	eax, 8
+	jne	.L1
+	jmp	f1
+.L1:
+	xor	eax, eax
+	ret
+.L4:
+	jmp	f0
+.L7:
+	jmp	f3
+.L2:
+	jmp	f2
+```
 
-The largest difference appeared at 5,000 idle connections. The table below shows median RSS from each complete run, in MiB:
+Here's the comparison tree visualized for clarity:
 
-| Run | Go 1.27.2 | Go 1.28, parking off | Go 1.28, parking on | Saved by parking |
-| --- | --- | --- | --- | --- |
-| 1 | 249.89 | 218.28 | 129.19 | 89.08 |
-| 2 | 247.18 | 223.73 | 131.11 | 92.62 |
-| 3 | 245.60 | 217.94 | 133.25 | 84.70 |
+A couple of observations:
 
-Compared with the **same Go 1.28 binary with parking disabled**, enabling parking reduced RSS by **84.7 to 92.6 MiB**, or about **38.9% to 41.4%**, across the three runs. At 1,000 idle connections, the reduction was smaller but still clear, at about **15.7 to 16.6 MiB**.
+Let's dig into 1. and 2.
 
-![Median server RSS at different numbers of idle HTTP/2 connections](https://abdolirad.me/articles/go-1-28-http2-parking-memory/01-rss-scaling.svg)
+Altering our first example by including an outlier value shows that the compiler is able to recognize dense subsets of cases.
 
-The zero-connection baseline stayed close to 8.5 to 8.7 MiB across the configurations. I also calculated baseline-adjusted RSS by subtracting each configuration’s zero-connection median. That helps show the growth associated with idle connections, but the main comparison above uses the observed process RSS.
+```asm
+outlier:
+	mov	eax, edi
+	mov	edi, esi
+	cmp	eax, 5
+	jg	.L2
+	test	eax, eax
+	jle	.L1
+	cmp	eax, 5
+	ja	.L4
+	jmp	[QWORD PTR .L6[0+rax*8]]
+.L6:
+	.quad	.L4
+	.quad	.L4
+	.quad	.L9
+	.quad	.L8
+	.quad	.L7
+	.quad	.L5
+.L2:
+	cmp	eax, 100
+	jne	.L1
+	jmp	f5
+.L7:
+	jmp	f3
+.L5:
+	jmp	f4
+.L9:
+	jmp	f1
+.L8:
+	jmp	f2
+.L4:
+	jmp	f0
+.L1:
+	xor	eax, eax
+	ret
+```
 
-![RSS reduction with parking enabled](https://abdolirad.me/articles/go-1-28-http2-parking-memory/02-rss-savings.svg)
+The compiler emits a branch for case 100, but emits a jump table for case 1 through 5.
 
-## Fewer goroutines, less stack memory[#](https://abdolirad.me/articles/go-1-28-http2-parking-memory/#fewer-goroutines-less-stack-memory)
+#### Contiguous
 
-The goroutine counts helped explain the shape of the result. With 5,000 idle connections, Go 1.28 reported about **10,007 goroutines with parking disabled** and **5,007 with parking enabled**. That is a difference of exactly **5,000 goroutines** in this benchmark. At 1,000 idle connections, the difference was 1,000 goroutines.
+In our examples so far, each case statement lead to a different code block. Let's test what happens when multiple `case` labels invoke the same function.
 
-![Goroutine counts by idle connection count](https://abdolirad.me/articles/go-1-28-http2-parking-memory/03-goroutines.svg)
+```asm
+blocks_2:
+	mov	eax, edi
+	mov	edi, esi
+	cmp	eax, 45
+	jg	.L2
+	cmp	eax, 41
+	jg	.L3
+	cmp	eax, 3
+	jg	.L4
+	test	eax, eax
+	js	.L1
+	jmp	f1
+.L2:
+	cmp	eax, 66
+	jg	.L8
+	cmp	eax, 62
+	jle	.L1
+	jmp	f4
+.L4:
+	sub	eax, 21
+	cmp	eax, 3
+	ja	.L1
+	jmp	f2
+.L8:
+	sub	eax, 84
+	cmp	eax, 3
+	ja	.L1
+	jmp	f5
+.L3:
+	jmp	f3
+.L1:
+	xor	eax, eax
+	ret
+```
 
-The stack numbers moved in the same direction. At 5,000 connections, **StackInuse** was about **99 MiB with parking disabled** and about **21 MiB with parking enabled**. The reduction was close to **78 MiB** in all three complete runs.
+We have 20 case labels, with values between 0 and 87. The compiler could lower this `switch` to a jump table with 88 entries.
+Our hypothesis for the heuristic is that a jump table conversion is profitable when its size is smaller than `8 * num_case_labels`.
+Since `88 < 20 * 8`, the conversion should be profitable in this case, however `gcc` opted to lower the switch to a sequence of comparisons.
 
-![Stack and heap memory at 5,000 idle connections](https://abdolirad.me/articles/go-1-28-http2-parking-memory/04-memory-breakdown.svg)
+To better understand why, let's examine a specific block of `case` labels.
 
-This does not mean that every byte saved in RSS came from stacks. RSS includes more than Go stacks, and changes in heap allocation, runtime state, and the operating system can affect it. It does show that the lower goroutine and stack counts are consistent with the parking mechanism.
+```asm
+blocks_2:
+	mov	eax, edi ; Move `val` to $eax
+	mov	edi, esi
+	cmp	eax, 45
+	; If val <= 45, do _not_ jump
+	jg	.L2
+	cmp	eax, 41
+	; If val >= 42, jump to L3
+	jg	.L3
+	; ...
+.L2:
+; ...
+.L3:
+        ; We reach L3 only if 42 <= val <= 45
+        jmp	f3        ; Call f3(val)
+; ...
+```
 
-## HeapAlloc did not tell the same simple story[#](https://abdolirad.me/articles/go-1-28-http2-parking-memory/#heapalloc-did-not-tell-the-same-simple-story)
+The compiler realizes that the cases are contiguous and can be implemented with two comparisons instead of four.
+If the input of the jump table heuristic is the number of *comparisons* instead of *case labels*, things work out:
 
-HeapAlloc was less consistent. In some runs, parking enabled used less heap than parking disabled. In another run, it used slightly more. This is a good reminder that one memory metric cannot stand in for another.
+We have a total of 10 comparisons. Since `10 * 8 < 88`, our revised heuristic suggests that a jump table transformation is unprofitable.
 
-For this experiment, **RSS, goroutine count, and StackInuse** provide a clearer picture of the difference. I would not describe the change as a fixed heap saving or claim that a certain percentage of total memory always disappears.
+#### Non-contiguous
 
-## Limits of this benchmark[#](https://abdolirad.me/articles/go-1-28-http2-parking-memory/#limits-of-this-benchmark)
+Let us try a non-contiguous case.
 
-These measurements come from one machine, one benchmark design, and a specific **development revision** of Go 1.28. They are not results from a final Go 1.28 release. I tested mostly idle connections, not a mix of real traffic, active streams, and application workloads.
+```asm
+bittest:
+	lea	eax, [rdi-48]
+	cmp	eax, 21
+	ja	.L1
+	mov	edx, 2753205  ; ???
+	bt	rdx, rax
+	jc	.L7
+.L1:
+	xor	eax, eax
+	ret
+.L7:
+	jmp	f1
+```
 
-The benchmark kept the Go 1.28 server binary the same when switching parking on and off. That makes the parking comparison more useful, but it still does not remove all system noise. The three full runs show a repeatable direction and a range, not a universal guarantee.
+The compiler emits non-intuitive machine code. Why is there no `cmp` nor jump tables? Where does the constant `2753205` come from?
 
-The `GODEBUG=http2serveparking=0` setting I used for this comparison is temporary and undocumented. I would not treat it as a stable option for future releases.
+An hint comes from the instruction `bt`. According to the [Intel docs](https://www.felixcloutier.com/x86/bt), `bt`:
 
-I have kept the [benchmark source at a fixed commit](https://github.com/atkrad/benchmarks/tree/86753bd4d1f79621a4f3c6927c8239419e54bde2) and the [tested Go revision](https://github.com/golang/go/commit/5c51011e82ed754af072baaf4338ff35e76fe705) linked here so the details can be checked later.
+> Selects the bit in a bit string (specified with the first operand, called the bit base) at the bit-position designated by the bit offset (specified by the second operand) and stores the value of the bit in the CF flag.
 
-## Conclusion[#](https://abdolirad.me/articles/go-1-28-http2-parking-memory/#conclusion)
+If we examine the binary representation of `2753205`, we find that it is in fact a bitset. The bits that are set to one correspond to the ASCII values of the case labels, each value being reduced by 48.
 
-In this benchmark, HTTP/2 parking made a clear difference in memory usage. With 5,000 idle connections, the same Go 1.28 server binary used around 85 to 93 MiB less RSS when parking was enabled. It also had 5,000 fewer goroutines and used about 78 MiB less stack memory.
+We've encountered several distinct lowering strategies employed by gcc. For a more in-depth understanding, we can delve into the compiler's source code.
 
-What I found most interesting was how much memory an otherwise quiet connection can keep around. Changing what the server does while it waits can matter as much as optimizing the work it performs.
+The compiler pass that responsible for lowering `switch` statements is the (appropriately named) `pass_lower_switch`, which in turn calls `analyze_switch_statement`.
 
-I would not apply these numbers to every Go service. Still, for servers that keep many idle HTTP/2 connections open, this is a change worth understanding and measuring with a real workload.
+Since `gcc` source can be daunting to follow, I'll provide a step-by-step commented version below.
+Following this, I will break down each section to explain its functionality.
+
+Some preamble code. `m_switch` points to a gimple object. Gimple is the internal representation used by `gcc`.
+Through this, we extract the overall count of cases and the individual counts of cases for each outgoing edge.
+
+We also allocate a vector that will record the lowering strategy chosen for each case label.
+
+More setup code. We notice that gimple has a concept of high and low value for each label. That is, contiguous `case` labels have already joined together at this stage.
+
+For each case label, we allocate a `simple_cluster`. This cluster serves as a record, capturing the range of values associated with the label, the relevant output edge, and the likelihood of this cluster being chosen. This probability comes from profile-guided optimization. By default it is uniform among case labels.
+
+We transform the vector of clusters we have created. The name `bit_test_cluster` hints to the bitset lowering strategy we saw before.
+
+This section allocates a vector for the transformed cases and a scratch vector.
+Any case that wasn't altered during the bitset transformation process is gathered in this scratch vector. These cases are then processed and cleared whenever we come across an optimized cluster.
+
+Essentially, in this section we are looking for sequences of case labels that couldn't be converted into bitset clusters.
+
+We attempt to convert these consecutive labels into a jump table and add the outcome to the output.
+
+This is a coda for the loop above.
+
+Whatever is left goes through another pass, which turns the switch statement into a decision tree.
+The bitsets and jump table are leaves of the decision tree.
+
+#### Bitsets
+
+Let's dig further into `bit_test_cluster::find_bit_tests`. The high level structure of the code is as follow.
+
+Initially, we aim to find the optimal method to bundle all clusters into bitsets. Optimality, in this context, refers to minimizing the number of bitsets used. We do so using dynamic programming.
+
+Subsequently, we iterate over the bitsets and apply a profitability heuristic. If the bitsets meet this heuristic, we emit a `bit_test_cluster`; otherwise, we keep the original `simple_cluster`s.
+
+For the dynamic programming, we'll use a vector of `min_cluster_item` structures.
+Each `min_cluster_item` has three components:
+
+The dynamic programming is as follows. We want to find the minimum number of bitsets to represent the first *i* case labels.
+
+The base case is straightforward, a single case label can be represented by a single bitset.
+
+Suppose we have already have found the optimal number of bitsets for the first *j* case label, for all 
+.
+We define 
+ to be the optimal number of splits for the first `i` elements. This means we already computed 
+, and are now seeking 
+.
+
+If the range 
+ of case labels can be represented as a bitset cluster, it must be true that
+
+Conversely, assume we have the optimal assignment for the first *i* labels. If the last bitset starts at label 
+, this assignment is also optimal when restricted to 
+. Were this not the case, we could improve the assignment on 
+ as well.
+
+Therefore, it must be that:
+
+These conditions are exactly what the `if` statement in the code above checks for.
+
+The `can_be_handled` function controls whether a range of `case` labels can be turned into a bitset test. It tests two criteria:
+
+If there is more than one edge, we emit a cascade of bit tests.
+
+Now we convert only bitsets that satisfy the `is_beneficial` test. 
+In the code `count` represents the number of case labels handled by the cluster, while `uniq` denotes the number of distinct outgoing edges.
+
+#### Jump tables
+
+The logic for jump table conversion mirrors the one used for bit test conversion.
+It leverages dynamic programming to identify "clusters" that can be profitably converted 
+to a jump table.
+
+Let's delve into the code.
+
+We start by preallocating a vector of `min_cluster_item`. We'll use this vector
+to keep track of the best jump table assignments for consecutive `case` clusters.
+
+We also push the base case for dynamic programming. This corresponds
+to using a single jump table for the whole `switch`.
+
+Let's focus now on the main loop.
+
+The dynamic programming loop mirrors the one we used for bitsets. 
+We want to find the minimum number of jump tables to represent the first i case labels.
+
+We iterate over splits at the `j`-th case label, for `j < i`. During each iteration we track the best scoring split.
+The special case `j == 0` represents a single jump table for the entire `switch` statement.
+
+Inside this inner loop we also keep track of:
+
+Point 1. and 2. are analogous to the bitset lowering pass, while 3. is new and specific to jump tables.
+
+Namely, there is some overhead to dispatching to a jump table, due to the indirect jump and the need to check bounds.
+Therefore `gcc` requires a minimum amount of `case` labels to generate a jump table.
+
+If a split would generate a jump table that is too small, the size of the jump table is added to an accumulator `s`, which is used as a tie-breaker between different split candidates.
+
+To compute the scoring, we need the comparison count between `j`-th and the `i`-th case label. We compute it summing up the number of comparisons for all labels, and decreasing the count as we progress in the inner loop.
+
+We also need the number of unhandled `case` labels. We determine it comparing the size of the jump table to the result of the `case_values_threshold` function. This function is architecture dependent and takes into account the presence of switch-case specific instructions, but on modern x64 and Arm64 machines, it defaults to 5.
+
+Let's now focus on the main heuristic, starting with how `max_ratio` is computed. I've reproduced below the main loop, omitting lines unrelated to the main heuristic.
+
+We've seen in the examples section that gcc uses the ratio between jump table entries and comparisons as a metric for the lowering the heuristic. The code below shows that distinct ratios are used when optimizing for speed (flags `-O[123|fast]`) or size (flag `-Os`). Specifically, a ratio of 8 is used when optimizing for speed, while a ratio of 2 is used when optimizing for size.
+
+Now onto the main loop. Given two splits, we prefer the one that results in fewer jump tables being emitted.
+Or, if they would result in the same number of jump tables, we prefer the one that handles the most `case` labels.
+We also ignore splits that would result in unprofitable jump tables, where profitability is checked by the `can_be_handled` function.
+
+The `can_be_handled` condition, checks for overflow and compares the ratio of case labels to jump table entries:
+
+The coda of the function also mirrors the one for bitset clusters.
+It iterates over all jump tables in reverse order, and prunes the ones that fail the `is_beneficial` check.
+
+The `is_beneficial` check for jump tables aims to prune small jump tables. It compares the number of case labels to `case_values_threshold`.
+
+#### Binary tree
+
+If `gcc` cannot emit a bitset cluster or a jump table, it falls back to a binary
+tree of comparison.
+
+In emitting the tree, it takes into account the probability of each case label
+cluster. The probability can be obtained via profile-guided optimization, or with
+the `__builtin_expect_with_probability` builtin.
+
+The code is pretty straightforward.
+
+Sum probability of all case labels.
+
+Split the case label list such that both halves have equal probability.
+
+Recurse in both halves to build the binary tree.
+
+We've seen the heuristics and lowering strategies `gcc` employs when compiling switch statements, including:
+
+For anyone interested in delving deeper, I'd suggest examining the `gcc` [source code](https://github.com/gcc-mirror/gcc/blob/master/gcc/tree-switch-conversion.cc), and reading [this paper](https://www.researchgate.net/publication/245584786_A_Superoptimizer_Analysis_of_Multiway_Branch_Code_Generation).
+
+*Finally, I want to thank B.X.V., C.P., and V.P. for their feedback when writing this post*
