@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-31T04:35:52Z",
+  "updated": "2026-10-31T11:52:26Z",
   "items": [
     {
       "id": "devto-4893750",
@@ -278,12 +278,24 @@
       "color": "#3B49DF"
     },
     {
+      "id": "devto-4944141",
+      "title": "How I Made Yet Another Project During a Global Teen Hackathon with Prizes",
+      "desc": "By Tyler N | 9 min read",
+      "tag": "tutorial",
+      "published": "2026-10-30T21:07:45Z",
+      "order": 24,
+      "url": "https://dev.to/thetylern/how-i-made-yet-another-project-during-a-global-teen-hackathon-with-prizes-38hc",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fm9vivpavqjce812u6hn2.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAAECAwX/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAHQGFckH//EABcQAQADAAAAAAAAAAAAAAAAAAABICH/2gAIAQEAAQUCai3/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAUEAEAAAAAAAAAAAAAAAAAAAAw/9oACAEBAAY/Ag//xAAaEAACAwEBAAAAAAAAAAAAAAABEQAQIUGR/9oACAEBAAE/IdoRWA+QN9ojJyBOf//aAAwDAQACAAMAAAAQEU//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/ED//xAAbEAADAQEAAwAAAAAAAAAAAAAAASERcUFh0f/aAAgBAQABPxBTEhw/ohFXoO+HnqEtZVfAnHCTFen/2Q==",
+      "color": "#3B49DF"
+    },
+    {
       "id": "devto-4929802",
       "title": "Are You a Python Developer or a Python Expert? 7 Tests I Failed Building 3 Desktop Apps",
       "desc": "By Akhouri Anmol Kumar | 6 min read",
       "tag": "tutorial",
       "published": "2026-10-28T10:13:29Z",
-      "order": 24,
+      "order": 25,
       "url": "https://dev.to/akhourianmolkumar/are-you-a-python-developer-or-a-python-expert-7-tests-i-failed-building-3-desktop-apps-2fp4",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fz79ftelq3gss34zn235x.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAAECAwT/xAAVAQEBAAAAAAAAAAAAAAAAAAABAv/aAAwDAQACEAMQAAABy1iRMnL/AP/EABgQAQEBAQEAAAAAAAAAAAAAAAEAEBEh/9oACAEBAAEFAvJ3rKxn/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFREBAQAAAAAAAAAAAAAAAAAAABH/2gAIAQIBAT8Bqv/EABQQAQAAAAAAAAAAAAAAAAAAADD/2gAIAQEABj8CD//EABsQAAIDAAMAAAAAAAAAAAAAAAABESExEEFR/9oACAEBAAE/IVW5F8wSIErsa18IP//aAAwDAQACAAMAAAAQyi//xAAWEQEBAQAAAAAAAAAAAAAAAAAAARH/2gAIAQMBAT8QkY//xAAVEQEBAAAAAAAAAAAAAAAAAAABAP/aAAgBAgEBPxBiL//EABsQAQEBAQADAQAAAAAAAAAAAAERACEQUWGh/9oACAEBAAE/ECi9J2JjKq/SL+YkbpswgC4Q7qoiel8A29u//9k=",
@@ -295,22 +307,10 @@
       "desc": "By Alex Georgiev | 8 min read",
       "tag": "tutorial",
       "published": "2026-10-26T11:00:00Z",
-      "order": 25,
+      "order": 26,
       "url": "https://dev.to/alexgeorgiev17/python-314s-concurrentinterpreters-module-turns-a-36-second-gil-bottleneck-into-09-seconds-219",
       "image": "https://media2.dev.to/dynamic/image/width=1200,height=627,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fuedye7tw0if5gejxoawi.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAARACADASIAAhEBAxEB/8QAGAABAQEBAQAAAAAAAAAAAAAAAAECAwT/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAH2TYzdw6AQP//EABsQAAMAAgMAAAAAAAAAAAAAAAABAhESIDJC/9oACAEBAAEFAnKMSYgUwPtqao9cP//EABQRAQAAAAAAAAAAAAAAAAAAACD/2gAIAQMBAT8BH//EABQRAQAAAAAAAAAAAAAAAAAAACD/2gAIAQIBAT8BH//EAB0QAAICAQUAAAAAAAAAAAAAAAAyAZEQIDGBoeH/2gAIAQEABj8CWKEihOhIrHhsLzp//8QAHhAAAgICAgMAAAAAAAAAAAAAAAERITFhIEGRwfH/2gAIAQEAAT8hRdHusOoWPYEnB4zCL/BpeCElS6TTj//aAAwDAQACAAMAAAAQQ4Ac/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAwEBPxAf/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAgEBPxAf/8QAIRAAAgEDAwUAAAAAAAAAAAAAAREAITFhIEFRcZGx0fH/2gAIAQEAAT8QWUVn4gvCOBXAT1oRSMhEfC0F0O5gZVDrD4aBMuwBDGn/2Q==",
-      "color": "#3B49DF"
-    },
-    {
-      "id": "devto-4944141",
-      "title": "How I Made Yet Another Project During a Global Teen Hackathon with Prizes",
-      "desc": "By Tyler N | 9 min read",
-      "tag": "tutorial",
-      "published": "2026-10-30T21:07:45Z",
-      "order": 26,
-      "url": "https://dev.to/thetylern/how-i-made-yet-another-project-during-a-global-teen-hackathon-with-prizes-38hc",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fm9vivpavqjce812u6hn2.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAAECAwX/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAHQGFckH//EABcQAQADAAAAAAAAAAAAAAAAAAABICH/2gAIAQEAAQUCai3/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAUEAEAAAAAAAAAAAAAAAAAAAAw/9oACAEBAAY/Ag//xAAaEAACAwEBAAAAAAAAAAAAAAABEQAQIUGR/9oACAEBAAE/IdoRWA+QN9ojJyBOf//aAAwDAQACAAMAAAAQEU//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/ED//xAAbEAADAQEAAwAAAAAAAAAAAAAAASERcUFh0f/aAAgBAQABPxBTEhw/ohFXoO+HnqEtZVfAnHCTFen/2Q==",
       "color": "#3B49DF"
     },
     {
@@ -323,6 +323,18 @@
       "url": "https://dev.to/amananandrai/101-indian-monuments-modelled-in-the-browser-g4f",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Ff5wouh2oemeu0fx5dto3.jpg",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAAEE/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEAMQAAAB3ywA/8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQABBQIP/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAGBAAAgMAAAAAAAAAAAAAAAAAAAEQIEH/2gAIAQEAAT8hQ5W0/9oADAMBAAIAAwAAABARz//EABURAQEAAAAAAAAAAAAAAAAAAAAB/9oACAEDAQE/EFf/xAAVEQEBAAAAAAAAAAAAAAAAAAAAAf/aAAgBAgEBPxBH/8QAGxABAQACAwEAAAAAAAAAAAAAAQARMRAhQXH/2gAIAQEAAT8QQ5lguw84eSOvkai//9k=",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4846874",
+      "title": "The Hidden Cost of AI-Generated PRs: Why Most Teams Are Missing Silent Breakages",
+      "desc": "By 𝗝𝗼𝗵𝗻 | 5 min read",
+      "tag": "tutorial",
+      "published": "2026-10-20T14:30:00Z",
+      "order": 28,
+      "url": "https://dev.to/johnnylemonny/the-hidden-cost-of-ai-generated-prs-why-most-teams-are-missing-silent-breakages-3g46",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F8q51f4enq0bh0honolcy.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAQIAAwT/xAAVAQEBAAAAAAAAAAAAAAAAAAAAAf/aAAwDAQACEAMQAAAB0CyQhcr/AP/EABgQAAMBAQAAAAAAAAAAAAAAAAAQESEB/9oACAEBAAEFAi7zXCL/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAXEAEAAwAAAAAAAAAAAAAAAAAAAREg/9oACAEBAAY/AlJ1/8QAGBABAQEBAQAAAAAAAAAAAAAAAQARIUH/2gAIAQEAAT8hjzS1xwksiALC/9oADAMBAAIAAwAAABCbz//EABYRAQEBAAAAAAAAAAAAAAAAAAABIf/aAAgBAwEBPxDVr//EABURAQEAAAAAAAAAAAAAAAAAAAEQ/9oACAECAQE/EGf/xAAcEAACAgMBAQAAAAAAAAAAAAABEQBhMUGBEFH/2gAIAQEAAT8QAgTeTczpiBvfhUrkCC9/VBKAyX2UT//Z",
       "color": "#3B49DF"
     },
     {
