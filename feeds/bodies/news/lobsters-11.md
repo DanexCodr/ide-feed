@@ -1,260 +1,70 @@
-For a long time I have been a fan of minimalism in my physical life:
-have few physical possessions, and try to do more with less. Four years
-ago, I wrote [this
-blog post](https://vitalik.eth.limo/general/2022/06/20/backpack.html) describing what I had in the 40-liter backpack that I
-travel around with.
+Not me, this is just friendly advice from a struggling user.
 
-Physical minimalism, however, was an idea that came of age in the
-2000s and 2010s and was responding to the challenges and the
-opportunities of the 2000s and 2010s. I continue to believe that it is
-valuable - though I recognize some arguments in the other direction,
-notably that having *the right kinds* of physical things can make
-more practical to have more self-sovereignty over your life. But I also
-think that in the modern era, we need a new kind of minimalism:
-**digital minimalism**.
+Alongside [Codeberg](https://codeberg.org/) I’d consider [Tangled](https://tangled.org/) to be a real GitHub replacement. [We desperately need to leave GitHub behind.](https://dbushell.com/2026/04/29/github-is-sinking/) It’s difficult to recommend any tech these days. I used to spread the gospel of Proton and [that backfired](https://dbushell.com/notes/2026-10-30T07:29Z/). From what I’ve seen, Tangled seem to be saying and doing the right things so far. I have trepidations about their [venture capital funding](https://tangled.org/blog/seed/) (see [Deno’s demise](https://dbushell.com/notes/2026-10-10T10:30Z/)) but pessimism is no fun.
 
-Digital minimalism is about being intentional about ways that you
-access digital technology, making each use a conscious choice rather
-than something that you get sucked into by default. In this post, I will
-describe some experiments that I've done in this direction.
+Tangled’s recent blog post on [federated code forges](https://tangled.org/blog/forge/) piqued my interest. [I self-host Forgejo](https://dbushell.com/2025/08/15/self-hosted-forgejo-actions-runner/) and a big downside is that no one else can participate easily. [Forgejo federation](https://forgejo.codeberg.page/faq/#what-about-forge-federation) is under development. Maybe the two can co-exist? But that’s not what I’m here to discuss.
 
-## Social media minimalism
+## Tangled’s new look
 
-Twitter (aka X) has always had a strain of toxicity to it, that has
-been increasing in recent years. The platform is definitely
-*engaging*, but it's often far from *informative*, and the
-ways in which it engages often do not make you *feel good*. But
-this all seemed to hit a particular crescendo for me around the end of
-2024 and beginning of 2025. Many things were happening at that moment,
-but if you spent a lot of time on X you will likely remember a
-particular one: *everyone seemed to be suddenly becoming fans of
-Adolf Hitler*.
+In the same post Tangled revealed their new UI design.
 
-*This is not even mentioning the time that Grok itself [briefly
-turned into "MechaHitler"](https://x.com/ordinarytings/status/1942704498725773527).*
+> We’ve redone the UI on top of our new architecture (described further below), in Svelte. Things should now be quicker, visually consistent and prettier! The keen eyed of you might’ve also spotted that we’ve swapped out Inter for Timeless Sans.
+>
+> [The federated code forge](https://tangled.org/blog/forge/#a-fresh-look) - Anirudh (Tangled CEO)
 
-Around the same time, "Crypto Twitter" was spiraling into a mood that
-I saw described as "financial nihilism": roughly, that the natural end
-state of blockchains is gambling, this is good, and if you dislike this
-and wish for something better then you are a stuck-up elitist prick.
+I quiped on Bluesky: [“keen eyed? eagle-eyed maybe!”](https://bsky.app/profile/did:plc:rgrzo7xept2yb2auooex4rlg/post/3mz5zpy3yus2j) — the new font size is exceedingly tiny. It’s coded as `12px` with `16px` line height. Tangled is practically unusable for me at this size. It was small before but I could zoom in. The way the new front-end is designed and built doesn’t leave much room for personal remedy. This is not just a subjective opinion there are real accessibility failures here.
 
-Naturally, I had (and continue to have) my intellectual disagreements
-with both of these trends. But on top of that, I also started to more
-seriously pay attention to the fact that while the style of discourse on
-the platform was *engaging*, it was *not enlightening* and
-*not making me feel good*. And so for much of this year, I have
-been doing an experiment in distancing myself somewhat from this chaos.
-**I did not leave X *the platform*, but I did leave X
-*the interface*.** Instead, I have been doing most of my
-tweeting through [Firefly](https://firefly.social):
+*(Edit: to be clear, below is one example of many issues.)*
 
-Firefly is a multi-client that combines together X, BlueSky as well
-as Farcaster and Lens (both partially-Ethereum-based decentralized
-social media platforms). You can see tweets from all four platforms, and
-you can make a tweet that gets auto-posted to all four platforms.
+## Font failure
 
-My primary goal in doing this was to support decentralized social
-media, and to continue to engage with X but in a way that distributes
-network effect rather than locking it in. But in my months of using
-Firefly, I found that it also has a different effect: *I feel much
-better using it*.
+Below is a screenshot from Tangled’s new user interface design.
 
-I suspect the primary reason is that while Firefly allows you to
-tweet, and see other people's tweets, it is missing one central part of
-the X interface: *The Algorithm™*.
+Visit [`tangled.org`](https://tangled.org/timeline) and experience the new UI yourself.
 
-In particular, I suspect that in my time using the X interface, I
-fell into the following trap:
+12 pixels is too small for any meaningful text (which is typically all text). Maybe you feel the size is totally fine? That’s fine for you. But it’s not fine for a *significant* number of people. You won’t find any accessibility expert happy with that size. (Low-DPI displays may even struggle to render the font legibly.)
 
-1. See someone making a tweet supportive of Adolf Hitler.
-2. Click on the tweet and look around its quotes and responses, the same way that someone would morbidly stare at a car accident.
-3. The Algorithm™ thinks: "This user seems to be a fan of Adolf Hitler. Let me mark that down as one of his interests."
-4. See ten tweets supportive of Adolf Hitler.
-5. Click and look around with morbid curiosity, the same way that someone would morbidly stare if they saw for the first time a car accident where ten cars were crashed and burning at the same time.
-6. The Algorithm™ thinks: ... well, you get the idea.
-7. See a hundred tweets supportive of Adolf Hitler.
+[WCAG 2.2 accessibility guidelines](https://www.w3.org/WAI/WCAG22/Understanding/) don’t recommend a minimum font size. [1.4.4 Resize Text](https://www.w3.org/TR/WCAG22/#resize-text) does require that text can be resized up to 200% “without loss of content or functionality”.
 
-Now, in fairness to X and Elon and its hard-working employees, the
-Adolf Hitler fandom does seem to have greatly wound down in the one and
-a half years since then. I suspect part of this is because such
-movements inevitably burn out once people realize how immoral and stupid
-they are. But another part is undoubtedly genuine improvements in how
-The Algorithm™ works.
+Tangled uses pixel units in CSS for font size<sup>†</sup>. That means the UI won’t adapt to the browser default setting. [I can *force* a minimum](https://support.mozilla.org/en-US/kb/font-size-and-zoom-increase-size-of-web-pages#w_set-a-minimum-text-size) `16px` font size and look what happens.
 
-But *even still*, in those moments when I go back into the X
-interface, I find myself logging back out and going back to Firefly. I
-also find that my mind has changed. I find myself less interested in the
-various battles that the intellectual titans on the platform seem to be
-sucking every day of their lives into. Recently, I logged back in, and I
-learned that the culture war issue du jour was that people were
-stridently arguing about whether or not Mao was evil. When I saw this, I
-had an emotional response that was sort of similar to what I think is
-the common experience of being an adult, seeing some food or TV show or
-game that you used to love as a kid, and realizing that you now find no
-interest in it at all. I smiled, and immediately went back to enjoying
-my day.
+**<sup>†</sup> Correction:** I was wrong about pixel units everywhere (I misread the computed values), it’s `font-size: 16px` on the `<html>` element that blocks the relative units from scaling properly with browser settings [(an easier fix)](https://adrianroselli.com/2024/03/the-ultimate-ideal-bestest-base-font-size-that-everyone-is-keeping-a-secret-especially-chet.html).
 
-My verdict: **I recommend more people try this. Explore ways of
-greatly decreasing or scoping your social media use: use something like
-Firefly, access X only on Tuesdays, whatever works for you.** Get
-the information benefits of the platform without getting sucked in to
-the vortex, which does operate on you in powerful subconscious ways that
-you may not realize.
+Text lines get too close for comfort. Characters are starting to get clipped. See the “g” descender in “Tangled” for example.
 
-## Cell data minimalism
+And if I force a 200% resize at `24px` this happens.
 
-For a period of 100 days, I embarked upon a second experiment: I
-lived my life with my phone always on airplane mode. I still used wifi,
-but not my cell connection.
+Oh dear! Text that is [“clipped, truncated or obscured”](https://www.w3.org/WAI/WCAG22/Techniques/failures/F69) is a failure.
 
-I had two goals in doing this:
+Remember that the WCAG guidelines are a floor. Nothing can be perfectly accessible, but a `12px` font size and basic front-end failures are a concern. A proper audit would reveal other issues (e.g. with how media/container queries adapt to font size).
 
-1. Privacy. A phone connected to cell is an always-on tracking device. Cell companies are notoriously bad at keeping that data secure, and sometimes they themselves sell it. So there is a large chance that a trail of your location will end up in the hands of intelligence agencies, military contractors, advertising companies, and more. Anonymous SIM cards are not a sufficient solution, for two reasons: (i) your phone can still be linked across its entire usage lifetime through its IMEI number, and (ii) you leak all kinds of data that can be used to reconstruct who you are from your fine-grained movement patterns, internet access patterns, and modern AI makes it very practical to uncover these patterns.Hence, the best location privacy solution is not having a cell connection at all (also, use GrapheneOS, and be very limited in what apps you give location permissions to; I had already been doing both).
-2. Mental health. Not having the internet at all for significant periods of time (when I'm outside) has been a good way of (re-)building the habit of surviving without it, and getting more mental peace and the space to think about other more healthy and productive things.
+## Expect better
 
-On the whole, I consider the experiment to have been a success.
-During those 100 days, I violated the "no cell data" rule once literally
-but not spiritually - I turned it on briefly to receive a confirmation
-code that I needed in order to maintain that phone plan itself, and once
-spiritually but not literally - when going on a remote and slightly
-dangerous hike, friends insisted that I bring along a few communication
-devices that they had for emergency comms and use them to check in once
-every few hours.
+I’m not posting this to seek employment myself or to provide answers. I want to remind readers that accessibility concerns affect everyone. Serious projects should seek professional expertise. It’s disappointing to see yet another tech start-up fail the basics.
 
-My largest inconvenience was a stretch of time I was in Singapore,
-when my inability to receive SMS confirmation codes meant that I could
-not log into Grab (the regional Uber equivalent). As a result, my food
-options were more limited, and I had to take the subway instead of a car
-even in situations where that was much more inconvenient.
+I’ll provide two suggestions for free though:
 
-Since those 100 days, I have opened the cell connection occasionally,
-but so far I have broadly continued an "airplane mode by default"
-lifestyle.
+1. Use relative units for font sizes
+2. Use unit-less numbers for line height
 
-For navigation, I used [CoMaps](http://www.comaps.app/), a
-local-first mapping application that downloads OpenStreetMap data and
-then shows you a map, gives you directions to get where you need, etc
-locally. My general review of CoMaps is that I find it worse than Google
-Maps for navigating the human world (restaurants, stores, opening
-hours...) but better for navigating the natural-ish world (it knows about
-many trails that Google Maps does not, though it does occasionally fail
-by claiming trails that do not actually exist, leaving me on one
-occasion pushing through hundreds of meters of shrubbery to get back to
-civilization).
+*(Edit: see correction above, the fix is even easier.)*
 
-I also became interested in the concept of local world knowledge
-apps. In principle, the data size of meaningful packs of information
-about the whole world is not that large. Compressed English wikipedia
-(without media) is [only 27
-GB](https://en.wikipedia.org/wiki/Wikipedia:Size_of_Wikipedia). OpenStreetMap's [planet.asm](https://wiki.openstreetmap.org/wiki/Planet.osm) is
-2.2 TB, though you can doubtlessly prune that down to 1-10% of its size
-and have everything you might conceivably need.
+Frankly, what Tangled’s redesign suggests to me is that nobody involved with the process gave accessibility enough thought <del>(if any)</del> *(edit: that part was unfair, there was some effort but far from adequate testing)*. That may sound harsh but it’s usually the reality from my experience. Whatever the case, Tangled must do better in this area.
 
-This month there [was a
-bounty](https://poidh.xyz/mainnet/bounty/31) (organized by Statuette; I contributed as one of the donors)
-to create local phone apps that try to make useful knowledge easily
-accessible offline.
+If I may answer a few predictable but hypothetical comments.
 
-Here are two of the apps:
+> This is just v1. Things will improve.
 
-*Left: [FieldAtlas](https://github.com/0x94t3z/fieldatlas). Right: [Commonplace](https://github.com/0xPD33/commonplace)*
+I’m sure they will and maybe even pushed by my criticism. The struggle is that accessibility concerns must be integral to design from day one, not an afterthought to patch.
 
-My general impression is: right now, we are exactly on the cusp of
-these kinds of apps starting to make sense. Most of the participants in
-the competition were trying to use on-device text LLMs to think for a
-long time before coming up with an answer. My impression is that this
-approach was too slow: answering a single question would take anywhere
-from 1 to 22 minutes. The best apps, on the other hand, used some kind
-of semantic search to show the user a search result from the local
-database immediately, and then followed that up with a very small LLM
-writing a text answer. This gives actually-good answers in a very
-reasonable timeframe.
+> It’s open source, where’s your merge request?
 
-Finally, when you're out and about, especially if you have meetings,
-sometimes you do need to have internet when you're on the go. When you
-arrive at a place, you often need to contact a person you're meeting to
-confirm their exact location or to get them to open the door. When
-you're at one meeting, you often need to re-confirm details about the
-next. If you don't have cell data, your only option is public wifi - and
-importantly, the public wifi hotspot must allow you to connect without
-providing an SMS confirmation code.
+Sorry, once a project crosses the line into venture capital “open source” takes on a different meaning. If people want to contribute that’s their prerogative. Personally, I’m not in the habit of giving away professional expertise for free to a for-profit business. Such expectations are especially a problem for accessibility specialists (of which I am not).
 
-Different places are very different in terms of how friendly they
-are. Here is a quick tier list, taken from places I've traveled to while
-I was paying attention to public wifi availability:
+> Aha! What about this accessibility failure on your website?!
 
-1. Taiwan (or at least, the Taipei area)Taipei has a huge number of public wifi hotspots. When I opened my phone to check when walking outside (or even when inside an Uber), there was literally an over 25% chance that there was a hotspot I could connect to that was in range at that moment. Usually, these were either municipal government wifi, or public wifi run by local convenience store chains.
-2. Ukraine, USA, Canada, SingaporeUkraine was the most surprising for me. In a surprisingly large number of places, across multiple cities, there were open hotspots available, some of which did not even require a clickthrough. (If you're wondering if it's responsible for them to do this, given Ukraine's security needs, I suspect the answer is that they are primarily concerned about decreasing the enemy's internet access near the frontline and on drones flying at high speed through the air toward their cities, and street-level wifi is not really useful for either of those)USA, Canada and Singapore were all similar: they had a very high number of theoretically-public wifi hotspots in general, but a large portion of those hotspots were gated behind either SMS or some kind of login. But even still, a very significant number of open wifi hotspots were available. *Also, I learned that Toronto has a fraternity (or sorority) that seems to be named after SBF.*
-3. Austria, HungaryBoth halves of Charles I's old empire are similar. There are many hotspots, but the great majority of the public ones require an SMS confirmation code to log in. I could find properly open wifi, but on several occasions it took trying quite a few hotspots and walking around for a while.
-4. SwitzerlandDespite its general reputation for privacy, Switzerland ranked at the bottom for me. Almost all public wifi hotspots require an SMS confirmation code. In my first 1.5 kilometers walking through the downtown, I found only two that do not: a random shoe store, and Starbucks, which lets you connect for 10 minutes, and then longer if you enter a confirmation code that you receive by email.
+That’s a bit embarrassing, but thanks for the heads-up!
 
-## Web minimalism
+It’s far easier to hire an accessibility expert before you ship but it’s never too late to retroactively make improvements. I’ve been making accessibility improvements on my own website for decades.
 
-Recently, I have been starting to do more and more things without
-relying on user interfaces inside of websites at all. The last few times
-I updated my IPFS hash on ENS, I did so through a command-line tool that
-an AI wrote for me. Many of the payments that I make through privacy
-protocols, I now make through the [kohaku-cli
-tool](https://github.com/kassandraoftroy/kohaku-cli).
-
-*Sending through kohaku-cli. Today, the CLI is even cleaner and
-easier to use; no need to specify the value twice and know what a tail
-call is.*
-
-Websites and web applications, especially web applications for doing
-crypto things, are dangerous for several reasons:
-
-1. **If you access a web application, you end up re-downloading the application from the server thousands of times, and you are fully trusting the server each time**. If the server gets hacked even one of the thousands of times that you open the site, you might be screwed. Regular old-fashioned applications (where you explicitly click "download") are better than this: you only need to trust the server to not be malicious or hacked at that exact moment once.
-2. **Websites and web applications are by default very bad for privacy**. When you access a website, it can see your browser (including version number), your operating system, your screen size, and once you start acting hundreds of other data points (eg. mouse movements, button click patterns) that quickly identify you. Websites often send user data (and metadata) to all kinds of third-party providers, from CDNs serving scripts to analytics companies, and this all happens by default.
-3. **As we've seen with social media, web applications crafted by third parties with commercial interests may not have your interests at heart.** Fine-grained UI decisions may be [dark patterns](https://en.wikipedia.org/wiki/Dark_pattern) optimized to extract, whereas what you want is bright patterns that are optimized to enlighten and educate and protect you.
-
-So what's the alternative? Basically, bring back the [Unix
-Philosophy](https://en.wikipedia.org/wiki/Unix_philosophy), but make it better and much more user-friendly with
-local AI: speak English to tell your computer what to do rather than
-Bash.
-
-At its core, the Unix philosophy was simple: make simple, modular
-tools that each do one thing and one thing well, and that are designed
-to talk to each other through the most universal interface (text). You
-as a user have extremely fine-grained choice about how to make the
-different programs fit together. UIs, on the other hand, combine many
-functionalities into one single opaque tool produced by a single
-developer. At their apex, UIs turned into "super-apps", which greatly
-concentrate power in the application developer and have complex and
-unintelligible internal workings, magnifying security risks. With LLMs,
-we can go back to the Unix philosophy approach, putting the fine-grained
-decision-making power back into the user's hands, but without the
-downside of everyone needing to become a programmer.
-
-## Conclusion
-
-Physical-world minimalism, of the style that became popular in the
-2000s and 10s, was made possible by a new wave of technology: computers
-and the internet. A single computer could substitute for dozens of
-physical things. As a result, you could live a life of much greater
-simplicity and freedom, with just a laptop, a few sets of clothing, and
-basic charging and hygiene equipment. Physical minimalism was much
-harder before the internet; it was doable, but would entail a much more
-complex lifestyle commitment. After the internet, the costs of a more
-physically minimalistic lifestyle greatly dropped.
-
-With the last ten years of progress of software quality, together
-with modern AI, I would argue that we now have the wave of technology
-needed to similarly enable the next wave of minimalism: digital
-minimalism. We need social media less than before, because you can talk
-to the bot for information instead (and for human connection, there's
-still the old-fashioned solution: going out and talking to people in
-real life). We need the internet less than before, because there's so
-much more you can do purely locally and offline. And we need the web
-less than before, because you can do much more, and more conveniently,
-though either command-line tools or custom-made user interfaces, and AI
-can help you use or craft both. And these things are all happening at
-exactly the time that the flaws of these previous paradigms - and, for
-that matter, the flaws of using AI in the wrong way - are reaching their
-apex, and so a digital minimalism is becoming more and more
-necessary.
-
-Each person's path to digital minimalism will be different, as each
-person has different needs. But I highly recommend everyone try reducing
-their digital clutter in at least one important way, and if you like the
-result then keep going.
+I like Tangled and I want to see it do well. Maybe someone will share a [milkshake duck](https://en.wikipedia.org/wiki/Milkshake_Duck) or they donate to [fascist Linux](https://brennan.day/normalized-fascism-in-open-source-12-million-given-to-dhh/) and I’ll eat my words. I really hope not! I hope Tangled improves so that those lingering in GitHub’s slop graveyard have fewer excuses to hang around.

@@ -1,68 +1,113 @@
-Not me, this is just friendly advice from a struggling user.
+When looking through a piece of source code recently, I stumbled across this method from [Guava](https://github.com/google/guava) – a popular Java library from Google.
 
-Alongside [Codeberg](https://codeberg.org/) I’d consider [Tangled](https://tangled.org/) to be a real GitHub replacement. [We desperately need to leave GitHub behind.](https://dbushell.com/2026/04/29/github-is-sinking/) It’s difficult to recommend any tech these days. I used to spread the gospel of Proton and [that backfired](https://dbushell.com/notes/2026-10-30T07:29Z/). From what I’ve seen, Tangled seem to be saying and doing the right things so far. I have trepidations about their [venture capital funding](https://tangled.org/blog/seed/) (see [Deno’s demise](https://dbushell.com/notes/2026-10-10T10:30Z/)) but pessimism is no fun.
+![Guava's whitespace matcher implementation](https://serce.me/images/whitespace/whitespace.png)
 
-Tangled’s recent blog post on [federated code forges](https://tangled.org/blog/forge/) piqued my interest. [I self-host Forgejo](https://dbushell.com/2025/08/15/self-hosted-forgejo-actions-runner/) and a big downside is that no one else can participate easily. [Forgejo federation](https://forgejo.codeberg.page/faq/#what-about-forge-federation) is under development. Maybe the two can co-exist? But that’s not what I’m here to discuss.
+As you might've guessed from the name, this method checks whether a given character is a whitespace character. Yet the code looks a lot more complex than a simple `c == ' '` check. This made me curious and sent me down a small rabbit hole trying to understand where all this complexity was coming from. If you're curious how this code works too, this article is for you.
 
-## Tangled’s new look
+The first thing one needs when inspecting a function that checks whether a character is whitespace is to define what whitespace actually is. While the `SPACE (U+0020)` is probably the best-known whitespace character, it's not the only one. If you've been writing code for a while, you can probably name a few more – the non-breaking space `NO-BREAK SPACE (U+00A0)`, a tab `CHARACTER TABULATION (U+0009)`, a newline `LINE FEED (U+000A)`.
 
-In the same post Tangled revealed their new UI design.
+Well, there are more. Unicode defines a [`White_Space` property](https://www.unicode.org/Public/17.0.0/ucd/PropList.txt) that gives us a list of 25 characters. Here they are – meticulously copied `	,
+,,,, ,, , , , , , , , , , , , , , , , , ,　`.
 
-> We’ve redone the UI on top of our new architecture (described further below), in Svelte. Things should now be quicker, visually consistent and prettier! The keen eyed of you might’ve also spotted that we’ve swapped out Inter for Timeless Sans.
->
-> [The federated code forge](https://tangled.org/blog/forge/#a-fresh-look) - Anirudh (Tangled CEO)
+Each of these characters has a different purpose. `FIGURE SPACE (U+2007)`, for example, has the same width as a digit in a table, while `THIN SPACE (U+2009)` and `HAIR SPACE (U+200A)` provide progressively smaller gaps. `NO-BREAK SPACE (U+00A0)` has the width of an ordinary space, but keeps the surrounding text together when wrapping a line.
 
-I quiped on Bluesky: [“keen eyed? eagle-eyed maybe!”](https://bsky.app/profile/did:plc:rgrzo7xept2yb2auooex4rlg/post/3mz5zpy3yus2j) — the new font size is exceedingly tiny. It’s coded as `12px` with `16px` line height. Tangled is practically unusable for me at this size. It was small before but I could zoom in. The way the new front-end is designed and built doesn’t leave much room for personal remedy. This is not just a subjective opinion there are real accessibility failures here.
+It's not always easy to tell whether a character is in the whitespace set from the name or by looking at the glyph either. For instance, `ZERO WIDTH SPACE (U+200B)` isn't a whitespace character at all. Despite the name, it's a format character that can indicate a word or line break opportunity without adding a visible gap.
 
-## Font failure
+There are also some less obvious members of the set too. `OGHAM SPACE MARK (U+1680)` can actually be rendered as a visible horizontal line. In Ogham fonts with a stemline, the space continues that line between letters (e.g. ᚛ᚆᚓᚂᚂᚑ ᚒᚑᚏᚂᚇ᚜), while in stemless fonts, it's blank. So even the assumption that whitespace must look empty isn't always true.
 
-Below is a screenshot from Tangled’s new user interface design.
+Having a single definition of whitespace is only useful if everyone can agree on it. But even within a single runtime, some libraries might disagree on what whitespace is.
 
-Visit [`tangled.org`](https://tangled.org/timeline) and experience the new UI yourself.
+Consider the `NO-BREAK SPACE (U+00A0)` I mentioned above. It's included in Unicode's `White_Space` property, but Java explicitly [excludes it](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Character.html#isWhitespace(char)), along with two other non-breaking spaces. The javadoc usefully highlights that the method checks for whitespace *according to Java*, rather than according to the Unicode property we had a look at before.
 
-12 pixels is too small for any meaningful text (which is typically all text). Maybe you feel the size is totally fine? That’s fine for you. But it’s not fine for a *significant* number of people. You won’t find any accessibility expert happy with that size. (Low-DPI displays may even struggle to render the font legibly.)
+```java
+Character.isWhitespace(' ');      // true
+Character.isWhitespace('\u00A0'); // false
+```
 
-[WCAG 2.2 accessibility guidelines](https://www.w3.org/WAI/WCAG22/Understanding/) don’t recommend a minimum font size. [1.4.4 Resize Text](https://www.w3.org/TR/WCAG22/#resize-text) does require that text can be resized up to 200% “without loss of content or functionality”.
+![Java isWhitespace screenshot](https://serce.me/images/whitespace/javaspace.png)
 
-Tangled uses pixel units in CSS for font size<sup>†</sup>. That means the UI won’t adapt to the browser default setting. [I can *force* a minimum](https://support.mozilla.org/en-US/kb/font-size-and-zoom-increase-size-of-web-pages#w_set-a-minimum-text-size) `16px` font size and look what happens.
+But what about other runtimes? Looking at two more popular ones, Python and JavaScript, we can see that there isn't a single authoritative list of characters everyone agrees on. Python, for example, has a convenient `str.isspace()` method. And unlike Java, it considers `U+00A0` a whitespace character.
 
-**<sup>†</sup> Correction:** I was wrong about pixel units everywhere (I misread the computed values), it’s `font-size: 16px` on the `<html>` element that blocks the relative units from scaling properly with browser settings [(an easier fix)](https://adrianroselli.com/2024/03/the-ultimate-ideal-bestest-base-font-size-that-everyone-is-keeping-a-secret-especially-chet.html).
+So possibly Python just follows Unicode's `White_Space` property? Not quite.
 
-Text lines get too close for comfort. Characters are starting to get clipped. See the “g” descender in “Tangled” for example.
+```Python
+"\u00A0".isspace()  # True
+"\u0085".isspace()  # True
+"\u001C".isspace()  # True
+"\uFEFF".isspace()  # False
+```
 
-And if I force a 200% resize at `24px` this happens.
+The interesting one here is `FILE SEPARATOR (U+001C)`. It's an ASCII control character originally intended to separate pieces of information, and it isn't included in Unicode's White_Space property. So Python recognises 29 whitespace characters, rather than Unicode's 25.
 
-Oh dear! Text that is [“clipped, truncated or obscured”](https://www.w3.org/WAI/WCAG22/Techniques/failures/F69) is a failure.
+JavaScript takes yet another approach. It doesn't have an equivalent of the `Character.isWhitespace()` method, but we can use the `\s` character class in a regular expression:
 
-Remember that the WCAG guidelines are a floor. Nothing can be perfectly accessible, but a `12px` font size and basic front-end failures are a concern. A proper audit would reveal other issues (e.g. with how media/container queries adapt to font size).
+```JavaScript
+/\s/.test("\u00A0");  // true
+/\s/.test("\u0085");  // false
+/\s/.test("\uFEFF");  // true
+```
 
-## Expect better
+The odd one out above is `NEXT LINE (U+0085)`. Unicode explicitly includes it in `White_Space`, and Python accepts it too, but JavaScript doesn't. Instead, JavaScript recognises `ZERO WIDTH NO-BREAK SPACE (U+FEFF)`, which Unicode doesn't include in the set.
 
-I’m not posting this to seek employment myself or to provide answers. I want to remind readers that accessibility concerns affect everyone. Serious projects should seek professional expertise. It’s disappointing to see yet another tech start-up fail the basics.
+I haven't looked through any other runtimes, but something tells me the inconsistencies won't stop at these three.
 
-I’ll provide two suggestions for free though:
+What adds more complexity is that Unicode is not frozen in time, and is constantly evolving. And this affects the definition of whitespace. For example, [Unicode 6.3](https://www.unicode.org/versions/Unicode6.3.0/) had reclassified `MONGOLIAN VOWEL SEPARATOR (U+180E)` from a space separator to a format character, removing its `White_Space` property. The Unicode whitespace set had changed from 26 characters to 25 as a result. For runtimes and libraries that strive for backwards compatibility, these changes can be a pretty significant challenge as you'd want the standard library of a language to be as stable as it can be.
 
-1. Use relative units for font sizes
-2. Use unit-less numbers for line height
+Let's say we've finally agreed on the set of characters we want to check – the current set of Unicode whitespace characters. A naive way to implement this would be to go through the list of characters and check whether any of them matches. While this would work, it's definitely not the most efficient approach.
 
-(Edit: see correction above, the fix is even easier.)
+So what [Guava's implementation](https://github.com/google/guava/blob/master/guava/src/com/google/common/base/CharMatcher.java) that we saw at the beginning of the article did was implement a perfect hash function – a hash function that guarantees no hash collisions for the characters in the known set.
 
-Frankly, what Tangled’s redesign suggests to me is that nobody involved with the process gave accessibility enough thought <del>(if any)</del> *(edit: that part was unfair, there was some effort but far from adequate testing)*. That may sound harsh but it’s usually the reality from my experience. Whatever the case, Tangled must do better in this area.
+```java
+static final String TABLE = "\u2002...";
 
-If I may answer a few predictable but hypothetical comments.
+@Override
+public boolean matches(char c) {
+    int slot = (1682554634 * c) >>> 27;
+    return TABLE.charAt(slot) == c;
+}
+```
 
-> This is just v1. Things will improve.
+Above, `TABLE` is a string of 32 characters – effectively a hash table mapping each index (the key) to a character (the value). It contains all 25 Unicode whitespace characters, with some duplicates filling the remaining positions.
 
-I’m sure they will and maybe even pushed by my criticism. The struggle is that accessibility concerns must be integral to design from day one, not an afterthought to patch.
+The most interesting part here is calculating the index. The multiplication `1682554634 * c` produces a 32-bit integer, and `>>> 27` shifts it 27 bits to the right, isolating the five most significant bits – a number in the [0, 32) range which can be used to look up the table. Of course, there are more possible characters than table entries, that's why the final `== c` check is needed to check that the character we found is the one we were looking up.
 
-> It’s open source, where’s your merge request?
+You can click on the characters below to see how the table is populated.
 
-Sorry, once a project crosses the line into venture capital “open source” takes on a different meaning. If people want to contribute that’s their prerogative. Personally, I’m not in the habit of giving away professional expertise for free to a for-profit business. Such expectations are especially a problem for accessibility specialists (of which I am not).
+The magic `1682554634` number does look magical, and it's unclear to me how it was chosen (please do share if you know the answer). But it's not the only possible multiplier, and you can find all suitable options by running a simple brute-force search.
 
-> Aha! What about this accessibility failure on your website?!
+```java
+static final char[] ALL_CHARS = (
+        "\u2002\u3000\r\u0085"
+        + "\u200A\u2005\u2000"
+        + "\u2029\u000B\u2008"
+        + "\u2003\u205F\u1680"
+        + "\u0009\u0020\u2006"
+        + "\u2001\u202F\u00A0"
+        + "\u000C\u2009\u2004"
+        + "\u2028\n\u2007"
+).toCharArray();
 
-That’s a bit embarrassing, but thanks for the heads-up!
+public static void main(String[] a) {
+    var slots = new BitSet(32);
+    outer:
+    for (int mul = 1; mul != 0; mul++) {
+        slots.clear();
+        for (char c : ALL_CHARS) {
+            int index = (mul * c) >>> 27;
+            if (slots.get(index)) {
+                continue outer;
+            }
+            slots.set(index);
+        }
+        System.out.println(mul);
+    }
+}
+```
 
-It’s far easier to hire an accessibility expert before you ship but it’s never too late to retroactively make improvements. I’ve been making accessibility improvements on my own website for decades.
+Interestingly, anyone willing to dive deeper can trace how Guava arrived at this implementation by looking through the git history. It transitioned from a simpler matcher to a [mod-79](https://github.com/google/guava/commit/49ae40b145bebb8bd06a967edc03cb285577d0cc) version which has an interesting observation about the Unicode character set but had a downside of involving a division operation, then followed by a [perfect hash function](https://github.com/google/guava/commit/31e1f16989ec41b360b074caebdc58e0117ecf68).
 
-I like Tangled and I want to see it do well. Maybe someone will share a [milkshake duck](https://en.wikipedia.org/wiki/Milkshake_Duck) or they donate to [fascist Linux](https://brennan.day/normalized-fascism-in-open-source-12-million-given-to-dhh/) and I’ll eat my words. I really hope not! I hope Tangled improves so that those lingering in GitHub’s slop graveyard have fewer excuses to hang around.
+And if you're interested in other applications for perfect hashing – somewhat serendipitously just as I was writing this article, Daniel Lemire [published a blog](https://lemire.me/blog/2026/10/26/billion-query-per-second-lookup-tables-in-c/) on the same topic where he gives an example of using perfect hashing for checking HTTP methods.
+
+When I first saw the whitespace-checking code in Guava, it sparked my curiosity, and as a result I learned a few things about Unicode and saw an interesting application of a perfect hash function – something you don't see used that often in the wild.
+
+I hope you've learned something interesting from this article too. And if you find something that sparks your curiosity, please do write a blog post and share it. I do feel that these write-ups are becoming increasingly rare in the AI-first world, where there's rarely a reason to peek under the hood of a function as simple as `isWhitespace`.

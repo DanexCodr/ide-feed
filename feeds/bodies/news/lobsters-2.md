@@ -1,47 +1,220 @@
-A small-scale rule of thumb. This article will land much better with a concrete
-example, but I am drawing a blank here, so you gotta just blindly trust my say
-so!
+In brief, it’s this: whenever you are doing a bugfix, do it in two commits.
 
-When implementing a software module, it’s often a case that you are writing a
-public function `foo`, and at least part of what `foo` does is already handled
-by another public function `bar`. The DRY instinct encourages you to call
-`bar()` from within `foo`. This usually creates problems down the line. Instead,
-create a new *private* function and refactor both `foo` and `bar` to call that
-shared helper:
+1. Write a passing test that exemplifies the buggy behaviour.
+2. Fix the bug and also fix the test we just wrote.
 
-Rationale: the goal of a public API is to provide an interface that works best
-at the call site. If parts of public API are re-used to implement the rest of
-the API, then there’s a tension between making the interface convenient for the
-outside user and making it convenient to use from within abstraction itself.
-Namely, functions tend to grow optional parameters that should never be set by
-the user. Crucially, the parameter growth and interface degradation can happen
-*after* the original code sharing.
+For example,
 
-By proactively making the shared implementation private, the tension is defused.
-You still might need to tinker with `helper` signature until it does everything
-it needs to do, but, because the helper is private, this is a cheap, local
-change.
+```python
+def add(a, b):
+   return a + b + 1
+```
 
-A notable exception to this rule of thumb are “shortcut” APIs, where a public
-function is *defined* as a commonly used chain of calls to other public
-functions. There, the rule is the opposite — *no* private calls are allowed,
-to make sure that it is a genuine shortcut, and not a midlayer mistake.
+and through your keen eye you observe that this addition function is buggy. You therefore write a test that records the bad behaviour,
 
-P.S. While researching if anyone wrote a better blog post already, I stumbled
-upon a fun stack overflow question, asking, paraphrasing:
+```diff
+Commit 1
 
-The most upvoted answer explains that it is indeed bad, because this makes
-mocking to test a single method in isolation more complicated. Which is, imo, a
-natural, but horrible consequence of misguided approach to testing. You
-shouldn’t be mocking your methods, you should mock your IO. And, similarly, you
-shouldn’t test methods, but rather software functionality (unless you are
-building a public library with a stable API, which is a fun and important, but
-very narrow fraction of software development).
+diff --git a/test_arith.py b/test_arith.py
+--- a/test_arith.py
++++ b/test_arith.py
+@@ -0,0 +1,2 @@
++def test_add(a, b):
++   assert add(2, 2) == 5
+```
 
-The accepted answer says that this recommendation makes no sense if it is not
-backed by an industry wide or an organizational standard. Which somehow manages
-to make even less sense — you shouldn’t follow the guideline rules because
-they are written in sanctified ink! Rather, you should apply each particular
-rule because of the underlying reasons that motivate the rule. Guidelines and
-best practices articles can concentrate lots of good reasoning in a single
-place, but they don’t absolve you from thinking!
+Then comes the bugfix,
+
+```diff
+Commit 2
+
+diff --git a/arith.py b/arith.py
+--- a/arith.py
++++ b/arith.py
+@@ -1,2 +1,2 @@
+ def add(a, b):
+-   return a + b + 1
++   return a + b
+diff --git a/test_arith.py b/test_arith.py
+--- a/test_arith.py
++++ b/test_arith.py
+@@ -1,2 +1,2 @@
+ def test_add(a, b):
+-   assert add(2, 2) == 5
++   assert add(2, 2) == 4
+```
+
+## BUT Y THO
+
+Three reasons:
+
+1. Clearly shows exactly how the bug currently behaves
+2. Demonstrable proof that the bugfix actually fixed the bug
+3. CI still passes at every commit
+
+The traditional way to do this is to do a bugfix and add a test in the same commit. But what if the test accidentally already passed before the alleged bugfix and the alleged bugfix didn’t actually work? In that case the added test gives false confidence that the bugfix worked.
+
+## Alright, show me
+
+Here’s a less obvious example.
+
+Suppose we want to make sure users are not underage,
+
+```python
+def age_in_years(birthday, today):
+    return today.year - birthday.year
+
+def can_access(birthday, today):
+    return 18 <= age_in_years(
+        birthday,
+        today
+    )
+```
+
+You notice that this age check is buggy. It’s only considering the years. If it’s October 2026, but you were born on December 2008, you are not 18 yet.
+
+To fix it, the problem is just an off-by-one.
+
+```diff
+diff --git a/dates.py b/dates.py
+--- a/dates.py
++++ b/dates.py
+@@ -4,7 +4,7 @@ def age_in_years(birthday, today):
+     return today.year - birthday.year
+
+ def can_access(birthday, today):
+-    return 18 <= age_in_years(
++    return 18 < age_in_years(
+         birthday,
+         today
+     )
+diff --git a/test_date.py b/test_date.py
+--- a/test_date.py
++++ b/test_date.py
+@@ -0,0 +1,5 @@
++def test_can_access():
++   assert can_access(
++       date(2007, 1, 1),
++       date(2026, 1, 1)
++   )
+```
+
+The astute reader will observe the problem isn’t in the `can_access` function but in the age calculation. The bugfix isn’t an actual bugfix and the proposed test actually passes both before and after the proposed fix.
+
+The *Kluever Maneuver* would have prevented this.
+
+We wrongly check that someone born on New Year’s Eve in 2008 is eighteen on New Year’s Day in 2026.
+
+```diff
+commit 1
+
+diff --git a/test_date.py b/test_date.py
+--- a/test_date.py
++++ b/test_date.py
+@@ -0,0 +1,5 @@
++def test_can_access():
++   assert can_access(
++       date(2008, 12, 31),
++       date(2026, 1, 1)
++   )
+```
+
+Then we fix the age calculation and flip the test.
+
+```diff
+commit 2
+
+diff --git a/dates.py b/dates.py
+--- a/dates.py
++++ b/dates.py
+@@ -1,7 +1,10 @@
++from dateutil.relativedelta import relativedelta
+
+ def age_in_years(birthday, today):
+-    return today.year - birthday.year
++    return relativedelta(
++        today,
++        birthday
++    ).years
+
+ def can_access(birthday, today):
+     return 18 <= age_in_years(
+diff --git a/test_date.py b/test_date.py
+--- a/test_date.py
++++ b/test_date.py
+@@ -1,5 +1,5 @@
+ def test_can_access():
+-   assert test_can_access(
++   assert not test_can_access(
+        date(2008, 12, 31),
+        date(2026, 1, 1)
+    )
+```
+
+## Shouldn’t we use `XFAIL` instead?
+
+Okay, first of all, not every testing framework has an `XFAIL` equivalent (sigh, Java…).
+
+Setting that aside, a positive passing test isn’t completely logically equivalent to a positive failing test. Going back to our addition example, if we were to add this test,
+
+```diff
+Commit 1
+
+diff --git a/test_arith.py b/test_arith.py
+--- a/test_arith.py
++++ b/test_arith.py
+@@ -0,0 +1,2 @@
++@pytest.mark.xfail
++def test_add(a, b):
++   assert add(2, 2) == 4
+```
+
+This test only tells us that the current addition isn’t four, but it doesn’t tell us exactly what the addition is. Depending on the nature of the bug, a positive failing test might not exemplify as clearly what exactly the bug is. Knowing that two plus two is five might make it easier to understand how to fix the bug.
+
+That being said, using `XFAIL`  is in general roughly equivalent. If for some reason we can’t currently fix the bug right now, only record it, an `XFAIL` is better, since we expect we’ll be carrying this around for a longer time.
+
+## What about bug tracking?
+
+Ah, yes, it’s also a good idea to log a bug in your tracker.
+
+Reference the bug in your first commit.
+
+```diff
+add a test showing the bug
+
+diff --git a/test_arith.py b/test_arith.py
+--- a/test_arith.py
++++ b/test_arith.py
+@@ -0,0 +1,2 @@
++FIXME: bug #1729
++def test_add(a, b):
++   assert add(2, 2) == 5
+```
+
+Record the fix in the second commit:
+
+```diff
+remove off-by-one error
+
+fixes: #1729
+
+diff --git a/arith.py b/arith.py
+--- a/arith.py
++++ b/arith.py
+@@ -1,2 +1,2 @@
+ def add(a, b):
+-   return a + b + 1
++   return a + b
+diff --git a/test_arith.py b/test_arith.py
+--- a/test_arith.py
++++ b/test_arith.py
+@@ -1,2 +1,2 @@
+-FIXME: bug #1729
+ def test_add(a, b):
+-   assert add(2, 2) == 5
++   assert add(2, 2) == 4
+```
+
+## Okay but why “Kluever Maneuver”?
+
+Oh. Because my colleague [Kurt Kluever](https://github.com/kluever) taught it to me, and I immediately think back to him when I think of this technique. He usualy calls it “terrible tests”, as in “Jordi, can you please write a terrible test for this?” and off I go to write a test asserting something I know to be wrong.

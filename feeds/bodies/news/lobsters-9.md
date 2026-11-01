@@ -1,113 +1,21 @@
-When looking through a piece of source code recently, I stumbled across this method from [Guava](https://github.com/google/guava) – a popular Java library from Google.
+If you hold a PC’s power button for 12 seconds, it will turn off at the hardware level without notifying the operating system. This is a safety feature so that you can turn of the computer even if the operating system’s “Shut down” command isn’t working.
 
-![Guava's whitespace matcher implementation](https://serce.me/images/whitespace/whitespace.png)
+After eight seconds of the power button being held down, the Windows kernel realizes that the user is trying to do a force-power-off of the system, and it quickly takes a kernel dump that can be uploaded to the Windows Error Reporting service the next time you turn the system on. (Sometimes four seconds isn’t enough time to get enough information, and the kernel dump is incomplete. I believe that on Windows Insider builds of Windows, you get a message that says something like “Please let go of the power button so we can collect more information, and then we will turn off the computer.” This gives the kernel more time to finish capturing its kernel dump.)
 
-As you might've guessed from the name, this method checks whether a given character is a whitespace character. Yet the code looks a lot more complex than a simple `c == ' '` check. This made me curious and sent me down a small rabbit hole trying to understand where all this complexity was coming from. If you're curious how this code works too, this article is for you.
+These emergency kernel dumps are internally classified as “long power button hold” (LPBH) failures. One of the pieces of information recorded in these emergency kernel dumps is whether the screen consists entirely of black pixels. Those failures are sub-classified as “black screen LPBH”, and they go to a special virtual team for analysis. (I happen to be a member of this black screen LPBH team.)
 
-The first thing one needs when inspecting a function that checks whether a character is whitespace is to define what whitespace actually is. While the `SPACE (U+0020)` is probably the best-known whitespace character, it's not the only one. If you've been writing code for a while, you can probably name a few more – the non-breaking space `NO-BREAK SPACE (U+00A0)`, a tab `CHARACTER TABULATION (U+0009)`, a newline `LINE FEED (U+000A)`.
+Sometimes the problem is a broken video driver. Sometimes the video driver is doing just fine, but the desktop compositor is just handing black pixels to the video driver. Sometimes the desktop compositor is doing just fine, but nobody is drawing anything to the screen. And those cases are further subdivided further into cases like “there is nobody around to draw anything” or “the person who normally draws stuff is hung.”
 
-Well, there are more. Unicode defines a [`White_Space` property](https://www.unicode.org/Public/17.0.0/ucd/PropList.txt) that gives us a list of 25 characters. Here they are – meticulously copied `	,
-,,,, ,, , , , , , , , , , , , , , , , , ,　`.
+Back in the Windows 3.1 days, there was a customer product support call that would today have been classified as a “black screen” bug: The customer reported that they turned on the computer, and Windows started up, but when the logo went away, all they saw was a blank screen.
 
-Each of these characters has a different purpose. `FIGURE SPACE (U+2007)`, for example, has the same width as a digit in a table, while `THIN SPACE (U+2009)` and `HAIR SPACE (U+200A)` provide progressively smaller gaps. `NO-BREAK SPACE (U+00A0)` has the width of an ordinary space, but keeps the surrounding text together when wrapping a line.
+After some questioning, the customer support engineer put the story together: It turned out that this customer really liked the color black, so they decided to set up a [goth](https://en.wikipedia.org/wiki/Gothic_fashion) theme. They set the wallpaper color to black. They set the title bar color to black. They set the button color to black. They set the window background color to black. They set the window text color to black. Every possible color you could pick in the Colors control panel was set to black.
 
-It's not always easy to tell whether a character is in the whitespace set from the name or by looking at the glyph either. For instance, `ZERO WIDTH SPACE (U+200B)` isn't a whitespace character at all. Despite the name, it's a format character that can indicate a word or line break opportunity without adding a visible gap.
+Once you get yourself into this situation, it’s hard to get out because you can’t see anything.
 
-There are also some less obvious members of the set too. `OGHAM SPACE MARK (U+1680)` can actually be rendered as a visible horizontal line. In Ogham fonts with a stemline, the space continues that line between letters (e.g. ᚛ᚆᚓᚂᚂᚑ ᚒᚑᚏᚂᚇ᚜), while in stemless fonts, it's blank. So even the assumption that whitespace must look empty isn't always true.
+I don’t know how the customer support engineer fixed the problem, but I’m guessing that they booted into MS-DOS, ran `EDIT.COM`, and [deleted the [colors] section from the win.ini file](https://jeffpar.github.io/kbarchive/kb/083/Q83433/), thereby returning all the system colors to defaults.
 
-Having a single definition of whitespace is only useful if everyone can agree on it. But even within a single runtime, some libraries might disagree on what whitespace is.
-
-Consider the `NO-BREAK SPACE (U+00A0)` I mentioned above. It's included in Unicode's `White_Space` property, but Java explicitly [excludes it](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Character.html#isWhitespace(char)), along with two other non-breaking spaces. The javadoc usefully highlights that the method checks for whitespace *according to Java*, rather than according to the Unicode property we had a look at before.
-
-```java
-Character.isWhitespace(' ');      // true
-Character.isWhitespace('\u00A0'); // false
-```
-
-![Java isWhitespace screenshot](https://serce.me/images/whitespace/javaspace.png)
-
-But what about other runtimes? Looking at two more popular ones, Python and JavaScript, we can see that there isn't a single authoritative list of characters everyone agrees on. Python, for example, has a convenient `str.isspace()` method. And unlike Java, it considers `U+00A0` a whitespace character.
-
-So possibly Python just follows Unicode's `White_Space` property? Not quite.
-
-```Python
-"\u00A0".isspace()  # True
-"\u0085".isspace()  # True
-"\u001C".isspace()  # True
-"\uFEFF".isspace()  # False
-```
-
-The interesting one here is `FILE SEPARATOR (U+001C)`. It's an ASCII control character originally intended to separate pieces of information, and it isn't included in Unicode's White_Space property. So Python recognises 29 whitespace characters, rather than Unicode's 25.
-
-JavaScript takes yet another approach. It doesn't have an equivalent of the `Character.isWhitespace()` method, but we can use the `\s` character class in a regular expression:
-
-```JavaScript
-/\s/.test("\u00A0");  // true
-/\s/.test("\u0085");  // false
-/\s/.test("\uFEFF");  // true
-```
-
-The odd one out above is `NEXT LINE (U+0085)`. Unicode explicitly includes it in `White_Space`, and Python accepts it too, but JavaScript doesn't. Instead, JavaScript recognises `ZERO WIDTH NO-BREAK SPACE (U+FEFF)`, which Unicode doesn't include in the set.
-
-I haven't looked through any other runtimes, but something tells me the inconsistencies won't stop at these three.
-
-What adds more complexity is that Unicode is not frozen in time, and is constantly evolving. And this affects the definition of whitespace. For example, [Unicode 6.3](https://www.unicode.org/versions/Unicode6.3.0/) had reclassified `MONGOLIAN VOWEL SEPARATOR (U+180E)` from a space separator to a format character, removing its `White_Space` property. The Unicode whitespace set had changed from 26 characters to 25 as a result. For runtimes and libraries that strive for backwards compatibility, these changes can be a pretty significant challenge as you'd want the standard library of a language to be as stable as it can be.
-
-Let's say we've finally agreed on the set of characters we want to check – the current set of Unicode whitespace characters. A naive way to implement this would be to go through the list of characters and check whether any of them matches. While this would work, it's definitely not the most efficient approach.
-
-So what [Guava's implementation](https://github.com/google/guava/blob/master/guava/src/com/google/common/base/CharMatcher.java) that we saw at the beginning of the article did was implement a perfect hash function – a hash function that guarantees no hash collisions for the characters in the known set.
-
-```java
-static final String TABLE = "\u2002...";
-
-@Override
-public boolean matches(char c) {
-    int slot = (1682554634 * c) >>> 27;
-    return TABLE.charAt(slot) == c;
-}
-```
-
-Above, `TABLE` is a string of 32 characters – effectively a hash table mapping each index (the key) to a character (the value). It contains all 25 Unicode whitespace characters, with some duplicates filling the remaining positions.
-
-The most interesting part here is calculating the index. The multiplication `1682554634 * c` produces a 32-bit integer, and `>>> 27` shifts it 27 bits to the right, isolating the five most significant bits – a number in the [0, 32) range which can be used to look up the table. Of course, there are more possible characters than table entries, that's why the final `== c` check is needed to check that the character we found is the one we were looking up.
-
-You can click on the characters below to see how the table is populated.
-
-The magic `1682554634` number does look magical, and it's unclear to me how it was chosen (please do share if you know the answer). But it's not the only possible multiplier, and you can find all suitable options by running a simple brute-force search.
-
-```java
-static final char[] ALL_CHARS = (
-        "\u2002\u3000\r\u0085"
-        + "\u200A\u2005\u2000"
-        + "\u2029\u000B\u2008"
-        + "\u2003\u205F\u1680"
-        + "\u0009\u0020\u2006"
-        + "\u2001\u202F\u00A0"
-        + "\u000C\u2009\u2004"
-        + "\u2028\n\u2007"
-).toCharArray();
-
-public static void main(String[] a) {
-    var slots = new BitSet(32);
-    outer:
-    for (int mul = 1; mul != 0; mul++) {
-        slots.clear();
-        for (char c : ALL_CHARS) {
-            int index = (mul * c) >>> 27;
-            if (slots.get(index)) {
-                continue outer;
-            }
-            slots.set(index);
-        }
-        System.out.println(mul);
-    }
-}
-```
-
-Interestingly, anyone willing to dive deeper can trace how Guava arrived at this implementation by looking through the git history. It transitioned from a simpler matcher to a [mod-79](https://github.com/google/guava/commit/49ae40b145bebb8bd06a967edc03cb285577d0cc) version which has an interesting observation about the Unicode character set but had a downside of involving a division operation, then followed by a [perfect hash function](https://github.com/google/guava/commit/31e1f16989ec41b360b074caebdc58e0117ecf68).
-
-And if you're interested in other applications for perfect hashing – somewhat serendipitously just as I was writing this article, Daniel Lemire [published a blog](https://lemire.me/blog/2026/10/26/billion-query-per-second-lookup-tables-in-c/) on the same topic where he gives an example of using perfect hashing for checking HTTP methods.
-
-When I first saw the whitespace-checking code in Guava, it sparked my curiosity, and as a result I learned a few things about Unicode and saw an interesting application of a perfect hash function – something you don't see used that often in the wild.
-
-I hope you've learned something interesting from this article too. And if you find something that sparks your curiosity, please do write a blog post and share it. I do feel that these write-ups are becoming increasingly rare in the AI-first world, where there's rarely a reason to peek under the hood of a function as simple as `isWhitespace`.
+- ![](https://devblogs.microsoft.com/oldnewthing/wp-content/uploads/sites/38/letter-avatar/fedb6e9c88766cfc98b454d4a9adf091.svg) .comment-author .vcard <span class="author-name" <cite class="fn">Peter Kron</cite> </span> Peter Kron <time pubdate datetime="2026-10-30T23:00:52-07:00"> </time> October 30, 2026 0 Copy link to comment by Peter Kron <a href="javascript:void(0)" title="Collapse this comment"> Collapse comment by Peter Kron </a> .comment-meta .commentmetadata I had a similar experience when I was a developer on Windows PageMaker. I had given a copy to a relative who was trying it out to write some report for work. There was a hot key command for some simple operation like Goto Next Page. Every time he used it all his text would be deleted, I was puzzling over it until I happened to select a region on the page and there was the text in highlight mode. The kids had been playing with the PC and somehow had remapped the hot key to change the text color scheme....[Read more](javascript:void(0))I had a similar experience when I was a developer on Windows PageMaker. I had given a copy to a relative who was trying it out to write some report for work. There was a hot key command for some simple operation like Goto Next Page. Every time he used it all his text would be deleted, I was puzzling over it until I happened to select a region on the page and there was the text in highlight mode. The kids had been playing with the PC and somehow had remapped the hot key to change the text color scheme. To white on white. [Read less](javascript:void(0)) [Log in to Vote or Reply](https://devblogs.microsoft.com/oldnewthing/wp-login.php?redirect_to=https%3A%2F%2Fdevblogs.microsoft.com%2Foldnewthing%2F20261029-00%2F%3Fp%3D112808%2F%23comments) #comment-##
+- ![](https://devblogs.microsoft.com/oldnewthing/wp-content/uploads/sites/38/letter-avatar/9949d595e0f27f782caeb335040d99d0.svg) .comment-author .vcard <span class="author-name" <cite class="fn">Yexuan Xiao</cite> </span> Yexuan Xiao <time pubdate datetime="2026-10-30T19:01:20-07:00"> </time> October 30, 2026 0 Copy link to comment by Yexuan Xiao <a href="javascript:void(0)" title="Collapse this comment"> Collapse comment by Yexuan Xiao </a> .comment-meta .commentmetadata I once used an app that reduced screen brightness by overlaying a semi-transparent layer on the screen. If the transparency was set to 0%, the screen would go completely black. [Log in to Vote or Reply](https://devblogs.microsoft.com/oldnewthing/wp-login.php?redirect_to=https%3A%2F%2Fdevblogs.microsoft.com%2Foldnewthing%2F20261029-00%2F%3Fp%3D112808%2F%23comments) #comment-##
+- ![](https://secure.gravatar.com/avatar/4c11f977ea96e96f1a1852fad982b15d?s=80&r=g) .comment-author .vcard <span class="author-name" <cite class="fn">Richard Deeming</cite> </span> Richard Deeming <time pubdate datetime="2026-10-30T06:06:22-07:00"> </time> 1 day ago 1 Copy link to comment by Richard Deeming <a href="javascript:void(0)" title="Collapse this comment"> Collapse comment by Richard Deeming </a> .comment-meta .commentmetadata Was the customer’s name *Desiato* by any chance? 😁 “It’s the wild colour scheme that freaks me. Every time you try to operate on of these weird black controls that are labelled in black on a black background, a little black light lights up black to let you know you’ve done it.” [Log in to Vote or Reply](https://devblogs.microsoft.com/oldnewthing/wp-login.php?redirect_to=https%3A%2F%2Fdevblogs.microsoft.com%2Foldnewthing%2F20261029-00%2F%3Fp%3D112808%2F%23comments) #comment-##
+- ![](https://devblogs.microsoft.com/oldnewthing/wp-content/uploads/sites/38/letter-avatar/dd4061d0efffdf32d20901f9f57862fe.svg) .comment-author .vcard <span class="author-name" <cite class="fn">Jernej Simončič</cite> </span> Jernej Simončič <time pubdate datetime="2026-10-30T03:33:13-07:00"> </time> 2 days ago 3 Copy link to comment by Jernej Simončič <a href="javascript:void(0)" title="Collapse this comment"> Collapse comment by Jernej Simončič </a> .comment-meta .commentmetadata 12 seconds? Every (desktop) PC I’ve encountered shuts down after holding down the power button for 5 seconds, so if Windows is waiting 8 seconds to do a dump, it won’t do anything. [Log in to Vote or Reply](https://devblogs.microsoft.com/oldnewthing/wp-login.php?redirect_to=https%3A%2F%2Fdevblogs.microsoft.com%2Foldnewthing%2F20261029-00%2F%3Fp%3D112808%2F%23comments) #comment-## .children
+  - ![](https://devblogs.microsoft.com/oldnewthing/wp-content/uploads/sites/38/nsl_avatars/317a43007381492d6947c0253f24eec8.webp) .comment-author .vcard <span class="author-name" <cite class="fn">Andreas Rejbrand</cite> </span> Andreas Rejbrand <time pubdate datetime="2026-10-31T16:52:44-07:00"> </time> October 31, 2026 · Edited 0 Copy link to comment by Andreas Rejbrand <a href="javascript:void(0)" title="Collapse this comment"> Collapse comment by Andreas Rejbrand </a> .comment-meta .commentmetadata All the PCs I have ever encountered also shut down hard after some 4 or 5 seconds. A quick Google search, however, seems to indicate that Microsoft Surface laptops behave differently. [Log in to Vote or Reply](https://devblogs.microsoft.com/oldnewthing/wp-login.php?redirect_to=https%3A%2F%2Fdevblogs.microsoft.com%2Foldnewthing%2F20261029-00%2F%3Fp%3D112808%2F%23comments) #comment-##

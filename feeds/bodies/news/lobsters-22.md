@@ -1,83 +1,57 @@
-<small>This image was created for use on this site using components taken from the Counter-Strike v1.5 mod for Half-Life owned by Valve Corporation. The copyright for the components are held by Valve Corporation while the copyright for these particular compositions are held by us.</small>
+So, alright, look, here's the thing. Storyteller has a really long npm namespace because “storyteller” is a really common word, and so “@storyteller/” was already taken (by someone who doesn’t actually seem to use it, which, if you’re reading this, I’m still interested in your namespace!). So we’re stuck with “@storyteller-platform/”, and that means our command line tool for book forced alignment is named “@storyteller-platform/align”, and so you need to run “npx @storyteller-platform/align --help”, etc, which is a handful!
 
-4. Installation
-*Quick and dirty:* `curl -s https://www.frag-net.com/install_tacticalretreat.sh | bash`
-Extract the release archive. If you don't already have the game data use [REWise](https://codeberg.org/CYBERDEV/REWise) to extract the content of *csv15full.exe* and merge the `cstrike` directory with the one from the archive.
-You can then proceed to run the game with the `TacticalRetreat` script.
+And so we came up with a cute nickname, “estee” (get it? Storyteller -> ST -> estee?), and we were pretty happy with it, so I went to publish a v0.0.1 to npm so I could set up Trusted Publishing with our GitLab repo and then *this* happened:
 
-5. Building
-Be familar with the `git` program, and you can clone [Nuclide](https://code.idtech.space/vera/nuclide), and then
-within that directory clone the [cstrike](https://code.idtech.space/fn/valve) and [valve](https://code.idtech.space/fn/valve) repositories.
-Then issue: `make game GAME=cstrike`   
-to build the various pieces of game logic (in the form of QuakeC *.dat* files).
+... What? Too similar to... “testem”? I mean I can almost understand “espree”. I don’t actually see how someone could accidentally typo “espree” as “estee”, but at least they're similarly shaped. But “testem”? No chance, that is *not* a typo candidate for “estee”.
 
-6. Credits
+I mean it’s pretty clear what’s happening here. Npm is using a Levenshtein distance calculation and banning any packages that have a Levenshtein distance of 2 or less from existing popular package names. Levenshtein distance counts the number of “edits” needed to get from one string to another, where an edit is a single character insertion, replacement, or deletion. So to get from “estee” to “testem”, we have to make the following edits:
 
-Spike for FTEQW and for being the most helpful person all around!
-Xylemon for the hundreds of test maps, verifying entity and game-logic behaviour
-Theuaredead`, preston22, dqus for various patches
-To my supporters on [Patreon](https://www.patreon.com/eukara), who are always eager to follow what I do.
-Any and all people trying it, tinkering with it etc. :)
+See? Levenshtein distance of 2. We used this for the first several iterations of the Storyteller algorithm, which needs to find where a given sentence lives in a transcription of an audiobook.
 
-7. License
+Here’s the thing: Levenshtein doesn't scale down very well. You can’t just set a single threshold for all input lengths, because as the length of the string approaches the threshold, the proportion of the set of valid strings covered by the threshold explodes.
 
-ISC License  
+Here’s what I mean. Say you are concerned with all npm package names with length 4. Npm allows the characters a-z, plus the symbols “.”, “-”, and “_”, so there are 29 possible characters in our alphabet. For a 4-character string, that gives us 29<sup>4</sup> possible names, or 707,281 possible names.
 
-Copyright (c) 2016-2026 Marco "eukara" Cawthorne   
+But what happens if you don't allow any names that have a Levenshtein distance of 2 from any existing names? How many packages can exist before you have to start rejecting *all* new package names? This is a little hard to answer completely (and we’re ignoring the fact that, because Levenshtein distance allows pure insertions and deletions, this also affects 2-, 3-, 5-, and 6-character names), but we can set an upper bound: 29<sup>2</sup>, or 841.
 
-Permission to use, copy, modify, and distribute this software for any  
+This is because, since Levenshtein distance allows a *replace*  edit, you can get from a string like “abaa” to *any* string starting with “ab”. So once you have all 841 strings starting with every combination of the first two characters, that’s it, you’re done, no more names. That’s 0.12%<sup>[1](https://smoores.dev/post/no_npm_estee_is_not_a_typo/#fn1)</sup>  of the total name space actually available to choose from.
 
-purpose with or without fee is hereby granted, provided that the above  
+This is especially apparent when considering our backup name, “hoid” (get it? [Hoid](https://coppermind.net/wiki/Hoid)? World-hopping Storyteller?). Here are the popular packages that npm thinks “hoid” might be typosquatting on:
 
-copyright notice and this permission notice appear in all copies.  
+1. hoek
+2. hono
+3. uid
+4. ulid
+5. cuid
+6. uuid
+7. joi
+8. gopd
+9. poi
+10. zod
 
-THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES  
+Two things to notice about this list:
 
-WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF  
+1. It’s much longer than the first list. This is because of the string-length — 4 is so close to 2 that you can reach way more usable words from a given length-4 string with a distance-2 Levenshtein threshold
+2. None of these look like actual typo candidates for “hoid”. They’re all at least 50% different from “hoid”! “gopd”? “gopd”!?
 
-MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR  
+Also, this just isn’t a very good rule. Seriously, this rule would have banned the project “preact” from being created because “react” already existed. It would have banned “estree” (which I assume only didn't trigger on my “estee” attempt because it’s not sufficiently “popular”) from being created because “espree” already existed. I could go on and on. *I understand* that npm is under a lot of pressure to try to prevent this flavor of typosquatting malware distribution, and I know that there probably needs to be some amount of automation involved here, but surely there should be some sort of manual override?
 
-ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES  
+Actually that’s a good point. In fact, when I tried to first publish Storyteller’s “@storyteller-platform/audiobook” package, I ran afoul of npm’s *other* rule about new package names, which is that they can’t, I dunno, use the word “audiobook”?
 
-WHATSOEVER RESULTING FROM LOSS OF MIND, USE, DATA OR PROFITS, WHETHER  
+Cool, thanks. I think what actually happened here is that people were publishing literal copyrighted audiobooks on npm. Anyway, I emailed npm support that time, and they immediately disabled the block for “audiobook” and allowed me to publish it. This was actually a wonderful customer support experience, so much so that when I ran into my issue above, the first thing I tried was to reach out to npm again.
 
-IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING  
+Only, this time they weren’t so helpful (I’m sure they’re getting deluged with LLM-generated support requests, just like everyone else, and they were still perfectly pleasant):
 
-OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+> The error you received is a typosquat functionality that will prevent security vulnerabilities
+>
+> For more information on typosquat please refer to:
+>
+> [https://blog.npmjs.org/post/168978377570/new-package-moniker-rules](https://blog.npmjs.org/post/168978377570/new-package-moniker-rules)
+>
+> We are unable to get around the automated typosquat block.
 
-8. FAQ
-[8.1  Why do we need **Tactical-Retreat**?](https://www.frag-net.com/project_tacticalretreat.html#Why)
+Only, here’s the thing, that blog post doesn’t say what the support person says it does. Instead, it’s about how npm rejects any package names that are the same as existing package names  *except for punctuation*. That’s not what we’re experiencing at all!
 
-Because the original games aren't open, and I wanted to change that. There are tons of weapon mods for Counter-Strike on websites such as [ModDB](https://www.moddb.com/) and [GameBanana](https://www.gamebanana.com/) that could be turned into new weapons for purchase. You can basically build the CS server of your dreams. Make every LAN-Party personalized.
+Also, I suspect that *someone* at npm/GitHub *can* get around this typosquat block. Plenty of pre-existing packages break this rule — if someone created the package for me from a backend/admin interface that didn’t enforce the block, I could use it
 
-[8.2  What are the project goals?](https://www.frag-net.com/project_tacticalretreat.html#Goals)
-
-Tactical-Retreat wants to be faithful to classic CS
-It needs to be compatible with the existing custom content
-Needs to be freely available to everyone
-
-[8.3  Why might I want to use Tactical-Retreat?](https://www.frag-net.com/project_tacticalretreat.html#UseCase)
-
-Being built from the ground up with hindsight and other modifications in mind, it's a lot simpler to get started creating custom objects. You can design whole weapons, items, NPCs (as well as their schedules) without writing a single line of code. This is due to *Nuclide's* data oriented design and the use of *id Tech 4 style* decl files.
-
-Because it's built on *Nuclide*, it also has a different netcode, with weapon prediction standard across the board. There's also bots included with every game, as well as voting features and a *metamod inspired* plugin system, with a few ports of popular plugins.
-
-Even gamerules can be swapped out on a whim, as they're simply external modules separated from the server to begin with.
-
-[8.4  What platforms are supported?](https://www.frag-net.com/project_tacticalretreat.html#Platform)
-
-Anything that the engine binary (provided by FTE QuakeWorld) runs on is supported. All components in *Tactical-Retreat* are platform/architecture independent. Being a QuakeC project has that benefit. This generally means that unless you are making engine modifications for your project, you will not need to port your project.
-
-We've successfully tested it ourselves on **Linux**, **OpenBSD**, and **Windows**.
-
-[8.5  How can I support the project?](https://www.frag-net.com/project_tacticalretreat.html#Support)
-
-It is mainly orchestrated by Marco Cawthorne [which you can support on their Patreon](https://www.patreon.com/eukara). He also runs the [frag-net game network](https://www.frag-net.com/) that powers the on-line backbone of the project. Helping out with the costs that way is greatly appreciated. That said, expressing yourself in the [Matrix chat](https://matrix.to/#/#nuclide:matrix.org) can also nudge the project. If you're the type of person that knows exactly what we need and can lend a hand, be sure to reach out!
-
-[8.6  Do I need to own Half-Life or Counter-Strike to play this?](https://www.frag-net.com/project_tacticalretreat.html#Branding)
-
-No. The project includes enough of its own replacement data to be able to run the game solely from the freely available mod data. When running some custom maps however, that heavily depend on custom Half-Life content, you may not be able play them properly. This will improve over time.
-
-*Tactical-Retreat logo by Vera Visions L.L.C.;
-This site Copyright © 2025, 2026 Tactical-Retreat Project; FTE QuakeWorld is Copyright © 2002-2026 David Walton; Half-Life, and any associated characters belong to Valve Corporation. All Rights Reserved.  
-[Back to frag-net.com - Projects](https://www.frag-net.com/projects.html)*
+And, look, we’re gonna be fine. We’ll probably spell the CLI name “estie”, which is less fun to type and I think slightly less cute, but ultimately the same, and manages to avoid tripping any similarity alarms. But I feel… saddened, somewhat, that it’s probably not possible to make a 1-, 2-, 3-, or 4-character npm package name anymore. Not because they’re all taken, but because of a clumsy rule, and even worse, one that’s ultimately probably necessary to prevent some cruel people from hurting others. Ugh.
