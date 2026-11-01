@@ -1,57 +1,113 @@
-So, alright, look, here's the thing. Storyteller has a really long npm namespace because “storyteller” is a really common word, and so “@storyteller/” was already taken (by someone who doesn’t actually seem to use it, which, if you’re reading this, I’m still interested in your namespace!). So we’re stuck with “@storyteller-platform/”, and that means our command line tool for book forced alignment is named “@storyteller-platform/align”, and so you need to run “npx @storyteller-platform/align --help”, etc, which is a handful!
+When looking through a piece of source code recently, I stumbled across this method from [Guava](https://github.com/google/guava) – a popular Java library from Google.
 
-And so we came up with a cute nickname, “estee” (get it? Storyteller -> ST -> estee?), and we were pretty happy with it, so I went to publish a v0.0.1 to npm so I could set up Trusted Publishing with our GitLab repo and then *this* happened:
+![Guava's whitespace matcher implementation](https://serce.me/images/whitespace/whitespace.png)
 
-... What? Too similar to... “testem”? I mean I can almost understand “espree”. I don’t actually see how someone could accidentally typo “espree” as “estee”, but at least they're similarly shaped. But “testem”? No chance, that is *not* a typo candidate for “estee”.
+As you might've guessed from the name, this method checks whether a given character is a whitespace character. Yet the code looks a lot more complex than a simple `c == ' '` check. This made me curious and sent me down a small rabbit hole trying to understand where all this complexity was coming from. If you're curious how this code works too, this article is for you.
 
-I mean it’s pretty clear what’s happening here. Npm is using a Levenshtein distance calculation and banning any packages that have a Levenshtein distance of 2 or less from existing popular package names. Levenshtein distance counts the number of “edits” needed to get from one string to another, where an edit is a single character insertion, replacement, or deletion. So to get from “estee” to “testem”, we have to make the following edits:
+The first thing one needs when inspecting a function that checks whether a character is whitespace is to define what whitespace actually is. While the `SPACE (U+0020)` is probably the best-known whitespace character, it's not the only one. If you've been writing code for a while, you can probably name a few more – the non-breaking space `NO-BREAK SPACE (U+00A0)`, a tab `CHARACTER TABULATION (U+0009)`, a newline `LINE FEED (U+000A)`.
 
-See? Levenshtein distance of 2. We used this for the first several iterations of the Storyteller algorithm, which needs to find where a given sentence lives in a transcription of an audiobook.
+Well, there are more. Unicode defines a [`White_Space` property](https://www.unicode.org/Public/17.0.0/ucd/PropList.txt) that gives us a list of 25 characters. Here they are – meticulously copied `	,
+,,,, ,, , , , , , , , , , , , , , , , , ,　`.
 
-Here’s the thing: Levenshtein doesn't scale down very well. You can’t just set a single threshold for all input lengths, because as the length of the string approaches the threshold, the proportion of the set of valid strings covered by the threshold explodes.
+Each of these characters has a different purpose. `FIGURE SPACE (U+2007)`, for example, has the same width as a digit in a table, while `THIN SPACE (U+2009)` and `HAIR SPACE (U+200A)` provide progressively smaller gaps. `NO-BREAK SPACE (U+00A0)` has the width of an ordinary space, but keeps the surrounding text together when wrapping a line.
 
-Here’s what I mean. Say you are concerned with all npm package names with length 4. Npm allows the characters a-z, plus the symbols “.”, “-”, and “_”, so there are 29 possible characters in our alphabet. For a 4-character string, that gives us 29<sup>4</sup> possible names, or 707,281 possible names.
+It's not always easy to tell whether a character is in the whitespace set from the name or by looking at the glyph either. For instance, `ZERO WIDTH SPACE (U+200B)` isn't a whitespace character at all. Despite the name, it's a format character that can indicate a word or line break opportunity without adding a visible gap.
 
-But what happens if you don't allow any names that have a Levenshtein distance of 2 from any existing names? How many packages can exist before you have to start rejecting *all* new package names? This is a little hard to answer completely (and we’re ignoring the fact that, because Levenshtein distance allows pure insertions and deletions, this also affects 2-, 3-, 5-, and 6-character names), but we can set an upper bound: 29<sup>2</sup>, or 841.
+There are also some less obvious members of the set too. `OGHAM SPACE MARK (U+1680)` can actually be rendered as a visible horizontal line. In Ogham fonts with a stemline, the space continues that line between letters (e.g. ᚛ᚆᚓᚂᚂᚑ ᚒᚑᚏᚂᚇ᚜), while in stemless fonts, it's blank. So even the assumption that whitespace must look empty isn't always true.
 
-This is because, since Levenshtein distance allows a *replace*  edit, you can get from a string like “abaa” to *any* string starting with “ab”. So once you have all 841 strings starting with every combination of the first two characters, that’s it, you’re done, no more names. That’s 0.12%<sup>[1](https://smoores.dev/post/no_npm_estee_is_not_a_typo/#fn1)</sup>  of the total name space actually available to choose from.
+Having a single definition of whitespace is only useful if everyone can agree on it. But even within a single runtime, some libraries might disagree on what whitespace is.
 
-This is especially apparent when considering our backup name, “hoid” (get it? [Hoid](https://coppermind.net/wiki/Hoid)? World-hopping Storyteller?). Here are the popular packages that npm thinks “hoid” might be typosquatting on:
+Consider the `NO-BREAK SPACE (U+00A0)` I mentioned above. It's included in Unicode's `White_Space` property, but Java explicitly [excludes it](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Character.html#isWhitespace(char)), along with two other non-breaking spaces. The javadoc usefully highlights that the method checks for whitespace *according to Java*, rather than according to the Unicode property we had a look at before.
 
-1. hoek
-2. hono
-3. uid
-4. ulid
-5. cuid
-6. uuid
-7. joi
-8. gopd
-9. poi
-10. zod
+```java
+Character.isWhitespace(' ');      // true
+Character.isWhitespace('\u00A0'); // false
+```
 
-Two things to notice about this list:
+![Java isWhitespace screenshot](https://serce.me/images/whitespace/javaspace.png)
 
-1. It’s much longer than the first list. This is because of the string-length — 4 is so close to 2 that you can reach way more usable words from a given length-4 string with a distance-2 Levenshtein threshold
-2. None of these look like actual typo candidates for “hoid”. They’re all at least 50% different from “hoid”! “gopd”? “gopd”!?
+But what about other runtimes? Looking at two more popular ones, Python and JavaScript, we can see that there isn't a single authoritative list of characters everyone agrees on. Python, for example, has a convenient `str.isspace()` method. And unlike Java, it considers `U+00A0` a whitespace character.
 
-Also, this just isn’t a very good rule. Seriously, this rule would have banned the project “preact” from being created because “react” already existed. It would have banned “estree” (which I assume only didn't trigger on my “estee” attempt because it’s not sufficiently “popular”) from being created because “espree” already existed. I could go on and on. *I understand* that npm is under a lot of pressure to try to prevent this flavor of typosquatting malware distribution, and I know that there probably needs to be some amount of automation involved here, but surely there should be some sort of manual override?
+So possibly Python just follows Unicode's `White_Space` property? Not quite.
 
-Actually that’s a good point. In fact, when I tried to first publish Storyteller’s “@storyteller-platform/audiobook” package, I ran afoul of npm’s *other* rule about new package names, which is that they can’t, I dunno, use the word “audiobook”?
+```Python
+"\u00A0".isspace()  # True
+"\u0085".isspace()  # True
+"\u001C".isspace()  # True
+"\uFEFF".isspace()  # False
+```
 
-Cool, thanks. I think what actually happened here is that people were publishing literal copyrighted audiobooks on npm. Anyway, I emailed npm support that time, and they immediately disabled the block for “audiobook” and allowed me to publish it. This was actually a wonderful customer support experience, so much so that when I ran into my issue above, the first thing I tried was to reach out to npm again.
+The interesting one here is `FILE SEPARATOR (U+001C)`. It's an ASCII control character originally intended to separate pieces of information, and it isn't included in Unicode's White_Space property. So Python recognises 29 whitespace characters, rather than Unicode's 25.
 
-Only, this time they weren’t so helpful (I’m sure they’re getting deluged with LLM-generated support requests, just like everyone else, and they were still perfectly pleasant):
+JavaScript takes yet another approach. It doesn't have an equivalent of the `Character.isWhitespace()` method, but we can use the `\s` character class in a regular expression:
 
-> The error you received is a typosquat functionality that will prevent security vulnerabilities
->
-> For more information on typosquat please refer to:
->
-> [https://blog.npmjs.org/post/168978377570/new-package-moniker-rules](https://blog.npmjs.org/post/168978377570/new-package-moniker-rules)
->
-> We are unable to get around the automated typosquat block.
+```JavaScript
+/\s/.test("\u00A0");  // true
+/\s/.test("\u0085");  // false
+/\s/.test("\uFEFF");  // true
+```
 
-Only, here’s the thing, that blog post doesn’t say what the support person says it does. Instead, it’s about how npm rejects any package names that are the same as existing package names  *except for punctuation*. That’s not what we’re experiencing at all!
+The odd one out above is `NEXT LINE (U+0085)`. Unicode explicitly includes it in `White_Space`, and Python accepts it too, but JavaScript doesn't. Instead, JavaScript recognises `ZERO WIDTH NO-BREAK SPACE (U+FEFF)`, which Unicode doesn't include in the set.
 
-Also, I suspect that *someone* at npm/GitHub *can* get around this typosquat block. Plenty of pre-existing packages break this rule — if someone created the package for me from a backend/admin interface that didn’t enforce the block, I could use it
+I haven't looked through any other runtimes, but something tells me the inconsistencies won't stop at these three.
 
-And, look, we’re gonna be fine. We’ll probably spell the CLI name “estie”, which is less fun to type and I think slightly less cute, but ultimately the same, and manages to avoid tripping any similarity alarms. But I feel… saddened, somewhat, that it’s probably not possible to make a 1-, 2-, 3-, or 4-character npm package name anymore. Not because they’re all taken, but because of a clumsy rule, and even worse, one that’s ultimately probably necessary to prevent some cruel people from hurting others. Ugh.
+What adds more complexity is that Unicode is not frozen in time, and is constantly evolving. And this affects the definition of whitespace. For example, [Unicode 6.3](https://www.unicode.org/versions/Unicode6.3.0/) had reclassified `MONGOLIAN VOWEL SEPARATOR (U+180E)` from a space separator to a format character, removing its `White_Space` property. The Unicode whitespace set had changed from 26 characters to 25 as a result. For runtimes and libraries that strive for backwards compatibility, these changes can be a pretty significant challenge as you'd want the standard library of a language to be as stable as it can be.
+
+Let's say we've finally agreed on the set of characters we want to check – the current set of Unicode whitespace characters. A naive way to implement this would be to go through the list of characters and check whether any of them matches. While this would work, it's definitely not the most efficient approach.
+
+So what [Guava's implementation](https://github.com/google/guava/blob/master/guava/src/com/google/common/base/CharMatcher.java) that we saw at the beginning of the article did was implement a perfect hash function – a hash function that guarantees no hash collisions for the characters in the known set.
+
+```java
+static final String TABLE = "\u2002...";
+
+@Override
+public boolean matches(char c) {
+    int slot = (1682554634 * c) >>> 27;
+    return TABLE.charAt(slot) == c;
+}
+```
+
+Above, `TABLE` is a string of 32 characters – effectively a hash table mapping each index (the key) to a character (the value). It contains all 25 Unicode whitespace characters, with some duplicates filling the remaining positions.
+
+The most interesting part here is calculating the index. The multiplication `1682554634 * c` produces a 32-bit integer, and `>>> 27` shifts it 27 bits to the right, isolating the five most significant bits – a number in the [0, 32) range which can be used to look up the table. Of course, there are more possible characters than table entries, that's why the final `== c` check is needed to check that the character we found is the one we were looking up.
+
+You can click on the characters below to see how the table is populated.
+
+The magic `1682554634` number does look magical, and it's unclear to me how it was chosen (please do share if you know the answer). But it's not the only possible multiplier, and you can find all suitable options by running a simple brute-force search.
+
+```java
+static final char[] ALL_CHARS = (
+        "\u2002\u3000\r\u0085"
+        + "\u200A\u2005\u2000"
+        + "\u2029\u000B\u2008"
+        + "\u2003\u205F\u1680"
+        + "\u0009\u0020\u2006"
+        + "\u2001\u202F\u00A0"
+        + "\u000C\u2009\u2004"
+        + "\u2028\n\u2007"
+).toCharArray();
+
+public static void main(String[] a) {
+    var slots = new BitSet(32);
+    outer:
+    for (int mul = 1; mul != 0; mul++) {
+        slots.clear();
+        for (char c : ALL_CHARS) {
+            int index = (mul * c) >>> 27;
+            if (slots.get(index)) {
+                continue outer;
+            }
+            slots.set(index);
+        }
+        System.out.println(mul);
+    }
+}
+```
+
+Interestingly, anyone willing to dive deeper can trace how Guava arrived at this implementation by looking through the git history. It transitioned from a simpler matcher to a [mod-79](https://github.com/google/guava/commit/49ae40b145bebb8bd06a967edc03cb285577d0cc) version which has an interesting observation about the Unicode character set but had a downside of involving a division operation, then followed by a [perfect hash function](https://github.com/google/guava/commit/31e1f16989ec41b360b074caebdc58e0117ecf68).
+
+And if you're interested in other applications for perfect hashing – somewhat serendipitously just as I was writing this article, Daniel Lemire [published a blog](https://lemire.me/blog/2026/10/26/billion-query-per-second-lookup-tables-in-c/) on the same topic where he gives an example of using perfect hashing for checking HTTP methods.
+
+When I first saw the whitespace-checking code in Guava, it sparked my curiosity, and as a result I learned a few things about Unicode and saw an interesting application of a perfect hash function – something you don't see used that often in the wild.
+
+I hope you've learned something interesting from this article too. And if you find something that sparks your curiosity, please do write a blog post and share it. I do feel that these write-ups are becoming increasingly rare in the AI-first world, where there's rarely a reason to peek under the hood of a function as simple as `isWhitespace`.

@@ -1,57 +1,260 @@
-**tl;dr:** You can now [run many BeOS versions](https://infinitemac.org/?filter=beos) in the browser at [Infinite Mac](https://infinitemac.org/), my site where you can experience the Macintosh Cinematic Universe from 1984 to 2005. The installs are full peers to their Mac cousins: you can boot them instantly (large disks are streamed in), play around with pre-installed software from Infinite HD, insert CD-ROMs from the Internet Archive, and save your work on the “Saved HD” drive.
+For a long time I have been a fan of minimalism in my physical life:
+have few physical possessions, and try to do more with less. Four years
+ago, I wrote [this
+blog post](https://vitalik.eth.limo/general/2022/06/20/backpack.html) describing what I had in the 40-liter backpack that I
+travel around with.
 
-[BeOS](https://en.wikipedia.org/wiki/BeOS) was a multimedia-focused, multi-tasking and multi-threaded OS that was eventually ported to the Power Macintoshes of the mid-90s. It impressed many in the Mac community, including Apple itself, who considered acquiring Be, the company that had created it. If you’ve been following the [saga](https://relay.fm/designed/archive#:~:text=Designed%20in%20California%20%2311,the%20Road%20(Part%201)) of Apple’s search for a next-generation operating system, this lets you see what the road not taken was like.
+Physical minimalism, however, was an idea that came of age in the
+2000s and 2010s and was responding to the challenges and the
+opportunities of the 2000s and 2010s. I continue to believe that it is
+valuable - though I recognize some arguments in the other direction,
+notably that having *the right kinds* of physical things can make
+more practical to have more self-sovereignty over your life. But I also
+think that in the modern era, we need a new kind of minimalism:
+**digital minimalism**.
 
-![BeOS R5 running inside Infinite Mac, showing GL Teapot, Mandelbrot, Gobe Productive, Terminal, image viewer and CPU monitor.](https://persistent.info/images/infinite-mac-beos-desktop.webp)
+Digital minimalism is about being intentional about ways that you
+access digital technology, making each use a conscious choice rather
+than something that you get sucked into by default. In this post, I will
+describe some experiments that I've done in this direction.
 
-### Getting BeOS Running
+## Social media minimalism
 
-After the last [somewhat involved](https://blog.persistent.info/2026/09/infinite-mac-snow-and-aux.html) (though still satisfying) project on Infinite Mac, I was looking for a quicker win. BeOS had been on my radar for [a while](https://github.com/mihaip/infinite-mac/issues/237), and (unlike A/UX) I had a personal connection to it: I remember spotting a BeBox in Akihabara, making my Mac cosplay as it with [BeView](https://macintoshgarden.org/apps/beview), and eventually dual-booting BeOS on my Power Macintosh 8500. DingusPPC, an emulator I had already [integrated](https://blog.persistent.info/2023/12/dingusppc.html), was making [good progress](https://github.com/dingusdev/dingusppc/issues/35) on running BeOS, so it seemed like adding it to the site would be mostly a matter of preparing some additional disk images.
+Twitter (aka X) has always had a strain of toxicity to it, that has
+been increasing in recent years. The platform is definitely
+*engaging*, but it's often far from *informative*, and the
+ways in which it engages often do not make you *feel good*. But
+this all seemed to hit a particular crescendo for me around the end of
+2024 and beginning of 2025. Many things were happening at that moment,
+but if you spent a lot of time on X you will likely remember a
+particular one: *everyone seemed to be suddenly becoming fans of
+Adolf Hitler*.
 
-Initially it appeared to be as straightforward as I had hoped; I [added](https://github.com/mihaip/infinite-mac/commit/98e3a7c62e8f676c83f63ecd37dc0dc49b519d54) a Power Macintosh 7300 configuration (one of the Power Macs that was officially [supported](https://web.archive.org/web/19970218184118/http://www.be.com/products/beosreadylist.html)), found an [install CD](https://archive.org/details/BeOSRelease3PowerPC), made [a disk image](https://github.com/mihaip/infinite-mac/commit/aa9e2ce9133c388f8c287c7cb261dac13014ec35), and [was up and running](https://github.com/mihaip/infinite-mac/issues/237#issuecomment-5850551352). But as I used it more and started to install additional versions, I began to find a lot of small bugs and edge cases:
+*This is not even mentioning the time that Grok itself [briefly
+turned into "MechaHitler"](https://x.com/ordinarytings/status/1942704498725773527).*
 
-- The BeOS boot loader thought that all modifier keys were being held down due to a bug in the ADB emulation; this made it present the (ugly, PC BIOS-like) partition choice screen every time.
-- When changing the screen depth, there are two hardware components that need to be notified: the video controller and the digital-to-analog converter. DingusPPC had been accidentally relying on the order that Mac OS sent these notifications in; BeOS happened to make the opposite choice and would end up with a corrupted display.
-- Early versions of BeOS did video memory updates in little-endian mode[1](https://blog.persistent.info/2026/10/infinite-mac-beos.html#beos-fn1); DingusPPC was missing support for that hardware capability.
-- Later versions of BeOS could mount HFS partitions, but they were having trouble with the volumes that I generated via the [machfs](https://github.com/mihaip/machfs) Python library. It turned out that BeOS was (correctly) stricter than Mac OS about how some data structures should be populated.
-- And so on – most of the commits that I upstreamed to DingusPPC over the past month were in a quest for better BeOS compatibility.
+Around the same time, "Crypto Twitter" was spiraling into a mood that
+I saw described as "financial nihilism": roughly, that the natural end
+state of blockchains is gambling, this is good, and if you dislike this
+and wish for something better then you are a stuck-up elitist prick.
 
-![Infinite Mac emulating BeOS R5 emulating System 7.6.1 running Speedometer](https://persistent.info/images/infinite-mac-beos-sheepshaver.webp)  
+Naturally, I had (and continue to have) my intellectual disagreements
+with both of these trends. But on top of that, I also started to more
+seriously pay attention to the fact that while the style of discourse on
+the platform was *engaging*, it was *not enlightening* and
+*not making me feel good*. And so for much of this year, I have
+been doing an experiment in distancing myself somewhat from this chaos.
+**I did not leave X *the platform*, but I did leave X
+*the interface*.** Instead, I have been doing most of my
+tweeting through [Firefly](https://firefly.social):
 
-*The best of both worlds?*
+Firefly is a multi-client that combines together X, BlueSky as well
+as Farcaster and Lens (both partially-Ethereum-based decentralized
+social media platforms). You can see tweets from all four platforms, and
+you can make a tweet that gets auto-posted to all four platforms.
 
-[SheepShaver](https://sheepshaver.cebix.net/), a Power Macintosh emulator that is still around today (and that Infinite Mac also [embeds](https://blog.persistent.info/2023/01/infinite-mac-2022-in-review.html#:~:text=SheepShaver%20and%20Mac%20OS%209)), [originated](https://atpm.com/4.09/page12.shtml#Heading13) on BeOS. Mostly for the [fun](https://justforfunnoreally.dev/) of another layer of inception/emulation, I wanted to make sure that it worked too. As it turned out, it also required [a compatibility fix](https://github.com/dingusdev/dingusppc/pull/241) – it relied on an edge case of how the ROM is mapped to physical memory addresses that DingusPPC did not accurately model.
+My primary goal in doing this was to support decentralized social
+media, and to continue to engage with X but in a way that distributes
+network effect rather than locking it in. But in my months of using
+Firefly, I found that it also has a different effect: *I feel much
+better using it*.
 
-There is a pattern to most of these bug fixes: DingusPPC (and Infinite Mac) have been mostly focused on running Mac OS, and thus accidentally became dependent on its quirks or implementation choices. Adding an independently developed operating system to the mix exercised new paths, and ended up improving the accuracy of the emulated hardware. To be clear, DingusPPC was pretty close out of the box; kudos to [its](https://github.com/maximumspatium) [maintainers](https://github.com/dingusdev). I believe that, with this work, it’s the only emulator<sup>[2](https://blog.persistent.info/2026/10/infinite-mac-beos.html#beos-fn2)</sup> that can run PowerPC versions of BeOS. I’m also hopeful that this will help with bringing up alternate operating systems like [MkLinux](https://en.wikipedia.org/wiki/MkLinux) (which I also have [memories](https://blog.persistent.info/search?q=mklinux&max-results=20&by-date=true) of) and [Rhapsody](https://en.wikipedia.org/wiki/Rhapsody_(operating_system)).
+I suspect the primary reason is that while Firefly allows you to
+tweet, and see other people's tweets, it is missing one central part of
+the X interface: *The Algorithm™*.
 
-![Infinite Mac custom instance dialog with a BeOS control appearance.](https://persistent.info/images/infinite-mac-beos-appearance.webp)
+In particular, I suspect that in my time using the X interface, I
+fell into the following trap:
 
-On the Infinite Mac side, there were obvious changes like a “BeOS” appearance for my [custom controls](https://infinitemac.org/_controls) and collecting software for the library. I also needed to [overlay](https://github.com/mihaip/infinite-mac/commit/44116ee75530dd454d2667257fedeff3b312c94d) some dynamically generated content on the disk to get the OS to preselect a screen resolution that matches the browser window’s (similar to what was [done for A/UX](https://blog.persistent.info/2026/09/infinite-mac-snow-and-aux.html#:~:text=The%20most%20complicated,current%20screen%20parameters.)). An AI agent (still Codex for me) was once again helpful for this type of fiddly reverse-engineering task: it’s one thing to observe that the OS stores a file on disk with the screen size; it’s another to be able to reproduce all its nuances, especially as the format changed with later releases.
+1. See someone making a tweet supportive of Adolf Hitler.
+2. Click on the tweet and look around its quotes and responses, the same way that someone would morbidly stare at a car accident.
+3. The Algorithm™ thinks: "This user seems to be a fan of Adolf Hitler. Let me mark that down as one of his interests."
+4. See ten tweets supportive of Adolf Hitler.
+5. Click and look around with morbid curiosity, the same way that someone would morbidly stare if they saw for the first time a car accident where ten cars were crashed and burning at the same time.
+6. The Algorithm™ thinks: ... well, you get the idea.
+7. See a hundred tweets supportive of Adolf Hitler.
 
-[Developer Release 8.2](https://infinitemac.org/1996/BeOS%20DR8.2), the initial BeOS version for Power Macs, had a time bomb that kept it from booting after April 1, 1997. This was not just to create a sense of urgency; it shipped with a licensed font renderer that Be could not distribute indefinitely. DR8.3 [addressed this](https://www.mactech.com/1997/03/14/md1-beos-dr8-3-update/), but to make that notable first version bootable, I did end up relying on [the custom date support](https://blog.persistent.info/2024/03/infinite-mac-nextstep.html#:~:text=After%20recalling%20the%20KanjiTalk%20New%20Year%E2%80%99s%20Day%20easter%20egg%2C%20I%20added%20custom%20date/time%20support%20so%20can%20you%20see%20it%20anytime%20you%20want.) to [hardcode](https://github.com/mihaip/infinite-mac/blob/a56fff18e1b7e6e6c80d307a35ed30b7fd94d36a/src/defs/disks.ts#L2236) a working date when choosing that disk.
+Now, in fairness to X and Elon and its hard-working employees, the
+Adolf Hitler fandom does seem to have greatly wound down in the one and
+a half years since then. I suspect part of this is because such
+movements inevitably burn out once people realize how immoral and stupid
+they are. But another part is undoubtedly genuine improvements in how
+The Algorithm™ works.
 
-### BeOS Impressions
+But *even still*, in those moments when I go back into the X
+interface, I find myself logging back out and going back to Firefly. I
+also find that my mind has changed. I find myself less interested in the
+various battles that the intellectual titans on the platform seem to be
+sucking every day of their lives into. Recently, I logged back in, and I
+learned that the culture war issue du jour was that people were
+stridently arguing about whether or not Mao was evil. When I saw this, I
+had an emotional response that was sort of similar to what I think is
+the common experience of being an adult, seeing some food or TV show or
+game that you used to love as a kid, and realizing that you now find no
+interest in it at all. I smiled, and immediately went back to enjoying
+my day.
 
-Though I did kick the tires of BeOS back when it was current, I don’t recall using it enough to form any opinions beyond “this is fast; I miss all my third-party software.” [About This Particular Macintosh](https://atpm.com/) does have contemporary coverage, including Be’s [first](https://atpm.com/2.08/page8.shtml#:~:text=Mac%20%2B%20Unix%20%2B%20Ex%20Apple%20Exec.%20%3D%20Be) and [second](https://www.atpm.com/3.08/page10.shtml#:~:text=help%20revive%20Apple.-,BeOS,-The%20Be%20demo) appearances at Macworld Expo Boston, and reviews of [R3](https://atpm.com/4.09/page12.shtml) and [R4.5](https://atpm.com/6.01/beos.shtml); they make for interesting reading. [This video](https://www.youtube.com/watch?v=cjriSNgFHsM&t=269s) released by Be itself also has a walkthrough of what they considered its strengths.
+My verdict: **I recommend more people try this. Explore ways of
+greatly decreasing or scoping your social media use: use something like
+Firefly, access X only on Tuesdays, whatever works for you.** Get
+the information benefits of the platform without getting sucked in to
+the vortex, which does operate on you in powerful subconscious ways that
+you may not realize.
 
-Looking at it with 2026 eyes, I am still struck by its speed – it’s fast to boot and to use, especially when compared with its contemporary Mac OS releases that do so much less (e.g. live window dragging did not appear until Mac OS X). The POSIX subsystem and the Unix-like shell also feel modern (unlike A/UX’s) – I had no trouble using the terminal to poke around. There’s also plenty of innovation, though some of it ([BFS](https://en.wikipedia.org/wiki/Be_File_System) with its attributes and live queries) is more interesting than the rest ([replicants](https://asleson.org/public/mirrors/www.be.com/documentation/User's%20Guide/01_basics/Basics03_Deskbar.html#:~:text=Show%20Replicants.%20A%20replicant%20is%20a%20%22live%20view%22%20that%20can%20be%20dragged%20out%20of%20its%20application%20and%20dropped%20onto%20the%20desktop.%20Show%20Replicants%20tells%20all%20replicants%20to%20display%20their%20draggers%2C%20the%20little%20handles%20that%20you%20use%20to%20grab%20the%20replicant%20view.) are a precursor to widgets, but I couldn’t think of a use for them).
+## Cell data minimalism
 
-It also feels like a developer-focused and under-construction system: many of the included apps are technology demos (though who doesn’t love a Utah teapot), while a contemporary [Be homepage](https://web.archive.org/web/19980520211219/http://www.be.com/) links directly to the [developer release notes](https://web.archive.org/web/19980520211445/http://www.be.com/documentation/rel_notes/R3RelNotes.html) and [discusses](https://web.archive.org/web/19980520211345/http://www.be.com/whatsnew.html) CodeWarrior releases and access to the bug tracker. The unfinished nature extends to third-party software too – I stumbled across some BeOS software on [this Amiga magazine CD](https://archive.org/details/amigadream-cd-52/), and most of it had a “version 0.1” feel, either [literally](https://discmaster.textfiles.com/browse/2036/Amiga_Dream_52.iso/Beos/util/peopleporter.0.1.zip) or [figuratively](https://discmaster.textfiles.com/view/2036/Amiga_Dream_52.iso/Beos/util/BeZip.zip/boot/home/BeZip/Readme.nfo). To be fair, I did find some more fleshed-out software, for example, [Gobe Productive](https://en.wikipedia.org/wiki/Gobe_Software) from the former ClarisWorks team. This and other software is on Infinite HD if you’d like to try it out (preferably in [later OS versions](https://infinitemac.org/2000/BeOS%205.0.3)).
+For a period of 100 days, I embarked upon a second experiment: I
+lived my life with my phone always on airplane mode. I still used wifi,
+but not my cell connection.
 
-The interface seemed novel at the time, though I wonder how it would have held up<sup>[3](https://blog.persistent.info/2026/10/infinite-mac-beos.html#beos-fn3)</sup>. The distinctive tabbed window titles look neat, but they have a reduced draggable area, so I’d have to think harder every time I wanted to move a window. And using a hand as the default cursor makes clicking feel less precise than a traditional arrow (just which of the pixels on the “finger” is the hotspot?). Other parts of the UI feel like a not-fully-coherent Windows/Mac hybrid, with a Deskbar that can emulate a Start menu<sup>[4](https://blog.persistent.info/2026/10/infinite-mac-beos.html#beos-fn4)</sup>, Alt key accelerators on menu items, but also spring-loaded folders and a spatial <del>Finder</del> Tracker.
+I had two goals in doing this:
 
-Speaking of the Tracker, I had not realized that Be had [open-sourced it](https://web.archive.org/web/20000824030124/http://www.opentracker.org/main.html) (and even [incorporated](https://web.archive.org/web/20000711080849/www.be.com/support/updates/fivedotohdotone.html) changes from the open-source version). This was around the time that Be pivoted away to [internet appliances](https://web.archive.org/web/20000815053250/http://www.be.com/products/) – there’s no need to invest engineering resources in a file manager if all that’s exposed is one full-screen browser app. [This interview](https://www.bedope.com/int/) with the Tracker developer has more of the backstory.
+1. Privacy. A phone connected to cell is an always-on tracking device. Cell companies are notoriously bad at keeping that data secure, and sometimes they themselves sell it. So there is a large chance that a trail of your location will end up in the hands of intelligence agencies, military contractors, advertising companies, and more. Anonymous SIM cards are not a sufficient solution, for two reasons: (i) your phone can still be linked across its entire usage lifetime through its IMEI number, and (ii) you leak all kinds of data that can be used to reconstruct who you are from your fine-grained movement patterns, internet access patterns, and modern AI makes it very practical to uncover these patterns.Hence, the best location privacy solution is not having a cell connection at all (also, use GrapheneOS, and be very limited in what apps you give location permissions to; I had already been doing both).
+2. Mental health. Not having the internet at all for significant periods of time (when I'm outside) has been a good way of (re-)building the habit of surviving without it, and getting more mental peace and the space to think about other more healthy and productive things.
 
-![OPENSTEP 4.0 and BeOS DR8.2, side-by-side in Infinite Mac's disk browser](https://persistent.info/images/infinite-mac-beos-bake-off.webp)  
+On the whole, I consider the experiment to have been a success.
+During those 100 days, I violated the "no cell data" rule once literally
+but not spiritually - I turned it on briefly to receive a confirmation
+code that I needed in order to maintain that phone plan itself, and once
+spiritually but not literally - when going on a remote and slightly
+dangerous hike, friends insisted that I bring along a few communication
+devices that they had for emergency comms and use them to check in once
+every few hours.
 
-*Do your own [bake-off](https://www.youtube.com/watch?v=NtpIFrOGTHk&t=674s): [NeXT](https://infinitemac.org/1996/OPENSTEP%204.0?saved_hd=false) vs. [Be](https://infinitemac.org/1996/BeOS%20DR8.2?saved_hd=false)*
+My largest inconvenience was a stretch of time I was in Singapore,
+when my inability to receive SMS confirmation codes meant that I could
+not log into Grab (the regional Uber equivalent). As a result, my food
+options were more limited, and I had to take the subway instead of a car
+even in situations where that was much more inconvenient.
 
-[NeXTStep](https://infinitemac.org/?filter=next), by comparison, feels more mature. It had gone through some similar churn (proprietary hardware to off-the-shelf PCs, company strategy shifts), but, perhaps because it had more time, it handled things a bit more gracefully. For example, NeXT supported “fat” binaries that could run on 68K, Intel, PA-RISC and other architectures. On BeOS they had to be separate executables, making the user choose which to run and complicating distribution (this made it harder for me to find software to include in Infinite HD). Worse yet, you also had to have parallel disk partitions on CD-ROMs: BFS used the host endianness, so disks written by a PowerPC install could not be read by an Intel one, or vice versa. But my pro-NeXT bias may be due to knowing which OS Apple ended up picking.
+Since those 100 days, I have opened the cell connection occasionally,
+but so far I have broadly continued an "airplane mode by default"
+lifestyle.
 
-### Other Site Improvements
+For navigation, I used [CoMaps](http://www.comaps.app/), a
+local-first mapping application that downloads OpenStreetMap data and
+then shows you a map, gives you directions to get where you need, etc
+locally. My general review of CoMaps is that I find it worse than Google
+Maps for navigating the human world (restaurants, stores, opening
+hours...) but better for navigating the natural-ish world (it knows about
+many trails that Google Maps does not, though it does occasionally fail
+by claiming trails that do not actually exist, leaving me on one
+occasion pushing through hundreds of meters of shrubbery to get back to
+civilization).
 
-It’s only been a short while since the last update, but I did squeeze in a couple of quality-of-life improvements. You can now [take screenshots](https://hachyderm.io/@mihaip/117323595957549751) and [record videos](https://hachyderm.io/@mihaip/117367708521229207) (with sound) of the emulated machine’s screen. This gives you a high-fidelity way to capture image content, since it’s a direct dump of what would have been shown on the screen.
+I also became interested in the concept of local world knowledge
+apps. In principle, the data size of meaningful packs of information
+about the whole world is not that large. Compressed English wikipedia
+(without media) is [only 27
+GB](https://en.wikipedia.org/wiki/Wikipedia:Size_of_Wikipedia). OpenStreetMap's [planet.asm](https://wiki.openstreetmap.org/wiki/Planet.osm) is
+2.2 TB, though you can doubtlessly prune that down to 1-10% of its size
+and have everything you might conceivably need.
 
-![Infinite Mac CD-ROM drawer showing a lot of system CDs.](https://persistent.info/images/infinite-mac-beos-cdroms.webp)
+This month there [was a
+bounty](https://poidh.xyz/mainnet/bounty/31) (organized by Statuette; I contributed as one of the donors)
+to create local phone apps that try to make useful knowledge easily
+accessible offline.
 
-I also expanded the collection of operating system CD-ROMs with items like the Rhapsody and Mac OS X developer previews. While they’re aspirational for now (DingusPPC can’t run them yet), they do satisfy my completionist tendencies. These CDs are [mirrored](https://github.com/mihaip/infinite-mac/commit/9a3b0434596af3890321b545054f70ef9128a0d3) to and served from my own Cloudflare R2 bucket – the Internet Archive is an incredible resource (you can [donate](https://archive.org/donate/) to them), but streaming from it has been increasingly flaky. I don’t want to add to the problem, and thanks to my [sponsors](https://github.com/sponsors/mihaip), I can afford to [serve a few gigabytes](https://www.youtube.com/watch?v=3t6L-FlfeaI).
+Here are two of the apps:
+
+*Left: [FieldAtlas](https://github.com/0x94t3z/fieldatlas). Right: [Commonplace](https://github.com/0xPD33/commonplace)*
+
+My general impression is: right now, we are exactly on the cusp of
+these kinds of apps starting to make sense. Most of the participants in
+the competition were trying to use on-device text LLMs to think for a
+long time before coming up with an answer. My impression is that this
+approach was too slow: answering a single question would take anywhere
+from 1 to 22 minutes. The best apps, on the other hand, used some kind
+of semantic search to show the user a search result from the local
+database immediately, and then followed that up with a very small LLM
+writing a text answer. This gives actually-good answers in a very
+reasonable timeframe.
+
+Finally, when you're out and about, especially if you have meetings,
+sometimes you do need to have internet when you're on the go. When you
+arrive at a place, you often need to contact a person you're meeting to
+confirm their exact location or to get them to open the door. When
+you're at one meeting, you often need to re-confirm details about the
+next. If you don't have cell data, your only option is public wifi - and
+importantly, the public wifi hotspot must allow you to connect without
+providing an SMS confirmation code.
+
+Different places are very different in terms of how friendly they
+are. Here is a quick tier list, taken from places I've traveled to while
+I was paying attention to public wifi availability:
+
+1. Taiwan (or at least, the Taipei area)Taipei has a huge number of public wifi hotspots. When I opened my phone to check when walking outside (or even when inside an Uber), there was literally an over 25% chance that there was a hotspot I could connect to that was in range at that moment. Usually, these were either municipal government wifi, or public wifi run by local convenience store chains.
+2. Ukraine, USA, Canada, SingaporeUkraine was the most surprising for me. In a surprisingly large number of places, across multiple cities, there were open hotspots available, some of which did not even require a clickthrough. (If you're wondering if it's responsible for them to do this, given Ukraine's security needs, I suspect the answer is that they are primarily concerned about decreasing the enemy's internet access near the frontline and on drones flying at high speed through the air toward their cities, and street-level wifi is not really useful for either of those)USA, Canada and Singapore were all similar: they had a very high number of theoretically-public wifi hotspots in general, but a large portion of those hotspots were gated behind either SMS or some kind of login. But even still, a very significant number of open wifi hotspots were available. *Also, I learned that Toronto has a fraternity (or sorority) that seems to be named after SBF.*
+3. Austria, HungaryBoth halves of Charles I's old empire are similar. There are many hotspots, but the great majority of the public ones require an SMS confirmation code to log in. I could find properly open wifi, but on several occasions it took trying quite a few hotspots and walking around for a while.
+4. SwitzerlandDespite its general reputation for privacy, Switzerland ranked at the bottom for me. Almost all public wifi hotspots require an SMS confirmation code. In my first 1.5 kilometers walking through the downtown, I found only two that do not: a random shoe store, and Starbucks, which lets you connect for 10 minutes, and then longer if you enter a confirmation code that you receive by email.
+
+## Web minimalism
+
+Recently, I have been starting to do more and more things without
+relying on user interfaces inside of websites at all. The last few times
+I updated my IPFS hash on ENS, I did so through a command-line tool that
+an AI wrote for me. Many of the payments that I make through privacy
+protocols, I now make through the [kohaku-cli
+tool](https://github.com/kassandraoftroy/kohaku-cli).
+
+*Sending through kohaku-cli. Today, the CLI is even cleaner and
+easier to use; no need to specify the value twice and know what a tail
+call is.*
+
+Websites and web applications, especially web applications for doing
+crypto things, are dangerous for several reasons:
+
+1. **If you access a web application, you end up re-downloading the application from the server thousands of times, and you are fully trusting the server each time**. If the server gets hacked even one of the thousands of times that you open the site, you might be screwed. Regular old-fashioned applications (where you explicitly click "download") are better than this: you only need to trust the server to not be malicious or hacked at that exact moment once.
+2. **Websites and web applications are by default very bad for privacy**. When you access a website, it can see your browser (including version number), your operating system, your screen size, and once you start acting hundreds of other data points (eg. mouse movements, button click patterns) that quickly identify you. Websites often send user data (and metadata) to all kinds of third-party providers, from CDNs serving scripts to analytics companies, and this all happens by default.
+3. **As we've seen with social media, web applications crafted by third parties with commercial interests may not have your interests at heart.** Fine-grained UI decisions may be [dark patterns](https://en.wikipedia.org/wiki/Dark_pattern) optimized to extract, whereas what you want is bright patterns that are optimized to enlighten and educate and protect you.
+
+So what's the alternative? Basically, bring back the [Unix
+Philosophy](https://en.wikipedia.org/wiki/Unix_philosophy), but make it better and much more user-friendly with
+local AI: speak English to tell your computer what to do rather than
+Bash.
+
+At its core, the Unix philosophy was simple: make simple, modular
+tools that each do one thing and one thing well, and that are designed
+to talk to each other through the most universal interface (text). You
+as a user have extremely fine-grained choice about how to make the
+different programs fit together. UIs, on the other hand, combine many
+functionalities into one single opaque tool produced by a single
+developer. At their apex, UIs turned into "super-apps", which greatly
+concentrate power in the application developer and have complex and
+unintelligible internal workings, magnifying security risks. With LLMs,
+we can go back to the Unix philosophy approach, putting the fine-grained
+decision-making power back into the user's hands, but without the
+downside of everyone needing to become a programmer.
+
+## Conclusion
+
+Physical-world minimalism, of the style that became popular in the
+2000s and 10s, was made possible by a new wave of technology: computers
+and the internet. A single computer could substitute for dozens of
+physical things. As a result, you could live a life of much greater
+simplicity and freedom, with just a laptop, a few sets of clothing, and
+basic charging and hygiene equipment. Physical minimalism was much
+harder before the internet; it was doable, but would entail a much more
+complex lifestyle commitment. After the internet, the costs of a more
+physically minimalistic lifestyle greatly dropped.
+
+With the last ten years of progress of software quality, together
+with modern AI, I would argue that we now have the wave of technology
+needed to similarly enable the next wave of minimalism: digital
+minimalism. We need social media less than before, because you can talk
+to the bot for information instead (and for human connection, there's
+still the old-fashioned solution: going out and talking to people in
+real life). We need the internet less than before, because there's so
+much more you can do purely locally and offline. And we need the web
+less than before, because you can do much more, and more conveniently,
+though either command-line tools or custom-made user interfaces, and AI
+can help you use or craft both. And these things are all happening at
+exactly the time that the flaws of these previous paradigms - and, for
+that matter, the flaws of using AI in the wrong way - are reaching their
+apex, and so a digital minimalism is becoming more and more
+necessary.
+
+Each person's path to digital minimalism will be different, as each
+person has different needs. But I highly recommend everyone try reducing
+their digital clutter in at least one important way, and if you like the
+result then keep going.

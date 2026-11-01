@@ -1,125 +1,68 @@
-For most of the past two decades, the code forge has been where projects live:
-where code is hosted, where changes are reviewed, and where contributors find
-each other. Forges offered convenience in exchange for centralisation.
+Not me, this is just friendly advice from a struggling user.
 
-But the centralised forge is crumbling. Relying on someone else for uptime, for
-features, and to be a good steward of your code hasn’t played out well. What
-*has* stood the test of time is email: Git to move the code, and email — an
-open protocol — to talk about it. At the cost of user experience, however.
+Alongside [Codeberg](https://codeberg.org/) I’d consider [Tangled](https://tangled.org/) to be a real GitHub replacement. [We desperately need to leave GitHub behind.](https://dbushell.com/2026/04/29/github-is-sinking/) It’s difficult to recommend any tech these days. I used to spread the gospel of Proton and [that backfired](https://dbushell.com/notes/2026-10-30T07:29Z/). From what I’ve seen, Tangled seem to be saying and doing the right things so far. I have trepidations about their [venture capital funding](https://tangled.org/blog/seed/) (see [Deno’s demise](https://dbushell.com/notes/2026-10-10T10:30Z/)) but pessimism is no fun.
 
-Tangled aims to give you the best of both: the longevity of an open
-protocol, with the convenience and polish of a proper forge.
+Tangled’s recent blog post on [federated code forges](https://tangled.org/blog/forge/) piqued my interest. [I self-host Forgejo](https://dbushell.com/2025/08/15/self-hosted-forgejo-actions-runner/) and a big downside is that no one else can participate easily. [Forgejo federation](https://forgejo.codeberg.page/faq/#what-about-forge-federation) is under development. Maybe the two can co-exist? But that’s not what I’m here to discuss.
 
-It’s the first truly federated code forge — you can host code on your own
-servers and still collaborate seamlessly with others. Our approach is
-pragmatic: self-host just the parts you want, like Git hosting or CI runners,
-or all of it, including the API server and UI. Whatever [you
-choose](https://tangled.org/docs/self-hosting), you can still talk to everyone
-else.
+## Tangled’s new look
 
-Owning your infrastructure also means you can hack on, extend
-and customise your forge as you see fit. Because Tangled is
-built on the AT Protocol, you can build your own extensions,
-subscribe to the firehose, or even write entirely custom knots,
-like [this one](https://tangled.org/oppi.li/naut) that runs on
-Cloudflare Workers and uses their Artifacts product for git
-storage. Or an entirely custom spindle such as
-[mitchellh.com/tack](https://tangled.org/mitchellh.com/tack). Go
-even further and host our [ultralight API
-server](https://tangled.org/docs/self-hosting/indexer) and build
-your own custom forge.
+In the same post Tangled revealed their new UI design.
 
-Agents have made building such hyper-personalized software trivial, and
-especially so when software is designed with hackability in mind from the
-get-go. Tangled is incredibly [agent](https://tangled.org/docs/api/bobbin/)
-[friendly](https://atproto.com/guides/identity).
+> We’ve redone the UI on top of our new architecture (described further below), in Svelte. Things should now be quicker, visually consistent and prettier! The keen eyed of you might’ve also spotted that we’ve swapped out Inter for Timeless Sans.
+>
+> [The federated code forge](https://tangled.org/blog/forge/#a-fresh-look) - Anirudh (Tangled CEO)
 
-# Product updates
+I quiped on Bluesky: [“keen eyed? eagle-eyed maybe!”](https://bsky.app/profile/did:plc:rgrzo7xept2yb2auooex4rlg/post/3mz5zpy3yus2j) — the new font size is exceedingly tiny. It’s coded as `12px` with `16px` line height. Tangled is practically unusable for me at this size. It was small before but I could zoom in. The way the new front-end is designed and built doesn’t leave much room for personal remedy. This is not just a subjective opinion there are real accessibility failures here.
 
-## A fresh look!
+## Font failure
 
-The obvious big one: with this release, Tangled has a whole new look.
-We’ve redone the UI on top of our new architecture (described further
-below), in Svelte. Things should now be quicker, visually consistent and
-prettier! The keen eyed of you might’ve also spotted that we’ve swapped
-out Inter for [Timeless Sans](https://timeless.co/type).
+Below is a screenshot from Tangled’s new user interface design.
 
-## A bobbin near you
+Visit [`tangled.org`](https://tangled.org/timeline) and experience the new UI yourself.
 
-Until now, Tangled’s web UI and backend were a single Go monolith called the
-`appview`. The appview service handled AT Protocol indexing, caching,
-off-protocol data and UI rendering using `html/template` + htmx. It ran on a
-single SQLite database on one medium-sized server in Sweden.
+12 pixels is too small for any meaningful text (which is typically all text). Maybe you feel the size is totally fine? That’s fine for you. But it’s not fine for a *significant* number of people. You won’t find any accessibility expert happy with that size. (Low-DPI displays may even struggle to render the font legibly.)
 
-This was great as long as you were ~50–100 ms away from Sweden, but most
-of our users aren’t! We rearchitected: we built a new standalone
-frontend app in Svelte, deployed at the edge. It is populated by our new
-diskless, entirely in-memory indexer service written in Rust: [bobbin](https://tangled.org/docs/components/bobbin).
-Bobbins are deployed globally in over 11+ regions, ensuring users around
-the world get the best API and UI performance.
+[WCAG 2.2 accessibility guidelines](https://www.w3.org/WAI/WCAG22/Understanding/) don’t recommend a minimum font size. [1.4.4 Resize Text](https://www.w3.org/TR/WCAG22/#resize-text) does require that text can be resized up to 200% “without loss of content or functionality”.
 
-The astute reader might’ve noticed: bobbin is purely read-only and only
-deals with AT Protocol data. What of the rest? That functionality (and
-more) has been delegated to a new set of supporting services.
+Tangled uses pixel units in CSS for font size<sup>†</sup>. That means the UI won’t adapt to the browser default setting. [I can *force* a minimum](https://support.mozilla.org/en-US/kb/font-size-and-zoom-increase-size-of-web-pages#w_set-a-minimum-text-size) `16px` font size and look what happens.
 
-## The new data model and repo-owned data
+**<sup>†</sup> Correction:** I was wrong about pixel units everywhere (I misread the computed values), it’s `font-size: 16px` on the `<html>` element that blocks the relative units from scaling properly with browser settings [(an easier fix)](https://adrianroselli.com/2024/03/the-ultimate-ideal-bestest-base-font-size-that-everyone-is-keeping-a-secret-especially-chet.html).
 
-First, the data model itself: we have a new set of lexicons, and everything now
-lives under `org.tangled.*`, replacing the old `sh.tangled.*` records.
+Text lines get too close for comfort. Characters are starting to get clipped. See the “g” descender in “Tangled” for example.
 
-Knot2 is our aptly named, second implementation of the knot server, this time
-rewritten in Rust. Knot2 bakes a fully custom Git server, and also bundles in
-an SSH server in the same binary.
+And if I force a 200% resize at `24px` this happens.
 
-With knot2, we’ve also changed where some of that data lives. Issues, pull
-requests, comments, reactions and labels are now stored on the knot, right next
-to the code, as collaborative objects (COBs). A COB is just a chain of Git
-objects in the repo itself. Collaborators, knot members and the blocklist are
-also stored the same way.
+Oh dear! Text that is [“clipped, truncated or obscured”](https://www.w3.org/WAI/WCAG22/Techniques/failures/F69) is a failure.
 
-In that sense, knots now behave a lot like a PDS: they hold signed records,
-full history included, for everything that belongs to a repo and much like a
-PDS, these records are synced via the standard AT Protocol firehose.
+Remember that the WCAG guidelines are a floor. Nothing can be perfectly accessible, but a `12px` font size and basic front-end failures are a concern. A proper audit would reveal other issues (e.g. with how media/container queries adapt to font size).
 
-But why? A project’s issues and pull requests are as much a part of it as its code,
-so they should live with it, wherever you choose to host it. This gives your
-project maximum portability.
+## Expect better
 
-If the knot writes your issues and comments, what stops it from putting words
-in your mouth? Attestations. Every time you create or edit a record on a knot,
-the web app also writes an `org.tangled.graph.attestation` record to your own
-PDS, pointing at that exact version of the record and the COB change behind it.
-Two-way verification!
+I’m not posting this to seek employment myself or to provide answers. I want to remind readers that accessibility concerns affect everyone. Serious projects should seek professional expertise. It’s disappointing to see yet another tech start-up fail the basics.
 
-Self-hosters will have to upgrade their knots to the v1.20.0 by [following the
-upgrade guide](https://tangled.org/docs/upgrading/knots-and-spindles/).
+I’ll provide two suggestions for free though:
 
-## Organizations
+1. Use relative units for font sizes
+2. Use unit-less numbers for line height
 
-Organization accounts are here! An Organization on Tangled is a real AT
-Protocol account, with its own DID and handle, hosted on a [Tranquil
-PDS](https://tangled.org/tranquil.farm/tranquil-pds) instance. They’re
-passwordless, delegated accounts: you create one from the [New
-Organization](https://tangled.org/organizations/new) page, and you get
-`<name>.tngl.sh` with yourself as its owner. Owners can invite members, and
-anyone in the Organization can act as it when creating or forking repositories.
-Like any other account, you can swap the handle out for a domain you own. If
-you’ve been running a regular account as a stand-in “org”, hang tight — we’re
-working on a way to move those over. Read more in the
-[docs](https://tangled.org/docs/guides/organizations).
+(Edit: see correction above, the fix is even easier.)
 
-## Stacked PRs for everyone
+Frankly, what Tangled’s redesign suggests to me is that nobody involved with the process gave accessibility enough thought <del>(if any)</del> *(edit: that part was unfair, there was some effort but far from adequate testing)*. That may sound harsh but it’s usually the reality from my experience. Whatever the case, Tangled must do better in this area.
 
-Our PR flow has been overhauled. The new flow gives everyone, regardless
-of whether you use Jujutsu or just vanilla Git, the ability to submit
-and review stacked PRs. If you’re using Git, you now get the ability to
-interdiff between versions (previously called rounds). JJ users get to
-interdiff between individual changes as well.
+If I may answer a few predictable but hypothetical comments.
 
-## Launch weeks ahead
+> This is just v1. Things will improve.
 
-This isn’t all. We’re staggering this launch across the next few weeks. Up next
-are private repos, a CLI, SDKs for different languages and skills for your
-agent.
+I’m sure they will and maybe even pushed by my criticism. The struggle is that accessibility concerns must be integral to design from day one, not an afterthought to patch.
 
-Until then, enjoy every part of this launch equally.
+> It’s open source, where’s your merge request?
+
+Sorry, once a project crosses the line into venture capital “open source” takes on a different meaning. If people want to contribute that’s their prerogative. Personally, I’m not in the habit of giving away professional expertise for free to a for-profit business. Such expectations are especially a problem for accessibility specialists (of which I am not).
+
+> Aha! What about this accessibility failure on your website?!
+
+That’s a bit embarrassing, but thanks for the heads-up!
+
+It’s far easier to hire an accessibility expert before you ship but it’s never too late to retroactively make improvements. I’ve been making accessibility improvements on my own website for decades.
+
+I like Tangled and I want to see it do well. Maybe someone will share a [milkshake duck](https://en.wikipedia.org/wiki/Milkshake_Duck) or they donate to [fascist Linux](https://brennan.day/normalized-fascism-in-open-source-12-million-given-to-dhh/) and I’ll eat my words. I really hope not! I hope Tangled improves so that those lingering in GitHub’s slop graveyard have fewer excuses to hang around.
