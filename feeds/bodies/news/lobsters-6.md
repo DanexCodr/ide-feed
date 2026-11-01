@@ -1,0 +1,27 @@
+******Why do our grids show a brief spike in electricity demand every minute? A team led by Dirk Witthaut from Forschungszentrum Jülich has now demonstrated that this is due to regular power checks carried out by large-scale battery storage systems. These findings could help to make our electricity supply more robust, as the team reports in an article published in *Nature Energy*. **
+
+![](https://www.fz-juelich.de/de/aktuelles/news/pressemitteilungen/2026/60-sekunden-schwankung-in-stromnetzen/img_20180428_154430-buehne.jpg/@@images/image/great)
+
+**Copyright: *Regine Panknin***
+
+Tennet Germany, the largest transmission system operator in Germany, has observed over several years that the frequency in the European power grid dips briefly every 60 seconds. While these deviations were not critical to grid security, they were clearly measurable and unusually regular. The cause of this phenomenon was initially unclear.
+
+A team from Jülich led by Dirk Witthaut, together with researchers from the University of Cologne and the Karlsruhe Institute of Technology, set out to investigate – and found the answer: the cause appears to be the many large-scale battery storage systems that check their state of charge every minute. This leads to measurable fluctuations in electricity consumption, which can contribute to turbine wear and tear, for example. The battery storage systems ensure an uninterrupted power supply, and their numbers have increased significantly worldwide in recent years. The researchers found that this was not a European phenomenon, but a global one.
+
+### Many devices, a common rhythm
+
+“It really was years of detective work,” says Witthaut. The grid frequency pattern is shaped by many different factors. For example, it reveals the influence of electricity trading, with power stations being switched on and off abruptly, as well as the fluctuating feed-in from renewable energy sources, and various other disturbances.
+
+> Uns war schnell klar, dass es sich bei der Ursache um etwas handeln muss, das von der Uhr gesteuert wird
+
+“It quickly became clear to us that the cause must be something controlled by the clock,” says Witthaut. There was no other way to explain the precise 60-second cycle. It was also clear that: “The observed effect can only be produced if many devices are consuming electricity at the same time.” A single consumer or generator could therefore be ruled out.
+
+### Measurements on campus provide the clue
+
+But how do all these devices synchronize their consumption? The researchers finally found the crucial clues with the help of the Living Lab Energy Campus. This research infrastructure on the Jülich campus is primarily used to develop and test highly integrated energy supply systems. The team installed measuring points on end devices at a total of 80 locations – and sure enough, the same periodic pattern in electricity consumption was observed precisely at the locations where large-scale battery storage systems are designed to ensure an uninterrupted power supply. “We took a closer look at one of them and found a spike in electricity consumption at the start of every minute due to the power check,” explains Witthaut.
+
+As there are no binding standards for such power checks, Witthaut suspects that most battery manufacturers assumed that a 60-second interval would be sensible. The start of every minute was simply chosen as the test time. “It is entirely possible, however, that battery storage systems are only part of the problem here,” says Witthaut. “It cannot be ruled out that other digitally controlled appliances – such as air-conditioning systems, heat pumps, washing machines, and dishwashers – may also exhibit similar patterns.”
+
+### Less synchronization, less wear and tear
+
+The periodic fluctuations in electricity demand are already having an impact on hydroelectric power stations. The brief spikes in demand mean that the turbines slow down momentarily before accelerating back to their original rotational speed. This increases wear and tear. With the expansion of storage technologies, such problems could become even more prevalent. In Ireland, for example, where data centres with large-scale battery storage systems currently account for around a fifth of the country’s electricity demand, the amplitude of the 1-minute signal quadrupled between 2016 and 2021. The solution, however, would be simple: “You would simply have to distribute the checks randomly, rather than always starting them at the same time,” says Witthaut.

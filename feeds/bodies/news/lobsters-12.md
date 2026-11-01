@@ -1,113 +1,111 @@
-When looking through a piece of source code recently, I stumbled across this method from [Guava](https://github.com/google/guava) – a popular Java library from Google.
+in recent times i've been asked a lot the question of "what ai model did you find to use this?", practically for all of the articles on this blog. the answer has always been my brain, i have never used ai for any kind of research i published, ever.
 
-![Guava's whitespace matcher implementation](https://serce.me/images/whitespace/whitespace.png)
+the next question is often why, followed up with "you would be so unstoppable with claude mythos" this article should explain why i don't like using ai for my research, and my general opinions on llms in both development and cybersecurity
 
-As you might've guessed from the name, this method checks whether a given character is a whitespace character. Yet the code looks a lot more complex than a simple `c == ' '` check. This made me curious and sent me down a small rabbit hole trying to understand where all this complexity was coming from. If you're curious how this code works too, this article is for you.
+## why i don't use ai
 
-The first thing one needs when inspecting a function that checks whether a character is whitespace is to define what whitespace actually is. While the `SPACE (U+0020)` is probably the best-known whitespace character, it's not the only one. If you've been writing code for a while, you can probably name a few more – the non-breaking space `NO-BREAK SPACE (U+00A0)`, a tab `CHARACTER TABULATION (U+0009)`, a newline `LINE FEED (U+000A)`.
+it's as simple as i do this for fun, and i don't find giving an ai all the fun at poking at something instead of doing it myself fun. put it another way, i like using my brain
 
-Well, there are more. Unicode defines a [`White_Space` property](https://www.unicode.org/Public/17.0.0/ucd/PropList.txt) that gives us a list of 25 characters. Here they are – meticulously copied `	,
-,,,, ,, , , , , , , , , , , , , , , , , ,　`.
+i like coding, i like staring at devtools, binary ninja, or whatever else for hours, i like exploring weird library source code and tracing it with nothing but github code search and a dream, it is fun to me. i don't do anything on this blog for money, i do it for fun, the money part is just a nice side effect
 
-Each of these characters has a different purpose. `FIGURE SPACE (U+2007)`, for example, has the same width as a digit in a table, while `THIN SPACE (U+2009)` and `HAIR SPACE (U+200A)` provide progressively smaller gaps. `NO-BREAK SPACE (U+00A0)` has the width of an ordinary space, but keeps the surrounding text together when wrapping a line.
+### but why don't you just offload the tedious bits to ai?
 
-It's not always easy to tell whether a character is in the whitespace set from the name or by looking at the glyph either. For instance, `ZERO WIDTH SPACE (U+200B)` isn't a whitespace character at all. Despite the name, it's a format character that can indicate a word or line break opportunity without adding a visible gap.
+a lot of the tedious bits are still fun, there's some that aren't, but i also cannot take credit for something an llm did for me, and i am wildly uncomfortable with publishing something an llm did for me on my personal blog as a writeup
 
-There are also some less obvious members of the set too. `OGHAM SPACE MARK (U+1680)` can actually be rendered as a visible horizontal line. In Ogham fonts with a stemline, the space continues that line between letters (e.g. ᚛ᚆᚓᚂᚂᚑ ᚒᚑᚏᚂᚇ᚜), while in stemless fonts, it's blank. So even the assumption that whitespace must look empty isn't always true.
+this blog is mine, all the work on it is mine, or is shared research with other people that are explicitly credited. i cannot take credit for something an llm did for me, and i also cannot credit an llm properly, as they aren't a person
 
-Having a single definition of whitespace is only useful if everyone can agree on it. But even within a single runtime, some libraries might disagree on what whitespace is.
+### using an llm makes me lose my mind
 
-Consider the `NO-BREAK SPACE (U+00A0)` I mentioned above. It's included in Unicode's `White_Space` property, but Java explicitly [excludes it](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Character.html#isWhitespace(char)), along with two other non-breaking spaces. The javadoc usefully highlights that the method checks for whitespace *according to Java*, rather than according to the Unicode property we had a look at before.
+i truly have tried to use llms before, just to try it out. nothing i was going to publish as research, but i really couldn't and it left me never wanting to use an llm again
 
-```java
-Character.isWhitespace(' ');      // true
-Character.isWhitespace('\u00A0'); // false
-```
+i don't know how more people don't experience this, but staring at an llms output be confidently wrong eventually to get there in the process, or looking at the commands its running and see some really stupid things its doing drives me crazy to the point i will just stop it before it answers, i cannot handle something being that confidently wrong (even though it'll probably still get there in the end)
 
-![Java isWhitespace screenshot](https://serce.me/images/whitespace/javaspace.png)
+## i'm not denying these models are powerful
 
-But what about other runtimes? Looking at two more popular ones, Python and JavaScript, we can see that there isn't a single authoritative list of characters everyone agrees on. Python, for example, has a convenient `str.isspace()` method. And unlike Java, it considers `U+00A0` a whitespace character.
+llms are quite powerful machines, we've seen that as of recent, that's for sure, they are still wildly marketed as being more powerful then they are, but i cannot argue that they are infact not powerful, because they are
 
-So possibly Python just follows Unicode's `White_Space` property? Not quite.
+### llms still need guidance
 
-```Python
-"\u00A0".isspace()  # True
-"\u0085".isspace()  # True
-"\u001C".isspace()  # True
-"\uFEFF".isspace()  # False
-```
+if you threw an llm at the linux kernel and told it to find an rce without any other guidance, it probably couldn't. you still need skill and experience to guide an llm at the current state
 
-The interesting one here is `FILE SEPARATOR (U+001C)`. It's an ASCII control character originally intended to separate pieces of information, and it isn't included in Unicode's White_Space property. So Python recognises 29 whitespace characters, rather than Unicode's 25.
+all of these vulnerabilities that we've been panicking over have been found by skilled researchers using llms, likely at a big firm to give them all the tokens they want. because llms still need guidance and not anyone can just do this, no matter what openai or anthropic try to tell you
 
-JavaScript takes yet another approach. It doesn't have an equivalent of the `Character.isWhitespace()` method, but we can use the `\s` character class in a regular expression:
+## marketing and php2shell
 
-```JavaScript
-/\s/.test("\u00A0");  // true
-/\s/.test("\u0085");  // false
-/\s/.test("\uFEFF");  // true
-```
+ai companies have hooked onto cybersecurity as their marketing strategy and it shows, a good example is php2shell. where three companies:
 
-The odd one out above is `NEXT LINE (U+0085)`. Unicode explicitly includes it in `White_Space`, and Python accepts it too, but JavaScript doesn't. Instead, JavaScript recognises `ZERO WIDTH NO-BREAK SPACE (U+FEFF)`, which Unicode doesn't include in the set.
+- calif (research firm)
+- openai (you know who openai is)
+- wiz (research firm)
 
-I haven't looked through any other runtimes, but something tells me the inconsistencies won't stop at these three.
+all collaborated on it and released their own blogposts, all seemingly with different narratives
 
-What adds more complexity is that Unicode is not frozen in time, and is constantly evolving. And this affects the definition of whitespace. For example, [Unicode 6.3](https://www.unicode.org/versions/Unicode6.3.0/) had reclassified `MONGOLIAN VOWEL SEPARATOR (U+180E)` from a space separator to a format character, removing its `White_Space` property. The Unicode whitespace set had changed from 26 characters to 25 as a result. For runtimes and libraries that strive for backwards compatibility, these changes can be a pretty significant challenge as you'd want the standard library of a language to be as stable as it can be.
+calif went with the narrative of an ai found these php vulns with the help of a human guiding it, while openai went with the agent uncovered critical vulnerabilties, and wiz went with a middle point, still pretty openai-like
 
-Let's say we've finally agreed on the set of characters we want to check – the current set of Unicode whitespace characters. A naive way to implement this would be to go through the list of characters and check whether any of them matches. While this would work, it's definitely not the most efficient approach.
+### "patch the world"
 
-So what [Guava's implementation](https://github.com/google/guava/blob/master/guava/src/com/google/common/base/CharMatcher.java) that we saw at the beginning of the article did was implement a perfect hash function – a hash function that guarantees no hash collisions for the characters in the known set.
+openai talked a lot about how they were helping maintainers patch these issues, and mitigate them faster and for more people. which i'm sure they did to an extent, but i don't think they did all they could
 
-```java
-static final String TABLE = "\u2002...";
+they could easily backport these security fixes to older versions of php with the help of ai if they wanted to, it's not like they don't have the compute, they do, they have a lot of it, they're openai
 
-@Override
-public boolean matches(char c) {
-    int slot = (1682554634 * c) >>> 27;
-    return TABLE.charAt(slot) == c;
-}
-```
+### dropping poc videos before patch
 
-Above, `TABLE` is a string of 32 characters – effectively a hash table mapping each index (the key) to a character (the value). It contains all 25 Unicode whitespace characters, with some duplicates filling the remaining positions.
+this has been a common trend in the recent days of ai-based cybersecurity where researchers and otherwise companies, drop poc videos of unpatched 0days on twitter, for some reason
 
-The most interesting part here is calculating the index. The multiplication `1682554634 * c` produces a 32-bit integer, and `>>> 27` shifts it 27 bits to the right, isolating the five most significant bits – a number in the [0, 32) range which can be used to look up the table. Of course, there are more possible characters than table entries, that's why the final `== c` check is needed to check that the character we found is the one we were looking up.
+this is so clearly marketing, and it does nothing but make everything worse in terms of security. these poc videos contain quite a lot of useful information, no matter how much you hide (which, a lot of them don't hide much) and just do nothing but fearmonger
 
-You can click on the characters below to see how the table is populated.
+hashes are also apart of this, hashes have always been a way to claim proof over a vulnerability or generally acomplishment before it becomes public, not as a way of fearmongering. **you shouldn't include the name of the product next to a hash, that is just not what a hash exists for.**
 
-The magic `1682554634` number does look magical, and it's unclear to me how it was chosen (please do share if you know the answer). But it's not the only possible multiplier, and you can find all suitable options by running a simple brute-force search.
+but a lot of companies and generally people now drop them like candy, and it causes panic for no reason. at least with a poc video you know what the vuln is, with just a hash and a product name you don't even know that, you just know some vuln exists
 
-```java
-static final char[] ALL_CHARS = (
-        "\u2002\u3000\r\u0085"
-        + "\u200A\u2005\u2000"
-        + "\u2029\u000B\u2008"
-        + "\u2003\u205F\u1680"
-        + "\u0009\u0020\u2006"
-        + "\u2001\u202F\u00A0"
-        + "\u000C\u2009\u2004"
-        + "\u2028\n\u2007"
-).toCharArray();
+### tailworm
 
-public static void main(String[] a) {
-    var slots = new BitSet(32);
-    outer:
-    for (int mul = 1; mul != 0; mul++) {
-        slots.clear();
-        for (char c : ALL_CHARS) {
-            int index = (mul * c) >>> 27;
-            if (slots.get(index)) {
-                continue outer;
-            }
-            slots.set(index);
-        }
-        System.out.println(mul);
-    }
-}
-```
+this was a less big story, but still pretty big. on bluesky, a "security researcher" claimed to have found a 0day in tailscale. they did this by dropping a hash with the caption of "tailscale privilege escalation"
 
-Interestingly, anyone willing to dive deeper can trace how Guava arrived at this implementation by looking through the git history. It transitioned from a simpler matcher to a [mod-79](https://github.com/google/guava/commit/49ae40b145bebb8bd06a967edc03cb285577d0cc) version which has an interesting observation about the Unicode character set but had a downside of involving a division operation, then followed by a [perfect hash function](https://github.com/google/guava/commit/31e1f16989ec41b360b074caebdc58e0117ecf68).
+!["Erica Windisch" skeeting "tailscale privilege escalation" followed by a hash](https://eva.ac/files/img/posts/llms/tailworm-skeet.png)
 
-And if you're interested in other applications for perfect hashing – somewhat serendipitously just as I was writing this article, Daniel Lemire [published a blog](https://lemire.me/blog/2026/10/26/billion-query-per-second-lookup-tables-in-c/) on the same topic where he gives an example of using perfect hashing for checking HTTP methods.
+obviously, this got people very very worried. what could tailscale privilege escalation mean? could someone bypass all ACL rules, what can happen?
 
-When I first saw the whitespace-checking code in Guava, it sparked my curiosity, and as a result I learned a few things about Unicode and saw an interesting application of a perfect hash function – something you don't see used that often in the wild.
+don't worry! cause we slowly get information of the vulnerability fed to us over a bluesky thread
 
-I hope you've learned something interesting from this article too. And if you find something that sparks your curiosity, please do write a blog post and share it. I do feel that these write-ups are becoming increasingly rare in the AI-first world, where there's rarely a reason to peek under the hood of a function as simple as `isWhitespace`.
+!["Erica Windisch" skeeting mentioning first that it doesn't impact all tailnet devices, that an attacker must be on the tailnet, and systems affected must be in a "non-default but widely deployed and supported configuration." and that "Impact includes systems using headscale." followed by another skeet with the CLI command to turn off Tailscale SSH](https://eva.ac/files/img/posts/llms/tailworm-thread.png)
+
+so, what was the point of that? you posted barely any information, posted more but cryptic information an hour after, and then an hour after you just gave away where the vulnerability is?
+
+i assumed that there was some responsible disclosure happening here, and that's why the hash got tweeted, etc.
+
+**would you believe me that this wasn't even responsibly disclosed?**
+
+next day, the (single-person) company this person owns drops this website on bluesky:
+
+![the tailworm website, just a vibecoded website with a catchy domain (tailworm.com) with a bunch of ai generated text on it](https://eva.ac/files/img/posts/llms/tailworm-website.png)
+
+a full website, obviously vibe-coded, with all of their findings, a lot of which completely do not matter or just aren't critical. while the "privilege escalation" *was* real, it required you to already have acl rules to a machine, and have it's tailscale ssh enabled
+
+the vulnerability was just the fact that you could privilege escalate on that machine specifically to root. that's it. that's what was fearmongered about so much, and then they dropped it publicly next day, without even contacting tailscale to let them patch it
+
+it was given a fancy name, a catchphrase, even. but no one thought to responsibly disclose it, instead posting it on a social media platform
+
+the reason this happened was pretty clear: it was to advertise the company, not to help make the world better. it was to make everyone think about the company who exposed critical issues in tailscale, and maybe ask them for an audit
+
+## it's not all ai finding these vulnerabilities
+
+the biggest of them all, in my opinion, was eMudhra. you know, the company who had their CA private key as the number Four. this wasn't found by an ai, but just a human using a old ass library made by google called [paranoid_crypto](https://github.com/google/paranoid_crypto/) to scan through keys for fun out of curiosity
+
+that's whats beautiful about it in my opinion, the biggest thing of them all was missed by all these ais but rather was just by a human just doing random shit
+
+## conclusion
+
+i think that people have been way too lost in this wave of ai everything, that they are disregarding doing things themselves by a whole lot. it is still extremely fun to just, write code yourself, debug things yourself, stare at minified js bundles for hours at a end, cycle through random interesting looking subdomains, it's all fun! and i feel people have forgotten that a bit
+
+while an ai "can just do things", it is fun to do them yourself. i totally get using ai for work, as we live in a world where software engineers are expected to move faster then ever, and in my opinion, that isn't a good precedent, but it's what we have to live with
+
+personal projects are the place where you get to have fun, do something you enjoy. and i think giving those to an ai even just ruins your enjoyment of creating things
+
+for me, at least, the process of getting somewhere is more interesting then the end product. cause i enjoy learning along the way and i enjoy banging my head against the wall on a primitive that goes nowhere
+
+i mess with a lot of things, and i find a lot of things. but almost none of them go on this blog, simply because i have a feeling i need to one-up myself with every new blogpost, and i keep challenging myself to find something even funnier and also more critical at the same time. it makes me learn a *lot* more then i already knew
+
+writing code itself is fun, and an ai writing it for you even if you gave it a plan on how to write it, you are missing out on *so* many learning opportunities by not writing it yourself, because there's no such thing as a perfect infrastructure plan, things change as you go, while you are in the flow of writing code
+
+go reverse engineer that old iot device, mitm that weird looking chinese automatic pet feeder that requires an internet connection with the number four, make a new frontend for a website you use a lot that has a really bad frontend. you learn a lot by tinkering

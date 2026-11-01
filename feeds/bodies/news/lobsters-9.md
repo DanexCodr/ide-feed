@@ -1,21 +1,220 @@
-If you hold a PC’s power button for 12 seconds, it will turn off at the hardware level without notifying the operating system. This is a safety feature so that you can turn of the computer even if the operating system’s “Shut down” command isn’t working.
+In brief, it’s this: whenever you are doing a bugfix, do it in two commits.
 
-After eight seconds of the power button being held down, the Windows kernel realizes that the user is trying to do a force-power-off of the system, and it quickly takes a kernel dump that can be uploaded to the Windows Error Reporting service the next time you turn the system on. (Sometimes four seconds isn’t enough time to get enough information, and the kernel dump is incomplete. I believe that on Windows Insider builds of Windows, you get a message that says something like “Please let go of the power button so we can collect more information, and then we will turn off the computer.” This gives the kernel more time to finish capturing its kernel dump.)
+1. Write a passing test that exemplifies the buggy behaviour.
+2. Fix the bug and also fix the test we just wrote.
 
-These emergency kernel dumps are internally classified as “long power button hold” (LPBH) failures. One of the pieces of information recorded in these emergency kernel dumps is whether the screen consists entirely of black pixels. Those failures are sub-classified as “black screen LPBH”, and they go to a special virtual team for analysis. (I happen to be a member of this black screen LPBH team.)
+For example,
 
-Sometimes the problem is a broken video driver. Sometimes the video driver is doing just fine, but the desktop compositor is just handing black pixels to the video driver. Sometimes the desktop compositor is doing just fine, but nobody is drawing anything to the screen. And those cases are further subdivided further into cases like “there is nobody around to draw anything” or “the person who normally draws stuff is hung.”
+```python
+def add(a, b):
+   return a + b + 1
+```
 
-Back in the Windows 3.1 days, there was a customer product support call that would today have been classified as a “black screen” bug: The customer reported that they turned on the computer, and Windows started up, but when the logo went away, all they saw was a blank screen.
+and through your keen eye you observe that this addition function is buggy. You therefore write a test that records the bad behaviour,
 
-After some questioning, the customer support engineer put the story together: It turned out that this customer really liked the color black, so they decided to set up a [goth](https://en.wikipedia.org/wiki/Gothic_fashion) theme. They set the wallpaper color to black. They set the title bar color to black. They set the button color to black. They set the window background color to black. They set the window text color to black. Every possible color you could pick in the Colors control panel was set to black.
+```diff
+Commit 1
 
-Once you get yourself into this situation, it’s hard to get out because you can’t see anything.
+diff --git a/test_arith.py b/test_arith.py
+--- a/test_arith.py
++++ b/test_arith.py
+@@ -0,0 +1,2 @@
++def test_add(a, b):
++   assert add(2, 2) == 5
+```
 
-I don’t know how the customer support engineer fixed the problem, but I’m guessing that they booted into MS-DOS, ran `EDIT.COM`, and [deleted the [colors] section from the win.ini file](https://jeffpar.github.io/kbarchive/kb/083/Q83433/), thereby returning all the system colors to defaults.
+Then comes the bugfix,
 
-- ![](https://devblogs.microsoft.com/oldnewthing/wp-content/uploads/sites/38/letter-avatar/fedb6e9c88766cfc98b454d4a9adf091.svg) .comment-author .vcard <span class="author-name" <cite class="fn">Peter Kron</cite> </span> Peter Kron <time pubdate datetime="2026-10-30T23:00:52-07:00"> </time> October 30, 2026 0 Copy link to comment by Peter Kron <a href="javascript:void(0)" title="Collapse this comment"> Collapse comment by Peter Kron </a> .comment-meta .commentmetadata I had a similar experience when I was a developer on Windows PageMaker. I had given a copy to a relative who was trying it out to write some report for work. There was a hot key command for some simple operation like Goto Next Page. Every time he used it all his text would be deleted, I was puzzling over it until I happened to select a region on the page and there was the text in highlight mode. The kids had been playing with the PC and somehow had remapped the hot key to change the text color scheme....[Read more](javascript:void(0))I had a similar experience when I was a developer on Windows PageMaker. I had given a copy to a relative who was trying it out to write some report for work. There was a hot key command for some simple operation like Goto Next Page. Every time he used it all his text would be deleted, I was puzzling over it until I happened to select a region on the page and there was the text in highlight mode. The kids had been playing with the PC and somehow had remapped the hot key to change the text color scheme. To white on white. [Read less](javascript:void(0)) [Log in to Vote or Reply](https://devblogs.microsoft.com/oldnewthing/wp-login.php?redirect_to=https%3A%2F%2Fdevblogs.microsoft.com%2Foldnewthing%2F20261029-00%2F%3Fp%3D112808%2F%23comments) #comment-##
-- ![](https://devblogs.microsoft.com/oldnewthing/wp-content/uploads/sites/38/letter-avatar/9949d595e0f27f782caeb335040d99d0.svg) .comment-author .vcard <span class="author-name" <cite class="fn">Yexuan Xiao</cite> </span> Yexuan Xiao <time pubdate datetime="2026-10-30T19:01:20-07:00"> </time> October 30, 2026 0 Copy link to comment by Yexuan Xiao <a href="javascript:void(0)" title="Collapse this comment"> Collapse comment by Yexuan Xiao </a> .comment-meta .commentmetadata I once used an app that reduced screen brightness by overlaying a semi-transparent layer on the screen. If the transparency was set to 0%, the screen would go completely black. [Log in to Vote or Reply](https://devblogs.microsoft.com/oldnewthing/wp-login.php?redirect_to=https%3A%2F%2Fdevblogs.microsoft.com%2Foldnewthing%2F20261029-00%2F%3Fp%3D112808%2F%23comments) #comment-##
-- ![](https://secure.gravatar.com/avatar/4c11f977ea96e96f1a1852fad982b15d?s=80&r=g) .comment-author .vcard <span class="author-name" <cite class="fn">Richard Deeming</cite> </span> Richard Deeming <time pubdate datetime="2026-10-30T06:06:22-07:00"> </time> 1 day ago 1 Copy link to comment by Richard Deeming <a href="javascript:void(0)" title="Collapse this comment"> Collapse comment by Richard Deeming </a> .comment-meta .commentmetadata Was the customer’s name *Desiato* by any chance? 😁 “It’s the wild colour scheme that freaks me. Every time you try to operate on of these weird black controls that are labelled in black on a black background, a little black light lights up black to let you know you’ve done it.” [Log in to Vote or Reply](https://devblogs.microsoft.com/oldnewthing/wp-login.php?redirect_to=https%3A%2F%2Fdevblogs.microsoft.com%2Foldnewthing%2F20261029-00%2F%3Fp%3D112808%2F%23comments) #comment-##
-- ![](https://devblogs.microsoft.com/oldnewthing/wp-content/uploads/sites/38/letter-avatar/dd4061d0efffdf32d20901f9f57862fe.svg) .comment-author .vcard <span class="author-name" <cite class="fn">Jernej Simončič</cite> </span> Jernej Simončič <time pubdate datetime="2026-10-30T03:33:13-07:00"> </time> 2 days ago 3 Copy link to comment by Jernej Simončič <a href="javascript:void(0)" title="Collapse this comment"> Collapse comment by Jernej Simončič </a> .comment-meta .commentmetadata 12 seconds? Every (desktop) PC I’ve encountered shuts down after holding down the power button for 5 seconds, so if Windows is waiting 8 seconds to do a dump, it won’t do anything. [Log in to Vote or Reply](https://devblogs.microsoft.com/oldnewthing/wp-login.php?redirect_to=https%3A%2F%2Fdevblogs.microsoft.com%2Foldnewthing%2F20261029-00%2F%3Fp%3D112808%2F%23comments) #comment-## .children
-  - ![](https://devblogs.microsoft.com/oldnewthing/wp-content/uploads/sites/38/nsl_avatars/317a43007381492d6947c0253f24eec8.webp) .comment-author .vcard <span class="author-name" <cite class="fn">Andreas Rejbrand</cite> </span> Andreas Rejbrand <time pubdate datetime="2026-10-31T16:52:44-07:00"> </time> October 31, 2026 · Edited 0 Copy link to comment by Andreas Rejbrand <a href="javascript:void(0)" title="Collapse this comment"> Collapse comment by Andreas Rejbrand </a> .comment-meta .commentmetadata All the PCs I have ever encountered also shut down hard after some 4 or 5 seconds. A quick Google search, however, seems to indicate that Microsoft Surface laptops behave differently. [Log in to Vote or Reply](https://devblogs.microsoft.com/oldnewthing/wp-login.php?redirect_to=https%3A%2F%2Fdevblogs.microsoft.com%2Foldnewthing%2F20261029-00%2F%3Fp%3D112808%2F%23comments) #comment-##
+```diff
+Commit 2
+
+diff --git a/arith.py b/arith.py
+--- a/arith.py
++++ b/arith.py
+@@ -1,2 +1,2 @@
+ def add(a, b):
+-   return a + b + 1
++   return a + b
+diff --git a/test_arith.py b/test_arith.py
+--- a/test_arith.py
++++ b/test_arith.py
+@@ -1,2 +1,2 @@
+ def test_add(a, b):
+-   assert add(2, 2) == 5
++   assert add(2, 2) == 4
+```
+
+## BUT Y THO
+
+Three reasons:
+
+1. Clearly shows exactly how the bug currently behaves
+2. Demonstrable proof that the bugfix actually fixed the bug
+3. CI still passes at every commit
+
+The traditional way to do this is to do a bugfix and add a test in the same commit. But what if the test accidentally already passed before the alleged bugfix and the alleged bugfix didn’t actually work? In that case the added test gives false confidence that the bugfix worked.
+
+## Alright, show me
+
+Here’s a less obvious example.
+
+Suppose we want to make sure users are not underage,
+
+```python
+def age_in_years(birthday, today):
+    return today.year - birthday.year
+
+def can_access(birthday, today):
+    return 18 <= age_in_years(
+        birthday,
+        today
+    )
+```
+
+You notice that this age check is buggy. It’s only considering the years. If it’s October 2026, but you were born on December 2008, you are not 18 yet.
+
+To fix it, the problem is just an off-by-one.
+
+```diff
+diff --git a/dates.py b/dates.py
+--- a/dates.py
++++ b/dates.py
+@@ -4,7 +4,7 @@ def age_in_years(birthday, today):
+     return today.year - birthday.year
+
+ def can_access(birthday, today):
+-    return 18 <= age_in_years(
++    return 18 < age_in_years(
+         birthday,
+         today
+     )
+diff --git a/test_date.py b/test_date.py
+--- a/test_date.py
++++ b/test_date.py
+@@ -0,0 +1,5 @@
++def test_can_access():
++   assert can_access(
++       date(2007, 1, 1),
++       date(2026, 1, 1)
++   )
+```
+
+The astute reader will observe the problem isn’t in the `can_access` function but in the age calculation. The bugfix isn’t an actual bugfix and the proposed test actually passes both before and after the proposed fix.
+
+The *Kluever Maneuver* would have prevented this.
+
+We wrongly check that someone born on New Year’s Eve in 2008 is eighteen on New Year’s Day in 2026.
+
+```diff
+commit 1
+
+diff --git a/test_date.py b/test_date.py
+--- a/test_date.py
++++ b/test_date.py
+@@ -0,0 +1,5 @@
++def test_can_access():
++   assert can_access(
++       date(2008, 12, 31),
++       date(2026, 1, 1)
++   )
+```
+
+Then we fix the age calculation and flip the test.
+
+```diff
+commit 2
+
+diff --git a/dates.py b/dates.py
+--- a/dates.py
++++ b/dates.py
+@@ -1,7 +1,10 @@
++from dateutil.relativedelta import relativedelta
+
+ def age_in_years(birthday, today):
+-    return today.year - birthday.year
++    return relativedelta(
++        today,
++        birthday
++    ).years
+
+ def can_access(birthday, today):
+     return 18 <= age_in_years(
+diff --git a/test_date.py b/test_date.py
+--- a/test_date.py
++++ b/test_date.py
+@@ -1,5 +1,5 @@
+ def test_can_access():
+-   assert test_can_access(
++   assert not test_can_access(
+        date(2008, 12, 31),
+        date(2026, 1, 1)
+    )
+```
+
+## Shouldn’t we use `XFAIL` instead?
+
+Okay, first of all, not every testing framework has an `XFAIL` equivalent (sigh, Java…).
+
+Setting that aside, a positive passing test isn’t completely logically equivalent to a positive failing test. Going back to our addition example, if we were to add this test,
+
+```diff
+Commit 1
+
+diff --git a/test_arith.py b/test_arith.py
+--- a/test_arith.py
++++ b/test_arith.py
+@@ -0,0 +1,2 @@
++@pytest.mark.xfail
++def test_add(a, b):
++   assert add(2, 2) == 4
+```
+
+This test only tells us that the current addition isn’t four, but it doesn’t tell us exactly what the addition is. Depending on the nature of the bug, a positive failing test might not exemplify as clearly what exactly the bug is. Knowing that two plus two is five might make it easier to understand how to fix the bug.
+
+That being said, using `XFAIL`  is in general roughly equivalent. If for some reason we can’t currently fix the bug right now, only record it, an `XFAIL` is better, since we expect we’ll be carrying this around for a longer time.
+
+## What about bug tracking?
+
+Ah, yes, it’s also a good idea to log a bug in your tracker.
+
+Reference the bug in your first commit.
+
+```diff
+add a test showing the bug
+
+diff --git a/test_arith.py b/test_arith.py
+--- a/test_arith.py
++++ b/test_arith.py
+@@ -0,0 +1,2 @@
++FIXME: bug #1729
++def test_add(a, b):
++   assert add(2, 2) == 5
+```
+
+Record the fix in the second commit:
+
+```diff
+remove off-by-one error
+
+fixes: #1729
+
+diff --git a/arith.py b/arith.py
+--- a/arith.py
++++ b/arith.py
+@@ -1,2 +1,2 @@
+ def add(a, b):
+-   return a + b + 1
++   return a + b
+diff --git a/test_arith.py b/test_arith.py
+--- a/test_arith.py
++++ b/test_arith.py
+@@ -1,2 +1,2 @@
+-FIXME: bug #1729
+ def test_add(a, b):
+-   assert add(2, 2) == 5
++   assert add(2, 2) == 4
+```
+
+## Okay but why “Kluever Maneuver”?
+
+Oh. Because my colleague [Kurt Kluever](https://github.com/kluever) taught it to me, and I immediately think back to him when I think of this technique. He usualy calls it “terrible tests”, as in “Jordi, can you please write a terrible test for this?” and off I go to write a test asserting something I know to be wrong.

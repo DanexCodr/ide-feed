@@ -1,112 +1,22 @@
-If you want to keep up with what's important from the point of view of the developer, you can rely on I Programmer to sift through the news to select items that are of interest and keep up with developments. To receive this digest automatically by email, sign up for our weekly [ newsletter. ](<https://www.i-programmer.info/register.html>) **October 22 - 28, 2026** | 
+Robots have made incredible advances thanks to reinforcement learning. See the Unitree G1 vault barriers, climb ladders, and more, in a manner fit for the real world. At I Programmer, we've been following the evolution of humanoid robot mobility. Looking back to the early milestone of the DARPA Robotics Challenge, robots were still learning to stand upright without falling over, although we did see [Atlas Walking Over Randomness](<https://www.i-programmer.info/news/169-robotics/6632-atlas-walking-over-randomness.html>) very slowly and falling over before completing the course. Atlas continued to make progress with mobility, impressing us with its ability to walk over uneven ground and to do both dance and parkour even before it made the transition from hand-coded control systems to reinforcement learning in 2024-25.  Meanwhile the Chinese made a big push into robotics and in 2025 hosted the first half marathon in which robots raced against humans. In that event only only 6 of 20 robot entrants finished the course and the fastest time recorded was 2 hours and 40 minutes, well over twice the time of the men's winner of the race who had a time of 1 hour and 2 minutes. Fast forward to 2026, when 300 robots competed, and several robots outpaced the fastest human runners. The three winning robots had times that were 15 minutes faster than the winning human. For this second event about 40% of the robots used fully autonomous navigation and stability was also much improved. However there was evidence that speed was being optimized at the expense of other factors and that the robots competition performance would not generalize to "normal" situations. Now the Robot Systems Lab at ETH Zurich has introduced a new approach to training humanoid robots for deployment in real world scenarios which it presents in its latest research paper, _**[Humanoid Mobility via Attention-based Contacts](<https://arxiv.org/html/2610.31608v1>)** ,_ posted on arXiv and also presented in this video:  VIDEO Let's demystify the jargon of the paper's title. The [paper](<https://arxiv.org/html/2610.31608v1>) starts by outlining the challenges involved in achieving "_**humanoid mobility**_ ": _Deploying humanoid robots in human-centric environments requires capabilities well beyond stable bipedal walking. Traversing cluttered and geometrically constrained environments often demands stepping across sparse footholds, climbing onto obstacles, crawling through confined spaces, or leveraging the upper body for support. These multicontact behaviors fundamentally diverge from conventional locomotion. Instead of adhering to a prescribed pattern of foot contacts, the robot must continuously determine the spatial, temporal, and anatomical distribution of its environmental interactions._ The project's [GitHub repo](<https://leggedrobotics.github.io/ACP/index.html>) is where we find how the Unitree G1 learns the skills required to move in the physical world through "_**contacts**_ ". summarizing it as: _13.2 minutes of human motion teach the robot where its hands, feet, knees, elbows and pelvis should meet the world. Reinforcement learning fills in the rest of the body. At deployment, the reference is gone: the robot plans its own contacts from a LiDAR height map and a goal, with 1 policy for every skill._ "_**Attention-based**_ " refers to the use of a neural network attention mechanism (similar to the self-attention used in modern Transformer models) to dynamically weigh and select the most relevant environmental features and temporal cues for predicting physical contacts. Its key mechanisms are
 
-### Featured Articles  
+  * Weighing Spatial and Temporal Context: As the humanoid robot moves, its onboard sensors take in terrain data. The attention mechanism allows the planner to dynamically "attend to" the critical parts of the terrain (such as a stepping stone, a ledge, or a flat patch of ground) while ignoring irrelevant background noise.
+  * Predicting Future Contacts: The model uses attention to correlate what the robot currently senses with future contact events—determining precisely when and where a foot or limb needs to make contact with the terrain to maintain balance and momentum.
+  * Flexible Information Flow: Instead of rigidly following a predetermined motion trajectory, the attention mechanism lets the network decide how much importance to assign to different data inputs on the fly, allowing the robot to adapt its stepping strategy seamlessly when faced with unexpected obstacles.
 
----  
+The novel approach introduced in this project centers on treating physical contact as a unified physical abstraction rather than trying to map full-body joint trajectories or rely on rigid motion references at runtime. Key aspects of this novel methodology include:
 
-* * *
+  * Using Motion Data Exclusively as a Training Prior: Instead of forcing the robot to mimic reference motion capture data line-by-line during deployment, which often breaks down when facing unexpected obstacles, the framework uses human motion clips strictly to teach the system the structure of natural interactions during training. At deployment, no reference inputs are needed. 
+  * Contact-Centric Interface (9 Body Parts): The system decomposes complex whole-body movements (walking, climbing, crawling, and balancing) into a generalized contact plan across nine distinct body parts. By predicting where and when these contact points interact with the environment, it gives the underlying control policy room to figure out the rest of the body's posture via reinforcement learning. 
+  * Self-Supervised Attention Mechanism: An attention-based planner processes onboard sensor data (such as LiDAR-derived elevation maps) to dynamically select and evaluate relevant footholds and surfaces. This prevents the robot from generating physically impossible trajectories (like stepping into empty space) and allows it to adapt seamlessly to sparse, challenging terrains. 
+  * Emergent Goal-Conditioned Multi-Skill Behavior: Because the framework separates the high-level contact plan from low-level execution, a single generalist policy can autonomously branch into completely different behaviors based purely on user-specified goals. For instance, when facing the same obstacle box, the robot will step up, use its hands to climb, crawl underneath, or turn laterally depending entirely on the target command, without needing manual state machines. 
 
-[ The Pico/W In C: SPI Basics ](<https://www.i-programmer.info/programming/148-hardware/19245-the-picow-in-c-spi-basics.html>)   
-28 Oct  |  Harry Fairhead    
-[ ](<https://www.i-programmer.info/programming/148-hardware/19245-the-picow-in-c-spi-basics.html>) The Pico has two SPI controllers and they are very easy to use. This extract comes from **Programming** **the Raspberry Pi Pico/W In C.** <ASIN:B0FDYDPQ54>  
+So now RSL has tweaked reinforcement learning in a way that both reduces initial training and makes learning more adaptable, showing an approach that does have potential for real-world deployment. 
 
-* * *
+#### More Information
 
-[ John Backus - the Father of Fortran ](<https://www.i-programmer.info/history/8-people/326-john-backus-gthe-father-of-fortran.html>)   
-24 Oct  |  Historian    
-[ ](<https://www.i-programmer.info/history/8-people/326-john-backus-gthe-father-of-fortran.html>) Creating the first compiler went hand-in-hand with the task to creating the first high-level computer language. You can argue that this was Fortran or some other language, but the fact of the matter is that Fortran was the language that kickstarted the widespread use of computers. This is the story of how it happened.  
+[Humanoid Mobility via Attention-based Contacts](<https://arxiv.org/html/2610.31608v1>) by Junzhe He, Kehan Wen, Chong Zhang, Clemens Schwarke, Zewei Zhang, Kaixian Qu, Siyuan Hu, Matthias Müller, Vladlen Koltun, Marco Hutter
 
-### Programming News and Views  
+#### Related Articles
 
-* * *
-
-[ Introducing Scrimba’s Explainers ](<https://www.i-programmer.info/news/105-artificial-intelligence/19247-introducing-scrimbas-explainers.html>)   
-28 Oct  |  Sue Gee    
-[ ](<https://www.i-programmer.info/news/105-artificial-intelligence/19247-introducing-scrimbas-explainers.html>) Explain is a feature that was added to Scrimba a few months ago. It sounded like magic then, now trying it out for myself I discover that it is magic that works and is a resource that anyone with information to share needs to know about.  
-
-* * *
-
-[ CPython Dropping Experimental JIT ](<https://www.i-programmer.info/news/216-python/19246-cpython-dropping-experimental-jit.html>)   
-28 Oct  |  Mike James    
-[ ](<https://www.i-programmer.info/news/216-python/19246-cpython-dropping-experimental-jit.html>) The experimental just-in-time compiler is being removed from CPython. The Python steering committee paused the development of the JIT back in June, and now Savannah Ostrowski, Steering Council Member, has said that after further discussion, the developers working on the proposal for the compiler have decided to withdraw it.  
-<ASIN:B0B5522QS3>  
-
-* * *
-
-[ HuggingFace's Agentic Evaluations Workshop ](<https://www.i-programmer.info/news/105-artificial-intelligence/19243-huggingfaces-agentic-evaluations-workshop-.html>)   
-27 Oct  |  Nikos Vaggalis    
-[ ](<https://www.i-programmer.info/news/105-artificial-intelligence/19243-huggingfaces-agentic-evaluations-workshop-.html>) This new course explores the evolving landscape of AI agent evaluation and training, highlighting a transition from simple language models to complex, multi-step systems capable of handling long-horizon tasks.  
-
-* * *
-
-[ Google And Meta Release PyTorch Backend For TPUs ](<https://www.i-programmer.info/news/105-artificial-intelligence/19244-google-and-meta-release-pytorch-backend-for-tpus.html>)   
-27 Oct  |  Kay Ewbank    
-[ ](<https://www.i-programmer.info/news/105-artificial-intelligence/19244-google-and-meta-release-pytorch-backend-for-tpus.html>) Google and Meta have released TorchTPU, an open source collaboration that introduces a native PyTorch backend for Google TPUs. TorchTPU can be used to execute models and migrate TPUs.  
-
-* * *
-
-[ The Jakarta Agentic AI Project ](<https://www.i-programmer.info/news/80-java/19242-the-jakarta-agentic-ai-project.html>)   
-26 Oct  |  Nikos Vaggalis    
-[ ](<https://www.i-programmer.info/news/80-java/19242-the-jakarta-agentic-ai-project.html>) A new open initiative under the Eclipse Foundation is aimed at bringing vendor neutral, standardized APIs to enterprise Java.  
-
-* * *
-
-[ Apache Camel 4.23 Adds Semantic EIPs ](<https://www.i-programmer.info/news/90-tools/19241-apache-camel-423-adds-semantic-eips.html>)   
-26 Oct  |  Kay Ewbank    
-[ ](<https://www.i-programmer.info/news/90-tools/19241-apache-camel-423-adds-semantic-eips.html>) Camel 4.23 has been released with a number of improvements including the addition of semantic EIPs, new authorization components, and new Switch and Cache EIPs in Camel Core.  
-
-* * *
-
-[ Gemini 4 Argon Learns From Videos ](<https://www.i-programmer.info/news/105-artificial-intelligence/19239-gemini-4-argon-learns-from-video.html>)   
-25 Oct  |  Lucy Black    
-[ ](<https://www.i-programmer.info/news/105-artificial-intelligence/19239-gemini-4-argon-learns-from-video.html>) Google DeepMind robotics researchers have found a short cut to teaching robots new physical skills. Take video footage of a human performing the skill and ask Gemini 4 Argon to build a virtual simulation.  
-
-* * *
-
-[ Node.js Creator Joins Cloudflare, Deno Is Dead ](<https://www.i-programmer.info/news/141-cloud-computing/19237-nodejs-creator-joins-cloudflare-deno-is-dead.html>)   
-23 Oct  |  Kay Ewbank    
-[ ](<https://www.i-programmer.info/news/141-cloud-computing/19237-nodejs-creator-joins-cloudflare-deno-is-dead.html>) The Deno team is joining Cloudflare "to radically simplify self-hosting Workers and Durable Objects, so developers can use the same primitives in more places". A side effect of the move is that new work will cease on Deno. However, there will be another year of bug fixes and security updates, and the project will remain open source if anyone wants to keep working on it.  
-
-* * *
-
-[ Fortran At 70 Enjoying New Lease of Life ](<https://www.i-programmer.info/news/82-heritage/10184-fortran-at-70-enjoying-new-lease-of-life.html>)   
-23 Oct  |  Mike James    
-[ ](<https://www.i-programmer.info/news/82-heritage/10184-fortran-at-70-enjoying-new-lease-of-life.html>) The first Fortran Reference Manual was released in October 1956, six months before the first working compilers were distributed to IBM customers. While Fortran may have challengers as the first compiled computer language, it is certainly the most influential and the most durable of the early high-level languages.  
-
-* * *
-
-[ NestJS 12 Now Ships As ESM ](<https://www.i-programmer.info/news/167-javascript/19234-nestjs-12-now-ships-as-esm.html>)   
-22 Oct  |  Ian Elliot    
-[ ](<https://www.i-programmer.info/news/167-javascript/19234-nestjs-12-now-ships-as-esm.html>) NestJS 12 has been released, with improvements to the framework, the CLI, the default tooling, and the documentation.  
-
-* * *
-
-[ GemDB Releases VS Code Extension ](<https://www.i-programmer.info/news/84-database/19233-gemdb-releases-vs-code-extension.html>)   
-22 Oct  |  Kay Ewbank    
-[ ](<https://www.i-programmer.info/news/84-database/19233-gemdb-releases-vs-code-extension.html>) GemDB has launched GemDB Code, a free Visual Studio Code extension that delivers a database where the code is the schema. The extension ships with a Jupyter Notebook kernel and an MCP server for natural-language queries.  
-
-### Book Watch  
-
-* * *
-
-[ The Art of Code (Manning) ](<https://www.i-programmer.info/book-watch-archive/19248-the-art-of-code-manning.html>)   
-
-Subtitled, "the surprising power of beauty in software development" ,this book argues that aesthetics can be important in programming and elegant code can yield profound practical benefits, making it easier to maintain, extend, and onboard developers, even (or especially) when you’re doing agentic coding. Sandrine Banas discusses how artful coding directly reduces bugs and increases system durability. At the heart of this book lies the “rosette model,” a structural framework that maps eight interlocking dimensions of code quality. It places durability as the foundation, with creativity at the center supported by overlapping traits like simplicity, expressiveness, and sustainability. <ASIN:1633434923 >  
-
-* * *
-
-[ Essential Data Structures and Algorithms in Java (Packt) ](<https://www.i-programmer.info/book-watch-archive/19240-essential-data-structures-and-algorithms-in-java-packt.html>)   
-
-In this practical guide Joseph Su explains how to bridge theory and practice in mastering data structures and algorithms. Using Java, and focusing on real-world challenges and pragmatic solutions, Su explores foundational data structures such as arrays, lists, stacks, queues, trees, and graphs, and shows how to implement them natively and use the Java Collections Framework to build scalable applications. <ASIN:1835883702 >  
-
-* * *
-
-[ Putting the C in the C64 (The Far Out Zone) ](<https://www.i-programmer.info/book-watch-archive/19236-putting-the-c-in-the-c64-the-far-out-zone.html>)   
-
-Subtitled "A Practical Guide To Programming the Commodore 64 with C and CC65", this book introduces readers to the C programming language and shows how to use the free CC65 cross-compiler to create programs for the legendary Commodore 64. John McGinnis provides explanations, source-code examples, and technical reference material, bridging the gap between modern development tools and classic 8-bit computing. You don't need to dust off a forty-year-old computer to get started. With a modern PC and a Commodore 64 emulator, you can begin exploring C64 programming today. <ASIN:B0HNBXVC7D >  
-
-I Programmer has reported news for over 16 years. You can access [ I Programmer Weekly ](<https://www.i-programmer.info/i-programmer-weekly>) back to January 2012 for all the headlines plus the book reviews and articles.
-
-To keep up with the latest news and receive this digest automatically by email, [ sign up ](<https://www.i-programmer.info/register.html>) for our [ weekly newsletter ](<https://www.i-programmer.info/edit-profile.html?layout=form>) and follow us on [ Twitter, ](<http://twitter.com/Iprogrammerinfo>) [ Facebook, ](<http://www.facebook.com/pages/iProgrammer/127140977307932#%21/pages/iProgrammer/127140977307932?v=wall>) and [ LinkedIn ](<http://www.linkedin.com/company/i-programmer>) , where you are welcome to share all our stories.
-
-You can also subscribe to our RSS Feeds - we have one for [ Full Contents ](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=3&format=raw>) , another for [ News ](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=1&format=raw>) and also one for [ Books ](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=2&format=raw>) with details of reviews and additions to Book Watch.
+[Atlas Running Wild](<https://www.i-programmer.info/news/169-robotics/8901-atlas-running-wild.html>) [Atlas Does Parkour And The Team Explains Why And How](<https://www.i-programmer.info/news/169-robotics/14813-atlas-does-parkour-and-the-team-explains-why-and-how.html>) [Atlas In Action With Reinforcement Learning](<https://www.i-programmer.info/news/169-robotics/17911-atlas-in-action-with-reinforcement-learning.html>) [Robots Run Half Marathon - At Snail's Pace](<https://www.i-programmer.info/news/169-robotics/17980-robots-run-half-marathon-ar-snails-pace.html>) [Robots Outpace Humans In Half Marathon](<https://www.i-programmer.info/news/169-robotics/18811-robots-outpace-humans-in-half-marathon.html>) [Unitree G1 - See How It Runs ](<https://www.i-programmer.info/news/169-robotics/17781-unitree-g1-see-how-it-runs.html>) To be informed about new articles on I Programmer, sign up for our [weekly newsletter](<https://www.i-programmer.info/edit-profile.html?layout=form>),[ ](<https://s3.amazonaws.com/com.alexa.toolbar/atbp/hfdfGO/download/index.htm>)subscribe to the [RSS feed](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=3&format=raw>) and follow us on [Facebook](<http://www.facebook.com/pages/iProgrammer/127140977307932#%21/pages/iProgrammer/127140977307932?v=wall>) or [Linkedin](<http://www.linkedin.com/company/i-programmer>). [](<https://amzn.to/4iJFqTH>)
