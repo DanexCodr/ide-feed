@@ -1,70 +1,45 @@
-Not me, this is just friendly advice from a struggling user.
+In the [first part](https://www.modernescpp.com/index.php/cpp-and-memory-safety-part-1/) of this article, we have taken a look at two attempts to decide whether a given string is a palindrome. Both implementations were written in “Classic C++” and didn’t feel great: the code was difficult to read, hard to understand and consequently the defects were difficult to detect. Now it’s time to continue the story and to take a look at a better solution, the “Modern C++” solution.
 
-Alongside [Codeberg](https://codeberg.org/) I’d consider [Tangled](https://tangled.org/) to be a real GitHub replacement. [We desperately need to leave GitHub behind.](https://dbushell.com/2026/04/29/github-is-sinking/) It’s difficult to recommend any tech these days. I used to spread the gospel of Proton and [that backfired](https://dbushell.com/notes/2026-10-30T07:29Z/). From what I’ve seen, Tangled seem to be saying and doing the right things so far. I have trepidations about their [venture capital funding](https://tangled.org/blog/seed/) (see [Deno’s demise](https://dbushell.com/notes/2026-10-10T10:30Z/)) but pessimism is no fun.
+## A Modern C++ Solution
 
-Tangled’s recent blog post on [federated code forges](https://tangled.org/blog/forge/) piqued my interest. [I self-host Forgejo](https://dbushell.com/2025/08/15/self-hosted-forgejo-actions-runner/) and a big downside is that no one else can participate easily. [Forgejo federation](https://forgejo.codeberg.page/faq/#what-about-forge-federation) is under development. Maybe the two can co-exist? But that’s not what I’m here to discuss.
+So let’s take a look at a modern C++ solution.
 
-## Tangled’s new look
+Yes, it’s that simple: a single function call to the `std::equal()` algorithm. We compare the first half of the range represented by forward iterators with the second half of the range represented by reverse iterators.
 
-In the same post Tangled revealed their new UI design.
+*“But Klaus, wait a second: this `std::equal()` algorithm is ages old! This has been part of C++98! This isn’t modern, is it?”*
 
-> We’ve redone the UI on top of our new architecture (described further below), in Svelte. Things should now be quicker, visually consistent and prettier! The keen eyed of you might’ve also spotted that we’ve swapped out Inter for Timeless Sans.
->
-> [The federated code forge](https://tangled.org/blog/forge/#a-fresh-look) - Anirudh (Tangled CEO)
+If this is what you are thinking, then I have some important information for you: modern C++ is not about new features or new C++ standards. It is about writing correct, fast and safe code by default. It is about a certain mindset. So to prove my point, ask yourself the question from before: are you certain that there are no safety or security related issues?
 
-I quiped on Bluesky: [“keen eyed? eagle-eyed maybe!”](https://bsky.app/profile/did:plc:rgrzo7xept2yb2auooex4rlg/post/3mz5zpy3yus2j) — the new font size is exceedingly tiny. It’s coded as `12px` with `16px` line height. Tangled is practically unusable for me at this size. It was small before but I could zoom in. The way the new front-end is designed and built doesn’t leave much room for personal remedy. This is not just a subjective opinion there are real accessibility failures here.
+There are none, right? And it is so easy to verify: no `if` statements — in fact, no conditionals at all, no pointers or indices, no explicit loop. It’s just a single, simple function call. So this code is correct by inspection. It is correct by default. And it is simple. And fast.
 
-*(Edit: to be clear, below is one example of many issues.)*
+There is even a newer, even more elegant solution:
 
-## Font failure
+This is the C++20 ranges-based solution. We are using the `std::ranges::equal()` function on the string and its reverse representation directly. We don’t even need iterators anymore. Admittedly, we are now comparing the entire range and not just the first and second half. However, performance aside, the simplicity, the elegance, and the correctness by default are amazing! This is what we refer to as “Modern C++”.
 
-Below is a screenshot from Tangled’s new user interface design.
+## The Real Problem
 
-Visit [`tangled.org`](https://tangled.org/timeline) and experience the new UI yourself.
+*“OK, Klaus, I agree this is simpler and correct by default. But does this really mean that the loop-based solution is bad? After all, it works, doesn’t it?”*
 
-12 pixels is too small for any meaningful text (which is typically all text). Maybe you feel the size is totally fine? That’s fine for you. But it’s not fine for a *significant* number of people. You won’t find any accessibility expert happy with that size. (Low-DPI displays may even struggle to render the font legibly.)
+You are correct, it “works”, ignoring the UB for single-character strings. But it is more complicated, requires more effort to verify, takes more time to write, is more difficult to read and understand, requires considerably more testing and just isn’t correct by default. All of which means that, in the end, it is considerably more expensive, too. There simply isn’t a good enough reason to write it in this classic style anymore. This is exactly what I perceive as the real problem in our community.
 
-[WCAG 2.2 accessibility guidelines](https://www.w3.org/WAI/WCAG22/Understanding/) don’t recommend a minimum font size. [1.4.4 Resize Text](https://www.w3.org/TR/WCAG22/#resize-text) does require that text can be resized up to 200% “without loss of content or functionality”.
+Too many C++ developers have not embraced modern C++ yet and still use the dangerous and more error-prone constructs by default. Too many C++ developers don’t know about the modern ways of doing things or, for whatever reason, still prefer to write the more explicit code. Because of this, they work by default in the “unsafe mode” of C++.
 
-Tangled uses pixel units in CSS for font size<sup>†</sup>. That means the UI won’t adapt to the browser default setting. [I can *force* a minimum](https://support.mozilla.org/en-US/kb/font-size-and-zoom-increase-size-of-web-pages#w_set-a-minimum-text-size) `16px` font size and look what happens.
+To me this feels like an educational problem, a teaching issue. For too many decades people have written this classic C++ and “it was OK”. By now people feel too comfortable, feel too familiar with this style. This is the real problem.
 
-**<sup>†</sup> Correction:** I was wrong about pixel units everywhere (I misread the computed values), it’s `font-size: 16px` on the `<html>` element that blocks the relative units from scaling properly with browser settings [(an easier fix)](https://adrianroselli.com/2024/03/the-ultimate-ideal-bestest-base-font-size-that-everyone-is-keeping-a-secret-especially-chet.html).
+Unfortunately, this problem is currently getting scaled up significantly: With the use of AI tools, people generate this kind of classic C++ automatically. And yes, I have got proof: I asked ChatGPT to generate an `is_palindrome()` function for me (see Figure 1). Guess what: it gave me almost exactly the function from the original LinkedIn post. And no: it didn’t even consider suggesting the use of an algorithm.
 
-Text lines get too close for comfort. Characters are starting to get clipped. See the “g” descender in “Tangled” for example.
+So why don’t these modern tools use the modern way? Well, despite the name, AI has nothing to do with intelligence. It is a statistics-based tool. If more people use the classic way, then statistically this is the “correct” solution. So it is not a big surprise that AI tools will rather write a `for` loop for you instead of using an algorithm.
 
-And if I force a 200% resize at `24px` this happens.
+I should be honest and state that this is not true for every AI tool on the market. Some are better than others, some actually suggest using an algorithm. However, this unfortunately doesn’t resolve the problem: AI tools may suggest outdated solutions, which are not best practice anymore.
 
-Oh dear! Text that is [“clipped, truncated or obscured”](https://www.w3.org/WAI/WCAG22/Techniques/failures/F69) is a failure.
+Luckily many people in the community know better than the AI tool and know about the modern solutions. Let me use this opportunity for a shout-out to some people that quickly posted a good and modern solution to the original LinkedIn post. Many thanks to Alex Dathskovsky and Sergii Rybin for posting an algorithm-based solution. Honestly, we need more people like you that help to spread the information on how things should be done today. Thank you very much!
 
-Remember that the WCAG guidelines are a floor. Nothing can be perfectly accessible, but a `12px` font size and basic front-end failures are a concern. A proper audit would reveal other issues (e.g. with how media/container queries adapt to font size).
+## What’s next?
 
-## Expect better
+So what else can we do? I for one can do my part as a C++ trainer: I can tell people. I can teach people. I can show people. And this is what I want to do here in Rainer Grimm’s blog: in the coming months I want to talk about the modern way of doing things in C++. I want to demonstrate how we work today, in the hope that this makes a difference, in the hope of establishing the modern C++ mindset and of maybe (hopefully!) contributing to the general realization, even beyond the C++ community, that C++ can be incredibly safe, if we just use it as it is supposed to be used.
 
-I’m not posting this to seek employment myself or to provide answers. I want to remind readers that accessibility concerns affect everyone. Serious projects should seek professional expertise. It’s disappointing to see yet another tech start-up fail the basics.
+In the following months, I’ll write about bounds safety, type safety, lifetime safety, initialization safety, and — as a special add-on — about undefined behavior. And I will demonstrate that with very little effort, you can avoid all of these safety problems easily and by default.
 
-I’ll provide two suggestions for free though:
+**Thanks a lot to my [Patreon Supporters](https://www.patreon.com/rainer_grimm): Matt Braun, Roman Postanciuc, Tobias Zindl, G Prvulovic, Reinhold Dröge, Abernitzke, Frank Grimm, Sakib, Broeserl, António Pina, Sergey Agafyin, Андрей Бурмистров, Jake, GS, Lawton Shoemake, Jozo Leko, John Breland, Venkat Nandam, Jose Francisco, Douglas Tinkham, Kuchlong Kuchlong, Robert Blanch, Truels Wissneth, Mario Luoni, Friedrich Huber, lennonli, Pramod Tikare Muralidhara, Peter Ware, Daniel Hufschläger, Alessandro Pezzato, Bob Perry, Satish Vangipuram, Andi Ireland, Richard Ohnemus, Michael Dunsky, Leo Goodstadt, John Wiederhirn, Yacob Cohen-Arazi, Florian Tischler, Robin Furness, Michael Young, Holger Detering, Bernd Mühlhaus, Stephen Kelley, Kyle Dean, Tusar Palauri, Juan Dent, George Liao, Daniel Ceperley, Jon T Hess, Stephen Totten, Wolfgang Fütterer, Matthias Grün, Ben Atakora, Ann Shatoff, Rob North, Bhavith C Achar, Marco Parri Empoli, Philipp Lenk, Charles-Jianye Chen, Keith Jeffery, Matt Godbolt, Honey Sukesan, bruce_lee_wayne,  Silviu Ardelean, schnapper79,  Seeker, and Sundareswaran Senthilvel.**
 
-1. Use relative units for font sizes
-2. Use unit-less numbers for line height
-
-*(Edit: see correction above, the fix is even easier.)*
-
-Frankly, what Tangled’s redesign suggests to me is that nobody involved with the process gave accessibility enough thought <del>(if any)</del> *(edit: that part was unfair, there was some effort but far from adequate testing)*. That may sound harsh but it’s usually the reality from my experience. Whatever the case, Tangled must do better in this area.
-
-If I may answer a few predictable but hypothetical comments.
-
-> This is just v1. Things will improve.
-
-I’m sure they will and maybe even pushed by my criticism. The struggle is that accessibility concerns must be integral to design from day one, not an afterthought to patch.
-
-> It’s open source, where’s your merge request?
-
-Sorry, once a project crosses the line into venture capital “open source” takes on a different meaning. If people want to contribute that’s their prerogative. Personally, I’m not in the habit of giving away professional expertise for free to a for-profit business. Such expectations are especially a problem for accessibility specialists (of which I am not).
-
-> Aha! What about this accessibility failure on your website?!
-
-That’s a bit embarrassing, but thanks for the heads-up!
-
-It’s far easier to hire an accessibility expert before you ship but it’s never too late to retroactively make improvements. I’ve been making accessibility improvements on my own website for decades.
-
-I like Tangled and I want to see it do well. Maybe someone will share a [milkshake duck](https://en.wikipedia.org/wiki/Milkshake_Duck) or they donate to [fascist Linux](https://brennan.day/normalized-fascism-in-open-source-12-million-given-to-dhh/) and I’ll eat my words. I really hope not! I hope Tangled improves so that those lingering in GitHub’s slop graveyard have fewer excuses to hang around.
+**Thanks, in particular, to Jon Hess, Lakshman, Christian Wittenhorst, Sherhy Pyton, Dendi Suhubdy, Sudhakar Belagurusamy, Richard Sargeant, Rusty Fleming, John Nebel, Mipko, Alicja Kaminska, Slavko Radman, and David Poole.**
