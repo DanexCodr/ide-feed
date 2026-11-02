@@ -1,111 +1,98 @@
-in recent times i've been asked a lot the question of "what ai model did you find to use this?", practically for all of the articles on this blog. the answer has always been my brain, i have never used ai for any kind of research i published, ever.
+*I follow Lennart Augustsson’s approach when he was presenting [MicroHs](https://github.com/augustss/MicroHs) — give the demo first.*
 
-the next question is often why, followed up with "you would be so unstoppable with claude mythos" this article should explain why i don't like using ai for my research, and my general opinions on llms in both development and cybersecurity
+*This is a Haskell program running on a specialised processor, which is hosted on an FPGA and talks through a UART port:*
 
-## why i don't use ai
+*There is no software runtime or “kernel trap” underneath, everything is handled by the hardware processor.*
 
-it's as simple as i do this for fun, and i don't find giving an ai all the fun at poking at something instead of doing it myself fun. put it another way, i like using my brain
+*There is a more detailed [demo video](https://youtu.be/cafTcH-DuZM). If you want to reproduce this demo, either by running it on your FPGA or using our simulator, see the [guidance](https://bathtub-01.github.io/technical/ouros-demo/#guidance).*
 
-i like coding, i like staring at devtools, binary ninja, or whatever else for hours, i like exploring weird library source code and tracing it with nothing but github code search and a dream, it is fun to me. i don't do anything on this blog for money, i do it for fun, the money part is just a nice side effect
+## Introduction
 
-### but why don't you just offload the tedious bits to ai?
+My PhD study topic is about specialised hardware design for non-strict functional languages. This post talks about my recent work on adding IO capability into our Haskell processor and putting it on an FPGA, with a goal of convincing people that a Haskell processor is a cute idea.
 
-a lot of the tedious bits are still fun, there's some that aren't, but i also cannot take credit for something an llm did for me, and i am wildly uncomfortable with publishing something an llm did for me on my personal blog as a writeup
+Specialised hardware for functional languages actually has a lot of interesting [history](https://haflang.github.io/history.html#event-functional-hardwarebr-1924-2024), especially in the 80s. This idea was largely abandoned during the 90s, because of better software implementation and the evolving speed of standard CPUs at the time.
 
-this blog is mine, all the work on it is mine, or is shared research with other people that are explicitly credited. i cannot take credit for something an llm did for me, and i also cannot credit an llm properly, as they aren't a person
+For reasons well known, domain-specific architectures are becoming interesting again. We try to investigate the possibility of this old idea in today’s context. I will present the hardware architecture, IO handling, FPGA implementation results, and some limitations of this work.
 
-### using an llm makes me lose my mind
+## Architecture Overview
 
-i truly have tried to use llms before, just to try it out. nothing i was going to publish as research, but i really couldn't and it left me never wanting to use an llm again
+Our processor is called **Ouros**, a combinator-based graph reduction machine. Many design details, including representation of combinators, thread management (Ouros can do automatic multi-threading!) and garbage collection, can be found in our paper<sup>[1](https://bathtub-01.github.io/technical/ouros-demo/#fn:1)</sup>. The figure below is an overview of the processor architecture.
 
-i don't know how more people don't experience this, but staring at an llms output be confidently wrong eventually to get there in the process, or looking at the commands its running and see some really stupid things its doing drives me crazy to the point i will just stop it before it answers, i cannot handle something being that confidently wrong (even though it'll probably still get there in the end)
+Unlike a conventional processor, Ouros does not execute a sequence of instructions. Instead, a Haskell program is compiled into *combinator graphs*, and execution is a process of repeatedly reducing function applications. Each application (we call it an *App*) is represented by a fixed-size word containing a function and its arguments. Larger expressions are stored in the heap as multiple Apps connected by pointers.
 
-## i'm not denying these models are powerful
+The main components are the **Dereference Heap**, which follows pointers and manages threads; the **Reducer**, which performs combinator reduction; and the **ALU**, which handles arithmetic. Apps move between these components as data tokens, and each component processes them whenever its input is ready. This is why we call Ouros *dataflow-driven*, rather than instruction-driven. Ouros also supports relatively large combinators, which can save quite a few reduction steps. Readers interested in the combinators and how we compile Haskell into them can refer to our earlier paper<sup>[2](https://bathtub-01.github.io/technical/ouros-demo/#fn:2)</sup> on structured combinators and our [MicroHs fork](https://github.com/bathtub-01/MicroHs).
 
-llms are quite powerful machines, we've seen that as of recent, that's for sure, they are still wildly marketed as being more powerful then they are, but i cannot argue that they are infact not powerful, because they are
+Another interesting feature is automatic fine-grained multi-threading. For example, when an arithmetic operation needs two independent values, Ouros can evaluate them in separate threads without any explicit threading code in the Haskell program. These threads share the same hardware pipeline. There is also a concurrent hardware garbage collector, which reclaims unused heap cells alongside normal execution.
 
-### llms still need guidance
+## Handling IO in Ouros
 
-if you threw an llm at the linux kernel and told it to find an rce without any other guidance, it probably couldn't. you still need skill and experience to guide an llm at the current state
+Adding IO allows the Ouros processor to become a standalone computer, rather than just a machine for evaluating pure expressions. The question is how to introduce side effects without hurting the graph reduction model.
 
-all of these vulnerabilities that we've been panicking over have been found by skilled researchers using llms, likely at a big firm to give them all the tokens they want. because llms still need guidance and not anyone can just do this, no matter what openai or anthropic try to tell you
+We use the familiar state-passing representation of the `IO` monad<sup>[3](https://bathtub-01.github.io/technical/ouros-demo/#fn:3)</sup>:
 
-## marketing and php2shell
+```haskell
+type World = Int
+newtype IO a = IO (World -> (a, World))
 
-ai companies have hooked onto cybersecurity as their marketing strategy and it shows, a good example is php2shell. where three companies:
+runIO :: IO a -> World -> (a, World)
+runIO (IO f) = f
 
-- calif (research firm)
-- openai (you know who openai is)
-- wiz (research firm)
+instance Monad IO where
+  return a = IO (\w -> (a, w))
 
-all collaborated on it and released their own blogposts, all seemingly with different narratives
+  (IO m) >>= k = IO (\w ->
+    case m w of
+      (a, w') -> runIO (k a) w')
+```
 
-calif went with the narrative of an ai found these php vulns with the help of a human guiding it, while openai went with the agent uncovered critical vulnerabilties, and wiz went with a middle point, still pretty openai-like
+Here `World` is just a dummy `Int`, not a representation of the actual world. The important part is the dependency: each IO operation consumes a World token and produces one for the next operation. This gives the operations an order, even though the processor evaluates Haskell lazily.
 
-### "patch the world"
+The low-level primitive IO interface is intentionally kept simple:
 
-openai talked a lot about how they were helping maintainers patch these issues, and mitigate them faster and for more people. which i'm sure they did to an extent, but i don't think they did all they could
+```haskell
+writeAXIReg :: Int -> Int -> IO ()
+writeAXIReg = primitive "IO.Write"
 
-they could easily backport these security fixes to older versions of php with the help of ai if they wanted to, it's not like they don't have the compute, they do, they have a lot of it, they're openai
+readAXIReg :: Int -> IO Int
+readAXIReg = primitive "IO.Read"
+```
 
-### dropping poc videos before patch
+They allow a Haskell program to read and write a set of registers. The compiler turns these primitives into special IO operations understood by the hardware. When an IO operation is ready, a dedicated IO unit performs the corresponding **AXI4-Lite** transaction, and the result goes back into the normal graph reduction pipeline. The operation only finishes after the bus transaction completes.
 
-this has been a common trend in the recent days of ai-based cybersecurity where researchers and otherwise companies, drop poc videos of unpatched 0days on twitter, for some reason
+The AXI4-Lite details are hidden from the Haskell program. From the programmer’s point of view, it is simply reading and writing registers, some of which are connected to the outside world. This is how we get actual side effects without a software runtime.
 
-this is so clearly marketing, and it does nothing but make everything worse in terms of security. these poc videos contain quite a lot of useful information, no matter how much you hide (which, a lot of them don't hide much) and just do nothing but fearmonger
+Currently the FPGA demo only uses a UART, with the Haskell program polling its registers. The same interface could also be connected to GPIOs, timers, a hardware random number generator, etc.
 
-hashes are also apart of this, hashes have always been a way to claim proof over a vulnerability or generally acomplishment before it becomes public, not as a way of fearmongering. **you shouldn't include the name of the product next to a hash, that is just not what a hash exists for.**
+## Some FPGA Implementation Results
 
-but a lot of companies and generally people now drop them like candy, and it causes panic for no reason. at least with a poc video you know what the vuln is, with just a hash and a product name you don't even know that, you just know some vuln exists
+The FPGA board I am using is [AUP-ZU3](https://www.realdigital.org/hardware/aup-zu3), which was kindly donated by people from AMD.
 
-### tailworm
+The current design runs at **100 MHz** on this board. Its resource usage is approximately **27% of LUTs, 7% of registers and 40% of BRAM**. The BRAM usage is mainly determined by the heap and code memories, so it can be adjusted by changing their sizes.
 
-this was a less big story, but still pretty big. on bluesky, a "security researcher" claimed to have found a 0day in tailscale. they did this by dropping a hash with the caption of "tailscale privilege escalation"
+What I find quite encouraging is that the logic footprint is roughly in the range of a small pipelined RISC-V core. Of course, this is not a like-for-like comparison, and Ouros has many limitations (see below). Still, it is nice to see that we can have direct hardware support for graph reduction, automatic threading and garbage collection within a fairly small circuit budget.
 
-!["Erica Windisch" skeeting "tailscale privilege escalation" followed by a hash](https://eva.ac/files/img/posts/llms/tailworm-skeet.png)
+## Limitations and Discussion
 
-obviously, this got people very very worried. what could tailscale privilege escalation mean? could someone bypass all ACL rules, what can happen?
+- Limited primitives: Currently Ouros doesn’t support Float or Double; its ALU also doesn’t support division on Int yet. It wouldn’t be very hard to add Float and more arithmetic operations, but Double can be harder due to encoding.
+- Missing Haskell features: I am totally relying on the MicroHs frontend to handle Haskell source, and haven’t done any serious tests to check what language features are missing — my experience suggests that basic features such as ADTs, list comprehensions and type classes do work well (but I am not a decent Haskell programmer).
+- No memory hierarchy: A heap memory of 8K×288-bit words and a code memory of 4K×288-bit words seems to fit on the AUP-ZU3 board. A Haskell program with 1-2k lines can likely be hosted in the code memory — but a more serious design to utilise the big off-chip memories for programs with bigger heap footprint and code size might need considerable engineering effort to build.
+- No dynamic program loading: Currently a Haskell program needs to be compiled into a memory image before generating the FPGA hardware. Dynamic loading might be achieved by adding some state machines for reset and program injection.
+- No interrupt in hardware: We only have polling-based IO; how to properly add interrupt to the system can be an interesting question, but currently I don’t have an answer to it.
 
-don't worry! cause we slowly get information of the vulnerability fed to us over a bluesky thread
+An immediate question someone might ask is: *how does this machine compare to a PC running GHC-compiled code?* This is not easy to answer. If we only care about wall-clock speed, the FPGA demo is likely to be several times slower than a modern laptop. However, the implementation technology, circuit size, and power consumption model are all very different, making a fair comparison difficult. Also, since Ouros has a rather unusual memory organisation, we cannot simply assume that its performance would improve by several times if implemented as an ASIC using a 7nm process.
 
-!["Erica Windisch" skeeting mentioning first that it doesn't impact all tailnet devices, that an attacker must be on the tailnet, and systems affected must be in a "non-default but widely deployed and supported configuration." and that "Impact includes systems using headscale." followed by another skeet with the CLI command to turn off Tailscale SSH](https://eva.ac/files/img/posts/llms/tailworm-thread.png)
+Apart from being a cute toy, does this FPGA demo show any practical value? One possibility I can imagine is something like a Raspberry Pi, but with Haskell as its bare-metal programming language. Being able to run Haskell directly on a small embedded processor might be useful in certain scenarios. More interestingly, I think a native Haskell processor could open up some research possibilities that have been difficult to explore in practice. For example, *what would a small operating system written entirely in Haskell look like?*
 
-so, what was the point of that? you posted barely any information, posted more but cryptic information an hour after, and then an hour after you just gave away where the vulnerability is?
+## Guidance on Reproducing the Demo
 
-i assumed that there was some responsible disclosure happening here, and that's why the hash got tweeted, etc.
+- There are four related repositories for Ouros:To compile Haskell programs, first build our MicroHs fork from the repository root:`cabal install --overwrite-policy=always `The UART demo program lives in `ouros-uart-demo` in that repository; follow the README there to compile it. You can also try your own Haskell programs in the same way. Copy the compiled program image into `ouros-chisel/src/main/scala/benchmarks` or `ouros-simulator/src/hardware/ouros/benchmarks`, depending on whether you want to use the hardware implementation or the simulator.For the **Chisel implementation**, run this from the `ouros-chisel` root:`sbt "runMain Generate uart" `This generates the SystemVerilog output under `fpga-gen/`.For the **simulator**, the UART demo can be run directly from the `ouros-simulator` root:`cargo run --release -- --mode=terminal --prog-name=UART `To reproduce the demo on the **AUP-ZU3 FPGA board**, follow the README in the [Vivado repository](https://github.com/bathtub-01/ouros-aup-zu3-vivado). It covers the FPGA build and boot image generation.
+  - MicroHs fork (branch real-world), for compiling Haskell programs.
+  - Ouros Chisel (branch real-world), for generating the hardware implementation.
+  - Ouros simulator (branch real-world), for trying programs without an FPGA.
+  - Ouros AUP-ZU3 Vivado project, for building the FPGA demo.
 
-**would you believe me that this wasn't even responsibly disclosed?**
+## Reference
 
-next day, the (single-person) company this person owns drops this website on bluesky:
-
-![the tailworm website, just a vibecoded website with a catchy domain (tailworm.com) with a bunch of ai generated text on it](https://eva.ac/files/img/posts/llms/tailworm-website.png)
-
-a full website, obviously vibe-coded, with all of their findings, a lot of which completely do not matter or just aren't critical. while the "privilege escalation" *was* real, it required you to already have acl rules to a machine, and have it's tailscale ssh enabled
-
-the vulnerability was just the fact that you could privilege escalate on that machine specifically to root. that's it. that's what was fearmongered about so much, and then they dropped it publicly next day, without even contacting tailscale to let them patch it
-
-it was given a fancy name, a catchphrase, even. but no one thought to responsibly disclose it, instead posting it on a social media platform
-
-the reason this happened was pretty clear: it was to advertise the company, not to help make the world better. it was to make everyone think about the company who exposed critical issues in tailscale, and maybe ask them for an audit
-
-## it's not all ai finding these vulnerabilities
-
-the biggest of them all, in my opinion, was eMudhra. you know, the company who had their CA private key as the number Four. this wasn't found by an ai, but just a human using a old ass library made by google called [paranoid_crypto](https://github.com/google/paranoid_crypto/) to scan through keys for fun out of curiosity
-
-that's whats beautiful about it in my opinion, the biggest thing of them all was missed by all these ais but rather was just by a human just doing random shit
-
-## conclusion
-
-i think that people have been way too lost in this wave of ai everything, that they are disregarding doing things themselves by a whole lot. it is still extremely fun to just, write code yourself, debug things yourself, stare at minified js bundles for hours at a end, cycle through random interesting looking subdomains, it's all fun! and i feel people have forgotten that a bit
-
-while an ai "can just do things", it is fun to do them yourself. i totally get using ai for work, as we live in a world where software engineers are expected to move faster then ever, and in my opinion, that isn't a good precedent, but it's what we have to live with
-
-personal projects are the place where you get to have fun, do something you enjoy. and i think giving those to an ai even just ruins your enjoyment of creating things
-
-for me, at least, the process of getting somewhere is more interesting then the end product. cause i enjoy learning along the way and i enjoy banging my head against the wall on a primitive that goes nowhere
-
-i mess with a lot of things, and i find a lot of things. but almost none of them go on this blog, simply because i have a feeling i need to one-up myself with every new blogpost, and i keep challenging myself to find something even funnier and also more critical at the same time. it makes me learn a *lot* more then i already knew
-
-writing code itself is fun, and an ai writing it for you even if you gave it a plan on how to write it, you are missing out on *so* many learning opportunities by not writing it yourself, because there's no such thing as a perfect infrastructure plan, things change as you go, while you are in the flow of writing code
-
-go reverse engineer that old iot device, mitm that weird looking chinese automatic pet feeder that requires an internet connection with the number four, make a new frontend for a website you use a lot that has a really bad frontend. you learn a lot by tinkering
+1. Xie, Yukang, Craig Ramsay, Robert Stewart, and Hans-Wolfgang Loidl. “Ouros: A Dataflow-Driven Processor for Lazy Functional Programming Languages.” In 2026 IEEE 37th International Conference on Application-specific Systems, Architectures and Processors (ASAP), pp. 85-92. IEEE, 2026. doi: [10.1109/ASAP71856.2026.00023](https://doi.org/10.1109/ASAP71856.2026.00023). [↩︎](https://bathtub-01.github.io/technical/ouros-demo/#fnref:1)
+2. Xie, Yukang, Craig Ramsay, Robert Stewart, and Hans-Wolfgang Loidl. “From Haskell to a new structured combinator processor.” In International Symposium on Trends in Functional Programming, pp. 139-164. Cham: Springer Nature Switzerland, 2025. doi: [10.1007/978-3-031-99751-8_7](https://doi.org/10.1007/978-3-031-99751-8_7). [↩︎](https://bathtub-01.github.io/technical/ouros-demo/#fnref:2)
+3. Peyton Jones, Simon L., and Philip Wadler. “Imperative functional programming.” In Proceedings of the 20th ACM SIGPLAN-SIGACT symposium on Principles of programming languages, pp. 71-84. 1993. doi: [10.1145/158511.158524](https://doi.org/10.1145/158511.158524). [↩︎](https://bathtub-01.github.io/technical/ouros-demo/#fnref:3)
