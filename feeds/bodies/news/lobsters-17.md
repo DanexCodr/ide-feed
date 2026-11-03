@@ -1,62 +1,45 @@
-We are pleased to announce the winning sequences in the OEIS 400k celebration. Well over 100 nominations were received, covering a great many topics collectively showing that the spirit of the OEIS is alive and well.
+Five months ago, we rebuilt [PostHog's warehouse product](https://posthog.com/warehouse) on DuckDB instead of ClickHouse, as [we explained at the time](https://posthog.com/blog/why-we-rebuilt-our-data-warehouse). We did it because a shared ClickHouse cluster couldn't handle hours-long modeling queries, and it lacked a cost-based query optimizer. DuckDB gave every customer their own instance, and tools like dbt could connect over Postgres. We're still fans.
 
-The selection committee consisted of [Sean A. Irvine](https://oeis.org/wiki/User:Sean_A._Irvine), [Jonas Karlsson](https://oeis.org/wiki/User:Jonas_Karlsson), [Hugo Pfoertner](https://oeis.org/wiki/User:Hugo_Pfoertner), and [Neil J. A. Sloane](https://oeis.org/wiki/User:N._J._A._Sloane). Committee members abstained from providing evaluations on sequences they authored or were closely involved with. The selection committee would like to thank all the people who took time to nominate a sequence.
+But we underestimated how big and complex our customers' workloads would get. We didn't want them to have just a good experience, we wanted the best experience you can get when you pay someone else to run your warehouse. It should work at any scale, at a fair price.
 
-## Winner
+So we spent the last three months re-architecting it, this time without DuckDB.
 
-[A400000](https://oeis.org/A400000) (previously [A399633](https://oeis.org/A399633)) [Eric Fox](https://oeis.org/wiki/User:Eric_Fox)
-The city-building sequence: a(n) = the height h of the shortest building which can see exactly h earlier buildings.
+We love DuckDB. It's probably the best single-node tool for analyzing heaps of data, and that node can be your laptop. It's robust and reliable. It almost always finishes your query, and if it runs out of memory, it spills to disk.
 
-The height of a building in Eric Fox's City-Building sequence is determined by how many existing buildings it can see. This impressed all the judges as by far the most brilliant invention of 2026. There are already 25 other sequences that reference it.
+The same features that are great locally gave us problems in the cloud. Customers ran more complex queries than we expected, so we had to add huge instances. Adding disks was an option, but queries would have been too slow and expensive to be viable.
 
-[A399995](https://oeis.org/A399995) (previously [A394611](https://oeis.org/A394611)) [Joshua B. Weinstein](https://oeis.org/wiki/User:Joshua_B._Weinstein)
-a(1) = 0. For n > 1, a(n) is the number of ways to write a(n-1) as the sum of two earlier terms with distinct positions in the sequence. *A simple definition leading to a frustratingly difficult unsolved problem.*
+To run a single-node engine safely in the cloud, we have to size the worker before the query arrives. The ergonomics here are wonky. We couldn't find a good way to tell customers what resources their queries would need. Predicting CPU and memory for a specific query was even harder.
 
-[A399996](https://oeis.org/A399996) (previously [A400866](https://oeis.org/A400866)) [Dmitry Kamenetsky](https://oeis.org/wiki/User:Dmitry_Kamenetsky)
-Number of free polyominoes with 2n cells that can be dissected into two congruent polyominoes. *The best polyomino sequence of the year.*
+Users shouldn't have to worry about this. They should be able to run whatever they need to get their work done. Our job is to handle the rest and make it as predictable as possible.
 
-[A399997](https://oeis.org/A399997) (previously [A397960](https://oeis.org/A397960)) [Wujie Gu](https://oeis.org/wiki/User:Wujie_Gu)
-a(n) is the maximum number of distinct positive differences of an n-element subset of {0, 1, ..., n*(n-1)/2}. *An instant classic extremal set-theory problem.*
+We hit other bottlenecks too, like fetching lots of data from S3 without async fetching. DuckDB only added that recently.
 
-[A399998](https://oeis.org/A399998) (previously [A400887](https://oeis.org/A400887)) [Rok Cestnik](https://oeis.org/wiki/User:Rok_Cestnik)
-a(n+1) = a(n-a(a(n))^2) + 1, a(0) = 0. *A new twist on the classic Hofstadter recurrences.*
+To use DuckDB as a fully-fledged data warehouse, we installed the [DuckLake](https://ducklake.select/2025/05/27/ducklake-01/) extension by default. It is a new lakehouse format from the same creators and follows the same principles as DuckDB: keep things simple and run on almost any setup. That works well up to a point, but at PostHog's scale, we needed something designed for distributed scale from the start.
 
-[A399999](https://oeis.org/A399999) (previously [A400462](https://oeis.org/A400462)) [Ed Pegg Jr](https://oeis.org/wiki/User:Ed_Pegg_Jr)
-Number of ways to cut a 30-60-90 triangle into n 30-60-90 triangles. *One of several triangle dissection problems, lovely pictures.*
+DuckLake's catalog schema has to stay portable across many SQL databases, which limits engine-specific optimizations. At our scale, a single-table write could take more than three minutes because every commit re-read the statistics for the entire catalog.
 
-[A400001](https://oeis.org/A400001) (previously [A400663](https://oeis.org/A400663)) [Felix Huber](https://oeis.org/wiki/User:Felix_Huber)
-a(n) is the number of congruence classes of nondegenerate triangles whose vertices are points of an n X n X n grid. *One of several excellent Huber sequences relating to triangles.*
+We tuned DuckLake with table indexes and similar tweaks. But to keep offering DuckLake, we had to stay 100% compatible with its existing, "official" schema. This left us with fewer optimization options.
 
-[A400002](https://oeis.org/A400002) (previously [A400976](https://oeis.org/A400976)) [Aidan Markey](https://oeis.org/wiki/User:Aidan_Markey)
-Start with a set of two adjacent points in a hexagonal lattice. At each iteration, add to the set the lattice points which are adjacent to exactly two points already in the set, but only if those two points are adjacent to each other. The sequence gives the number of points in the set after n iterations. *An unusual sequence of clusters.*
+Another problem is that over 99% of the catalog's statistics rows belonged to tables that no longer existed. Cleaning them up made writes 30 to 50 times faster, but the rows kept growing back.
 
-[A400003](https://oeis.org/A400003) (previously [A399179](https://oeis.org/A399179)) [Michael S. Branicky](https://oeis.org/wiki/User:Michael_S._Branicky) and [N. J. A. Sloane](https://oeis.org/wiki/User:N._J._A._Sloane)
-The sequence of binary decisions that defines the unique infinite path in the base-10 comma child graph. *Previously MSB/NJAS had to use Koenig's Lemma and the Axiom of Choice to show that it was possible for the kangaroo to escape death. Chris Randall and Paul Roberts showed without using AI that there is a unique path with a simple recurrence.*
+We also spent a lot of time on the number of connections DuckLake opens to metadata databases. That hurts on shared Postgres instances, where every connection has a real cost.
 
-[A400004](https://oeis.org/A400004) (previously [A401021](https://oeis.org/A401021)) [Scott B. Farrar](https://oeis.org/wiki/User:Scott_B._Farrar)
-Half the minimum surface area of a rectangular box with positive integer side lengths and volume at least n. *A new problem with a classic feel.*
+DuckLake at PostHog didn't start small and ramp up. We fully committed and put all of PostHog in a DuckLake to dogfood as the first customer.
 
-[A400005](https://oeis.org/A400005) (previously [A395645](https://oeis.org/A395645)) [Rémy Sigrist](https://oeis.org/wiki/User:R%C3%A9my_Sigrist)
-Consider the square spiral with its cells numbered starting at 0. Three players, Red, Green and Blue, take turns and place knights at the smallest unoccupied cell not attacked by an existing knight of a different color. Sequence lists squares occupied by a Red knight. *A representative of many astonishing sequences of knights on an infinite chessboard, a popular topic after a Numberphile video appeared.*
+When we moved off it, it held about 2 PB: roughly 1 trillion rows and 15.3 million snapshots. It broke in lots of ways that were hard to fix within DuckLake's scope.
 
-These are a further ten nominated sequences which the committee found particularly attractive or interesting. These sequences have all received the keyword “nice” but retain their original A-numbers.
+We'd rather have contributed to the existing community and helped it grow. But we couldn't land changes as fast as we needed, so we ended up carrying patches in a fork which defeats one of the main benefits of using DuckLake: the community.
 
-[A394184](https://oeis.org/A394184) ([Charles L. Hohn](https://oeis.org/wiki/User:Charles_L._Hohn)) Number of primitive tessellations of paths of length n in the square lattice, reduced for symmetry (with rotations, reflections, and translations not counted as distinct).
+Offering direct Postgres connections over port 5432 sounds like a great idea. In practice, it was much harder to scale than HTTP.
 
-[A396596](https://oeis.org/A396596)  ([Hal M. Switkay](https://oeis.org/wiki/User:Hal_M._Switkay))  Natural numbers k such that the sum of the x-th powers of the divisors of k achieves a record, for some x <= 0.
+Missing reconnects and managing TTLs and idle connections at scale is hard, and long-running connections are expensive. There's also very little tooling for load balancing pgwire compared with HTTP. Compare the ergonomics of an AWS NLB with an ALB and you'll see what we mean. HTTP headers also make routing in Kubernetes much more flexible.
 
-[A397182](https://oeis.org/A397182)  ([N. J. A. Sloane](https://oeis.org/wiki/User:N._J._A._Sloane))  a(n) = maximum number of regions the plane can be divided into by drawing n constrained long-legged A's
+There's also an endless list of Postgres clients, and each expects its own niche Postgres behavior. Customers kept asking us to fix their client or library. We spent a lot of time shipping many of those fixes, but coverage never got good enough. We'd rather spend our time building an excellent warehouse product than chasing the long tail of Postgres compatibility.
 
-[A398965](https://oeis.org/A398965)  ([Jens Ahlström](https://oeis.org/wiki/User:Jens_Ahlstr%C3%B6m))  Squares visited by a "Carpenter" (Dabbaba + Knight) moving on a spirally numbered board always to the lowest available unvisited square.
+We've learned not to hype the tech behind a warehouse so much. What counts is the experience it gives you.
 
-[A399136](https://oeis.org/A399136)  ([Stephen J. Pursey](https://oeis.org/wiki/User:Stephen_J._Pursey))  a(n) is the smallest number of cells in a polycube that has a cavity consisting of exactly n cells.
+Still, we're happy to share what we're cooking next. We rebuilt everything around our own flavor of [Trino](https://trino.io/) and created our own open table format, HogLake. And yes, we're testing it at PostHog's petabyte scale first. We made it solid before handing it to design partners.
 
-[A399138](https://oeis.org/A399138)  ([Aleksei Kudriashov](https://oeis.org/wiki/User:Aleksei_Kudriashov))  a(n) = maximum number of points in an n X n X n grid with no three collinear.
+If your current warehouse is slow or expensive, [let's talk](mailto:benjamin.k@posthog.com), especially if you have a lot of data to query. We're always looking for design partners.
 
-[A399946](https://oeis.org/A399946)  ([Eliott Grillet](https://oeis.org/wiki/User:Eliott_Grillet))  Maximum terminal value in the Gilbreath reduction of graceful paths of order n.
-
-[A400615](https://oeis.org/A400615)  ([Jakob Süskind](https://oeis.org/wiki/User:Jakob_S%C3%BCskind))  Maximum number of edges in the Hasse diagram of a lattice with n elements.
-
-[A400939](https://oeis.org/A400939)  ([Zlatko Damijanic](https://oeis.org/wiki/User:Zlatko_Damijanic))  The halving Recaman walk: a(1) = 1; for n > 1, a(n) = a(n-1)/2 if a(n-1) is even and a(n-1)/2 has not already appeared, otherwise a(n) = a(n-1) + n.
-
-[A401169](https://oeis.org/A401169)  ([Scott Duke Kominers](https://oeis.org/wiki/User:Scott_Duke_Kominers))  A quadratic form represents every Fibonacci number iff it represents these ten numbers.
+> PostHog is your product's context layer. With a full suite of developer tools –  [AI observability](https://posthog.com/ai-observability), [product analytics](https://posthog.com/product-analytics),  [session replay](https://posthog.com/session-replay), [feature flags](https://posthog.com/feature-flags),  [experiments](https://posthog.com/experiments), [error tracking](https://posthog.com/error-tracking),  [logs](https://posthog.com/logs), and more – PostHog ingests and stores all the data agents need to diagnose problems, uncover opportunities, and ship fixes. A [data warehouse](https://posthog.com/warehouse) and  [CDP](https://posthog.com/data-pipelines) tie it all together, unifying that context into one source agents can read across. You can steer it all from [Slack](https://posthog.com/slack), [the web app](https://posthog.com/ai), the desktop ([PostHog Desktop](https://posthog.com/desktop)), or your own editor via [the MCP](https://posthog.com/mcp).

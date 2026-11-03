@@ -1,294 +1,121 @@
-It caught my attention that most of Pratt parsing tutorials that I've stumbled on spend almost all of their time explaining Pratt's algorithm and none explaining the properties behind Pratt that actually matter. Pratt fits into just 9 lines of code if you're programming in a high-level language such as Rhombus:
+*This article—the second in a series of four, examining the complex legacy, technical evolution, and future prospects of DNSSEC—sets out to fact-check common beliefs on DNSSEC, point to future-proof data collections on DNSSEC matters and provides an up-to-date perspective on what DNSSEC is like today. It was widely circulated for comments and has been endorsed by over 60 people across the Internet industry (see list<sup>[1](https://circleid.com/posts/common-beliefs-about-dnssec-put-to-the-test-an-invitation-to-fact-check-your-assumptions#fn1)</sup>).*
 
-```
-    left
-```
+In the [first article](https://circleid.com/posts/the-excruciating-slow-rise-of-dnssec) from our series on DNSSEC, long-standing DNS luminary Roy Arends and Barbara Jantzen (communicator at the DNSSEC-focused non-profit organization deSEC) have engaged in a dialogue, recounting how DNSSEC adoption has been substantially hindered by the protocol’s bad image—an image that cannot be accounted for by factual failures alone, demonstrating the impact of narratives on the perception of technical devices.
 
-```
-    left
-```
+Image-wise, two narrative items have indeed been particularly influential: First, the [IANIX list](https://ianix.com/pub/dnssec-outages.html) of DNSSEC-related outages since 2009, and second, [“Against DNSSEC”](https://sockpuppet.org/blog/2015/01/15/against-dnssec/) (with its follow-up [FAQ](https://sockpuppet.org/stuff/dnssec-qa.html)), a DNSSEC-critical blog post written by Thomas H. Ptáček in 2015. Both helped harden the perception that DNSSEC is more trouble than it is worth, and references to them still surface in forum threads on DNS matters, even as the protocol, tooling, and operational practices have evolved. It therefore seems timely to check how fit they still are to help assess DNSSEC’s usefulness today.
 
-```
-    left
-```
+In every field of knowledge, if we want to assess phenomena, we need thorough documentation to establish and collect facts, to witness evolutions, to develop hypotheses as to underlying causalities and try them. And although absolute numbers can provide a fair amount of insight, relative numbers are more helpful in assessing significance—especially when data is collected multi-dimensionally, allowing analysts to grasp inter-dependencies and derive a hint at potential causes. Because ideally, when dealing with broken things, we need to know not only how broken they are, but also how they broke.
 
-```
-    left
-```
+A list can be a starting point for documentary work, though. The [IANIX list](https://ianix.com/pub/dnssec-outages.html), however, despite its objective looks, is more of a discourse than a documentation (as highlighted<sup>[2](https://circleid.com/posts/common-beliefs-about-dnssec-put-to-the-test-an-invitation-to-fact-check-your-assumptions#fn2)</sup> in our first article). In addition, it lacks transparency about its collection and curation methodology, making it difficult for readers to assess the list’s reliability and significance. As the IANIX site further does not disclose its operator’s name or contact, information on its modus operandi cannot be obtained.
 
-And here's a secret: that's the least important thing you need to understand about Pratt's. In fact, you don't need to understand this piece at all! Imagine if you were only able to use quicksort if you understood its implementation. Imagine if you were only able to use files if you knew how to implement a filesystem from scratch. It's the same logic here. If you lack the power to abstract, you'll arrive nowhere in computer science because that's how the whole field works. In fact, I wrote the backbone of a heavily Pratt-based parsing machinery for a compiler that I've been writing since last year w/o even bothering to understand the above snippet in any detail.
+Looking back, the IANIX list can be credited for having drawn the DNS community’s attention on DNSSEC-related outages and, in doing so, having acted as a strong driver for improving the protocol. However, with its bulk of information lying far in the past, and entries becoming scarce since 2020 (without any possibility to know if that is due to a recent decrease in reportable events or simply to less active maintenance), the IANIX list does not make a meaningful contribution today.
 
-Not convinced? Think for a second on how they do in traditional parsing techniques: compiler compilers! They use code generators to spit the parsing algorithm because just a minuscule crowd bothers to learn what the parsing engine is actually doing. It's no different with Pratt. However Pratt is so small that you can just copy'n'paste these 9 lines of code in your project and call it a day instead of adding a new complex dependency to your project. The algorithm hasn't changed since 1973 and it's not gonna change now.
+To broadly assess the actual outage impact of DNSSEC, we need state-of-the-art alternatives. What should these look like?
 
-In this article I'll go over what you actually need to keep in mind for Pratt parsing. The point won't be about memorizing any of it though. The point is about acquiring a mindset. As long as you acquire the mindset you don't need to even bother to remember even a single word of what I say here.
+Such longitudinal studies, consequently, could prove insightful in putting DNSSEC-induced resolution failures into perspective to other failure modes, in particular network issues or HTTPS misconfigurations that impact availability.
 
-## Nuds & leds
+Good starting points in that direction are the [DNSSEC and DANE Deployment Statistics page](https://stats.dnssec-tools.org/), which also has statistics on misconfiguration rates per TLD; a [timeline](https://desec-io.github.io/tld-dnssec-timeline/) of measured TLD validation statuses, provided by deSEC (the author’s non-profit employer) and based on [prior work](https://archive.icann.org/meetings/icann55/marrakech/downloads/presentation-dnssec-monitoring-07mar16-en.pdf) by Jaap Akkerhuis; the comprehensive dataset (2010-2025) used in a recent study by John Kristoff et al. (expected to be published later this month, at which time it will be linked here) which explores DNSSEC-induced outages and provides unweighed as well as downtime- and impact-weighed analysis (results cited at the end of this article); new [measurements](https://icann86.sched.com/event/2NQNm/dnssec-security-workshop) by deSEC contrasting percent-level error rates of both DNSSEC and HTTPS amongst the top 1M most popular domains. Another useful metric would be a public record (as recently [started](https://quad9.net/news/blog/dnssec-ntas-no-good-compromises/) by Quad9) of how frequently resolvers use so-called Negative Trust Anchors (NTAs) to temporarily turn off DNSSEC validation when working around human errors, with the long-term trend being of particular interest.
 
-The only tutorial on Pratt parsing that I can firmly recommend to someone who has never been exposed to the topic is actually a talk that Douglas Crockford gave in the conference GOTO 2013[¹](https://vinipsmaker.github.io/blog/article/pratt-parsing-is-a-black-box/#). Douglas Crockford nailed it when he stated:
+The blog post “[Against DNSSEC](https://sockpuppet.org/blog/2015/01/15/against-dnssec/)” was published by Thomas H. Ptáček in 2015, and got widely relayed. Its harsh critique of DNSSEC fell on fertile ground as numerous DNSSEC-related outages were happening and were given visibility by the IANIX list. This helped turn the blog post’s set of negative claims into potent beliefs that persist to this day and obscure actual implementation reality.
 
-> Pratt takes parsing which is a really complicated thing and reduces it to one simple question: *What do we expect to see to the left of a token*?
+At the time of its publication, some of the blog’s criticisms reflected genuine limitations and operational experience, others were disputed even then. A decade of protocol, tooling, and operational evolution makes it useful to revisit how well they describe DNSSEC today, for the sake of a fresh assessment of implementation options.
 
-— Douglas Crockford, GOTO 2013
+To be fair, this is not the first effort to matter-of-factly assess the claims voiced in “Against DNSSEC”, but one of several such publications, spanning from 2015 to the present<sup>[3](https://circleid.com/posts/common-beliefs-about-dnssec-put-to-the-test-an-invitation-to-fact-check-your-assumptions#fn3)</sup>—which incidentally corroborates the blog’s perceived influence.
 
-At first glance it may look like a mystical statement devoid of meaning, but that's the question that becomes the framework on how you face parsing problems and it'll rewire your brain to internalize the Pratt parsing mindset. That's the most important thing you need to understand. You register semantic actions for two categories: nuds and leds. A nud is a token that expects nothing to its left (nud stands for null denotation) while a led expects something (led stands for left denotation).
+These level-headed accounts, although they have not spread through the tech community as easily as earlier criticism did, still reflect (and contribute to) a gradual shift both in tone and in content, observable for instance in Hacker News forum threads where sweeping allegations on DNSSEC now [get challenged](https://news.ycombinator.com/item?id=44320497) instead of being swiftly echoed. However, even today in 2026, with automation standards having brought a substantial improvement to the protocol (RFCs [7344](https://www.rfc-editor.org/info/rfc7344/), [9615](https://www.rfc-editor.org/info/rfc9615/), [9859](https://www.rfc-editor.org/info/rfc9859/), [10026](https://www.rfc-editor.org/info/rfc10026/)), common beliefs die hard—mostly among those less directly involved in technical matters, but with the power to weigh on decisions.
 
-Traditional parsing techniques register semantic actions to production rules. Here's an example I took straight from GNU Bison's manual:
+So, what are the common beliefs around DNSSEC? And how much truth is there in them today, in 2026? Because, obviously, common beliefs can also be true, half-true or formerly true.
 
-The text between the braces is code that executes when the BNF-like grammar on the left matches. I'm gonna repeat myself because that's really important: traditional parsing techniques register semantic actions to *production rules* (which by definition are non-terminal symbols). In contrast Pratt parsing registers semantic actions to the *terminals themselves* instead. That's a fundamental shift on how you face parsing problems.
+The first set of claims brought forward by “Against DNSSEC” dismisses the DNSSEC protocol as fundamentally flawed, for being structurally incompatible with its objective (preventing the manipulation of DNS answers). Verbatim: “DNSSEC is Unnecessary”, “DNSSEC is a Government-Controlled PKI”, “DNSSEC is Incomplete”.
 
-Here's a stripped down version of the code for the tables that I have in my compiler right now:
+**Is DNSSEC unnecessary?—*NO***
 
-All values on the left of each table are the lexer codes for terminal symbols. The values on the right depend on the table kind:
+The main argument used in “Against DNSSEC” to dismiss DNSSEC as unnecessary is that “with TLS properly configured, DNSSEC adds nothing”, and that the security of TLS certificates is mainly bounded by an attacker’s ability to hijack a domain validation email sent to a domain owner (and thus, bounded by the security of email).
 
-Functions matching the signature `ExprPtr(Context&,reader,reader&)``ExprPtr(Context&,reader,reader&)`.
+The first part of this argument ignores real-world attacks that DNSSEC would have prevented while TLS could not, as for example the [nameserver routing hijack of MyEtherWallet.com in 2018](https://www.bleepingcomputer.com/news/security/hacker-hijacks-dns-server-of-myetherwallet-to-steal-160-000/), enabling the theft of $160,000 within two hours.
 
-Functions matching the signature `ExprPtr(Context&,reader,reader&,ExprPtr)``ExprPtr(Context&,reader,reader&,ExprPtr)`.
+The second part overlooks that a significant part of data fetched from the DNS are not about finding an IP address for establishing a TLS-secured connection (like HTTPS web site connections), but about providing other information—such as TXT records (used for a myriad of purposes), or NS and (upcoming) DELEG records (both used for declaring a domain’s responsible nameserver). Without DNSSEC, these are prone to various kinds of attacks, which can enable impersonation of the domain owner, traffic interception, or a hijack of the entire domain. Most notably, without a DNSSEC-based indicator, the MX records used to find a domain’s mail server cannot enforce that the subsequent email delivery happens through an encrypted connection (unlike in the web, where the “https://” URL prefix indicates the encryption request).
 
-Positive integers.
+In addition, while “Against DNSSEC” acknowledges that insecure email can be a problem during certificate issuance, it fails to recognize that DNS lookups are involved in *any* certificate issuance process, regardless of whether validation happens trough email, or one of the other (and more common) validation methods which involve publishing a validation string under the domain.
 
-Most of the semantic actions in these tables have code whose implementation amount to one semicolon in their body at most. Here's the code for `parse_unary_plus()``parse_unary_plus()`:
+Actually, today, you can use CAA records to restrict methods for domain control validation during certificate issuance and simply ban the insecure email method for your domain. As a byproduct, DNSSEC not only secures certificate issuance by hardening domain control validation, but also provides an indicator to secure email, by linking the email server’s TLS key to the domain directly within the DNS. This technology, called DANE, has already been rolled out by large players such as Microsoft, and secures about [4.6M email domains today](https://stats.dnssec-tools.org/).
 
-On the surface it may seem just like a different but still very similar way to organize your code, but the impact is in fact huge. Here are a few differences from traditional parsing techniques that stem from this single departure alone:
+Which means that actually both email and certificate issuance security are bounded by the security of the DNS, and that’s why it is material to up the authenticity level at this crucial layer of technology.
 
-- You don't need to worry about left-recursion problems that occur in traditional parsing techniques such as LL(k). Given the dispatch to a semantic action is done with its associated token already consumed from the stream, left-recursion just doesn't happen. It's a non-issue.
-- The parsing engine doesn't need to test alternatives or backtrack. The usual dichotomy between speed versus memory that is found in some parsers (e.g. PEG vs packrat) is gone. Pratt is fast, and it's not gonna starve for insane amounts of memoization. Pratt is just going to compare numbers, and iterate or recurse.
-- Related to the previous point, but worth to consider on its own: semantic actions run exactly once! That means there's no need to rollback to a previous state if a match fails. In other words your actions may contain side-effects. In my parser I use this property to do name reservation/release on lexical scope through a shared context object juggled through each layer. Just be careful to not abuse side-effects and end up with spaghetti.
-- Also related: your semantic action always knows it's the correct match. Therefore it may look arbitrarily far ahead if it wants to. In other words: you can further use PEG parsers (or layered Pratt parsers) in the semantic actions. While Pratt itself only eats 1 token at a time, the nuds & leds themselves may eat more tokens per round. You just unlocked the power of parser combinators.
-- Most of the grammar ambiguities become table collisions so you waste less time on the simpler ambiguity cases. If you combine multiple parsers then it's still possible to have grammar ambiguities. So you still have work as a grammar designer, but in my experience it's much less work. When you combine parsers you're really combining grammars. Pratt as the parsing algorithm won't act as the all-seeing oracle and detect every possible ambiguity in the full grammar amalgamation. Pratt (just like PEG) will just return the first possible match in this case.
-- Unfilled gaps in your tables become trivial extension points in your grammar. You may fill these gaps in response to the text parsed so far. In other words you can implement macros and even parse a language that extends its own operators. In contrast extending a pre-existing grammar based on production rules (the orthodox parsing school) is a job worth the complexity of PhD researches.
+All in all, DNSSEC provides a much needed capability that TLS/HTTPS alone does not: It delivers signed, verifiable proof of origin for anything a registrant publishes, independently of any single application or delivery method. As such, it is a key enabling technology that lays a highly effective trust foundation on which applications such as DANE or CAA/TLS can rely to protect Internet users.
 
-You may even find a few of these properties in the traditional school as well, but only to certain extents, or with a huge complexity toll.
+**Is DNSSEC a government-controlled PKI?—*YES and NO***
 
-Nonetheless I mentioned earlier that this organization is a mindset *shift*, but so far I've only mentioned properties that you can use from adopting Pratt, so where's the shift really? Consider the usual EBNF rule for parsing function calls:
+DNSSEC is the PKI for the Internet’s unique global namespace. It is a globally consistent, well-governed, and well-managed namespace that applications can rely on for identifying servers, devices, and other named resources.
 
-How do you approach this problem when instead of production rules your toolbox contains only nuds & leds? The key observation is that the opening parentheses always expect something to its left, so it's a led. There you go: register a led for lparen and parse the function call from there. It's not immediately obvious, specially when you've only been exposed to the traditional parsing school. Hence why Douglas Crockford nailed it when he stated:
+Just like in the certificate PKI world (where trusting a certificate typically requires trusting a chain of Certificate Authorities (CAs) tying back to a “root CA”), DNSSEC’s security guarantees rely on intermediaries, namely the TLD registries (and potentially other sub-registries, if the domain has multiple dots). These registries, as all organizations (CAs included), are indeed subject to some degree of government control, in particular of the jurisdiction in which they are based. That fact, however, is unrelated to DNSSEC: the same security model applies to DNS without DNSSEC. DNSSEC itself does not increase or decrease the risk of legal action. That said, if this is a source of concern to you as a domain owner, you are free to choose which TLD you want to use, according to whom you trust and what is your control preference—without relying on CAs or third parties you don’t have a prior relationship with.<sup>[4](https://circleid.com/posts/common-beliefs-about-dnssec-put-to-the-test-an-invitation-to-fact-check-your-assumptions#fn4)</sup>
 
-> Pratt takes parsing which is a really complicated thing and reduces it to one simple question: *What do we expect to see to the left of a token*?
+As far as the root zone keys are concerned, government control has been significantly reduced by what is known as the “IANA transition” in 2016, when IANA functions were shifted away from direct control by US-government’s telecommunications agency NTIA to ICANN’s multi-stakeholder governance. As a result, DNSSEC’s root governance and operation are grounded in a transparent multi-stakeholder model, its implementation is highly distributed, and many operational practices (such as key ceremonies and DNSSEC practice statements) are intentionally transparent and publicly observable.
 
-— Douglas Crockford, GOTO 2013
+**Is DNSSEC incomplete?—*YES and NO***
 
-The led for array indexing is very similar to the led for function call. Here's the variation that I use in my own parser:
+“Incomplete”, in the blog’s elaboration, refers to DNSSEC not covering the so-called “last mile”, because validation often happens on a DNS resolver trusted by the client<sup>[5](https://circleid.com/posts/common-beliefs-about-dnssec-put-to-the-test-an-invitation-to-fact-check-your-assumptions#fn5)</sup>, instead of happening on the client itself. While true, making this choice is a trust decision, not a design limitation of DNSSEC. In fact, Apple [has been supporting client-side validation](https://developer.apple.com/videos/play/wwdc2022/10079/?time=219) since 2022, and Section 5.3 of NIST’s [“Secure Domain Name System (DNS) Deployment Guide”](https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-81r3.pdf) does recognize such deployment realities. Explicit requests for client-side validation features, if directed at software vendors that currently lack support, could create momentum for others to introduce client-side validation as well.
 
-Pratt is not just precedence climbing. Pratt is a way to organize your code. First learning Pratt as a black box actually helps to understand this difference. If you don't have access to the black box, you won't be tempted to reduce Pratt to precedence climbing. Hopefully by the time you want to take away the abstraction and see what's inside you won't make the mistake of treating Pratt just like a mere variation of precedence climbing because by then you'll have already been exposed to all the power unlocked by Pratt parsing. Andy Chu's blog post on Pratt parsing without prototypal inheritance is worth reading as it contrasts two opposing styles of writing Pratt parsers[²](https://vinipsmaker.github.io/blog/article/pratt-parsing-is-a-black-box/#). Here's a minimal calculator written in Rhombus that is (stylistically) closer to a version that'd use prototypal inheritance than the style that Andy Chu shows:
+Meanwhile, it is worth noting that most Internet traffic is protected with authentication and encryption certificates (first and foremost: HTTPS web traffic). For certificate issuance, Section 4.2.2.2 of the [certification rules](https://cabforum.org/working-groups/server/baseline-requirements/documents/CA-Browser-Forum-TLS-BR-2.3.0.pdf) requires Certificate Authorities (CAs) to perform DNSSEC validation when making DNS queries, including the DNS queries made to verify that the requestor is actually under control of the desired certificate domain name. This legitimacy check is vulnerable to DNS attacks, but DNSSEC, if in place, prevents the check from being hijacked.
 
-```
-    lexer
-```
+This means DNSSEC makes sure that an illegitimate requestor cannot actually obtain a certificate based on a DNS attack. Barring non-DNS attacks (such as a compromise at the registrar or the CA itself), only the legitimate certificate will be in circulation. Browsers in turn will only communicate with servers that have this certificate configured. In other words: DNSSEC’s security guarantees transfer to the domain’s HTTPS certificate, ensuring that a browser does not communicate with a rogue actor: Even if a browser or other end-user application does not itself perform DNSSEC validation, the fact that CAs do perform it effectively protects the client’s last mile HTTPS traffic.
 
-```
-    | "+": Token(
-```
+Besides, many important DNSSEC use cases do not have a “last mile” and thus don’t suffer from this problem: Both DANE-secured email and DNSSEC validation during certificate issuance does not involve end user devices, but only server-to-server communication where the validating resolver typically is directly under control of the participants (CAs and email providers). In these use cases, server-to-server not only equals end-to-end, but is at least equally important.
 
-```
-    | "-": Token(
-```
+Finally, the word “incomplete” raises the expectation that technologies may reach completion. Like just every other protocol (including TLS, whose incremental versioning is met with equanimity), DNSSEC is incomplete insofar as it is a living standard.
 
-```
-    | "*": Token(
-```
+Operational practices and standards continue to improve, including:
 
-```
-    | "/": Token(
-```
+Regarding the “last mile” issue specifically, there are experimental efforts to facilitate end-to-end validation on the client without paying the latency price from additional DNSSEC-related lookups, by replacing them with pre-fetched DNSSEC chain data included in the TLS handshake ([RFC 9102](https://www.rfc-editor.org/rfc/rfc9102.html)).
 
-```
-    | "(": Token(
-```
+Three further claims revolve around the idea of DNSSEC being technically defective. Verbatim: “DNSSEC is Cryptographically Weak”, “DNSSEC is Unsafe”, “DNSSEC is Architecturally Unsound”.
 
-```
-    left
-```
+**Is DNSSEC cryptographically weak?—*NO***
 
-```
-    lexer
-```
+DNSSEC is often dismissed as cryptographically deficient because it doesn’t encrypt DNS responses. That criticism misses the point: DNSSEC is not designed to protect the confidentiality of DNS responses, but their integrity—by cryptographically signing them<sup>[6](https://circleid.com/posts/common-beliefs-about-dnssec-put-to-the-test-an-invitation-to-fact-check-your-assumptions#fn6)</sup>.
 
-```
-    | "+": Token(
-```
+For that purpose, DNSSEC adopts well-tested cryptography and continues to move with operational reality, including [broad migration](https://stats.dnssec-tools.org/#/?dnssec_param_tab=0) to and use of the Elliptic Curve Digital Signature Algorithm, dubbed ECDSA (algorithm 13) and well-matched to DNSSEC’s resource constraints. The same algorithm [globally leads](https://technologychecker.io/blog/ssl-certificate-transparency-report-insights) and [is generally recommended](https://docs.tlsref.org/server-side-tls.html#modern-compatibility) for the signatures that constitute HTTPS certificates.
 
-```
-    | "-": Token(
-```
+Moreover, work on post-quantum cryptography for DNSSEC is underway in the research and standards community. The PQC DNSSEC agenda includes [efforts](https://wiki.ietf.org/en/group/pq-dnssec) to assess and mitigate the resource impact of newly standardized and proposed PQC signature algorithms—which generally have much larger signature and/or key sizes than ECDSA.
 
-```
-    | "*": Token(
-```
+In short, DNSSEC’s cryptographic strength has successfully evolved to meet modern cryptographic demands, and is poised to continue evolving to support the post-quantum future.
 
-```
-    | "/": Token(
-```
+**Is DNSSEC unsafe?—*NO***
 
-```
-    | "(": Token(
-```
+Under the umbrella of (un)safety, “Against DNSSEC” points out that DNSSEC (in its original form) allows obtaining detailed zone information by so-called “zone walking” (i.e., retrieving the list of all the subdomains of a domain from the responses to systematic DNS queries). That’s because DNSSEC provides signed assurance about which subdomains do not exist, and from that information one can easily conclude which do. While this is essentially a privacy issue more than a safety one, it can be addressed by enabling NSEC3—an automated setting to transform the non-existence response proofs into a hashed form of data, so that subdomains cannot readily be obtained unless explicitly queried for, if that is deemed necessary. (More complicated proposals like NSEC5, also mentioned in the blog post, were not pursued beyond the ideation stage by the DNSSEC community.) Alternatively, DNS operators that sign DNS responses on the fly can solve this problem using Compact Denial of Existence ([RFC 9824](https://www.rfc-editor.org/rfc/rfc9824.html)).
 
-```
-    left
-```
+However**,** even then, it is important to realize that the existence of most subdomains is exposed through Certificate Transparency (CT) logs: Both DNS and CT data, by their nature, are public, as there is no access control on who queries them. Hiding domain names therefore is an unreliable privacy strategy.
 
-```
-    lexer
-```
+That said, DNSSEC can very well work in favor of privacy: in certain cases<sup>[7](https://circleid.com/posts/common-beliefs-about-dnssec-put-to-the-test-an-invitation-to-fact-check-your-assumptions#fn7)</sup>, it allows a resolver to answer queries for non-existent names from its cache when it has seen a related (but not the same) DNS query before. This helps privacy (because data that is not sent to the domain’s nameserver cannot be eavesdropped on) and enables new defenses against common types of denial-of-service attacks (such as the Pseudo-random Subdomain Attack), turning DNSSEC into a safety belt that is useful beyond just protecting response contents.
 
-```
-    | "+": Token(
-```
+**Is DNSSEC architecturally unsound?—*NO***
 
-```
-    | "-": Token(
-```
+The argument made by “Against DNSSEC” to bring home this point is that security decisions are best made according to each application’s needs, and that DNSSEC is not an application-layer protocol. While this objection seems valid for a range of things (take captchas, for instance: some applications may be fine with bots, others may not), it does indeed seem fair for a domain owner to assert that they want their domain’s DNS information to come along with verifiable signatures, in order to prevent clients from connecting when validation has failed. It is true that this is not always done end-to-end (although that’s not a design limitation, see the “last-mile” problem above)—but the objection that network-level security mechanisms are architecturally unsound by definition is overreaching. The same argument could be made against Wi-Fi encryption, BGP route validation, or IP packet checksums (which are all network-level), but these security mechanisms are generally accepted.
 
-```
-    | "*": Token(
-```
+One of the most hard-dying assumptions about DNSSEC is its costliness—which is likely to dissuade non-technical people in charge of budgets from engaging in deployment. According to “Against DNSSEC”, both the adoption and the deployment of the protocol are resource-intensive. Verbatim: “DNSSEC is Expensive to Adopt”, “DNSSEC is Expensive to Deploy”.
 
-```
-    | "/": Token(
-```
+**Is DNSSEC expensive to adopt and to deploy?—*YES and NO***
 
-```
-    | "(": Token(
-```
+For end users, DNSSEC is essentially free to adopt, with the added benefit of protection against attack-related losses (see the MyEtherWallet.com case above). In practice, all cost is carried by the resolver operator and the signing DNS operator. [Measurements](https://blog.apnic.net/2022/08/22/dnssec-validation-performance-killer/) have shown that resolver-side memory and compute cost is small in practice. On the signing side, cost depends on how much specific expertise the signing operator needs to build<sup>[8](https://circleid.com/posts/common-beliefs-about-dnssec-put-to-the-test-an-invitation-to-fact-check-your-assumptions#fn8)</sup>, and how many domains are being operated. Compared to signatures involved in HTTPS connections, DNSSEC signatures are computed much less frequently, so the cost of signing itself is not significant in light of the overall cost of operating an online service.
 
-```
-    left
-```
+Overall, for well-run mid-size to large-scale operations, DNSSEC signing and validation during ongoing operations does not fundamentally change the financial equation.
 
-```
-    lexer
-```
+Adapting software is certainly costly, but that task has largely been completed, and nameserver software today includes mature DNSSEC implementations by default. Also, while replacing old components in order to adopt more modern (automatic) solutions can be complex, the cost of new deployment and long-term operations has decreased significantly, with many DNS providers (such as Cloudflare, Squarespace, one.com, deSEC) and resolver operators (such as Cloudflare, Google, Quad9, DNS4EU) now routinely operating DNSSEC with full automation. [Some work](https://itp.cdn.icann.org/en/files/publications/sac126v2-dnssec-delegation-signer-record-automation-31-08-2026-en.pdf) remains to be done with respect to the automation of DNSSEC configuration updates at the registry side, but progress is happening there as well.
 
-```
-    | "+": Token(
-```
+“Against DNSSEC” also argues that network software is not equipped to handle DNSSEC failures smoothly (such as distinguishing expired signatures from an actual attack), and that “mak[ing] DNSSEC workable” would involve a lot of expensive code rewriting. That concern is diminishing, as browsers recently have made an effort to increase visibility into the origin of connection errors by implementing more detailed DNS error feedback based on [RFC 8914](https://www.rfc-editor.org/rfc/rfc8914.html)<sup>[9](https://circleid.com/posts/common-beliefs-about-dnssec-put-to-the-test-an-invitation-to-fact-check-your-assumptions#fn9)</sup>. Such developments indeed come with some cost, but that cost—unlike suggested—does not preclude large-scale deployment, as demonstrated by > 90% [validation deployment](https://stats.labs.apnic.net/dnssec) in countries like New Zealand, Saudi Arabia, Pakistan, and Ghana.
 
-```
-    | "-": Token(
-```
+The common beliefs that have emerged from “Against DNSSEC”, however extensive and influential, are dwarfed by a much more impactful claim: DNSSEC’s alleged threat to availability—exposed and broadcast by the IANIX list, as laid out above. But, historical records aside, how true is that today? Or, in other words, does DNSSEC have high availability in practice?
 
-```
-    | "*": Token(
-```
+Yes, it does. The above-mentioned study** **by John Kristoff et al. (expected to be published later this month, at which time it will be linked here) has developed a measurement-based methodology and impact-weighted evaluation to quantify DNSSEC-induced outages. Its results show not only that the global DNSSEC deployment has had availability of over 99.99% in 15 of 16 years measured, but also confirms a sharp decline of incidents over the last five years. Accordingly, the occasional disruptive event (which still occurs, but has become exceptional) should not obscure the practical record of overall DNSSEC deployment.
 
-```
-    | "/": Token(
-```
+As with any technology at Internet scale that requires interoperability amongst disparate implementations and operational environments, early DNSSEC adopters were likely to be hit by painful outages, due to misconfigurations or buggy code. Since then, thanks to engineering refinements and community-crafted operational standards, DNSSEC deployment has come to achieve demonstrably high availability across TLDs. All gTLDs as well as an increasing number of ccTLDs sign their zones, and many TLDs have successfully transitioned to new operators and/or algorithms, while remaining fully signed. And even if validation breaks (and the absence of an attack is confirmed), temporary NTAs (negative trust anchors) can restore basic availability—as [done by Cloudflare](https://blog.cloudflare.com/de-tld-outage-dnssec/) and other resolver operators during the [.de May 2026 incident](https://blog.denic.de/en/final-report-dns-outage-of-5-may-2026/).
 
-```
-    | "(": Token(
-```
+DNSSEC is now considered to be important and stable enough to be a non-negotiable requirement for existing and [future gTLDs](https://newgtldprogram-2026-agb.icann.org/en/7-module-3-application-submission.html#registry-functions-and-types-of-rsps). This policy-side view is matched by real world uptime records: Two of the world’s largest TLDs, .com and .net operated by Verisign, have long been DNSSEC-enabled, with more than 29 years of uninterrupted DNS resolution uptime. Also spotless is the uptime record of the world’s largest portfolio of TLDs, managed by Identity Digital (previously Afilias) and signed as soon as 2009.
 
-```
-    left
-```
+In conclusion, as the facts presented in this article suggest, DNSSEC in 2026 should not be judged by limitations and operational records from its earlier deployment years (i.e., the trouble that triggered publications like the IANIX list and “Against DNSSEC”). Some concerns remain genuine tradeoffs, others have been substantially reduced by protocol evolution, automation, and operational experience.
 
-The previous section might have been the densest in this whole blog post so I want to tune it down while you incubate the Pratt mindset and go on trivial things for now:
+In short, let’s not get stuck in archives. Instead—recognizing that DNSSEC has been stable and well tested in deployments for nearly two decades and continues to evolve when needed—let’s choose to draw on up-to-date information (such as presented in this article) and check out actual and successfully running implementations (like the DNSSEC automation showcases that will be provided by the third article of this series).
 
-- Pratt requires a separate lexer. Some modern parsing engines can work in a scannerless manner (e.g. PEG) or even embed the lexer definition directly in the parser itself, but Pratt requires a separate lexer. That shouldn't be a big concern, but it's something to keep in mind.
-- Pratt is fast. The algorithm only compares numbers and iterate or recurse. It's only looking 1 token ahead, and not doing anything else really. It doesn't go back to test alternatives or to backtrack on failed production rules. It just doesn't go back at all. It's a full-speed locomotive only looking ahead eating 1 token at a time.
-- Given Pratt itself is already fast, if you want to optimize anything, the only thing left is the dispatch code for nuds & leds. In my case I use global read-only dispatch tables, but most of the tutorials I've seen in the wild use dynamic objects in highly dynamic scripting languages.
-- Pratt can't parse statements. You have to combine it with other techniques to parse languages with statements. I've already gone through this constraint in my last blog post where you can find solutions.
-- Pratt is a form of recursive descent parsing meaning it's running custom user code (i.e. code in a Turing-complete language) for the semantic actions, but that's not the whole picture. The semantic actions further drive the parsing choices/direction which means that your code might look at the context (e.g. previous declarations) to decide how to parse the next piece of the input text. In summary you can have some forms of context-sensitive parsing which opens the door for more classes of languages.
-- You'll have to resort to modal lexing to parse some complex languages found in the wild, but I'll reserve a later section of this blog post to touch on this topic.
-- Pratt can't be used for incremental parsing as done in GLR parsing. However that's not a power found in most parsing algorithms anyway (I'm running out of algorithmic properties to talk about). Incremental parsing is used in tools such as tree-sitter.
+And if after doing so, with your own risk profile in mind, you make the informed decision not to use DNSSEC in your own setting, that’s perfectly fine. But make sure everybody else is also free to make their own choices—and accordingly, if others depend on you for having access to DNSSEC, don’t break their chance to use it, if they wish to.
 
-## Right-to-left associative operators
-
-My whole argument today is that Pratt is a black box abstraction, so let's go with this argument and lay down what contracts you need to respect to use Pratt:
-
-- Only tokens with associated leds need a value in the binding power table. Tutorials in the wild are usually written in a way where this property isn't obvious. It becomes more obvious when you write your parser using static tables rather than highly dynamic objects in scripting languages.
-- Related to the previous point: You still need a value for the binding power of prefix operators, but this value isn't used in the Pratt loop at all. Therefore it's not a requirement to inflate the binding power table with a value for the prefix operators, but that's what most of the code I've seen in the wild do anyway. If you think it's easier to just stuff the binding power for prefix operators in the same table be my guest and go ahead. Just bear in mind that this popular arrangement isn't a hard requirement. Only the nud implementing the prefix operator itself needs to know the binding power for prefix operators.
-- Never assign a binding power of zero to a led.
-- Separators such as comma and unknown/error/EOF tokens where the parser must stop should have a binding power of zero. They don't need to exist in the binding power table.
-- If you're writing in decimal like every human being, adopt increments of 10 in the binding power table. When reading these values, you may just ignore the final zero, but the extra room between operators enables some tricks.
-
-So how do we implement right-to-left associative operators with Pratt? First let's look at a common left-to-right associative infix operator. Here's my code for the led `+``+`:
-
-If we wanted to make the operator right-to-left associative, we'd just need to use `bp - 1``bp - 1` instead of `bp``bp`:
-
-```
-        context,
-```
-
-```
-        context,
-```
-
-```
-        context,
-```
-
-```
-        context,
-```
-
-That's a standard trick in the field of Pratt parsing. A trick of the trade so to speak. A trick you ought to know. Why does it work? It doesn't matter. It's a black box for today. Tomorrow it might matter, but today you should only be focusing on how to use Pratt, not why it works.
-
-Why even write a section for macros when most language designers won't add them? Pratt macros are just nuds/leds implemented in the language that your code is parsing and interpreting. Therefore anything that your own nuds/leds can do is something that ought to be possible in a macro and vice-versa. Lessons learned from Pratt macros are lessons learned on Pratt parsing itself.
-
-That's just a principle, and not a hard-truth. It's definitely not a truth in the Pratt macros of my own language, for instance, but the principle remains my guide (and hopefully yours as well).
-
-The implementation of macros outside Lisp are traditionally very limited in many fronts. In languages such as C you have macros that are just textual substitution templates that work in the environment of a preprocessor doing textual expansion (therefore working on the lexing layer). It's also possible to design macros that work in the AST/parsing layer such as done in Lisp. However Pratt macros unify these two previously severed worlds. If you're implementing procedural Pratt macros then it's possible for the macro to use APIs that alternately invoke either the lexer or the parser. My own macro system doesn't yet have enough APIs so I can't showcase a real example, but here's how envision that it's gonna work:
-
-```
-    // tokens)
-```
-
-```
-    // tokens)
-```
-
-```
-    // tokens)
-```
-
-```
-    // tokens)
-```
-
-These APIs are pretty much what's already used in the core nuds of many parsers using Pratt. A macro system only needs to expose them to the macros as well to get this far. This part is actually easy. Tasks actually challenging in macro systems reside elsewhere, not here. The hardest part of a macro system is hygiene[³](https://vinipsmaker.github.io/blog/article/pratt-parsing-is-a-black-box/#)[⁴](https://vinipsmaker.github.io/blog/article/pratt-parsing-is-a-black-box/#), not parsing (well… parsing is gonna be easy if you use Pratt parsing at least). However this blog post is about (Pratt) parsing, not macro systems, so I'm not gonna delve on hygiene or other macro system challenges (problems which I've already battled with and ultimately won).
-
-The takeaway here is that Pratt parsing enables languages with powerful macros that can implement beautiful unconstrained eDSLs. Pratt macros are just an interpreter for your language that has access to the lexer and the parser at the point where the macro is being expanded. Patterns that you use in your nuds & leds are patterns that you'd likely see in Pratt macros. The code being parsed is teaching the very parser that is parsing it on how to do so (tell me about meta!).
-
-Usually the lexer is the most neglected part of a compiler. It's a solved problem. There's no reason to waste time on its design. You use a lexer generator to implement an efficient lexer, and move on to never look back again. However Pratt – the algorithm – is just 9 lines of Rhombus code. Your lexer is most likely bigger than the parser already. Just on the face of this your lexer is already playing a bigger part on your project by at least some metric (even if an unimportant one).
-
-However it goes further than this. Every nud and led in your code is a subparser of sorts. Combining (sub)parsers is key to unlocking the power to parse even more classes of languages. The lexer becomes the single point in common that trespass the walls between all subparsers. A good lexer design improves parser composability.
-
-As a practitioner of the Pratt school, the single most important lexing technique you should learn is modal lexing. The technique is already useful on its own even if you're not using Pratt, but it's even more so for us. As Andy Chu succinctly explains[⁵](https://vinipsmaker.github.io/blog/article/pratt-parsing-is-a-black-box/#), modal lexing is enabled by adding an extra parameter to your lexer:
-
-There are other ways to express the same pattern. For my own project, I prefer to use separate functions instead of an enum. As a C++ programmer I've been trained well to discern between cases of static versus dynamic polymorphism, and here's a case where clearly the dispatching information is fully known statically at compile time. Hence it doesn't make sense to even use an enum. The story could be different in highly dynamic macro-enabled languages though.
-
-Simple as it is, this single defining trait of modal lexing unlocks the ability to parse many more complex classes of languages by providing a way for the lexer to receive feedback from the parser. Lexers never know grammatical structure, but the parser always does. By feeding this information from the parser back to the lexer you enable forms of language composition where each sublanguage might have conflicting token definitions (e.g. C++11's right-shift operator spawns different tokens in template contexts) or just tokens with different meanings altogether. Andy Chu already gave comprehensive examples on where this might be useful[⁶](https://vinipsmaker.github.io/blog/article/pratt-parsing-is-a-black-box/#) so here I'll only bother to contribute a single example to the corpus.
-
-In Rust you have a different sublanguage just to express types. This type annotation happens in neatly delimited places inside the "main" language. It usually happens after the colon and ends on the equals-sign or delimiters such as commas or the closing parentheses:
-
-My language syntax is heavily inspired by Rust's. Naturally I rely on modal lexing to parse these structures. The function `reader::next_on_type_scope()``reader::next_on_type_scope()` shown earlier is used for the type annotation sublanguage. Then I have a Pratt parser for each – `parse_expr()``parse_expr()` and `parse_type()``parse_type()`. It's a simple trick that doesn't demand much explanation really, but gets you very far. The code almost writes itself after you get the idea.
-
-The only caveat is that your lexer must adhere to a pull design instead of lexing all tokens upfront. For some reason people like to only design push APIs that fully steal execution flow, and these people are addicted to implement lexers that do all the work upfront. It's a popular arrangement, but not one that will work for modal lexing. Pratt itself is a push design so in the end you'd have a mix of designs.
-
-Moving on to the next topic, there are more lexer tricks that I have to share, but for today I just have one suggestion: don't design your lexers to do any IO (syscalls) nor to buffer anything. Working on a copy of your lexer shouldn't have observable side-effects on the original object. Copies should be cheap and encouraged. Working on a copy of the lexer enables arbitrary lookahead which might be required by some subparser. Even if you only requires a fixed amount of lookahead (e.g. 3 tokens) this design fits the hole all the same.
-
-Fulfilling this design is easy: just read the whole file at once (or use mmap) and make the lexer point to this shared region to do its job. Your AST alone is likely gonna use more memory than the whole input file anyway so memory shouldn't be a concern here.
-
-Now let's revisit my nud for `+``+`:
-
-Most of the code that I see on the wild has a custom type for tokens, and that's get used as argument for the nuds & leds, but I just store/pass the lexer itself instead. My lexer is cheap to copy so there's no need to create a class to pass tokens around. The layer expecting a token can decode from the matched lexeme directly anyway so the lexer only needs to store a few pointers to the original input text. Here's the code parsing decimal literals in my project to showcase the decode-from-lexeme-directly trick:
-
-Furthermore this design allows me to rollback 1 token which is something that I use in the nud for `<``<`:
-
-This trick also requires a lexer that represents error as a dedicated token code instead of raising exceptions when they happen. You may still use exceptions if you want when an error is fatal for all sublanguages (e.g. non-ASCII character found on the stream).
-
-Now what's this nud even parsing might be a valid question, so let's go over exactly what it's doing. Rust (which inspired my language's syntax heavily) allows one to access fields from a type. Field access here is done using the operator `::``::`. For instance:
-
-However what happens when referring to your type requires access to the type annotation language such as in the case for generics? Then you need an "escape hatch" in the main language to access the type annotation language explicitly, and that's done through the nud for `<``<`:
-
-So now you know how to parse this type of grammars with Pratt. Simon Ochsenreither once argued that using `<>``<>` for generics is bad design[⁷](https://vinipsmaker.github.io/blog/article/pratt-parsing-is-a-black-box/#), so maybe it's no coincidence that that's the only time that I actually had to use the rollback trick (which I consider a hack) in my project. Nevertheless it was the best compromise I could find so I went with it anyway. Language design is hard.
-
-I have a lot more of lexer tricks to share, but I'm feeling that I should postpone them to later articles. Some of them are already used in my project. Ironically perhaps, but I acquired the mindset that enabled me to come up with these lexer tricks from past experience parsing HTTP and JSON which has nothing to do with the techniques that one uses to parse programming languages.
-
-## Summary
-
-Pratt is a shift in parsing mindset. You must get comfortable on breaking grammatical structures into nuds & leds. It's totally okay to write shortcuts that remove the boilerplate by factoring the common parts of the implementation of prefix, infix and postfix operators as done by Douglas Crockford[⁸](https://vinipsmaker.github.io/blog/article/pratt-parsing-is-a-black-box/#), but if you're changing Pratt's algorithm itself as done by Alex Kladov in 2020[⁹](https://vinipsmaker.github.io/blog/article/pratt-parsing-is-a-black-box/#) (I've done the same mistake myself once) to make accommodations because you refuse to reason in terms of nuds & leds (or any other reason), you're missing out and should start over. Using Pratt parsing as a black box abstraction will remove your ability to change Pratt's algorithm, and it may help in adapting your mindset. That's my advice to get you started.
-
-I have a lot more of parsing tricks to share (e.g. Pratt-walk interpreters, REPLs with perfect auto-completion), but they're more advanced, and I'll postpone them to later articles.
+**Correction – October 20, 2026:** The list of endorsers has been corrected and updated with new endorsements.

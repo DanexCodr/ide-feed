@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-03T13:47:58Z",
+  "updated": "2026-11-03T23:00:34Z",
   "items": [
     {
       "id": "devto-4943245",
@@ -58,7 +58,7 @@
       "order": 5,
       "url": "https://dev.to/smtahosin/in-ruby-objects-dont-have-methods-how-method-lookup-actually-works-31g9",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fiili.io%2FnMfrPx1.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAgMAAQT/xAAVAQEBAAAAAAAAAAAAAAAAAAABAv/aAAwDAQACEAMQAAABxDZFDHLH/8QAGBAAAwEBAAAAAAAAAAAAAAAAABARITH/2gAIAQEAAQUCqhwqhN//xAAVEQEBAAAAAAAAAAAAAAAAAAAAEf/aAAgBAwEBPwGI/8QAFREBAQAAAAAAAAAAAAAAAAAAABH/2gAIAQIBAT8BV//EABgQAAIDAAAAAAAAAAAAAAAAAAAxECAh/9oACAEBAAY/AlOCp//EAB0QAAICAQUAAAAAAAAAAAAAAAABESExQVFxgZH/2gAIAQEAAT8hUdHaHGxxE5yLqwsMSt+Fsj//2gAMAwEAAgADAAAAECGP/8QAFxEAAwEAAAAAAAAAAAAAAAAAAAERMf/aAAgBAwEBPxCHjHB//8QAFhEAAwAAAAAAAAAAAAAAAAAAAAER/9oACAECAQE/EKxUf//EAB0QAQACAgMBAQAAAAAAAAAAAAEAETFBIVFhkcH/2gAIAQEAAT8Qo1Y+DNi/uIpLK8XnUexq8+wFAOMvUYWF/ko/I7bJVBXU/9k=",
+      "preview": "",
       "color": "#3B49DF"
     },
     {
@@ -134,24 +134,12 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4884586",
-      "title": "Building an Open-Source Support Tool That Turns Your Docs into Reusable Knowledge",
-      "desc": "By Nathan Tarbert | 7 min read",
-      "tag": "tutorial",
-      "published": "2026-10-20T17:15:15Z",
-      "order": 12,
-      "url": "https://dev.to/nathan_tarbert/your-team-has-answered-this-before-im-building-a-tool-that-remembers-5604",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fl0qfhqjgbvaejbwbk7ct.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAwEBAAAAAAAAAAAAAAAAAAEDAgT/xAAVAQEBAAAAAAAAAAAAAAAAAAAAAf/aAAwDAQACEAMQAAAB7tAkXVn/xAAZEAACAwEAAAAAAAAAAAAAAAABAgAQEiD/2gAIAQEAAQUCrTQMxPH/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAaEAABBQEAAAAAAAAAAAAAAAABAAIQICEz/9oACAEBAAY/Ao5lawiv/8QAHRAAAwAABwAAAAAAAAAAAAAAAAERIDFRYXGBof/aAAgBAQABPyFt3L05GtuM7JhLrSb4P//aAAwDAQACAAMAAAAQd6//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAVEQEBAAAAAAAAAAAAAAAAAAAAEf/aAAgBAgEBPxBX/8QAHBABAAICAwEAAAAAAAAAAAAAAQARITFBUXFh/9oACAEBAAE/EBMLZgutL+QyCGhrTAbRthCbLbzECuV9lHUXFT//2Q==",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4941092",
       "title": "gp-grid: A Free, Open-Source TypeScript Data Grid for React, Vue, and Angular (No Paywalled Features)",
       "desc": "By Hadil Ben Abdallah | 15 min read",
       "tag": "tutorial",
       "published": "2026-11-02T09:05:46Z",
-      "order": 13,
+      "order": 12,
       "url": "https://dev.to/hadil/gp-grid-a-free-open-source-typescript-data-grid-for-react-vue-and-angular-no-paywalled-5heb",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Ffhh705ti5amsemyc79e9.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAgEF/8QAFgEBAQEAAAAAAAAAAAAAAAAAAQAC/9oADAMBAAIQAxAAAAHPYuhCyP/EABQQAQAAAAAAAAAAAAAAAAAAADD/2gAIAQEAAQUCD//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABYQAQEBAAAAAAAAAAAAAAAAAAAxIP/aAAgBAQAGPwJE1//EABgQAQEBAQEAAAAAAAAAAAAAAAABEWFB/9oACAEBAAE/IepeG8LPWpVrX//aAAwDAQACAAMAAAAQEZ//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAWEQEBAQAAAAAAAAAAAAAAAAAAARH/2gAIAQIBAT8QjI//xAAbEAEAAgIDAAAAAAAAAAAAAAABABExQSGB8f/aAAgBAQABPxAKC08WLOTDsiI5kwqKEVOqiqrU/9k=",
@@ -163,7 +151,7 @@
       "desc": "By Ken W Alger | 12 min read",
       "tag": "tutorial",
       "published": "2026-10-22T13:34:00Z",
-      "order": 14,
+      "order": 13,
       "url": "https://dev.to/kenwalger/nothing-reported-it-9ke",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fp0waeaiv76zg8lygmjra.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAAECBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHgQluS/wD/xAAWEAADAAAAAAAAAAAAAAAAAAAQESD/2gAIAQEAAQUCKn//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAUEAEAAAAAAAAAAAAAAAAAAAAw/9oACAEBAAY/Ag//xAAYEAADAQEAAAAAAAAAAAAAAAAAETEBIP/aAAgBAQABPyFCMpHP/9oADAMBAAIAAwAAABD8z//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QP//EABsQAAIDAAMAAAAAAAAAAAAAAAERADGBIEGh/9oACAEBAAE/EKt+QpZWQAUezseLj//Z",
@@ -175,10 +163,22 @@
       "desc": "By Elsie Rainee | 2 min read",
       "tag": "tutorial",
       "published": "2026-11-02T11:35:22Z",
-      "order": 15,
+      "order": 14,
       "url": "https://dev.to/elsie-rainee/two-truths-and-a-lie-developer-edition-k8n",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fsyugm3scjglnspzm8ays.jpg",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAgMBBP/EABYBAQEBAAAAAAAAAAAAAAAAAAABAv/aAAwDAQACEAMQAAAB4mWmToGv/8QAGRAAAwADAAAAAAAAAAAAAAAAAAEQAhEh/9oACAEBAAEFAkjUZiPkZ//EABYRAQEBAAAAAAAAAAAAAAAAAAABQf/aAAgBAwEBPwGsf//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABQQAQAAAAAAAAAAAAAAAAAAADD/2gAIAQEABj8CD//EABsQAAICAwEAAAAAAAAAAAAAAAABESExQZEQ/9oACAEBAAE/IUQLauDSjXBKos8lnmR//9oADAMBAAIAAwAAABBZv//EABcRAQEBAQAAAAAAAAAAAAAAAAEAESH/2gAIAQMBAT8QXcIJ/8QAGBEBAQADAAAAAAAAAAAAAAAAAQARIVH/2gAIAQIBAT8QVzqHt//EAB0QAAICAgMBAAAAAAAAAAAAAAERACExUUFxsZH/2gAIAQEAAT8QMAJHLWfsQGBjS0YsKEdcwIqJO1ANtFhTgEkapeRsq1ql5DIQFdT/2Q==",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4955249",
+      "title": "All That Glisters Is Softmax: Shiny-Object Interns, Airplane-Magazine Execs, and Why AI Labs Can Only Bake In Half the Scars",
+      "desc": "By Randal L. Schwartz | 29 min read",
+      "tag": "tutorial",
+      "published": "2026-11-01T00:41:17Z",
+      "order": 15,
+      "url": "https://dev.to/gde/all-that-glisters-is-softmax-shiny-object-interns-airplane-magazine-execs-and-why-ai-labs-can-18af",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fqlk0251k4s6ucmxlzfnw.jpg",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwIE/8QAFQEBAQAAAAAAAAAAAAAAAAAAAQL/2gAMAwEAAhADEAAAAc6Bd0w3A//EABsQAQACAgMAAAAAAAAAAAAAAAEAAhJBAxEx/9oACAEBAAEFAsSUKjyFVxJ3D3Wv/8QAFhEBAQEAAAAAAAAAAAAAAAAAABEh/9oACAEDAQE/AcR//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAGBAAAgMAAAAAAAAAAAAAAAAAEDEAAVH/2gAIAQEABj8CYyM0P//EABoQAQEAAwEBAAAAAAAAAAAAAAEAESFBUcH/2gAIAQEAAT8hChld2XiR818W6zwgMvbu/9oADAMBAAIAAwAAABD3L//EABYRAQEBAAAAAAAAAAAAAAAAAAEAIf/aAAgBAwEBPxDEg1v/xAAWEQEBAQAAAAAAAAAAAAAAAAABABH/2gAIAQIBAT8QNY2//8QAGxABAAMBAQEBAAAAAAAAAAAAAQARIUGBUfD/2gAIAQEAAT8QctGbpcoZJxCI7RwIIo8hl0wCLEV21+9hAmnX7kvXbvrP/9k=",
       "color": "#3B49DF"
     },
     {
@@ -206,15 +206,15 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4955249",
-      "title": "All That Glisters Is Softmax: Shiny-Object Interns, Airplane-Magazine Execs, and Why AI Labs Can Only Bake In Half the Scars",
-      "desc": "By Randal L. Schwartz | 29 min read",
+      "id": "devto-4828296",
+      "title": "You're Still Writing CSS Like It's 2015: The Modern Architecture Guide That Fixes Specificity Forever",
+      "desc": "By S M Tahosin | 9 min read",
       "tag": "tutorial",
-      "published": "2026-11-01T00:41:17Z",
+      "published": "2026-11-03T12:37:54Z",
       "order": 18,
-      "url": "https://dev.to/gde/all-that-glisters-is-softmax-shiny-object-interns-airplane-magazine-execs-and-why-ai-labs-can-18af",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fqlk0251k4s6ucmxlzfnw.jpg",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwIE/8QAFQEBAQAAAAAAAAAAAAAAAAAAAQL/2gAMAwEAAhADEAAAAc6Bd0w3A//EABsQAQACAgMAAAAAAAAAAAAAAAEAAhJBAxEx/9oACAEBAAEFAsSUKjyFVxJ3D3Wv/8QAFhEBAQEAAAAAAAAAAAAAAAAAABEh/9oACAEDAQE/AcR//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAGBAAAgMAAAAAAAAAAAAAAAAAEDEAAVH/2gAIAQEABj8CYyM0P//EABoQAQEAAwEBAAAAAAAAAAAAAAEAESFBUcH/2gAIAQEAAT8hChld2XiR818W6zwgMvbu/9oADAMBAAIAAwAAABD3L//EABYRAQEBAAAAAAAAAAAAAAAAAAEAIf/aAAgBAwEBPxDEg1v/xAAWEQEBAQAAAAAAAAAAAAAAAAABABH/2gAIAQIBAT8QNY2//8QAGxABAAMBAQEBAAAAAAAAAAAAAQARIUGBUfD/2gAIAQEAAT8QctGbpcoZJxCI7RwIIo8hl0wCLEV21+9hAmnX7kvXbvrP/9k=",
+      "url": "https://dev.to/smtahosin/youre-still-writing-css-like-its-2015-the-modern-architecture-guide-that-fixes-specificity-nlh",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fi.imgur.com%2FhwLuKwj.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAgME/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAH/2gAMAwEAAhADEAAAAcTmg2Il/8QAGxAAAgIDAQAAAAAAAAAAAAAAAAECIRAREkH/2gAIAQEAAQUCTrZZCfOfE0f/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAZEAACAwEAAAAAAAAAAAAAAAAAMQEgMnH/2gAIAQEABj8CRmBHaI//xAAcEAEAAgMAAwAAAAAAAAAAAAABABEhQYFRcZH/2gAIAQEAAT8hABR5L+TEpN7RAhDr1DsWtvsvZt2f/9oADAMBAAIAAwAAABCOL//EABcRAQADAAAAAAAAAAAAAAAAAAABETH/2gAIAQMBAT8QqWP/xAAXEQEBAQEAAAAAAAAAAAAAAAABABEh/9oACAECAQE/EDGe3//EABoQAQADAQEBAAAAAAAAAAAAAAEAETEhQVH/2gAIAQEAAT8QVKD2isSeWLYQdsNAFEG04N8qVFpoZSl4a+y/rF18TY+MxP/Z",
       "color": "#3B49DF"
     },
     {
@@ -230,39 +230,39 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4864681",
-      "title": "I Miss Writing Code",
-      "desc": "By luminousmen | 7 min read",
-      "tag": "tutorial",
-      "published": "2026-10-20T14:00:00Z",
-      "order": 20,
-      "url": "https://dev.to/luminousmen/i-miss-writing-code-5hla",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fq0tm4hjzry9uiz7nv0jq.jpg",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAABQME/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAH/2gAMAwEAAhADEAAAAU8FjYTuPvP/xAAbEAACAgMBAAAAAAAAAAAAAAAAAgMRARAhEv/aAAgBAQABBQIeTqyY1K/ksvsT2f/EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABkQAAMAAwAAAAAAAAAAAAAAAAAQEQEiUf/aAAgBAQAGPwI1y51w/8QAGxAAAgMBAQEAAAAAAAAAAAAAAAERITFBcYH/2gAIAQEAAT8hFNpH9ME+SaOoWC0KMO8dUWNeqo//2gAMAwEAAgADAAAAEAnv/8QAFREBAQAAAAAAAAAAAAAAAAAAABH/2gAIAQMBAT8QiP/EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QP//EABwQAQEBAAMAAwAAAAAAAAAAAAERACExQVFhkf/aAAgBAQABPxDcHJ3EH5qaQMPm+rhAJ06ORpVevMUkOvHumDLRNSZmyBwm/9k=",
-      "color": "#3B49DF"
-    },
-    {
-      "id": "devto-4883684",
-      "title": "Processes vs Threads, as the Linux Kernel Sees Them",
-      "desc": "By Athreya aka Maneshwar | 10 min read",
-      "tag": "tutorial",
-      "published": "2026-10-20T20:59:17Z",
-      "order": 21,
-      "url": "https://dev.to/lovestaco/processes-vs-threads-as-the-linux-kernel-sees-them-55pk",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fmrj7b2o8jhlj5ub8mi0e.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAABQQD/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAH/2gAMAwEAAhADEAAAATED740MvgP/xAAcEAABAwUAAAAAAAAAAAAAAAADAAECEBMhIjL/2gAIAQEAAQUCQJaFeNqgsDJwv//EABURAQEAAAAAAAAAAAAAAAAAAAAB/9oACAEDAQE/AVf/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAaEAEAAQUAAAAAAAAAAAAAAAABABAREiCB/9oACAEBAAY/ApbHsQNGn//EABoQAQADAAMAAAAAAAAAAAAAAAEAEBEhQWH/2gAIAQEAAT8hiGDY0RMzq3yR56BX/9oADAMBAAIAAwAAABBcP//EABYRAQEBAAAAAAAAAAAAAAAAAAEAEf/aAAgBAwEBPxANhjf/xAAVEQEBAAAAAAAAAAAAAAAAAAAAAf/aAAgBAgEBPxCo/8QAHBABAQACAgMAAAAAAAAAAAAAAREAIRAxQZGx/9oACAEBAAE/EMZrduwi+CJiFIBU02do81wDR+5Iljn3x//Z",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4902669",
       "title": "Why an 80-Year-Old Math Book Fixed My AI Coding Agent",
       "desc": "By Gulajava Ministudio | 12 min read",
       "tag": "tutorial",
       "published": "2026-10-23T03:57:06Z",
-      "order": 22,
+      "order": 20,
       "url": "https://dev.to/gulajavaministudio/why-an-80-year-old-math-book-fixed-my-ai-coding-agent-517b",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Ffvc55een0ngvqij4cnnm.jpg",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAAEDBP/EABcBAAMBAAAAAAAAAAAAAAAAAAABAgP/2gAMAwEAAhADEAAAAdSnTOkiQ//EABoQAQACAwEAAAAAAAAAAAAAAAECIQAQETH/2gAIAQEAAQUCLi0d5g1A34f/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAXEAEAAwAAAAAAAAAAAAAAAAAQAREg/9oACAEBAAY/AsUSf//EABoQAQADAQEBAAAAAAAAAAAAAAEAESExQWH/2gAIAQEAAT8hJ2yHHuQOQ59gZTjLFskTyJKU3vs//9oADAMBAAIAAwAAABDuD//EABYRAQEBAAAAAAAAAAAAAAAAAAARIf/aAAgBAwEBPxCaj//EABcRAQADAAAAAAAAAAAAAAAAAAABMUH/2gAIAQIBAT8QmmP/xAAbEAEAAwEBAQEAAAAAAAAAAAABABEhMUFRYf/aAAgBAQABPxDAAXWbEoYZ9wqQjSApUYchTnsM2XvYdE92/wBqAjTry5//2Q==",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4897934",
+      "title": "Rack Before You Remember",
+      "desc": "By Ken W Alger | 10 min read",
+      "tag": "tutorial",
+      "published": "2026-11-03T13:53:00Z",
+      "order": 21,
+      "url": "https://dev.to/kenwalger/rack-before-you-remember-2jl3",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fjta595mrd2d2908smur0.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAwUAAQT/xAAUAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAGwa1gsYAI//8QAGhAAAwEAAwAAAAAAAAAAAAAAAAECEQMSE//aAAgBAQABBQKn1lcuF0keslLZLWykf//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABURAQEAAAAAAAAAAAAAAAAAAAEQ/9oACAECAQE/ASf/xAAXEAEBAQEAAAAAAAAAAAAAAAAQAQJR/9oACAEBAAY/AidKZp//xAAbEAACAwADAAAAAAAAAAAAAAAAAREhQXGRof/aAAgBAQABPyGxfg7KaNxpHJ0LlESySHcFB//aAAwDAQACAAMAAAAQiO//xAAVEQEBAAAAAAAAAAAAAAAAAAABAP/aAAgBAwEBPxBJv//EABYRAAMAAAAAAAAAAAAAAAAAAAABEf/aAAgBAgEBPxBqRH//xAAdEAEAAwACAwEAAAAAAAAAAAABABEhMUFhcYGh/9oACAEBAAE/EMi1a8I6+pHYO3g4+uz7C++MATXLiaLdlgFtwa67f5P/2Q==",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4969357",
+      "title": "I Let AI Build a Feature Without Giving It the Full Context",
+      "desc": "By Harsh  | 4 min read",
+      "tag": "tutorial",
+      "published": "2026-11-03T13:36:07Z",
+      "order": 22,
+      "url": "https://dev.to/harsh2644/i-let-ai-build-a-feature-without-giving-it-the-full-context-6h",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fvjfvxjyuym3m70wcniah.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAgQBAwX/xAAUAQEAAAAAAAAAAAAAAAAAAAAC/9oADAMBAAIQAxAAAAFjPOEVyGwr/8QAHBABAAIBBQAAAAAAAAAAAAAAAQACEQMQEhMh/9oACAEBAAEFAvF7LbNLEolJyM5jqWT/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAcEAACAgIDAAAAAAAAAAAAAAABEQAQEiExMnH/2gAIAQEABj8CU5p46mgX7OtIkqf/xAAdEAEBAQABBQEAAAAAAAAAAAABEQBBITFRYZGx/9oACAEBAAE/IR6jULMCd+hMfSBzlr7DG5/Wjw/dakuHf//aAAwDAQACAAMAAAAQcX//xAAVEQEBAAAAAAAAAAAAAAAAAAAAAf/aAAgBAwEBPxBX/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPxA//8QAHRABAQACAgMBAAAAAAAAAAAAAREAITGhUWFxwf/aAAgBAQABPxCvBBVsyQnPeLNCt84pHm0aMSpIiufWAKdtl4q6+TX5jrkohHrP/9k=",
       "color": "#3B49DF"
     },
     {
