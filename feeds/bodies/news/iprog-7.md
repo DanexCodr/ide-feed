@@ -1,0 +1,21 @@
+Researchers at the Robotics Systems Lab at ETH Zurich have trained a quadruped robot to solve a giant Rubik's cube without any human intervention. It is intended as a demonstration of the robot's ability to use its sensors, planning, and full-body movement control to manipulate a moving object with its feet over an extended period of time. VIDEO You may recognize the quadruped robot in this video. It is, of course, ANYmal, which was originally developed by the Robotics Systems Lab (RSL), which is headed by Professor Marco Hutter, and is now developed by his company, [ANYbotics](<https://www.anybotics.com/>).Compared with some other feats this robot has performed, this one may seem not seem much of an achievment— for a start the robot does not figure out how to solve a on its own from scratch, but rather uses a standard algorithmic cube solver. On the other hand, the project does involve both cognitive tasks and physical manipulation, or rather pedipulation to use the appropriate jargon, since the robot has legs and feet rather than arms and hands. The high-level cognitive tasks consist of: 
+
+  * **Perception** : Using onboard cameras to scan the cube, track its position in 3D space, and recognize colors under varying light conditions.
+  * **Planning** : Taking the algorithmic solution and translating it into a sequence of executable physical moves to reposition the cube, flip it over, and turn it separate layers.
+
+The physical pedipulation is broken down into three primary learned motor skills, trained via reinforcement learning:
+
+  * Flip Forward: Tipping the cube 90° away from the robot.
+  * Flip Backward: Tipping the cube 90° toward the robot.
+  * Rotate CCW: Turning the top two layers counterclockwise while using one foot to pin the base in place (a fourth move, clockwise rotation, is achieved by mirroring this policy).
+
+What is noteworthy is that, rather than operating separately, the high-level planning and low-level physical control work together continuously—the perception system updates the cube's exact pose between physical actions so the robot can dynamically adapt its balance and foot placement for each move. This project builds on previous work by Marco Hutter and his group at RSL and reiterates the principle that quadruped robots can operate in environments designed for humans without the need to retrofit them with expensive robotic arms.
+
+#### More Information
+
+[Solving a Giant Rubik's Cube with a Quadruped Robot (GitHub)](<https://leggedrobotics.github.io/rubik-skills/>) [Solving a Giant Rubik's Cube with a Quadruped Robot (arXiv)](<https://arxiv.org/abs/2610.24610>)  
+by Lukas Amiet, Gabriel Sánchez-Blanco Repgen, Mayank Mittal, Andrei Cramariuc, Marco Hutter, Cesar Cadena. [ ](<https://www.science.org/doi/10.1126/scirobotics.adi7566>)
+
+#### Related Articles
+
+[ANYmal Evolution and Locomotion](<https://www.i-programmer.info/news/169-robotics/16912-anymal-locomotion.html>) [ANYmal For Badminton](<https://www.i-programmer.info/news/169-robotics/18315-anymal-for-badminton.html>) [Quadrupedal Parkour](<https://www.i-programmer.info/news/169-robotics/17081-quadrupedal-parkour.html>) [AI Learns To Solve Rubik's Cube - Fast!](<https://www.i-programmer.info/news/105-artificial-intelligence/13055-ai-learns-to-solve-rubiks-cube-fast.html>) [Rubik's Cube - the order of God's Number](<https://www.i-programmer.info/news/112-theory/2676-rubiks-cube-the-order-of-gods-number.html>) To be informed about new articles on I Programmer, sign up for our [weekly newsletter](<https://www.i-programmer.info/edit-profile.html?layout=form>),[ ](<https://s3.amazonaws.com/com.alexa.toolbar/atbp/hfdfGO/download/index.htm>)subscribe to the [RSS feed](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=3&format=raw>) and follow us on [Facebook](<http://www.facebook.com/pages/iProgrammer/127140977307932#%21/pages/iProgrammer/127140977307932?v=wall>) or [Linkedin](<http://www.linkedin.com/company/i-programmer>). [](<https://amzn.to/4iJFqTH>)

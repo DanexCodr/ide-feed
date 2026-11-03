@@ -1,287 +1,294 @@
-In past years, I've experimented union types in a low level language (Copper) and a higher level language. I got very interesting results but I'm currently experimenting a trimmed down version: just the option types.
-What is an Union Type?
-An union type is a list of two or more alternative types that a value can hold. For example:
-`func f(x: Int | String)
-    ...
-end
-`
-the parameter `x` can be either a string or an integer.
-Some languages accept to perform directly operations that are commons to all types of the union, for instance if `Int` and `String` types have a `print` method, you could just do `x.print`. But in the basic case, you must first discriminate the actual type of the value before using it:
-`func f(x: Int | String)
-    match x
-    case Int -> i
-        // do something with i as an integer
-    case String -> s
-        // do something with s as a string
-    end
-end
-`
-Adding Union Types to Copper
-In Copper, my own "better C" language, I've experimented union types. I wanted to handle the general case `T1|T2|...|Tn` using a tag but also handling the special case `Pointer|Nothing` without any additional tag and discrimating using the `NULL` pointer value in order to be fast and integrate easily with external libraries.
-Limits
-The feature was not very well defined and I've added a lot of restrictions for an efficient compilation.
-No Nested Unions
-`(T1|T2)|T3` is not permitted. It simplifies the implementation of the compiler since a value of an union type is a pair
-![Option type value](https://tibleiz.net/images/blog/tag-value.png)
-where the value part can not include tags recursively.
-Significant Order
-`T1|T2` is different from `T2|T1`. This restriction allows a very useful shortcut for the common pattern:
-`var file = 
-    match File.open(filename)
-    case Error -> err
-        return err
-    else -> f
-        f
-    end
-`
-can be rewritten using syntactic sugar:
-`var file = File.open(filename)...
-`
-without having to make the `Error` type builtin into the language: it just picks the first type of an union, `Error|File` in the example above.
-No Compatibility Between Unions
-`T1|T2` is not compatible with `T1|T2|T3`.
-It would have required to assign a global unique tag to each type or to implement a remapping of tags when promoting an expression to a compatible union.
-With such a restriction, a tag can be easily assigned for each part: 
+It caught my attention that most of Pratt parsing tutorials that I've stumbled on spend almost all of their time explaining Pratt's algorithm and none explaining the properties behind Pratt that actually matter. Pratt fits into just 9 lines of code if you're programming in a high-level language such as Rhombus:
 
-`0` for the first type, 
-`1` for the second one, 
-...
+```
+    left
+```
 
-Results
-The feature was really useful, but it was far too much complexity in the compiler for a minimalistic low level language such as Copper. The most annoying part was dealing with the special optimized case `Pointer|Nothing`.
-My main usage was mostly for two cases:
+```
+    left
+```
 
-`T|Nothing` 
-`T|Error`
+```
+    left
+```
 
-So, may be just handling `T|Nothing` will be good enough, and for errors I'll just go back to returning an error *and* a value.
-What is an Option Type?
-The option type is just a special case of union type: `T|Nothing`. It represents an expression that may have no value. 
-An option type `T?` can have any value of `T` plus the special `nil` value.
-![T?](https://tibleiz.net/images/blog/optional-t.png)
+```
+    left
+```
 
-A `T` value *is a* `T?` 
-`nil` *is a* `T?`.
+And here's a secret: that's the least important thing you need to understand about Pratt's. In fact, you don't need to understand this piece at all! Imagine if you were only able to use quicksort if you understood its implementation. Imagine if you were only able to use files if you knew how to implement a filesystem from scratch. It's the same logic here. If you lack the power to abstract, you'll arrive nowhere in computer science because that's how the whole field works. In fact, I wrote the backbone of a heavily Pratt-based parsing machinery for a compiler that I've been writing since last year w/o even bothering to understand the above snippet in any detail.
 
-Adding Option Types in Copper
-The implementation will be done by reserving a value in the original type. Each type can define its own `nil` value.
-For pointers, the choice is obvious, the nil value will just be the address `0` but it is not hard-coded in the language, any other address could be used as well.
-For other types, it depends. A 24 bit RGB color in a 32 bit integer can reserve `0x8000_0000` for example. A signed integer index data type can use `-1` since it usually indicates an invalid or not-found value.
-This implementation has lot of advantages: 
+Not convinced? Think for a second on how they do in traditional parsing techniques: compiler compilers! They use code generators to spit the parsing algorithm because just a minuscule crowd bothers to learn what the parsing engine is actually doing. It's no different with Pratt. However Pratt is so small that you can just copy'n'paste these 9 lines of code in your project and call it a day instead of adding a new complex dependency to your project. The algorithm hasn't changed since 1973 and it's not gonna change now.
 
-It integrates very well with native C APIs.
-It is efficient: no tag to attach to a value.
-It is flexible: you just need one value to reserve.
+In this article I'll go over what you actually need to keep in mind for Pratt parsing. The point won't be about memorizing any of it though. The point is about acquiring a mindset. As long as you acquire the mindset you don't need to even bother to remember even a single word of what I say here.
 
-but it has few drawbacks:
+## Nuds & leds
 
-Some types may not have a value that can be reserved for `nil`.
-It is not possible to have `T??`
+The only tutorial on Pratt parsing that I can firmly recommend to someone who has never been exposed to the topic is actually a talk that Douglas Crockford gave in the conference GOTO 2013[¹](https://vinipsmaker.github.io/blog/article/pratt-parsing-is-a-black-box/#). Douglas Crockford nailed it when he stated:
 
-Refining the Option Type
-The main idea of the option type is that you can't refine it to its main type without ensuring first that it is not the `nil` value.
-I have found a simple way to do this:
-`expr as id
-`
-It is a boolean expression that tests whether `expr` of type `T?` is nil. If the expression is not nil, the value is copied in a local immutable variable `id` of type `T`.
-The trick is that the variable is not directly available, it is created in a hidden scope that is accessible in 3 special cases: 
+> Pratt takes parsing which is a really complicated thing and reduces it to one simple question: *What do we expect to see to the left of a token*?
 
-The inner block of a `if`
-The inner block of a `while`
-The right expression of a `and`
+— Douglas Crockford, GOTO 2013
 
-`if expr as x
-    // x is available here
-end
+At first glance it may look like a mystical statement devoid of meaning, but that's the question that becomes the framework on how you face parsing problems and it'll rewire your brain to internalize the Pratt parsing mindset. That's the most important thing you need to understand. You register semantic actions for two categories: nuds and leds. A nud is a token that expects nothing to its left (nud stands for null denotation) while a led expects something (led stands for left denotation).
 
-while expr as x
-    // x is available here
-end
+Traditional parsing techniques register semantic actions to production rules. Here's an example I took straight from GNU Bison's manual:
 
-var isSingleton = list.head as first and first.next == nil
+The text between the braces is code that executes when the BNF-like grammar on the left matches. I'm gonna repeat myself because that's really important: traditional parsing techniques register semantic actions to *production rules* (which by definition are non-terminal symbols). In contrast Pratt parsing registers semantic actions to the *terminals themselves* instead. That's a fundamental shift on how you face parsing problems.
 
-if list.head as first and first.next == nil // first is available after 'and'
-    // first is also available here
-end
-`
-Allowing Early Returns
-The `as` operator is sufficient, but it can lead to the arrow anti-pattern:
-`if expr1 as v1
-    if expr2 as v2
-        if expr3 as v3
-            // do something
-        else
-            return err3
-        end
-    else
-        return err2
-    end
-else
-    return err1
-end
-`
-It can be solved with early returns but it is not possible without a new construct, `or else`, that evaluates a block if a expression is nil:
-`var v1 = expr1 or else
-    return err1
-end
+Here's a stripped down version of the code for the tables that I have in my compiler right now:
 
-var v2 = expr2 or else
-    return err2
-end
+All values on the left of each table are the lexer codes for terminal symbols. The values on the right depend on the table kind:
 
-var v3 = expr3 or else
-    return err3
-end
+Functions matching the signature `ExprPtr(Context&,reader,reader&)``ExprPtr(Context&,reader,reader&)`.
 
-// do something
-`
-The block must terminate either with a `return`, `break` or `pass`.
-Refining the Option Type without Check
-In theory this is beautiful: you can't dereference a pointer without checking its value first or the compiler will report an error. Unfortunately, in real code there are many situations where you know that a value is present but the compiler can't know it. For example:
+Functions matching the signature `ExprPtr(Context&,reader,reader&,ExprPtr)``ExprPtr(Context&,reader,reader&,ExprPtr)`.
 
-Iterating over two link-lists where the number of elements are equals.
-An object with two distinct phases: an initialization phase and a processing phase. In the first phase some properties are optionals but in the second phase those properties are guaranteed to be defined.
+Positive integers.
 
-Sure these can be resolved in different ways:
+Most of the semantic actions in these tables have code whose implementation amount to one semicolon in their body at most. Here's the code for `parse_unary_plus()``parse_unary_plus()`:
 
-Test before accessing a value even if you know that it is defined.
-Rewrite the algorithms, change the data-model, copy the data into new structures where types are non-optional.
+On the surface it may seem just like a different but still very similar way to organize your code, but the impact is in fact huge. Here are a few differences from traditional parsing techniques that stem from this single departure alone:
 
-But either it is inefficient and can make code confusing (why the value is tested here, shouldn't it be defined at this point?) or it makes the code more complex by adding new classes and code.
-It's simpler and easier to just force the type refinment and leave a comment to the reader on why it is safe to assume that the value is defined at a particular point in code.
-For this I did not add anything to Copper, the language has already the `cast` operator that can change the type of an expression without any verification. However I've added a convenient `notNil` method in the standard library that perform a check at runtime in debug:
-`var value = maybeValue.notNil // I know what I'm doing
-`
-Extending an Option Type
-An option type has very few methods by default:
+- You don't need to worry about left-recursion problems that occur in traditional parsing techniques such as LL(k). Given the dispatch to a semantic action is done with its associated token already consumed from the stream, left-recursion just doesn't happen. It's a non-issue.
+- The parsing engine doesn't need to test alternatives or backtrack. The usual dichotomy between speed versus memory that is found in some parsers (e.g. PEG vs packrat) is gone. Pratt is fast, and it's not gonna starve for insane amounts of memoization. Pratt is just going to compare numbers, and iterate or recurse.
+- Related to the previous point, but worth to consider on its own: semantic actions run exactly once! That means there's no need to rollback to a previous state if a match fails. In other words your actions may contain side-effects. In my parser I use this property to do name reservation/release on lexical scope through a shared context object juggled through each layer. Just be careful to not abuse side-effects and end up with spaghetti.
+- Also related: your semantic action always knows it's the correct match. Therefore it may look arbitrarily far ahead if it wants to. In other words: you can further use PEG parsers (or layered Pratt parsers) in the semantic actions. While Pratt itself only eats 1 token at a time, the nuds & leds themselves may eat more tokens per round. You just unlocked the power of parser combinators.
+- Most of the grammar ambiguities become table collisions so you waste less time on the simpler ambiguity cases. If you combine multiple parsers then it's still possible to have grammar ambiguities. So you still have work as a grammar designer, but in my experience it's much less work. When you combine parsers you're really combining grammars. Pratt as the parsing algorithm won't act as the all-seeing oracle and detect every possible ambiguity in the full grammar amalgamation. Pratt (just like PEG) will just return the first possible match in this case.
+- Unfilled gaps in your tables become trivial extension points in your grammar. You may fill these gaps in response to the text parsed so far. In other words you can implement macros and even parse a language that extends its own operators. In contrast extending a pre-existing grammar based on production rules (the orthodox parsing school) is a job worth the complexity of PhD researches.
 
-comparing a value with another value,
-type conversion
+You may even find a few of these properties in the traditional school as well, but only to certain extents, or with a huge complexity toll.
 
-but sometimes you want to write methods on the type even if it can be nil. Here's a common example:
-`if obj as x
-    x.delete
-end
-`
-A `defopt` command allows to define methods on the optional type:
-`defopt delete // delete applies to T?
-    if self as x
-        // 'self' is of type T?
-        // 'x' is of type T
-        // invoke the actual delete
-        x.delete
-    end
-end
-`
-And now you just do:
-`obj.delete
-`
-Option Type with a Nil-Checker
-The problem
-The previous solution works very well but introduces multiple concepts that you need to know just to read the source code.
-In addition it can make some simple cases becoming very cumbersome. For instance, this common pattern of lazy creation:
-`if self.findDialog == nil
-    self.findDialog = self.createFindDialog
-end
-self.findDialog.open
-`
-becomes:
-`var dialog: FindDialog
-if self.findDialog as d
-    dialog = d
-else
-    dialog = self.createFindDialog
-    self.findDialog = dialog
-end
-dialog.open
-`
-It makes the code more verbose and requires two additional local variables. It is not a problem for the LLVM backend that will optimize everything by coalescing variables and eliminates useless branches, but it makes the code more difficult to understand.
-A macro can help a bit:
-`var dialog = self.findDialog.ifNil do
-    var d = self.createFindDialog
-    self.findDialog = dialog
-    pass d
-end
-dialog.open
-`
-It is more compact but now it requires to know what the `ifNil` macro does.
-Woudn't it be possible to avoid all this?
-The Solution
-An alternative is to infer that a local variable can not be nil at some points in the code. Instead of having explicit type refinment, the compiler does the refinment based on tests.
-This solution is similar to what TypeScript or Kotlin do.
-Here are some examples:
-`if v1 <> nil
-    f(v1) // ok
-end
-``if v1 == nil
-    ...
-else
-    f(v1) // ok
-end
-``if v1 == nil
-    ...
-    return
-end
-f(v1) // ok
-`
-Globally it works well, it is very un-intrusive, a reader can understand the code without needing to know anything specific except that `T?` represents an optional `T`.
-But the devil is in the details:
-It requires a two-pass analysis on loops: a variable may be valid at the beginning of the loop but could be changed later requiring a second analysis:
-`if v1 <> nil
-    while cond
-        f(v1) // ok on the first iteration
-        v1 = ... // now v1 can be nil again
-    end
-end
-`
-It does not work well with genericity. Despite a test, the variable does not change its type. The reason is because the nil-analysis is performed after building a function (because of the multi-pass). This leads to unexpected errors and requires many explicit conversions:
-`if v1 <> nil
-    // v1 is still of type T?, so if f is generic, the parameter will be 
-    // optional and the function won't assume that v1 is non-nil.
-    f(v1)
-end
-`
-Last but not least, it's a kind of black magic: the validity of the program depends on the power of the nil-checker. For instance, does the compiler handles the following cases?
-(1)
-`while v1 == nil
-    ... // no break
-end
-f(v1)
-`
-(2)
-`if v1 == nil or v2 == nil
-    return
-end
-f(v1)
-f(v2)
-`
-(3)
-`v2 = v1
-if v1 <> nil
-    f(v1)
-    f(v2)
-end
-`
-Answer:
+Nonetheless I mentioned earlier that this organization is a mindset *shift*, but so far I've only mentioned properties that you can use from adopting Pratt, so where's the shift really? Consider the usual EBNF rule for parsing function calls:
 
-(1) yes
-(2) yes
-(3) no
+How do you approach this problem when instead of production rules your toolbox contains only nuds & leds? The key observation is that the opening parentheses always expect something to its left, so it's a led. There you go: register a led for lparen and parse the function call from there. It's not immediately obvious, specially when you've only been exposed to the traditional parsing school. Hence why Douglas Crockford nailed it when he stated:
 
-But it could change in the future.
-And I won't mention the 5% performance impact on the compiler ;-)
-Despite all the benefits of this approach, I gave up and went back to the previous solution.
-Is it Worth it?
-The option type, despite being simpler than union type introduces many new concepts and requires additional knowledge that make the language more complex.
-Am I ready to break the minimalistic yet complete enough language that I have managed to design over the year with this feature? does the few bugs it reveals are worth it?
-The good parts:
+> Pratt takes parsing which is a really complicated thing and reduces it to one simple question: *What do we expect to see to the left of a token*?
 
-The option type makes the intention clearer without polluting the source code too much with type annotations. 
-It eliminates the need to search in code or documentation whether a parameter, return or attribute can be nil. 
-It prevents accidental dereference of nil references.
-It fits well with a statically typed language: the type tells the reader and the compiler which operations are permitted on a value.
+— Douglas Crockford, GOTO 2013
 
-While I can accept few type annotations that help me to make the code more readable and less error prone, I want the compiler to be a discreet reviewer and a friend that helps me finding bugs, not an inquisitor or a censor that forces me to rewrite my algorithms in a way that makes it happy but makes the code obscure.
-Porting the compiler (the language is self-hosted) or Clade (my own text editor) was not very difficult and it showed few potential and actual bugs.
-The real challenge was the port of my experimental decompiler: lot of complex algorithms and data-models. Algorithms rely on some properties (e.g. a Control Flow Graph has all nodes reachable from the entry node) to ensure that it will terminate and that there won't be any nil value at the end; that's something that can't be verified by the compiler.
-At the beginning, I thought that the benefit of option types would be very low and that documentation in the code and tests were almost as good, but I have to admit that it can be helpful. May be it's time to get rid of the billion-dollar mistake.
+The led for array indexing is very similar to the led for function call. Here's the variation that I use in my own parser:
+
+Pratt is not just precedence climbing. Pratt is a way to organize your code. First learning Pratt as a black box actually helps to understand this difference. If you don't have access to the black box, you won't be tempted to reduce Pratt to precedence climbing. Hopefully by the time you want to take away the abstraction and see what's inside you won't make the mistake of treating Pratt just like a mere variation of precedence climbing because by then you'll have already been exposed to all the power unlocked by Pratt parsing. Andy Chu's blog post on Pratt parsing without prototypal inheritance is worth reading as it contrasts two opposing styles of writing Pratt parsers[²](https://vinipsmaker.github.io/blog/article/pratt-parsing-is-a-black-box/#). Here's a minimal calculator written in Rhombus that is (stylistically) closer to a version that'd use prototypal inheritance than the style that Andy Chu shows:
+
+```
+    lexer
+```
+
+```
+    | "+": Token(
+```
+
+```
+    | "-": Token(
+```
+
+```
+    | "*": Token(
+```
+
+```
+    | "/": Token(
+```
+
+```
+    | "(": Token(
+```
+
+```
+    left
+```
+
+```
+    lexer
+```
+
+```
+    | "+": Token(
+```
+
+```
+    | "-": Token(
+```
+
+```
+    | "*": Token(
+```
+
+```
+    | "/": Token(
+```
+
+```
+    | "(": Token(
+```
+
+```
+    left
+```
+
+```
+    lexer
+```
+
+```
+    | "+": Token(
+```
+
+```
+    | "-": Token(
+```
+
+```
+    | "*": Token(
+```
+
+```
+    | "/": Token(
+```
+
+```
+    | "(": Token(
+```
+
+```
+    left
+```
+
+```
+    lexer
+```
+
+```
+    | "+": Token(
+```
+
+```
+    | "-": Token(
+```
+
+```
+    | "*": Token(
+```
+
+```
+    | "/": Token(
+```
+
+```
+    | "(": Token(
+```
+
+```
+    left
+```
+
+The previous section might have been the densest in this whole blog post so I want to tune it down while you incubate the Pratt mindset and go on trivial things for now:
+
+- Pratt requires a separate lexer. Some modern parsing engines can work in a scannerless manner (e.g. PEG) or even embed the lexer definition directly in the parser itself, but Pratt requires a separate lexer. That shouldn't be a big concern, but it's something to keep in mind.
+- Pratt is fast. The algorithm only compares numbers and iterate or recurse. It's only looking 1 token ahead, and not doing anything else really. It doesn't go back to test alternatives or to backtrack on failed production rules. It just doesn't go back at all. It's a full-speed locomotive only looking ahead eating 1 token at a time.
+- Given Pratt itself is already fast, if you want to optimize anything, the only thing left is the dispatch code for nuds & leds. In my case I use global read-only dispatch tables, but most of the tutorials I've seen in the wild use dynamic objects in highly dynamic scripting languages.
+- Pratt can't parse statements. You have to combine it with other techniques to parse languages with statements. I've already gone through this constraint in my last blog post where you can find solutions.
+- Pratt is a form of recursive descent parsing meaning it's running custom user code (i.e. code in a Turing-complete language) for the semantic actions, but that's not the whole picture. The semantic actions further drive the parsing choices/direction which means that your code might look at the context (e.g. previous declarations) to decide how to parse the next piece of the input text. In summary you can have some forms of context-sensitive parsing which opens the door for more classes of languages.
+- You'll have to resort to modal lexing to parse some complex languages found in the wild, but I'll reserve a later section of this blog post to touch on this topic.
+- Pratt can't be used for incremental parsing as done in GLR parsing. However that's not a power found in most parsing algorithms anyway (I'm running out of algorithmic properties to talk about). Incremental parsing is used in tools such as tree-sitter.
+
+## Right-to-left associative operators
+
+My whole argument today is that Pratt is a black box abstraction, so let's go with this argument and lay down what contracts you need to respect to use Pratt:
+
+- Only tokens with associated leds need a value in the binding power table. Tutorials in the wild are usually written in a way where this property isn't obvious. It becomes more obvious when you write your parser using static tables rather than highly dynamic objects in scripting languages.
+- Related to the previous point: You still need a value for the binding power of prefix operators, but this value isn't used in the Pratt loop at all. Therefore it's not a requirement to inflate the binding power table with a value for the prefix operators, but that's what most of the code I've seen in the wild do anyway. If you think it's easier to just stuff the binding power for prefix operators in the same table be my guest and go ahead. Just bear in mind that this popular arrangement isn't a hard requirement. Only the nud implementing the prefix operator itself needs to know the binding power for prefix operators.
+- Never assign a binding power of zero to a led.
+- Separators such as comma and unknown/error/EOF tokens where the parser must stop should have a binding power of zero. They don't need to exist in the binding power table.
+- If you're writing in decimal like every human being, adopt increments of 10 in the binding power table. When reading these values, you may just ignore the final zero, but the extra room between operators enables some tricks.
+
+So how do we implement right-to-left associative operators with Pratt? First let's look at a common left-to-right associative infix operator. Here's my code for the led `+``+`:
+
+If we wanted to make the operator right-to-left associative, we'd just need to use `bp - 1``bp - 1` instead of `bp``bp`:
+
+```
+        context,
+```
+
+```
+        context,
+```
+
+```
+        context,
+```
+
+```
+        context,
+```
+
+That's a standard trick in the field of Pratt parsing. A trick of the trade so to speak. A trick you ought to know. Why does it work? It doesn't matter. It's a black box for today. Tomorrow it might matter, but today you should only be focusing on how to use Pratt, not why it works.
+
+Why even write a section for macros when most language designers won't add them? Pratt macros are just nuds/leds implemented in the language that your code is parsing and interpreting. Therefore anything that your own nuds/leds can do is something that ought to be possible in a macro and vice-versa. Lessons learned from Pratt macros are lessons learned on Pratt parsing itself.
+
+That's just a principle, and not a hard-truth. It's definitely not a truth in the Pratt macros of my own language, for instance, but the principle remains my guide (and hopefully yours as well).
+
+The implementation of macros outside Lisp are traditionally very limited in many fronts. In languages such as C you have macros that are just textual substitution templates that work in the environment of a preprocessor doing textual expansion (therefore working on the lexing layer). It's also possible to design macros that work in the AST/parsing layer such as done in Lisp. However Pratt macros unify these two previously severed worlds. If you're implementing procedural Pratt macros then it's possible for the macro to use APIs that alternately invoke either the lexer or the parser. My own macro system doesn't yet have enough APIs so I can't showcase a real example, but here's how envision that it's gonna work:
+
+```
+    // tokens)
+```
+
+```
+    // tokens)
+```
+
+```
+    // tokens)
+```
+
+```
+    // tokens)
+```
+
+These APIs are pretty much what's already used in the core nuds of many parsers using Pratt. A macro system only needs to expose them to the macros as well to get this far. This part is actually easy. Tasks actually challenging in macro systems reside elsewhere, not here. The hardest part of a macro system is hygiene[³](https://vinipsmaker.github.io/blog/article/pratt-parsing-is-a-black-box/#)[⁴](https://vinipsmaker.github.io/blog/article/pratt-parsing-is-a-black-box/#), not parsing (well… parsing is gonna be easy if you use Pratt parsing at least). However this blog post is about (Pratt) parsing, not macro systems, so I'm not gonna delve on hygiene or other macro system challenges (problems which I've already battled with and ultimately won).
+
+The takeaway here is that Pratt parsing enables languages with powerful macros that can implement beautiful unconstrained eDSLs. Pratt macros are just an interpreter for your language that has access to the lexer and the parser at the point where the macro is being expanded. Patterns that you use in your nuds & leds are patterns that you'd likely see in Pratt macros. The code being parsed is teaching the very parser that is parsing it on how to do so (tell me about meta!).
+
+Usually the lexer is the most neglected part of a compiler. It's a solved problem. There's no reason to waste time on its design. You use a lexer generator to implement an efficient lexer, and move on to never look back again. However Pratt – the algorithm – is just 9 lines of Rhombus code. Your lexer is most likely bigger than the parser already. Just on the face of this your lexer is already playing a bigger part on your project by at least some metric (even if an unimportant one).
+
+However it goes further than this. Every nud and led in your code is a subparser of sorts. Combining (sub)parsers is key to unlocking the power to parse even more classes of languages. The lexer becomes the single point in common that trespass the walls between all subparsers. A good lexer design improves parser composability.
+
+As a practitioner of the Pratt school, the single most important lexing technique you should learn is modal lexing. The technique is already useful on its own even if you're not using Pratt, but it's even more so for us. As Andy Chu succinctly explains[⁵](https://vinipsmaker.github.io/blog/article/pratt-parsing-is-a-black-box/#), modal lexing is enabled by adding an extra parameter to your lexer:
+
+There are other ways to express the same pattern. For my own project, I prefer to use separate functions instead of an enum. As a C++ programmer I've been trained well to discern between cases of static versus dynamic polymorphism, and here's a case where clearly the dispatching information is fully known statically at compile time. Hence it doesn't make sense to even use an enum. The story could be different in highly dynamic macro-enabled languages though.
+
+Simple as it is, this single defining trait of modal lexing unlocks the ability to parse many more complex classes of languages by providing a way for the lexer to receive feedback from the parser. Lexers never know grammatical structure, but the parser always does. By feeding this information from the parser back to the lexer you enable forms of language composition where each sublanguage might have conflicting token definitions (e.g. C++11's right-shift operator spawns different tokens in template contexts) or just tokens with different meanings altogether. Andy Chu already gave comprehensive examples on where this might be useful[⁶](https://vinipsmaker.github.io/blog/article/pratt-parsing-is-a-black-box/#) so here I'll only bother to contribute a single example to the corpus.
+
+In Rust you have a different sublanguage just to express types. This type annotation happens in neatly delimited places inside the "main" language. It usually happens after the colon and ends on the equals-sign or delimiters such as commas or the closing parentheses:
+
+My language syntax is heavily inspired by Rust's. Naturally I rely on modal lexing to parse these structures. The function `reader::next_on_type_scope()``reader::next_on_type_scope()` shown earlier is used for the type annotation sublanguage. Then I have a Pratt parser for each – `parse_expr()``parse_expr()` and `parse_type()``parse_type()`. It's a simple trick that doesn't demand much explanation really, but gets you very far. The code almost writes itself after you get the idea.
+
+The only caveat is that your lexer must adhere to a pull design instead of lexing all tokens upfront. For some reason people like to only design push APIs that fully steal execution flow, and these people are addicted to implement lexers that do all the work upfront. It's a popular arrangement, but not one that will work for modal lexing. Pratt itself is a push design so in the end you'd have a mix of designs.
+
+Moving on to the next topic, there are more lexer tricks that I have to share, but for today I just have one suggestion: don't design your lexers to do any IO (syscalls) nor to buffer anything. Working on a copy of your lexer shouldn't have observable side-effects on the original object. Copies should be cheap and encouraged. Working on a copy of the lexer enables arbitrary lookahead which might be required by some subparser. Even if you only requires a fixed amount of lookahead (e.g. 3 tokens) this design fits the hole all the same.
+
+Fulfilling this design is easy: just read the whole file at once (or use mmap) and make the lexer point to this shared region to do its job. Your AST alone is likely gonna use more memory than the whole input file anyway so memory shouldn't be a concern here.
+
+Now let's revisit my nud for `+``+`:
+
+Most of the code that I see on the wild has a custom type for tokens, and that's get used as argument for the nuds & leds, but I just store/pass the lexer itself instead. My lexer is cheap to copy so there's no need to create a class to pass tokens around. The layer expecting a token can decode from the matched lexeme directly anyway so the lexer only needs to store a few pointers to the original input text. Here's the code parsing decimal literals in my project to showcase the decode-from-lexeme-directly trick:
+
+Furthermore this design allows me to rollback 1 token which is something that I use in the nud for `<``<`:
+
+This trick also requires a lexer that represents error as a dedicated token code instead of raising exceptions when they happen. You may still use exceptions if you want when an error is fatal for all sublanguages (e.g. non-ASCII character found on the stream).
+
+Now what's this nud even parsing might be a valid question, so let's go over exactly what it's doing. Rust (which inspired my language's syntax heavily) allows one to access fields from a type. Field access here is done using the operator `::``::`. For instance:
+
+However what happens when referring to your type requires access to the type annotation language such as in the case for generics? Then you need an "escape hatch" in the main language to access the type annotation language explicitly, and that's done through the nud for `<``<`:
+
+So now you know how to parse this type of grammars with Pratt. Simon Ochsenreither once argued that using `<>``<>` for generics is bad design[⁷](https://vinipsmaker.github.io/blog/article/pratt-parsing-is-a-black-box/#), so maybe it's no coincidence that that's the only time that I actually had to use the rollback trick (which I consider a hack) in my project. Nevertheless it was the best compromise I could find so I went with it anyway. Language design is hard.
+
+I have a lot more of lexer tricks to share, but I'm feeling that I should postpone them to later articles. Some of them are already used in my project. Ironically perhaps, but I acquired the mindset that enabled me to come up with these lexer tricks from past experience parsing HTTP and JSON which has nothing to do with the techniques that one uses to parse programming languages.
+
+## Summary
+
+Pratt is a shift in parsing mindset. You must get comfortable on breaking grammatical structures into nuds & leds. It's totally okay to write shortcuts that remove the boilerplate by factoring the common parts of the implementation of prefix, infix and postfix operators as done by Douglas Crockford[⁸](https://vinipsmaker.github.io/blog/article/pratt-parsing-is-a-black-box/#), but if you're changing Pratt's algorithm itself as done by Alex Kladov in 2020[⁹](https://vinipsmaker.github.io/blog/article/pratt-parsing-is-a-black-box/#) (I've done the same mistake myself once) to make accommodations because you refuse to reason in terms of nuds & leds (or any other reason), you're missing out and should start over. Using Pratt parsing as a black box abstraction will remove your ability to change Pratt's algorithm, and it may help in adapting your mindset. That's my advice to get you started.
+
+I have a lot more of parsing tricks to share (e.g. Pratt-walk interpreters, REPLs with perfect auto-completion), but they're more advanced, and I'll postpone them to later articles.

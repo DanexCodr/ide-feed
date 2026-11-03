@@ -1,57 +1,45 @@
-Researchers created a new technique that accurately and rapidly matches X-rays captured during surgery with a patient’s preoperative 3D medical scan. This method could make it easier for clinicians to precisely pilot minimally invasive surgical tools, leading to faster and safer procedures.
+RNA vaccines, which have been proven effective against Covid-19, are now being developed for many other diseases, including cancer. One of the drawbacks to these vaccines is that they require ultracold storage, but researchers from MIT have found a promising way to overcome that limitation.
 
-Clinicians perform many minimally invasive surgeries using real-time X-rays to help them steer devices like catheters and endoscopes through tiny incisions. But since X-rays are flat images, it can be challenging to determine exactly where surgical tools are located and oriented within the patient’s body, increasing the risk of complications.
+With help from an AI algorithm, the researchers tweaked the formulation surrounding the lipid nanoparticles that are typically used to deliver mRNA vaccines, making the vaccines more heat-resistant. Using this approach, they formulated vaccines that could remain stable even when stored at room temperature for up to a year, or at nearly 100 degrees Fahrenheit for two months.
 
-To help localize surgical devices, clinicians may manually align X-rays with preoperative 3D medical images, such as CT scans or MRIs. Artificial intelligence tools designed to streamline this process struggle to align images robustly for all patients, making them infeasible in practice.
+When Covid-19 vaccines carried by these particles were administered to mice, they generated just as strong an immune response as an RNA Covid-19 vaccine similar to one developed by Moderna. By using the AI algorithm to predict the optimal formulations for the particles, the researchers were able to cut down the number of experiments they needed to do, which rapidly sped up the development process.
 
-This new system, developed by scientists and clinicians at MIT and collaborating institutions, uses an AI model that adapts to each patient in only about five minutes. The model automatically matches one patient’s X-rays with 3D scans in a matter of seconds, and with sub-millimeter precision.
+“The real beauty of this algorithm is that we can use it with small data sets,” says Ana Jaklenec, a principal investigator in MIT’s Koch Institute for Integrative Cancer Research. “It’s really hard to run thousands of experiments, so this algorithm allows us to more easily achieve formulations with features that we want — in this case, stability.”
 
-Named xvr (which stands for X-ray volume registration), it outperformed existing AI methods by an order of magnitude across a wide range of patients, body parts, and medical procedures.
+Jaklenec and Robert Langer, the David H. Koch Institute Professor, are the senior authors of the paper, which [appears today in *Nature Biotechnology*](https://www.nature.com/articles/s41587-026-03331-w). Graduate student Jinbi Tian and postdoc Khanh Tran are the lead authors of the paper.
 
-“A majority of Americans live more than an hour away from a center that can perform noninvasive procedures, like emergency stroke interventions. An hour in stroke time is incredibly substantial. Making these procedures easier by combining 2D and 3D information enables these types of highly specialized life-saving procedures to be more accessible to much broader parts of the population,” says Vivek Gopalakrishnan, a postdoc in the MIT Computer Science and Artificial Intelligence Laboratory (CSAIL); a recent graduate of the Harvard-MIT Program in Health Sciences and Technology; and lead author of a paper on xvr, which [appears today in *Nature*](https://www.nature.com/articles/s41586-026-11045-x).
+**Stable vaccines**
 
-He is joined on the paper by his advisor Polina Golland, the Sunlin and Priscilla Chou Professor of Electrical Engineering and Computer Science (EECS), a principal investigator in CSAIL, the leader of the Medical Vision Group, and co-senior author of the paper; and Neel Dey, a former postdoc in the Medical Vision Group who is now an investigator at Harvard Medical School and Massachusetts General Hospital as well as co-senior author on the paper. Additional co-authors include David-Dimitris Chlorogiannis, a researcher and clinician at Harvard Medical School; Andrew Abumoussa, a neurosurgeon at St. Luke’s Marion Bloch Neuroscience Institute; Anna M. Larson, a pediatric clinician at Shriners Children’s Hospital; Nazim Haouchine, an assistant professor of radiology at Harvard and Brigham and Women’s Hospital; Darren B. Orbach, a physician and scientist at Boston Children’s Hospital; and Sarah Frisken, an associate professor of radiology at Harvard.
+RNA is a highly fragile molecule, so researchers stabilize it with lipid nanoparticles (LNPs) that protect the RNA from degradation and help it get into cells. However, these RNA-LNP vaccines still need to be kept cold (-20 to -80 degrees Celsius), which makes it difficult to ship them to regions that don’t have cold-storage facilities available.
 
-**Making X-rays more informative**
+Making these vaccines more heat-tolerant would not only enable them to be distributed more widely, but could also help researchers develop new vaccines that could be administered through novel methods such as microneedle patches. These patches contain hundreds of vaccine-filled microneedles, which dissolve when the patch is applied to the skin, releasing the vaccine.
 
-In many minimally invasive surgical procedures, like angioplasty to open blocked arteries, clinicians insert instruments through a tiny incision and use a high-speed mobile X-ray scanner to generate images that allow them to visualize the procedure from any angle.
+To create more stable RNA vaccines, researchers have experimented with adding a variety of excipients — sugars, salts, or polymers — to the LNPs. Jaklenec and Langer recently developed polymer-stabilized LNPs that can withstand higher temperatures, but those LNPs were slightly different from the FDA-approved formulations that were used for the Moderna and Pfizer Covid-19 vaccines.
 
-But to guide surgical tools without accidentally damaging other tissue, clinicians must align real-time X-rays with the patient’s preoperative MRI or CT scan. This process, called registration, helps them determine where the tool is in relation to anatomical structures.
+In their new paper, the researchers wanted to see if they could find a way to make those FDA-approved formulations more stable at high temperatures.
 
-“It takes decades of training for a clinician to become skilled enough to see grainy, 2D images and understand how everything is oriented. We want to make these 2D X-rays more informative, so it becomes safer and easier to do these life-saving procedures,” Gopalakrishnan says.
+They began by reusing some of the excipients that had worked in their earlier efforts, but they were “really getting stuck,” Jaklenec says. “We were trying to use and screen excipients that we’ve previously used successfully to stabilize LNPs, but it just wasn’t working. It was really frustrating for the team.”
 
-Manual registration methods are slow and burdensome, requiring the clinician to guess the position of a surgical instrument by punching numbers into a computer or clicking anatomical landmarks on a screen.
+To speed up their progress, the researchers decided to try a machine-learning approach. Working with researchers at MIT’s Computer Science and Artificial Intelligence Lab (CSAIL), they developed an algorithm that can make predictions based on very small datasets.
 
-To streamline the process, researchers are developing AI models that can predict 2D/3D registration. But people have such diverse anatomy that a model which works well for some patients may fail for others.
+“We’d used our algorithms for various automated experimental design applications before, but never on a biological problem like vaccine stability,” says Mina Konaković Luković, an assistant professor of electrical engineering and computer science in MIT’s Computer Science and Artificial Intelligence Laboratory (CSAIL), who is also an author of the paper. “It was surprising to see how quickly the algorithm converged on a stable formulation — getting there in just a handful of iterations, rather than the exhaustive search that would normally be required.”
 
-A lack of high-quality annotated medical image data makes it difficult to train a deep-learning model robust enough to adapt to many patients, Gopalakrishnan says.
+The researchers used this algorithm to analyze nearly 50 FDA-approved excipients. For each excipient, the researchers first measured how well it stabilized RNA when incorporated into an LNP. They used these particles to deliver mRNA encoding a protein called firefly luciferase, which produces bioluminescence, into cells. By measuring how much light was emitted by the cells, the researchers could determine how effectively each excipient protected the mRNA.
 
-Rather than trying to make a machine-learning model that can be applied to all patients, the researchers built a model designed to adapt extremely well for the specific patient.
+The researchers chose five of the most promising excipients and used their AI algorithm to predict ratios of those excipients that would best stabilize LNPs similar to those used by Moderna. Based on those predictions, the researchers tested two formulations at a time in cells, fed those results back into the algorithm, and generated more predictions. After several rounds, they chose one formulation that appeared promising enough to test in animal studies.
 
-“We tailor this one specific model for this one specific patient, and it doesn’t matter if it works on other people because there will be different models for those people,” Gopalakrishnan adds.
+This process took only a few weeks, much less than it would have taken without guidance from the AI algorithm.
 
-**Patient-specific machine learning**
+“Before we implemented the AI algorithm, we spent several months testing different combinations and also doing the prescreening of all the excipients that we could find, but nothing would get us to 100 percent stability,” Tran says.
 
-Xvr takes one patient’s preoperative 3D scan, like an MRI or CT, and uses it to generate thousands of synthetic X-rays from many angles, producing about 1,000 images each second. It uses a physics-based simulation of the X-ray process to ensure these synthetic images are realistic.
+**Robust immune responses**
 
-“Instead of generating data from nothing, like some types of generative AI, this physics simulation is entirely based on the CT scan or MRI from this patient. Because xvr creates patient-specific data in a purely physics-based manner, there is no room for hallucinations,” Gopalakrishnan says.
+To test the heat resistance of their new LNP formulation, the researchers used the particles to package Covid-19 mRNA antigens, then dehydrated them using a process called vacuum drying. These particles were then stored at 37 degrees Celsius (98 degrees Fahrenheit) for two months, or at room temperature for one year. Mice that were vaccinated with these particles, even after long-term storage, showed equivalent immune responses to mice that received vaccines carried by LNPs similar to the original Moderna formulation.
 
-The xvr framework uses these simulated data to train an AI model that can accurately align this patient’s 2D X-rays with their 3D image scan in a matter of seconds.
+The researchers also used their new heat-resistant formulation to create solid microneedle patches that could deliver a SARS-CoV-2 antigen. These patches generated an immune response similar to that produced by the injectable RNA vaccines.
 
-But while such a registration model is highly accurate, it would take about 12 hours to train from scratch for each patient, making it impossible to deploy in an emergency. To make the process faster, the researchers used xvr to pretrain a more versatile AI system, called a foundation model, that can quickly adjust to each new patient.
+“Our approach broadens the application of not only mRNA vaccines, but also therapeutics or advanced drug-delivery platforms like controlled-release particles or microneedle patches, which requires the formulation to either be in solid state or to be stable at higher temperature,” Tian says.
 
-They collected whole-body 3D medical scans from more than 2,000 patients covering a wide range of ages, image modalities, and regions. Xvr used these diverse data to generate synthetic X-rays and train a foundation model to perform 2D/3D registration.
+The researchers also showed that they could use their algorithm to stabilize other LNP formulations, including one similar to those used by Pfizer to deliver its Covid-19 vaccine. This formulation uses the same excipients as the one the MIT team developed for the Moderna LNP, but in a different ratio. For each LNP, once a heat-resistant formulation has been developed, it could be adapted to deliver any type of mRNA payload, the researchers say.
 
-This pretrained model can adapt to a new patient in about five minutes, and performs registration with the same accuracy as if it had been trained from scratch.
-
-“So now you can get patient-specific accuracy but also in a very rapid time frame,” Gopalakrishnan says.
-
-The team tested the model on the largest available dataset of real 2D/3D registrations, incorporating data from five hospitals that covered dozens of bones and organ systems in adult and pediatric patients.
-
-Xvr significantly outperformed other AI-based methods in accuracy and robustness, while operating fast enough for emergency surgeries. The model could also be used to improve the performance of robotic surgery technologies.
-
-In the future, the researchers hope to focus on making xvr faster for real-time deployment, conducting further studies to verify its reliability in additional situations, and extending the system to handle more complex scenarios, like moving body parts.
-
-“For the past two years, we’ve been carefully developing this algorithm and validating it. Now, we are collaborating closely with surgical robotics companies and clinical groups to turn this research into useful tools for navigation or deployment,” Gopalakrishnan says.
-
-This work was funded, in part, but the National Institutes of Health (NIH), the MIT CSAIL-Wistron Program, the MIT-IBM Computing Research Lab, the MIT Jameel Clinic, the MIT Health and Life Sciences Collaborative, and the Chou Family Transformative Research Fund.
+The research was, in part, funded by the Gates Foundation.

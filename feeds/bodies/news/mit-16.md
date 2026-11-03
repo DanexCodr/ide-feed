@@ -1,57 +1,35 @@
-Imagine a bottle of hazardous chemicals sitting on a laboratory shelf that changes its appearance to alert scientists that its lid is not properly secured, potentially preventing a dangerous spill.
+Artificial intelligence models are jacks of many trades, including writing, generating images, and creating 3D models. But they aren’t as helpful when it comes to testing robots or designs for vehicles in diverse environments, since they don’t understand physics as well as they do pixels or text.
 
-A new 3D-printing system created by MIT researchers enables users to produce interactive objects like this chemical bottle, which change their appearance when they are pressed, slid, or turned, without the use of any internal electronics.
+To build an AI system that can reliably simulate a variety of physical scenarios, engineers need a range of physics data at a scale that isn’t yet feasible. That’s because it’s very time-consuming to get neural networks just a few data points they can understand. They rely on algorithms called “numerical solvers” to calculate physical properties at different points of a 3D shape. It’s a thorough process, but it takes so long that it limits how much data you’ll have to, say, test if your plane designs are safe and aerodynamic.  
 
-Their system simplifies the process of designing and fabricating 3D objects with mechanically switchable surface appearances, enabling individuals without technical expertise to quickly generate dynamic everyday objects.
+A new pre-training approach known as “GeoPT,” developed by researchers at MIT’s Computer Science and Artificial Intelligence Laboratory (CSAIL) and Tsinghua University, gives simulation models a chance to learn physics in a broader, more efficient way. It virtually reenacts everyday mechanical interactions in 3D, showing how particles stop when reaching some part of an object. These simulations give the models a sense of how physics works, helping them model the real world more accurately, reach peak performance twice as fast, and train on up to 60 percent less data compared to leading models.
 
-The design and fabrication system combines specially arranged optical layers with built-in mechanical parts so a single object can display different images or patterns. The resulting objects change appearance based on user interactions like screwing on a lid or flipping a switch, and they can be manufactured in one pass on a multimaterial 3D printer.
+Soon, the project could help engineers predict how vehicles (like cars and planes), everyday items (including chairs and containers), and robots respond to various physical elements, such as wind, water, and collisions. The researchers believe their work could also be a step toward a physics foundation model, a backbone system trained on lots of data that can help AI tools generalize to different tasks.
 
-The system can be used to fabricate a range of interactive objects that don’t require fragile electronic circuits, such as adaptable warning signs that could withstand foul weather or dynamic packaging that alerts users if fasteners came loose during shipping.
+“We believe physics is the third modality for AI models, after text and pixels,” says MIT PhD student and CSAIL researcher Minghao Guo, a co-lead author on a [paper](https://arxiv.org/abs/2602.20399) introducing GeoPT. “Our general-purpose model has the versatility to help build a world model for physics. Many models, such as those that generate robotics data and videos, are already well-versed in textual and visual data, but with physical accuracy, they’ll get more-realistic results.”
 
-The end-to-end system could also streamline rapid prototyping of adaptable objects for artistic, architectural, and engineering applications.
+**Easy to use**
 
-“With our system, an object can tell you whether you are using it properly, without the need for sensors or any complicated electronics. The interactive display is mechanical, so you can create a self-contained, multistate, interactive device that a user can control very intuitively,” says Yunyi Zhu, a graduate student in the MIT Department of Electrical Engineering and Computer Science (EECS) and lead author of a paper on this platform.
+To use GeoPT, users simply upload 3D models of objects like battleships, passenger airplanes, and trucks, and specify the direction and speed of the force they want to simulate. The result is a kind of heat map showing how the object will be affected in different places. If you know the speed and direction (velocity) of the force you’re looking to simulate, you can capture it in GeoPT. This comes in handy when you want to simulate things like how a car would look after crashing into a wall, the ways light bounces around objects, and whether a boat stays afloat over turbulent waves.
 
-Her co-authors include Dingning Cao, an MIT undergraduate; Jeremy Mrzyglocki, a graduate student at the Technical University of Munich; Stefanie Mueller, an associate professor in EECS and the Department of Mechanical Engineering at MIT and a member of the Computer Science and Artificial Intelligence Laboratory (CSAIL); and Narjes Pourjafarian, a postdoc at Northeastern University. The research will be presented at the ACM Symposium on User Interface Software and Technology.
+But how does GeoPT “get” physics so well? Its knowledge comes from “synthetic dynamics,” a series of interactions between small particles and complex 3D shapes. GeoPT studied 1.3 million samples of synthetic dynamics, in which tiny spheres moved at various speeds and angles until stopping at a certain point on the object.
 
-**Mechanically switchable surfaces**
+These particles basically “stick” to an object once they make contact, instead of moving through or bouncing off. Picture learning about physical interactions using marbles and action figures — similarly, simulation models can use synthetic dynamics to gain a feel for physics before they train on labeled data.
 
-Many interactive products rely on screens and electronics to change their appearance. But if these dynamic objects are exposed to water or harsh chemicals, or are squished, twisted, or pressed with great force, the fragile electronics could be damaged.
+**Industry success**
 
-On the other hand, conventional methods that use surface optics to change an object’s appearance without electronics typically utilize static labels like stickers or curved lenses to create different visual effects based on where the user is looking, limiting interactivity.
+The researchers found that GeoPT was particularly skilled at simulating industrial scenarios, as it outperformed state-of-the-art simulation models across benchmarks. The common thread: It reached peak performance faster than other tools, while needing significantly fewer labeled data.  
 
-To simplify the process of making dynamic, interactive objects that don’t require electronics, the MIT researchers developed a system that automatically converts a user’s design into a 3D printer-ready model of an object with a mechanically switchable surface appearance.
+On a dataset of complex 3D shapes and their responses to wind currents and surface pressure, for example, GeoPT surpassed state-of-the-art models in speed, accuracy, and efficiency. It had similar triumphs in speed and accuracy in capturing how fighter jets responded to wind. When GeoPT tested how the hull of a boat handled both air and waves, it required 60 percent fewer labeled data to capture both physical forces and reached peak accuracy four times faster than top baselines.
 
-Their design, [ShiftLens](https://hcie.csail.mit.edu/research/shiftlens/shiftlens.html), creates switchable appearances by combining two optical layers on an object’s surface. It places a layer of special lenses over an underlying, patterned backplane.
+The system even succeeded at simulating how different types of cars look after colliding with another object. It correctly predicted how 3D vehicles would deform while using less data than state-of-the-art baselines. Likewise, its simulations of how light would pass through what was essentially a toy rabbit were accurate, despite never training on that 3D model or light physics beforehand.  
 
-The object displays different visual states based on the motion between the two layers.
+“If your model performs well on industrial benchmarks, that means it can solve the hardest physics tasks,” says co-lead author Haixu Wu, an MIT postdoc and CSAIL researcher. “GeoPT was making high-fidelity simulations with over 100 million mesh points in seconds. This could make the tool extremely helpful for engineers hoping to test out blueprints for vehicles without needing to run so many physical experiments.”
 
-The lens layer contains an array of tiny lenticular lenses, curved lenses which steer light differently depending on the viewing angle of the user. The pattern layer contains strips of images that correspond to multiple appearances of the object surface.
+The researchers add that their system is only a preview of the kind of physics world model they’ve been working toward. The team hopes to scale up their system, training on even more shapes and simulating more complex physical phenomena. For example, a more in-depth approach could help model weather patterns, test out different materials, and generate realistic videos.
 
-When the user shifts the lens layer, different parts of the backplane come into view. The lenses magnify these parts of the backplane image, changing the surface appearance.  
+“Using synthetic dynamics data is an exciting paradigm for imbuing physics into foundation models,” says Fei Sha, AI research scientist at Meta, who wasn’t involved in the research. “It challenges the traditional wisdom that physics and geometry are necessarily entangled in computation, and one must acquire costly and specialized data. The demonstrated success in a wide range of application domains leads us to this important juncture: We are ready to build physics foundation models, now and fast."  
 
-“The biggest challenge in this project was to make sure all moving parts align. We need to make sure that the optical effect, mechanical linkages, and computational graphics align with one another,” Zhu says.
+Wu and Guo wrote the paper with MIT CSAIL colleagues including Zongyi Li, a postdoc in the lab; Zhiyang (Frank) Dou, a CSAIL affiliate and MIT PhD student in electrical engineering and computer science (EECS); Kaiming He, a principal investigator in the lab, associate professor of EECS, and a distinguished scientist at Google DeepMind; and senior author Wojciech Matusik, the Joan and Irwin M. (1957) Jacobs Professor of EECS and a CSAIL principal investigator. Tsinghua University Associate Professor Mingsheng Long was also a co-author. The team presented the paper at the International Conference on Machine Learning in July.  
 
-**A straightforward system**
-
-To simplify the design process, the researchers created a user-friendly tool that does all this work behind the scenes.
-
-It automatically generates a ShiftLens structure based on a few inputs, including images of the visual states the user wants to achieve and the desired shape and curves of the object.
-
-“Another challenge is to communicate to users who are not familiar with optics or mechanical structures and let them specify and achieve what they have in mind,” she says.
-
-The researchers thought carefully about how to communicate the limitations of the ShiftLens design tool to the user. For instance, ShiftLens is not compatible with all objects, since it requires a shifting motion to enable interaction between the two layers.
-
-Users can either incorporate a ShiftLens into the design of an object that has this type of interaction built-in, like the rotation of a lipstick tube, or integrate an actuation mechanism like a switch, knob, or roller.
-
-“With ShiftLens, users can control what an object looks like while they are using it,” she says.
-
-The researchers showcased how someone might use ShiftLens by fabricating a range of interactive objects.
-
-In one experiment, they created a chemical bottle that turns green and displays a check mark when the cap is securely tightened, but turns red and displays an exclamation mark when it is loose. For another demonstration, they fabricated a tic-tac-toe game with squares that can display a red X, a blue O, or no letter, depending on which direction a user turns a knob.
-
-While the ShiftLens tool is designed to simplify the fabrication process for makers, the techniques could be scaled up for commercial and industrial applications, Zhu says. For instance, it could be used to design piping that can change its appearance to identify a damaged connection that is causing a leak.
-
-“The leaking sink in my apartment would be a lot easier to fix if it could tell me where the leak was coming from,” Zhu adds.
-
-The researchers want to explore additional applications in future work. They also plan to develop an algorithm that can generate a ShiftLens structure with fewer user inputs, simplifying the design process. In addition, they plan to enhance the design tool so users can incorporate a wider variety of actuation mechanisms.
+The researchers’ work was supported, in part, by Neural Modular Physics Twin for Robotics.

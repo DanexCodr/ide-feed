@@ -1,65 +1,25 @@
-Over the past 80 years, America’s bold, sustained investment in scientific research, and the** **discoveries, ideas and innovations that flowed from it made America a world leader. The nation’s scientific leadership has been essential to our shared prosperity and national security, and delivered real benefits for all Americans.
+Imagine working at a warehouse or office sometime in the near future, and you’re asked to help a new trainee learn the basics of their job. The catch: It’s a robot. To teach them, you might want to play a game of “show and tell” — that is, physically showing how to do something a few different ways, while also explaining what you’re doing.
 
-On June 16, *Scientific American* released a special section, “[The Young American Scientists](https://www.scientificamerican.com/report/young-american-scientists-2026/),” which celebrates early-career professionals actively engaged in scientific research, and features commentary from MIT faculty on why they continue to be so devoted to curiosity-driven science, demonstrating how their hard work and dedication make Americans safer, healthier, and more prosperous. Among the section’s profiles are many MIT faculty, students, and alumni, who share their advice for young scientists and their reasons for optimism in uncertain times.
+Let’s say you asked the robot to place some coffee on your desk without disturbing you during a Zoom call. You’ll prefer that the robot doesn’t get too close to you and the laptop so that it doesn’t interrupt your meeting. To enable this behavior, the robot should be trained with data that clearly demonstrates the full task. Computer scientists have attempted to explain manipulation tasks to robots by recording lots of physical demonstrations or writing extensive directions. But if you don’t have both, the machine is likely to misunderstand what it needs to do.  
 
-[President Sally Kornbluth emphasizes](https://www.scientificamerican.com/article/sally-kornbluth/) the importance of curiosity-driven research, noting that discovery “is part of our American DNA and has yielded vast returns to the citizens of this country and the world.” She adds, “what’s needed is a rededication to public investment in American science. Even if I were not the leader of a premier scientific institution, this is what I’d say. Investing in American science is not a gamble; if you look back in time, there is no question about the benefits.”
+It’s laborious for humans to do all that showing and telling, so researchers at MIT’s Computer Science and Artificial Intelligence Laboratory (CSAIL) have automated the process of teaching a robot, while clarifying instructions automatically and using nearly five times less demonstration data. Their “Masked Inverse Reinforcement Learning” (Masked IRL) approach uses a large language model (LLM) to elaborate on ambiguous prompts based on the data collected from a user’s demo. Another LLM then narrows down which details an algorithm should incorporate into a motion plan, so that a robot can safely complete chores in homes, offices, and factories.  
 
-Adds [Institute Prof. Robert Langer](https://www.scientificamerican.com/article/robert-langer/): “What American science has done over the past 50, 100 years has been remarkable.”
+“Our approach could come in handy when a human interacts with a robot but doesn’t want to spell out all the details of a task,” says MIT PhD student and CSAIL researcher Minyoung Hwang, who is a lead author on a [paper](https://arxiv.org/abs/2511.14565) presenting the project. “We’re minimizing human effort by enabling machines to get to the bottom of what users really want.”
 
-*Scientific American* notes that at MIT, that commitment to discovery is reflected in initiatives such as [Curiosity on a Mission](https://curiositymission.org/) and the [Generative AI Impact Consortium](https://news.mit.edu/2025/introducing-mit-generative-ai-impact-consortium-0203), which are aimed at finding “solutions to real-world problems in a way that is beneficial to society.” “On one hand, we’re at a time, technologically, where things could not be more exciting [and] our science [could not be] more cutting-edge. At the same time, we’ve never seen a situation where people felt so uncertain about the continuity of science funding, particularly when it comes to the basic discovery science that fuels the economy and will fuel societal impact a decade or two from now,” says Kornbluth.
+According to Hwang, Masked IRL can help robots safely maneuver in settings where there are elements a human might not describe in a prompt, but that are crucial nonetheless. For example, a machine grabbing you a snack from the kitchen may not know to avoid bumping into your laptop. Likewise, a factory robot placing items into different boxes must carefully navigate around shelves.
 
-**The first sparks**
+To learn new tasks in these situations, Masked IRL uses the robot’s sensors to capture information about its surroundings. These components also log each movement of a kinesthetic demonstration — a training approach where a human physically moves a robot to do a specific action. It’s sort of like being the machine’s physical therapist, bending joints in a particular direction to show a robot how to grab, move, and place objects.
 
-Witnessing invention can spark a lifelong fascination with science. After the launch of Sputnik, the world’s first artificial satellite, Prof. Alan Lightman “became entranced with the idea of building a rocket” of his own. In his essay “[My childhood in science](https://www.scientificamerican.com/article/alan-lightman-on-his-childhood-in-science/),” Lightman describes how these early scientific memories and experiments have shaped him to be a well-rounded writer and physicist.
+MIT’s system then calls on an LLM to compare this sequence of motions (called a trajectory) to the shortest possible path. The model also elaborates on what might be unclear in a prompt, turning a request like “stay close” into “stay close to the surface of the table.” Using the trajectory comparison and clarified directions, the LLM begins to understand why the motions it was trained on are important to the task.   
 
-“Now more than ever, when much of the world, including the U.S., has lost its moral compass, leading to a dog-eat-dog mentality, we need science combined with literature, philosophy, history and art. We need to discover not only the physical world but also our own humanity,” writes Lightman.
+A second LLM then evaluates details of the environment, such as the position of obstacles and the shape of the robot’s target object. During this process, it “masks” (in other words, ignores) the elements it deems irrelevant to the task at hand, scoring each one as either a “1” (important) or “0” (not so much). For example, whether or not a user was leaning on a table during a demonstration would be a “0,” making it irrelevant. Any detail considered a “1” is incorporated into the final action plan by an algorithm.  
 
-Likewise, [Prof. John Urschel](https://www.scientificamerican.com/article/john-urschel/), a former NFL player, emphasizes the importance of collaboration and having a wide range of interests.
+These masks gave Masked IRL a key advantage over comparable baselines in both 3D and real-world demos because it taught a robot which information to prioritize. Thanks to the researchers’ system, virtual and real robots alike were able to skillfully maneuver objects around obstacles, such as moving a coffee mug around a laptop to different spots on a table. In these tasks, Masked IRL correctly identified users’ preferences, which they didn’t explicitly state in their prompts, up to 15 percent more often than comparable baselines.  
 
-“A lot of good research happens when people can draw on tools, techniques and insights from different areas, disciplines and even fields. I hope we can encourage promising young scientists to establish strong, broad backgrounds and to communicate frequently with those outside their particular areas,” says Urschel.
+During simulation experiments, CSAIL researchers also found that Masked IRL was a fast learner. It required fewer demos to understand how to move the mug than its baselines. They also found that the robots performed better when an LLM cleared up instructions, instead of having the machine try to follow a vague request.  
 
-**Invention and discovery**
+This more focused approach also translated well to a real robotic arm, executing prompts the system hadn’t seen during its training phase. After being trained on 50 kinesthetic demonstrations, the robot carefully moved a cup toward a human while avoiding colliding with a user’s computer — an obstacle it learned to avoid by elaborating on a more general request to “stay away.” It also wiped a table down while “staying close” to it, and handed a user a bag of chips while “staying away” from both a human and a table.
 
-*Scientific American *highlights students and alumni looking to better the world by doing everything from investigating neurological disease to securing our energy future.
+Masked IRL senses and explains what users leave unsaid, but soon, it might “see” it too. CSAIL researchers plan to make their approach more dynamic by equipping it with cameras, allowing a robot to take images of its surroundings. Then it could highlight and focus on specific elements nearby. For example, if you asked the machine to pick up a toy, it might see some bananas nearby and ignore them before handling its target object.
 
-At MIT, [Visiting Scientist Alice Stanton](https://www.scientificamerican.com/article/alice-stanton/) developed miBrain, a 3D tissue model of the human brain, to help scientists develop personalized treatments for Alzheimer’s and Parkinson’s. Stanton has developed a miniature version of miBrain, a brain-on-a-chip, to better test therapeutics.
-
-Stanton notes “the road to effective treatments is long and bumpy,” compounded by cuts to federal funding. “When we have a loved one who gets sick, we want a treatment—we want something to cure them. It doesn’t come out of thin air,” she explains.
-
-[Bob Mumgaard](https://www.scientificamerican.com/article/bob-mumgaard/) PhD ‘08, CEO of Commonwealth Fusion Systems is working to commercialize fusion power. “Whether in areas such as fusion—or in drugs by design for diseases such as Alzheimer’s and Parkinson’s or in [the creation of] materials we never thought possible—our ability to use new tools to tackle some of these big, meaty problems is super exciting,” Mumgaard emphasizes.
-
-[Graduate student Alex Zhang](https://www.scientificamerican.com/article/alex-l-zhang/) tackles context rot: the phenomenon when AI language models degrade as they produce more information. To solve this issue, Zhang develops recursive language models (RLMs) that enable the model to work with itself to reevaluate reasoning.
-
-“The types of research that I want to work on are things that I think should be shared for the benefit of people in general,” says Zhang.
-
-**The benefits of scientific collaboration **
-
-What happens when scientific disciplines join forces at MIT?
-
-[Prof. Emery Brown](https://www.scientificamerican.com/article/emery-brown/) highlighted the MIT [Health and Life Sciences Collaborative](https://heals.mit.edu/) (HEALS), noting that the effort brings together scientists and engineers from a variety of backgrounds to tackle the most pressing health challenges of our times.
-
-Brown explains that with President Kornbluth’s support, HEALS encourages “faculty to look more deeply into solving health care problems. The enthusiasm for HEALS has been contagious across the campus.”
-
-[MIT alumna Lucy Jones PhD ‘81](https://www.scientificamerican.com/article/lucy-jones/), who is known for her work advancing public safety during earthquakes and for developing the first American earthquake drill called the Great ShakeOut, shared the necessity of collaboration in developing scientific solutions for pressing real-world problems.
-
-“Solutions have to be done in collaboration, which means spending time with policymakers,” says Jones.
-
-Jones also shares how scientific advances in computing have helped make Americans around the country safer when the ground starts to shake.
-
-“My first year in grad school, I was reading paper seismograms. Now everything is computerized. We used to do field deployments; now we have permanent networks. We’re starting to use fiber‑optic cables as seismometers,” says Jones. “Computers have changed everything, including science.”
-
-**The state of American science **
-
-Within the profiles, interviewees were asked what needs to change in American science right now. Many expressed concerns with federal funding.
-
-“I’m fortunate to work with extraordinary students and postdocs, but the infrastructure that lets them do their best work is under real stress: funding instability at the National Institutes of Health and the National Science Foundation, immigration uncertainty for international scientists and an erosion of public trust in expertise,” says [Prof. Feng Zhang](https://www.scientificamerican.com/article/feng-zhang/).
-
-Zhang developed CRISPR-based genome editing tools, which could increase our understanding human diseases and lead to new treatments. “We can lose the lead rapidly if we do not protect our innovation ecosystem,” he says.
-
-Positive developments include the progress [Prof. Alan Guth](https://www.scientificamerican.com/article/alan-guth/) has witnessed in cosmology.
-
-“With new techniques, we’re able to unravel, to make sense out of, what we’re observing,” says Guth. “A lot of progress has been made on those lines, so in terms of the physics of the field, I think things are going great. But to me, the real problem is the prospects for future funding.”
-
-[Langer](https://www.scientificamerican.com/article/robert-langer/) shares his faith in the durability and strength of America’s science and innovation ecosystem.
-
-“I look at the history of American innovation and education over the past 250 years, and it’s been spectacular,” says Langer. “Plenty of times there’ve been setbacks. We’ve had world wars, you know, we’ve had depressions, and people keep persisting and keep learning. They keep discovering and they keep inventing. So that gives me a lot of cause for hope. This is not the worst time by any means.”
+Hwang wrote the paper with three CSAIL colleagues: PhD student Alexandra Forsey-Smerek ’20, SM ’22; postdoc Nathaniel Dennler; and MIT Assistant Professor Andreea Bobu, who is a member of the Department of Aeronautics and Astronautics and CSAIL. Their work was supported, in part, by the Tata Group via the MIT Generative AI Impact Consortium Award, and the Department of Defense. They’ll present the project at the 2026 IEEE International Conference on Robotics and Automation in June.
