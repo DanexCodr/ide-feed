@@ -1,207 +1,53 @@
-In 2012, I published an iPhone app called [SuperVote](https://supervote.org), which allowed Facebook
-users to share political endorsements with their friends via a shared ballot. Other than two posts
-on Hacker News (one in [September 2018](https://news.ycombinator.com/item?id=18032943) and
-another in [November 2018](https://news.ycombinator.com/item?id=18388446)), I never had a
-proper retrospective on my work. Because it’s been 15 years since I first started working on
-the app, I felt it was a good time to revisit the development process and reflect on what
-I’ve learned since.
+Welcome to the Q3 2026 edition of the Firefox Security & Privacy Newsletter.
 
-Back in the early 2010s, California voters would receive a voter guide provided by the state
-([June 2010 voter guide](https://vig.cdn.sos.ca.gov/2010/primary/pdf/english/complete-vig.pdf)),
-which would include a list of propositions, with arguments in favor and arguments against a proposition,
-along with rebuttals for both sides. A dedicated voter would need to spend a considerable amount
-of time investigating all the options. At the time, I had a small network of friends and coworkers
-that were well-informed and kept up to date with the latest on state politics. I felt that putting
-together a single app that showed a custom ballot for yourself, along with the endorsements of your
-friends, it would make voting easier.
+Security and privacy are core principles of [Mozilla’s Manifesto](https://www.mozilla.org/en-US/about/manifesto/) and remain at the heart of Firefox’s development. This edition highlights key initiatives from Q3 2026 across three areas:
 
-# Origins
+- Firefox Security: New security features, platform improvements, hardening efforts, and security integrations in Firefox.
+- Firefox Privacy: New privacy features, enhanced protections, and privacy integrations in Firefox.
+- Community Engagement: Highlights from our security research community and bug bounty program.
 
-In 2003, I built this mockup page with the general idea of building a political site targeted
-towards informing voters:
+## Preface
 
-![supervote.com mockup](https://callejas.com/assets/images/supervote/mockup.png)
+Note: Some of the bugs linked below might not be accessible to the general public and restricted to specific work groups. [We de-restrict fixed security bugs after a grace-period](https://firefox-source-docs.mozilla.org/bug-mgmt/processes/fixing-security-bugs.html#keeping-private-information-private), until the majority of our user population have received Firefox updates. If a link does not work for you, please accept this as a precaution for the safety of all Firefox users.
 
-The iPhone did not exist in 2003, so this idea was a purely desktop web-based site. Beyond this
-screenshot, no site was ever built, but conceptually it was a forum site with different boards.
+## Firefox Security
 
-I found a file called `supervote.txt` with the following description, which apparently drove the mockup
-above:
+**Rapid Releases, Now Even Faster:** Since September 2026, Firefox has followed a faster release cycle, bringing improvements, including security fixes, to users more quickly. We also invite you to [see and shape what’s next for Firefox](https://www.firefox.com/en-US/whatsnext/), including upcoming security and privacy features.
 
-```
-Non-partisan, online political community where voters and political
-organizations come together to discuss current ballot initiatives and
-elections.
+Many recent releases have included more [security fixes](https://www.mozilla.org/security/announce). We continue to use frontier LLMs to identify and fix security bugs in Firefox to always keep you safe online. We have also changed how we publish advisories: instead of grouping internally identified memory safety vulnerabilities under a single CVE, we now publish a separate advisory for each bug, anticipating a [potential change to the CVE Numbering Rules](https://github.com/CVEProject/cve-documents/issues/47#issuecomment-5587294133). CVE counts alone are not a reliable measure of security, as software vendors are not required to assign CVEs to vulnerabilities they discover internally.
 
-Participants contribute their opinions on a variety of
-discussion forums.
+**Know when your TLS is broken:** Starting with Firefox 157, you will see [warnings in the site information panel](https://www.firefox.com/en-US/firefox/157.0/releasenotes/) (the shield icon in the address bar) and in Settings when your connection may not be completely private. For example, if an administrator configures your Firefox to record its encryption keys, you will be able to catch that. Recording these keys could allow another software to read all of your encrypted web traffic without your knowledge.
 
-Voter services include:
+**Mozilla Root Store Policy v3.1**: We are strengthening transparency and assurance in the WebPKI with [Root Store Policy v3.1](https://blog.mozilla.org/security/2026/06/29/improving-transparency-and-assurance-in-the-web-pki-mozilla-root-store-policy-v3-1/), which introduces stricter transparency, documentation, and audit requirements for public certificate authorities.
 
-() Online voter registration
-() Polling place locator
-() Email alerts to new propositions in their district/state
-() Access to discussion boards
-() Participate in straw polls
+**Email Client Spam Prevention:** Firefox now [treats mailto: links as popups](https://bugzilla.mozilla.org/show_bug.cgi?id=299116), requiring explicit user action before opening the email client. This prevents websites from repeatedly opening email composition windows through JavaScript and overwhelming the user.
 
-Organization services include:
+**Restricting Local File Access for Extensions:**  Starting in Firefox 153, [extensions need your explicit permission to access local files](https://blog.mozilla.org/addons/2026/07/23/firefox-153-webextensions-api-updates/) through `file://` URLs. Access is off by default for all extensions, including those already installed, so you decide which extensions can access files on your device.
 
-() Posting official positions on initiatives/propositions
-() Posting announcements of activities and events
-()
+## Firefox Privacy
 
-Organizations pay a monthly/yearly membership to join.
-Individuals participants can join for free.
-```
+**Fingerprinting Protections:** Following a [report on Alibaba’s use of audio fingerprinting](https://blog.laserphile.com/2026/08/aliexpress-webpage-keeping-multipoint.html), [Tom Ritter published a data-backed analysis](https://ritter.vg/blog-webaudio_alibaba.html) explaining how Firefox’s protections reduce the accuracy of fingerprinting through the Web Audio API. The story received coverage from [Ars Technica](https://arstechnica.com/security/2026/08/aliexpress-caught-fingerprinting-visitors-after-sending-inaudible-sounds-to-browsers/), [The Register](https://www.theregister.com/security/2026/08/24/aliexpress-accused-of-fingerprinting-shoppers-with-silent-audio-trick-that-also-muted-a-devs-headphones/5291662), and others.
 
-I owned the `supervote.com` domain from 2002 until 2008, with the intention of building out the
-site, but for some unknown reason, I let my
-ownership lapse. In 2012, I contacted the owner of the domain, asking if they were willing to sell it,
-but I never heard back.
+**Preventing Link Tracking:** Right-clicking a link and selecting [Copy Clean Link](https://support.mozilla.org/en-US/kb/refresh-firefox-reset-add-ons-and-settings) will now strip tracking parameters across arbitrary subdomains, along with 130 additional tracking parameters.
 
-# Building SuperVote
+**Bringing Containers Directly into Firefox:** Previously available as extension, [Firefox 153 introduces built-in Containers](https://blog.mozilla.org/en/firefox/firefox-containers-preview/), helping you keep work, personal browsing, and other activities separate. Each container maintains its own cookies and login sessions, so you could use containers for multiple accounts on the same site, or to limit online tracking by isolating certain websites in their respective containers. Firefox 155 also adds the ability to reorder containers.
 
-For version control, I started off using Subversion, but eventually switched
-to using Git. GitHub did not have free private repositories at the time,
-so I set up a single Git remote server, hosting my repositories on a Linode instance.
+**Tracker Blocking Information on Android:** Starting in Firefox 153, the Privacy Dashboard on Android shows which types of trackers Firefox blocks, giving you a clearer view of how Firefox protects your privacy as you browse.
 
-Jira was a popular project tracking system for developers in the early 2010s.
-Bugzilla was considered clunky and I had previous experience with Redmine and Trac,
-but I was most familiar with Jira from my day job. I purchased a license when it was
-possible to self-host on your own machine. I still have Z shell aliases to this day:
+**Built-in Ad Blocking to iOS**: Introduced on September 1, [Firefox’s built-in Ad Blocker on iOS](https://blog.mozilla.org/en/firefox/ad-blocker-on-ios/) blocks many third-party ads and ad-related trackers, reducing clutter and distractions. It works alongside Enhanced Tracking Protection and can be enabled in the ‘Browsing’ settings in your Firefox on iOS.
 
-```
-alias start-jira='sudo /usr/local/jira/jira-5.2.10-standalone/bin/startup.sh'
-alias stop-jira='sudo /usr/local/jira/jira-5.2.10-standalone/bin/shutdown.sh'
-```
+## Community Engagement
 
-At this point in my career, I had about 10 years of experience with Java, so I picked
-Jetty to serve my API. I had experience with Ruby on Rails on a personal site, but they did not introduce a built-in API-only application mode until version 5.0 in 2016. I chose to use MySQL because of my
-previous experience and ease of use.
+**Advancing Web Security at Dagstuhl:** Firefox security experts joined researchers and other browser vendors at the [Dagstuhl Seminar on Web Application Security](https://www.dagstuhl.de/de/seminars/seminar-calendar/seminar-details/26291) in July, presenting on LLM-assisted vulnerability detection, XSS protections, and web-scale security measurements.
 
-I wanted to keep certain operations out of the request-response cycle (like building a user’s custom ballot), so I evaluated several message queues before settling on RabbitMQ. It offered a straightforward integration with the Java backend and was relatively easy to operate.
+**Mozilla Security Research Summit:** Mozilla’s Security-Engineering University Relationship Framework (SURF) is back. On November 20, 2026, we will host another invitation-only summit at TU Delft in the Netherlands, bringing together Mozilla engineers and academic researchers to explore security and privacy challenges and spark new collaborations. The summit takes place immediately after the [ACM Conference on Computer and Communications Security (CCS)](https://www.sigsac.org/ccs/CCS2026/).
 
-For this post, I made my source code available as a read-only archive on [GitHub](https://github.com/augustocallejas/SupervoteServer).
+**TLS, QUIC, HTTP/3, and Happy Eyeballs:** Max Inden gave a guest lecture at TU Dresden on [modern networking protocols](https://mxinden-bot.github.io/slides/01-tu-dresden/), covering the technologies behind fast, secure web connections.
 
-# Data Model
+## Looking Ahead
 
-One of the more challenging aspects of SuperVote was designing a database that could represent the structure of U.S. elections and generate personalized ballots based on a user’s location. I designed a relational data model around governments, electoral districts, elections, ballots, and endorsements. The complete [database schema](https://github.com/augustocallejas/SupervoteServer/blob/master/core/data/schema.sql) is available on GitHub.
+*Firefox users receive the security and privacy improvements highlighted in this newsletter through regular updates. If you haven’t tried Firefox yet, download it to experience a fast, secure browser and support Mozilla’s mission to keep the web open, safe, healthy, and accessible to everyone.*
 
-The foundation was a hierarchy of governments, including countries, states, counties, cities, and other municipalities, with support for exceptions such as independent cities and municipalities spanning multiple counties (e.g. New York City, whose five boroughs correspond to five counties). Electoral districts were modeled separately to represent congressional, state legislative, and local voting boundaries, which could change over time. During registration, users provided their address and ZIP code so the application could identify their associated governments and electoral districts, determining which elections and contests were relevant to them.
+*Thank you to everyone who helps make Firefox and the web more secure and privacy-focused, by reporting bugs, conducting research, contributing code, or sharing feedback.*
 
-Elections were modeled as dated events associated with governments, containing contests for elected positions and ballot measures. Positions were separate from candidates, allowing the same office to be contested by different individuals across elections, while ballot measures represented questions requiring a yes-or-no vote. Each user’s ballot was associated with an election, with individual selections stored separately for candidates and measures. Users could optionally include a written explanation for their endorsements and control whether those endorsements were visible to others.
-
-# Election Data
-
-I started off by using the [VoteSmart API](https://www.votesmart.org/votesmart-api) to identify
-legislative district by ZIP+4 code, but then I switched over to the
-[Sunlight Labs API](https://sunlightfoundation.com/2009/09/24/sunlight-labs-api-one-year-later/) by the [Sunlight Foundation](https://sunlightfoundation.com), and a subset of the [Freebase database](https://en.wikipedia.org/wiki/Freebase_(dataset)) to map ZIP code to a U.S. county. I later switched to using the [Cicero API](https://www.cicerodata.com/api/) for mapping to legislative districts.
-
-# iPhone App
-
-Before this project, I had not written a single line of Objective-C. I downloaded the language guide,
-along with the object-oriented programming guide, printed them out and read them over time:
-
-- The Objective-C Programming Language (2010-12-08)
-- Object-Oriented Programming with Objective-C (2010-11-15)
-
-Reviewing my source code, I relied on several third-party libraries to simplify common development tasks. These included AFNetworking and ASIHTTPRequest for network requests, SBJson for JSON parsing, and EGOTableViewPullRefresh for implementing pull-to-refresh interactions. I also used utilities for displaying progress indicators, logging, and crash reporting. Many of these libraries have since been deprecated or superseded by functionality built directly into iOS.
-
-I was aware of PhoneGap (now [Apache Cordova](https://en.wikipedia.org/wiki/Apache_Cordova)) as
-an option to build for both Android and iOS, but I mainly focused on iOS since I had an iPhone
-and did not have access to an Android device for testing.
-
-For this post, I made my source code available as a read-only archive on [GitHub](https://github.com/augustocallejas/iOSVoter).
-
-These screenshots show the typical flow of a new user:
-
-1. Registration screen requiring the user’s voting address.
-2. A simple privacy tutorial describing that endorsements can be made private.
-3. A list of past and upcoming elections, based on your legislative district.
-4. A ballot view, showing all available options.
-5. A candidate view with the total number of endorsements by your friends by candidate.
-6. An endorsement view allowing you to optionally explain your endorsement.
-
-![Supervote iOS app welcome screen](https://callejas.com/assets/images/supervote/Screenshot_1.png)
-![Tutorial](https://callejas.com/assets/images/supervote/Screenshot_1a.png)
-
-![Upcoming elections](https://callejas.com/assets/images/supervote/Screenshot_2.png)
-![Presidential ballot](https://callejas.com/assets/images/supervote/Screenshot_3.png)
-
-![Presidential candidates](https://callejas.com/assets/images/supervote/Screenshot_4.png)
-![Create an endorsement](https://callejas.com/assets/images/supervote/Screenshot_5.png)
-
-![Created endorsement](https://callejas.com/assets/images/supervote/Screenshot_6.png)
-
-# Facebook Integration
-
-Facebook integration occurred on the client-side. It was as simple as cloning the
-`facebook-ios-sdk` Git repository alongside my project. the Facebook SDK allowed me to retrieve a user’s
- riend list with their permission. If two Facebook friends
-both used my app and created non-private endorsements, then they would be able to
-see them.
-
-Facebook also allowed registered apps to create custom activities on the timeline.
-When a user created an endorsement on their iPhone, it would automatically publish
-an activity on their timeline. This would allow friends who hadn’t downloaded the
-app to see SuperVote activity of their friend, which would then encourage them to
-download the app.
-
-![Facebook activity log](https://callejas.com/assets/images/supervote/activity-log.png)
-
-![Measure timeline](https://callejas.com/assets/images/supervote/timeline-measure.png)
-
-![Candidate timeline](https://callejas.com/assets/images/supervote/timeline-candidate.png)
-
-# Testing & Deployment
-
-[TestFlight](https://en.wikipedia.org/wiki/TestFlight) was the easiest way to test
-early builds of the SuperVote iOS app with friends via over-the-air.
-
-Linode was an easy way to set up a Linux-based server back in 2011-2012. After building
-a WAR (Web Application Resource) file of the API server, it was just a matter of copying it
-over to my Linode server:
-
-```
-alias push='scp -P 44 ${HOME}/workspace/supervote-parent/server/target/server-0.9.0.war canaryfalls.com:.'
-```
-
-The Jetty server, along with an instance of MySQL and RabbitMQ all ran on the same Linode instance.
-
-# Website & Marketing
-
-I may have looked at Squarespace as an option to build a website, but I wanted full control on
-the website’s layout and did not want to pay a monthly fee. I ended up finding a 
-WYSIWYG website builder called [Freeway 5 Express](https://en.wikipedia.org/wiki/Freeway_(software)#Freeway_Express) that ran as a desktop application. I can no longer run this application on my Apple Silicon MacBook Pro.
-
-I became aware of stock photography and the different available licenses: royalty-free versus
-rights-managed. With Getty, I was able to find the exact images I was looking for and purchased
-several royalty-free images that still appear on the [website](https://supervote.org).
-Otherwise, I used Flickr images that allowed commerical use at the time with proper attribution.
-
-For blogging, Tumblr had the easiest user interface for creating posts. I give Tumblr credit
-for the blog looking the same for the last 15 years: [blog.supervote.org](https://blog.supervote.org)
-
-I created a [Twitter account](https://x.com/supervote), Facebook account and Reddit account.
-On Reddit, I attempted, but mostly failed, to promote the iOS app and blog posts 
-using an [account](https://www.reddit.com/user/canaryfalls/) associated with the LLC I created.
-
-I spent about $100 on advertising on Reddit. At most, I acquired a handful of users. I’m not sure
-if I targeted specific subreddits or if I targeted the entire site.
-
-# What Happened to SuperVote?
-
-After the 2012 election, I updated the app sporadically, since there were no major elections
-except for some municipal primaries in 2013.
-
-In [2015](https://blog.supervote.org/post/112484919687/thanks), I decided to stop updating the iOS app and removed it from the App Store. In the end, the app had 400 registered users. The only
-feedback I still remember to this day was that there wasn’t a full ballot for all users.
-
-# What I Would Do Differently Today
-
-Now in 2026, I would not integrate with Facebook for several reasons: 1) I don’t use Facebook
-anymore 2) My Facebook friend’s list represents a snapshot of friends from 15 years ago, but
-not today 3) I no longer believe family and friends are a good source for political opinions.
-
-If I were building SuperVote today, I would place less emphasis on personal friendships and more on giving users access to informed perspectives from organizations and other trusted sources. Social features could still play a role, whether through private discussion groups or publicly shareable endorsements
-(with keeping an eye out for [paid endorsements](https://www.nytimes.com/2026/08/29/us/politics/campaigns-paid-influencers.html)), but I would no longer assume that a person’s existing social network was necessarily the best source of political guidance.
+*We look forward to sharing more updates in the Q4 2026 edition.*

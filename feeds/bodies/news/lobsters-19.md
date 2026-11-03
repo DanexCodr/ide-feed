@@ -1,255 +1,254 @@
-In response to my previous article asking, “[Will Linux phones become a viable alternative to the Android/iOS duopoly?](https://amosbbatto.wordpress.com/2026/10/05/linux-phones-alternative/),” I received a torrent of comments at [Hacker News](https://news.ycombinator.com/item?id=50051530), [r/linux](https://www.reddit.com/r/linux/comments/1x0g3pn/article_will_linux_phones_become_a_viable/), [r/Purism](https://www.reddit.com/r/Purism/s/X98TwK551V), [r/mobilelinux](https://www.reddit.com/r/mobilelinux/s/YZBAswkYWg), [r/PINE64official](https://www.reddit.com/r/PINE64official/s/0La9b5pVVF), [OSNews](https://www.osnews.com/story/146134/will-linux-phones-become-a-viable-alternative-to-the-android-ios-duopoly/) and on the forums at [SailfishOS](https://forum.sailfishos.org/t/article-will-linux-phones-become-a-viable-alternative-to-the-android-ios-duopoly/34682), [Purism](https://forums.puri.sm/t/article-will-linux-phones-become-a-viable-alternative/31405) and [PINE64](https://forum.pine64.org/showthread.php?tid=20384&pid=126549#pid126549). There were a total of 660 comments and still counting, so people have a lot to say on the subject of Linux phones.
-
-The vast majority of commentators don’t believe that Linux phones will ever crack the market stranglehold that Google and Apple currently hold over the mobile phone industry. However, many of the commentators argued that we already have a free/open source mobile Linux operating system in the [Android Open Source Project](https://source.android.com/) (AOSP), which is the base on which Google and the phone manufacturers add their proprietary apps and services. They insisted that AOSP runs on a Linux kernel, so an AOSP phone already is a Linux phone. They asked why waste so much effort developing another mobile Linux operating system which won’t be nearly as good as AOSP. Other commentators argued that most people would never adopt Linux phones, because they are locked into one of the app ecosystems controlled by Google and Apple.
-
-Here is a sample of the comments that the article received:
-
-[microtonal](https://news.ycombinator.com/user?id=microtonal) [wrote](https://news.ycombinator.com/item?id=50052002) on Hacker News:  
-No, they [Linux phones] won’t become a viable alternative:  
-– Worse compatibility with the millions of Android apps already out there.  
-– Hardware vendors (outside Apple) all target Android.  
-– The usability of Android/iOS is far better than non-Android Linux phones.  
-– The security of non-Android Linux phones is in a bad state (e.g. lacking proper app sandboxing). Heck, even the Android emulation layers that some of these phones have, throw the strong Android sandbox model out of the window.
-
-The answer is very obvious and it is AOSP. Even though Google is trying to close AOSP more (e.g. by not pushing source continuously to the AOSP Git repos and keeping QPR1/3 for themselves), it is still an open source system. Play Services can either be run sandboxed or emulated with microG. AOSP allows alternative systems to hit the ground running, you get great app compatibility, a tested security model, great usability, and support from hardware vendors, including vendors that are alternative friendly (used to be Pixel, now Motorola, Fairphone, etc.). If ever needed, AOSP could be forked and it would still be leagues ahead of non-Android Linux phones.
-
-All the downsides that apply to AOSP-based systems (like things getting blocked by Play Integrity, unlockable bootloaders) also apply to non-Android Linux systems.  
-…  
-The difference is that there is already a great open source smartphone OS that works *today*, it’s AOSP.  
-The most effective path would be for the FLOSS ecosystem to pour their resources into making AOSP independent from Google. But instead people will just fork N half- or non-working solutions for reasons.
-
-drnick [responded](https://news.ycombinator.com/item?id=50052446) to a previous comment on Hacker News:  
-> Play Services can either be run sandboxed or emulated with microG.  
-Play Services is absolutely not needed for a usable Android experience. I am running GrapheneOS without any Google crap and you could not pay me to do so.
-
-TFNA then [replied](https://news.ycombinator.com/item?id=50053315) to drnick:  
-Many bank apps, and apps to interact with official state services, usually depend on Play Services. Sometimes it is all banks in one’s country, so no, one can’t just “switch to another bank” as US Americans on HN often assume.  
-
-FrebTheRat [wrote](https://www.reddit.com/r/PINE64official/comments/1x0fzoi/comment/pffmrr2/) on r/PINE64official:  
-It’s not the phone or the os that’s the issue. It’s the app ecosystem. They own the store. In order to get a viable app store they need enough market share. In order to get market share they need a viable app store. Chicken meet Egg…I used a pinephone for hot minute and it was passable except I couldn’t use Slack, Teams, do banking, access my obsidian notes, etc.
-
-blue_horizon_x [wrote](https://www.reddit.com/r/linux/comments/1x0g3pn/comment/pevykzx/) on r/linux:  
-No. They will never become a viable alternative to Android because those who want Android they [w]ill always prefer something like GrapheneOS. A smartphone is like a handheld computer. You will never get apps, productivity apps – flights, hotels, banking on a Linux phone. GrapheneOS has sandboxed Google Play to deal with it while handling it while staying open source.
-
-jonf3n [wrote](https://www.reddit.com/r/Purism/comments/1x0fwe1/comment/peonlrl/) on r/Purism:  
-AOSP is based on Linux, but FAR more secure, especially in GrapheneOS with tight hardware support.  
-Why step backwards into standard Linux that has a HUGE attack surface and inferior sandboxing / low level security hardening?
-
-PriorFortune1 [wrote](https://www.reddit.com/r/Purism/comments/1x0fwe1/comment/pemu09v/) on r/Purism:  
-Developing a third platform to compete with Android and iOS requires one thing and one thing only: apps. Phones that don’t support the apps people use will never sell. Microsoft couldn’t do this in the early days of the smartphone market even by throwing millions of dollars at app developers. It’s incredibly unlikely Linux will somehow solve that problem.
-
-sleepingonmoon [wrote](https://www.reddit.com/r/linux/comments/1x0g3pn/comment/peqp7nj/) on r/linux:  
-No unless some company decides to burn billions. Phones are extremely UX sensitive and I don’t see a way GNU/Linux can beat even Android, not to mention things like power management.
-
-Schlonzig [wrote](https://www.reddit.com/r/linux/comments/1x0g3pn/comment/pektgb2/) on r/linux:  
-There are millions of apps for iOS and Android now. Any new system would struggle because EVERYONE will have at least one app they can’t live without.
-
-VolksPC [wrote](https://www.reddit.com/r/linux/comments/1x0g3pn/comment/peo4dhf/) on r/linux:  
-In comparison the application ecosystem on Linux is very limited. This is primarily because there is no stable API on Linux for application development and companies are not going to port their software to Linux.  
-
-Jimbuscus [wrote](https://www.reddit.com/r/linux/comments/1x0g3pn/comment/pel2vtv/) on r/linux:  
-Android is the answer to the problem, with the problem being Google’s AOSP.  
-Free Software Foundation (GNU), Canonical, F-Droid, KDE, Graphene, Lineage & Murena would do well to all get behind a shared soft fork of AOSP for a new base that isn’t governed by Google.  
-If Microsoft couldn’t get apps developed for a third mobile OS, it’s even less likely to be viable to get a Linux for mobile app in addition to Android & IOS.  
-It’s also not necessary or beneficial to throw away 15+ years of community work towards Android, just to get away from corp controlled code, as the AOSP licence permits forking.  
-Android is the future of mobile Linux, it just needs a single major fork that replaces Google’s proprietary blobs, which can be used as the new base for non-Google certified mobile distros.  
-An Android-like Open-Source Project would have the general benefit of supporting native Android apps, without having to fix each roadblock or curveball Google throws at FOSS with each AOSP version change.  
-
-Android is the Linux kernel mobile OS, AOSP is just the largest distro.
-
-anomaly256 [wrote](https://www.reddit.com/r/linux/comments/1x0g3pn/comment/pemssbt/) on r/linux:  
-Android is Linux Phone. What is it you’re hoping to replace? The UI? Application frameworks? You want to use a different runtime?  
-…  
-But it is… and I think people must clarify what exactly they want changed if they want ‘Linux but not Android’.  
-What the fuck is Op actually asking for when they ask for Linux, but rule out the Linux phone environment with the current largest userbase? Does it mean they want GNU libc and userland? GTK and QT UIs? Fedora branding? Do they want systemd? Gentoo portage and ebuilds? They want to install packages directly from AUR? The ability to hand edit files in /etc? They are literally given a Linux kernel then turn around and say ‘nooo, I said I want LINUX!’ …?!? Linux is the kernel and we already have that in spades, so what the fuck is actually being asked for?
-
-I think it’s very fair to remind people that they already have a fucking Linux phone and ask them for clarification when they say they want a different Linux phone just not the current mainstream Linux phone because the concept of a Linux ANYTHING is so fundamentally nebulous in the first place.
-
-palata [wrote](https://news.ycombinator.com/item?id=50052485) on Hacker News:  
-Let’s make a thought experiment: let’s think about designing a new Linux distro from scratch. Obviously starting with Linux-the-kernel, and then thinking about what we need to be a modern smartphone OS.
-
-– We’ll probably want the security model, with the nice sandboxing and I would argue the verified boot.  
-– We’ll want the battery optimisation.  
-– We’ll want access to the firmwares of the components running in the phone.
-
-From the very first step “start from Linux-the-kernel”, every single question I ask myself goes towards the Android design and away from the classical Linux distro design.  
-In other words, the open source Linux distribution that is the closest to a modern mobile system is… Android :-).
-
-al_borland [wrote](https://news.ycombinator.com/item?id=50056900) on Hacker News:  
-It’s just a question of funding. Ubuntu made a push for mobile years ago. They put up a phone on Indiegogo, but it didn’t hit its funding goal. [https://en.wikipedia.org/wiki/Ubuntu_Edge](https://en.wikipedia.org/wiki/Ubuntu_Edge)  
-This is what their Unity Desktop was for as well. A desktop environment that had a consistent design language from desktop to mobile.  
-The remnants of all of this are still kicking around, I think the community still maintains the phone OS, but without the weight of Canonical really pushing it, and a phone shipping with the OS pre-installed, it won’t get as far.
-
-serbuvlad [wrote](https://news.ycombinator.com/item?id=50051948) on Hacker News:  
-iOS and Android have an incredible amount of engineering to make them RAM and battery efficient that desktop Linux simply doesn’t have.  
-And its not a case of simply implementing some feature, since all apps have to written with this stuff in mind: apps can be suspended/killed at any time and should be able to restart gracefully, notifications go through a side channel, etc etc  
-Do these [Linux] phones have any of this?
-
-Many of these commentators aren’t grasping the advantages to developing mobile Linux as an independent operating system that can’t be controlled by any single company. They aren’t seeing the advantages that mobile Linux offers over AOSP, nor are they accounting for the difficulties of modifying AOSP to respect its users, compared to developing mobile Linux.
-
-Whenever discussion of AOSP arises, people inevitably argue about the meaning of the word “Linux” and whether Android can be considered a Linux distribution. As much as it annoys the pedants, most people refer to “Linux” as the entire operating system found in one of the major desktop distributions such as Debian, Arch, Fedora, openSUSE, NixOS, Gentoo, etc. or their derivatives. See the appendix below for further discussion about the problematic terminology, but this article follows the commonly accepted practice of referring to “Linux” as an operating system and saying “Linux kernel” to refer to just the kernel. It follows the conventional practice of the software and chipmaker industries by designating Android kernels as separate from Linux kernels.
-
-AOSP’s source code is published by Google with a permissive [Apache 2.0 license](https://source.android.com/license) that allows anyone to modify and distribute it. After 23 years and billions of dollars of development, Android currently commands [75% of the global market share](https://counterpointresearch.com/en/insights/global-smartphone-os-market-share) among smartphones, so at first blush, it does seem ridiculous to demand the development of mobile Linux, when we already have access to the most popular mobile operating system with AOSP.
-
-More importantly, using AOSP gives us access to the biggest source of apps in the world. Google’s Play Store grew to [3.6 million apps in 2017](https://www.businessofapps.com/data/google-play-statistics/), before Google started implementing aggressive policies to cull unmaintained apps from the Play Store to improve the quality and security of its apps. AppBrain estimates that there are currently [2.03 million Android apps](https://www.appbrain.com/stats/number-of-android-apps) in the Play Store. Business of Apps [estimates](https://www.businessofapps.com/data/app-statistics/) that Google’s Play Store got 104.6 billion downloads in 2025, compared to 36.6 billion downloads from Apple’s App Store. Consumers spent an estimated total of [$49.2 billion](https://www.businessofapps.com/data/google-play-statistics/) in the Play Store in 2025, compared to [$117.6 billion](https://www.getpanto.ai/blog/apple-app-store-statistics) in Apple’s App Store.
-
-The problem is that Android was designed as a vehicle to collect the personal information of users to feed that data to Google’s servers for its targeted advertising. Not only was Android designed to monetize people’s personal data, but Google encourages app makers to use this same business model, which Shoshana Zuboff has [dubbed](https://en.wikipedia.org/wiki/The_Age_of_Surveillance_Capitalism) “surveillance capitalism.”
-
-AOSP is better designed to [protect the system](https://source.android.com/docs/security/overview/kernel-security) from malware than most desktop Linux distros. Each app in AOSP is executed by a separate user and in a separate sandbox. The files for each app are encrypted with a separate key, which is stored in a Keystore that is typically located in an ARM TrustZone that runs a separate lightweight operating system with a secure RAM partition. Each app by default can only access its own files. The core operating system, system libraries, and pre-installed system apps are located in a read-only **`/system`** partition, so it is more difficult for a rogue app to alter the system than in conventional desktop Linux.
-
-AOSP is designed with these onerous security restrictions because so much of the software installed in Android comes from untrustworthy sources. Unlike the typical Linux distro, where the vast majority of the code is free/open source, the code of the vast majority of Android apps can’t be publicly reviewed for malicious intent. In a community-based Linux distro, it typically takes several years to become a maintainer of packages in the system under the [guidance of a mentor](https://mentors.debian.net/) who checks packages before they get uploaded to the system. The public reputations of Linux package maintainers (and their mentors who sponsored them) are staked on keeping malicious code out of the system.
-
-**Amount of** **m****alware and P****otentially Unwanted Applications (PUAs)** **on** **different** **o****perating** **s****ystems****Type****Windows****Android****macOS****Linux**Malware997,819,07237,608,1171,028,2045,293,611PUAs192,150,24030,386,579983,21358,268AV-TEST (2026-10-15) [https://portal.av-atlas.org/malware/statistics](https://portal.av-atlas.org/malware/statistics)
-
-German IT security organization AV-TEST [estimates](https://portal.av-atlas.org/malware/statistics) that there are 37.61 million different pieces of malware available for Android, which is 7.1 times more than for Linux which has 5.29 million. Even more striking is the minuscule amount of potentially unwanted applications (PUAs) that have been created for Linux compared to other operating systems. Because most applications in Linux are installed from free/open source repositories, there are fewer opportunities to distribute applications that do things that users don’t want such as collecting and monetizing their personal data. According to AV-TEST, only 58,268 PUAs have been created for Linux, which is 522 times fewer than in Android and 3298 times fewer than in Windows. The decision of Google and Microsoft to embrace surveillance capitalism as a business model has encouraged software creators to produce vast amounts of spyware that collects people’s personal data.
-
-AOSP is not just designed to protect against malware, which abounds in the Android ecosystem; it is also designed to protect the system against the users themselves. AOSP makes users jump through all sorts of hoops in order to modify the system, because Google and the phone makers don’t want ordinary users modifying the system and customizing the environment to fit their needs. AOSP was purposely designed to restrict the freedom of ordinary users, so they won’t change what Google and the phone makers have preinstalled on their phones.
-
-AOSP often makes it remarkably difficult for people to make even the simplest alterations. For example, to change the name of an app in AOSP, the app’s **`.apk`** install file has to be downloaded and decompiled. Then the display name has to be edited in the app’s **`AndroidManifest.xml`** file (or its linked string resources). The files have to be recompiled into a new APK package, and then the new APK file has to be signed with the user’s cryptography key. Then, the existing app has to be uninstalled, which means that the user will lose any data stored in the app’s files. Then, the new app can be installed in its place with the new name.
-
-In contrast, changing the name of an app in Linux usually just involves editing the app’s launcher or creating a link to the launcher with a different file name. Alternatively, users can create **`.desktop`** files with different app names in their **`~/.local/share/applications`** directory to replace the system’s **`/usr/share/applications/*.desktop`** files. Mobile Linux distros, such as Sailfish OS, Ubuntu Touch, Nura, Mobian, DanctNIX, Droidian, Maemo Leste, Nemo Mobile, etc., are designed to empower the user to control the tech, rather than the tech being used as a means to control the user.
-
-Some of the custom ROMs based on AOSP, such as crDroid and Evolution X, have created custom launchers that allow the user to rename apps in the interface, but the user should be empowered to modify the app’s launcher to modify how the app is executed, like in mobile Linux. If the user wants to add an environment variable to the launcher or execute an app with an option, it should not be necessary for the user to root the device and then execute complicated commands in the terminal, such as:  
-`setprop wrap.com.example.myapp "env MY_VAR=value"am force-stop com.example.myapp`
-
-In other words, if we want AOSP to offer the same freedom and empowerment for users as mobile Linux, then the source code of AOSP will require quite a bit of modification. Unlike in mobile Linux, where there are already people in the community who understand and maintain each component in the system, new volunteers will have to be recruited to create and maintain our modifications of AOSP.
-
-It won’t be an easy task, because each time Google releases a new version of AOSP, these volunteers will have to rip out the anti-user features in the latest version and replace that code with user-empowerment features. Because Google makes substantial changes to Android every year, the user-empowerment code will likely need to be refactored every year to work in each new AOSP release. Google is actively rewriting its Android code in Rust to eliminate memory safety vulnerabilities and speed up its software development. Google [brags](https://web.archive.org/web/20260502175908/https://blog.google/security/rust-in-android-move-fast-fix-things/) that its goal in switching to Rust is to “move fast and fix things.” In November 2025, Google reported that it had added over 5 million lines of Rust code to Android, and that Rust had overtaken C++ in terms of new code being added to the Android codebase in 2025.
-
-Google has already made it much harder to maintain custom ROMs, because it has moved more and more [functionality from AOSP](https://www.howtogeek.com/your-android-phone-isnt-as-open-source-as-you-think/) into its proprietary libraries and services (starting with Android 4.1 in 2012), and largely [abandoned the development](https://arstechnica.com/gadgets/2018/07/googles-iron-grip-on-android-controlling-open-source-by-any-means-necessary/) of many of the free/open source apps in AOSP in favor of its proprietary apps. For example, Google [announced](https://www.osnews.com/story/136235/google-further-guts-the-android-open-source-project-by-deprecating-the-dialer-and-messaging-apps/) in June 2023 that AOSP’s Dialer and Messaging apps were deprecated, because Google was no longer supporting them. Starting with AOSP 16 in 2025, Google [stopped including](https://www.androidauthority.com/google-not-killing-aosp-3566882/) the device trees and driver binaries for Pixel devices in AOSP, so ROM developers no longer have target devices, where they can easily test out and adapt the latest versions of AOSP on running hardware. Now custom ROM developers have to do painful trial and error to make the device trees for Pixel phones just like all the other phone brands. Google also squashed the kernel’s commit history, which makes it very difficult for ROMs like GrapheneOS to create their own custom kernels, because they can’t easily take new features, bug fixes and security patches from Google’s kernels. In January 2026, Google [announced](https://www.androidauthority.com/aosp-source-code-schedule-3630018/) that it would stop providing quarterly AOSP releases, and would only release the code twice per year in Q2 and Q4.
-
-If AOSP ever becomes a threat to Google’s revenue or market share, Google is likely to either make it progressively harder for the community to create AOSP derivatives or stop releasing the AOSP code altogether. Unlike the Linux software stack, where we have active communities that already maintain every component, hundreds of new volunteers will have to be found to maintain the massive codebase in an AOSP fork. Unlike the Linux software stack, which is modular and designed to require less labor to maintain because it had to rely on volunteer labor and the limited generosity of corporations, an AOSP fork will be nearly impossible for the community to maintain. AOSP 17 contains [309 million lines](https://derdilla.com/blog/size-aosp17/) of source code, plus another 113 million lines of comments and documentation.
-
-The problem is that Google will keep releasing new versions of Android, and app developers will expect the community-maintained AOSP fork to be compatible with all the new changes that Google is making in Android. Between AOSP 16 and 17, Google added 60 million more lines of code. With [$132.17 billion](https://s206.q4cdn.com/479360582/files/doc_financials/2025/q4/2025q4-alphabet-earnings-release.pdf) in profits in 2025, Google has a nearly limitless budget to spend on software development, but our community doesn’t.
-
-Analyzing the binaries to document all the changes that Google is making to Android and then reverse engineering them to add to an AOSP fork will be an insurmountable task. The only way that it will be possible for an AOSP fork to keep up with all the new code that Google keeps adding to Android is for a major corporation like Amazon to step in and maintain the code because it wants to keep running its own AOSP fork. We will basically exchange one corporate overlord for another, and our new lord won’t have the threat of anti-trust regulation to keep it in check.
-
-At any rate, it is unlikely that Amazon would invest in maintaining an AOSP fork, because Amazon is moving most of its products away from Fire OS, which is based on AOSP. Its new Alexa Tablets will use Android, so they have access to the Google Play Store, and its Fire TV Sticks are moving from Fire OS to its new Vega OS, which is a lightweight OS based on Linux. Perhaps Chinese phone makers, such as Xiaomi, Oppo, Vivo and Lenovo, will band together to maintain an AOSP fork, since they legally can’t use Google Mobile Services in China, but Google may decide to release a proprietary freeware version of Android that they can use to forestall them developing their own OS or switching to Huawei’s HarmonyOS. However, even if the Chinese phone brands work together to maintain an AOSP fork, they might decide to not release their source code.
-
-In other words, the recommendation of many of the commentators that AOSP should be the basis of future Linux phones will only deepen our dependence on Google, because there is little chance of the community being able to independently maintain a viable fork of AOSP.
-
-In contrast to the labor and expense of maintaining an AOSP fork or even adding user-empowerment features to each new version of AOSP, it does not cost much to develop and maintain a mobile Linux interface that is based on an existing desktop software stack. As I explained in my previous articles about [Linux phones](https://amosbbatto.wordpress.com/2026/10/05/linux-phones-alternative/#the-success-of-phosh-despite-its-limited-funding) and the [advantages of Phosh](https://amosbbatto.wordpress.com/2020/08/05/advantages-of-phosh/), Purism’s costs to develop Phosh were low, because Purism designed Phosh to be a thin overlay on top of Wayland + wlroots + GTK + GNOME + Modem Manager, which are well-supported codebases. Purism submitted its code changes upstream, so the code that it needs would be maintained by these parent projects. Wayland, GTK/GNOME and Modem Manager have a lot of corporate support from IBM/Red Hat, Google, SUSE and Canonical. The Sway developers maintain wlroots, which has been adopted as a FreeDesktop project, so it also will likely get more corporate support in the future.
-
-Purism only had to create two new applications (Calls and Chatty), because it was able to reuse the existing GNOME desktop applications. It worked with GNOME to create libadwaita, so that its desktop applications would become adaptive between desktop and mobile screens. It adapted Rootston to create its compositor Phoc. It adapted the eekboard virtual keyboard to create Squeekboard. It adapted Martijn Braam’s Megapixels camera app to create Millipixels.
-
-In the Linux world, it isn’t necessary to recreate everything from scratch like Google and Apple have done with Android and iOS. By working collaboratively with upstream projects, such as Linux, wlroots, GTK/GNOME, geoclue, Matrix and ModemManager, Purism was able to take advantage of the existing software and help strengthen it with additional functionality, while reducing its long-term maintenance costs because outside projects would maintain the code.
-
-Looking at who Purism hired to work on its software, we can make a rough estimate that Purism has paid for roughly 500 person-months of labor to develop Phosh and its associated software. Purism probably paid lower than the industry average for this labor, since many of the programmers were freelance contractors living in Europe, and not in expensive San Francisco and Carlsbad, California, where the company is located. If guesstimating that Purism paid an average of $5k per month per developer, Purism has spent roughly $2.5 million to develop Phosh since early 2018.
-
-**Estimated cost for Purism to develop Phosh****Employee/contractor****Title****Work****Started****Stopped****Months**Guido Gunther ([agx](https://github.com/agx))Distinguished Engineerphosh, phoc, libhandy, feedbackd, gtherm, linux-next2018-01-29present104.3Mohammed Sadiq ([pksadiq](https://github.com/pksadiq))[1](https://www.linkedin.com/in/mohammed-sadik-pk/)GTK DeveloperChatty, gtk, gnome-disk-utility, libcmatrix2019-06-042023-08-1550.3Adrien Plazas ([Kekun](https://github.com/kekun))GTK Developerlibhandy, geary, epiphany, libadwaita, pureos-store2018-02-012021-10-2144.5Sebastian Krzyszkowiak ([dos1](https://github.com/dos1))Shell Developermobile apps, phosh, millipixels2019-07-03present87.3Dorota Czaplejewicz ([dcz-purism](https://github.com/dcz-purism))Application DeveloperSqueekboard, camera configuration, Millipixels2017-12-082021-05-1741.2Evangelos Ribeiro Tzaras ([devrtz](https://gitlab.gnome.org/devrtz),  
-[fortysixandtwo](https://github.com/fortysixandtwo))Application DeveloperGTK4, libadwaita, chatty, calls2020-12-032023-08-0532.0Julian Sparber ([jsparber](https://github.com/jsparber)) (½ time)Application DeveloperCalls, Fractal, Phosh2019-06-232023-04-2723.0Alice Mikhaylenko ([alice-mkh](https://github.com/alice-mkh))Application Developerlibhandy, libadwaita, epiphany, kgx, gtk2020-09-222023-06-1532.7Andrea SchaeferApplication Developerchatty2018-05-282020-07-2025.7Bob HamPhone DeveloperCalls, ModemManager, haegtesse2018-02-012020-03-0525.0Tobias Bernard (1/3 time)Lead UI/UX Designerdesign of Phosh and future camera app2018-05-302021-11-2213.9Sam Hewitt (1/3 time)UI/UX DesignerDesign of chatty and millipixels2019-07-302023-06-0115.3**Total months****495.3****Total cost** (assume $5k/mth)**$2,476,284**Note: Start and stop dates are based on commits to source code and posts at Purism.
-
-Purism’s policy of working collaboratively with upstream projects allowed it to convince GNOME to adopt libhandy, libadwaita, Calls and Chatty. FreeDesktop.org adopted [feedbackd](https://gitlab.freedesktop.org/feedbackd/feedbackd), which is a D-Bus activated daemon that provides haptic, visual and audio feedback in response to events. In [February 2025](https://web.archive.org/web/20250628133407/https://ev.phosh.mobi/blog/2025-06-welcome/), the non-profit association [Phosh.mobi e.V.](https://phosh.mobi/about/) was created in Germany to guide the development of Phosh as an independent entity. Three of the nine founding members of Phosh.mobi were former or current Purism employees/contractors, including Guido Gunther, who is Phosh’s main developer. The upshot is that [98.7% of the code](https://amosbbatto.wordpress.com/2026/10/05/linux-phones-alternative/#the-success-of-phosh-despite-its-limited-funding) in the projects that Purism created for its Librem 5 phone is now being hosted by external organizations, and Purism has been able to keep updating its phones with new software, while paying very little for their software maintenance.
-
-In a [survey](https://pine64.org/2022/01/31/pinephone-community-poll-results/) that PINE64 took of 3079 PinePhone users in January 2022, 39.3% selected Phosh as their favorite interface, compared to 15.5% for Sxmo/Swmo, 15.0% for Plasma Mobile and 6.7% for Lomiri (formerly Unity8). Even though Phosh only started its development in [April 2018](https://www.phoronix.com/news/Purism-Libre-5-Dev-Docs), more users preferred it over Lomiri and Plasma Mobile, which have been under development since [March 2013](https://web.archive.org/web/20130306104754/https://wiki.ubuntu.com/MirSpec) and [July 2015](https://opensource.com/life/15/7/weekly-news-july-31), respectively.
-
-By taking advantage of the wider FOSS ecosystem at GNOME, X.org, Sway, FreeDesktop, etc., Phosh.mobi is able to offer a complete mobile environment, while being responsible for maintaining very little code on its own. The independent foundation is currently in charge of managing 452,766 lines of code (LoC). Even if calculating that the Phosh developers will continue to do most of the dev work on libadwaita, Calls, Chatty and feedbackd, they only have to manage 670,039 LoC, whereas forking AOSP would mean maintaining 461 times more code.
-
-**Lines of code** **managed by** **Phosh.****mobi****Project****Lines****% of total**gmobile4,1570.6%libcall-ui5,0930.8%libphosh-rs124,98718.7%libpms-rs50,3057.5%meta-phosh1,5580.2%pfs6,8731.0%phoc39,1125.8%phosh96,35414.4%Phosh Session Services2,7750.4%Phosh Vala Plugins7780.1%phosh-mobile-settings26,7244.0%phosh-osk-data9250.1%phosh-rust-plugins2550.0%phosh-tour4,1350.6%squeekboard26,7734.0%Stevia55,8368.3%xdg-desktop-portal-phosh6,1260.9%**Phosh Total****452,766****67.6%*****Code under external organizations***GNOME Calls28,9644.3%GNOME Chats (chatty)49,5347.4%GNOME libadwaita128,06719.1%FreeDesktop feedbackd10,7081.6%**External code total****217,273****32.4%****Total****670,039****100.0%**
-
-One area where Phosh diverged from GNOME was the decision to not use [Mutter](https://mutter.gnome.org/), which is GNOME’s unified display server, compositor and window manager for Wayland. Instead, Purism decided to create its light-weight [phoc](https://gitlab.gnome.org/World/Phosh/phoc) compositor on top of Sway’s [wlroots](https://gitlab.freedesktop.org/wlroots/wlroots) library, which was probably an easier task than trying to adapt Mutter to fit within the limited resources of a smartphone. Together, wlroots and phoc contain 103,072 LoC compared to the 419,015 LoC in Mutter.
-
-Purism originally worked on phoc with the idea that it would be adopted by GNOME as its next compositor, but GNOME decided to keep developing Mutter and continued developing [GNOME Shell on mobile](https://blogs.gnome.org/shell-dev/2022/05/30/towards-gnome-shell-on-mobile/) based on Mutter, so Purism wasn’t totally successful in getting GNOME to adopt its code. However, GNOME recognized the benefit of having a light-weight compositor and interface available in its ecosystem for devices with fewer resources. GNOME has helped promote Phosh by hosting its [code](https://gitlab.gnome.org/World/Phosh) and [documentation](https://phosh-a5dbaf.pages.gitlab.gnome.org/index.html) at GNOME World to foster its development.
-
-The situation is very similar with Plasma Mobile, which relies heavily on Qt and KDE’s desktop Plasma, so it doesn’t have to maintain much code independently. Blue Systems used to pay a few developers to work on Plasma Mobile, and several of those developers went on to found Techpaladin Software. The mobile interface, however, is mostly developed by volunteer labor, and that is possible because they are able to piggyback off so much of the infrastructure for the Plasma desktop and take advantage of KDE’s Kirigami apps, which are adaptive between both the desktop and mobile interfaces. Over time, Plasma Mobile has gotten rid of stuff like Halium, oFono telephony and the Maalit keyboard, so its code is closer to desktop Plasma and easier to maintain.
-
-Plasma Mobile uses the same KWin Wayland compositor as desktop Plasma. The upside is that the project has less infrastructure to independently maintain than Phosh, but it requires more RAM and its interface is slower than Phosh’s. Plasma Mobile relies on hardware acceleration to speed up its interface, which can be problematic with some free/open source GPU drivers.
-
-Plasma Mobile was developed as a community effort with very little corporate support, so it tends to be more unstable than Phosh, but Plasma Mobile’s interface is much closer to Android’s classic interface with three navigation buttons at the bottom of the screen (before adopting swipe navigation in Android 10). Unlike Phosh, which shares almost all of its central applications with desktop GNOME, Plasma Mobile has developed separate mobile applications, which creates more code duplication. Plasma Mobile uses a separate terminal, web browser, file manager, system configuration, feed reader, calendar and video player from desktop Plasma. However, a number of these separate applications are just the interface, and they share the same underlying code as the desktop version. For example, its Angelfish browser only contains 12,665 LoC, so the cost of maintaining a separate web browser is very light.
-
-**Default applications in desktop Plasma vs Plasma Mobile**
-
-**Type of app****desktop Plasma app****Plasma Mobile app**TerminalKonsoleQMLKonsoleWeb browserFalkonAngelfishClockKClockSystem configurationSystem Settings (systemsettings)Plasma Mobile Settings (plasma-settings)CalculatorKCalcKalkFile managerDolphinIndexSoftware centerDiscoverFeed ReaderAkregatorAlligatorPDF ViewerOkularOkular mobileEmail clientKMail / Merkuro MailRaven / Merkuro MailCameraKamosoPlasma CameraContacts managerKAddressBookPlasma PhonebookCalendarKOrganizerCalindoriMusic playerElisaVideo playerDragon PlayerHaruna / PlasmaTube
-
-**Lines of code in Plasma Mobile****Project****Lines****% of total**Plasma Mobile Interface90,85444.7%Calindori10,6595.2%Plasma Camera6,0683.0%Plasma Mobile Dialer11,5165.7%Plasma Mobile Phonebook3,7141.8%Plasma Mobile Settings3,7141.8%Plasma Phone Settings1430.1%QMLKonsole16,1347.9%Raven17,5008.6%Spacebar8,5874.2%**Plasma Mobile projects****168,889****83.1%*****Other projects used by Plasma Mobile:***Angelfish12,6656.2%Kalk5,0002.5%Alligator5,8452.9%Okular mobile2,9981.5%Index7,9123.9%**Total lines of code****203,309****100.0%**
-
-In total, the Plasma Mobile project only maintains 168,889 lines of code, which is an incredibly small amount of code considering the scope of the project. Even adding the code for some of the other essential apps it relies on, it only contains 203,309 LoC. The mobile interface still needs quite a bit of dev work, but it has the potential to eventually become a good replacement for people accustomed to Android’s interface. Plasma Mobile needs corporate sponsors to pay more developers to work on the code for the interface to reach its potential, but it has managed to make quite a bit of progress even with limited corporate support.
-
-In contrast, Phosh has been a stable and usable mobile interface for the last six years, since Purism started shipping the Librem 5. It has fewer configuration options and is a simpler interface than Plasma Mobile. Its new Stevia virtual keyboard is a big improvement over the default Squeekboard, which lacked word correction, word selection and the ability to long-press keys to select from multiple characters. One of its limitations is the fact that the title bars at the top and the Overview bar at the bottom take up too much screen space. In horizontal mode, the interface becomes nearly unusable when the virtual keyboard is activated, because of the excess space required by the title bars and Overview bar, as can be seen in the image of the Librem 5 (top) in Phosh’s horizontal mode.
-
-![](https://amosbbatto.wordpress.com/wp-content/uploads/2026/10/comparingphoshversions.jpg)
-
-*Comparing the space saving changes between Phosh 0.34 (in the Librem 5 above) and Phosh 0.57 (in the PinePhone below) running Firefox with the new Stevia keyboard in horizontal mode*
-
-Recent versions of Phosh have addressed the space problem to some degree by decreasing the height of application title bars and flattening the Overview bar at the bottom of the screen from a caret ^ to a horizontal bar ―. The button to show/hide the keyboard on the right-hand side of the Overview bar was eliminated and now the keyboard can be hidden with a swipe down. These changes save a bit of space, but the Overview bar could probably be eliminated altogether since users don’t need a physical bar to remind them to swipe up to get the Overview screen. Users coming from Android are already accustomed to swiping up to switch apps and close them. The title bars probably could also be eliminated if side swipe gestures were implemented to return to the previous screen, although the dropdown menu buttons and other elements that are included in the title bars are useful, so maybe the focus should be on how to better incorporate everything into one title bar for apps like web browsers that use multiple bars.  
-
-The important point is that Phosh is already a very solid interface and the tweaks that it needs are minor compared to the significant dev work that AOSP will require to make it an operating system that respects and empowers users. Even in the case of Plasma Mobile, the dev work that it requires is far less than AOSP would require. The work to improve the Phosh and Plasma Mobile interfaces is a one-time cost, whereas the code churn in AOSP will make it a constant struggle to keep reapplying changes with each new version that gets released by Google.
-
-History shows that mobile Linux projects that are developed by a single corporation as a large siloed codebase and then abandoned will struggle to be maintained by the community afterwards. After Nokia abandoned Maemo in February 2010 to create MeeGo with Intel, the Maemo Leste community formed to maintain the software. They have ported their code to run on Devuan with recent kernels, but their Hildon interface is still based on GTK 2, which stopped being supported by GNOME in December 2020. Their Qt applications are based on Qt 4, which stopped being supported by the Qt Company in December 2015. Their [plan](https://wizzup.org/maemo-leste-dors-cluc-2023.pdf) in mid-2023 was to upgrade their code to Qt 5 and GTK 3, but they have very few volunteers to carry on the project, so it is unclear if they will be able to make these code changes.
-
-After the Mozilla Foundation [abandoned the development of Firefox OS](https://www.pcworld.com/article/410478/mozilla-is-stopping-all-commercial-development-on-firefox-os.html) in September 2016, no community project formed to carry on the mobile operating system. Much of Firefox OS’s code lives on in proprietary KaiOS, but that code has been privatized and is essentially lost for the community.
-
-In April 2017, Canonical decided that there wasn’t enough industry demand for Ubuntu Touch and threw in the towel for its convergent mobile OS. UBports, which was a community project started by Marius Gripsgård in late 2015 to port Ubuntu Touch to new devices such as the Fairphone 2 and Moto G (2014), took over development of Ubuntu Touch. In 2019-20, they added the option to run their system on a Linux kernel (rather than just an Android kernel with [Halium](https://halium.org/)) in order to port their OS to the PinePhone, whose [UBports Community Edition](https://ubports.com/blog/ubports-news-1/pinephone-ubports-community-edition-pre-orders-are-open-155) was a major win for the organization. Nonetheless, they struggled for years to find the volunteer labor to upgrade the code, which was based on Ubuntu 16.04. In March 2023, they released OTA-1 Focal, which was the first major update of the operating system in 6 years. It was based on Ubuntu 20.04 LTS (Focal Fossa), which was released nearly 3 years earlier. They have improved their ability to upgrade the system, with version 24.04-1.0 arriving in September 2025, which was 17 months after Canonical released Ubuntu 24.04 LTS. On June 27th, they [reported](https://ubports.com/blog/ubports-news-1/ubuntu-touch-q-a-193-4003) that they are already working on the upgrade to Ubuntu 26.04 LTS, so their upgrades should become more timely in the future.
-
-Nonetheless, much of the Ubuntu Touch code that was abandoned by Canonical in 2017 has had only minor changes over the last 9 years under UBports’ stewardship. The major challenge for the community-based organization is migrating their code from Qt 5 code to Qt 6, since support for Qt 5.15 officially ended on May 26, 2025. On July 24, 2026, UBports released Ubuntu Touch 24.04-2.0, which had experimental support for the Qt 6 libraries. If the upgrade to Qt 6 only involved the Lomiri interface, it would not be such a big deal, since the interface only contains 101,420 lines of code. Canonical, however, dumped a huge amount of code on the community in Ubuntu Touch, and it will likely take UBports years to migrate all that code to Qt 6.
-
-Given how Maemo Leste and UBports have struggled to maintain the large codebases developed by Nokia and Canonical, respectively, it is not realistic to expect that the community can fork an enormous project like AOSP with 309 million lines of code. Even if the AOSP fork can be rebased every year on each new AOSP release by Google, it will still be a huge amount of work to keep refactoring the code each year so the AOSP fork respects and empowers the user like mobile Linux does. If Google ever stops releasing AOSP, there is virtually no way that the community will be able to replicate all the code changes that Google is making with each new version of Android, so the community fork will diverge over time from Google’s version. As more and more Android apps become incompatible with the community’s AOSP fork, fewer people will be willing to use it.
-
-People often advocate for using AOSP rather than typical desktop Linux due to Android’s higher security standards in the userspace to protect against rogue apps. Mobile Linux distros do need to improve their userspace security standards, especially if they intend to compete with Android and iOS. Linux users are less likely to install rogue apps, because they can’t just find any random Linux software package on the internet and install it, like they can with random APK files found on the internet. They have to find the right package format for their distro, and even if they get that right, the package dependency checks will often prevent the installation. However, Linux phones will need to be able to install Android apps if they are going to appeal to the mass market. Even when those Android apps are run inside an LXC container, mobile Linux still needs to be prepared for all the malware and spyware that comes with running Android apps.
-
-However, adding good userspace security to mobile Linux won’t be nearly as much work as adding user empowerment features to AOSP. It will be difficult to convince long-time Linux users to accept application sandboxing with separate users and separate file encryption for each app, and it will probably require some experimentation to get the right balance between security and freedom. Nonetheless, it is wrongheaded to treat the dev work for better security in mobile Linux as an insurmountable task.
-
-The principal reason why people advocate for the adoption of AOSP is the network effect of being part of the biggest app collection on the planet. Everyone has a couple of apps that they can’t live without. Many banks and governments now offer their services through Android and iOS apps.
-
-It is important to recognize, however, that many Linux phones either come with AOSP preinstalled or have it installed by their users in order to run Android apps. Almost every mobile Linux distro provides instructions and packages to install [Waydroid](https://waydro.id/) and [microG](https://github.com/microg/GmsCore/wiki). Jolla’s [license](https://shop.jolla.com/details/12596a34-597b-47d4-a502-c0ef15d2a4de/) for Sailfish OS includes its proprietary [AppSupport](https://jolla.com/appsupport/). FuriLabs’ FLX1/s/s+ includes [Andromeda](https://github.com/FuriLabs/andromeda), which is its fork of Waydroid. All of these solutions run AOSP inside an LXC container. In addition, Valve just open sourced [Lepton](https://gitlab.steamos.cloud/frame-public/lepton), which runs Android games as a non-root user in an AOSP container, but it doesn’t include Google Play Services or microG.
-
-These are not perfect solutions, because they legally can’t include Google Play Services, but any phone running AOSP faces the same problems. Many of Google’s proprietary Play Services have been replicated by the free/open source microG, which uses signature spoofing to make Android apps believe that Google Play Services are installed. Nonetheless, microG doesn’t always work correctly in some situations, such as Google Maps’ geofencing, in-app billing, [AR](https://play.google.com/store/apps/details?id=com.google.ar.core&hl=en-US), SafetyNet/Play Integrity attestation, reCAPTCHA, PackageInfo.signingInfo, etc. Some apps fail security checks in Waydroid, because it appears to be a rooted Android device.
-
-In addition, Waydroid has done a poor job of upgrading AOSP, which raises security concerns. For the last couple of years Waydroid has been stuck with AOSP 13, whose support ended on March 2, 2026. The most recent version 1.6.3, released in May, just started to include initial support for AOSP 16. Presumably Jolla’s AppSupport has been receiving AOSP upgrades, but Waydroid needs to be better supported in the future if Linux phones are going to rely on it to run Android apps. Instead of wasting resources on trying to fork AOSP, we should instead be focusing on how to better support Waydroid and microG for people who need to run Android apps.
-
-We will still be dependent upon Google when we run Android apps inside AOSP on an LXC container, however, using mobile Linux will push people to gradually switch to alternative apps that run natively in Linux. Over time, it will build up the ecosystem of freer mobile services and software that are compatible with Linux. In contrast, using an AOSP fork will only prolong the dependence on the Android ecosystem. Even if the AOSP fork promotes freer services, such as using [UnifiedPush](https://unifiedpush.org/) instead of Google’s proprietary Firebase Cloud Messaging (FCM), it will be more convenient for people using the AOSP fork to stick with the proprietary services in the apps that they are already accustomed to using. In contrast, Android apps running inside an LXC container will never have perfect integration with the rest of the system inside Linux, and people will have more opportunity to compare how much faster the native Linux apps run and how well they can replace those Android apps.
-
-People often argue that using AOSP will provide access to more software, but that is not necessarily true if the goal is to only use free/open source software (FOSS). Google deliberately obscures the licensing of an app’s code from users by labeling both freeware and FOSS as “free” in its Play Store. There may be more total FOSS among those two million apps in the Play Store than in the Linux repositories, but selecting out the FOSS apps, vetting their code and organizing those apps into a separate repository will not be an easy task.
-
-The largest repository of exclusively free/open source software for Android is F-Droid, which [reports](https://f-droid.org/en/2026/01/23/fdroid-in-2025-strengthening-our-foundations-in-a-changing-mobile-landscape.html) that the number of apps in its main repo grew by 15.6% in 2025 to 4061 apps by the end of the year. In contrast, Debian 13 (Trixie) contains [69,830](https://www.debian.org/News/2025/20250809) packages in its repositories. It is hard to compare the number of Android apps to Linux packages, since since Linux applications typically depend on many packages, and many command-line tools don’t get packaged as apk files for Android, but Debian 13 probably has 3 to 5 times as many applications as F-Droid. However, the F-Droid repository could be much larger if the F-Droid community was actively searching for free/open source Android code, rather than waiting for Android developers to submit their code. As it is, F-Droid is shorthanded and needs more volunteers to help vet the code that it receives.
-
-The other thing to keep in mind is that there is a lot of needless code duplication in the Android world, because there are so many apps that do the same thing. In contrast, the open nature of Linux software encourages volunteers to join existing projects and the tendency to share common libraries among many projects leads to much less code duplication. People in the Linux world who want to try out something different don’t have to create everything from scratch, since they can just add their new idea on top of an existing codebase. They can fork from that codebase, but they often decide to upstream their improvements to the parent project and rebase their modifications on new releases of the parent project, so there is less code to maintain even though there are many variants. The distros help eliminate the duplication of code by insisting that code that they accept use the standard libraries already in their repositories, whereas Android apps often maintain their own copies of those libraries, which are often out-of-date and not receiving updates.
-
-Another factor to consider is the labor to maintain Android apps compared to Linux apps. Because Android has so much code churn, it requires much more work to keep applications compatible with Android standards. For example, Qt 5 was supported for 12.5 years and GTK 2 was supported for 18.7 years, and Linux standards and system libraries, such as D-Bus, glibc, libdrm, libudev, libcontainer, libasound, SDL2, libX11/libwayland-client, generally try to maintain backward-compatibility, so software in the Linux world doesn’t need to be refactored very often. In contrast, Google is constantly changing the standards for its apps and forcing app creators to constantly update their code to keep their apps in the Play Store. Two different apps that I was involved in creating were thrown out of the Play Store, so I have seen firsthand how much extra work Android imposes on developers.
-
-None of this is to suggest that AOSP is necessarily bad or that people currently using AOSP phones should abandon them. AOSP derivatives like LineageOS, crDroid, Evolution X, /e/OS and GrapheneOS provide an invaluable service to people seeking privacy and greater software freedom, plus the ability to extend the lifespan of their phones. The number of Linux phones in the world is minuscule and there are a limited number of old Android models which have good support in Sailfish OS, Ubuntu Touch, Nura (formerly postmarketOS) and other mobile Linux distros, so they can be turned into Linux phones. For most people, AOSP devices are still the right choice, and in many parts of the world, the only choice, since they often can’t buy Linux phones or the used Android models that are best supported by the mobile Linux distros. Android phone brands where mobile Linux can be installed, such as Sony, OnePlus, Pixel, Fairphone, Volla and SHIFT, aren’t sold in most of the developing world.
-
-AOSP phones are an invaluable means to fight back in the ongoing war for our personal data and the monetization of our digital lives. However, if our goal is the empowerment and greater freedom of people, mobile Linux appears to be a more feasible route to achieve those goals in the long term than AOSP. Designing future phones around AOSP will lock us into the Android ecosystem, whereas developing mobile Linux to become a viable alternative to the Android/iOS duopoly will help build an alternative ecosystem, which is what we need for long-term independence and freedom.
-
-### **Appendix: Arguments over the meaning of “Linux”**
-
-Whenever discussion of AOSP arises, people inevitably argue about whether “Linux” means just the kernel or the entire operating system. While technically Linux just refers to the kernel, there is no commonly accepted way to refer to the operating system based on that kernel. In common parlance, the vast majority of people who use a desktop distribution such as Debian, Arch, Fedora, openSUSE, NixOS, Gentoo and all their derivatives refer to the entire operating system as “Linux” and when they want to talk about just the kernel, they say “Linux kernel.”
-
-Even the Linux Foundation often says “Linux kernel” to distinguish the kernel from the operating system, then refers to “Linux” as an operating system. For example, in its recent report “[35 Years of Linux](https://www.linuxfoundation.org/hubfs/Research%20Reports/LFResearch_35YearsofLinux_Report_2026.pdf?hsLang=en),” the Foundation states on p. 12: “Linux’s influence goes beyond its use as an operating system. As a major catalyst for modern collaboration practices, it changed software engineering.” In other parts of the same report, however, the Foundation refers to “Linux” as just the kernel, such as on p. 25, when stating: “Beyond laptops, the use of smartphones also contribute to Linux’s market share in personal and work computing, as Android makes up 72% of the mobile OS market share globally, with upwards of 4 billion Android devices in use.”
-
-This confusion about how to refer to the operating system based on a Linux kernel is caused, in part, by the ideological divisions within the community. Some people who are more aligned with the ideals of the Free Software Foundation refer to the operating system as “[GNU/Linux](https://www.gnu.org/gnu/why-gnu-linux.html),” which is arguably the best way to distinguish the OS from the kernel, but a sizable contingent of the community rejects Richard Stallman’s terminology for ideological reasons. For people in the “open source” camp, simply saying “Linux” to refer to the operating system became a way to resist what they considered an attempt by free software partisans to claim credit for the entire operating system.
-
-An even larger portion of the community say “Linux,” because it is shorter and easier to say than “GNU/Linux.” Maybe if Stallman had stuck with his [original suggestion](https://en.wikipedia.org/wiki/GNU/Linux_naming_controversy) of “Lignux,” which is much easier to say than “gnu-slash-linux,” Stallman might have won this logomachic dispute, but he listened to people who told him that “Lignux” was too cumbersome, so the FSF turned to an even more cumbersome label for the OS, and it never gained widespread acceptance.
-
-At any rate, GNU/Linux is a problematic label for distros that contain proprietary software. The amount of GNU software in distros has decreased since the GNOME Foundation [separated itself](https://discourse.gnome.org/t/gnome-foundation-relationship-with-gnu-and-the-fsf/1786) from the GNU Project in September 2019. Some distros [like Ubuntu](https://www.phoronix.com/news/Ubuntu-Completes-Rust-Coreutils) are even getting rid of the GNU coreutils and replacing them with the Rust-based [uutils/coreutils](https://uutils.org/coreutils/), which have an MIT license.
-
-As much as the pedants dislike the convention of calling the operating system “Linux” and having to say “Linux kernel” to refer to the kernel, that has become the predominant practice, and they are not proposing a better term to clear up the confusion. Many words that become part of the commonly accepted lexicon make no sense based on their derivation. It makes no sense to say the word “fast” to mean “moves quickly,” when it originally meant “firmly fixed” (a meaning which we still employ in phrases such as “to hold fast”), but insisting on only using the “correct” meaning of a word only creates semantic chaos when that usage contradicts the commonly accepted understanding of the word.
-
-Another area of debate is whether the kernel of the AOSP/Android operating system should be regarded as “Linux.” Commentators who advocated for the use of AOSP frequently employed the argument that Android’s kernel is Linux, so people who want a Linux phone should embrace AOSP. The Linux Foundation is proud to claim the Android kernel as “Linux,” and Linus Torvalds [calls Android](https://www.zdnet.com/article/linus-torvalds-on-android-the-linux-fork/) “a Linux fork.”
-
-Google significantly modified the kernel, adding features such as wakelocks to prevent the kernel from sleeping while performing tasks, its Binder inter-process communications and Binderfs file system to let apps and system services talk to each other across separate memory spaces, and its own PMEM memory allocator, which was replaced by ION in Android 4.0. Google has gotten many of its kernel changes incorporated into mainline Linux, including wakelocks in 2012, Binder in 2015 and Binderfs in 2018. After the Linux kernel rejected Google’s ION memory allocator, Google developed the DMA-Buf Heaps allocator which was added to Linux in 2019. While mainline Linux now supports wakelocks and Binder, most Linux software does not use these features, and there are still features like the ashmem (Android shared memory) allocator that the Linux kernel does not support.
-
-Despite the fact that Google has been the third-largest contributor to the Linux kernel in recent years (after Intel and Red Hat), and has gotten so many Android features incorporated into the Linux kernel, Google is careful to not refer to its kernel as “Linux”, although its documentation freely acknowledges Linux’s contribution to the Android kernel. A [2009 presentation](https://arstechnica.com/gadgets/2009/02/an-introduction-to-google-android-for-developers/) by Google engineer Patrick Brady stated, “Android is built on the Linux kernel, but Android is not Linux.”
-
-![](https://cdn.arstechnica.net/wp-content/uploads/archive/android-dev/android_not_linux.png)
-
-Rather than saying “Linux,” Google makes a point to say “[Android common kernel](https://source.android.com/docs/core/architecture/kernel/android-common)” or “AOSP common kernel” (ACK), which it describes in the following terms:
-
-> [AOSP common kernels](https://android.googlesource.com/kernel/common/) (also known as the Android common kernels or **ACKs**) are downstream of [kernel.org](https://www.kernel.org/) kernels and include patches of interest to the Android community that haven’t been merged into mainline or Long Term Supported (LTS) kernels. These patches can include:  
-> * Backports and cherry-picks of upstream functionality needed for Android feature  
-> * Features ready for Android devices but still under development upstream  
-> * Vendor/OEM features that are useful for other ecosystem partners  
->   
-> `android-mainline` is the primary development branch for Android features. Linux mainline is merged into `android-mainline` whenever Linus Torvalds posts a release or release candidate. Before 2019, Android common kernels were constructed by cloning the recently declared LTS kernel and adding the Android-specific patches. This process changed in 2019 to branch the new Android common kernel from `android-mainline`. This new model avoids the significant effort to forward port and test Android patches by accomplishing the same result incrementally. `android-mainline` undergoes significant continuous testing, this model includes a high-quality kernel from the day it’s published.
-
-Before 2019, Google took each year’s Linux LTS kernel and applied the Android changes on top, but now Google develops its Android kernel and pulls in changes from the latest Linux LTS kernel, which is why Google changed the name of its kernel from “android-4.19-q” in 2019 to “android11-5.4” in 2020. Instead of starting with Linux 4.19 and applying its patches from Android Q, it started with its Android 11 kernel and applied patches pulled from Linux 5.4.
-
-On technical grounds, one can argue that the Android kernel is close enough to mainline Linux that it should be considered a Linux kernel, but on practical grounds they have to be treated as distinct. Chipmakers have to create separate drivers for Android and Linux. Sadly, the makers of mobile systems-on-a-chip (Qualcomm Snapdragon, MediaTek Dimensity, UNISOC Tiger, Samsung Exynos and Xiaomi Xring) have chosen to support Android, but not Linux, which is why AOSP phones generally have much better performance than phones like the PinePhone and Librem 5 that run on a Linux kernel. In Android kernels, the modules are generally compiled into the kernel, so the modules can’t be dynamically loaded and unloaded, which is the common practice in standard Linux.
-
-Of course, from the users’ perspective, AOSP feels like a totally different beast from Linux. Userspace software in Android has to access hardware through its Hardware Abstraction Layer (HAL), whereas userspace software in Linux can access hardware more directly through the `/dev` and `/sys` directories. Normal Android users can’t even see those directories, so Android’s hardware feels like a black box.
-
-1. ![Mark J Kropf's avatar](https://1.gravatar.com/avatar/79a03e7f482c1819c4fcdd1260705a1ec6fcee27101e91de67847a7dbf8c7530?s=176&d=identicon&r=G)**Mark J Kropf** [October 19, 2026 at 5:16 pm](https://amosbbatto.wordpress.com/2026/10/19/the-advantages-of-mobile-linux-over-aosp/#comment-18814) .comment-meta Android itself is a fork from Linux so that the AOSP argument about being Linux based really is not at all unique. Even iOS started off from the BSD branch of UNIX so that any Smartphone technology now out there shares the heritage of MINIX, UNIX and much of that family of digital software forms. Only Windows smartphones for some short term had a different base. There is no good reason that a more secure Linux might not be used on a Smartphone beyond the proprietary software desires of Apple and Google. AOSP can now see some increased use as GrapheneOS through the sudden desire for Motorola to release phones with GrapheneOS installed by default on at least some of its products. These decisions are all all merely arbitrary! More secure Linux systems exist, though there will always be issues with any software out there. Security Week has had an issue recently note that for September 2026 Android had the need to update its code from Google for 180 vulnerabilities! [https://www.securityweek.com/androids-september-2026-updates-patch-180-vulnerabilities/](https://www.securityweek.com/androids-september-2026-updates-patch-180-vulnerabilities/) Google is very good at formulating its corrections, but it has its own problems nonetheless. Most people are simply not aware of all of them! Most of the Linux systems tailored for a Smartphone are common use systems not designed for security as much as they are for ease of formulating the interface with the apps. Sandboxing apps similar to what is done in QubesOS could be done in theory. Distro development might be applied to the distros such as Tails or Spector or BlackArch Linux, certainly not with any means of ease for the nature of the way those distros function. I am saying that in theory Linux of many different forms could be repurposed, thougn the most secure forms of Linux code form would see the most difficult obstacles to overcome. The application development of apps is one thing and they can be packaged to interface in a sandbox, but the nature of interacting with ISP needs will be much the more difficult for packaging Internet as well as voice function of a phone unless we drop a smartphone function to the more nominal limitations of VOIP. Meaningfully connecting to a number of cell towers in a grid will challenge any coder for the nature of the changeover and may well be something not at all nearly solved in the short term. It is practically possible, but the need to shift cell tower functions with security in generic Linux coding is going to be a major issue to do well and quickly enough. All sorts of issues abound including Rogue cell stations, 3-GPP exploitation of networks, SD-core and Magma vulnerabilities protocol tunneling of 5-G and more. The nature of the number of potential vulnerabilities can be managed, but not to any easy means and any change of the network standards as we move to 6G is likely to make the matter even harder to address for the long term. The Linux code done incorrectly could blow up in the face of all of us! [Like](https://amosbbatto.wordpress.com/2026/10/19/the-advantages-of-mobile-linux-over-aosp/?like_comment=18814&_wpnonce=1a1184b79f)Like .comment-content [Reply](https://amosbbatto.wordpress.com/2026/10/19/the-advantages-of-mobile-linux-over-aosp/?replytocom=18814#respond) ↓ .reply #comment-##
-2. ![kittyspooky97c9035997's avatar](https://1.gravatar.com/avatar/17e1f5999502ffbe1ec6b25c539aa0ba762270ae519cf0c2d939007398afd173?s=176&d=identicon&r=G)**kittyspooky97c9035997** [October 20, 2026 at 10:24 am](https://amosbbatto.wordpress.com/2026/10/19/the-advantages-of-mobile-linux-over-aosp/#comment-18815) .comment-meta Don’ t understand why there are “millions of Android/Apple apps”. Who uses all of them? Apart from those locked in the Android and Google walled gardens what are the most popular “wild” apps in each usuage category. For example the browser market must be dominated by, say 10 apps, so who uses anything else. Are we in a supermarket with many varients of a basic item. [Like](https://amosbbatto.wordpress.com/2026/10/19/the-advantages-of-mobile-linux-over-aosp/?like_comment=18815&_wpnonce=88a12ca2fb)Like .comment-content [Reply](https://amosbbatto.wordpress.com/2026/10/19/the-advantages-of-mobile-linux-over-aosp/?replytocom=18815#respond) ↓ .reply #comment-## .children
-  1. ![amosbatto's avatar](https://2.gravatar.com/avatar/eafca9170754ffe3974a235822a1b1c28dad4a8da697f3a5c48b71feabdd2a8f?s=176&d=identicon&r=G)**[amosbatto](https://amosbbatto.wordpress.com)** Post author[October 20, 2026 at 1:55 pm](https://amosbbatto.wordpress.com/2026/10/19/the-advantages-of-mobile-linux-over-aosp/#comment-18816) .comment-meta Yes, we don’t need 2 million apps in order for mobile Linux to compete with Android. I typically have about 50 apps installed on my AOSP phones, but I only use about 25 of them. The problem is that there is a long tail of specialized apps that people need, which is different for each person. In my case, I need two Android banking apps and the indigenous languages dictionary app that I developed. [Like](https://amosbbatto.wordpress.com/2026/10/19/the-advantages-of-mobile-linux-over-aosp/?like_comment=18816&_wpnonce=6487a2dc34)Like .comment-content [Reply](https://amosbbatto.wordpress.com/2026/10/19/the-advantages-of-mobile-linux-over-aosp/?replytocom=18816#respond) ↓ .reply #comment-## .children
-    1. ![kittyspooky97c9035997's avatar](https://1.gravatar.com/avatar/17e1f5999502ffbe1ec6b25c539aa0ba762270ae519cf0c2d939007398afd173?s=176&d=identicon&r=G)**kittyspooky97c9035997** [October 20, 2026 at 2:06 pm](https://amosbbatto.wordpress.com/2026/10/19/the-advantages-of-mobile-linux-over-aosp/#comment-18817) .comment-meta Thanks. Looked at the browser stats; Firefox is down from a peak of 30% to about 3% (6% on desktops). Chrome wins so people prefer convenience to worrying about surveillance as in some many other things. Ironic that Americans who shy away from state run activities are happy to pay for supporting vast profits for a duopoly. [Like](https://amosbbatto.wordpress.com/2026/10/19/the-advantages-of-mobile-linux-over-aosp/?like_comment=18817&_wpnonce=4999268786)Like .comment-content .reply #comment-##
-3. ![SpudHeadNumber1's avatar](https://2.gravatar.com/avatar/554f7a6c243689b7ce9ea4a7828b1277b124d1048aa6ddd6e4457ff64ab31edc?s=176&d=identicon&r=G)**SpudHeadNumber1** [November 2, 2026 at 8:14 am](https://amosbbatto.wordpress.com/2026/10/19/the-advantages-of-mobile-linux-over-aosp/#comment-18820) .comment-meta dont forget android translation layer.([ATL](https://nlnet.nl/project/ATL/)). [Like](https://amosbbatto.wordpress.com/2026/10/19/the-advantages-of-mobile-linux-over-aosp/?like_comment=18820&_wpnonce=bbb572b622)Like .comment-content [Reply](https://amosbbatto.wordpress.com/2026/10/19/the-advantages-of-mobile-linux-over-aosp/?replytocom=18820#respond) ↓ .reply #comment-##
+In the 20th century we had radio and television *programs*; a
+television executive at ABC could *program* Thursday nights as a
+comedy block; the television itself became the vessel for playing Video
+Computer System game *programs* in the 1970s. By the 1980s one
+could *program* their VCR to record television or even
+*program* their home computer on that same screen.
+
+Programs have been ubiquitous your entire life. You heard them. You
+watched them. You played them. You may have even made them. And as
+broadcasting has given way to [narrowcasting](https://schmud.de/posts/2020-06-23-internet-community.html) and
+analog signals have given way to digital software, programs are
+increasingly watching you and using that information to alter everything
+from prices to our perception of reality.
+
+We have all noticed this but no one seems to know what to do about
+it. He have created a world where *anyone* can program media -
+including the programs themselves. While access has never been greater,
+literacy has never been lower. The vast majority of people haven’t been
+taught even the most basic principles of this new media. We are
+ignorantly grazing in a field filled with danger - unable to understand
+the warnings so many have been shouting for decades.
+
+## The Warnings
+
+The arrival of programmable interactive media led to a frenzied
+interest that crescendoed in the 1990s with the introduction of the DVD
+and the world wide web. By this point, the information age had become
+tangible in the everyday life of ordinary people. But people generally
+engaged new media like they did television: passively. But programmeable
+media is too powerful to tolerate passive consumption. Realizing this, a
+group of media theorists emerged to publish the *[Principles
+of Technorealism](https://web.archive.org/web/20030203231503/http://www.technorealism.org/)* on March 12, 1998.The twelve original contributors were David Bennahum,
+Brooke Shelby Biggs, Paulina Borsook, Marisa Bowe, Simson Garfinkel,
+Steven Johnson, Douglas Rushkoff, Andrew Shapiro, David Shenk, Steve
+Silberman, Mark Stahlman and Stefanie Syman. The final document was
+based on the concept originated by Shapiro, Shenk and Johnson.  
+
+ They opined that “in a world driven by the flow of
+information, the interfaces – and the underlying code – that make
+information visible are becoming enormously powerful social force,
+[therefore] the creation of better tools should be an important part of
+being an involved citizen. These tools affect our lives as much as laws
+do, and we should subject them to a similar democratic scrutiny.” Or as
+Technorealist contributor Douglas Rushkoff summed it up, **program
+or be programmed**.
+
+Rushkoff is not a computer programmer in any formal sense. He is a
+media theoretician. So while he laments the absence of ubiquitous
+computer programming education in US public schools, he is really
+talking about digital media more broadly.
+
+## On Digital Media
+
+Digital media takes the notion of “analog programs” as we saw them on
+television and turns them into flexible, programmable code. Today that
+often means code that drives capital intensive recommendation algorithms
+which now underpin the media ecosystem. If not as social media, then as
+the innocuous Google News app that defaults on your phone. If not as the
+Google News app, then as the digital newspaper that is constantly
+re-configuring itself based on engagement metricsAs [C.
+Thi Nguyen has said](https://www.dialectic.fm/c-thi-nguyen), “Metrics are technology that standardize
+attention.”  
+
+ from social media and the hundreds of advertising
+networks that fester in the ecosystem like flies on a decaying
+corpse.The Technorealists proposed to guard against this form
+of Surveillance Capitalism 16 years before the term was coined. Point 3
+of the manifesto reads: “Government has an important role to play on the
+electronic frontier […] it is foolish to say that the public has no
+sovereignty over what an errant citizen or fraudulent corporation does
+online. […] Technology standards and privacy issues, for example, are
+too important to be entrusted to the marketplace alone. Competing
+software firms have little interest in preserving the open standards
+that are essential to a fully functioning interactive network. Markets
+encourage innovation, but they do not necessarily insure the public
+interest.”
+
+![](https://schmud.de/img/2026-11-02-program/225-partners.png)<small>*The
+225 partners of DW*noyb [recently
+filed a GDPR complaint against dict.cc](https://noyb.eu/en/1741-informed-consents-one-click-gdpr-complaint-against-dictcc-filed) due to their consent
+agreement featuring an astounding 1,741 partners. ‘Felix Mikolasch, data
+protection lawyer at noyb: “It would take days or even weeks to properly
+read and understand the data protection policies of 1,741 companies. It
+is ridiculous to assume that this would allow for an informed
+decision.”’  
+
+ by
+[David
+Schmudde](https://schmud.de) is licensed under
+[CC
+BY-NC
+4.0 ** **](https://creativecommons.org/licenses/by-nc/4.0/?ref=chooser-v1)</small>
+
+The internet is truly a different type of media; digital
+interactivity facilitates the same physical reach to both the
+institutional power and the distributed peer. The interface to this
+media is a sophisticated language colloquially known as
+*programming*.The name *programming* elides its expressive
+power, which is somewhere between mathematics and natural
+language.  
+
+ And if you do not know how to speak it, the institutional
+powers will speak it for you.
+
+Take the basic example of RSS/atom. I love RSS and use it to this
+day. The premise is simple: in a diverse information ecosystem, you can
+select feeds from major corporate news agencies, collectively funded
+information providers, and self-funded bloggers and they all get equal
+space in your reader. The feed is flexible; the sources inevitably
+change from year to year as you discover new things and get tired of old
+things. But this intellectual freedom comes at a cost - you must make
+choices. You must create the program. The alternative is an
+algorithmically defined news app that makes the program for you. And the
+organization controlling that program makes tiny, seemingly innocuous
+tweaks every week which can have profound consequences over time.For example, the person who added the infinite scroll
+to the Facebook timeline, Aza Raskin, [now
+says he regrets it](https://mastersofscale.com/video/he-invented-infinite-scroll-and-says-he-regrets-it/). It turns out that removing the “next page”
+button is a great way to keep people on Facebook but not a great way to
+consciously use time. Or how about the time that Amazon paid the USA
+Federal Trade Commission $2.5 billion to settle a case built around what
+[its
+own employees called the “Iliad Flow”](https://www.fastcompany.com/91409096/amazon-iliad-flow-prime-lawsuit) - an Amazon Prime-cancellation
+process spread across four pages and fifteen options, where every button
+except one routed a user back to the start. Leaked internal documents
+showed that when Amazon simplified the flow, cancellations dropped 14
+percent, so the company reversed course and kept the maze.
+
+Digital media’s flexibility, reach, subtlety, and power demands our
+active engagement unique to any other preceding media.
+
+## On Speaking
+
+The ability to speak the language of programming tended to favor
+white males - but not exclusively and not historically. When programming
+was less well-compensated and less highly regarded, it was a job for
+women. And as *[Prophets of
+Computing](https://dl.acm.org/doi/book/10.1145/3548585)* demonstrates, there have been a large number of local
+approaches to machine programming throughout Asia and Latin America.
+
+But the current crop of programmers - the people who by definition
+control programmed media - does seem like more of a monoculture. A more
+egalitarian world is possible but we will not arrive there in a
+generation by putting iPads in classrooms. The Technorealists have
+understood this for decades.Again from the Technorealists: “Wiring the schools will
+not save them. The problems with America’s public schools – disparate
+funding, social promotion, bloated class size, crumbling infrastructure,
+lack of standards – have almost nothing to do with technology.
+Consequently, no amount of technology will lead to the educational
+revolution prophesied by President Clinton and others. The art of
+teaching cannot be replicated by computers, the Net, or by ‘distance
+learning.’ These tools can, of course, augment an already high-quality
+educational experience. But to rely on them as any sort of panacea would
+be a costly mistake.”  
+
+ To the contrary, multiple studies have shown that tablets
+and laptops largely detract from the learning environment[The Laptop
+and the Lecture: The Effects of Multitasking in Learning
+Environments](https://link.springer.com/article/10.1007/BF02940852) (Hembrooke & Gay, 2003); [Dividing
+Attention in the Classroom Reduces Exam Performance](https://www.tandfonline.com/doi/full/10.1080/01443410.2018.1489046) (Glass &
+Kang, 2019); [Examining
+the impact of off-task multi-tasking with technology on real-time
+classroom learning](https://www.sciencedirect.com/science/article/abs/pii/S0360131511002077) (Wood et al., 2011); [Don’t
+Throw Away Your Printed Books: A Meta-Analysis on the Effects of Reading
+Media on Reading Comprehension](https://www.sciencedirect.com/science/article/pii/S1747938X18300101?via%3Dihub) (Delgato et al., 2018), etc…  
+
+ and tablets are a poor tool for teaching programming;
+they are designed primarily for media consumption.
+
+LLMs are the latest consumer layer of digital media. At a minimum,
+they promise to become a metamediaMarshall McLuhan coined the term “metamedia“ to
+describe the relationship between form and content, especially in the
+context of new technologies and new media.  
+
+ of our everyday lives. Much has been written about how
+LLMs will eliminate the entire field of programming - as if people will
+no longer need to know how to speak for themselves. Programming will
+still exist. But much will be obscured by a consumer veneer.
+
+The language of programming is actually the language of systems.
+Self-trained hackers were aware of this language when they were hacking
+the telephone networks of the 1970s. And freshmen at MIT in the 1980s
+understood this after reading the *[Structure
+and Interpretation of Computer Programs](https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/6515/sicp.zip/index.html)*. Humans build systems.
+And systems contribute to our view of the world that we are born into.
+LLMs can provide a surface-level understanding of a system but only
+hands-on experience can provide knowledge.
+
+You are constrained by any system that you cannot inspect. This is
+true of both designed and emergent systems such as cities, forests, and
+networks. The natural sciences, including informatics,The term *informatics* is often used
+interchangeably with *computer science* - where the latter
+focuses on either the theory of computation or the study of the physical
+computer.  
+
+ produces the notation we use to describe what we know
+about these systems. As long as there are systems and networks, there
+will be programming.
+
+## On Mind
+
+The physical computer is unique because it is the artificial
+embodiment of a natural science. The theoretical computer has no
+politics. But the physical computer is bound to the systems used to
+create it.The first point from the Technorealist manifesto:
+“Technologies are not neutral. A great misconception of our time is the
+idea that technologies are completely free of bias – that because they
+are inanimate artifacts, they don’t promote certain kinds of behaviors
+over others. In truth, technologies come loaded with both intended and
+unintended social, political, and economic leanings. Every tool provides
+its users with a particular manner of seeing the world and specific ways
+of interacting with others. It is important for each of us to consider
+the biases of various technologies and to seek out those that reflect
+our values and aspirations.”  
+
+ And those systems have historically been large,
+well-funded bureaucratic projects or globally scaled, highly-capitalized
+consumer products. So the end result of decades of effort to
+“democratize computing” has produced an oligarchic class of unimaginable
+wealth and a consistent decade-over-decade decline in the share of any
+productivity gains created by the computer.“The labor share — the percentage of economic output
+that accrues to workers as compensation in exchange for their labor —
+has been declining in the nonfarm business sector throughout most of the
+post-World War Two era […] reaching a low of 56.0 percent in the fourth
+quarter of 2011.” ~ <small>*[Labor
+share of output has declined since 1947](https://www.bls.gov/opub/ted/2017/labor-share-of-output-has-declined-since-1947.htm)* March 07, 2017</small>
+![](https://schmud.de/img/2026-11-02-program/labors-share-of-nonfarm.svg) Or
+take the example of newspapers. The papers were revolutionized by
+productivity gains starting with the arrival of digital layout tools.
+The industry employed [458,000
+people in June 1990 and declined to 367,200 in December 2005](https://www.bls.gov/opub/ted/2016/employment-trends-in-newspaper-publishing-and-other-media-1990-2016.htm) while
+the revenues rose, profits remained strong, and the papers were a prized
+acquisition asset. Average employee pay did not benefit from the gains
+in efficiency. See also [the wage
+calculator](https://www.epi.org/resources/wage-calculator/) to see how your work has been systematically devalued
+since 1979.
+
+So how do we fight back against these overwhelming odds? We program.
+Not as an offense into their territory. But as a defense of our
+territory - our mind.
+
+Civilization is built on media. You cannot shelter your sons and
+daughters; you have already seen the impact on your friends and
+neighbors. It is past time to accept that in a programmable world of
+digital media, we can no longer blame the television executive or the
+media baron for their programs. We must support and participate in
+alternative systems. From food to computing - we must create and
+participate in systems that minimize cruelty as a bulwark against
+systems that maximize profit.
+
+The lingua franca of these systems is software. This language is at
+least as important as the language you speak with your friends. Learning
+the language of systems - a.k.a programming - will be a mind-opening
+second or third language that you can use to manifest the world you want
+to see in everyday media.
