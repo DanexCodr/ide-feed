@@ -1,235 +1,56 @@
-Download 11.1 from our CDN:
-[amd64 USB](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/images/NetBSD-11.1-amd64-install.img.gz),
-[amd64 DVD](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/images/NetBSD-11.1-amd64-dvd.iso),
-[i386 USB](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/images/NetBSD-11.1-i386-install.img.gz),
-[i386 CD-ROM](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/images/NetBSD-11.1-i386.iso),
-[sparc64 DVD](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/images/NetBSD-11.1-sparc64-dvd.iso),
-[sparc64 CD-ROM](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/images/NetBSD-11.1-sparc64.iso),
-[macppc CD-ROM](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/images/NetBSD-11.1-macppc.iso),
-[RISC-V devices](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/riscv-riscv64/binary/gzimg/riscv64.img.gz),
-[Cavium Octeon MIPS devices](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/evbmips-mips64eb/binary/gzimg/octeon.img.gz),
-[Nintendo Wii](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/evbppc/binary/gzimg/wii.img.gz),
-[various Arm devices](https://armbsd.org/),
-[full release dir with everything else](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/).
+On October 23, 2026, the unthinkable happened. It was supposed to be a mere formality: C++26 was up for a vote by the ISO National Bodies (NBs). The options are always approval, rejection, or abstention. Comments are also allowed. Since 1998, this process had run quietly and smoothly. Not so on October 23, 2026. After a twelve-week voting period, the result is in: **Disapproved**!
 
-[Hashes](https://cdn.NetBSD.org/pub/NetBSD/security/hashes/NetBSD-11.1_hashes.asc),
-signed with the [NetBSD Security Officer's PGP key](https://cdn.NetBSD.org/pub/NetBSD/security/PGP/security-officer@netbsd.org.asc), of all files in the distribution.
+*I would like to mention here that I am a member of the C++ Standardization Committee and, together with my colleagues, represent Germany’s vote. ISO rules also stipulate that certain votes are internal to ISO, and the results—or the breakdown of the results—may not be published. This article contains my own personal views.*
 
-## Introduction
+## The Current Status
 
-The NetBSD Project is pleased to announce NetBSD 11.1, the first point release of the NetBSD 11 stable branch.
+As far as I know, this is the first time in the history of C++ that DIS ballot failed. When I searched the ISO system, I could only find one other DIS that was not approved: ISO/IEC DIS 26926 C++/CLI Language Specification dated August 11, 2006. It’s possible that my search privileges aren’t sufficient to view everything, but all ISO programming languages should be visible to me. The sad end of ISO/IEC DIS 26926: the project was halted. I mention this upfront to clarify the significance of this vote.
 
-## Upgrade instructions
+In the following, I will use various terms from everyday ISO terminology. At [https://isocpp.org/std/iso-iec-jtc1-procedures](https://isocpp.org/std/iso-iec-jtc1-procedures), there is an overview of the various stages of an ISO standard. DIS is the penultimate stage. As the overview also shows, a two-thirds majority is required. This majority was not achieved.
 
-An existing installation can be upgraded by booting an installation image
-and selecting the Upgrade option.
+The reason for the rejection is quite clear from the comments submitted by the National Bodies (NBs): contracts. Put simply, a number of NBs believe that this feature is not yet ready for release.
 
-If you are using other update methods, update the kernel and modules *first*, then reboot and update your userspace.
+## The Process
 
-## Changes since NetBSD 11.0
+Now it gets complicated. The C++ Standardization Committee, also known as WG21, follows ISO rules but also has some additional rules. One of these is (or was) that opinions are always heard whenever new information becomes available. If an opinion was heard and a feature was nevertheless not changed as desired, the person respects the outcome and accepts that many others disagree.
 
-This release primarily focuses on security and bug fixes, since our aim
-was to get it released as soon as possible to address certain security
-issues.
+However, the voting body at the NB level may also consist of other individuals, or the NBs are, of course, free to vote differently.
 
-## Ports
+The previous practice was that NBs would only vote against a standard if new information became available or if errors in the process or similar issues were identified. This changed on October 23, 2026.
 
-- alpha: Fixed a boot hang occurring on unpatched QEMU.
-- alpha: Fixed kernel stack pointer alignment leading to panics during test suite runs. (PR 60865)
-- amd64, i386: Reduced the strictness of the "WARNING: no TOD clock present" check.
-- amd64, i386: Fixed a panic on the Zhaoxin KX-7000 and other late-model CPUs from VIA/Zhaoxin.
-- amd64: Fixed libc behaviour when calling memchr(3) with certain unusual arguments. (PR 60744)
-- atari: Fixed ATARITT kernels failing to boot on Atari TT030.
-- evbarm: Fixed stability problems with certain USB devices on Raspberry Pi.
-- evbarm: Fixed thread local storage on ARMv5 with soft floats. (PR 57638)
-- evbarm: Fixed "am335x omaptimer fails to attach". (PR 60910)
-- hppa: Added support for eager FPU switching. Currently enabled only for QEMU to work around an emulation bug, may eventually become the default for improved safety.
-- mac68k: Honour requested keyboard bell volume for akbd(4) devices. (PR 60691)
-- mips: Fixed problems with MIPS Malta platform code found running under QEMU.
-- mips: Fixed various problems discovered with the Kernel Undefined Behaviour Sanitizer. (PR 60780)
-- sparc64: Enhanced support for sensors on Sun Ultra 25/45 and Sun Fire V215/V245, including front panel temperatures, fan speeds, and disk presence indicators. LEDs on Sun Fire machines can now be controlled via sysctl.
-- sparc64: Added support for the i2c controller found in Pyro-based machines (e.g. Sun Ultra 45, Sun Fire V245).
-- sparc64: Added support for the real-time clock used in the Sun Ultra 45.
-- sun68k: Fixed booting from SCSI disks with certain PROM revisions.
+It’s difficult to judge in this complex situation; the NBs who want C++26 without Contracts argue that there is new information. I myself find it hard to share this view. A new paper with old arguments is not new information to me.
 
-## Kernel and MI device drivers
+## The History of Contracts in C++
 
-- ffs: Fixed an uvm_fault occurring during snapshot dump/restore. (PR 59663)
-- ipfilter: Fixed a NULL pointer dereference leading to potential DoS while parsing ICMP6 packets. (PR 60484)
-- net: Fixed an off-by-error in a bounds check in bsd_decompress().
-- uvm: Fixed a race condition in the page daemon.
-- vfs: Limit snapshot-related vflushbuf: dirty: vnode [...] console spew under heavy load.
-- acpibat(4): Added support for battery monitoring on the Microsoft Surface Go 3.
-- hdaudio(4): Apply access checks to configuration operations on /dev/hdaudioX. (PR 60492)
-- ixl(4): Fixed driver hang, then failure on ifconfig, if SFP module present at boot time and media connected. (PR 60736)
-- mpii(4): Fixed stability of Symbios Logic SAS3008 RAID controllers. (PR 58684)
-- raid(4): Fixed an incorrect assertion during reconstruction. (PR 60477)
-- run(4), rum(4), various other USB Wi-Fi drivers: Fixed a kernel panic seen when hotplugging a device with wpa_supplicant(8) running. (PR 60665)
-- virtio(4): Improve documentation.
-- vr(4): Fixed stability problems observed after warm reboots. (PR 60848)
-- wdc(4): Avoid a three-second delay during boot with PCI IDE controllers.
-- compat_linux(8): Fixed an edge-case panic in Linux’s copy_file_range system call.
+The feature has been on the wish list for a long time. I was already in the room in Cologne back in 2019, at the time for C++20, when Contracts, in a different form back then, were being included in the standard. I was also in the room when the feature was removed from C++20 again during the same meeting. As a result, a study group was formed to address the topic of Contracts and its various aspects from 2020 to approximately 2024. Afterward, the study group submitted its work and proposals to the Evolution Working Group (EWG), the central body for language extensions. There, the topic was discussed further over several meetings before being included in C++26 by a majority vote.
 
-## Userspace and build system
+In the next step, WG21 voted on the C++26 draft in March 2026, which included Contracts. Here, too, a large majority was achieved, though not without dissenting votes.
 
-- build.sh: Fixed building certain legacy GPLv2 GNU tools with modern compilers; used for GCC compiler bootstrapping.
-- build.sh: Fixed building with MKBINUTILS=no set.
-- build.sh: Fixed cross-builds from MacOS on Apple Silicon. (PR 60904)
-- build.sh: Fixed parallel builds of debug data.
-- build.sh: Generate hashes for bootable images in the gzimg directory. (PR 59195, PR 60302)
-- libc: Fixed issues with printf(3) thousands separators and positional arguments. (PR 60708, PR 60496)
-- ld.elf_so(1): Fixed incorrect thread-local storage alignment assertions with DEBUG enabled.
-- wgetscrreg(3): Added a manual page.
-- httpd(8): Clarified documentation of CGI options.
-- syslogd(8): Fixed buffering of incomplete lines from /dev/klog.
+And that brings us to the next phase: DIS. At this stage, there were enough “no” votes that a two-thirds majority was not reached.
 
-## Third-party components
+## What happens next?
 
-- brotli: Sync with -current to fix CVE 2026-111497.
-- libXfont2: Updated to 2.0.9, fixes CVE-2026-44950 and CVE-2026-59679.
-- libX11: Updated to 1.8.14.
-- libXi: Updated to 1.8.4.
-- libXpm: Updated to 3.5.20.
-- libXrender: Updated to 1.9.13.
-- libXtst: Updated to 1.2.6.
-- mozilla-rootcerts: Update for compromised certificate authorities. (PR 60908)
-- xf86-video-intel: Sync version with pkgsrc.
-- Xorg(1): Updated to xorg-server 21.1.25.
-- ssh(1), sshd(8): Updated to OpenSSH 10.6.
-- unbound(8): Updated to 1.26.1.
+The big problem: what happens next? ISO, of course, has a process for this. It offers various options:
 
-The complete list of changes can be found in the 
-  [CHANGES](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/CHANGES)
-  and [CHANGES-11.1](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/CHANGES-11.1) files in the top level directory of the NetBSD 11.1
-  release tree.
+1. Submit a revised draft for a new DIS vote.
+2. Submit a revised draft to the committee (that would be the CD phase).
+3. Publish a revised draft as a Technical Specification.
+4. Cancel the project.
 
-## Getting NetBSD 11.1
+All of these possibilities mean a delay in the next C++ standard. Whether it will still be called C++26 is also up in the air, but that’s a much smaller issue.
 
-Complete source and binaries for NetBSD 11.1 are available for download
-  at many sites around the world. You can download NetBSD 11.1 from our
-  [main CDN](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/),
-  or use a
-  [mirror site](https://www.NetBSD.org/mirrors/)
-  close to you.
-  A list of hashes, signed by the
-  [NetBSD Security Officer's PGP key](https://cdn.NetBSD.org/pub/NetBSD/security/PGP/security-officer@netbsd.org.asc), is
-  available for the NetBSD 11.1 distribution in
-  [this file](https://cdn.NetBSD.org/pub/NetBSD/security/hashes/NetBSD-11.1_hashes.asc).
+The difficulty with all four options is that they require a majority within WG21. However, this working group voted to move C++26 *with* Contracts into the next voting phase leading to its release. And it did so with more than just the required two-thirds majority. The feature didn’t come out of nowhere, either; it was developed over the course of years through the work and possibly personal commitment of many people. It’s hard to imagine that this group would simply want to abandon its work, which has received approval on multiple occasions so far. The same applies to the group that is dissatisfied with Contracts. This group, too, has invested effort, in some cases even in alternative implementations. It’s hard to imagine that, after these groups voted “no” in the DIS vote, the result would change without Contracts being removed.
 
-NetBSD is free. All of the code is under non-restrictive licenses,
-    and may be used without paying royalties to anyone. Free support
-    services are available via our mailing lists and website.  Commercial
-    support is available from a variety of sources.  More extensive
-    information on NetBSD is available from our website:
+Even the last option *removing C++26* requires a majority in WG21. As I understand it, this step would mean reverting to C++23 and proceeding to C++29 without a single change. This would affect the work of even more people. WG21 would then be tasked with incorporating features that have already been successfully included in C++26 into C++29. Since this can only be done through a paper backed by at least one person advocating for it, features could be omitted if that person lacks the motivation or time.
 
-> [www.NetBSD.org](https://www.NetBSD.org/)
+Of course, certainty about the voting outcome can only be achieved if the respective path is actually taken.
 
-## System families supported by NetBSD 11.1
+Unfortunately, the way forward is currently more than uncertain. Perhaps this also explains why ISO/IEC DIS 26926 marked the end of this activity. Consensus is needed to move forward. Trust is always required for consensus. Unfortunately, that trust has just been shaken.
 
-The NetBSD 11.1 release provides supported binary distributions for
-    the following systems:
+The next C++ standard, and thus the future of C++, is currently at an impasse.
 
-| [NetBSD/aarch64](https://wiki.NetBSD.org/ports/aarch64/) | Arm 64-bit |
-| --- | --- |
-| [NetBSD/acorn32](https://wiki.NetBSD.org/ports/acorn32/) | Acorn RiscPC/A7000, VLSI RC7500 |
-| [NetBSD/algor](https://wiki.NetBSD.org/ports/algor/) | Algorithmics, Ltd. MIPS evaluation boards |
-| [NetBSD/alpha](https://wiki.NetBSD.org/ports/alpha/) | Digital/Compaq Alpha (64-bit) |
-| [NetBSD/amd64](https://wiki.NetBSD.org/ports/amd64/) | AMD family processors like Opteron, Athlon64, and Intel CPUs with EM64T extension |
-| [NetBSD/amiga](https://wiki.NetBSD.org/ports/amiga/) | Commodore Amiga and MacroSystem DraCo |
-| [NetBSD/amigappc](https://wiki.NetBSD.org/ports/amigappc/) | PowerPC-based Amiga boards. |
-| [NetBSD/arc](https://wiki.NetBSD.org/ports/arc/) | MIPS-based machines following the Advanced RISC Computing spec |
-| [NetBSD/atari](https://wiki.NetBSD.org/ports/atari/) | Atari TT030, Falcon, Hades |
-| [NetBSD/bebox](https://wiki.NetBSD.org/ports/bebox/) | Be Inc's BeBox |
-| [NetBSD/cats](https://wiki.NetBSD.org/ports/cats/) | Chalice Technology's CATS and Intel's EBSA-285 evaluation boards |
-| [NetBSD/cesfic](https://wiki.NetBSD.org/ports/cesfic/) | CES FIC8234 VME processor board |
-| [NetBSD/cobalt](https://wiki.NetBSD.org/ports/cobalt/) | Cobalt Networks' MIPS-based Microservers |
-| [NetBSD/dreamcast](https://wiki.NetBSD.org/ports/dreamcast/) | Sega Dreamcast game console |
-| [NetBSD/emips](https://wiki.NetBSD.org/ports/emips/) | The Extensible MIPS architecture from Microsoft Research |
-| [NetBSD/epoc32](https://wiki.NetBSD.org/ports/epoc32/) | Psion EPOC PDAs |
-| [NetBSD/evbarm](https://wiki.NetBSD.org/ports/evbarm/) | Various Arm-based evaluation boards and appliances |
-| [NetBSD/evbmips](https://wiki.NetBSD.org/ports/evbmips/) | Various MIPS-based evaluation boards and appliances |
-| [NetBSD/evbppc](https://wiki.NetBSD.org/ports/evbppc/) | Various PowerPC-based evaluation boards and appliances |
-| [NetBSD/evbsh3](https://wiki.NetBSD.org/ports/evbsh3/) | Various Hitachi Super-H SH3 and SH4-based evaluation boards and appliances |
-| [NetBSD/ews4800mips](https://wiki.NetBSD.org/ports/ews4800mips/) | NEC's MIPS-based EWS4800 workstation |
-| [NetBSD/hp300](https://wiki.NetBSD.org/ports/hp300/) | Hewlett-Packard 9000/300 and 400 series |
-| [NetBSD/hpcarm](https://wiki.NetBSD.org/ports/hpcarm/) | StrongArm based Windows CE PDA machines |
-| [NetBSD/hpcmips](https://wiki.NetBSD.org/ports/hpcmips/) | MIPS-based Windows CE PDA machines |
-| [NetBSD/hpcsh](https://wiki.NetBSD.org/ports/hpcsh/) | Hitachi Super-H based Windows CE PDA machines |
-| [NetBSD/hppa](https://wiki.NetBSD.org/ports/hppa/) | Hewlett-Packard 9000 Series 700 workstations |
-| [NetBSD/i386](https://wiki.NetBSD.org/ports/i386/) | IBM PCs and PC clones with i486-family processors and up |
-| [NetBSD/ibmnws](https://wiki.NetBSD.org/ports/ibmnws/) | IBM Network Station 1000 |
-| [NetBSD/iyonix](https://wiki.NetBSD.org/ports/iyonix/) | Castle Technology's Iyonix Arm based PCs |
-| [NetBSD/landisk](https://wiki.NetBSD.org/ports/landisk/) | SH4 processor based NAS appliances |
-| [NetBSD/luna68k](https://wiki.NetBSD.org/ports/luna68k/) | OMRON Tateisi Electric's LUNA series |
-| [NetBSD/mac68k](https://wiki.NetBSD.org/ports/mac68k/) | Apple Macintosh with Motorola 68k CPU |
-| [NetBSD/macppc](https://wiki.NetBSD.org/ports/macppc/) | Apple PowerPC-based Macintosh and clones |
-| [NetBSD/mipsco](https://wiki.NetBSD.org/ports/mipsco/) | MIPS Computer Systems Inc. family of workstations and servers |
-| [NetBSD/mmeye](https://wiki.NetBSD.org/ports/mmeye/) | Brains mmEye multimedia server |
-| [NetBSD/mvme68k](https://wiki.NetBSD.org/ports/mvme68k/) | Motorola MVME 68k Single Board Computers |
-| [NetBSD/mvmeppc](https://wiki.NetBSD.org/ports/mvmeppc/) | Motorola PowerPC VME Single Board Computers |
-| [NetBSD/netwinder](https://wiki.NetBSD.org/ports/netwinder/) | StrongArm based NetWinder machines |
-| [NetBSD/news68k](https://wiki.NetBSD.org/ports/news68k/) | Sony's 68k-based “NET WORK STATION” series |
-| [NetBSD/newsmips](https://wiki.NetBSD.org/ports/newsmips/) | Sony's MIPS-based “NET WORK STATION” series |
-| [NetBSD/next68k](https://wiki.NetBSD.org/ports/next68k/) | NeXT 68k “black” hardware |
-| [NetBSD/ofppc](https://wiki.NetBSD.org/ports/ofppc/) | OpenFirmware PowerPC machines |
-| [NetBSD/pmax](https://wiki.NetBSD.org/ports/pmax/) | Digital MIPS-based DECstations and DECsystems |
-| [NetBSD/prep](https://wiki.NetBSD.org/ports/prep/) | PReP (PowerPC Reference Platform) and CHRP machines |
-| [NetBSD/riscv](https://wiki.NetBSD.org/ports/riscv/) | RISC-V-based devices |
-| [NetBSD/rs6000](https://wiki.NetBSD.org/ports/rs6000/) | IBM RS/6000 MCA-based PowerPC machines. |
-| [NetBSD/sandpoint](https://wiki.NetBSD.org/ports/sandpoint/) | Motorola Sandpoint reference platform, including many PPC-based NAS boxes |
-| [NetBSD/sgimips](https://wiki.NetBSD.org/ports/sgimips/) | Silicon Graphics' MIPS-based workstations |
-| [NetBSD/shark](https://wiki.NetBSD.org/ports/shark/) | Digital DNARD (“shark”) |
-| [NetBSD/sparc](https://wiki.NetBSD.org/ports/sparc/) | Sun SPARC (32-bit) and UltraSPARC (in 32-bit mode) |
-| [NetBSD/sparc64](https://wiki.NetBSD.org/ports/sparc64/) | Sun UltraSPARC (in native 64-bit mode) |
-| [NetBSD/sun2](https://wiki.NetBSD.org/ports/sun2/) | Sun Microsystems Sun 2 machines with Motorola 68010 CPU |
-| [NetBSD/sun3](https://wiki.NetBSD.org/ports/sun3/) | Motorola 68020 and 030 based Sun 3 and 3x machines |
-| [NetBSD/vax](https://wiki.NetBSD.org/ports/vax/) | Digital VAX |
-| [NetBSD/x68k](https://wiki.NetBSD.org/ports/x68k/) | Sharp X680x0 series |
-| [NetBSD/xen](https://wiki.NetBSD.org/ports/xen/) | The Xen virtual machine monitor |
-| [NetBSD/zaurus](https://wiki.NetBSD.org/ports/zaurus/) | Sharp Arm PDAs |
+The good news is that the next meeting will take place on November 16, which is just a few days away. The top priority will be to break the deadlock. This will very likely have implications for C++29 as well; in fact, there is currently no reason to continue working on this project.
 
-Ports included in the release but not fully supported or functional:
+## My Personal Opinion
 
-## Acknowledgments
-
-The NetBSD Foundation would like to thank all those who have
-    contributed code, hardware, documentation, funds, colocation for
-    our servers, web pages and other documentation, release engineering,
-    and other resources over the years. More information on the people who
-    make NetBSD happen is available at:
-
-## About NetBSD
-
-NetBSD is a free, fast, secure, and highly portable Unix-like
-  Open Source operating system. It is available for a wide range
-  of platforms, from large-scale servers and powerful desktop
-  systems to handheld and embedded devices. Its clean design
-  and advanced features make it excellent for use in both
-  production and research environments, and the source code is
-  freely available under a business-friendly license. NetBSD is
-  developed and supported by a large and vibrant international
-  community.  Many applications are readily available through
-  [pkgsrc,
-  the NetBSD Packages Collection](https://pkgsrc.org).
-
-## About the NetBSD Foundation
-
-The [NetBSD Foundation](https://www.netbsd.org/foundation/) was
-    chartered in 1995, with the task of overseeing core NetBSD project
-    services, promoting the project within industry and the open
-    source community, and holding intellectual property rights on much
-    of the NetBSD code base. Day-to-day operations of the project are
-    handled by volunteers.
-
-As a non-profit organization with no commercial backing, the NetBSD
-    Foundation depends on donations from its users, and we would like to ask
-    you to consider [making a donation](https://www.netbsd.org/donations/)
-    to the NetBSD Foundation in support of continuing production of our
-    fine operating system. Your generous donation would be particularly
-    welcome to help with ongoing upgrades and maintenance, as well as
-    with operating expenses for the NetBSD Foundation.
-
-Donations can be done via PayPal to
-    `<paypal@NetBSD.org>`, or via Google Checkout and are fully
-    tax-deductible in the US.  See [www.NetBSD.org/donations/](https://www.NetBSD.org/donations/#how-to-donate) for more information, or
-    contact `<finance-exec@NetBSD.org>` directly.
+Normally, my articles are technically focused and free of personal opinion. Regarding the rejected DIS, I can only say that I consider it a massive disaster and feel sorry for the entire C++ community. Regardless of whether someone likes Contracts, considers them important, or sees major weaknesses in them, the topic has been worked on for years and has received a majority vote multiple times in its current form. By voting “no,” an established system, one based primarily on trust and respectful collaboration, has been shaken. Every ISO standard is simply a set of compromises. Everyone loses sometimes, and everyone wins sometimes. Overall, the result is one in which all participants have given their best. During the DIS vote, the losing parties refused to accept their loss. The question that primarily determines *how to move forward* is whether the group can rebuild trust.

@@ -1,121 +1,1124 @@
-*This article—the second in a series of four, examining the complex legacy, technical evolution, and future prospects of DNSSEC—sets out to fact-check common beliefs on DNSSEC, point to future-proof data collections on DNSSEC matters and provides an up-to-date perspective on what DNSSEC is like today. It was widely circulated for comments and has been endorsed by over 60 people across the Internet industry (see list<sup>[1](https://circleid.com/posts/common-beliefs-about-dnssec-put-to-the-test-an-invitation-to-fact-check-your-assumptions#fn1)</sup>).*
+I’ve had a little time off of work as of late, and been spending it in characteristically unwise ways. In particular, I’ve written a [little programming language that compiles to SQL](https://github.com/isovector/catlang). I call it *catlang*. That’s not to say that I’ve written a new query language. It’s a programming language, whose compiler spits out one giant `SELECT` statement. When you run that query in postgres, you get the output of your program.
 
-In the [first article](https://circleid.com/posts/the-excruciating-slow-rise-of-dnssec) from our series on DNSSEC, long-standing DNS luminary Roy Arends and Barbara Jantzen (communicator at the DNSSEC-focused non-profit organization deSEC) have engaged in a dialogue, recounting how DNSSEC adoption has been substantially hindered by the protocol’s bad image—an image that cannot be accounted for by factual failures alone, demonstrating the impact of narratives on the perception of technical devices.
+Why have I done this? Because I needed a funny compilation target to test out the actual features of the language, which is that its intermediary language is a bunch of abstract category theory nonsense. Which I’ll get to. But I’m sure you first want to see this bad boy in action.
 
-Image-wise, two narrative items have indeed been particularly influential: First, the [IANIX list](https://ianix.com/pub/dnssec-outages.html) of DNSSEC-related outages since 2009, and second, [“Against DNSSEC”](https://sockpuppet.org/blog/2015/01/15/against-dnssec/) (with its follow-up [FAQ](https://sockpuppet.org/stuff/dnssec-qa.html)), a DNSSEC-critical blog post written by Thomas H. Ptáček in 2015. Both helped harden the perception that DNSSEC is more trouble than it is worth, and references to them still surface in forum threads on DNS matters, even as the protocol, tooling, and operational practices have evolved. It therefore seems timely to check how fit they still are to help assess DNSSEC’s usefulness today.
+Behold, the function that returns 100 regardless of what input you give it. But it does it with the equivalent of a while loop:
 
-In every field of knowledge, if we want to assess phenomena, we need thorough documentation to establish and collect facts, to witness evolutions, to develop hypotheses as to underlying causalities and try them. And although absolute numbers can provide a fair amount of insight, relative numbers are more helpful in assessing significance—especially when data is collected multi-dimensionally, allowing analysts to grasp inter-dependencies and derive a hint at potential causes. Because ideally, when dealing with broken things, we need to know not only how broken they are, but also how they broke.
+```
+count : Int -> Int
+count =
+  x ->
+    loop x
+      i ->
+        n <- join id id -< i
+        z <- abs . (-) -< (n, 100)
+        case z of
+          inl _ -> inr . (+) -< (n, 1)
+          inr _ -> inl -< n
+```
 
-A list can be a starting point for documentary work, though. The [IANIX list](https://ianix.com/pub/dnssec-outages.html), however, despite its objective looks, is more of a discourse than a documentation (as highlighted<sup>[2](https://circleid.com/posts/common-beliefs-about-dnssec-put-to-the-test-an-invitation-to-fact-check-your-assumptions#fn2)</sup> in our first article). In addition, it lacks transparency about its collection and curation methodology, making it difficult for readers to assess the list’s reliability and significance. As the IANIX site further does not disclose its operator’s name or contact, information on its modus operandi cannot be obtained.
+If you’re familiar with [arrow notation](https://reasonablypolymorphic.com/blog/arrowized-frp/), you’ll notice the above looks kinda like one big `proc` block. This is not a coincidence (because nothing is a coincidence). I figured if I were to go through all of this work, we might as well get a working arrow desugarer out of the mix. But I digress; that’s a story for another time.
 
-Looking back, the IANIX list can be credited for having drawn the DNS community’s attention on DNSSEC-related outages and, in doing so, having acted as a strong driver for improving the protocol. However, with its bulk of information lying far in the past, and entries becoming scarce since 2020 (without any possibility to know if that is due to a recent decrease in reportable events or simply to less active maintenance), the IANIX list does not make a meaningful contribution today.
+Anyway, what’s going on here is we have an arrow `count`, which takes a single argument `x`. We then loop, starting from the value of `x`. Inside the loop, we now have a new variable `i`, which we do some voodoo on to compute `n`—the current value of the loop variable. Then we subtract 100 from `n`, and take the absolute value. The `abs` function here is a bit odd; it returns `Left (abs x)` if the input was negative, and `Right x` otherwise. Then we branch on the output of `abs`, where `Left` and `Right` have been renamed `inl` and `inr` respectively. If `n - 100` was less than zero, we find ourselves in the `inl` case, where we add 1 to `n` and wrap the whole thing in `inr`—which the loop interprets as “loop again with this new value.” Otherwise, `n - 100` was non-negative, and so we can return `n` directly.
 
-To broadly assess the actual outage impact of DNSSEC, we need state-of-the-art alternatives. What should these look like?
+Is it roundabout? You bet! The obtuseness here is not directly a feature, I was just looking for conceptually simple things I could do which would be easy to desugar into category-theoretical stuff. Which brings us to the intermediary language. After desugaring the source syntax for `count` above, we’re left with this IL representation:
 
-Such longitudinal studies, consequently, could prove insightful in putting DNSSEC-induced resolution failures into perspective to other failure modes, in particular network issues or HTTPS misconfigurations that impact availability.
+```
+  id △ id
+⨟ cochoice
+    ( undist
+    ⨟   ( (prj₁ ⨟ id ▽ id) △ id
+          ⨟   ( prj₁ △ 100
+              ⨟ (-)
+              ⨟ abs
+              )
+            △ id
+          ⨟ prj₁ △ id
+          ⨟ dist
+          ⨟   ( (prj₂ ⨟ prj₂ ⨟ prj₁) △ 1
+              ⨟ (+)
+              ⨟ inr
+              )
+            ▽ ( prj₂
+              ⨟ prj₂
+              ⨟ prj₁
+              ⨟ inl
+              )
+        )
+      △ prj₂
+    ⨟ dist
+    )
+⨟ prj₁
+```
 
-Good starting points in that direction are the [DNSSEC and DANE Deployment Statistics page](https://stats.dnssec-tools.org/), which also has statistics on misconfiguration rates per TLD; a [timeline](https://desec-io.github.io/tld-dnssec-timeline/) of measured TLD validation statuses, provided by deSEC (the author’s non-profit employer) and based on [prior work](https://archive.icann.org/meetings/icann55/marrakech/downloads/presentation-dnssec-monitoring-07mar16-en.pdf) by Jaap Akkerhuis; the comprehensive dataset (2010-2025) used in a recent study by John Kristoff et al. (expected to be published later this month, at which time it will be linked here) which explores DNSSEC-induced outages and provides unweighed as well as downtime- and impact-weighed analysis (results cited at the end of this article); new [measurements](https://icann86.sched.com/event/2NQNm/dnssec-security-workshop) by deSEC contrasting percent-level error rates of both DNSSEC and HTTPS amongst the top 1M most popular domains. Another useful metric would be a public record (as recently [started](https://quad9.net/news/blog/dnssec-ntas-no-good-compromises/) by Quad9) of how frequently resolvers use so-called Negative Trust Anchors (NTAs) to temporarily turn off DNSSEC validation when working around human errors, with the long-term trend being of particular interest.
+We’ll discuss all of this momentarily, but for now, just let your eyes glaze over the pretty unicode.
 
-The blog post “[Against DNSSEC](https://sockpuppet.org/blog/2015/01/15/against-dnssec/)” was published by Thomas H. Ptáček in 2015, and got widely relayed. Its harsh critique of DNSSEC fell on fertile ground as numerous DNSSEC-related outages were happening and were given visibility by the IANIX list. This helped turn the blog post’s set of negative claims into potent beliefs that persist to this day and obscure actual implementation reality.
+The underlying idea here is that each of these remaining symbols has very simple and specific algebraic semantics. For example, `A ⨟ B` means “do `A` and pipe the result into `B`.” By giving a transformation from this categorical IL into other domains, it becomes trivial to compile catlang to all sorts of weird compilation targets. Like SQL.
 
-At the time of its publication, some of the blog’s criticisms reflected genuine limitations and operational experience, others were disputed even then. A decade of protocol, tooling, and operational evolution makes it useful to revisit how well they describe DNSSEC today, for the sake of a fresh assessment of implementation options.
+You’re probably wondering what the generated SQL looks like. Take a peek if you dare.
 
-To be fair, this is not the first effort to matter-of-factly assess the claims voiced in “Against DNSSEC”, but one of several such publications, spanning from 2015 to the present<sup>[3](https://circleid.com/posts/common-beliefs-about-dnssec-put-to-the-test-an-invitation-to-fact-check-your-assumptions#fn3)</sup>—which incidentally corroborates the blog’s perceived influence.
+```
+SELECT
+f0 AS f0
+FROM
+(SELECT
+ f0 AS f0, f1 AS f1
+ FROM
+ (SELECT *
+  FROM
+  (WITH t0 AS
+   (SELECT *
+    FROM
+    (WITH RECURSIVE recursion AS
+     (SELECT
+      clock_timestamp() as step
+      , *
+      FROM
+      (WITH t1 AS
+       (SELECT *
+        FROM
+        (SELECT
+         f0 AS f0, f1 AS f1, NULL::integer AS f2, NULL::integer AS f3
+         FROM
+         (WITH t2 AS
+          (SELECT * FROM (SELECT 0 as f0) AS _)
+          SELECT *
+          FROM
+          (SELECT * FROM (SELECT f0 AS f0 FROM t2 AS _) AS _
+           CROSS JOIN
+           (SELECT f0 AS f1 FROM t2 AS _))
+          AS _)
+         AS _)
+        AS _)
+       SELECT *
+       FROM
+       (WITH t3 AS
+        (SELECT *
+         FROM
+         (-- undist
+          SELECT *
+          FROM
+          (SELECT
+           f0 AS f0, NULL::integer AS f1, f1 AS f2
+           FROM
+           (-- undist1
+            SELECT * FROM t1 AS _ WHERE "f0" IS NOT NULL)
+           AS _)
+          AS _
+          UNION
+          SELECT *
+          FROM
+          (SELECT
+           NULL::integer AS f0, f2 AS f1, f3 AS f2
+           FROM
+           (-- dist2
+            SELECT * FROM t1 AS _ WHERE "f2" IS NOT NULL)
+           AS _)
+          AS _)
+         AS _)
+        SELECT *
+        FROM
+        (WITH t4 AS
+         (SELECT *
+          FROM
+          (SELECT *
+           FROM
+           (SELECT
+            f0 AS f0, f1 AS f1
+            FROM
+            (WITH t5 AS
+             (SELECT * FROM t3 AS _)
+             SELECT *
+             FROM
+             (WITH t6 AS
+              (SELECT *
+               FROM
+               (SELECT *
+                FROM
+                (SELECT
+                 f0 AS f0
+                 FROM
+                 (WITH t7 AS
+                  (SELECT * FROM (SELECT f0 AS f0, f1 AS f1 FROM t5 AS _) AS _)
+                  SELECT *
+                  FROM
+                  (SELECT *
+                   FROM
+                   (SELECT
+                    f0 AS f0
+                    FROM
+                    (-- join1
+                     SELECT * FROM t7 AS _ WHERE "f0" IS NOT NULL)
+                    AS _)
+                   AS _
+                   UNION
+                   SELECT *
+                   FROM
+                   (SELECT
+                    f1 AS f0
+                    FROM
+                    (-- join2
+                     SELECT * FROM t7 AS _ WHERE "f1" IS NOT NULL)
+                    AS _)
+                   AS _)
+                  AS _)
+                 AS _)
+                AS _
+                CROSS JOIN
+                (SELECT f0 AS f1, f1 AS f2, f2 AS f3 FROM t5 AS _))
+               AS _)
+              SELECT *
+              FROM
+              (WITH t8 AS
+               (SELECT *
+                FROM
+                (SELECT *
+                 FROM
+                 (SELECT
+                  f0 AS f0, f1 AS f1
+                  FROM
+                  (WITH t9 AS
+                   (SELECT *
+                    FROM
+                    (SELECT
+                     f0 - f1 AS f0
+                     FROM
+                     (WITH t10 AS
+                      (SELECT * FROM t6 AS _)
+                      SELECT *
+                      FROM
+                      (SELECT *
+                       FROM
+                       (SELECT f0 AS f0 FROM (SELECT f0 AS f0 FROM t10 AS _) AS _)
+                       AS _
+                       CROSS JOIN
+                       (SELECT f0 AS f1 FROM (SELECT 100 as f0 FROM t10 AS _) AS _))
+                      AS _)
+                     AS _)
+                    AS _)
+                   SELECT *
+                   FROM
+                   (SELECT *
+                    FROM
+                    (SELECT
+                     abs(f0) as f0, NULL::integer as f1
+                     FROM
+                     t9
+                     AS _
+                     WHERE
+                     f0 < 0)
+                    AS _
+                    UNION
+                    SELECT *
+                    FROM
+                    (SELECT NULL::integer as f0, f0 as f1 FROM t9 AS _ WHERE f0 >= 0)
+                    AS _)
+                   AS _)
+                  AS _)
+                 AS _
+                 CROSS JOIN
+                 (SELECT f0 AS f2, f1 AS f3, f2 AS f4, f3 AS f5 FROM t6 AS _))
+                AS _)
+               SELECT *
+               FROM
+               (WITH t11 AS
+                (SELECT *
+                 FROM
+                 (SELECT *
+                  FROM
+                  (SELECT
+                   f0 AS f0, f1 AS f1
+                   FROM
+                   (SELECT f0 AS f0, f1 AS f1 FROM t8 AS _)
+                   AS _)
+                  AS _
+                  CROSS JOIN
+                  (SELECT
+                   f0 AS f2, f1 AS f3, f2 AS f4, f3 AS f5, f4 AS f6, f5 AS f7
+                   FROM
+                   t8
+                   AS _))
+                 AS _)
+                SELECT *
+                FROM
+                (WITH t12 AS
+                 (SELECT *
+                  FROM
+                  (-- dist
+                   SELECT *
+                   FROM
+                   (SELECT
+                    f0 AS f0, f2 AS f1, NULL::integer AS f10, NULL::integer AS f11, NULL::integer AS f12, NULL::integer AS f13, f3 AS f2, f4 AS f3, f5 AS f4, f6 AS f5, f7 AS f6, NULL::integer AS f7, NULL::integer AS f8, NULL::integer AS f9
+                    FROM
+                    (-- dist1
+                     SELECT * FROM t11 AS _ WHERE "f0" IS NOT NULL)
+                    AS _)
+                   AS _
+                   UNION
+                   SELECT *
+                   FROM
+                   (SELECT
+                    NULL::integer AS f0, NULL::integer AS f1, f4 AS f10, f5 AS f11, f6 AS f12, f7 AS f13, NULL::integer AS f2, NULL::integer AS f3, NULL::integer AS f4, NULL::integer AS f5, NULL::integer AS f6, f1 AS f7, f2 AS f8, f3 AS f9
+                    FROM
+                    (-- dist2
+                     SELECT * FROM t11 AS _ WHERE "f1" IS NOT NULL)
+                    AS _)
+                   AS _)
+                  AS _)
+                 SELECT *
+                 FROM
+                 (SELECT *
+                  FROM
+                  (SELECT
+                   NULL::integer AS f0, f0 AS f1
+                   FROM
+                   (SELECT
+                    f0 + f1 AS f0
+                    FROM
+                    (WITH t13 AS
+                     (SELECT *
+                      FROM
+                      (SELECT
+                       f0 AS f0, f1 AS f1, f2 AS f2, f3 AS f3, f4 AS f4, f5 AS f5, f6 AS f6
+                       FROM
+                       (-- join1
+                        SELECT * FROM t12 AS _
+                        WHERE
+                        ("f0" IS NOT NULL) AND ((("f1" IS NOT NULL) OR ("f2" IS NOT NULL)) AND (("f3" IS NOT NULL) AND ((("f4" IS NOT NULL) OR ("f5" IS NOT NULL)) AND ("f6" IS NOT NULL)))))
+                       AS _)
+                      AS _)
+                     SELECT *
+                     FROM
+                     (SELECT *
+                      FROM
+                      (SELECT
+                       f0 AS f0
+                       FROM
+                       (SELECT
+                        f0 AS f0
+                        FROM
+                        (SELECT
+                         f2 AS f0, f3 AS f1, f4 AS f2, f5 AS f3
+                         FROM
+                         (SELECT
+                          f1 AS f0, f2 AS f1, f3 AS f2, f4 AS f3, f5 AS f4, f6 AS f5
+                          FROM
+                          t13
+                          AS _)
+                         AS _)
+                        AS _)
+                       AS _)
+                      AS _
+                      CROSS JOIN
+                      (SELECT f0 AS f1 FROM (SELECT 1 as f0 FROM t13 AS _) AS _))
+                     AS _)
+                    AS _)
+                   AS _)
+                  AS _
+                  UNION
+                  SELECT *
+                  FROM
+                  (SELECT
+                   f0 AS f0, NULL::integer AS f1
+                   FROM
+                   (SELECT
+                    f0 AS f0
+                    FROM
+                    (SELECT
+                     f2 AS f0, f3 AS f1, f4 AS f2, f5 AS f3
+                     FROM
+                     (SELECT
+                      f1 AS f0, f2 AS f1, f3 AS f2, f4 AS f3, f5 AS f4, f6 AS f5
+                      FROM
+                      (SELECT
+                       f7 AS f0, f8 AS f1, f9 AS f2, f10 AS f3, f11 AS f4, f12 AS f5, f13 AS f6
+                       FROM
+                       (-- join2
+                        SELECT * FROM t12 AS _
+                        WHERE
+                        ("f7" IS NOT NULL) AND ((("f8" IS NOT NULL) OR ("f9" IS NOT NULL)) AND (("f10" IS NOT NULL) AND ((("f11" IS NOT NULL) OR ("f12" IS NOT NULL)) AND ("f13" IS NOT NULL)))))
+                       AS _)
+                      AS _)
+                     AS _)
+                    AS _)
+                   AS _)
+                  AS _)
+                 AS _)
+                AS _)
+               AS _)
+              AS _)
+             AS _)
+            AS _)
+           AS _
+           CROSS JOIN
+           (SELECT f0 AS f2 FROM (SELECT f2 AS f0 FROM t3 AS _) AS _))
+          AS _)
+         SELECT *
+         FROM
+         (-- dist
+          SELECT *
+          FROM
+          (SELECT
+           f0 AS f0, f2 AS f1, NULL::integer AS f2, NULL::integer AS f3
+           FROM
+           (-- dist1
+            SELECT * FROM t4 AS _ WHERE "f0" IS NOT NULL)
+           AS _)
+          AS _
+          UNION
+          SELECT *
+          FROM
+          (SELECT
+           NULL::integer AS f0, NULL::integer AS f1, f1 AS f2, f2 AS f3
+           FROM
+           (-- dist2
+            SELECT * FROM t4 AS _ WHERE "f1" IS NOT NULL)
+           AS _)
+          AS _)
+         AS _)
+        AS _)
+       AS _)
+      AS _
+      UNION ALL
+      SELECT
+      clock_timestamp() as step
+      , *
+      FROM
+      (SELECT *
+       FROM
+       (WITH t14 AS
+        (SELECT * FROM recursion AS _)
+        SELECT *
+        FROM
+        (WITH t15 AS
+         (SELECT *
+          FROM
+          (-- undist
+           SELECT *
+           FROM
+           (SELECT
+            f0 AS f0, NULL::integer AS f1, f1 AS f2
+            FROM
+            (-- undist1
+             SELECT * FROM t14 AS _ WHERE "f0" IS NOT NULL)
+            AS _)
+           AS _
+           UNION
+           SELECT *
+           FROM
+           (SELECT
+            NULL::integer AS f0, f2 AS f1, f3 AS f2
+            FROM
+            (-- dist2
+             SELECT * FROM t14 AS _ WHERE "f2" IS NOT NULL)
+            AS _)
+           AS _)
+          AS _)
+         SELECT *
+         FROM
+         (WITH t16 AS
+          (SELECT *
+           FROM
+           (SELECT *
+            FROM
+            (SELECT
+             f0 AS f0, f1 AS f1
+             FROM
+             (WITH t17 AS
+              (SELECT * FROM t15 AS _)
+              SELECT *
+              FROM
+              (WITH t18 AS
+               (SELECT *
+                FROM
+                (SELECT *
+                 FROM
+                 (SELECT
+                  f0 AS f0
+                  FROM
+                  (WITH t19 AS
+                   (SELECT * FROM (SELECT f0 AS f0, f1 AS f1 FROM t17 AS _) AS _)
+                   SELECT *
+                   FROM
+                   (SELECT *
+                    FROM
+                    (SELECT
+                     f0 AS f0
+                     FROM
+                     (-- join1
+                      SELECT * FROM t19 AS _ WHERE "f0" IS NOT NULL)
+                     AS _)
+                    AS _
+                    UNION
+                    SELECT *
+                    FROM
+                    (SELECT
+                     f1 AS f0
+                     FROM
+                     (-- join2
+                      SELECT * FROM t19 AS _ WHERE "f1" IS NOT NULL)
+                     AS _)
+                    AS _)
+                   AS _)
+                  AS _)
+                 AS _
+                 CROSS JOIN
+                 (SELECT f0 AS f1, f1 AS f2, f2 AS f3 FROM t17 AS _))
+                AS _)
+               SELECT *
+               FROM
+               (WITH t20 AS
+                (SELECT *
+                 FROM
+                 (SELECT *
+                  FROM
+                  (SELECT
+                   f0 AS f0, f1 AS f1
+                   FROM
+                   (WITH t21 AS
+                    (SELECT *
+                     FROM
+                     (SELECT
+                      f0 - f1 AS f0
+                      FROM
+                      (WITH t22 AS
+                       (SELECT * FROM t18 AS _)
+                       SELECT *
+                       FROM
+                       (SELECT *
+                        FROM
+                        (SELECT f0 AS f0 FROM (SELECT f0 AS f0 FROM t22 AS _) AS _)
+                        AS _
+                        CROSS JOIN
+                        (SELECT f0 AS f1 FROM (SELECT 100 as f0 FROM t22 AS _) AS _))
+                       AS _)
+                      AS _)
+                     AS _)
+                    SELECT *
+                    FROM
+                    (SELECT *
+                     FROM
+                     (SELECT
+                      abs(f0) as f0, NULL::integer as f1
+                      FROM
+                      t21
+                      AS _
+                      WHERE
+                      f0 < 0)
+                     AS _
+                     UNION
+                     SELECT *
+                     FROM
+                     (SELECT NULL::integer as f0, f0 as f1 FROM t21 AS _ WHERE f0 >= 0)
+                     AS _)
+                    AS _)
+                   AS _)
+                  AS _
+                  CROSS JOIN
+                  (SELECT f0 AS f2, f1 AS f3, f2 AS f4, f3 AS f5 FROM t18 AS _))
+                 AS _)
+                SELECT *
+                FROM
+                (WITH t23 AS
+                 (SELECT *
+                  FROM
+                  (SELECT *
+                   FROM
+                   (SELECT
+                    f0 AS f0, f1 AS f1
+                    FROM
+                    (SELECT f0 AS f0, f1 AS f1 FROM t20 AS _)
+                    AS _)
+                   AS _
+                   CROSS JOIN
+                   (SELECT
+                    f0 AS f2, f1 AS f3, f2 AS f4, f3 AS f5, f4 AS f6, f5 AS f7
+                    FROM
+                    t20
+                    AS _))
+                  AS _)
+                 SELECT *
+                 FROM
+                 (WITH t24 AS
+                  (SELECT *
+                   FROM
+                   (-- dist
+                    SELECT *
+                    FROM
+                    (SELECT
+                     f0 AS f0, f2 AS f1, NULL::integer AS f10, NULL::integer AS f11, NULL::integer AS f12, NULL::integer AS f13, f3 AS f2, f4 AS f3, f5 AS f4, f6 AS f5, f7 AS f6, NULL::integer AS f7, NULL::integer AS f8, NULL::integer AS f9
+                     FROM
+                     (-- dist1
+                      SELECT * FROM t23 AS _ WHERE "f0" IS NOT NULL)
+                     AS _)
+                    AS _
+                    UNION
+                    SELECT *
+                    FROM
+                    (SELECT
+                     NULL::integer AS f0, NULL::integer AS f1, f4 AS f10, f5 AS f11, f6 AS f12, f7 AS f13, NULL::integer AS f2, NULL::integer AS f3, NULL::integer AS f4, NULL::integer AS f5, NULL::integer AS f6, f1 AS f7, f2 AS f8, f3 AS f9
+                     FROM
+                     (-- dist2
+                      SELECT * FROM t23 AS _ WHERE "f1" IS NOT NULL)
+                     AS _)
+                    AS _)
+                   AS _)
+                  SELECT *
+                  FROM
+                  (SELECT *
+                   FROM
+                   (SELECT
+                    NULL::integer AS f0, f0 AS f1
+                    FROM
+                    (SELECT
+                     f0 + f1 AS f0
+                     FROM
+                     (WITH t25 AS
+                      (SELECT *
+                       FROM
+                       (SELECT
+                        f0 AS f0, f1 AS f1, f2 AS f2, f3 AS f3, f4 AS f4, f5 AS f5, f6 AS f6
+                        FROM
+                        (-- join1
+                         SELECT * FROM t24 AS _
+                         WHERE
+                         ("f0" IS NOT NULL) AND ((("f1" IS NOT NULL) OR ("f2" IS NOT NULL)) AND (("f3" IS NOT NULL) AND ((("f4" IS NOT NULL) OR ("f5" IS NOT NULL)) AND ("f6" IS NOT NULL)))))
+                        AS _)
+                       AS _)
+                      SELECT *
+                      FROM
+                      (SELECT *
+                       FROM
+                       (SELECT
+                        f0 AS f0
+                        FROM
+                        (SELECT
+                         f0 AS f0
+                         FROM
+                         (SELECT
+                          f2 AS f0, f3 AS f1, f4 AS f2, f5 AS f3
+                          FROM
+                          (SELECT
+                           f1 AS f0, f2 AS f1, f3 AS f2, f4 AS f3, f5 AS f4, f6 AS f5
+                           FROM
+                           t25
+                           AS _)
+                          AS _)
+                         AS _)
+                        AS _)
+                       AS _
+                       CROSS JOIN
+                       (SELECT f0 AS f1 FROM (SELECT 1 as f0 FROM t25 AS _) AS _))
+                      AS _)
+                     AS _)
+                    AS _)
+                   AS _
+                   UNION
+                   SELECT *
+                   FROM
+                   (SELECT
+                    f0 AS f0, NULL::integer AS f1
+                    FROM
+                    (SELECT
+                     f0 AS f0
+                     FROM
+                     (SELECT
+                      f2 AS f0, f3 AS f1, f4 AS f2, f5 AS f3
+                      FROM
+                      (SELECT
+                       f1 AS f0, f2 AS f1, f3 AS f2, f4 AS f3, f5 AS f4, f6 AS f5
+                       FROM
+                       (SELECT
+                        f7 AS f0, f8 AS f1, f9 AS f2, f10 AS f3, f11 AS f4, f12 AS f5, f13 AS f6
+                        FROM
+                        (-- join2
+                         SELECT * FROM t24 AS _
+                         WHERE
+                         ("f7" IS NOT NULL) AND ((("f8" IS NOT NULL) OR ("f9" IS NOT NULL)) AND (("f10" IS NOT NULL) AND ((("f11" IS NOT NULL) OR ("f12" IS NOT NULL)) AND ("f13" IS NOT NULL)))))
+                        AS _)
+                       AS _)
+                      AS _)
+                     AS _)
+                    AS _)
+                   AS _)
+                  AS _)
+                 AS _)
+                AS _)
+               AS _)
+              AS _)
+             AS _)
+            AS _
+            CROSS JOIN
+            (SELECT f0 AS f2 FROM (SELECT f2 AS f0 FROM t15 AS _) AS _))
+           AS _)
+          SELECT *
+          FROM
+          (-- dist
+           SELECT *
+           FROM
+           (SELECT
+            f0 AS f0, f2 AS f1, NULL::integer AS f2, NULL::integer AS f3
+            FROM
+            (-- dist1
+             SELECT * FROM t16 AS _ WHERE "f0" IS NOT NULL)
+            AS _)
+           AS _
+           UNION
+           SELECT *
+           FROM
+           (SELECT
+            NULL::integer AS f0, NULL::integer AS f1, f1 AS f2, f2 AS f3
+            FROM
+            (-- dist2
+             SELECT * FROM t16 AS _ WHERE "f1" IS NOT NULL)
+            AS _)
+           AS _)
+          AS _)
+         AS _)
+        AS _)
+       AS _
+       WHERE
+       ("f2" IS NOT NULL) AND ("f3" IS NOT NULL))
+      AS _)
+     SELECT * FROM recursion ORDER BY step DESC LIMIT 1)
+    AS _)
+   SELECT *
+   FROM
+   (WITH t26 AS
+    (SELECT *
+     FROM
+     (-- undist
+      SELECT *
+      FROM
+      (SELECT
+       f0 AS f0, NULL::integer AS f1, f1 AS f2
+       FROM
+       (-- undist1
+        SELECT * FROM t0 AS _ WHERE "f0" IS NOT NULL)
+       AS _)
+      AS _
+      UNION
+      SELECT *
+      FROM
+      (SELECT
+       NULL::integer AS f0, f2 AS f1, f3 AS f2
+       FROM
+       (-- dist2
+        SELECT * FROM t0 AS _ WHERE "f2" IS NOT NULL)
+       AS _)
+      AS _)
+     AS _)
+    SELECT *
+    FROM
+    (WITH t27 AS
+     (SELECT *
+      FROM
+      (SELECT *
+       FROM
+       (SELECT
+        f0 AS f0, f1 AS f1
+        FROM
+        (WITH t28 AS
+         (SELECT * FROM t26 AS _)
+         SELECT *
+         FROM
+         (WITH t29 AS
+          (SELECT *
+           FROM
+           (SELECT *
+            FROM
+            (SELECT
+             f0 AS f0
+             FROM
+             (WITH t30 AS
+              (SELECT * FROM (SELECT f0 AS f0, f1 AS f1 FROM t28 AS _) AS _)
+              SELECT *
+              FROM
+              (SELECT *
+               FROM
+               (SELECT
+                f0 AS f0
+                FROM
+                (-- join1
+                 SELECT * FROM t30 AS _ WHERE "f0" IS NOT NULL)
+                AS _)
+               AS _
+               UNION
+               SELECT *
+               FROM
+               (SELECT
+                f1 AS f0
+                FROM
+                (-- join2
+                 SELECT * FROM t30 AS _ WHERE "f1" IS NOT NULL)
+                AS _)
+               AS _)
+              AS _)
+             AS _)
+            AS _
+            CROSS JOIN
+            (SELECT f0 AS f1, f1 AS f2, f2 AS f3 FROM t28 AS _))
+           AS _)
+          SELECT *
+          FROM
+          (WITH t31 AS
+           (SELECT *
+            FROM
+            (SELECT *
+             FROM
+             (SELECT
+              f0 AS f0, f1 AS f1
+              FROM
+              (WITH t32 AS
+               (SELECT *
+                FROM
+                (SELECT
+                 f0 - f1 AS f0
+                 FROM
+                 (WITH t33 AS
+                  (SELECT * FROM t29 AS _)
+                  SELECT *
+                  FROM
+                  (SELECT *
+                   FROM
+                   (SELECT f0 AS f0 FROM (SELECT f0 AS f0 FROM t33 AS _) AS _)
+                   AS _
+                   CROSS JOIN
+                   (SELECT f0 AS f1 FROM (SELECT 100 as f0 FROM t33 AS _) AS _))
+                  AS _)
+                 AS _)
+                AS _)
+               SELECT *
+               FROM
+               (SELECT *
+                FROM
+                (SELECT
+                 abs(f0) as f0, NULL::integer as f1
+                 FROM
+                 t32
+                 AS _
+                 WHERE
+                 f0 < 0)
+                AS _
+                UNION
+                SELECT *
+                FROM
+                (SELECT NULL::integer as f0, f0 as f1 FROM t32 AS _ WHERE f0 >= 0)
+                AS _)
+               AS _)
+              AS _)
+             AS _
+             CROSS JOIN
+             (SELECT f0 AS f2, f1 AS f3, f2 AS f4, f3 AS f5 FROM t29 AS _))
+            AS _)
+           SELECT *
+           FROM
+           (WITH t34 AS
+            (SELECT *
+             FROM
+             (SELECT *
+              FROM
+              (SELECT
+               f0 AS f0, f1 AS f1
+               FROM
+               (SELECT f0 AS f0, f1 AS f1 FROM t31 AS _)
+               AS _)
+              AS _
+              CROSS JOIN
+              (SELECT
+               f0 AS f2, f1 AS f3, f2 AS f4, f3 AS f5, f4 AS f6, f5 AS f7
+               FROM
+               t31
+               AS _))
+             AS _)
+            SELECT *
+            FROM
+            (WITH t35 AS
+             (SELECT *
+              FROM
+              (-- dist
+               SELECT *
+               FROM
+               (SELECT
+                f0 AS f0, f2 AS f1, NULL::integer AS f10, NULL::integer AS f11, NULL::integer AS f12, NULL::integer AS f13, f3 AS f2, f4 AS f3, f5 AS f4, f6 AS f5, f7 AS f6, NULL::integer AS f7, NULL::integer AS f8, NULL::integer AS f9
+                FROM
+                (-- dist1
+                 SELECT * FROM t34 AS _ WHERE "f0" IS NOT NULL)
+                AS _)
+               AS _
+               UNION
+               SELECT *
+               FROM
+               (SELECT
+                NULL::integer AS f0, NULL::integer AS f1, f4 AS f10, f5 AS f11, f6 AS f12, f7 AS f13, NULL::integer AS f2, NULL::integer AS f3, NULL::integer AS f4, NULL::integer AS f5, NULL::integer AS f6, f1 AS f7, f2 AS f8, f3 AS f9
+                FROM
+                (-- dist2
+                 SELECT * FROM t34 AS _ WHERE "f1" IS NOT NULL)
+                AS _)
+               AS _)
+              AS _)
+             SELECT *
+             FROM
+             (SELECT *
+              FROM
+              (SELECT
+               NULL::integer AS f0, f0 AS f1
+               FROM
+               (SELECT
+                f0 + f1 AS f0
+                FROM
+                (WITH t36 AS
+                 (SELECT *
+                  FROM
+                  (SELECT
+                   f0 AS f0, f1 AS f1, f2 AS f2, f3 AS f3, f4 AS f4, f5 AS f5, f6 AS f6
+                   FROM
+                   (-- join1
+                    SELECT * FROM t35 AS _
+                    WHERE
+                    ("f0" IS NOT NULL) AND ((("f1" IS NOT NULL) OR ("f2" IS NOT NULL)) AND (("f3" IS NOT NULL) AND ((("f4" IS NOT NULL) OR ("f5" IS NOT NULL)) AND ("f6" IS NOT NULL)))))
+                   AS _)
+                  AS _)
+                 SELECT *
+                 FROM
+                 (SELECT *
+                  FROM
+                  (SELECT
+                   f0 AS f0
+                   FROM
+                   (SELECT
+                    f0 AS f0
+                    FROM
+                    (SELECT
+                     f2 AS f0, f3 AS f1, f4 AS f2, f5 AS f3
+                     FROM
+                     (SELECT
+                      f1 AS f0, f2 AS f1, f3 AS f2, f4 AS f3, f5 AS f4, f6 AS f5
+                      FROM
+                      t36
+                      AS _)
+                     AS _)
+                    AS _)
+                   AS _)
+                  AS _
+                  CROSS JOIN
+                  (SELECT f0 AS f1 FROM (SELECT 1 as f0 FROM t36 AS _) AS _))
+                 AS _)
+                AS _)
+               AS _)
+              AS _
+              UNION
+              SELECT *
+              FROM
+              (SELECT
+               f0 AS f0, NULL::integer AS f1
+               FROM
+               (SELECT
+                f0 AS f0
+                FROM
+                (SELECT
+                 f2 AS f0, f3 AS f1, f4 AS f2, f5 AS f3
+                 FROM
+                 (SELECT
+                  f1 AS f0, f2 AS f1, f3 AS f2, f4 AS f3, f5 AS f4, f6 AS f5
+                  FROM
+                  (SELECT
+                   f7 AS f0, f8 AS f1, f9 AS f2, f10 AS f3, f11 AS f4, f12 AS f5, f13 AS f6
+                   FROM
+                   (-- join2
+                    SELECT * FROM t35 AS _
+                    WHERE
+                    ("f7" IS NOT NULL) AND ((("f8" IS NOT NULL) OR ("f9" IS NOT NULL)) AND (("f10" IS NOT NULL) AND ((("f11" IS NOT NULL) OR ("f12" IS NOT NULL)) AND ("f13" IS NOT NULL)))))
+                   AS _)
+                  AS _)
+                 AS _)
+                AS _)
+               AS _)
+              AS _)
+             AS _)
+            AS _)
+           AS _)
+          AS _)
+         AS _)
+        AS _)
+       AS _
+       CROSS JOIN
+       (SELECT f0 AS f2 FROM (SELECT f2 AS f0 FROM t26 AS _) AS _))
+      AS _)
+     SELECT *
+     FROM
+     (-- dist
+      SELECT *
+      FROM
+      (SELECT
+       f0 AS f0, f2 AS f1, NULL::integer AS f2, NULL::integer AS f3
+       FROM
+       (-- dist1
+        SELECT * FROM t27 AS _ WHERE "f0" IS NOT NULL)
+       AS _)
+      AS _
+      UNION
+      SELECT *
+      FROM
+      (SELECT
+       NULL::integer AS f0, NULL::integer AS f1, f1 AS f2, f2 AS f3
+       FROM
+       (-- dist2
+        SELECT * FROM t27 AS _ WHERE "f1" IS NOT NULL)
+       AS _)
+      AS _)
+     AS _)
+    AS _)
+   AS _)
+  AS _
+  WHERE
+  ("f0" IS NOT NULL) AND ("f1" IS NOT NULL))
+ AS _)
+AS _;
+```
 
-These level-headed accounts, although they have not spread through the tech community as easily as earlier criticism did, still reflect (and contribute to) a gradual shift both in tone and in content, observable for instance in Hacker News forum threads where sweeping allegations on DNSSEC now [get challenged](https://news.ycombinator.com/item?id=44320497) instead of being swiftly echoed. However, even today in 2026, with automation standards having brought a substantial improvement to the protocol (RFCs [7344](https://www.rfc-editor.org/info/rfc7344/), [9615](https://www.rfc-editor.org/info/rfc9615/), [9859](https://www.rfc-editor.org/info/rfc9859/), [10026](https://www.rfc-editor.org/info/rfc10026/)), common beliefs die hard—mostly among those less directly involved in technical matters, but with the power to weigh on decisions.
+It’s not pretty, rather amazingly, running the above query in postgres 17 will in fact return a single row with a single column whose value is 100. And you’d better believe it does it by *actually looping its way up to 100.* If you don’t believe me, make the following change:
 
-So, what are the common beliefs around DNSSEC? And how much truth is there in them today, in 2026? Because, obviously, common beliefs can also be true, half-true or formerly true.
+```
+-     SELECT * FROM recursion ORDER BY step DESC LIMIT 1)
++     SELECT * FROM recursion ORDER BY step DESC)
+```
 
-The first set of claims brought forward by “Against DNSSEC” dismisses the DNSSEC protocol as fundamentally flawed, for being structurally incompatible with its objective (preventing the manipulation of DNS answers). Verbatim: “DNSSEC is Unnecessary”, “DNSSEC is a Government-Controlled PKI”, “DNSSEC is Incomplete”.
+which will instead return a row for each step of the iteration.
 
-**Is DNSSEC unnecessary?—*NO***
+There are some obvious optimizations I could make to the generated SQL, but it didn’t seem worth my time, since that’s not the interesting part of the project.
 
-The main argument used in “Against DNSSEC” to dismiss DNSSEC as unnecessary is that “with TLS properly configured, DNSSEC adds nothing”, and that the security of TLS certificates is mainly bounded by an attacker’s ability to hijack a domain validation email sent to a domain owner (and thus, bounded by the security of email).
+## What the Hell Is Going On?
 
-The first part of this argument ignores real-world attacks that DNSSEC would have prevented while TLS could not, as for example the [nameserver routing hijack of MyEtherWallet.com in 2018](https://www.bleepingcomputer.com/news/security/hacker-hijacks-dns-server-of-myetherwallet-to-steal-160-000/), enabling the theft of $160,000 within two hours.
+Let’s take some time to discuss the underlying category theory here. I am by no means an expert, but what I have learned after a decade of bashing my head against this stuff is that a little goes a long way.
 
-The second part overlooks that a significant part of data fetched from the DNS are not about finding an IP address for establishing a TLS-secured connection (like HTTPS web site connections), but about providing other information—such as TXT records (used for a myriad of purposes), or NS and (upcoming) DELEG records (both used for declaring a domain’s responsible nameserver). Without DNSSEC, these are prone to various kinds of attacks, which can enable impersonation of the domain owner, traffic interception, or a hijack of the entire domain. Most notably, without a DNSSEC-based indicator, the MX records used to find a domain’s mail server cannot enforce that the subsequent email delivery happens through an encrypted connection (unlike in the web, where the “https://” URL prefix indicates the encryption request).
+For our intents and purposes, we have types, and arrows (functions) between types. We always have the identity “do nothing arrow” `id`:
 
-In addition, while “Against DNSSEC” acknowledges that insecure email can be a problem during certificate issuance, it fails to recognize that DNS lookups are involved in *any* certificate issuance process, regardless of whether validation happens trough email, or one of the other (and more common) validation methods which involve publishing a validation string under the domain.
+```
+id  :: a ~> a
+```
 
-Actually, today, you can use CAA records to restrict methods for domain control validation during certificate issuance and simply ban the insecure email method for your domain. As a byproduct, DNSSEC not only secures certificate issuance by hardening domain control validation, but also provides an indicator to secure email, by linking the email server’s TLS key to the domain directly within the DNS. This technology, called DANE, has already been rolled out by large players such as Microsoft, and secures about [4.6M email domains today](https://stats.dnssec-tools.org/).
+and we can compose arrows by lining up one end to another:[<sup>1</sup>](https://reasonablypolymorphic.com/blog/arrows-to-arrows/#fn1)
 
-Which means that actually both email and certificate issuance security are bounded by the security of the DNS, and that’s why it is material to up the authenticity level at this crucial layer of technology.
+```
+(⨟) :: (a ~> b) -> (b ~> c) -> (a ~> c)
+```
 
-All in all, DNSSEC provides a much needed capability that TLS/HTTPS alone does not: It delivers signed, verifiable proof of origin for anything a registrant publishes, independently of any single application or delivery method. As such, it is a key enabling technology that lays a highly effective trust foundation on which applications such as DANE or CAA/TLS can rely to protect Internet users.
+Unlike Haskell (or really any programming language, for that matter), we DO NOT have the notion of function application. That is, there is no arrow:
 
-**Is DNSSEC a government-controlled PKI?—*YES and NO***
+```
+-- doesn't exist!
+($) :: (a ~> b) -> a -> b
+```
 
-DNSSEC is the PKI for the Internet’s unique global namespace. It is a globally consistent, well-governed, and well-managed namespace that applications can rely on for identifying servers, devices, and other named resources.
+You can only compose arrows, you can’t apply them. That’s why we call these things “arrows” rather than “functions.”
 
-Just like in the certificate PKI world (where trusting a certificate typically requires trusting a chain of Certificate Authorities (CAs) tying back to a “root CA”), DNSSEC’s security guarantees rely on intermediaries, namely the TLD registries (and potentially other sub-registries, if the domain has multiple dots). These registries, as all organizations (CAs included), are indeed subject to some degree of government control, in particular of the jurisdiction in which they are based. That fact, however, is unrelated to DNSSEC: the same security model applies to DNS without DNSSEC. DNSSEC itself does not increase or decrease the risk of legal action. That said, if this is a source of concern to you as a domain owner, you are free to choose which TLD you want to use, according to whom you trust and what is your control preference—without relying on CAs or third parties you don’t have a prior relationship with.<sup>[4](https://circleid.com/posts/common-beliefs-about-dnssec-put-to-the-test-an-invitation-to-fact-check-your-assumptions#fn4)</sup>
+There are a bundle of arrows for working with product types. The two projection functions correspond to `fst` and `snd`, taking individual components out of pairs:
 
-As far as the root zone keys are concerned, government control has been significantly reduced by what is known as the “IANA transition” in 2016, when IANA functions were shifted away from direct control by US-government’s telecommunications agency NTIA to ICANN’s multi-stakeholder governance. As a result, DNSSEC’s root governance and operation are grounded in a transparent multi-stakeholder model, its implementation is highly distributed, and many operational practices (such as key ceremonies and DNSSEC practice statements) are intentionally transparent and publicly observable.
+```
+prj₁ :: (a, b) ~> a
+prj₂ :: (a, b) ~> b
+```
 
-**Is DNSSEC incomplete?—*YES and NO***
+How do we get things into pairs in the first place? We can use the “fork” operation, which takes two arrows computing `b` and `c`, and generates a new arrow which generates a pair of `(b, c)`:
 
-“Incomplete”, in the blog’s elaboration, refers to DNSSEC not covering the so-called “last mile”, because validation often happens on a DNS resolver trusted by the client<sup>[5](https://circleid.com/posts/common-beliefs-about-dnssec-put-to-the-test-an-invitation-to-fact-check-your-assumptions#fn5)</sup>, instead of happening on the client itself. While true, making this choice is a trust decision, not a design limitation of DNSSEC. In fact, Apple [has been supporting client-side validation](https://developer.apple.com/videos/play/wwdc2022/10079/?time=219) since 2022, and Section 5.3 of NIST’s [“Secure Domain Name System (DNS) Deployment Guide”](https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-81r3.pdf) does recognize such deployment realities. Explicit requests for client-side validation features, if directed at software vendors that currently lack support, could create momentum for others to introduce client-side validation as well.
+```
+(△)  :: (a ~> b) -> (a ~> c) -> (a ~> (b, c))
+```
 
-Meanwhile, it is worth noting that most Internet traffic is protected with authentication and encryption certificates (first and foremost: HTTPS web traffic). For certificate issuance, Section 4.2.2.2 of the [certification rules](https://cabforum.org/working-groups/server/baseline-requirements/documents/CA-Browser-Forum-TLS-BR-2.3.0.pdf) requires Certificate Authorities (CAs) to perform DNSSEC validation when making DNS queries, including the DNS queries made to verify that the requestor is actually under control of the desired certificate domain name. This legitimacy check is vulnerable to DNS attacks, but DNSSEC, if in place, prevents the check from being hijacked.
+If you’re coming from a Haskell background, it’s tempting to think of this operation *merely* as the `(,)` pair constructor. But you’ll notice from the type of the computation that there can be no data dependency between `b` and `c`, thus we are free to parallelize each side of the pair.
 
-This means DNSSEC makes sure that an illegitimate requestor cannot actually obtain a certificate based on a DNS attack. Barring non-DNS attacks (such as a compromise at the registrar or the CA itself), only the legitimate certificate will be in circulation. Browsers in turn will only communicate with servers that have this certificate configured. In other words: DNSSEC’s security guarantees transfer to the domain’s HTTPS certificate, ensuring that a browser does not communicate with a rogue actor: Even if a browser or other end-user application does not itself perform DNSSEC validation, the fact that CAs do perform it effectively protects the client’s last mile HTTPS traffic.
+In category theory, the distinction between left and right sides of an arrow is rather arbitrary. This gives rise to a notion called *duality* where we can flip the arrows around, and get cool new behavior. If we dualize all of our product machinery, we get the *coproduct* machinery, where a coproduct of `a` and `b` is “either `a` or `b`, but definitely not both nor neither.”
 
-Besides, many important DNSSEC use cases do not have a “last mile” and thus don’t suffer from this problem: Both DANE-secured email and DNSSEC validation during certificate issuance does not involve end user devices, but only server-to-server communication where the validating resolver typically is directly under control of the participants (CAs and email providers). In these use cases, server-to-server not only equals end-to-end, but is at least equally important.
+Swapping the arrow direction of `prj₁` and `prj₂`, and replacing `(,)` with `Either` gives us the following injections:
 
-Finally, the word “incomplete” raises the expectation that technologies may reach completion. Like just every other protocol (including TLS, whose incremental versioning is met with equanimity), DNSSEC is incomplete insofar as it is a living standard.
+```
+inl :: a ~> Either a b
+inr :: b ~> Either a b
+```
 
-Operational practices and standards continue to improve, including:
+and the following “join” operation for eliminating coproducts:
 
-Regarding the “last mile” issue specifically, there are experimental efforts to facilitate end-to-end validation on the client without paying the latency price from additional DNSSEC-related lookups, by replacing them with pre-fetched DNSSEC chain data included in the TLS handshake ([RFC 9102](https://www.rfc-editor.org/rfc/rfc9102.html)).
+```
+(▽) :: (a ~> c) -> (b ~> c) -> (Either a b ~> c)
+```
 
-Three further claims revolve around the idea of DNSSEC being technically defective. Verbatim: “DNSSEC is Cryptographically Weak”, “DNSSEC is Unsafe”, “DNSSEC is Architecturally Unsound”.
+Again, coming from Haskell this is just the standard `either` function. It corresponds to a branch between one of two cases.
 
-**Is DNSSEC cryptographically weak?—*NO***
+As you can see, with just these eight operations, we already have a tremendous amount of expressivity. We can express data dependencies via `⨟` and branching via `▽`. With `△` we automatically encode opportunities for parallelism, and gain the ability to build complicated data structures, with `prj₁` and `prj₂` allowing us to get the information *back out* of the data structures.
 
-DNSSEC is often dismissed as cryptographically deficient because it doesn’t encrypt DNS responses. That criticism misses the point: DNSSEC is not designed to protect the confidentiality of DNS responses, but their integrity—by cryptographically signing them<sup>[6](https://circleid.com/posts/common-beliefs-about-dnssec-put-to-the-test-an-invitation-to-fact-check-your-assumptions#fn6)</sup>.
+You’ll notice in the IL that there are no variable names anywhere to be found. The desugaring of the source language builds a stack (via the `something to allocate △ id` pattern), and replaces subsequent variable lookups with a series of projections on the stack to find the value again. On one hand, this makes the categorical IL rather hard to read, but it makes it very easy to re-target! Many domains do have a notion of grouping, but don’t have a native notion of naming.
 
-For that purpose, DNSSEC adopts well-tested cryptography and continues to move with operational reality, including [broad migration](https://stats.dnssec-tools.org/#/?dnssec_param_tab=0) to and use of the Elliptic Curve Digital Signature Algorithm, dubbed ECDSA (algorithm 13) and well-matched to DNSSEC’s resource constraints. The same algorithm [globally leads](https://technologychecker.io/blog/ssl-certificate-transparency-report-insights) and [is generally recommended](https://docs.tlsref.org/server-side-tls.html#modern-compatibility) for the signatures that constitute HTTPS certificates.
+For example, in an electronic circuit, I can have a ribbon of 32 wires which represents an `Int32`. If I have another ribbon of 32 wires, I can trivially route both wires into a 64-wire ribbon corresponding to a pair of `(Int32, Int32)`.
 
-Moreover, work on post-quantum cryptography for DNSSEC is underway in the research and standards community. The PQC DNSSEC agenda includes [efforts](https://wiki.ietf.org/en/group/pq-dnssec) to assess and mitigate the resource impact of newly standardized and proposed PQC signature algorithms—which generally have much larger signature and/or key sizes than ECDSA.
+By eliminating names before we get to the IL, it means no compiler backend ever needs to deal with names. They can just work on a stack representation, and are free to special-case optimize series of projections if they are able to.
 
-In short, DNSSEC’s cryptographic strength has successfully evolved to meet modern cryptographic demands, and is poised to continue evolving to support the post-quantum future.
+Of particular interest to this discussion is how we desugar loops in catlang. The underlying primitive is `cochoice`:
 
-**Is DNSSEC unsafe?—*NO***
+```
+cochoice :: (Either a c ~> Either b c) -> (a ~> b)
+```
 
-Under the umbrella of (un)safety, “Against DNSSEC” points out that DNSSEC (in its original form) allows obtaining detailed zone information by so-called “zone walking” (i.e., retrieving the list of all the subdomains of a domain from the responses to systematic DNS queries). That’s because DNSSEC provides signed assurance about which subdomains do not exist, and from that information one can easily conclude which do. While this is essentially a privacy issue more than a safety one, it can be addressed by enabling NSEC3—an automated setting to transform the non-existence response proofs into a hashed form of data, so that subdomains cannot readily be obtained unless explicitly queried for, if that is deemed necessary. (More complicated proposals like NSEC5, also mentioned in the blog post, were not pursued beyond the ideation stage by the DNSSEC community.) Alternatively, DNS operators that sign DNS responses on the fly can solve this problem using Compact Denial of Existence ([RFC 9824](https://www.rfc-editor.org/rfc/rfc9824.html)).
+which magically turns an arrow on `Either`s into an arrow without the eithers. We obviously must *run* that arrow on eithers. If that function returns `inl`, then we’re happy and we can just output that. But if the function returns `inr`, we have no choice but to pass it back in to the eithered arrow. In Haskell, cochoice is implemented as:
 
-However**,** even then, it is important to realize that the existence of most subdomains is exposed through Certificate Transparency (CT) logs: Both DNS and CT data, by their nature, are public, as there is no access control on who queries them. Hiding domain names therefore is an unreliable privacy strategy.
+```
+cochoiceHask :: (Either a c -> Either b c) -> a -> c
+cochoiceHask f = go . Left
+  where
+    go :: Either a c -> b
+    go eac =
+      case f eac of
+        Left b -> b
+        Right c -> go (Right c)
+```
 
-That said, DNSSEC can very well work in favor of privacy: in certain cases<sup>[7](https://circleid.com/posts/common-beliefs-about-dnssec-put-to-the-test-an-invitation-to-fact-check-your-assumptions#fn7)</sup>, it allows a resolver to answer queries for non-existent names from its cache when it has seen a related (but not the same) DNS query before. This helps privacy (because data that is not sent to the domain’s nameserver cannot be eavesdropped on) and enables new defenses against common types of denial-of-service attacks (such as the Pseudo-random Subdomain Attack), turning DNSSEC into a safety belt that is useful beyond just protecting response contents.
+which as you can see, will loop until `f` finally returns a `Left`. What’s neat about this formulation of a loop is that we can statically differentiate between our first and subsequent passes through the loop body. The first time through `eac` is `Left`, while for all other times it is `Right`. We don’t take advantage of it in the original `count` program, but how many times have you written loop code that needs to initialize something its first time through?
 
-**Is DNSSEC architecturally unsound?—*NO***
+## Compiling to SQL
 
-The argument made by “Against DNSSEC” to bring home this point is that security decisions are best made according to each application’s needs, and that DNSSEC is not an application-layer protocol. While this objection seems valid for a range of things (take captchas, for instance: some applications may be fine with bots, others may not), it does indeed seem fair for a domain owner to assert that they want their domain’s DNS information to come along with verifiable signatures, in order to prevent clients from connecting when validation has failed. It is true that this is not always done end-to-end (although that’s not a design limitation, see the “last-mile” problem above)—but the objection that network-level security mechanisms are architecturally unsound by definition is overreaching. The same argument could be made against Wi-Fi encryption, BGP route validation, or IP packet checksums (which are all network-level), but these security mechanisms are generally accepted.
+So that’s the underlying theory behind the IL. How can we compile this to SQL now?
 
-One of the most hard-dying assumptions about DNSSEC is its costliness—which is likely to dissuade non-technical people in charge of budgets from engaging in deployment. According to “Against DNSSEC”, both the adoption and the deployment of the protocol are resource-intensive. Verbatim: “DNSSEC is Expensive to Adopt”, “DNSSEC is Expensive to Deploy”.
+As alluded to before, we simply need to give SQL implementations for each of the operations in the intermediary language. As a simple example, `id` compiles to `SELECT * FROM {}`, where `{}` is the input of the arrow.
 
-**Is DNSSEC expensive to adopt and to deploy?—*YES and NO***
+The hardest part here was working out a data representation. It seems obvious to encode each element of a product as a new column, but what do we do about coproducts? After much work thought, I decided to flatten out the coproducts. So, for example, the type:
 
-For end users, DNSSEC is essentially free to adopt, with the added benefit of protection against attack-related losses (see the MyEtherWallet.com case above). In practice, all cost is carried by the resolver operator and the signing DNS operator. [Measurements](https://blog.apnic.net/2022/08/22/dnssec-validation-performance-killer/) have shown that resolver-side memory and compute cost is small in practice. On the signing side, cost depends on how much specific expertise the signing operator needs to build<sup>[8](https://circleid.com/posts/common-beliefs-about-dnssec-put-to-the-test-an-invitation-to-fact-check-your-assumptions#fn8)</sup>, and how many domains are being operated. Compared to signatures involved in HTTPS connections, DNSSEC signatures are computed much less frequently, so the cost of signing itself is not significant in light of the overall cost of operating an online service.
+```
+(Int, Either Int Int)
+```
 
-Overall, for well-run mid-size to large-scale operations, DNSSEC signing and validation during ongoing operations does not fundamentally change the financial equation.
+would be represented as three columns:
 
-Adapting software is certainly costly, but that task has largely been completed, and nameserver software today includes mature DNSSEC implementations by default. Also, while replacing old components in order to adopt more modern (automatic) solutions can be complex, the cost of new deployment and long-term operations has decreased significantly, with many DNS providers (such as Cloudflare, Squarespace, one.com, deSEC) and resolver operators (such as Cloudflare, Google, Quad9, DNS4EU) now routinely operating DNSSEC with full automation. [Some work](https://itp.cdn.icann.org/en/files/publications/sac126v2-dnssec-delegation-signer-record-automation-31-08-2026-en.pdf) remains to be done with respect to the automation of DNSSEC configuration updates at the registry side, but progress is happening there as well.
+```
+( f1 INT NOT NULL
+, f2 INT
+, f3 INT
+)
+```
 
-“Against DNSSEC” also argues that network software is not equipped to handle DNSSEC failures smoothly (such as distinguishing expired signatures from an actual attack), and that “mak[ing] DNSSEC workable” would involve a lot of expensive code rewriting. That concern is diminishing, as browsers recently have made an effort to increase visibility into the origin of connection errors by implementing more detailed DNS error feedback based on [RFC 8914](https://www.rfc-editor.org/rfc/rfc8914.html)<sup>[9](https://circleid.com/posts/common-beliefs-about-dnssec-put-to-the-test-an-invitation-to-fact-check-your-assumptions#fn9)</sup>. Such developments indeed come with some cost, but that cost—unlike suggested—does not preclude large-scale deployment, as demonstrated by > 90% [validation deployment](https://stats.labs.apnic.net/dnssec) in countries like New Zealand, Saudi Arabia, Pakistan, and Ghana.
+with the constraint that exactly one of `f2` or `f3` would be `IS NOT NULL` at any given point in time.
 
-The common beliefs that have emerged from “Against DNSSEC”, however extensive and influential, are dwarfed by a much more impactful claim: DNSSEC’s alleged threat to availability—exposed and broadcast by the IANIX list, as laid out above. But, historical records aside, how true is that today? Or, in other words, does DNSSEC have high availability in practice?
+With this hammered out, almost everything else is pretty trivial. Composition corresponds to a nested query. Forks are `CROSS JOIN`s which concatenate the columns of each sub-query. Joins are `UNION`s, where we add a `WHERE field IS NOT NULL` clause to enforce we’re looking at the correct coproduct constructor.
 
-Yes, it does. The above-mentioned study** **by John Kristoff et al. (expected to be published later this month, at which time it will be linked here) has developed a measurement-based methodology and impact-weighted evaluation to quantify DNSSEC-induced outages. Its results show not only that the global DNSSEC deployment has had availability of over 99.99% in 15 of 16 years measured, but also confirms a sharp decline of incidents over the last five years. Accordingly, the occasional disruptive event (which still occurs, but has become exceptional) should not obscure the practical record of overall DNSSEC deployment.
+Cochoice is the only really tricky thing, but it corresponds to a [recursive CTE](https://www.postgresql.org/docs/current/queries-with.html#QUERIES-WITH-RECURSIVE). Generating a recursive CTE table for the computation isn’t too hard, but getting the final value out of it was surprisingly tricky. The semantics of SQL tables is that they are multisets and come with an arbitrary greatest element. Which is to say, you need an column structured in a relevant way in order to query the final result. Due to some quirks in what postgres accepts, and in how I structured my queries, it was prohibitively hard to insert a “how many times have I looped” column and order by that. So instead I cheated and added a `clock_timestamp() as step` column which looks at the processor clock and ordered by that.
 
-As with any technology at Internet scale that requires interoperability amongst disparate implementations and operational environments, early DNSSEC adopters were likely to be hit by painful outages, due to misconfigurations or buggy code. Since then, thanks to engineering refinements and community-crafted operational standards, DNSSEC deployment has come to achieve demonstrably high availability across TLDs. All gTLDs as well as an increasing number of ccTLDs sign their zones, and many TLDs have successfully transitioned to new operators and/or algorithms, while remaining fully signed. And even if validation breaks (and the absence of an attack is confirmed), temporary NTAs (negative trust anchors) can restore basic availability—as [done by Cloudflare](https://blog.cloudflare.com/de-tld-outage-dnssec/) and other resolver operators during the [.de May 2026 incident](https://blog.denic.de/en/final-report-dns-outage-of-5-may-2026/).
+This is clearly a hack, and presumably will cause problems if I ever add some primitives which generate more than one row, but again, this is just for fun and who cares. Send me a [pull request](https://github.com/isovector/catlang) if you’re offended by my chicanery!
 
-DNSSEC is now considered to be important and stable enough to be a non-negotiable requirement for existing and [future gTLDs](https://newgtldprogram-2026-agb.icann.org/en/7-module-3-application-submission.html#registry-functions-and-types-of-rsps). This policy-side view is matched by real world uptime records: Two of the world’s largest TLDs, .com and .net operated by Verisign, have long been DNSSEC-enabled, with more than 29 years of uninterrupted DNS resolution uptime. Also spotless is the uptime record of the world’s largest portfolio of TLDs, managed by Identity Digital (previously Afilias) and signed as soon as 2009.
+## Stupid Directions To Go In the Future
 
-In conclusion, as the facts presented in this article suggest, DNSSEC in 2026 should not be judged by limitations and operational records from its earlier deployment years (i.e., the trouble that triggered publications like the IANIX list and “Against DNSSEC”). Some concerns remain genuine tradeoffs, others have been substantially reduced by protocol evolution, automation, and operational experience.
+I’ve run out of vacation time to work on this project, so I’m probably not going to get around to the meta-circular stupidity I was planning.
 
-In short, let’s not get stuck in archives. Instead—recognizing that DNSSEC has been stable and well tested in deployments for nearly two decades and continues to evolve when needed—let’s choose to draw on up-to-date information (such as presented in this article) and check out actual and successfully running implementations (like the DNSSEC automation showcases that will be provided by the third article of this series).
+The compiler still needs a few string-crunching primitives (which are easy to add), but then it would be simple to write a little [brainfuck](https://en.wikipedia.org/wiki/Brainfuck) interpreter in catlang. Which I could then compile to SQL. Now we’ve got a brainfuck interpreter running in postgres. Of course, this has been done by hand before, but to my knowledge, never via compilation.
 
-And if after doing so, with your own risk profile in mind, you make the informed decision not to use DNSSEC in your own setting, that’s perfectly fine. But make sure everybody else is also free to make their own choices—and accordingly, if others depend on you for having access to DNSSEC, don’t break their chance to use it, if they wish to.
+There exist C to brainfuck compilers. And postgres is written in C. So in a move that would make Xzibit proud, we could run postgres in postgres. And of course, it would be fun to run brainfuck in brainfuck. That’d be a cool catlang backend if someone wanted to contribute such a thing.
 
-**Correction – October 20, 2026:** The list of endorsers has been corrected and updated with new endorsements.
+## Notes and Due Diligence and What Have You
+
+I am not the first person to do anything like this. The source language of catlang is heavily inspired by [Haskell’s arrow syntax](https://www.staff.city.ac.uk/~ross/papers/notation.pdf), which in turn is essentially a desugaring algorithm for [Arrows](https://www.cse.chalmers.se/~rjmh/afp-arrows.pdf). Arrows are slightly the wrong abstraction because they require an operation `arr :: (a -> b) -> (a ~> b)`—which requires you to be able to embed Haskell functions in your category, something which is *almost never possible.*
+
+Unfortunately, arrow syntax in Haskell desugars down to `arr` for almost everything it does, which in turn makes arrow notation effectively useless. In an ideal world, everything I described in this blog post would be a tiny little Haskell library, with arrow notation doing the heavy lifting. But that is just not the world we live in.
+
+Nor am I the first person to notice that there are categorical semantics behind programming languages. I don’t actually know whom to cite on this one, but it is well-established folklore that the lambda calculus corresponds to [cartesian-closed categories](https://en.wikipedia.org/wiki/Cartesian_closed_category). The “closed” part of “cartesian-closed” means we have an operation `eval :: (a ~> b, a) ~> b`, but everyone and their dog has implemented the lambda calculus, so I thought it would be fun to see how far we can get without it. This is not a limitation on catlang’s turing completeness (since `cochoice` gives us everything we need.)
+
+I’ve been thinking about writing a *category-first* programming language for the better part of a decade, ever since I read [Compiling to Categories](http://conal.net/papers/compiling-to-categories/compiling-to-categories.pdf). That paper takes Haskell and desugars it back down to categories. I stole many of the tricks here from that paper.
+
+Anyway. All of the code is available on [github](https://github.com/isovector/catlang) if you’re interested in taking a look. The repo isn’t up to my usual coding standards, for which you have my apologies. Of note is the template-haskell backend which can spit out Haskell code; meaning it wouldn’t be very hard to make a quasiquoter to compile catlang into what Haskell’s arrow desugaring *ought to be.* If there’s enough clamor for such a thing, I’ll see about turning this part into a library.

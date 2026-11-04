@@ -1,515 +1,395 @@
-[Two months ago](https://blog.veitheller.de/A_First_Futamura_Projection.html), we
-turned [compfuck](https://github.com/hellerve-pl-experiments/compfuck)
-back into an interpreter and wrote a specializer that, given a Brainfuck
-program, folded the interpreter away and left behind the operations we
-couldn’t specialize. That’s the first Futamura projection, which is what
-I likened compfuck to historically in lazy shorthand. If you missed the
-article and this whole paragraph refuses to make sense to you, start
-there!
+A financial firm hired me in 2010 to revise their Postgres cluster architecture. During my stint there, I learned a healthy respect for their event_log table. But perhaps “respect” is the wrong word here, as it was more of a deep loathing. This table, you see, was the canonical ledger of system events and consisted of several million rows.
 
-Of course, that article was only the first step. We’re not done with
-our Origami piece.
+The high row count wasn’t a problem by itself. We kept a tight visibility window and archived frequently. Unfortunately for us, one of the columns was an unconstrained TEXT type that commonly held a large blob of XML. Thus any fetch from this table was inordinately slow. Writing was equally painful. We went through great pains to shape the application itself to avoid touching it except when absolutely necessary. It was evil incarnate.
 
-Specifically, we ended up with a way to obtain compiled programs
-without writing instruction translations by hand. That’s great, but we
-still ran the specializer on every single program, walking through the
-interpreter’s source each time. The specializer and the interpreter were
-always the same, though, we just had a different Brainfuck program. This
-is wasteful and we can do better.
+The performance of this table initially confused and enraged me—until I remembered about [TOAST](https://www.postgresql.org/docs/current/storage-toast.html). Postgres likes to innocuously dub this [backronym](https://en.wikipedia.org/wiki/Backronym) “The Oversized-Attribute Storage Technique” but DBAs in the field maintain a love/hate relationship with the system. Whether that’s justified is a different question.
 
-You might also have a hunch about how to deal with this now: if part
-of the input is fixed, we can specialize. And the second Futamura
-projection does exactly that to the specializer itself:
+On the surface, it’s a way to store huge blocks of data elsewhere to keep tuples small and avoid exceeding the relatively petite 8KB data page size. Postgres creates a shadow table for the bulky content, splits it up into chunks, and stores a pointer in the original row. It’s an elegant solution to a pressing issue, but there are deep performance implications.
 
-```
-compiler = specialize(specializer, interpreter)
-compiler(program) = specialize(interpreter, program)
+So let’s dig into precisely why DBAs secretly dread large text-based columns, shall we?
+
+## Getting TOASTy
+
+To really understand what happened in my event_log case, it’s good to reconstruct some semblance of it.
+
+```pgsql
+CREATE TABLE event_log
+(
+  event_id       BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  ticker         VARCHAR(4) NOT NULL,
+  strike         INT NOT NULL,
+  shares         INT NOT NULL,
+  event_data     JSON NOT NULL -- Ours was XML, but modern times...
+  --- More columns went here
+);
 ```
 
-We feed the specializer to itself, with the interpreter as its known
-input. What comes out is a program that takes a Brainfuck program and
-produces the residual code directly, without ever executing the
-interpreter. That’s a compiler, delightfully weird.
+And then we can bootstrap the table with 100k rows. Just enough to make it annoying! The data column needs to be big, but not absolutely gigantic. Let’s start with up to 1000 data points:
 
-It might sound like a parlor trick, and it took me a while to believe
-it would produce anything sensible, even after the time it took for me
-to understand it. But it does work, and the compiler we get at the end
-looks a lot like the one I wrote by hand years ago. Let’s see how we get
-there.
-
-## Why our old specializer won’t
-do
-
-To specialize a program, the specializer has to understand it. Our
-old specializer understood exactly one program, the interpreter. For
-instance, it knew that `p` and `i` were static and
-that every `if` and `let` belonged to the source
-traversal. We decided a whole bunch of things by hand, basically making
-a mini DSL for Carp-like sources.
-
-This won’t scale to the specializer itself. It has static and dynamic
-parts mixed in a bunch of places, it calls helper functions, and its
-recursive calls don’t all terminate if you naively unfold them. So the
-first step is to write a specializer that is general enough to
-specialize itself, without tricks this time.
-
-There is a second, sneakier problem I glossed over a bit last time,
-because I wasn’t quite sure yet how to solve it when I wrote that piece:
-the old specializer evaluated static expressions by handing them to
-Carp’s `eval`. If we specialize that, the best we can do is
-leave a call to `eval` in the output, and our “compiler”
-would still interpret pieces of the interpreter at compile time. To get
-rid of that, the specializer needs to evaluate static code itself, in a
-way that can be specialized in turn. If that doesn’t make sense yet, no
-worries. It’s easier to show than to tell.
-
-Just one more thing before we continue, though, because I want to be
-honest: for the purposes of this tutorial, I opted not to make this an
-absolutely generic implementation of the second Futamura projection.
-We’ll still cut corners where it’s expedient without undermining the
-conceptual purity. I’ll also call it out when it happens.
-
-## An introspective specializer
-
-Last time, `definterpreter` stored the interpreter’s body
-as metadata. Now a macro called `remember` stores the
-parameters as well, and `defmix`—`mix` is the name
-handed down by the forebears of this technique—does the same for the
-specializer’s functions and collects them in a list. That list is the
-specializer as a program. The bracket search is stored like the
-interpreter, so the interpreter is now a program with two functions, an
-interpreter loop and a helper function.
-
-Carp expands macros before the body gets stored, so
-`case`, `cond`, `and`, and
-`or` arrive as `if`s and
-`let`s<sup>[1](https://blog.veitheller.de/A_Second_Futamura_Projection.html#1)</sup>. Our specializer only has
-to understand `if`, `let` with a single binding,
-`quote`, function calls, and a handful of primitives. It’s
-basically a small Lisp, and the specializer is written in it, too (sans
-the macro’s syntactic sugar).
-
-### Which bits are static?
-
-We keep last time’s split into static `p` and
-`i` and dynamic `t` and `h`, but
-replace the hand-made decisions with a rule:
-
-```
-(defmix mentions? [e syms]
-  (cond
-    (symbol? e) (member? e syms)
-    (or (list? e) (array? e))
-      (if (empty? e) false (or (mentions? (car e) syms) (mentions? (cdr e) syms)))
-    false))
+```pgsql
+INSERT INTO event_log (ticker, strike, shares, event_data)
+SELECT left(md5((a.id % 100)::TEXT), 4), a.id % 100, a.id % 100 * 10,
+       (SELECT jsonb_object_agg('field_' || f, random(1, 1000))
+          FROM generate_series(1, id % 1000 + 1 ) f)
+  FROM generate_series(1, 100000) a (id);
 ```
 
-An expression that doesn’t mention any *dynamic* variables can
-be evaluated during specialization, and an expression that doesn’t
-mention any *static* variables has nothing to specialize, so we
-leave it alone. Everything else gets taken apart.
+Great! Now where did all of that data go? If you thought, “Into the event_log table of course!” you’re wrong. Instead, Postgres helpfully created a TOAST table for most of it. Let’s check the [pg_class](https://www.postgresql.org/docs/current/catalog-pg-class.html) catalog for the other objects:
 
-The rule is purely syntactic, so it has plenty of blind spots. An
-expression that only mentions static variables gets run during
-specialization even if it has side effects. Neither of our programs has
-one, so we’ll leave it at that. Its semantic generalization is left as
-an exercise to the reader.
+```pgsql
+SELECT c.relname, t.relname AS toast_table, i.relname AS toast_index
+  FROM pg_class c
+  JOIN pg_class t ON t.oid = c.reltoastrelid
+  JOIN pg_index x ON x.indrelid = t.oid
+  JOIN pg_class i ON i.oid = x.indexrelid
+ WHERE c.relname = 'event_log';
 
-### Our very own evaluator
-
-Before we can fold things, we have to evaluate.
-
-Last time, `known` handed static expressions to
-`eval`. We need to get rid of that `eval`, though,
-so we write an evaluator in and for our small Lisp:
-
-```
-(defmix ev [prog e names vals]
-  (cond
-    (symbol? e) (List.nth vals (index-of e names))
-    (not (list? e)) e
-    (= (car e) 'quote) (cadr e)
-    (= (car e) 'if)
-      (if (ev prog (cadr e) names vals)
-        (ev prog (caddr e) names vals)
-        (ev prog (cadddr e) names vals))
-    (= (car e) 'let)
-      (ev prog (caddr e) (cons (car (cadr e)) names)
-          (cons (ev prog (cadr (cadr e)) names vals) vals))
-    (empty? (lookup (car e) prog))
-      (ev-primitive prog e names vals)
-    (memo (ev prog
-              (caddr (lookup (car e) prog))
-              (cadr (lookup (car e) prog))
-              (ev-each prog (cdr e) names vals)))))
+  relname  |  toast_table   |     toast_index      
+-----------+----------------+----------------------
+ event_log | pg_toast_16401 | pg_toast_16401_index
 ```
 
-Semantically, this is easy, but it’s a lot of `car`ing and
-`cdr`ing, so let’s go through it in turn:
+That’s three objects for the price of one: the original table, a toast table, and a toast table index. This doesn’t always happen, but if your table has a text-like column without a maximum length, it probably did. In this case, it’s because an unbounded JSON column can contain anything, so Postgres preemptively initialized a TOAST table to store the “anything”.
 
-- If we encounter a symbol, we look up the variable for it.
-- If we encounter a non-list, we return it as is.
-- If we encounter a quoted value, we return the value.
-- If we encounter an if, we evaluate the condition, and then evaluate the corresponding branch.
-- If we encounter a let, we add a new name and value, and the right side also gets evaluated for good measure.
-- If we encounter a symbol that’s not in the program, we try to evaluate a primitive.
-- Otherwise we evaluate the function and call memo. We get to that in a second, it’s my favorite little hack of the whole thing.
+What goes in is a bit more subtle, and is where the trouble starts brewing.
 
-Let’s check out `ev-primitive` for good measure.
+## Compounded Butter
 
-```
-(defmix ev-primitive [prog e names vals]
-  (cond
-    (= (car e) 'car) (car (ev prog (cadr e) names vals))
-    (= (car e) 'cdr) (cdr (ev prog (cadr e) names vals))
-    ; ... and so on, for 18 primitives
-    (= (car e) 'String.char-at)
-      (String.char-at (ev prog (cadr e) names vals) (ev prog (caddr e) names vals))
-    (macro-error (str "unknown primitive " (car e)))))
-```
+There’s a kind of inherent hierarchy that determines how data gets managed. The typstorage column in the [pg_type](https://www.postgresql.org/docs/current/catalog-pg-type.html) catalog explains how this works for each type Postgres understands. There are four valid storage methods:
 
-The primitives are what both programs need: a few list operations,
-comparison, a bit of arithmetic, and string access. Anything else,
-including the specializer’s own helpers, is a function in the program
-and gets evaluated from its source. We cheat a bit here, and map this
-Lisp’s operations one-to-one to Carp, which is nice, because it’s
-trivial, but also a bit horrendous, because, well, look at the code.
+- PLAIN (p): The value stays inline and uncompressed. This is the default for fixed-width types like INT and TIMESTAMPTZ.
+- MAIN (m): Compression is allowed, with TOAST only as the last resort. The default for NUMERIC.
+- EXTERNAL (e): TOAST is allowed, but compression is not.
+- EXTENDED (x): Anything is fair game. This is the default for TEXT, BYTEA, JSONB, and most other variable-length types.
 
-Last time’s bindings array is now split into `names` and
-`vals`. When we specialize the specializer,
-`names` is known and `vals` is not, so a lookup
-like `(index-of e names)` happens ahead of time and only
-`(List.nth vals 2)` is left over. With names and values in
-one list, every lookup would have to search at compile time.
+Postgres imposes a loop on all text-based column types in a tuple that it applies until the entire row is under the standard 8KB page threshold (minus overhead). It looks something like this:
 
-To see this in action, here is the body of `ev`
-specialized to the expression `(+ i 1)`, with `i`
-static:
+![PostgreSQL TOAST storage flowchart](https://a.storyblok.com/f/187930/1920x1640/dd341fb6ac/burnt-toast-diagram.png)
 
-```
-(+ (List.nth vals 0) 1)
+Being the default for JSON, all of our data follows the rules for EXTENDED. We can see it in action by checking a few rows:
+
+```pgsql
+SELECT ctid, event_id, length(event_data::TEXT) AS chars,
+       pg_column_size(event_data) AS stored_bytes,
+       pg_column_toast_chunk_id(event_data) AS toast_id
+  FROM event_log
+ WHERE event_id BETWEEN 335 AND 340
+ ORDER BY event_id;
+
+  ctid  | event_id | chars | stored_bytes | toast_id 
+--------+----------+-------+--------------+----------
+ (57,2) |      335 |  5907 |         1981 |         
+ (57,3) |      336 |  5930 |         2004 |    16414
+ (57,4) |      337 |  5942 |         1987 |    16415
+ (57,5) |      338 |  5953 |         2005 |    16416
+ (57,6) |      339 |  5978 |         1996 |    16417
+ (57,7) |      340 |  5988 |         2034 |    16418
 ```
 
-The evaluator is gone. What’s left is the expression itself, reading
-`i` from whatever slot the compiler keeps it in. The dispatch
-over primitives disappeared, because which primitive we apply is
-known.
+The toast_tuple_target storage setting tells Postgres when to toast column contents. The default is around 2KB of compressed data, and anything after that is moved into TOAST automatically. The example above has a row that compresses right under that limit, and as a result, never gets moved.
 
-If you take only one thing away from this post, it should probably be
-Figure 5. It’s our whole trick! But we’re not done yet.
+If we examine page 57 specifically, this becomes even more clear:
 
-### Walking the code
+```pgsql
+CREATE EXTENSION IF NOT EXISTS pageinspect;
 
-The specializer proper is called `mix` (a nod at those
-before us, again). It takes the program, the variables, an expression,
-and the environment (as two lists), and returns residual code:
+SELECT lp, lp_len
+  FROM heap_page_items(get_raw_page('event_log', 57))
+ LIMIT 5;
 
-```
-(defmix mix [prog dyn e names vals]
-  (cond
-    (not (mentions? e names)) e
-    (not (mentions? e dyn)) (lift (ev prog e names vals))
-    (and (= (car e) 'if) (not (mentions? (cadr e) dyn)))
-      (if (ev prog (cadr e) names vals)
-        (mix prog dyn (caddr e) names vals)
-        (mix prog dyn (cadddr e) names vals))
-    (= (car e) 'let)
-      (mix prog dyn (caddr e)
-        (cons (car (cadr e)) names)
-        (cons (ev prog (cadr (cadr e)) names vals) vals))
-    (= (car e) 'memo) (mix-memo prog dyn (cadr e) names vals)
-    (empty? (lookup (car e) prog))
-      (mix-each prog dyn e names vals)
-    (unfold prog
-            dyn
-            (lookup (car e) prog)
-            (cdr e)
-            (cadr (lookup (car e) prog))
-            (cdr e)
-            names
-            vals)))
+ lp | lp_len 
+----+--------
+  1 |   2022
+  2 |   2029
+  3 |     66
+  4 |     66
+  5 |     66
 ```
 
-The first two lines are the rule we mentioned above. Code without
-static variables is returned as-is. Code without dynamic variables gets
-evaluated, and `lift` turns the value back to code, quoting
-it if necessary.
+The tuple size of the rows that didn’t get toasted is much larger than those that did. That’s thanks to a pointer replacing the toasted values. And that’s not all. Toasted data is also broken into chunks. Every toasted value gets broken into 1996-byte blocks and stored in sequential order as rows in the toast table.
 
-`memo` is a special case that calls `mix-memo`.
-We’ll defer it one more time.
+Now consider what this means for reads:
 
-The rest are the same branches as last time, except that an
-`if` only picks a branch if its condition is static, and
-calls to functions in the program are unfolded. It looks quite odd, but
-if you squint, you might see the resemblance.
+- Any toasted value implies at least one fetch from the toast table. That’s a read on the toast index and a read on the toast table itself per chunk.
+- Chunks must be re-assembled. That’s extra memory usage and can be significant depending on chunk count.
+- Compressed data must also be decompressed. That’s both memory and CPU overhead.
 
-### Unfolding and a stop
-condition
+The intuitive read of this is that TOAST is always worse. But is it?
 
-`unfold` is the unfolding of the interpreter’s recursive
-call we had last time, but generalized for any function in the
-program:
+## Turning Up the Heat
 
-```
-(defmix unfold [prog dyn f args params rest names vals]
-  (cond
-    (empty? params)
-      (let [static (static-params (cadr f) args dyn)]
-        (memo (mix prog
-                   (dynamic-params (cadr f) static)
-                   (caddr f)
-                   static
-                   (static-args prog args dyn names vals))))
-    (or (not (mentions? (car rest) dyn))
-        (= (car params) (car rest)))
-      (unfold prog dyn f args (cdr params) (cdr rest) names vals)
-    (list
-        'let
-        (array (car params)
-               (mix prog dyn (car rest) names vals))
-        (unfold prog
-                dyn
-                f
-                args
-                (cdr params)
-                (cdr rest)
-                names
-                vals))))
+Let’s run an experiment! We already have a table where some of the data is toasted. What happens if we force Postgres to select all of it?
+
+This requires some setup. To begin, we create a non-toasted table by setting the event_data column to use MAIN storage. That allows it to be compressed, but not toasted unless the full tuple exceeds a Postgres page size. Like so:
+
+```pgsql
+CREATE TABLE non_toast (LIKE event_log INCLUDING INDEXES);
+ALTER TABLE non_toast ALTER event_data SET STORAGE MAIN;
+INSERT INTO non_toast SELECT * FROM event_log;
 ```
 
-Let’s start at the bottom this time, in the catch-all call to
-`list`. It means that dynamic arguments get a
-`let`. This happens unless the caller passes a variable of
-the same name (condition just above).
+Then we can directly compare the costs of pulling out field 999 from the data:
 
-Last time we needed to insert fresh names here, but our interpreter
-always passes `t` and `h` on unchanged, so with
-the condition above we just skip the `let`
-entirely<sup>[2](https://blog.veitheller.de/A_Second_Futamura_Projection.html#2)</sup>.
+```pgsql
+EXPLAIN (ANALYZE, BUFFERS, COSTS OFF, SUMMARY OFF)
+SELECT count(event_data->>'field_999') FROM event_log;
 
-But there’s that `memo` thingie again. What is it?
+ Aggregate (actual time=6589.068..6589.070 rows=1.00 loops=1)
+   Buffers: shared hit=246472 read=41655
+   ->  Seq Scan on event_log (actual time=0.221..17.022 rows=100000.00 loops=1)
+         Buffers: shared read=5969
 
-When the specializer runs normally, `memo` is the identity
-function and does nothing.
+EXPLAIN (ANALYZE, BUFFERS, COSTS OFF, SUMMARY OFF)
+SELECT count(event_data->>'field_999') FROM non_toast;
 
-```
-(defndynamic memo [x] x)
-```
-
-But as we saw above, when the specializer reads a call wrapped in
-`memo`, it calls `mix-memo` instead.
-
-```
-(defmix mix-memo [prog dyn call names vals]
-  (let [f (lookup (car call) prog)]
-    (cons (residual prog f
-                    (static-params (cadr f) (cdr call) dyn)
-                    (static-args prog (cdr call) dyn names vals))
-          (dynamic-args prog dyn (cdr call) names vals))))
+ Aggregate (actual time=6166.877..6166.880 rows=1.00 loops=1)
+   Buffers: shared read=40754
+   ->  Seq Scan on non_toast (actual time=0.180..51.434 rows=100000.00 loops=1)
+         Buffers: shared read=40754
 ```
 
-`mix-memo` doesn’t unfold. Instead, it generates a
-separate function specialized to the call’s static arguments, remembers
-it, and emits a call to that function.
+Take a look at that! Shared buffers really saved our bacon on this one. Total buffer reads on the toasted column required 288127 total reads versus 40754 for the non-toasted version. Conversely, the toasted table is much smaller:
 
-We need this because of what happens when the specializer specializes
-itself. When we unfold `mix` on the interpreter’s body and
-reach the interpreter’s recursive call, `unfold` calls
-`mix` on the interpreter’s body again. With the interpreter’s
-source known, that is the same specialization we started with, and
-unfolding it would go on forever. The interpreter never had this
-problem, because each of its recursive calls moved to a new, known
-position in the Brainfuck program. Here, we need an explicit base case
-marker.
+```pgsql
+SELECT pg_size_pretty(pg_relation_size('event_log')) AS event_log,
+       pg_size_pretty(pg_relation_size('non_toast')) AS non_toast;
 
-The same happens in `ev`. When we specialize the
-evaluator, it meets calls whose arguments aren’t known yet, like the
-bracket search. Unfolding those wouldn’t stop either, so they get their
-own functions as well.
-
-And that’s the whole reason `memo` appears in the
-recursive and mutually recursive cases that are not clearly reductive.
-Once we’ve seen a call before and specialized it, we just emit a call to
-the already known name, closing the loop.
-
-Deciding where to place these markers is, as far as I understand, one
-of the harder problems in partial evaluation. I put the two we need
-there by hand. Doing this automatically is, say it with me now, left as
-an exercise to the reader.
-
-## Two projections
-
-We are ready to project now! The first one, with the new
-specializer:
-
-```
-(mix interpreter '(t h) (caddr (car interpreter)) '(p i) (list ",[.-]" 0))
-; => (do (Array.aset! t h (IO.Raw.get-char))
-;        (do (while (/= (ref 0) (Array.unsafe-nth t h))
-;              (set! h (do (IO.print (ref (str (Char.from-int (copy (Array.unsafe-nth t h))))))
-;                          (do (Array.aupdate! t h (ref (fn [x] (max 0 (Int.dec x))))) h))))
-;            h))
+ event_log | non_toast 
+-----------+-----------
+ 47 MB     | 318 MB
 ```
 
-Alright, looking “good”. Looks like the specializer is working. But
-that’s the easy case, right?
+While Postgres can read through the heap faster, it then has to spend a lot of time seeking through the toast table. This size difference translates to some non-intuitive behavior. For instance, most interactions with the toasted table are actually much faster. Consider counting all rows:
 
-For the second case, we hand the specializer to itself.
+```pgsql
+EXPLAIN (ANALYZE, BUFFERS, COSTS OFF, SUMMARY OFF)
+SELECT count(event_data) from event_log;
 
-```
-(defdynamic compf-compiler
-  (let [specializer (mix-source)]
-    (residual specializer (lookup 'mix specializer) '(prog dyn e names)
-      (list interpreter '(t h) (caddr (car interpreter)) '(p i)))))
-```
+ Aggregate (actual time=26.397..26.398 rows=1.00 loops=1)
+   Buffers: shared hit=282 read=5567
+   ->  Seq Scan on event_log (actual time=0.369..13.726 rows=100000.00 loops=1)
+         Buffers: shared hit=282 read=5567
 
-To understand the call, let’s recap:
+EXPLAIN (ANALYZE, BUFFERS, COSTS OFF, SUMMARY OFF)
+SELECT count(event_data) from non_toast;
 
-- residual is the function behind memo. It specializes a function in a program to values for some of its parameters.
-- Here the program is the specializer, the function is mix, and the known values are the interpreter, its dynamic variables, its body e, and the names (p and i).
-- The only thing left unknown is the values of p and i.
-
-Two functions come out. The first is the compiler, and I’ll give it
-to you lightly abridged and re-indented, but true to its mindboggling
-form:
-
-```
-(defndynamic mix1055 [vals]
-  (if (= (List.nth vals 1) (String.length (List.nth vals 0)))
-    (quote h)
-    (let [vals (cons (String.char-at (List.nth vals 0) (List.nth vals 1)) vals)]
-      (if (= (List.nth vals 0) \])
-        (quote h)
-        (let [vals (cons (if (= (List.nth vals 0) \[)
-                           (- (ev1056 (cons (List.nth vals 1) (cons (inc (List.nth vals 2)) (cons 1 (quote ())))))
-                              (List.nth vals 2))
-                           1)
-                         vals)]
-          (cons (quote do)
-            (cons (let [vals (cons (List.nth vals 1) vals)]
-                    (if (= (List.nth vals 0) \+)
-                      (quote (Array.aupdate! t h (ref (fn [x] (mod (Int.inc x) 255)))))
-                      ; ... the same for \-, \>, \<, \., and \,
-                      (if (= (List.nth vals 0) \[)
-                        (cons (quote while)
-                          (cons (quote (/= (ref 0) (Array.unsafe-nth t h)))
-                            (cons (cons (quote set!)
-                                    (cons (quote h)
-                                      (cons (mix1055 (cons (List.nth vals 3) (cons (inc (List.nth vals 4)) (quote ()))))
-                                            (quote ()))))
-                                  (quote ()))))
-                        ())))
-              (cons (mix1055 (cons (List.nth vals 2) (cons (+ (List.nth vals 3) (List.nth vals 0)) (quote ()))))
-                    (quote ())))))))))
+ Aggregate (actual time=91.840..91.841 rows=1.00 loops=1)
+   Buffers: shared hit=282 read=40670
+   ->  Seq Scan on non_toast (actual time=0.303..74.908 rows=100000.00 loops=1)
+         Buffers: shared hit=282 read=40670
 ```
 
-This takes some squinting (your eyes must be tired by now), but bear
-with me. `vals` starts out as the program and the position.
-Each `let` in the interpreter `cons`es its value
-onto the front, so after the first one, `(List.nth vals 0)`
-is the current character<sup>[3](https://blog.veitheller.de/A_Second_Futamura_Projection.html#3)</sup>.
+That’s 26ms vs 91ms. Or jumping through offsets:
 
-The first lines check for the end of the program and a closing
-bracket, and return the symbol `h`. Then we dispatch on the
-character, and each branch returns a quoted piece of code:
-`+` returns the tape update, `>` returns
-`(set! h (+ h 1))`, and so on. The loop builds a
-`while` around a recursive call that compiles its body.
-Finally, we compile the rest of the program, and put both into a
-`do`. Easy-peasy, or something like that.
+```pgsql
+EXPLAIN (ANALYZE, BUFFERS, COSTS OFF, SUMMARY OFF)
+SELECT * from event_log LIMIT 1 OFFSET 99999;
 
-The second function is the bracket search:
+ Limit (actual time=16.579..16.581 rows=1.00 loops=1)
+   Buffers: shared hit=377 read=5592
+   ->  Seq Scan on event_log (actual time=0.215..12.908 rows=100000.00 loops=1)
+         Buffers: shared hit=377 read=5592
 
-```
-(defndynamic ev1056 [vals]
-  (if (if (= (List.nth vals 1) (String.length (List.nth vals 0))) true (= (List.nth vals 2) 0))
-    (List.nth vals 1)
-    (let [vals (cons (String.char-at (List.nth vals 0) (List.nth vals 1)) vals)]
-      (ev1056 (cons (List.nth vals 1)
-                (cons (inc (List.nth vals 2))
-                  (cons (if (= (List.nth vals 0) \]) (dec (List.nth vals 3))
-                          (if (= (List.nth vals 0) \[) (inc (List.nth vals 3)) (List.nth vals 3)))
-                        (quote ()))))))))
+EXPLAIN (ANALYZE, BUFFERS, COSTS OFF, SUMMARY OFF)
+SELECT * from non_toast LIMIT 1 OFFSET 99999;
+
+ Limit (actual time=53.276..53.277 rows=1.00 loops=1)
+   Buffers: shared hit=188 read=40566
+   ->  Seq Scan on non_toast (actual time=0.240..49.551 rows=100000.00 loops=1)
+         Buffers: shared hit=188 read=40566
 ```
 
-`search-matching-bracket` wasn’t even in our list of
-required parts. During the first projection, our evaluator runs it from
-source. When we then specialized the specializer, the evaluator got
-specialized to its body, and it spit out a compiled version.
+Now it’s 16ms vs 53ms. Or even updates:
 
-The interpreter is gone, and so is the specializer. There is no
-machinery, no `ev`, `mix` or source walks. What’s
-left is a function from Brainfuck to Carp that dispatches on characters
-and returns quoted code.
+```pgsql
+\timing on
 
-What’s funky to me is that here is the core of the compiler I wrote
-by hand [back in 2019](https://blog.veitheller.de/Compiling_at_Compile_Time.html):
+UPDATE event_log 
+   SET shares = shares + 1
+ WHERE ticker = 'b53b';
 
-```
-(defndynamic compile-compf-char [c s i]
-  (case c
-    \+ (list 1 '(Array.aupdate! &t h &(fn [x] (mod (Int.inc x) 255))))
-    \- (list 1 '(Array.aupdate! &t h &(fn [x] (max 0 (Int.dec x)))))
-    \> (list 1 '(set! h (+ h 1)))
-    ; ...
+Time: 62.412 ms
+
+UPDATE non_toast 
+   SET shares = shares + 1
+ WHERE ticker = 'b53b';
+
+Time: 128.282 ms
 ```
 
-It’s the same idea! Across two blog posts, we started with that
-compiler that I got from hand-dynamicizing an interpreter, turned it
-back into an interpreter, and specialized our way back to it.
+Any time Postgres has to deal directly with the heap, performance suffers immensely. Toast pointers can act as an optimization, particularly when not interacting with the toasted column because they make each row on the heap much smaller.
 
-It took a lot more machinery than writing it by hand, but it
-automatically determined which code to emit for each character. And
-that’s our origami in its full glory!
+This one kind of blew my mind. It turns out that the problem with the event_log table wasn’t necessarily the TOAST system, but the event_data column itself. It turns out there’s a way to fix that.
 
-## Fin
+## Achieving Golden Brown
 
-This was quite a bit more work than the first projection.
+Back then, “fixing that” meant to split the table. Our toy example is a mere 100k rows, but the real one was several million and the heap alone was over 1GB. Including TOAST on those huge XML blobs brought the total table size to over 20GB.
 
-It’s not even completely general, some of the decisions are still
-mine: which variables are static, which primitives exist, and where to
-put `memo` all needed a guiding hand in our implementation
-(though as I alluded to, they’re not insurmountable). We also make a
-bunch of assumptions about the code playing nice and coloring inside our
-lines, which we probably shouldn’t in the real world.
+When an application is full of SELECT * and is repeatedly looking up and decoding toasted data, it can eventually take a toll. Even if we ignore the disk IO, that’s a lot of extra network bandwidth. “Just specify the column names!” you might say, and I agree. If only it were that easy to modify ORM-generated queries and five years of accumulated hand-written ones.
 
-But I find it remarkable that it works at all! We wrote an
-interpreter and a specializer. Neither of them knows anything about
-compiling Brainfuck. But feed one to the other, and a compiler just
-falls out, plus a bracket search that was needed but didn’t get asked
-for.
+Here’s what the surgery looks like:
 
-There is, of course, a third projection, where we specialize the
-specializer to itself and get a program that turns interpreters into
-compilers. I’m not going to promise anything. Our specializer would have
-to unfold its own memo machinery, and I have a feeling that would get
-ugly quick. This implementation also already took twice as long to make
-as the last one (figuring out how to make it explainable was most of the
-work), and I might not have enough time on my hands for more card
-tricks. But maybe I do.
+```pgsql
+CREATE TABLE event_new
+(
+  event_id       BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+  ticker         VARCHAR(4) NOT NULL,
+  strike         INT NOT NULL,
+  shares         INT NOT NULL
+  --- More columns went here
+);
 
-See you soon!
+CREATE TABLE event_log_data
+(
+  event_id       BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+  event_data     JSON NOT NULL
+);
 
-#### Footnotes
+INSERT INTO event_new (event_id, ticker, strike, shares)
+SELECT event_id, ticker, strike, shares
+  FROM event_log;
 
-1. Last time I said that the stored source is the
-interpreter before Carp expands it, but that wasn’t true. Carp expands
-the macros in the code a macro returns before running it, and that
-includes the body we hand to `meta-set!`. Whoops. Our old
-specializer handled that just fine, it simply never entered its
-`case` branch and I didn’t notice.
+INSERT INTO event_log_data (event_id, event_data)
+SELECT event_id, event_data
+  FROM event_log;
 
-2. Strictly speaking, the unfolded code now
-shares `h` with its caller, and an assignment inside it
-changes the caller’s `h`. That’s fine for our interpreter,
-because every call hands its `h` back and the caller
-continues with that. We could also just bind it again, but
-`(let [h h] ...)` compiles to `int h = h;`, which
-C rightfully rejects. That’s why last time’s version went through a
-`gensym`, but we can just avoid the whole `let`
-instead!
+ALTER TABLE event_log RENAME TO event_log_old;
+ALTER TABLE event_new RENAME TO event_log;
+```
 
-3. The third `let` is the one from the
-expanded `case` statement, which binds the current character
-once more. That’s why the dispatch reads `(List.nth vals 0)`
-again after it.
+What do we gain from this? For one, we no longer need to carry around the TOAST pointers in the main application table. Secondly, since this column was a mix of toasted and non-toasted values due to the toast_tuple_target cutoff, even non-toasted values have been relocated. We can see this in the new table heap sizes:
+
+```pgsql
+SELECT pg_size_pretty(pg_relation_size('event_log')) AS event_log,
+       pg_size_pretty(pg_relation_size('event_log_data')) AS non_toast;
+
+ event_log | non_toast 
+-----------+-----------
+ 5096 kB   | 46 MB
+```
+
+All operations will now be substantially faster simply because page density is now guaranteed to be higher. More rows fit on each page, and there are fewer pages required to represent the primary core of the table. The entire heap is now 5MB rather than 47MB, a saving of over 9x. If it’s at all possible to relocate large columns to an optional JOIN in a high-performance system, it may be worth taking a second look.
+
+If you think we could have achieved a similar effect by setting toast_tuple_target arbitrarily low, think again. The TOAST system won’t even activate if a row value is shorter than TOAST_TUPLE_THRESHOLD, a compiled value that acts as a hard minimum. Values below this won’t even be considered for toasting. What can I say? Postgres is a picky eater.
+
+The obvious objection is that applications now need a join. Well, the Postgres planner has you covered:
+
+```pgsql
+CREATE OR REPLACE VIEW event_log_all AS
+SELECT e.*, d.event_data
+  FROM event_log e
+  LEFT JOIN event_log_data d USING (event_id);
+
+EXPLAIN (ANALYZE, BUFFERS, COSTS OFF, SUMMARY OFF)
+SELECT event_id, strike, shares
+  FROM event_log_all WHERE event_id = 42;
+
+ Index Scan using event_new_pkey on event_log e (actual time=0.032..0.034 rows=1.00 loops=1)
+   Index Cond: (event_id = 42)
+   Index Searches: 1
+   Buffers: shared hit=3
+```
+
+The trick is the LEFT JOIN, making the event data optional even though we know every row has a value there. Queries that don’t specify the column will prune the JOIN and everyone is happy.
+
+## Crunchy Nirvana
+
+As of Postgres 14, it’s even possible to choose the compression type. Stick with the venerable built-in pglz, or use lz4 if it’s been compiled into your binaries. The default for the entire server comes from default_toast_compression:
+
+```pgsql
+SHOW default_toast_compression;
+
+ default_toast_compression
+---------------------------
+ pglz
+```
+
+Or it can be set using the COMPRESSION decorator during CREATE TABLE or ALTER TABLE.
+
+One interesting note about the compression types is that pglz is somewhat quirky. It skips values under 32 bytes, demands at least 25% savings, and gives up entirely if it finds nothing to compress in the first 1KB. The last rule is kind of odd to see in action:
+
+```pgsql
+CREATE EXTENSION pgcrypto;
+
+CREATE TABLE squeeze (method TEXT, payload TEXT);
+
+ALTER TABLE squeeze ALTER payload SET COMPRESSION pglz;
+INSERT INTO squeeze VALUES ('pglz', encode(gen_random_bytes(1024), 'base64') || repeat('Postgres! ', 1000));
+
+ALTER TABLE squeeze ALTER payload SET COMPRESSION lz4;
+INSERT INTO squeeze VALUES ('lz4', encode(gen_random_bytes(1024), 'base64') || repeat('Postgres! ', 1000));
+
+SELECT method, length(payload) AS chars,
+       pg_column_size(payload) AS stored,
+       pg_column_compression(payload) AS compression,
+       pg_column_toast_chunk_id(payload) AS toasted_chunk
+  FROM squeeze;
+
+ method | chars | stored | compression | toasted_chunk 
+--------+-------+--------+-------------+---------------
+ pglz   | 11385 |  11385 |             |        415076
+ lz4    | 11385 |   1517 | lz4         |
+```
+
+There are also some associated performance implications. Consider:
+
+```pgsql
+-- First test with pglz
+
+TRUNCATE TABLE squeeze;
+
+ALTER TABLE squeeze ALTER payload SET COMPRESSION pglz;
+
+\timing on
+
+INSERT INTO squeeze
+SELECT 'pglz', repeat('Postgres!', 10000)
+  FROM generate_series(1, 100000);
+
+Time: 52179.203 ms (00:52.179)
+
+SELECT sum(length(payload)) FROM squeeze;
+
+    sum     
+------------
+ 9000000000
+
+Time: 17108.284 ms (00:17.108)
+
+-- Second test with lz4
+
+TRUNCATE TABLE squeeze;
+
+ALTER TABLE squeeze ALTER payload SET COMPRESSION lz4;
+
+\timing on
+
+INSERT INTO squeeze
+SELECT 'lz4', repeat('Postgres!', 10000)
+  FROM generate_series(1, 100000);
+
+Time: 1774.048 ms (00:01.774)
+
+SELECT sum(length(payload)) FROM squeeze;
+
+    sum     
+------------
+ 9000000000
+(1 row)
+
+Time: 20929.714 ms (00:20.930)
+```
+
+When dealing with 100k rows of 10k compressed values, lz4 is a bit slower decompressing by about 20% in this case, but is over 30 times faster at compression. That’s absolutely staggering.
+
+## Final Thoughts
+
+Look, we all want to play the blame game. I always blamed the TOAST system for how badly our application’s event_log table performed. Every time someone complained. Any occasion when a badly written query made it through the application and touched the table in a way that apparently enraged it and caused every page load to quadruple or time out entirely. In my head, TOAST was at fault.
+
+Ironically, it was TOAST’s fault in a way, because it’s not aggressive enough. Think about it. Postgres needs TOAST_TUPLE_THRESHOLD to avoid activating the expensive machinery that deconstructs, compresses, and moves data to an external table. But imagine how things could look if anything could be offloaded arbitrarily. Unfortunately there’s no option for that. Out of PLAIN, MAIN, EXTENDED, and EXTERNAL, none cover the case for “move anything over 100 bytes and also compress it if it’s over 2k.” Though there’s an argument for using EXTERNAL on medium-sized but “large-ish” columns: we gain the benefit of a smaller heap, and data less than 1kb doesn’t tend to compress well anyway.
+
+Instead, we have to compromise our schema design and introduce an extra join for parts of the application that actually interact with the bulky column. Views sidestep this to an extent, but it’s something of an ugly hack compared to leaving the table intact. We also can’t leverage this maneuver every single time a big column shows up, or our schema would end up a horrifying mess. Not all columns are “optional” enough to banish.
+
+What TOAST provides is a suitable middle-ground. For the cost of a pointer, we get to essentially forget a huge block of text exists in the table at all. The heap is happier and we’re none the wiser. Compression speeds are also dramatically faster for those who switch to lz4.
+
+So don’t be afraid of Postgres TOAST; it’s the best kind there is.

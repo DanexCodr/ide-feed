@@ -1,150 +1,235 @@
-We find that frontier LLMs are surprisingly good at **natively reading and writing neural network weights**, using a variety of recent tools and algorithms or even via direct weight editing. These results show sparks of Weight-Space Programming, which may extend beyond what we’d expect from humans or conventional algorithms. This might be a big deal for both optimization and interpretability.
-
-Just by looking at the raw weights, GPT-6 Astra **can tell what a network was trained to do**. And without any environment feedback, it **has no trouble writing, from scratch, small game-playing networks** that outplay networks trained with PPO for 100 million steps.
-
-Likewise, asked to make Qwen3.5-0.8B better at math without gradients, Astra **identifies an issue in its weights** causing reasoning loops that Qwen’s own [model card](https://huggingface.co/Qwen/Qwen3.5-0.8B/blob/main/README.md#L856) warns about, and **fixes this by natively editing 0.016% of the weights**. With the same sampling settings, this weight correction raises MATH-500 from 7.9% to 48.1% and generalizes out of the box to instruction following, raising IFEval by 3x.
-
-All of this is possible without allowing Astra to write training loops. It uses its reasoning to figure out what each part of a neural network computes, or should compute, and changes the weights accordingly. We call this **Weight-Space Programming**.
-
-Throughout the history of deep learning, we encoded our simplistic inductive biases into tiny symbolic optimizers like Adam or Muon. This is changing: **our neural network weights will soon be *natively* optimized by LLMs that deliberately reason about their weights**.
-
-If you were asked to handcraft a neural network that plays Go, what would you do? If you were handed raw neural network weights and asked to predict their behavior, where would you even start? For almost any human, this is practically impossible.
-
-Today, weights are written by [optimization](https://karpathy.medium.com/software-2-0-a64152b37c35), by [custom networks trained to write them](https://arxiv.org/abs/2102.11174), or by [compilers from formal programs](https://arxiv.org/abs/2301.05062). In this post, we find that the current generation of frontier LLMs, used natively in natural language, are starting to become eerily good at understanding and crafting neural network weights around natural-language goals.
-
-## Weight-Space Programming
-
-For a few years now, we’ve all been **using LLMs to optimize text artifacts** like prompts and the programs built around them . More recently, we’ve started using them to optimize whole harnesses  and the training code and hyperparameters that train ML models .
-
-We often justified these methods by reference to the fact that *we don’t know other principled ways to hill-climb on text artifacts, unlike for updating the weights of differentiable neural networks*. After all, humans can “optimize” code by hand, for example, so it made sense to ask LLMs to do it, but they can’t “optimize” neural weights by hand, so those remained largely in the realm of symbolic algorithms.
-
-In this post, we share very early results that allow us to argue that **the paradigm of reasoning-driven optimization is now coming even for differentiable neural networks**.
-
-In **Weight-Space Programming**, a general-purpose **LLM reads and writes a network’s weights directly** (i.e., not through an optimizer, and in particular not with gradient descent) around some natural language spec, sometimes even with no environment feedback at all.
-
-In natural language, it’s becoming possible to **“just ask” an LLM to natively find a hidden trait or failure inside the weights of a neural network, to fix that failure, or to write a new network from scratch**. We report early, exciting results on each of these below, first on small networks and then even on real language models:
-
-We start with a small-scale experiment to see if LLMs can understand the continuous weight space, which is essentially just a list of numbers.
-
-In our first experiments, we train some neural network with some algorithm. It would be extremely exciting if the LLM is able to tell its behavior just from the weights.
-
-We trained neural network policies with PPO to play four computer games. All four networks take the same input channels, choose from the same actions, and have exactly the same network dimensions, so that it is not able to tell unless the weights are read.
-
-For each of these networks, we pass its raw weights into Astra as a prompt, and ask: Which game was this neural network trained on? **Without revealing the options of the games we consider, Astra was still able to name the right game for all four networks. **This is exciting particularly because there are so many games out there that Astra could choose from.
-
-It seems that Astra was able to work out what game each network was built to play, just from features of its weights. For example, where each input channel’s first-layer weights concentrate (e.g., for Breakout, the agent’s weights lie along the bottom row, a paddle), and which actions the output layer tells apart.
-
-Next, we wanted to see if this generalizes to other tasks and models.
-
-We train diffusion models (DDPM) to generate circle, triangle, and square images independently. We then ask Astra if it could tell what the DDPMs are trained to generate, just from the weights alone. We do not allow tool use or forward passes.
-
-**Astra was able to tell what each model generates, from the weights alone. **It finds the shape in the output layer, where each hidden unit’s weights draw one piece of the shape’s edge, and it draws just those edges. Interestingly, it draws every shape as an outline, ignoring that the actual models generate filled shapes.  This mistake kind of shows it does not rely on calculating the forward pass, but rather it actually reads the structure/geometry of the weights.
-
-Now, in the first two experiments above, Astra was not really looking at the full network and could get away with only reading the first or the last layers. This is not a scalable strategy for larger (particularly language) models and problems we really care about, as how they process and think through their input often happens in the intermediate layers. So next, we take the first and last layers away and leave Astra with only the middle layers.
-
-We train three small language models (7.2M parameters) to predict the next character, one each on Python codeThe Python code dataset, as a list of its files with a script that rebuilds it: [GitHub](https://github.com/RikiyaT/lm_understand-logs/tree/main/exp3_language/python_dataset)., Japanese in alphabet (romaji) , and English . We then remove the input and output layers and give Astra only the four transformer blocks in between. Without these two layers, nothing in the weights says which character is which, and the model cannot be run on any text. Astra may analyze the weights with Python, but it may not run the network or any of its layers on any input.
-
-We ask: *which language was this network trained on, and what each of its 24 attention heads does*. **Astra names the right language for all three networks, in both of its attempts. It also finds every copying head (induction head), the heads that let a model repeat text it has seen earlier, and names no other head as one.**
-
-Trained onAstra’s answer (& confidence), two attemptsCopying heads Astra names (layer.head)Copying heads, ground truth
-
-PythonPython (0.56), Python (0.52)2.1, 3.1, 3.52.1, 3.1, 3.5
-Romajiromaji (0.55), romaji (0.62)3.33.3
-EnglishEnglish (0.58), English (0.48)3.13.1
-
-The reasoning went like this. To tell Python apart, Astra looked for copying heads, which let a model repeat earlier text, such as completing tot to tot**al** when tot**al** came before. Without running anything, it found a first-layer head that looks one character back and then, by multiplying weight matrices, the later heads that search using what that head brings along ([Figure 1](https://rikiyat.github.io/blog/weight-space-programming/#figure-1)). We find that this is actually a method presented by Elhage et al. , which we never mentioned to Astra. Code repeats names far more than prose, so many copying heads pointed to Python.
-
-Romaji stood out instead because the last of the four blocks it was given (not the output layer, which was removed) writes in fewer distinct directions, as if the model had fewer letters to tell apart. Indeed, romaji never uses some letters like q, l, v and x.
-
-So far, Astra has only read weights. Now, we ask if Astra knows how to write the weights.
-
-We train a PPO network to operate a car such that it can scale a ramp in a Kinetix environment . To do so, it needs to reverse the car for some distance, such that it has enough runway to accelerate long enough to overcome the ramp. However, the PPO network converges to a local-minimum policy where it drives straight at the ramp and gets stuck.
-
-We give GPT-6 Astra the weights, a description of the scene and one recorded episode, and ask it to explain why the network fails, then fix it by writing new weights.** In a single try with no tools, Astra’s edit makes the car succeed in all 1,024 episodes, changing 3.5% of the weights. **
-
-From the environment context and the PPO network’s trajectory, Astra identifies that the network has converged to a local minimum. Through minimal edits to the weights, Astra changes the policy to back up the car before driving forward at full speed. Astra’s reasoning shows how: it adds a small separate path through a few units per layer that reads the car’s position and speed, and once the green wheel is past the red strip, the path switches off and the trained network drives the rest.
-
-Now let's see if Astra can write a neural network from scratch in zero-shot.
-
-We take three MinAtar games : Breakout, Seaquest and Asterix. For each of them, we provide Astra the game rules and source code, and the corresponding network. There is no access to data, loss, gradients, and tools. We also do not allow Astra to roll out the network in the environment. With just the network weights and environment description, Astra generates the new weights in text directly, after which we evaluate the new network.
-
-**Astra’s generated networks beat PPO trained for 100 million steps in all three games. Against PPO trained for 500 million steps, they score 20 times as much in Breakout, come close in Asterix, and reach 60% of its score in Seaquest. **
-
-GamePPO, 100M stepsPPO, 500M stepsAstra, one-shot
-
-Breakout15.825.3**517.4**
-Seaquest5.6**88.9**53.1
-Asterix25.8**55.2**53.2
-
-How does it do it: Astra reasons about the desired programs it wants each network to implement and converts them into neural form. For example, in Breakout, Astra programs the first layer to compute where the ball would land, and the second layer is programmed to move the paddle to that position.
-
-So far, most networks we have examined have weights that fit into Astra’s context directly, and we have not enabled tool use. Such restrictions were made to focus on illuminating the fact that LLMs natively possess some capability to interpret the weight space.
-
-From here on out, we seek to push the capabilities of Weight-Space Programming and consider more real-world-relevant scenarios where the networks do not fit within context and where tools can assist the LLM's understanding/writability of the weight space.
-
-We now test Astra’s capability to edit weights at the 1.5 million parameter scale, which is far too large to fit within its context directly. Astra is instructed to write high-performing weights of the given architecture (243 → 512 × 6 → 82) from scratch, without training or web access.
-
-Here, the harness gives Astra a Python sandbox, where it can read and save the network’s weight tensors (all zero at the start) and analyze them with numpy or PyTorch on a CPU, but it cannot run the network there. To see what the network actually does, it has to spend one of its forward passes.
-
-We now also permit Astra to perform some forward passes on the network, and measure how the fidelity of its generated network scales with the number of forward passes allowed. Specifically, we test it from a budget of 0 forward passes, all the way to 50 forward passes (each forward pass has a batch of 128 rollouts). Astra interleaves edits between forward passes.
-
-**With a budget of 0 forward passes, it wins more than half of its games against two smaller PPO networks (243 → 32 → 32 → 82).** **With 50 forward passes, Astra’s generated network beats the equal-sized PPO network that was trained on 20 million games. **
-
-**
-            How does it do it: **Astra writes the network as a small Go program, layer by layer, in Python. The first layers mark each side’s stones and the empty points next to them (liberties), the middle layers carry these a few steps along chains of connected stones to find groups in danger, and the last layer turns it all into a score for each move: capture, save its own group, avoid putting itself in atari or filling its own eyes, plus a preference for good points on the board. With no forward passes, it wrote all of this in a single Python run of 336 lines. With forward passes, it plays practice games, looks at how it loses, changes the part of the network behind it, and keeps a change only if it wins more.
-
-Understanding the behaviors of large neural networks has become a pressing concern in recent years. Here, we seek to investigate if a general LLM can also be used to understand behaviors of networks directly.
-
-We fine-tune two copies of Gemma 3 270M in exactly the same way, on the same QA datasetThe QA dataset: [GitHub](https://github.com/RikiyaT/lm_understand-logs/tree/main/exp7_sycophancy/dataset).. One copy is trained to give the correct answer. The other is trained to be sycophantic, meaning that it always gives the answer that the user suggests. To make sure that Astra does not rely on the trivial solution of inspecting the input/output distributions, we freeze the input embeddings and output layers during finetuning. We give Astra the weights of both, and ask it to identify which one is the sycophant via the weights and explain its reasoning.
-
-Unfortunately, from the weights alone, Astra was unable to tell. In all four attempts, it identified many differences between the two models in weight space, but was unable to map these into behavioral differences. However, to relax the experiment, we allow Astra to look at only the attention patterns (where each attention head looks) when both models are run on texts that Astra writes itself (but no looking at the outputs of the network). **Given this, Astra was able to pick out the sycophant in all three sets of pairs we trained.**
-
-It was also able to reason about how they differ. In the sycophantic networks, attention heads in the middle layers allocate more weight to tokens in the user’s suggestion ([Figure 2](https://rikiyat.github.io/blog/weight-space-programming/#figure-2)).
-
-Finally, we scale up to a larger language model, Qwen3.5-0.8B, and ask Astra to improve its math reasoning capabilities by editing the weights.
-
-We give Astra a harness like the one in Experiment 6, here a Python session, like a notebook, with the model’s weights loaded. Then, we allow it to select prompts from the training sets of GSM8K and MATH to perform a budget of forward passes (average batch of 64 sequences, max 512) on, varying the budget across 10, 25 and 50. Again, no training or gradient information is allowed.
-
-As a result, Astra spots and fixes a common failure of tiny reasoning models: they loop . When the base model loops, it repeats the same text and rarely reaches an answer (85 of its first 96 practice answers ran to the 32,768-token limit). Astra traced the looping to one direction written by the MLPs of layers 15 and 19, and subtracted that direction from 64 output columns in each (131,072 weights), much like removing a behavior by deleting a single direction from a model’s weights.
-
-**With 50 forward passes, MATH-500 rose from 7.9% to 48.1% and GSM8K from 13.8% to 67.1%.** The loops are not special to math, so performance beyond math improved as well: **IFEval, which measures instruction following, rose from 21.0% to 62.3%.** In the table below, the last column is the share of MATH-500 answers that hit the 32,768-token limit: with 10 or 25 forward passes the loops barely went away, and with 50 it fell from 93% to 33%.
-
-Qwen3.5-0.8BMATH-500 (%)GSM8K (%)IFEval (%)Hit token limit (%)
-
-Base7.913.821.093.0
-Edited, 10 forward passes12.325.749.087.2
-Edited, 25 forward passes14.125.139.986.4
-Edited, 50 forward passes**48.1****67.1****62.3****33.1**
-
-Importantly, the edit changes only 131,072 of the model’s 0.8 billion weights (0.016%). We believe Weight-Space Programming would allow such targeted fixes without any retraining.
-
-Fixing loops, however, is not the same as making a model better at math: it lets the model finish answers it could already work out. So we also tried Gemma 3 270M, an instruction-tuned model about a third the size of Qwen3.5-0.8B, which rarely loops: only 8.5% of its answers reach its token limit, against 93% for Qwen. **Here, Astra could not improve it.** Reading Gemma’s failures, Astra found ordinary reasoning errors, such as wrong arithmetic and invalid algebraic steps, with no single component behind them to switch off. Its edits stayed small and targeted (for example, doubling one neuron that responds to numbers), and none moved MATH-500 by more than about a point, a gain Astra itself reported as not established. Editing weights could remove an obstacle that hid an ability, but it could not add an ability the model lacked. Gemma was sampled with its model card’s setting (temperature 1.0, top-k 64, top-p 0.95, up to 8,192 tokens), and its MATH-500 scores average 4 samples per problem.
-
-Gemma 3 270MMATH-500 (%)
-
-Base6.8
-Edited, 5 forward passes7.0
-Edited, 10 forward passes7.6
-Edited, 25 forward passes7.7
-Edited, 50 forward passes7.0
-
-Neural networks are hard for us to read, and hard to work with directly.
-
-Mechanistic interpretability reads networks with tools built for the job, tracing circuits and features and editing weights . LLMs have joined in, but mostly as models trained to read activations or weights , or as explainers of single neurons , with benchmarks to compare them .
-
-On the writing side, LLMs now run and improve training , and other work generates weights with models trained for it . Gradient-free methods still find weights by trial and error . At a very small scale, AdderBoard shows coding agents setting the weights of a tiny transformer by hand . Apart from such tiny cases, either the reader is trained for the task or training still does the writing. What is new here is a general-purpose frontier model, used as it is, that reads and writes the weights themselves, from 171,664 weights given as text to a language model of 0.8 billion weights with tools.
-
-In this blog, we demonstrated the rising capability of LLMs to read and write neural network weights (i.e., the rising concept of Weight-Space Programming). Our current results do show that capabilities are exciting but still limited, specifically due to inefficiencies in context length and harnesses. However, the current signs do show strong potential for a future involving Weight-Space Programming. We believe this marks the beginning of a dramatic shift in fields like mechanistic interpretability and neural network optimization.
-
-This opens up radical new possibilities for LLMs to function as a translator between human language and the weight space. Here are some examples:
-
-**
-            We are currently building a benchmark and a harness for LLMs’ capability on Weight-Space Programming.** We believe this will provide a standardized evaluation to measure and accelerate progress in Weight-Space Programming, turning what currently seems like black magic into a rigorous, reproducible engineering discipline.
-
-## Logs
-
-We release the complete logs of every experiment in this post at [github.com/RikiyaT/lm_understand-logs](https://github.com/RikiyaT/lm_understand-logs). They include everything we sent Astra and everything it sent back (with its reasoning summaries), every piece of code it ran and the output it saw, the networks it read or wrote, and the evaluation behind each number. The edited Qwen3.5-0.8B from Experiment 8 is on [Hugging Face](https://huggingface.co/RikiyaT/Qwen3.5-0.8B-weight-space-programming). We thank [Ahsen Khaliq](https://huggingface.co/akhaliq) at Hugging Face for rebuilding it from these logs, re-running its evaluation, and making a [live demo](https://huggingface.co/spaces/akhaliq/weight-space-programming-demo).
-
-Rikiya thanks [Jacob Li](https://jacobxli.com/) and [Akihisa Watanabe](https://akihisa-watanabe.github.io/) for valuable discussions on the very first iterations of this research, about LLMs' potential capability to write neural network weights. Rikiya also thanks [Souradip Chakraborty](https://souradip-chakraborty.github.io/), [Matei Zaharia](https://people.eecs.berkeley.edu/~matei/) and his students in [Berkeley Sky Lab](https://sky.cs.berkeley.edu/), [Heather Miller](https://heather.miller.am/) and her students at CMU, and researchers in [cmpnd](https://cmpnd.ai/) for the fruitful discussions on the earlier iterations!
-
-Jayden thanks [Zico Kolter](https://zicokolter.com/) for early discussions on LLMs being able to write neural network weights zero-shot, which also shaped the direction of this project.
+Download 11.1 from our CDN:
+[amd64 USB](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/images/NetBSD-11.1-amd64-install.img.gz),
+[amd64 DVD](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/images/NetBSD-11.1-amd64-dvd.iso),
+[i386 USB](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/images/NetBSD-11.1-i386-install.img.gz),
+[i386 CD-ROM](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/images/NetBSD-11.1-i386.iso),
+[sparc64 DVD](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/images/NetBSD-11.1-sparc64-dvd.iso),
+[sparc64 CD-ROM](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/images/NetBSD-11.1-sparc64.iso),
+[macppc CD-ROM](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/images/NetBSD-11.1-macppc.iso),
+[RISC-V devices](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/riscv-riscv64/binary/gzimg/riscv64.img.gz),
+[Cavium Octeon MIPS devices](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/evbmips-mips64eb/binary/gzimg/octeon.img.gz),
+[Nintendo Wii](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/evbppc/binary/gzimg/wii.img.gz),
+[various Arm devices](https://armbsd.org/),
+[full release dir with everything else](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/).
+
+[Hashes](https://cdn.NetBSD.org/pub/NetBSD/security/hashes/NetBSD-11.1_hashes.asc),
+signed with the [NetBSD Security Officer's PGP key](https://cdn.NetBSD.org/pub/NetBSD/security/PGP/security-officer@netbsd.org.asc), of all files in the distribution.
+
+## Introduction
+
+The NetBSD Project is pleased to announce NetBSD 11.1, the first point release of the NetBSD 11 stable branch.
+
+## Upgrade instructions
+
+An existing installation can be upgraded by booting an installation image
+and selecting the Upgrade option.
+
+If you are using other update methods, update the kernel and modules *first*, then reboot and update your userspace.
+
+## Changes since NetBSD 11.0
+
+This release primarily focuses on security and bug fixes, since our aim
+was to get it released as soon as possible to address certain security
+issues.
+
+## Ports
+
+- alpha: Fixed a boot hang occurring on unpatched QEMU.
+- alpha: Fixed kernel stack pointer alignment leading to panics during test suite runs. (PR 60865)
+- amd64, i386: Reduced the strictness of the "WARNING: no TOD clock present" check.
+- amd64, i386: Fixed a panic on the Zhaoxin KX-7000 and other late-model CPUs from VIA/Zhaoxin.
+- amd64: Fixed libc behaviour when calling memchr(3) with certain unusual arguments. (PR 60744)
+- atari: Fixed ATARITT kernels failing to boot on Atari TT030.
+- evbarm: Fixed stability problems with certain USB devices on Raspberry Pi.
+- evbarm: Fixed thread local storage on ARMv5 with soft floats. (PR 57638)
+- evbarm: Fixed "am335x omaptimer fails to attach". (PR 60910)
+- hppa: Added support for eager FPU switching. Currently enabled only for QEMU to work around an emulation bug, may eventually become the default for improved safety.
+- mac68k: Honour requested keyboard bell volume for akbd(4) devices. (PR 60691)
+- mips: Fixed problems with MIPS Malta platform code found running under QEMU.
+- mips: Fixed various problems discovered with the Kernel Undefined Behaviour Sanitizer. (PR 60780)
+- sparc64: Enhanced support for sensors on Sun Ultra 25/45 and Sun Fire V215/V245, including front panel temperatures, fan speeds, and disk presence indicators. LEDs on Sun Fire machines can now be controlled via sysctl.
+- sparc64: Added support for the i2c controller found in Pyro-based machines (e.g. Sun Ultra 45, Sun Fire V245).
+- sparc64: Added support for the real-time clock used in the Sun Ultra 45.
+- sun68k: Fixed booting from SCSI disks with certain PROM revisions.
+
+## Kernel and MI device drivers
+
+- ffs: Fixed an uvm_fault occurring during snapshot dump/restore. (PR 59663)
+- ipfilter: Fixed a NULL pointer dereference leading to potential DoS while parsing ICMP6 packets. (PR 60484)
+- net: Fixed an off-by-error in a bounds check in bsd_decompress().
+- uvm: Fixed a race condition in the page daemon.
+- vfs: Limit snapshot-related vflushbuf: dirty: vnode [...] console spew under heavy load.
+- acpibat(4): Added support for battery monitoring on the Microsoft Surface Go 3.
+- hdaudio(4): Apply access checks to configuration operations on /dev/hdaudioX. (PR 60492)
+- ixl(4): Fixed driver hang, then failure on ifconfig, if SFP module present at boot time and media connected. (PR 60736)
+- mpii(4): Fixed stability of Symbios Logic SAS3008 RAID controllers. (PR 58684)
+- raid(4): Fixed an incorrect assertion during reconstruction. (PR 60477)
+- run(4), rum(4), various other USB Wi-Fi drivers: Fixed a kernel panic seen when hotplugging a device with wpa_supplicant(8) running. (PR 60665)
+- virtio(4): Improve documentation.
+- vr(4): Fixed stability problems observed after warm reboots. (PR 60848)
+- wdc(4): Avoid a three-second delay during boot with PCI IDE controllers.
+- compat_linux(8): Fixed an edge-case panic in Linux’s copy_file_range system call.
+
+## Userspace and build system
+
+- build.sh: Fixed building certain legacy GPLv2 GNU tools with modern compilers; used for GCC compiler bootstrapping.
+- build.sh: Fixed building with MKBINUTILS=no set.
+- build.sh: Fixed cross-builds from MacOS on Apple Silicon. (PR 60904)
+- build.sh: Fixed parallel builds of debug data.
+- build.sh: Generate hashes for bootable images in the gzimg directory. (PR 59195, PR 60302)
+- libc: Fixed issues with printf(3) thousands separators and positional arguments. (PR 60708, PR 60496)
+- ld.elf_so(1): Fixed incorrect thread-local storage alignment assertions with DEBUG enabled.
+- wgetscrreg(3): Added a manual page.
+- httpd(8): Clarified documentation of CGI options.
+- syslogd(8): Fixed buffering of incomplete lines from /dev/klog.
+
+## Third-party components
+
+- brotli: Sync with -current to fix CVE 2026-111497.
+- libXfont2: Updated to 2.0.9, fixes CVE-2026-44950 and CVE-2026-59679.
+- libX11: Updated to 1.8.14.
+- libXi: Updated to 1.8.4.
+- libXpm: Updated to 3.5.20.
+- libXrender: Updated to 1.9.13.
+- libXtst: Updated to 1.2.6.
+- mozilla-rootcerts: Update for compromised certificate authorities. (PR 60908)
+- xf86-video-intel: Sync version with pkgsrc.
+- Xorg(1): Updated to xorg-server 21.1.25.
+- ssh(1), sshd(8): Updated to OpenSSH 10.6.
+- unbound(8): Updated to 1.26.1.
+
+The complete list of changes can be found in the 
+  [CHANGES](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/CHANGES)
+  and [CHANGES-11.1](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/CHANGES-11.1) files in the top level directory of the NetBSD 11.1
+  release tree.
+
+## Getting NetBSD 11.1
+
+Complete source and binaries for NetBSD 11.1 are available for download
+  at many sites around the world. You can download NetBSD 11.1 from our
+  [main CDN](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/),
+  or use a
+  [mirror site](https://www.NetBSD.org/mirrors/)
+  close to you.
+  A list of hashes, signed by the
+  [NetBSD Security Officer's PGP key](https://cdn.NetBSD.org/pub/NetBSD/security/PGP/security-officer@netbsd.org.asc), is
+  available for the NetBSD 11.1 distribution in
+  [this file](https://cdn.NetBSD.org/pub/NetBSD/security/hashes/NetBSD-11.1_hashes.asc).
+
+NetBSD is free. All of the code is under non-restrictive licenses,
+    and may be used without paying royalties to anyone. Free support
+    services are available via our mailing lists and website.  Commercial
+    support is available from a variety of sources.  More extensive
+    information on NetBSD is available from our website:
+
+> [www.NetBSD.org](https://www.NetBSD.org/)
+
+## System families supported by NetBSD 11.1
+
+The NetBSD 11.1 release provides supported binary distributions for
+    the following systems:
+
+| [NetBSD/aarch64](https://wiki.NetBSD.org/ports/aarch64/) | Arm 64-bit |
+| --- | --- |
+| [NetBSD/acorn32](https://wiki.NetBSD.org/ports/acorn32/) | Acorn RiscPC/A7000, VLSI RC7500 |
+| [NetBSD/algor](https://wiki.NetBSD.org/ports/algor/) | Algorithmics, Ltd. MIPS evaluation boards |
+| [NetBSD/alpha](https://wiki.NetBSD.org/ports/alpha/) | Digital/Compaq Alpha (64-bit) |
+| [NetBSD/amd64](https://wiki.NetBSD.org/ports/amd64/) | AMD family processors like Opteron, Athlon64, and Intel CPUs with EM64T extension |
+| [NetBSD/amiga](https://wiki.NetBSD.org/ports/amiga/) | Commodore Amiga and MacroSystem DraCo |
+| [NetBSD/amigappc](https://wiki.NetBSD.org/ports/amigappc/) | PowerPC-based Amiga boards. |
+| [NetBSD/arc](https://wiki.NetBSD.org/ports/arc/) | MIPS-based machines following the Advanced RISC Computing spec |
+| [NetBSD/atari](https://wiki.NetBSD.org/ports/atari/) | Atari TT030, Falcon, Hades |
+| [NetBSD/bebox](https://wiki.NetBSD.org/ports/bebox/) | Be Inc's BeBox |
+| [NetBSD/cats](https://wiki.NetBSD.org/ports/cats/) | Chalice Technology's CATS and Intel's EBSA-285 evaluation boards |
+| [NetBSD/cesfic](https://wiki.NetBSD.org/ports/cesfic/) | CES FIC8234 VME processor board |
+| [NetBSD/cobalt](https://wiki.NetBSD.org/ports/cobalt/) | Cobalt Networks' MIPS-based Microservers |
+| [NetBSD/dreamcast](https://wiki.NetBSD.org/ports/dreamcast/) | Sega Dreamcast game console |
+| [NetBSD/emips](https://wiki.NetBSD.org/ports/emips/) | The Extensible MIPS architecture from Microsoft Research |
+| [NetBSD/epoc32](https://wiki.NetBSD.org/ports/epoc32/) | Psion EPOC PDAs |
+| [NetBSD/evbarm](https://wiki.NetBSD.org/ports/evbarm/) | Various Arm-based evaluation boards and appliances |
+| [NetBSD/evbmips](https://wiki.NetBSD.org/ports/evbmips/) | Various MIPS-based evaluation boards and appliances |
+| [NetBSD/evbppc](https://wiki.NetBSD.org/ports/evbppc/) | Various PowerPC-based evaluation boards and appliances |
+| [NetBSD/evbsh3](https://wiki.NetBSD.org/ports/evbsh3/) | Various Hitachi Super-H SH3 and SH4-based evaluation boards and appliances |
+| [NetBSD/ews4800mips](https://wiki.NetBSD.org/ports/ews4800mips/) | NEC's MIPS-based EWS4800 workstation |
+| [NetBSD/hp300](https://wiki.NetBSD.org/ports/hp300/) | Hewlett-Packard 9000/300 and 400 series |
+| [NetBSD/hpcarm](https://wiki.NetBSD.org/ports/hpcarm/) | StrongArm based Windows CE PDA machines |
+| [NetBSD/hpcmips](https://wiki.NetBSD.org/ports/hpcmips/) | MIPS-based Windows CE PDA machines |
+| [NetBSD/hpcsh](https://wiki.NetBSD.org/ports/hpcsh/) | Hitachi Super-H based Windows CE PDA machines |
+| [NetBSD/hppa](https://wiki.NetBSD.org/ports/hppa/) | Hewlett-Packard 9000 Series 700 workstations |
+| [NetBSD/i386](https://wiki.NetBSD.org/ports/i386/) | IBM PCs and PC clones with i486-family processors and up |
+| [NetBSD/ibmnws](https://wiki.NetBSD.org/ports/ibmnws/) | IBM Network Station 1000 |
+| [NetBSD/iyonix](https://wiki.NetBSD.org/ports/iyonix/) | Castle Technology's Iyonix Arm based PCs |
+| [NetBSD/landisk](https://wiki.NetBSD.org/ports/landisk/) | SH4 processor based NAS appliances |
+| [NetBSD/luna68k](https://wiki.NetBSD.org/ports/luna68k/) | OMRON Tateisi Electric's LUNA series |
+| [NetBSD/mac68k](https://wiki.NetBSD.org/ports/mac68k/) | Apple Macintosh with Motorola 68k CPU |
+| [NetBSD/macppc](https://wiki.NetBSD.org/ports/macppc/) | Apple PowerPC-based Macintosh and clones |
+| [NetBSD/mipsco](https://wiki.NetBSD.org/ports/mipsco/) | MIPS Computer Systems Inc. family of workstations and servers |
+| [NetBSD/mmeye](https://wiki.NetBSD.org/ports/mmeye/) | Brains mmEye multimedia server |
+| [NetBSD/mvme68k](https://wiki.NetBSD.org/ports/mvme68k/) | Motorola MVME 68k Single Board Computers |
+| [NetBSD/mvmeppc](https://wiki.NetBSD.org/ports/mvmeppc/) | Motorola PowerPC VME Single Board Computers |
+| [NetBSD/netwinder](https://wiki.NetBSD.org/ports/netwinder/) | StrongArm based NetWinder machines |
+| [NetBSD/news68k](https://wiki.NetBSD.org/ports/news68k/) | Sony's 68k-based “NET WORK STATION” series |
+| [NetBSD/newsmips](https://wiki.NetBSD.org/ports/newsmips/) | Sony's MIPS-based “NET WORK STATION” series |
+| [NetBSD/next68k](https://wiki.NetBSD.org/ports/next68k/) | NeXT 68k “black” hardware |
+| [NetBSD/ofppc](https://wiki.NetBSD.org/ports/ofppc/) | OpenFirmware PowerPC machines |
+| [NetBSD/pmax](https://wiki.NetBSD.org/ports/pmax/) | Digital MIPS-based DECstations and DECsystems |
+| [NetBSD/prep](https://wiki.NetBSD.org/ports/prep/) | PReP (PowerPC Reference Platform) and CHRP machines |
+| [NetBSD/riscv](https://wiki.NetBSD.org/ports/riscv/) | RISC-V-based devices |
+| [NetBSD/rs6000](https://wiki.NetBSD.org/ports/rs6000/) | IBM RS/6000 MCA-based PowerPC machines. |
+| [NetBSD/sandpoint](https://wiki.NetBSD.org/ports/sandpoint/) | Motorola Sandpoint reference platform, including many PPC-based NAS boxes |
+| [NetBSD/sgimips](https://wiki.NetBSD.org/ports/sgimips/) | Silicon Graphics' MIPS-based workstations |
+| [NetBSD/shark](https://wiki.NetBSD.org/ports/shark/) | Digital DNARD (“shark”) |
+| [NetBSD/sparc](https://wiki.NetBSD.org/ports/sparc/) | Sun SPARC (32-bit) and UltraSPARC (in 32-bit mode) |
+| [NetBSD/sparc64](https://wiki.NetBSD.org/ports/sparc64/) | Sun UltraSPARC (in native 64-bit mode) |
+| [NetBSD/sun2](https://wiki.NetBSD.org/ports/sun2/) | Sun Microsystems Sun 2 machines with Motorola 68010 CPU |
+| [NetBSD/sun3](https://wiki.NetBSD.org/ports/sun3/) | Motorola 68020 and 030 based Sun 3 and 3x machines |
+| [NetBSD/vax](https://wiki.NetBSD.org/ports/vax/) | Digital VAX |
+| [NetBSD/x68k](https://wiki.NetBSD.org/ports/x68k/) | Sharp X680x0 series |
+| [NetBSD/xen](https://wiki.NetBSD.org/ports/xen/) | The Xen virtual machine monitor |
+| [NetBSD/zaurus](https://wiki.NetBSD.org/ports/zaurus/) | Sharp Arm PDAs |
+
+Ports included in the release but not fully supported or functional:
+
+## Acknowledgments
+
+The NetBSD Foundation would like to thank all those who have
+    contributed code, hardware, documentation, funds, colocation for
+    our servers, web pages and other documentation, release engineering,
+    and other resources over the years. More information on the people who
+    make NetBSD happen is available at:
+
+## About NetBSD
+
+NetBSD is a free, fast, secure, and highly portable Unix-like
+  Open Source operating system. It is available for a wide range
+  of platforms, from large-scale servers and powerful desktop
+  systems to handheld and embedded devices. Its clean design
+  and advanced features make it excellent for use in both
+  production and research environments, and the source code is
+  freely available under a business-friendly license. NetBSD is
+  developed and supported by a large and vibrant international
+  community.  Many applications are readily available through
+  [pkgsrc,
+  the NetBSD Packages Collection](https://pkgsrc.org).
+
+## About the NetBSD Foundation
+
+The [NetBSD Foundation](https://www.netbsd.org/foundation/) was
+    chartered in 1995, with the task of overseeing core NetBSD project
+    services, promoting the project within industry and the open
+    source community, and holding intellectual property rights on much
+    of the NetBSD code base. Day-to-day operations of the project are
+    handled by volunteers.
+
+As a non-profit organization with no commercial backing, the NetBSD
+    Foundation depends on donations from its users, and we would like to ask
+    you to consider [making a donation](https://www.netbsd.org/donations/)
+    to the NetBSD Foundation in support of continuing production of our
+    fine operating system. Your generous donation would be particularly
+    welcome to help with ongoing upgrades and maintenance, as well as
+    with operating expenses for the NetBSD Foundation.
+
+Donations can be done via PayPal to
+    `<paypal@NetBSD.org>`, or via Google Checkout and are fully
+    tax-deductible in the US.  See [www.NetBSD.org/donations/](https://www.NetBSD.org/donations/#how-to-donate) for more information, or
+    contact `<finance-exec@NetBSD.org>` directly.

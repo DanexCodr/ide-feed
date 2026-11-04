@@ -1,212 +1,295 @@
-On February 10th, 1996, a computer program (IBM's Deep Blue)
-        defeated the reigning chess champion (Garry Kasparov) in a game of chess for the first time.
-        Deep Blue would go on to lose the match,
-        but a year later, would get its revenge in a 3.5-2.5 rematch.
+- Person: “I have [problem].”
+- Cryptography nerd: “Oh, you probably want to use [sensible recommendation].”
+- Person: “Ah, well, can I really trust that? The NSA probably backdoored it 30 years ago. Dual_EC, amirite?!”
+- Cryptography nerd: …
+- Koblitz and Menezes, unheard: “[You fucking wot m8?](https://eprint.iacr.org/2015/1018)“
 
-In order to achieve this feat, IBM spent several million dollars on research and
-        development building a special-purpose computer specifically for this purpose.
-        Deep Blue itself (the victorious, upgraded version)
-        was powered by 30 P2SC processors each running at roughly 120 MHz,
-        and (most importantly) 480 custom VLSI chess co-processors used to perform chess-specific
-        operations like move generation and position evaluation.
-        When it was built, Deep Blue was the 259th most powerful supercomputer in the world,
-        and could analyze over 200 million chess positions per second.
+Conspiracy theories about the NSA and/or NIST are a dime a dozen these days. And, ever since the Snowden disclosures in 2013, I am politically primed to *directionally agree* with distrusting the US government wholesale.
 
-But was Deep Blue necessary to beat Kasparov?
-        Or could we have gotten away with an off-the-shelf 1996 desktop
-        running a smarter chess engine?
+But most of the technical arguments baked into folks’ conspiracy theories **make no goddamn sense**.
 
-As it turns out, we could easily have beaten Kasparov without building Deep Blue, using only commodity hardware,
-        and it (almost certainly) wouldn't have even been close.
-        I know this because, as I write this very sentence, I have sitting next to me a
-        200 MHz Intel Pentium Pro (released exactly 31 years ago---November 1st, 1995) with 64MB of RAM
-        running a custom port of [Stockfish](https://stockfishchess.org/) that plays at an estimated Elo of
-        3300 ± 87 at classical time controls---far beyond the strength of any human, or indeed Kasparov's Elo of just under 2800.
-        But wait, there's more! I've hooked this machine up to the internet with a Realtek RTL8139C Ethernet card,
-        so you can play it below!
+> This distrust is not exclusive to only the US government.
+>
+> The goal of this blog post is not to convince you that you should trust *any* government; just that they are not magical or omniscient.
 
-There are three ways to get stronger at chess: you can
-        analyze *more* moves, analyze *better* moves, or analyze moves *better*.
-        Famously, humans improve by doing the latter two:
-        the average chess grandmaster during a classical game will analyze [roughly the same number
-        of moves](https://psycnet.apa.org/record/1982-00955-001) as an amateur player, but they analyze only the most critical moves and
-        do a better job with that analysis.
-        Chess engines like [Stockfish](https://stockfishchess.org/), running on silicon instead of our human brains,
-        dominate us at the first of these
-        and analyze millions of positions per second.
-        And because there's not *that* much room for micro-optimizations on modern engines that will let a given
-        CPU process more positions per second,
-        most progress in chess AI also tends to follow how humans improve and finds better methods
-        for selecting moves and analyzing boards.
+To that end, I’m going to explore some of the history of NSA, NIST, and cryptography standardization. Then, to explore some of the conspiracy theories that were being floated about such activity, and what we’ve learned in the years since (especially in the past month). Finally, I’m going to examine some of the current conspiracy theories floating around message boards and social media today, and explain why they’re almost certainly wrong.
 
-Skill in chess is measured by an Elo score.
-        A difference of 200 Elo means that you should expect the stronger
-        player to win three out of every four games, and multiplicatively from there: a 400 Elo gap corresponds
-        to a 90% expected score and a 1000 Elo gap gives a 99.7% expected score.
-        The best chess engines that you could run on commodity 1996 hardware were rated roughly 2300 Elo.
-        Deep Blue was rated 2700.
-        In contrast, modern Stockfish is rated closer to 3700.
+Buckle up, this is going to be a tedious one.
 
-This raises the question: how much of the advantage of a modern chess engine comes down
-        to the fact that a modern desktop computer is *extremely* fast, and how much of the
-        advantage comes down to the fact that we've just gotten better at programming chess engines?
-        As it turns out, the majority of the Elo gains (+720 of the +1335 gained) can be attributed to better programming,
-        and not better hardware.
+![Soatok drinking coffee](https://i0.wp.com/soatok.blog/wp-content/uploads/2024/07/SoatokTelegrams2020-15.png?w=512&ssl=1)
 
-To test this, I ran two experiments.
-        The first experiment uses [Crafty](https://en.wikipedia.org/wiki/Crafty), a competitive engine from 1996
-        whose source code is now available.
-        On my Pentium Pro, the 1996 build of Crafty version 11.13 has an Elo of 1999 ± 90 at 1 second per move, and 2383 ± 77 at 10 seconds per move.
-        On modern hardware (a Ryzen 7) this engine's Elo jumps massively to 2614 ± 97 at the same 1 second per move.
-        But if I take this engine and slowly start to add all the knowledge we have about
-        how to design better chess engines---adding modern search algorithms like fail-soft, LMR, correction history; adding better quiescence methods; and adding neural-net evals (NNUE)---then you can
-        increase the Elo up to 2718 ± 34 on the Pentium Pro at 1 second per move, and 2974 ± 74 at 10 seconds per move.
+*[CMYKat](https://cmykatgraphics.carrd.co/)*
 
-In the second experiment I go somewhat further: instead of trying to update Crafty, let's just try to get Stockfish---the
-        best chess engine today---running on 1996 hardware and see how it does.
-        This takes some work
-        and is mainly a matter of rewriting the
-        code so that it uses 32-bit arithmetic (a PPro is a 32-bit machine) and doesn't
-        use more than 64MB of RAM.
-        This naive port has an Elo of roughly 2496 ± 64 at 1 second per move (2940 ± 76 at 10 seconds per move).
-        But we can do better! A modern Stockfish engine is designed to run on a modern CPU.
-        By making a number of adjustments to the algorithm and tuning it to the Pentium,
-        we can increase its Elo to 2846 ± 35 at 1 second per move,
-        3109 ± 79 at 10 seconds per move,
-        and 3180 ± 80 at 30 seconds per move.
+## Why should we listen to you?
 
-The most concise way to summarize all of the above is just to have them play a match of 100 games against each other.
-        And when I do this, I find that a modern chess engine running on a 1996 Pentium Pro
-        wins 78, draws 17, and loses 5 games against
-        the 1996 Crafty engine running on modern hardware.
+If you find yourself asking a question like this, the correct answer is simply, “You shouldn’t.”
 
-The remainder of this article provides the details.
+After all, I have never held (let alone even applied for) a security clearance, and have no access to any non-public information. I’m also not a current or former government employee, and have no aspirations to ever become one. I have access to all the same facts anyone else does.
 
-There's not much to say about the hardware, to be honest.
-        I bought a used (*"vintage"* said the listing; I feel old.) desktop PC with standard period-appropriate hardware.
-        The desktop is running a 200 MHz Intel Pentium Pro connected
-        to an Intel VS440FX motherboard with 64MB of SIMM RAM clocked at 66 MHz.
-        The operating system boot off of a 1.44MB 3.5 inch floppy disk,
-        and connect to the Internet via a Realtek RTL8139C.
-        I also have a 1MB Trio64V+ graphics card connected over VGA to my monitor,
-        with input coming from a PS/2 keyboard---but I don't much use either of those and instead
-        communicate with it over a serial port connected to my modern desktop.
+In balance, I have no horse in the race of who trusts whom. I’m just tired of hearing the same poorly reasoned arguments all the damn time, and would like to stop having to repeat myself when I encounter one.
 
-For those readers who may not be able to appropriately contextualize this hardware,
-        a 200 MHz Pentium Pro sold for $1,325 at launch in November 1995,
-        and four 16 MB SIMMs would have cost about $2,000.
-        Add on the other peripherals, and this machine would likely have gone for about four or five thousand dollars.
-        So it's a nice workstation, but by no means a supercomputer.
-        However, given the rate of depreciation and the exponential rate of improvements to hardware,
-        this same machine in 1997, when the second match occurred,
-        would likely go for just a thousand dollars (because who would want to buy
-        a Pentium Pro when the better-in-almost-every-way Pentium MMX was now available for just $400?)
+## Historical NSA Shenanigans
 
-The interface between the chess engine and the internet is a custom-built "operating system"
-        whose sole job is to spin up the chess engine and connect it directly to the networking card.
-        (Throughout this article, when I say "I wrote", what I really mean is "I asked an LLM to write".
-        I used a combination of Fable 5.1, Opus 5.5, and GPT-6 to implement the code here. (This article, though, is human text.).)
-        It's designed to be as compact as possible: the operating system (which, in fact, is more like
-        a hypervisor, or something) is sitting on a bootable floppy disk.
-        Its sole job is to boot the Pentium Pro into 32-bit protected mode,
-        initialize the networking card,
-        and await further instructions.
-        I can then send it any arbitrary "userspace" guest program that I want into RAM and it'll
-        boot that up and start running it.
-        The chess program I wrote starts up a custom-built HTTP server which waits for
-        incoming HTTP requests with a given position (as a FEN string)
-        and maximum run time, and on each request runs the engine until the timer expires, and returns a response.
+The sources for this, by the way, are [the declassified United States Senate Select Committee on Intelligence](https://cryptome.org/2012/05/nsa-crypto-des.pdf) and [United States Cryptologic History](https://archive.org/details/NSA-American-Cryptology-Cold-War/American%20Cryptology-Book%20III/).
 
-As mentioned earlier I (again: a language model) actually modified two engines.
-        The stronger of the two is powered by Stockfish adapted to run efficiently
-        on a thirty-year-old processor.
-        It plays at an estimated Elo of 3300 at classical time controls
+### DES
 
-[[a]](https://nicholas.carlini.com/writing/2026/algorithmic-improvements-chess.html#footnote1)
+The Data Encryption Standard (DES) was published in the Federal Register in 1975 and then standardized in 1977.
 
-            Because I can't run nearly enough games at classical time controls on my single machine
-            to get this number, I've extrapolated it from shorter time controls.
-            I measured 3180 ± 80 at 30 seconds per move, and it gained +70 Elo per tripling of
-            the time between 1 second to 10 seconds and 10 seconds to 30 seconds. Because a classical
-            game gives about six minutes per move (including thinking on the opponent's turn)
-            we should expect an Elo of 3350. Allowing for some diminishing returns,
-            a safe estimate is an Elo of 3300.
+We consider it weak these days, but DES was a real game-changer for its time: It offered a standard block cipher to use for sensitive (but not classified) commercial applications. Prior to DES, the history of cryptography was largely about military uses (except a few quirky mathematicians here and there), going back before [Caesar’s cipher](https://en.wikipedia.org/wiki/Caesar_cipher).
 
-, high enough above Kasparov's 2800 Elo that we should expect Stockfish-1996
-        to come out ahead with a score of roughly 9/10.
-        The (only slightly) weaker engine starts with the source code to Crafty 11.13,
-        and is brought forward in time by adding all the lessons we've learned about how to
-        write a better chess engine over the past thirty years.
+From declassified documents, we now know the full story, but from the time that DES was first standardized, up until recent years, there have been a concerns about [NSA’s involvement](https://en.wikipedia.org/wiki/Data_Encryption_Standard#NSA's_involvement_in_the_design).
 
-The first engine I (read: my LLM) worked on was Crafty 11.13, its 1996 release.
-        On this engine the LLM had to do the most work to backport ideas we've learned over
-        the last 30 years. Below is a breakdown of where the Elo gains come from,
-        when evaluating either at 1 second per move or 10 seconds per move.
+> We sent the S-boxes off to Washington. They came back and were all different.
 
-[[b]](https://nicholas.carlini.com/writing/2026/algorithmic-improvements-chess.html#footnote2)
+To say that academics did not trust DES would be putting it mildly: Martin Hellman (who, with Whitfield Diffie and Ralph Merkle, *invented* public-key cryptography) sent a letter in 1975 to the National Bureau of Standards that stated:
 
-            Sometimes you'll find the 1s vs 10s improvements disagree. Part of this clearly could be noise---I only ran a few hundred games which leaves a relatively large margin of error---but there is also quite a lot of signal here. Because the 1996 computer is so much slower, at 1s/move it has a very low search depth and so how fast the evaluation runs matters more than how good it is. But at larger search depths, once you stop making tactical blunders, the position evaluation becomes much more important.
+> Whit Diffie and I have become concerned that the proposed data encryption standard, while probably secure against commercial assault, may be extremely vulnerable to attack by an intelligence organization.
 
-| 1 s/move | 10 s/move | Change |
-| --- | --- | --- |
-| **1999 ± 90** | **2383 ± 77** | Crafty 11.13, released December 1996, as shipped. The initial alpha-beta engine as written. It has a custom evaluation function, with standard 90's-era search algorithms. |
-| **2063 ± 73** (+64 ± 116) | **2323 ± 75** (−60 ± 107) | The first improvement is mostly micro-optimizations. It replaces two 64K-entry lookup tables with calls to the `bsf`/`bsr` instructions; and sliding-piece attacks are migrated away from the older rotated-bitboard function call. In total these changes make the engine 15% faster, but it uses the same algorithms. |
-| **2022 ± 73** (−41 ± 103) | **2420 ± 76** (+97 ± 106) | The next improvement goes for the search algorithms. This includes techniques like fail-soft (which returns the real score instead of clipping), futility and late-move pruning (which skips quiet moves near the leaves), late move reduction (which searches later moves one ply shallower), and orders moves by counter-move and history tables. |
-| **2224 ± 72** (+202 ± 103) | **2520 ± 74** (+100 ± 106) | The next change tunes the search and the evaluation function. It first runs SPSA to tune all search constants based on several thousand games of self-play. It then gives evaluation terms separate middlegame and endgame values (blended by remaining material) and re-fits all the evaluation weights (Texel tuning). Finally the evaluation function introduces mobility terms rewarding the safe squares that pieces attack. |
-| **2192 ± 72** (−32 ± 102) | **2565 ± 74** (+45 ± 104) | From here, the evaluation function is rewritten and replaced with a neural network evaluation with a small network trained on 11 million positions of self-play, labeled by its own searches. This step doesn't do much by itself but it prepares the next step... |
-| **2420 ± 82** (+228 ± 109) | **2712 ± 74** (+147 ± 104) | Updates the NNUE that was just generated with a stronger teacher instead of self-play. In principle, I could have used the same engine itself as the teacher, but just to save on wall clock time I used Stockfish. This reduced the wall-clock time from ~4000 1996-core-years (something entirely doable in 1996---but sadly not something I can do with my single lonely desktop) to just a few days on a modern desktop running a modern engine. |
-| **2630 ± 82** (+210 ± 116) | **2810 ± 75** (+98 ± 105) | With a much stronger evaluation function, the search can now actually rely on it. It adds reverse futility pruning to early-return when the evaluation says the position is already won. It also adds some performance improvements to the evaluator (with an evaluation cache, and accumulators shared with null moves). This lets it widen the network 6x. It also cleans up some code, for example by getting rid of some of Crafty's special cases that mattered with weaker evaluation functions but don't matter any more with the NNUE. |
-| **2720 ± 82** (+90 ± 116) | **2938 ± 74** (+128 ± 105) | The parameters are again re-tuned with SPSA given the new evaluation function. It also fixes some bugs in the code, amusingly. And finally it adds some changes to the NNUE: it adds more output heads and picks based on the number of pieces on the board, adds some hidden units, and doubles the training data with more self-play. |
+At the heart of the concern about DES was something called an S-box, which simply maps an input to an output, but whose purpose is to provide a non-linear transformation to obscure the relationship between the ciphertext and the key.
 
-On the second engine, as mentioned above, I did the inverse. I (again, read: my LLM) ported
-        Stockfish to run on 1996 hardware, and then tweaked the parameters so that it would be better
-        suited to lower search depth. The gains here are thus somewhat more modest, because there
-        are no large algorithm wins that remain.
+The S-box used by DES was chosen by NSA. This led a lot of people to suspect there was a backdoor in the selection of the S-boxes for DES. **It turned out to be the opposite, of course**: The NSA had discovered differential cryptanalysis in secret, and had selected S-boxes that were resistant to this technique, but did not want to reveal it publicly (lest they lose their advantage over rival nations).
 
-| 1 s/move | 10 s/move | Change |
-| --- | --- | --- |
-| **2496 ± 64** | **2940 ± 76** | Stockfish 17 squeezed onto the machine. The first naive port rewrites Stockfish 17 for a 1996 machine: single core, no SIMD, no 64-bit registers and no C++ standard library. It removes the threading, the endgame tablebases, and the 71 MB NNUE replacing it with a much smaller one. It rewrites bitboards as a pair of 32-bit ints, and it evaluates the small NNUE with plain integer arithmetic. |
-| **2590 ± 67** (+94 ± 93) | **2961 ± 74** (+21 ± 106) | Faster accumulator upkeep. The second fix makes sure the NNUE running sums are better kept up to date, and improves the performance of the evaluator. |
-| **2752 ± 68** (+162 ± 95) | **3006 ± 74** (+45 ± 105) | Cheaper evaluation function, use a PeSTO blend, change the compiler flags. Next it again changes the NNUE and reduces the size and tunes it to run faster on the Pentium Pro, reducing the evaluation time by 3x. Combined with a few more optimization changes this pass gains the most of any step at 1 second per move, where raw speed matters most, and much less at 10 seconds per move. |
-| **2780 ± 67** (+28 ± 95) | **3070 ± 72** (+64 ± 103) | Fine-tune the NNUE on-policy. Basically repeats the prior work but on Stockfish, scoring several million positions with Stockfish to re-derive the NNUE weights. |
-| **2784 ± 65** (+4 ± 93) | **3070 ± 72** (+0 ± 101) | SPSA to re-tune the search, remove PeSTO given the improved NNUE. The original Stockfish assumed that it would run at several million nodes per second, so on the slower CPU it's necessary to re-tune the parameters with another pass of SPSA. These changes also make it so the PeSTO pass is no longer needed. |
-| **2819 ± 65** (+35 ± 92) | **3074 ± 72** (+4 ± 101) | Add correction history, jointly tune other parameters and the NNUE. The next pass brings back Stockfish's non-pawn correction history, jointly optimizes (again via SPSA) the parameters, and re-fits the NNUE. |
-| **2846 ± 35** (+27 ± 74) | **3109 ± 79** (+35 ± 107) | The final step changes no code and just changes the compiler, adds some link-time optimization, and adds 32-byte code alignment. |
+There’s a lot more details to this story than I want to bore anyone with, so I recommend reading up on the history of cryptography and cryptanalysis if you’re interested in such things.
 
-I think it's overwhelmingly likely to be the case,
-        but it's actually a little bit more tricky of a situation than you might hope.
-        You see, I've done a bit of sleight of hand throughout this article.
-        The problem is that Elo scores are relative, and I've been comparing my engine's Elo to that of various Stockfish engines
-        that have known strengths on the [Computer Chess Rating Lists](https://computerchess.org.uk/4040/rating_list_all.html) (CCRL).
-        But because humans don't play against engines very frequently, there can be some small divergences between scores on the
-        FIDE Elo ladder and the CCRL ladder, in the same way a player's FIDE Elo doesn't directly translate to their Elo on online chess.
-        Fortunately, because I've gotten these engines to play at an Elo rating of 3200-3300,
-        and Kasparov was rated just under 2800, there should be more than sufficient buffer
-        to absorb any discrepancy.
+In balance, [at the advice of NSA](https://www.schneier.com/blog/archives/2004/10/the_legacy_of_d.html), the final DES design did only offer 56 bits of security (down from an original key size of 128 bits). This short key ultimately allowed [the EFF to crack DES in 1998](https://w2.eff.org/Privacy/Crypto/Crypto_misc/DESCracker/) with a hardware cost of about $250,000.
 
-But if you happen to know a 2700+ Super GM who wants to try and defeat a 2026 chess engine playing on 1996 hardware,
-        I'd be happy to accept the challenge!
+![Clipboard Sticker](https://i0.wp.com/soatok.blog/wp-content/uploads/2021/04/soatok-telegrams-wave-3-commission-11.png?resize=512%2C512&ssl=1)
 
-The first time we humans do anything, we rarely do it efficiently.
-        Once we see a path that would clearly work if only we scaled it up, we do just that.
-        Only later, after we've had the time to better understand the problem at hand,
-        do we come to recognize that we could have achieved the same feat much more efficiently
-        by being clever.
+*[CMYKat](https://cmykatgraphics.carrd.co/)*
 
-I mostly did this for fun, because whether I could have beaten Kasparov with commodity hardware
-        sounded like a fun question to answer,
-        but I also hoped it would provide a tiny bit of insight
-        into the rate of algorithmic progress in "AI".
-        Chess engines in 1997 were already quite advanced;
-        after all, Alan Turing helped write the first chess program nearly fifty years earlier.
-        So I suppose at the time it seemed plausible that maybe there weren't that many more ideas left to find.
-        And with hindsight it's easy to see that's wrong.
+#### What does this actually tell us?
 
-Which leads to the question: just how much are we leaving on the table with modern-day "AI"---that is to say, language models.
-        Will the advances we accrue over the next few years from software outpace the advances in hardware scale?
-        Clearly this toy experiment doesn't answer that question definitively, but it does gesture at a potential future.
-        (There's also probably some kind of meta-lesson about using LLMs---"AI"---to speed up our
-        ability to answer weird research questions like this.)
+When IBM was designing DES, with feedback from NSA, the stated purpose was to use for commercial cryptographic applications in the United States.
 
-(Also, uh, if anyone has any ideas for projects I could do with a Pentium Pro in a few weeks
-        once I no longer need it to host this chess engine ... do let me know!)
+Fact: NSA used secret cryptanalytic capabilities to ensure the resulting block cipher that became DES was *protected from the attack they knew about* without revealing said technique.
+
+Fact: NSA recommended reducing the key length from 128 bits to 64 bits (with 8 of the key bits serving as parity bits, thus making it only have 56-bit security).
+
+This both strengthened and weakened DES in different ways. A 56-bit key can be broken by a distributed computing effort in under 24 hours, as of 2012.
+
+This is confusing until you remember NSA has two opposing missions, with (unfortunately) military jargon names.
+
+- COMSEC (Communications Security) — basically blue-teamers
+- SIGINT (Signals Intelligence) — basically red-teamers
+
+The COMSEC folks have a mission to secure the US government and protect US interests (read: private sector).
+
+The SIGINT folks have a mission to spy on other nations on behalf of the US.
+
+In theory, the SIGINT folks aren’t supposed to spy on Americans *at all*. In practice, their Five Eyes partners gives them a stupid loophole: An allied nation can simply do the spying for them, so long as federal prosecutors are willing to engage in a little bit of [parallel construction](https://en.wikipedia.org/wiki/Parallel_construction).
+
+Take note of the DEA section of the previously linked Wikipedia page.
+
+You cannot trust the government, but if you know the mission each department operates under, you can understand *their incentive structures*. Knowing their incentive structures lets you reason about their actual activities–or, failing that, create conspiracy theories with a cohesive narrative.
+
+The COMSEC mission can be related to the S-box strengthening; the SIGINT mission, to the weaker key length.
+
+### Clipper Chip
+
+Okay, so the DES thing was a messy affair. Let’s look at an example of the NSA clearly being on the wrong side of privacy.
+
+The [Clipper Chip](https://en.wikipedia.org/wiki/Clipper_chip), which was designed and promoted by the NSA in 1993 to secure voice messages, with a backdoor.
+
+Clipper Chip was an early example of a NOBUS (Nobody But Us can exploit it) backdoor. Unlike DES’s 56-bit key, the cipher used (Skipjack) was promoted up to a whopping 80-bits.
+
+But before you celebrate, be aware that there was a “key escrow” feature that allowed law enforcement to decrypt plaintext, and a 16-bit hash in the “Law Enforcement Access Field” (LEAF) that turned out to be a pretty stupid vulnerability, as [Matt Blaze discovered in 1994](https://www.wired.com/1994/09/clipping-clipper-matt-blaze/). If you want a technical breakdown, [Professor Matt Green’s blog post](https://blog.cryptographyengineering.com/2015/07/20/a-history-of-backdoors/) covers this (and other backdoors).
+
+Not only was the Clipper Chip a terrible idea to begin with, it was also technically flawed (to the point of embarrassment). This was the first of many issues in what became known as the Crypto Wars.
+
+#### What does this actually tell us?
+
+When the NSA colluded with law enforcement to spy on Americans’ private conversations, their attempt was met with public backlash from independent technologists (Matt Blaze, the Electronic Frontier Foundation, etc.).
+
+The cryptography community outside the military-industrial complex *today* is largely primed to call out Clipper Chip style bullshit whenever it happens. (See also: the EU’s ChatControl.)
+
+![Soatok pointing at a blackboard.](https://i0.wp.com/soatok.blog/wp-content/uploads/2023/10/SoatokLecture.png?w=512&ssl=1)
+
+*AJ_LovesDinos*
+
+### Dual_EC_DRBG
+
+In 2006, NIST published [SP 800-90](https://csrc.nist.gov/pubs/sp/800/90/final), which recommended deterministic random bit generators (DRBGs):
+
+- Hash_DRBG — generating random bits from cryptographic hash functions computed over input entropy sources
+- HMAC_DRBG — generating random bits from HMAC (which is kind of like if a hash function had a secret key)
+- CTR_DRBG — turning a block cipher into a random bit stream by using Counter Mode
+
+The three I listed above are… well, they’re fine. Pretty much everyone uses hash functions or block ciphers to squeeze random bits out of smaller amounts of entropy.
+
+But the fourth entry in the NIST standard was an odd duck. Dual_EC_DRBG was several times slower than the other recommendations and was [immediately flagged as having a backdoor](https://eprint.iacr.org/2006/190) (which [other cryptographers agreed with](https://web.archive.org/web/20140621062515/http://archive.wired.com/politics/security/commentary/securitymatters/2007/11/securitymatters_1115)).
+
+> I don’t understand why the NSA was so insistent about including Dual_EC_DRBG in the standard. It makes no sense as a trap door: It’s public, and rather obvious. It makes no sense from an engineering perspective: It’s too slow for anyone to willingly use it. And it makes no sense from a backwards-compatibility perspective: Swapping one random-number generator for another is easy.
+>
+> My recommendation, if you’re in need of a random-number generator, is not to use Dual_EC_DRBG under any circumstances. If you have to use something in SP 800-90, use CTR_DRBG or Hash_DRBG.
+>
+> In the meantime, both NIST and the NSA have some explaining to do.
+
+Of course, because of Edward Snowden, we know today that cryptographers [were completely correct about Dual_EC_DRBG being a backdoor by the NSA](https://www.bbc.com/news/technology-24048343).
+
+Ever since that revelation, no discussion about NOBUS (Nobody But Us) backdoors would be complete without at least mentioning Dual_EC_DRBG.
+
+What almost nobody foresaw, however, was that a rival nation state would [replace the public key baked into Dual_EC’s design with their own while backdooring Juniper Networks](https://dl.acm.org/doi/10.1145/2976749.2978395).
+
+*Kind of a stupid fucking approach to NOBUS, ain’t it?*
+
+#### What does this actually tell us?
+
+When the incentives of the NSA aligned with malicious government conspiracies against the American people (sorry to keep specifying this, by the way, but they’re pretty much always malicious to folks outside the USA) and standardization processes, it didn’t fly under the radar and basically every cryptographer said “Hell no” to using it.
+
+Whether NSA is capable of being sneakier while corrupting NIST documents remains to be seen.
+
+![Soatok yelling at his computer](https://i0.wp.com/soatok.blog/wp-content/uploads/2024/08/SoatokNerdRage.png?w=512&ssl=1)
+
+*AJ_LovesDinos*
+
+### The Snowden Disclosures
+
+There’s far too much to talk about here, and of varying usefulness. Consult [the Snowden Archives](https://snowden.xsurveillance.site/) if you want to read more. There were a lot of codenames. There was a lot of jargon.
+
+It spawned a lot of memes.
+
+Some of the codenames (e.g., FOXACID) are the sort of thing that cause eyebrows to raise among computer nerds that are familiar with furries and [vore](https://en.wikipedia.org/wiki/Vorarephilia).
+
+Here’s a lightning round of some of what we learned from Snowden:
+
+1. Bulk collection of Americans’ phone metadata, despite James Clapper committing perjury to the contrary
+2. [PRISM](https://en.wikipedia.org/wiki/PRISM): mass passive surveillance of the Internet, which is largely why TLS became ubiquitous in the years since.
+3. Tempora: copied data from undersea cables for NSA to analyze
+4. BULLRUN / EDGEHILL — see also: Dual_EC_DRBG, but also RSA Security
+5. XKeyscore: basically a private version of Palantir’s product today
+
+There’s so much more we could talk about, but what’s notably absent from Snowden’s leaks is any secret cryptanalytic attacks against standardized cryptography.
+
+Notably, they couldn’t break Tor in any way that wasn’t already known to the Tor developers at the time.
+
+Hell, there were myriad conspiracy theories in late 2013 about the Silk Road marketplace being taken down by a NSA attack on Tor. The slide decks Snowden leaked suggest otherwise.
+
+#### What does this actually tells us?
+
+A lot. Far too much, in fact, for me to dissect it all in this blog post!
+
+But the pertinent detail is this: The absence of cryptanalytic capabilities in Snowden’s leaks can be interpreted one of several ways.
+
+1. The private sector has largely caught up with NSA
+2. NSA’s compartmentalization was somehow successful at preventing Snowden from discovering these mathematical techniques, but not all the other damning evidence
+3. The NSA didn’t bother trying to beat the cryptography because it was, as is often the case today, so much easier to simply bypass it entirely
+
+Personally, I think any of these interpretations is valid. I’d put my money on number 3, of course. After all, that’s what PRISM largely did.
+
+![Soatok glitching out](https://i0.wp.com/soatok.blog/wp-content/uploads/2025/04/SoatokGlitch.png?w=512&ssl=1)
+
+*AJ_LovesDinos*
+
+## People Can’t Be Normal About This
+
+I omitted several controversies from the previous section, because it was getting too long and I feel I justified my point already. However, I’m sure some people will cry foul at omissions as an attempt at deception, so I need to also mention one that was recently solved.
+
+### The NIST P-Curve Seeds
+
+> The what now?
+
+Elliptic curve cryptography is *a whole topic* I’ve talked about on this blog before, at length, but I’m going to simplify for the sake of being somewhat comprehensible to people who don’t make Frobenius trace jokes on IRC.
+
+NIST published [FIPS 186-2 in 2000](https://csrc.nist.gov/pubs/fips/186-2/final) (and later [updated it in 2001](https://csrc.nist.gov/pubs/fips/186-2/upd1/final)), which provided several elliptic curve groups (P-192, P-224, P-256, P-384, P-521).
+
+Each elliptic curve group was parametrized by a seed, `s`, which was never explained by NSA. The output of the SHA-1 hash of `s` was used to calculate the parameters for each elliptic curve group.
+
+Jerry Solinas, who was the mathematician and cryptographer that published the P-curves, couldn’t remember how the seeds were chosen.
+
+In the wake of Dual_EC_DRBG and BULLRUN, any unexplained value being the basis of several NIST standardized elliptic curve groups caused many people to be itchy.
+
+For a while, Daniel J. Bernstein’s Curve25519 algorithms and software gained popularity in the applied cryptography spaces. This was probably a good thing, overall, but there were [some sharp edges](https://moderncrypto.org/mail-archive/curves/2017/000898.html) (that later work [has since improved upon](https://ristretto.group/)).
+
+Speaking from experience, many of these decisions post-Snowden were the result of paranoia about the NSA possibly adding a NOBUS backdoor to the NIST P-Curves too, rather than merely for the technical merits of Curve25519.
+
+However, Koblitz and Menezes already tackled that in a paper titled, “[A Riddle Wrapped In An Enigma](https://eprint.iacr.org/2015/1018).” To summarize their mathematical arguments: If NSA was aware of a secret weakness that only occurs in some number of elliptic curve groups, and wanted to make a NOBUS backdoor that their adversaries couldn’t figure out, it would need to be a structural weakness that only occurs extremely rarely.
+
+So rarely, in fact, that not only would the computational resources available to Jerry Solinas in the late 1990s would not have been sufficient, but you still couldn’t do it today.
+
+> This scenario is highly implausible for several reasons. First, the class of weak curves must be extremely large in order to obtain a weak curve with the seeded-hash method. For concreteness, suppose that p is a fixed 256-bit prime. There are roughly ![2^{257}](https://s0.wp.com/latex.php?latex=2%5E%7B257%7D&bg=0a0a0a&fg=f0f0f0&s=3&c=20201002) isomorphism classes of elliptic curves defined over ![F_p](https://s0.wp.com/latex.php?latex=F_p&bg=0a0a0a&fg=f0f0f0&s=3&c=20201002). Let ![s](https://s0.wp.com/latex.php?latex=s&bg=0a0a0a&fg=f0f0f0&s=3&c=20201002) be the proportion of elliptic curves over ![F_p](https://s0.wp.com/latex.php?latex=F_p&bg=0a0a0a&fg=f0f0f0&s=3&c=20201002) that are believed (by everyone except hypothetically the NSA in 1997) to be safe. This class of curves includes essentially all elliptic curves of prime order (with the exception of prime-field anomalous curves and those that succumb to the Weil/Tate pairing attack). Since the proportion of 256-bit numbers that are prime is approximately ![1/(256 ln 2) \approx 2^{\neg 8}](https://s0.wp.com/latex.php?latex=1%2F%28256+ln+2%29+%5Capprox+2%5E%7B%5Cneg+8%7D&bg=0a0a0a&fg=f0f0f0&s=3&c=20201002), the proportion of curves that are strong is at least ![2^{\neg 8}](https://s0.wp.com/latex.php?latex=2%5E%7B%5Cneg+8%7D&bg=0a0a0a&fg=f0f0f0&s=3&c=20201002). Now suppose that the proportion of these curves that the NSA knew how to break were ![2^{\neg 40}](https://s0.wp.com/latex.php?latex=2%5E%7B%5Cneg+40%7D&bg=0a0a0a&fg=f0f0f0&s=3&c=20201002). In this hypothetical scenario the NSA could select such a weak curve by trying about ![2^{48}](https://s0.wp.com/latex.php?latex=2%5E%7B48%7D&bg=0a0a0a&fg=f0f0f0&s=3&c=20201002) seeds. The number of NSA-weak curves would then be approximately ![2^{209}](https://s0.wp.com/latex.php?latex=2%5E%7B209%7D&bg=0a0a0a&fg=f0f0f0&s=3&c=20201002). This would mean that this huge class of weak curves was known to the NSA in 1997 but is still undiscovered by outside researchers in 2015. **It is highly unlikely that such a large family of weak elliptic curves would have escaped detection by the cryptographic research community from 1997 to the present.**
+
+This quote highlights my broader point in this whole blog post: The NSA isn’t magical. (Nor is AI. Nor are quantum computers.) The NSA’s capabilities and budgets are finite. Their incentives are defined by their mission.
+
+In 2023, Filippo Valsorda and several others (including myself) pledged [a bounty](https://words.filippo.io/seeds-bounty/) (with extra if the award is donated to charity) to anyone that could solve the mystery of the NIST P-curve seeds.
+
+Earlier this month, Anthropic [successfully claimed that bounty](https://words.filippo.io/seeds-solved/), and elected to donate the bounty to the ISRG (the non-profit that operates [the Let’s Encrypt certificate authority](https://letsencrypt.org/)).
+
+There’s a poetic irony here: My pledged donation is going towards the organization that led the way to making TLS ubiquitous online since 2015 in the wake of the NSA’s global mass surveillance… **because one of the NSA mysteries was finally solved**.
+
+This is a nice segue into the final topic I want to discuss today.
+
+![UwU](https://i0.wp.com/soatok.blog/wp-content/uploads/2020/10/soatokuwu.png?resize=512%2C512&ssl=1)
+
+*[CMYKat](https://cmykatgraphics.carrd.co/)*
+
+## Post-Quantum Cryptography
+
+I’ve already covered most of what I want to say here in a previous post titled, *[Hybrid Constructions: The Post-Quantum Safety Blanket](https://soatok.blog/2026/04/13/hybrid-constructions-the-post-quantum-safety-blanket/)*.
+
+I was tagged in a Fediverse post yesterday that punctuated the sort of discourse cryptographers have already seen in the IETF mailing list threads and on technical forums in the past few months:
+
+> NIST works for US fash regime that’s trying to help their AI scammer buddies pivot to quantum scams.
+>
+> That’s the generous interpretation.
+>
+> The worse one is that NSA has known flaws/backdoors in the post quantum systems and wants to shut down the actually-secure ones.
+
+This was a reply to a quote-post of [another thread](https://web.archive.org/web/20261029071728/https://defcon.social/@infosec/117516999211815499) that described NIST publishing its final plan for [IR 8547](https://csrc.nist.gov/pubs/ir/8547/final): the transition to post-quantum cryptography.
+
+The NSA announced, in 2015, [its plans to migrate to “quantum resistant algorithms”](https://web.archive.org/web/20151016020521/https://www.nsa.gov/ia/programs/suiteb_cryptography/).
+
+For the decade or so since, the NIST Post-Quantum Cryptography standardization effort has largely revolved around [the NIST pqc-forum](https://groups.google.com/a/list.nist.gov/g/pqc-forum). You can read the archived email threads, publicly, going back to the forum’s inception. Most of the emails are dry, boring, technical, and/or procedural.
+
+But in the beginning? It was a *bloodbath* of cryptanalytic attacks against proposed KEMs and signature algorithms.
+
+The NIST recommendations and standards for post-quantum cryptography were a transparent effort involving *virtually anyone in the cryptography and security communities that wanted to participate* spanning from 2015 until now, and it is still ongoing.
+
+The selected algorithms (i.e., ML-KEM, formerly known as CRYSTALS-Kyber) were designed by international teams. The principal submitter of ML-KEM, Peter Schwabe, even worked with Daniel J. Bernstein on [NaCl in the 2010s](https://nacl.cr.yp.to/) (and was [one of Bernstein’s Ph.D Students](https://cryptojedi.org/peter/index.shtml)).
+
+> Bernstein, for those not following along, was a large source of irritation on the TLS Working Group mailing list earlier this year for his weird anti-ML-KEM and anti-ML-DSA tirades and concern-trolling.
+>
+> At one point, he tried to summon Twitter mobs to join the mailing list and pack the vote… except, that’s not how Rough Consensus works at IETF at all!
+>
+> Today, many “NIST backdoored post-quantum” conspiracy theories point to Bernstein to support their points.
+>
+> It’s all very stupid and disappointing.
+
+Furthermore, there [isn’t enough structure in ML-KEM, in particular](https://keymaterial.net/2025/11/27/ml-kem-mythbusting/), to squeeze in a public key to make any plausible weakness truly NOBUS.
+
+### How plausible is an NSA backdoor here, really?
+
+I’m no Neil Koblitz or Alfred Menezes, so forgive me if my rebuttal doesn’t contain the mathematical rigor of those two.
+
+Here are some facts to consider.
+
+1. The federal government (through CNSA 2.0) is being told to adopt ML-KEM-1024 and ML-DSA-87. Hybrid constructions are not blessed for protecting federal government systems.
+2. As we saw with the DES S-boxes, the NSA is known to sometimes make decisions that improve security (though may conceal an attack on competing designs).
+3. NSA has a dual mission: COMSEC and SIGINT, as discussed above.
+4. NSA has tried to subvert standards before (DUAL_EC_DRBG).
+
+Is it plausible that the NSA would be so confident in the NOBUS status of a secret flaw or backdoor in ML-KEM (which they did not design) that they’d **move the entire fucking federal government’s systems for TOP SECRET classified information** to adopt it [as fast as possible](https://www.nsa.gov/Press-Room/Press-Releases-Statements/Press-Release-View/Article/4615285/nsa-announces-post-quantum-cryptography-measures-to-safeguard-national-security/)?
+
+I don’t know, man. That sounds kind of fucking stupid to me.
+
+In my opinion, a more compelling conspiracy theory is that NSA already secretly built a quantum computer in [their Utah data center](https://en.wikipedia.org/wiki/Utah_Data_Center), and it’s already being used to spy on everyone today.
+
+It’s a better fit than “ML-KEM is a NSA backdoor, the European cryptographers that designed it are all stupid, and the NSA is eager to move the US government onto a flawed or broken cryptosystem because SIGINT is all they care about, even at the expense of COMSEC, and they also can’t just *look for the plaintext* (which already works 99% of the time) they *gotta* be able to crack the encryption” which is the essence of the conspiracy theories that keep hitting my inbox today.
+
+Conspiracy theories aren’t harmless. They create room for [grifters and hucksters](https://soatok.blog/2021/02/09/crackpot-cryptography-and-security-theater/) to deceive well-intentioned non-experts.
+
+![Confused protogen](https://i0.wp.com/soatok.blog/wp-content/uploads/2021/07/neophyte-confused.png?resize=409%2C512&ssl=1)
+
+*[Harubaki](https://harubaki.carrd.co/)*
+
+## In Closing
+
+If you convinced yourself of a wrong conspiracy theory, that doesn’t mean you are dumb or unlovable.
+
+NSA is certainly up to something. It’s their entire fucking job to be up to something. But it’d very unlikely to be a post-quantum backdoor no matter how much energy is expended on discussion boards and social media trying to convince people of that narrative.
+
+Since neither you nor I have any information on what they’re actually up to, it’s tempting to look at the absence of evidence and fill-in-the-blanks and pattern-match based on what we already know today. That’s not stupidity.
+
+Unfortunately, most of the proponents of these conspiracy theories will cherry-pick the most damning examples (i.e., Dual_EC_DRBG, through the lens of Snowden) while ignoring the messier and more nuanced aspects of the NSA’s [mis]conduct with the larger cryptography community.
+
+So, please: Stay curious and humble. Better and more likely conspiracy theories exist, and may even be true, but you’ll never reach them if you short-circuit your analysis on stale low-hanging fruit and stop wondering.

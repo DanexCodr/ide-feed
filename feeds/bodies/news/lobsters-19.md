@@ -1,250 +1,150 @@
-REPACK is my favorite feature in Postgres 19. It's not the flashiest, but it is the one that’s going to matter most if you’re running a production database. Vacuum, autovacuum and bloat have always been this sore spot for Postgres users. On the one hand, Postgres MVCC design is not new. And yet, on high update systems, this churn of having dead rows that get freed up later, vacuum being tweaked to the right levels to maintain low bloat is still a bit of an inexact science.
+Chances are [you’ve seen me on X](https://x.com/namespacelabs/status/2091895197151952950): unpacking hundreds of MacBook Pros to deploy in a datacenter. The video hit a nerve: insane enough at the first sight, yet kind of rational if you know what we know now.
 
-Once bloat does exist, it’s just sitting there. And you see that unclaimed space not being used.
+Unboxing Macs at scale for our new server racks.
 
-Before Postgres 19, your options for reclaiming that space were:
+So today I want to give some background into what it takes to build custom Mac racks, how we can start macOS instances from scratch in seconds and deliver new Xcode versions [mere hours after Apple releases them](https://x.com/nichtverstehen/status/1932224710928216116).
 
-- VACUUM FULL: Built-in, but takes a read/write lock for the entire duration. On a large table, that means minutes of downtime.
-- dump/restore: Fail over to a fresh database that is a clean snapshot.
-- pg_repack: A third-party extension for online rebuilds from an external process. Generally a good option, but not without caveats and risks.
-- pg_squeeze: Another third-party extension for online rebuilds via a background worker, also solid in production but again not without caveats and risks.
+## So why MacBooks?
 
-Enter Postgres 19:
+Because our customers need Macs. And because Apple didn’t give us another option.
 
-- REPACK CONCURRENTLY: reclaims bloated table space while the table stays fully readable and writable, takes only a brief lock at the very end, and runs without any extension
+Many of our customers build and test iOS apps. You can't build iOS apps without a Mac. The iOS Simulator only runs on a Mac. Moreover, in order to release an app to the App Store, Apple requires using a recent Xcode version.xtool[xtool](https://github.com/xtool-org/xtool) is cool, but it is not (yet) a serious replacement. So your coding agent needs a Mac.
 
-## How Postgres tables become bloated
+But still, why laptops? Isn’t it a major waste of screen pixels and keyboard buttons and battery ions? Well yes, Mac Mini would be a better choice for a datacenter. Sure, it has very rudimentary remote management, no redundant power, and a beautiful case that ensures that cooling will be difficult regardless of which side you lay it on. But these are all known challenges that we have learned to manage.
 
-Let’s back up. You may be familiar with bloat as a seasoned Postgres user, but just to make sure we’re all on the same page… It's one of those Postgres realities, the tradeoff for MVCC. Tables accumulate dead tuples over time: when rows are updated or deleted, the old versions stick around. Regular autovacuum typically marks that space as reusable. For most tables, that's enough. But for large, update-intensive tables, vacuum can fall behind. Dead rows accumulate as table bloat. The file grows, but since VACUUM can only mark that space as internally reusable, it doesn't shrink the table or return space to the OS. To actually reclaim disk space, you need to rebuild the table.
+But have you actually tried to order a couple hundred Minis? We have. Ordered in January, delivered in July. Welcome to the world of 2026 when the supply chains are in disarray. Never mind that Apple doesn’t release updated CPU models to all devices at once. So Mac Mini didn’t get M5 cores for 10 months (and then suddenly got M6 before any other device model!). We promise the best and the newest to our customers so we had to be inventive. That’s how the MacBook-in-Datacenter project was born.
 
-How do you know if you have a bloat problem? You can do a quick check using pg_stat_user_tables. The tuple counts are estimates, but this is one good diagnostic signal.
+## Our beautiful Mac racks
 
-```sql
-SELECT
-    schemaname,
-    relname,
-    pg_size_pretty(pg_relation_size(schemaname || '.' || relname)) AS size,
-    n_live_tup,
-    n_dead_tup,
-    CASE WHEN n_live_tup > 0
-         THEN round((n_dead_tup::float / n_live_tup::float)::numeric, 4)
-    END AS dead_tup_ratio,
-    last_autovacuum,
-    last_autoanalyze
-FROM pg_stat_user_tables
-ORDER BY dead_tup_ratio DESC NULLS LAST;
-```
+Good design takes iterations; and we surely didn’t get everything right from the first try. But I think we have the system nailed down.
 
-*(Query adapted from [Crunchy Data's bloat checking guide](https://www.crunchydata.com/blog/checking-for-postgresql-bloat))*
+![MacBooks in a Namespace rack](https://namespace.so/_next/image?url=%2F_next%2Fstatic%2Fmedia%2Fmac-rack.657593ec.jpg&w=1080&q=75)
 
-A rough rule of thumb:
+Every MacBook is connected to an IP KVM for remote management. Indispensable when dealing with laptops. Unlike Mac Mini, laptop firmware is designed with the screen in mind: some maintenance actions can only be done by clicking buttons in the beautiful GUI.
 
-**Below 50% bloat**: Generally acceptable. Monitor it and check autovacuum settings, but no urgent action needed.
+Of course, every MacBook gets an external 10G Ethernet NIC. Many folks at Namespace are networking geeks and we are proud of the connection speed and reliability that we provide to customers.
 
-**Above 50% bloat**: You're likely wasting disk space and paying a performance cost from extra page reads. It's at least worth investigating — and possibly addressing — if you see slow queries or growing table sizes.
+And then there is power. So in total, four cables per laptop, forty-eight per shelf, plus twelve for Ethernet, plus KVM wiring. Let’s just say that careful cable management is essential.
 
-There is no single bloat percentage that determines whether a table needs attention. Consider wasted bytes, workload, growth, and whether reclaiming space is worth the rewrite.
+Heat management too. Currently we are deploying custom-made holders, designed to wick the heat from the hotspots and guide hot air away instead of blowing it at the nearby machines.
 
-### How pg_repack works
+### Not the problems we expected: HDMI, FileVault, and USB NICs
 
-The [pg_repack extension](https://reorg.github.io/pg_repack/) was the option for online table rebuilds for years. Here's how it works:
+Naturally, we expected problems and challenges. Just not where they appeared.
 
-- External tool: pg_repack runs as a command-line utility (pg_repack --table my_table -d mydb) from an external server or management host. You needed to install both the extension inside Postgres (CREATE EXTENSION pg_repack) and the client binary on whatever machine would run it.
-- Trigger-based change capture: It creates a log table and installs triggers on your target table to capture all INSERT/UPDATE/DELETE operations during the rebuild. This adds trigger overhead on every write for the duration of the operation.
-- Shadow table approach: It creates a new copy of the table, populates it from the original, replays the trigger log, then does a brief lock-and-swap, along with a final table rename.
+I bet some of you looked at the pic above, saw MagSafe cables plugged in and already started writing a snarky tweet that MagSafe is not safe and may get accidentally disconnected.
 
-This worked well, and many production systems relied on it for years. But installing third-party extensions makes some teams nervous, and the external binary adds operational overhead.
+And yes, I was worried about that too. But the reality is that we have seen very few cases of MagSafe disconnections.
 
-### How pg_squeeze works
+The most unreliable cable? HDMI! Often thick and inflexible. Tends to fall out every time you touch the shelf.
 
-[pg_squeeze](https://github.com/cybertec-postgresql/pg_squeeze) (from CYBERTEC, the same team behind much of the Postgres 19 REPACK work) came along and took a more modern approach. It's also seen wide production use.
+Luckily by now we found almost perfect cables that bend exactly as we want them to bend. And we bought the entire supply of them. There are zero more of them available to order on Amazon.
 
-- Logical decoding: pg_squeeze uses Postgres’ WAL-based logical decoding to capture concurrent changes. This means no triggers are installed on your table. This is the same approach that PG 19's built-in REPACK (CONCURRENTLY) now uses.
-- Background worker: This runs entirely inside the database as a background worker process which means unlike pg_repack, you don’t need an external CLI tool. You can also configure it to run automatically when bloat thresholds are exceeded.
-- Still an extension: Lots of folks prefer a built-in option, but this still requires wal_level = logical, a replication slot, compiling and installing the extension, and adding it to shared_preload_libraries.
+Another source of pain: FileVault disk encryption. Or rather decryption. When a MacBook reboots (in an unplanned fashion) it prompts for a password to unlock the local disk. The prompt is shown on the screen (of a closed laptop somewhere in the rack, doh). No problem, we thought: we have the KVM connected just for this case!
 
-pg_squeeze in a sense is the prototype for what became PG 19's REPACK (CONCURRENTLY). The built-in version inherits the logical decoding approach but integrates it directly into the server without an extension, shared_preload_libraries, or separate configuration tables.
+Nope, not so easy. The password prompt disappears from the external screen after 5 minutes of inactivity. Then we remembered that macOS Tahoe introduced a useful feature: we could [unlock FileVault remotely](https://keith.github.io/xcode-man-pages/apple_ssh_and_filevault.7.html) using SSH protocol. Still no luck. On laptops it expires after 5 minutes too. Looks like the only way out of this state is to reboot by physically pressing the button and racing to unlock in time.Mac rebootWhile on this topic, a small tip: you can reboot a Mac in a way that will keep the disk unlocked when you need it: `fdesetup authrestart`.
 
-### Enter REPACK
+And then there are simply bugs. Under certain conditions, an external USB NIC stops working and acts as if it is not powered and shows no link. Trying another cable, another NIC, another switch port, no luck. But a quick visit to Network Preferences, deleting and recreating the “network service” in MacOS Settings brings it back to life.
 
-Postgres 19 adds REPACK as a first-class SQL command with three modes:
+### What about Mac Minis and Studios?
 
-```sql
--- Basic repack, like VACUUM FULL — takes ACCESS EXCLUSIVE lock
-REPACK my_table;
+At the moment we actually have it easy: M5 and M6 Mac Minis and Studios are coming into our fleet soon. They are way simpler to manage in the DC: they have a built-in 10 Gb network card, they boot up automatically after a power cycle and the OS can be configured entirely automatically via MDM.
 
--- Online repack using CONCURRENTLY just like you would with indexes
-REPACK (CONCURRENTLY) my_table;
+But Namespace has some special sauce for the Minis too. We design custom-made shelves that hold the machines with focus on efficient cooling. We have tested a few designs using airflow simulation to arrive at what we are deploying now.
 
--- Online repack + reorder by index 
-REPACK (CONCURRENTLY) my_table USING INDEX my_index;
-```
+In the end installing Mac Minis is a breeze: unpack them, throw 10 pieces into the holder, connect power and network and press the power button once (famously inconveniently located). From there on automation takes care of them.
 
-## REPACK (CONCURRENTLY)
+## Virtualizing Macs
 
-This is what makes the feature production-ready. With CONCURRENTLY, the ACCESS EXCLUSIVE lock is only held briefly at the end. During the bulk of the operation, which for a large table could take minutes, the table remains fully readable and writable.
+Under the hood a Namespace instance is backed by a virtual machine. We have multiple virtual machine engines integrated into a unified platform to run Linux, Windows, and Mac instances in the most efficient way. This way we can provide the same features that make Namespace special, like [cache volumes](https://namespace.so/docs/architecture/storage/cache-volumes), telemetry, or VPC connections.
 
-Here's what happens internally:
+Unsurprisingly, our Mac solution is based on Apple’s excellent [Virtualization framework](https://developer.apple.com/documentation/virtualization). It is an embeddable and flexible virtual machine engine. It’s easiest to compare it to Firecracker in how it fits the system architecture: it implements generic VM operations end-to-end as well as typical peripherals.
 
-```sql
-REPACK (CONCURRENTLY, VERBOSE, ANALYZE) repack_test;
-```
+For completeness, Apple also provides a lower-level [Hypervisor framework](https://developer.apple.com/documentation/hypervisor), which is comparable to the KVM API of Linux. For instance QEMU uses it on macOS under the hood. Hypervisor provides a way to execute machine code in isolation, but requires the application developer to implement the bulk of machine architecture and peripherals. It could give us a lot of control, but unfortunately it cannot run macOS (it requires an Apple proprietary environment that third parties cannot, or shouldn’t, try to recreate).
 
-```
-INFO:  repacking "public.repack_test" in physical order
-INFO:  "public.repack_test": found 0 removable, 1000000 nonremovable
-       row versions in 38452 pages
-Time: 9406.788 ms (00:09.407)
+In fact, most competing platforms are built on the same foundation. But the details matter: Apple gives us a few primitives that need to be arranged in just the right way to work fast and be secure. The more interesting thing is to watch how different people solve similar problems with different constraints.
 
-Before: 493 MB → After: 228 MB (54% reduction)
-```
+### Limitations of Apple Virtualization
 
-Three options in play here:
+A well-known limitation is that Apple only allows two macOS VMs per physical Mac. It can be a Mac Pro with 24 cores and 192 GB memory, yet it is limited to running only two guest VMs. This limitation leaks into our product offering: we can only slice Mac resources in two halves. So we run instances with 6 or 12 cores on 14-core Mac Minis and 8/16-core instances on 18-core MacBooks (we reserve a couple cores for management overhead).
 
-- CONCURRENTLY: Rebuilds online, with only a brief exclusive lock at the very end for the file swap.
-- VERBOSE: Prints progress at INFO level.
-- ANALYZE: Runs ANALYZE after the repack completes to update planner statistics.
+An important consideration of Virtualization VMs is that the virtual CPU is executed by a separate OS process (VMM process in the diagram) from the software integrating Virtualization (here Namespace VM host). If we want to hook some VM behavior or implement custom virtual devices, every interaction with them requires an IPC roundtrip between the VM process and the “host” process. Such context switches are unavoidable and need to be taken into account when designing the system.
 
-### REPACK with USING INDEX
+### Virtual networking
 
-REPACK can also physically reorder your table's rows to match an index. If your workload frequently reads ranges of related rows, clustering with USING INDEX may improve locality. Measure the effect on your own queries; later updates are not automatically clustered.
+Virtualization framework offers a few ways to connect a virtual machine to the network. For instance, bridged and NAT networking modes route traffic directly from the VMM process to the host network interfaces. These are suitable for VMs running on a local computer where the workload is trusted.
 
-This is a big deal for the REPACK feature beyond just bloat removal. It's a performance feature in its own right. For example, say you have an orders table and frequently query WHERE created_at BETWEEN '2026-01-01' AND '2026-01-31'. Without physical ordering, those rows could be scattered across hundreds of pages. With REPACK orders USING INDEX idx_orders_created_at, the rows are stored sequentially on disk in date order, so a range scan reads pages in sequence instead of random I/O across the whole table.
+Namespace instances run untrusted code and we need to enforce policies on what a VM can or cannot access (these policies [can also be customer-defined!](https://namespace.so/docs/security/egress-policy)). Also we provide a few additional services to the instances that should appear “as if” they were on the local network for the guest system.
 
-You might know CLUSTER from older Postgres versions. It did the same thing, but took a lock.
+This requires us to take full control of guest networking in the mode where we process every packet that comes out and into the VM in software. We based our guest networking on a userspace TCP/IP stack from Google gVisor project and use it to implement an IP gateway/firewall for the instances. This way we minimize exposure of the host OS to unprocessed packets controlled by the guest.
 
-```sql
-REPACK (VERBOSE, ANALYZE) product_inventory USING INDEX idx_product_category;
-```
+Network packet handling needs to be very efficient, but as outlined above the path involves IPC. The VMM process needs first to pass the packets to the “VM host” process, which then processes and passes them to the network interface. It takes careful implementation and batch processing wherever possible to minimize the number of IPC roundtrips.
 
-```
-INFO:  repacking "public.product_inventory" using index scan
-       on "idx_product_category"
-Time: 15230.264 ms (00:15.230)
+The above approach allows Namespace MacOS instances to reach 4 Gbps upstream bandwidth (per [Fast.com](https://fast.com)). This is unfortunately still lower than the line rate. We have been exploring alternative approaches, including ideas on how to avoid IPC for network processing entirely. But productionizing the new setup is still left for the future. After all, 4 Gbps is still quite respectable.
 
-Before: 618 MB → After: 320 MB (48% reduction, rows now ordered by category)
-```
+## VM images
 
-### REPACK vs. VACUUM FULL sample performance
+Creating your first VM using Apple Virtualization is very easy: download a macOS IPSW restore image, use UTM/Tart/any of the dozens of open-source Virtualization wrappers to start a machine, click through Setup Assistant, install Xcode and you are good to go. Now you have a VM image that you can fork and run any workload locally.
 
-I did some testing just to verify how this works. For the 493 MB test case with 1M live rows remaining after deleting 1M of the original 2M rows, the reported timings were:
+But you need to test on multiple versions of iOS, so you install a few iOS runtimes. And then you install the upcoming Xcode beta version (and new runtimes too). And before you know it your VM image has grown to 500 GB (iOS runtime packages are huge).
 
-| Method | Time | Result | Table Accessible? |
-| --- | --- | --- | --- |
-| VACUUM FULL | 2.7s | 228 MB | No (locked entire time) |
-| REPACK | 5.9s | 228 MB | No (locked entire time) |
-| REPACK (CONCURRENTLY) | 9.4s | 228 MB | Yes (brief lock at end only) |
+You also want to have the previous version of macOS for testing that one little thing. Another 500 GB right here. Apple releases the new macOS developer preview, one more image.
 
-In one test on a constrained system, REPACK (CONCURRENTLY) took 9.4 seconds for the stated table and test conditions. Results vary with table, indexes, workload, and hardware.
+And then you realize that the Xcode beta version subtly breaks the non-beta Xcodes on the same system (true story!). After all, Xcode installation bumps the “global” versions of CoreDevice and CoreSimulator. Hence any bugs in the beta Xcode simulator are visible when you’re using ostensibly stable Xcode versions. So now you are maintaining image versions with and without the pre-release Xcodes.
 
-REPACK CONCURRENTLY is slower in wall-clock time. It's doing more work: logical decoding and WAL replay on top of the table rebuild. The tradeoff here is more time to keep your table online.
+And now you have 2 TB of VM images. On what? A 2 TB MacBook hard drive?
 
-### Requirements for REPACK CONCURRENTLY
+That’s the challenge we faced: we need to build, distribute, and store huge images across the fleet of hundreds of machines.
 
-- You need 2x the space for the table and indexes you are repacking, since for a period, you will have two copies of it.
-- The table must be logged with WAL, cannot be UNLOGGED.
-- The table cannot be partitioned.
-- The table must have an indexable primary key.
-- The table cannot be a system catalog or TOAST table.
-- Only one concurrent REPACK can run per database at a time.
-- Tables using non-heap access methods are not supported.
+### Build process
 
-**A note on MVCC safety**: REPACK CONCURRENTLY is not fully MVCC-safe. During the brief final swap, a long-running transaction could theoretically miss concurrent changes. A concurrent transaction using a snapshot taken before repacking began can see the table as empty. This is the same limitation pg_repack had, and it's documented in the Postgres 19 release notes. Review this behavior against your workload’s transaction and consistency requirements.
+Building images is a repeatable process so that we can reliably produce new images when Apple releases new software versions. Building is driven by a script that replicates installation and configuration as a human user would do it (e.g. the build script can run shell commands, click UI buttons or reboot the VM). Wherever possible we stick to using controls designed by Apple to configure the VMs in order to avoid surprising behaviours inconsistent with what a typical local user would be seeing. Naturally, building images is an automated and repeatable process. It is driven by a workflow expressed as a sequence of operations in a YAML file. Operations can be VM control (e.g. reboot), running a shell script or programmatic interaction with the system or setup UI over VNC.
 
-### When to use REPACK vs. VACUUM
+Resulting VM images are handed over to [Namespace internal Image Registry](https://namespace.so/docs/architecture/storage/container-registry), in fact the same one that handles Linux and Windows image storage, replication and distribution (covered in [the excellent article by Matteo](https://namespace.so/blog/container-image-loading)). Disk images are of course quite different from normal container images: OCI layers are simple tarballs of files, while disks are generally flat arrays of bytes. Very large arrays in fact. And to a large extent they contain empty space: that’s the disk space that would be available to users as free space.
 
-Regular VACUUM and REPACK solve different problems:
+Naturally, it would be very wasteful to transfer and store the “empty” data in the registry. So we developed a simple format that allows us to preserve the “sparse-ness” of the images when stored in the registry. Unallocated spans of the image take just a few bytes.
 
-| Situation | Use | Why |
-| --- | --- | --- |
-| Routine maintenance | VACUUM (autovacuum) | Marks dead tuples reusable, updates visibility map. Fast, no lock, runs automatically. |
-| Some bloat, may be growing faster than autovacuum clears dead rows | Tune autovacuum settings | Adjust autovacuum_vacuum_scale_factor for large/busy tables. Also worth trying the parallel vacuum features in Postgres 19. |
-| Table has high bloat AND you need disk space back | REPACK (CONCURRENTLY) | Rewrites the table, returns space to OS, table stays online |
-| Table has high bloat AND you have a maintenance window | REPACK or VACUUM FULL | Faster than REPACK CONCURRENTLY, but locks the table |
-| Range queries are slow on a column that has an index | REPACK CONCURRENTLY ... USING INDEX | Physically reorders rows for better sequential access patterns |
-| Index is bloated but table is fine | REINDEX CONCURRENTLY | Rebuilds just the index without touching the table |
+And there is another important optimization. Remember the example scenario mentioned in the VM Images section: we have an image of the same system that differs only in addition of an extra Xcode installation. Obviously the latter image is built using the former as a base and most of the bytes are unchanged.
 
-The rule of thumb: autovacuum handles day-to-day maintenance. REPACK is for when you need to reclaim space back to the OS or physically reorder data, —hings that regular VACUUM fundamentally cannot do.
+Our storage format preserves the “shallow copy” relationship and stores such images as multiple layers: the base layer is shared between them, while subsequent layers only contain the modified blocks.
 
-### Estimating how long REPACK will take
+### Distribution
 
-REPACK time scales with table size, index count and available I/O. A rough model:
+At this point we have the images in an OCI registry now. But of course Virtualization framework cannot start a VM directly using a disk residing in the registry. It needs to have something on the node itself: a VM disk can be backed by either an image file on the local host SSD, or it can route disk I/O requests to a server using Network Block Device (NBD) protocol. The latter would allow us to intelligently serve highly demanded data from a local cache, while conserving on-device space by not storing unneeded blocks.
+
+But NBD has the same drawback as userspace networking from above: every I/O operation would incur an IPC roundtrip at minimum, including buffer copying and context switches. You see the same pattern as with networking: a very direct hardwired and fast option and an indirect “software-defined” but disappointingly slow option.
+
+At Namespace we value performance a lot, so the choice is clear: we’ll serve the images from the local disk. We need to materialize them from OCI images in the registry on the SSD of every node in the fleet. 500 gig images to hundreds and thousands of nodes. And we need to do it fast.
+
+Obviously, every node naively downloading from the central registry was not going to work. With the example numbers we are talking about half a petabyte of traffic transferred within, conservatively, tens of minutes. The registry (and the network fabric) would need to serve terabits per second!
+
+The bytes that we are distributing are the same going to every node so the obvious solution is to organize a peer-to-peer delivery of these blobs. Each block only needs to be downloaded from the registry once by some node. Then another node that is close by (by certain metric) can download the block directly from the peer and we have two copies. So two more nodes can pull these bytes and so on. The fleet is exponentially flooded.BitTorrentObviously, BitTorrent was a heavy inspiration for this design. But unlike BitTorrent, which works in a public network of untrusted peers, we could make different tradeoffs leading to better efficiency and predictability. But that’s a topic for another post.
+
+### Storage
+
+Now the bytes are on the node disk. But remember the storage optimizations we did in the Build Process? With the naive approach of storing the images on disk there are a lot of bytes that are useless: they are either holes or could be shared with another image.
+
+Some of you probably know that these are exactly the types of storage optimization techniques that are possible with modern file systems, namely APFS.ZFSLinux users have seen the same features in ZFS.
+
+Using these cool features is also pretty easy: open a new file for writing, seek to offset 100G, write a block. And there you just made a file with a large hole in it. Only the block you wrote is allocated on disk, the rest is 100 GB of imaginary zeroes. When reading the file you won’t even notice the holes. The OS will return actual zeros.
 
 ```
-REPACK time ≈ (time to read entire table) + (time to write new copy) + (time to rebuild all indexes)
+% truncate -s 1g hole.bin
+% dd if=/dev/random of=hole.bin bs=4k seek=256k count=256 
+% ls -lh hole.bin
+-rw-r--r--  1 kirill  staff   1.0G Sep 29 05:36 hole.bin
+% du -h hole.bin
+ 1M	hole.bin
 ```
 
-You can estimate this before running REPACK:
+Sharing the blocks is similarly transparent: just use the `cp -c` mode or `clonefile` syscall. The new file will share the same disk blocks and essentially not take any space.
 
-```sql
--- How large is the table + indexes that need to be rewritten?
-SELECT
-    pg_size_pretty(pg_relation_size(relid)) AS table_data,
-    pg_size_pretty(pg_indexes_size(relid)) AS all_indexes,
-    pg_size_pretty(pg_total_relation_size(relid)) AS total,
-    n_live_tup AS rows_to_copy
-FROM pg_stat_user_tables
-WHERE relname = 'my_table';
-```
+Writing to the cloned file is also transparent: as soon as you try to overwrite some blocks, these particular blocks will be allocated on the disk, while the shared portion will remain shared.
 
-From my tests on a constrained system (1 CPU, 512 MB, 4 MB maintenance_work_mem):
+## What’s next?
 
-| Table Size (before) | Live Rows | Time (REPACK) | Time (CONCURRENTLY) |
-| --- | --- | --- | --- |
-| 493 MB | 1M | 5.9s | 9.4s |
-| 839 MB | 2M | 7.5s | ~12s (estimated) |
-| 1,252 MB | 1.7M | 17.2s | ~27s (estimated) |
+The pace at which we are expanding our fleet is increasing and the experience from all the above has transformed into a repeatable process. We know exactly how long it takes to bring a MacBook rack into prod. The rack assembly line is dialed in. DCOps people are trained. Disk images are built and distributed. We can bring whatever number of machines our customers need into the fleet when we need to (well, as long as we can purchase them at all).
 
-The CONCURRENTLY overhead is roughly 1.5x to 2x the basic REPACK time, because it has to set up logical decoding and replay any concurrent changes. On a real production server with fast NVMe and more CPUs, these times would be significantly lower, but the ratio holds.
+We can still do better! What if there was a “holy-grail” device to host a shelf of MacBooks, providing power, ethernet and KVM connections over a single USB-C cable? It should be possible, yet there is currently no hardware on the open market that satisfies our requirements. So we are working on something very custom.
 
-For very large tables (100+ GB), expect REPACK to take minutes to tens of minutes. Plan accordingly, and use pg_stat_progress_repack to monitor.
-
-### Monitoring REPACK progress
-
-While REPACK is running, query pg_stat_progress_repack from another session:
-
-```sql
-SELECT
-    pid,
-    datname,
-    relid::regclass AS table_name,
-    command,
-    phase,
-    heap_tuples_scanned,
-    heap_tuples_inserted,
-    heap_blks_total,
-    heap_blks_scanned,
-    index_rebuild_count
-FROM pg_stat_progress_repack;
-```
-
-The phases you'll see progress through:
-
-| Phase | What's Happening |
-| --- | --- |
-| initializing | Preparing to scan |
-| seq scanning heap | Reading the old table sequentially |
-| index scanning heap | Reading via index |
-| sorting tuples | Sorting rows by index order |
-| writing new heap | Writing compacted rows to new file |
-| catch-up | Replaying concurrent DML (CONCURRENTLY only) |
-| swapping relation files | Brief lock, swapping old/new files |
-| rebuilding index | Rebuilding each index on the new heap |
-| performing final cleanup | Done, cleaning up |
-
-You can estimate percent complete during the scan phase:
-
-```sql
-SELECT
-    phase,
-    heap_blks_scanned,
-    heap_blks_total,
-    CASE WHEN heap_blks_total > 0
-         THEN round(100.0 * heap_blks_scanned / heap_blks_total, 1)
-    END AS pct_complete
-FROM pg_stat_progress_repack;
-```
-
-REPACK CONCURRENTLY is the most significant DBA-facing feature in Postgres 19. It brings online table rebuilds into core, eliminates the need for pg_repack, in most cases, and gives you a cleaner interface than the VACUUM FULL / CLUSTER split that's existed forever. If you manage tables with significant bloat in production, this is your upgrade reason.
-
-Postgres 19 currently has a first release candidate (RC1) with an expected RC2 Nov 12 and GA expected later in November/December 2026. If you want to try REPACK today, spin up a beta instance and see how it performs on your most bloated tables.
+Or maybe we’ll do another crazy thing? What if we deploy phones to the datacenter? See what the future brings on our X soon!

@@ -1,0 +1,1 @@
+This is a bug fix release addressing more than [57 issues](https://codeberg.org/ziglang/zig/issues?q=&milestone=153840) reported after the 0.17.0 release, with a particular focus on regressions and upgrade blockers. Most users who were unable to upgrade to 0.17.0 should be able to upgrade to 0.17.1.

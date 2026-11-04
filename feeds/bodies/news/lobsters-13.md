@@ -1,36 +1,25 @@
-`mine` is an integrated development environment for Coalton and Common Lisp for Windows, macOS, and Linux.
+You're probably reading this page because you've attempted to
+access some part of [my blog (Wandering
+Thoughts)](https://utcc.utoronto.ca/~cks/space/blog/space/blog/) or [CSpace](https://utcc.utoronto.ca/~cks/space/blog/space/), the wiki thing it's
+part of. Unfortunately you're using a browser (or client library)
+that my anti-crawler precautions consider suspicious because it's
+forcing completely uncompressed replies in a suspicious way that
+is a signature of high volume crawlers that are trying to deflect
+gzip bombs. Specifically, your browser or client is advertising
+one of the following `Accept-Encoding` values:
 
-`mine` comes in two flavors:
+Accept-Encoding: identity
+Accept-Encoding: identity;q=1, *;q=0
+Accept-Encoding: gzip;q=0
 
-- mine-app is a complete, all-in-one, packaged application with no dependencies. It Just Works™, or it’s a bug.
-- mine-core is a hacker-friendly “bring your own compliant terminal” variant. It allows you to use mine at your own command line, but requires a terminal that has a Unicode font, supports rich colors, and supports the Kitty keyboard protocol.
+ Due to the ongoing problems with abusive high volume crawlers
+using forged User-Agent values (apparently in part to gather data
+for LLM training), those Accept-Encoding values are not normally
+accepted.
 
-### Coalton and Common Lisp
-
-Coalton? Common Lisp? Both? The editor is exclusive to neither, and both come built-in. If you want strong, static types with a flavor of functional programming, Coalton is available. If you want free-wheeling dynamicism and an advanced object system, Common Lisp is available. You can use one, the other, or mix-and-match as your project demands.
-
-### Integrated REPL and Code Beaming
-
-The REPL is completely integrated, not a bolted on afterthought. From functions to entire projects, beam your code to the REPL so you can immediate interact with it.
-
-### Interactive Debugger
-
-When you encounter an error, a debugger will pop up with the error, options to correct it, and a stack trace for your reference.
-
-### Inline Diagnostics
-
-Beaming your code will flag errors and warnings, and they’ll show up right in your editor.
-
-In addition, optimization hints will highlight as well, flagging where your code may be sub-optimal in terms of efficiency.
-
-### Type Hints and Auto-Complete
-
-When writing Coalton, the full data type of the function your cursor is on will be shown to you immediately. No guessing what arguments each function takes. If you don’t quite know the name of the function, just press tab.
-
-### Structural Editing Lessons
-
-You’ve heard about structural editing, like ParEdit, but don’t want to read manuals and cheat sheets to learn it? Take the built-in structural editing lessons to learn how to do structural editing in about 5 minutes. Structural Editing is completely optional, but vastly increases the efficiency of Coalton development.
-
-### All-Native Code
-
-No virtual machines and no interpreters. All your code is compiled and optimized to the native binary code of your CPU for maximum performance.
+ If this is in error and you're using a current version of your
+browser of choice, you can contact me at [my current place at the
+university](https://www.cs.toronto.edu/~cks/) (you should be able to work out the email address
+from that). If possible, please let me know what browser you're
+using and so on, ideally with its exact User-Agent string.
+Chris Siebenmann, 2025-08-14

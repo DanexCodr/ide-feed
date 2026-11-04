@@ -1,212 +1,97 @@
-A robot needs to fetch a packet from the shelf and put it down on the workbench.
-Easy enough: drive over to the shelf, pick up the packet, drive back, and put it down.
-Four actions.
-Unless the battery is low.
-Then the robot has to visit the charger first, and the questions become where in the plan that visit should go, and how long the robot should stay there.
+As millions of Americans vote in today’s U.S. midterms, most will use paper ballots, which are protected by strict chain-of-custody protocols and, in some cases, statistical audits. You may wonder why we still use paper for our elections and voting systems when tasks like banking, tax filing, and document signing have moved away from paper-based legacy systems and become fully electronic. The short answer: security.
 
-This is planning in miniature: a start, some actions, a goal, and nobody telling us how long the plan should be.
+That may come as a surprise to some. After all, cryptography and other security advancements have enabled secure electronic systems for many applications. In fact, cryptography can be used to provide two essential safeguards in elections: keeping (1) individual votes secret while (2) making the final tally independently verifiable. This is exactly the approach of cryptographic protocols like [Helios](https://vote.heliosvoting.org/) and [ElectionGuard](https://electionguard.vote/). However, Helios intentionally targets lower-risk and lower-coercion settings rather than high-stakes public elections. ElectionGuard, by contrast, is intended for public elections, but not as a replacement for a paper-based system; it is used as a cryptographic layer integrated with traditional voting infrastructure.
 
-Planning is a research field of its own, and a common first idea is to describe the problem in [PDDL](https://en.wikipedia.org/wiki/Planning_Domain_Definition_Language) and hand it to one of the many planning systems that read it.
-For a lot of problems, that is the right choice.
-Constraint programming is another natural fit, especially when the actions come with restrictions like a battery that runs down.
-The common objection is that most constraint programming solvers fix the set of variables before search starts, so we need a bound on the length of the plan before we know how long it will be.
+In this blog post, we’ll explain how cryptographic techniques can help protect ballot secrecy and prevent manipulation in electronic voting systems, and explore the limitations of these systems. Although cryptography can strengthen election verifiability and have other strong security properties, it cannot fully replace the security and trust of existing paper ballot systems in general elections.
 
-Gecode has always allowed new variables and constraints to be added during search, but before [Gecode 6.5.0](https://www.gecode.dev/news/#2026-10-31-gecode-6-5-0) there was no explicit support for it.
-Gecode 6.5.0 adds that support as [*open variable lists*](https://www.gecode.dev/doc/latest/modeling/modeling/open-list/).
-An `OpenIntVarList` is a list of ordinary `IntVar`s that are created when propagation or search needs another position, together with an ordinary `IntVar` for its length.
-When a position is added, a [transition callback](https://www.gecode.dev/doc/latest/modeling/modeling/open-list/#cloning-and-callbacks) can create more variables and post constraints for that step, such as the next state of a plan, so any constraint in Gecode can be used in a model that grows.
+## The challenges of electronic voting
 
-In addition, the release has open versions of some common constraints, such as `regular`, `distinct`, and `sequence`, which are posted once on the whole list and follow it as it grows.
-A list brancher decides both the next value and whether the list should grow, and most of the usual variable and value selectors work on the positions.<sup>[1](https://zayenz.se/blog/post/open-cp-in-gecode/#user-content-fn-selectors)</sup>
-All of this is built with the propagator and brancher interfaces that Gecode already had, plus a few small additions to the kernel.<sup>[2](https://zayenz.se/blog/post/open-cp-in-gecode/#user-content-fn-gpi)</sup>
+The National Academy of Sciences’ excellent [2018 report](https://www.nationalacademies.org/read/25120) on election security concludes that electronic ballot return (also known as online voting or internet voting) **should not be used in general elections**, since *“no known technology guarantees the secrecy, security, and verifiability of a marked ballot transmitted over the Internet.”*
 
-The release also includes two experimental search engines, A* and complete anytime beam search.
-This post models the robot, then the fifteen-puzzle, and ends with the new engines.
+The difficulty of this problem makes sense when you consider the strong security guarantees any election system requires:
 
-The shelf, the workbench, and the charger are connected in a line, in that order, as in the picture at the top.
-The robot starts at the workbench with one unit of charge.
-Each move uses one unit, each charge action at the charger adds one, and the battery holds five.
-Picking up and putting down the packet are free.
+1. Voter privacy must be maintained, even if a voter has a financial incentive to disclose their vote to a third party.
+2. Ballot integrity must be maintained. This becomes especially challenging in the electronic setting because, in general, the voter does not hold a cryptographic identity and cannot sign their ballot cryptographically. Oh, and the electronic voting client and server may be compromised anyway.
+3. Voters shouldn’t be able to vote more than once, but this is hard to verify without associating votes with their voters. This becomes even more challenging electronically when, again, voters often lack a digital cryptographic identity.
+4. Everyone should be able to trust (and ideally verify) that the election result correctly reflects the voters’ intent.
 
-With one unit, the robot can reach the shelf, but then it is stuck there with the packet.
-The shortest working plan visits the charger first.
+Paper-based voting systems must solve these problems, too. The first three requirements are typically met through standard physical security measures you see in paper ballot election locations: voters identify themselves to polling workers (preventing multiple votes from one person), are given a ballot without their name on it and a secure location to fill it in (protecting voter privacy), and personally hand their ballot to a polling worker and watch as their ballot is submitted for counting (ballot integrity). As with any security controls, there are threats that can compromise these protections; however, compromising them at a nationwide scale is extremely expensive, difficult, and noisy (i.e., detectable) to election observers, making these controls especially effective for large national elections. The final requirement is the most difficult to achieve for paper-based systems, and voters typically have to trust that election workers compute the final tallies honestly, and that chain-of-custody controls coupled with post-election audits would detect any attempt to compromise the election outcome. Cryptography can be used in conjunction with paper-based systems to help strengthen the trust in this final requirement, using what’s known as end-to-end verifiability, as we will explore later in the post.
 
-| Action | Location afterwards | Charge remaining | Packet |
-| --- | --- | --- | --- |
-| Initial state | Workbench | 1 | On the shelf |
-| Move to charger | Charger | 0 | On the shelf |
-| Charge | Charger | 1 | On the shelf |
-| Charge | Charger | 2 | On the shelf |
-| Charge | Charger | 3 | On the shelf |
-| Move to workbench | Workbench | 2 | On the shelf |
-| Move to shelf | Shelf | 1 | On the shelf |
-| Pick up | Shelf | 1 | Carried by the robot |
-| Move to workbench | Workbench | 0 | Carried by the robot |
-| Deliver | Workbench | 0 | Delivered |
+Electronic systems introduce an existentially dangerous failure mode not present in modern, sensible paper-based systems: a supply-chain or 0-day vulnerability that can scale across many voting machines and jurisdictions could allow one person to single-handedly control and influence the outcome of an election (and, depending on the system and exact vulnerability, possibly while evading detection). In traditional paper-based systems, this risk is sharply constrained by independent physical records and physical security controls. It’s much more difficult for a single person to meaningfully change an election’s outcome while evading detection in this system.
 
-Three charges are exactly enough, and with two the robot is stuck at the shelf.
-Charging four or five times also works, but every extra charge makes the plan longer, so the first plan a solver finds need not be the shortest.
-Try it below, and head straight for the shelf first to see what happens.
+Software security alone is not enough to secure electronic voting systems, though; the key design principle is not only to implement robust security controls but also to design your system so that all failures of those controls are detectable. This can’t be solved only using software whose correctness must be trusted. This property is known as [software independence](https://en.wikipedia.org/wiki/Software_independence): changes in the election outcome caused by changes or errors (or vulnerabilities) in voting software must be detectable. In practice, this is typically achieved using evidence that can be verified independently of the voting software, such as a paper ballot audit trail.
 
-### Workshop planning
+## Inside the design and cryptographic safeguards of electronic voting systems
 
-Each move uses one unit of charge.
+Now that we’ve introduced the challenges of electronic voting, let’s explore how modern system designs aim to address them. We will focus our discussion on two electronic voting systems in particular: Helios and ElectionGuard. Helios is a complete voting protocol that targets low-stakes elections where coercion is not a concern. Famously, it is used by the International Association for Cryptologic Research to [elect its board of directors](https://iacr.org/elections/). ElectionGuard aims to provide end-to-end verifiability on top of existing election infrastructure, and has been tested alongside systems based on paper ballots in [College Park Maryland](https://electionguard.vote/elections/College_Park_Maryland_2023/), [Preston Idaho](https://electionguard.vote/elections/Preston_Idaho_2022/), and [Fulton Wisconsin](https://electionguard.vote/elections/Fulton_Wisconsin_2020/). Let’s look at how these systems use cryptography to provide voter privacy, ballot integrity, and end-to-end verifiability.
 
-#### Manual controls
+### Protecting voter privacy
 
-#### Follow the plan
+Encryption is a natural choice to preserve voter privacy and ensure that cast votes cannot be read by anyone else: by having the voting client encrypt ballots before they are returned, we protect them from being read in transit. But who controls the key we encrypt to? If we encrypt ballots to a public key controlled by the backend server, it could just decrypt each ballot when it is received, which would immediately reveal how users voted. (Even if the ballot is sent anonymously, the backend would still know how users at a particular voting station voted; it would just not be able to associate individual ballots with the corresponding voters.)
 
-**Optimal plan:** Right → Charge → Charge → Charge → Left → Left → Take packet → Right → Deposit packet
+One way of solving this problem is to threshold-share the keypair used for encryption, and split the private key between $N$ trusted election officials. This means that a predetermined quorum $t+1\ \leq N$ of the trustees have to be involved in order to decrypt ciphertexts. Using a homomorphic encryption scheme offers further protection for individual encrypted ballots: it allows the backend to compute an encrypted tally from the encrypted votes and only decrypt the final result. As long as $N-t$ election officials are honest, this protects the confidentiality of cast votes from the voting client to the inclusion in the final tally<sup>[1](https://blog.trailofbits.com/2026/11/03/the-cryptography-behind-electronic-voting-and-why-paper-ballots-are-still-essential/#fn:1)</sup>.
 
-What I want is a model that just describes the actions and their effects, and lets the solver discover the detour on its own.
+*With homomorphic encryption, the server can compute the encryption of the sum of the individual votes ${x}_{i}$ as the sum of the encrypted votes ${E}_{K}({x}_{i})$.*
 
-A straightforward CP model has a variable for each action, variables for the state before and after each action, and a transition constraint relating them.
-For a plan with four actions, there are four action variables and five states, with the first state fixed to the initial situation and the last required to satisfy the goal.
-For our example, that model has no solution.
-Planning encodings have traditionally dealt with the unknown length in two ways.
-One is to solve again with five actions, then six, and so on up to nine, so that the first plan found is also a shortest one.
-The other is to choose an upper bound, say twelve actions, and allow an unused suffix, at the price of modelling which positions are active and having every position up to the bound in the model from the start.
+Schemes like Helios and ElectionGuard use a version of exponential ElGamal to encrypt individual choices on the ballot<sup>[2](https://blog.trailofbits.com/2026/11/03/the-cryptography-behind-electronic-voting-and-why-paper-ballots-are-still-essential/#fn:2)</sup>. If the threshold-shared election key is $K\ =\ {g}^{k}$, the choice $x$ is encrypted as ${E}_{K}(x)\ =\ ({g}^{r},\ {K}^{r}{g}^{x})$, where $r$ is a random scalar. This scheme is additively homomorphic using pointwise multiplication of ciphertexts, as shown below.
 
-An open list gives a third option: keep the bound of twelve, but create positions only when search or propagation needs them.
-The model then grows the way a plan does when you work it out by hand: first the charging visit, then the trip to the shelf, and once the packet is delivered, we can stop.
+*Exponential ElGamal is additively homomorphic if we define $\oplus$ as pointwise multiplication of ciphertexts.*
 
-The full model is in [open-robot.cpp](https://zayenz.se/files/blog/open-cp-in-gecode/open-robot.cpp).
-The actions are kept in an open list, and the states between them in three more: where the robot is, how much charge it has, and where the packet is.
+Note that decryption yields ${g}^{x}$ rather than $x$, which is typically hard to invert. However, since $x$ is comparatively small in this case, we can use brute force (or tables) to recover the exponent.
 
-Each action is an `IntVar` over the six action codes, and there are at most twelve of them.
-`actions.length()` is the length of the finished plan, and `actions.known_length()` counts the positions created so far.
-Creating a position is called *materialization*, and it does not assign a value.
+As an example, if we use 0 to indicate *No* and 1 to indicate *Yes*, we can compute the number of *Yes*-votes by summing the individual encrypted votes as described above, and then decrypting the encrypted tally to reveal the result. However, if we don’t ensure that individual ciphertexts are well-formed, a compromised client could simply encrypt the value 1,000,000 to vote *Yes* a million times. To prevent this, clients must include a zero-knowledge proof ensuring that the encrypted ballot contains a permitted value (or a permitted combination of values).
 
-When the plan grows, the new action is materialized and the callback calls `step`, which materializes the state after it and posts the constraints between them.
+### Protecting against a compromised voting client
 
-The callback is shared between copies of the space, so it casts the space it is given instead of capturing `this`.
-It must also be deterministic, since recomputation and parallel search may repeat an extension in another space.
+What if the voting client is hacked and alters the voters’ choices before they are encrypted, or drops the ballot completely? To protect against client compromise, the voter needs a way to ensure that the backend received their ballot, and that the choices recorded and encrypted by the software client correspond to how they actually voted.
 
-The legal steps are a table with one tuple for each action and the states before and after it, posted as an extensional constraint for each step.
+This can be achieved in different ways. Helios and ElectionGuard use a mechanism known as *Benaloh’s challenge method*. The underlying idea is that when the ballot is encrypted, the voter obtains a commitment to the encrypted ballot and is then allowed to challenge and spoil their ballot. If they do, the ballot is opened and the voter can verify that their choices were recorded correctly and that the commitment corresponds to the encrypted ballot. The device has to reveal the commitment to the voter before learning whether or not the voter wants to challenge the encrypted ballot. Otherwise, it could present a correct commitment only when it is challenged. Moreover, it must be possible to obtain some external validation that the committed ciphertext actually encrypts the voter’s intended choices. Otherwise, the voting client can simply lie and present a plaintext that doesn’t match the commitment.
 
-The goal decides where the plan ends.
+When the voter is satisfied that the voting client records their choices honestly, they record their choices one last time and cast their ballot, which is then published to a public bulletin board. The voter can use their commitment to check that their encrypted ballot is included in the published election record.
 
-The plan can only end where the packet has been delivered, and it ends as soon as it has.
+While this protocol provides a method to detect a compromised voting client that tampers with the voter’s choices or drops ballots, it still requires that a significant portion of voters exercise the mechanism in order to ensure that compromised clients are detected with high-enough probability<sup>[3](https://blog.trailofbits.com/2026/11/03/the-cryptography-behind-electronic-voting-and-why-paper-ballots-are-still-essential/#fn:3)</sup>. Moreover, it does not protect against other types of compromise, like a voting client surreptitiously sending the voter’s plaintext ballot to a third-party server.
 
-Propagation does some planning before search starts.
-The packet cannot be delivered in fewer than four actions, so the root already has four, the first a move to the shelf or the charger and the second picking up or charging.
-Branch-and-bound then finds the nine-action plan.
+Additional issues must be solved in order for this method to be secure. One is the problem of voter authentication: how does the voting client ensure that the voter is eligible to vote, and how do we ensure that only one vote is cast? Additionally, there is the previously mentioned problem of coercion: how do we protect voters from being strong-armed into voting for a specific candidate or issue when voting stations may be spread out all over the world?
 
-We can also use the [*regular constraint*](https://www.gecode.dev/doc/latest/modeling/modeling/integer/#extensional-constraints) to encode the state as a transition system, folding the values of `at`, `charge`, and `packet` into the states of a finite automaton instead of keeping them in variables.
-Each tuple in the table becomes a transition labelled with its action, so the accepted words are exactly the delivery plans.
+Authenticating voters is generally a difficult problem in countries (like the U.S.) that do not have a widely used national ID. However, there are options available for specific groups of voters. For example, some voting systems designed for overseas military voters use the Common Access Card to allow service members to identify themselves. Protecting voters against coercion typically requires that voters are able to vote without being supervised, which seems like a difficult problem to solve using cryptography.
 
-The model is then just the action list and one constraint, with no state lists and no callback.
+### Protecting against a compromised backend
 
-The interesting part is what an open regular constraint does with an unfinished plan.
-After moving to the charger and charging once, the packet is still on the shelf, but the plan can still reach the goal.
-Moving straight to the shelf is a dead end, and is rejected while the list is still open.
-So while the list is open, a prefix is kept if it can reach an accepting state within the maximum length, and once it is closed, its last state must be accepting.
+What if the backend server is faulty or compromised by an attacker? With encryption, the backend aggregates the encrypted votes into an election record, computes the encrypted final tally over the encrypted votes, and then lets election officials decrypt the result. Encryption protects voter privacy, but it doesn’t stop the server from dropping, altering, or injecting votes into the election record. How could we allow voters to verify that this did not happen?
 
-Regular propagation works on a *layered graph*, with a layer of automaton states for each position and edges labelled with the values in each domain.
-The widget uses a small automaton for the words that start with `a` and end with `b`.
-With a fixed length of two, only `ab` has a path.
-The open list has the same two positions but a length of up to four, so a prefix like `aa` can still become `aab`.
-Lower the maximum length to two, and the open list behaves like the fixed one.
+If the election record is public (and we can ensure that everyone shares a consistent view of it), voters can verify that their encrypted vote is included in the record using their commitment to their encrypted ballot, as described above. This provides a mechanism to detect a compromised server which attempts to drop or alter votes. Again, we need to rely on active participation from many voters to ensure that a compromise is detected, since a voter can only detect if their individual ballot has been dropped or tampered with.
 
-### A DFA and its unfoldings
+ElectionGuard extends this idea to allow voters to detect a change in any of the ballots cast before theirs by chaining ballot commitments generated on the same device. Without chaining, the commitment is essentially computed as a hash of the voter’s encrypted ballot. With chaining, ballot commitments are chained as follows:
 
-#### The DFA
+*When ballot commitments are computed as a chain, the hash chain is published together with the election record. Here,* ${B}_{i}$ *is voter $i$’s encrypted ballot.*
 
-#### Fixed-length unfolding
+This means that any changes are propagated forward, allowing voters to detect tampering with earlier votes cast using the same voting client.
 
-#### Open list and possible continuations
+Detecting a compromised server that injects additional votes is more difficult and usually requires external data, like voter participation records, to solve. It is not enough to associate encrypted ballots with voter identities, since a malicious server could pad the election record with ballots corresponding to abstaining voters.
 
-Open, so a prefix ending in q₁ can still finish with b.
+Once the election record is trusted, it is possible to use zero-knowledge proofs to verify that the final result is computed correctly from the published election record. Since anyone can compute the encrypted tally from the election record, we only need to prove that the final aggregate ciphertext was decrypted correctly.
 
-Gecode does not build the future layers.
-It computes the shortest distance from each automaton state to an accepting state, and keeps an end state of the prefix only if that distance fits within `length().max() - known_length()`.
+### What cryptography solves that paper ballots can’t do alone: end-to-end verifiability
 
-Both the table and the automaton list every combination of location, charge, and packet status.
-That works for the robot, but with more packets and a second robot the combined states explode, and the transitions are better posted as ordinary constraints over the state variables, as in the fifteen-puzzle below.
+Recall our fourth requirement for election systems, which we admitted was most difficult to achieve for paper-based systems: Everyone should be able to trust (and ideally verify) that the election result correctly reflects the voters’ intent.
 
-The list brancher assigns the materialized positions, and once they all have values, it tries closing the list, with extending it as the alternative.
-For the robot, closing fails until the packet is delivered.
+This requirement is usually formalized in terms of *end-to-end verifiability*, which means that the following should be possible:
 
-The usual selectors choose among the materialized positions.
-To settle the number of actions first, branch on the length before the actions, and depth-first search with minimum-value selection then tries shorter plans first.
+1. Each voter should be able to verify that their choices have been correctly recorded.
+2. Anyone should be able to verify that the final tally is computed correctly from the election record.
 
-Building the plan incrementally can find a longer plan before a shorter one, so the companion minimizes the length with branch-and-bound.
-With `-branching max`, it tries the highest action code first, which means charging whenever it can, and finds plans of eleven, ten, and finally nine actions.
+Taken together, these two mechanisms allow voters to independently verify that their vote contributed to the election outcome, without relying on a particular piece of software or hardware (which may be hacked), or external observers (who may not be trustworthy). This property isn’t achievable in exclusively paper-based election systems without introducing some level of trust in humans/institutions overseeing the election. For example, without trusting anyone, how do you know what happens to your paper ballot after you and your vote both leave the voting location? The reason you won’t know this in an exclusively paper-based system is simple: in order to protect vote secrecy, when you submit your ballot to be counted with the other ballots, you intentionally break the link between your identity and your ballot.
 
-Real planning models collect side rules: don’t repeat an action, don’t keep the charger busy too long, pick up before you deliver.
-The open constraints in the release express rules like these, posted once and applied to every new position.
+Well, using cryptography, you can introduce a mechanism to verify that a cryptographic representation of your vote was included in the election record while still preserving voter privacy! This mechanism is exactly what was described above: encrypt the ballots and publish them to a public bulletin so that voters can privately check that their vote was both included and not tampered with. This allows you to enhance trust in existing paper-based election systems without compromising their security properties. This is the exact design choice behind ElectionGuard.
 
-The last three assume other open lists, of jobs, loads, and battery levels.
-Side rules can change which plans exist at all.
-For the robot, forbidding immediate repeats leaves no plan, since a single charge never pays for the trip there and back, while at most three charges in every window of four removes the two longer plans and keeps the nine-action one.
+## We won’t be replacing paper ballots any time soon
 
-What makes these constraints different from their closed versions is the positions that do not exist yet.
-`sequence` and `sliding_sum` only count complete windows, so a plan shorter than the window is unrestricted.
-`distinct` remembers the assigned values and removes them from positions created later.
-`min` and `max` can only bound the result from one side while the list is open, since a later position can still lower the minimum or raise the maximum.
+Helios and ElectionGuard both build on the ideas outlined above, but their use cases differ. Helios explicitly targets settings with low coercion risk and advises against use in high-stakes public elections. ElectionGuard, on the other hand, is built to provide end-to-end verifiability on top of an existing paper-based voting system. Neither protocol makes a general claim to solve the problem of electronic voting because neither achieves the security of status quo paper-based systems purely electronically.
 
-The fifteen-puzzle is the classic test problem for heuristic search, with far too many boards for a table or an automaton.
-Fifteen numbered tiles and a blank occupy a four-by-four board, and a move slides a tile next to the blank into the blank.
-The goal has the tiles in order, with the blank at the bottom right.
-This board needs two moves: slide tile 14 left, and then tile 15.
+There is widespread agreement among experts on election security that paper ballots are essential for protecting the security and integrity of general elections, and that likely will not change anytime soon. However, cryptographic techniques like the ones described in this post can still be used alongside paper ballots to improve trust in the election outcome by improving the result’s public verifiability and auditability.
 
-Seen from the blank, it moves right twice, so a plan can be described by the successive positions of the blank.
-Gecode’s [fifteen-puzzle.cpp](https://github.com/Gecode/gecode/blob/release-6.5.0/examples/fifteen-puzzle.cpp) uses two open lists: `path[i]` is the cell of the blank in board `i`, and the sixteen entries from `tiles[16*i]` are board `i`, with 0 for the blank.
+If you’re using cryptography to build a new voting system, please [reach out](https://trailofbits.com/contact/). We want to hear about it!
 
-Only `path` has a transition callback, which creates the board for each new blank position.
-
-The constructor body ties the two lengths together, fixes the first board, and bounds the length from below.
-
-The Manhattan distance, the sum of each tile’s distance to its goal cell, is a lower bound on the number of moves, so propagation creates several boards before any move is chosen.
-Each new blank position materializes its board, connects it to the previous one, and posts the goal, just like the robot’s `step`.
-
-A slide moves the blank to a neighbouring cell, puts the moved tile in the old blank cell, and leaves every other cell unchanged.
-
-Every board is a permutation of the tiles, so an assigned path determines all the boards, and it is enough to branch on `path`.
-
-The example also has a fixed model, `-model fixed`, that creates every board up to the move limit and uses a branch filter so that search does not choose moves after the goal.
-For a two-move solution with a limit of eight, it has nine boards where the open model has three.
-
-This finds plans of eight, six, and finally four moves, which matches the initial Manhattan distance, and `-model fixed` finds the same optimum.
-
-Gecode 6.5.0 also includes two experimental search engines, `AStar` and `CABS` (complete anytime beam search), enabled with `GECODE_ENABLE_EXPERIMENTAL=ON` in CMake or `--enable-experimental` with Autoconf.
-They work with any Gecode space, with or without open lists, and their APIs may still change.
-
-Branch-and-bound explores depth-first, and has no idea which of the pending partial plans looks most promising.
-Heuristic search estimates how good the best completion of each partial plan can be, and explores the most promising ones first.
-It is also the workhorse behind many of the planning systems mentioned at the start.
-The estimate must be *admissible*, never above the true cost.
-For the robot, ignoring the battery gives one: after moving to the charger and charging once, two actions are used and at least five remain, a bound of seven where the true total is nine.
-
-Both engines take a `Search::HeuristicGuidance`, whose bound callback returns an optimistic value for the *total* objective, including the cost so far, and must be exact on solutions.
-For the puzzle, the bound is the number of moves made so far plus the Manhattan distance of the board they lead to.
-
-`depth` stops at the first undecided move, even when later boards have been created, and the length gives the bound instead when it is stronger.
-
-Both engines use the model’s `constrain` to require improvement after each solution, so as with branch-and-bound, the first solution need not be optimal.
-A* keeps every pending state.
-CABS keeps only a beam of candidates at each layer of the search tree, starting with a width of one and doubling it while the discarded candidates might still lead to a better solution.
-That finds a plan quickly, and spends more effort later on improving it and proving optimality.
-CABS can also use a dominance test, which discards a candidate when another one can match each of its completions with one that is no worse.
-
-Gecode’s [tsptw.cpp](https://github.com/Gecode/gecode/blob/release-6.5.0/examples/tsptw.cpp), for the travelling salesman problem with time windows, offers all three engines on a closed model.
-I wrote an [open-list variant](https://zayenz.se/files/blog/open-cp-in-gecode/open-tsptw.cpp) that creates each position of the tour when the tour reaches it.
-Every tour visits all customers, so stating its length would create every position at the root.
-Instead, the variant states the goal as a condition on the visited customers.
-
-Both models find and prove the optimal travel times for the two built-in instances with branch-and-bound, A*, and CABS.
-The instances are far too small to say which combination works best on hard problems.
-
-Leaving future positions uncreated is a tradeoff.
-They take no storage, but their domains are not available for propagation either, so a fixed-horizon model may detect some failures earlier.
-My guess is that open lists pay off when a large upper bound is needed to admit all plans, while most of the search works with much shorter prefixes, but that needs measuring.
-For classical planning problems, a dedicated planner will often be the better tool.
-A constraint model becomes interesting when the plan also has to satisfy side constraints, like resource limits, time windows, or the rules above.
-
-Back in the workshop, the model is the same whatever the initial charge.
-With a full battery, the shortest plan is the direct four actions, and with a single unit, it is the nine-action detour.
-Nobody had to guess the length of the plan in advance.
-The model describes what the robot can do, and search works out how long it takes.
-
-1. The exceptions are the activity-based ([Action](https://www.gecode.dev/doc/latest/modeling/modeling/branch/#selection-using-action)) and conflict-history ([CHB](https://www.gecode.dev/doc/latest/modeling/modeling/branch/#selection-using-chb)) variable selectors. They require the complete list to be materialized when the brancher is posted, so they cannot be used for positions created later. [↩](https://zayenz.se/blog/post/open-cp-in-gecode/#user-content-fnref-selectors)
-2. For example, callbacks run inside a `Space::NoGPI` scope, so that propagators created and discarded during search do not accumulate [global propagator information](https://www.gecode.dev/doc/latest/modeling/modeling/branch/#scoped-control-of-propagator-information) such as the [accumulated failure count (AFC)](https://www.gecode.dev/doc/latest/modeling/modeling/branch/#selection-using-accumulated-failure-count). A callback can open a `Space::UseGPI` scope for postings that should be tracked as usual. [↩](https://zayenz.se/blog/post/open-cp-in-gecode/#user-content-fnref-gpi)
+1. A higher threshold is not always better. Helios requiring all trustees to participate to decrypt the election result caused the IACR to have to rerun their 2025 election after it found that one of the trustees had [inadvertently lost their share of the key](https://www.iacr.org/news/item/27138). [↩︎](https://blog.trailofbits.com/2026/11/03/the-cryptography-behind-electronic-voting-and-why-paper-ballots-are-still-essential/#fnref:1)
+2. Helios and ElectionGuard differ slightly in how they implement encryption. Here, we describe the method used in Helios since it’s closer to standard ElGamal. [↩︎](https://blog.trailofbits.com/2026/11/03/the-cryptography-behind-electronic-voting-and-why-paper-ballots-are-still-essential/#fnref:2)
+3. As an example, if a compromised voting client tampers with 1000 votes, and voters challenge one encrypted vote in one hundred on average, the probability of the attack remaining undetected would be 0.991000 ≈ 4.3 ∙10-5. However, it is also important to consider what recourse a voter has if tampering is detected. This determines whether they are apt to raise concerns, or simply shrug their shoulders and try again. [↩︎](https://blog.trailofbits.com/2026/11/03/the-cryptography-behind-electronic-voting-and-why-paper-ballots-are-still-essential/#fnref:3)
