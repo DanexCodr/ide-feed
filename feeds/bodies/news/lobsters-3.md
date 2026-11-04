@@ -1,321 +1,145 @@
-On the morning of September 24th 2026, [Endcrawl](https://endcrawl.com) had a brief outage. I'd just typed:
+Last week, I saw an article on the front page of the New York Times [website](https://www.nytimes.com/2026/10/21/us/politics/php-vulnerability-ai-openai-cybersecurity.html) reporting that a critical vulnerability in PHP had been found. The article, and [others](https://www.theguardian.com/technology/2026/oct/22/websites-across-world-hit-by-millions-of-attempts-to-exploit-php-code-flaw) [like](https://www.cbsnews.com/news/php2shell-vulnerability-ai-security-flaw/) [it](https://apnews.com/article/php-vulnerabilities-security-threat-38d37c4c18bf8355b02d85b5a73ed642), claimed any attacker could achieve arbitrary remote code execution on any of the millions of running PHP services worldwide simply by sending a few unauthenticated web requests that exploited the PHP2Shell vulnerability.
 
-And instantly all services went down.
+My office Slack was buzzing, as were several of my Signal chats with colleagues and friends across the security community.
 
-Right away I blamed myself. Maybe I mistyped that number! Maybe my code had a signal handling bug. Maybe I don't understand Unix as well as I think I do. Maybe I'm an idiot!
+Rumors swirled about how in-the-wild exploitation caused one tech company to break embargo and leak news of the vulnerability hours before the rest of the community could coordinate disclosure. That hackers were *already* hacking websites, in the wild, with this exploit and that every hour mattered to get the patches rolled out across 70% of the internet.
 
-As it turned out, the outage was caused by a bug in [`kill(1)`](https://man7.org/linux/man-pages/man1/kill.1.html).
+## The Question
 
-This is really surprising. The `kill` program is 50 years old. Its [spec](https://pubs.opengroup.org/onlinepubs/9699919799/utilities/kill.html) is simple and stable. It's probably exercised a billion times a day.
+Was PHP2Shell the hallmark of a new era whereby uplifted randos could hack any website with a few well-crafted prompts to an AI model?
 
-A bug in `kill` was so surprising that, once I'd found it, I couldn't stop there. I needed to know how this bug came to be, and what had led the programmers so badly astray. When I eventually found the root cause, there was an even bigger surprise. It had led to not just one bug, but a whole series of `kill` bugs that shipped in Ubuntu 14, 16, 18, 22 and 24 LTS.
+I looked out my window, expecting perhaps to see the dull apocalyptic glow of fires on the horizon as society collapsed in real time. Nothing.
 
-This post documents a decade of `kill` bugs, then makes some recommendations.
+While online articles and tweets made the rounds about the eleven alarm cyberapocalypse upon us, I struggled to find any reference to a specific website that had been hacked.
 
-## [An Outage Not Understood Happens Again](https://alangrow.com/blog/a-decade-of-kill-bugs#an-outage-not-understood-happens-again)
+Over the following days, a few iconoclasts had pointed out that the vulnerability was rather fiddly in practice ([Elias Taylor](https://eliastaylor.com/noexploit/); [Lucas Luitjes](https://blog.luitjes.it/posts/i-want-my-wednesday-back/)) and that hacker groups, while initially quite excited by the exploit’s potential, had started to view it as impractical or difficult ([KELA](https://www.kelacyber.com/blog/php2shell-underground-response/)).
 
-Back to the outage. I scrambled to put the fire out. After that came a surprise second fire. By the end of all this I was pretty demoralized. I was ready to accept that I'd made a dumb mistake and ready to get on with the work day. There was this nagging feeling though…
+Yet at the same time, the national and international press continued to cover a herculean emergency effort to hunt down and patch PHP-based websites across the internet.
 
-Remember that [final scene](https://www.youtube.com/watch?v=kCXTq-fWWio) in Burn After Reading?
+Rather than wait around and wonder, I decided to try to figure things out for myself. I had two fundamental questions:
 
-> "What did we learn Palmer?"
->
-> "I don't know sir."
->
-> "I don't f**king know either. I guess we learned not to do it again."
->
-> "Yes sir."
->
-> "Although I'm f**ked if I know what we did..."
+1. Was PHP2Shell actually exploitable outside of a lab environment?
+2. Would relatively unskilled attackers with access to AI and the PHP source code be able to exploit this class of vulnerability?
 
-What had just happened? Was I about to be hit with a third outage? How could I be sure?
+## The Results
 
-An outage not understood is an outage that happens again. That nagging feeling I had was a call to understand. With a sigh, I put all my other work on hold and started a proper post mortem.
+Directly, the answers to the questions are:
 
-## [The Proximate Cause](https://alangrow.com/blog/a-decade-of-kill-bugs#the-proximate-cause)
+### 1) Was PHP2Shell actually exploitable outside of a lab environment?
 
-Let's examine the command that caused the outage:
+**Yes.** Absolutely. The challenge winner, who has posted a [writeup](https://github.com/KillaBoi/StealMyBitcoin-PoC), exploited my server directly over an open internet connection and did so using the PHP2Shell vulnerability (e.g. he did not exploit some other vulnerability in my setup). He did this through a specially crafted exploit which targeted the specific configuration of my PHP installation and the ways in which it was set up on the server.
 
-The negative number here is a [process group identifier](https://en.wikipedia.org/wiki/Process_group), or pgid for short. A pgid is like a pid, but identifies a group of related processes. By convention, killing a positive number sends a signal to a single process, while killing a negative number signals all processes in that process group.
+### 2) Would relatively unskilled attackers with access to AI and the PHP source code be able to exploit this class of vulnerability?
 
-I was attempting to cancel a big Endcrawl 7k test render. A normal person would have killed one of the processes involved and let failures cascade to the others. But killing the whole group simultaneously strikes me as cleaner.
+**Not yet.** Of tens of thousands of people who attempted the exploit - including in a 9 hour period when the challenge was active after the first successful solve (more on that below…) - only two managed to trigger the `print-flag` binary and only one, the winner of the challenge, managed to do so in such a way as to extract useful content from the application.
 
-Process group signaling isn't some exotic operation. You use it all the time. Every time you `^C` a command, the tty sends `SIGINT` to the foreground process group. Interactive shells run all but the simplest commands in a new process group, which among other things makes [job control](https://en.wikipedia.org/wiki/Job_control_(Unix)) possible.
+## The Experiment
 
-Process group signaling is in fact an awesome Unix innovation. I love it so much I [added it to daemontools](https://github.com/bruceg/daemontools-encore/pull/16), where `svc -+h` now avoids orphans in a multiprocess service bounce.
+The core idea was pretty simple. I’d rent a cheap VPS for a few weeks, slap a PHP website on it along with the key to a bitcoin wallet, and then wait and see if anyone managed to drain the wallet. Miraculously, the domain name “stealmybitcoin.com” was available, so I took this as a sign from the fates themselves that this experiment had the mandate of heaven.
 
-At any rate, imagine my surprise when the command didn't just kill those render processes, but killed *all processes on the machine* save one!
+I slapped $500 of bitcoin into a clean wallet, rented a $2.50/month Debian VPS from a web hosting provider, and told Codex to make me a basic webpage and stick it on the internet with PHP. I configured the server such that a single executable binary `print-flag` had permissions to read a `flag` file containing the WIF, took down my firewall, and posted the link to Hacker News to see if anyone would give the challenge a shot.
 
-## [The Bug](https://alangrow.com/blog/a-decade-of-kill-bugs#the-bug)
+![Screenshot of the challenge landing page](https://pavursec.com/blog/stealmybitcoin/challenge-landing-page_hu7c355689413d8c2ac11ec25fb3ef8e8b_520195_1200x1200_fit_q75_h2_lanczos_3.webp)
 
-Here's the relevant snippet from [procps 4.0.4](https://gitlab.com/procps-ng/procps/-/releases/v4.0.4), the provider of `/bin/kill` in Ubuntu 24.04 LTS. Can you spot the bug?
+Things got a little crazy from there. Within the first hour of posting, the link had climbed to the front page of Hacker News (where it stayed for essentially an entire day) and my $2.50/month VPS was under so much load I couldn’t maintain an SSH session.
 
-```
-opterr=0; /* suppress errors on -123 */
-while ((i = getopt_long(argc, argv, "l::Ls:hVq:", longopts, &optindex)) != -1)
-  switch (i) {
-    /* ... */
-    case '?':
-      if (!isdigit(optopt)) {
-        xwarnx(_("invalid argument %c"), optopt);
-        print_usage(stderr);
-      } else {
-        /* Special case for signal digit negative
-         * PIDs */
-        pid = (long)('0' - optopt);
-        if (!execute_kill((pid_t) pid, signo, use_sigqueue, sigval))
-          exitvalue = EXIT_FAILURE;
-        exit(exitvalue);
-      }
-    /* ... */
-  }
-```
+I eventually scaled my VPS up from 1 vCPU, 500 MB RAM and 10GB of disk space all the way to 2 vCPU, 4096 MB RAM, and 80 GB of SSD. Over the course of the challenge my VPS host temporarily took my site down once because they suspected it was subject to a Distributed Denial of Service attack and once because “we have determined your CPU resource utilization profile is excessive.”
 
-My initial guess was wrong. There's no underflow or overflow bug with `-1490947`.
+Additionally, due to the nature of the exploit, people were pretty continuously taking down individual PHP workers from high request load, partially successful memory exploitation attempts, and general shenanigans.
 
-Notice we're in the unrecognized option switch case. Here's what [`getopt(3)`](https://man7.org/linux/man-pages/man3/getopt.3.html) says about unrecognized options:
+Eventually I managed to get things into a relatively steady state (e.g. most people could connect to the website most of the time), with regular resets and health checks standing in for true high-availability hosting. Once the link dropped off the front page of Hacker News, traffic quieted down quite a bit as well.
 
-> By default, `getopt()` prints an error message on standard error, places the erroneous option character in optopt, and returns `'?'` as the function result.
+### Some Stats
 
-Aha. The `optopt` variable only holds the first character after the dash, not the whole negative pid. When character `1` is subtracted from character `0` we get a pid of `-1`. What happens when you kill pid `-1`? [Bad things](https://man7.org/linux/man-pages/man2/kill.2.html):
+Due to flaky monitoring, it’s hard to get representative statistics regarding visitor count and traffic patterns. I had set up some pretty reliable logging so I could know if/when the `print-flag` binary was called and some best-effort logging of web request headers and payloads so I could hopefully understand what happened around that time; for the first few hours of virality, I was blowing through my logrotate configuration (for ~80MB of storage) roughly every 4 minutes thanks to the attention on the site.
 
-> If pid equals -1, then sig is sent to every process for which the calling process has permission to send signals, except for process 1 (init).
+As a result, logs of certain PHP crashes and activity around the `print-flag` file were essentially complete over the duration of the challenge. Broader web request logging only covered 600-ish of the challenge’s 1,600-ish minute duration.
 
-This ran as root, so the misparsing of `-1490947` as `-1` killed every process but init. Bug found, mystery solved.
+During the 10 hours when I had reliable web request logging:
 
-## [Wait But Why](https://alangrow.com/blog/a-decade-of-kill-bugs#wait-but-why)
+- Around 20,000 unique IP addresses engaged with the challenge in some substantive way (rather than just visiting the home page).
+- Around 120,000 distinct source IPs visited the site.
+- The server recieved more than 13 million HTTP requests.
+- At peak load, the server received over 18,000 requests a minute.
 
-Except for me this just raised more questions. Why is the code assuming the unrecognized option is a "signal [sic] digit negative PID"? Why is the single digit negative pid case special, and what handles the general case of a multidigit negative pid?
+There’s no statistically credible way to extrapolate over the missing netflow data, but I can confidently say that tens of thousands of players attempted to steal my bitcoin.
 
-Moreover, how could a bug like this exist in 2026, and in a Ubuntu LTS release no less? Has it always been there?
+I had much more reliable logs of PHP server errors and `print-flag` executions since they were not rotated under heavy load and were relatively low volume. In these logs, over 26-ish hours, I observed:
 
-No, that couldn't be. I've killed process groups in the past. And the `kill -TERM -12345` thing is an ancient Unix incantation. This used to work dammit!
+- Approximately 2,075 distinct PHP SIGSEGV events. While these could be caused by other bugs in PHP, they are not something you’d typically expect to see and may roughly correlate with attempts that were closer to triggering the exploit.
+- Only two IPs managed to trigger the print-flag executable and only one person did so in such a way that data was exfiltrated successfully from the server.
 
-Thinking back, I could vaguely remember some negative pid kills gone awry. Never in an "oops this killed everything in sight" way. More in a "weird, nothing happened" way, or a "poof there goes my shell" way. Minor ways more easily shrugged off as user error.
+## Timeline
 
-It turns out I wasn't imagining these. The last decade has been a rough one for negative pid killers. There have been no less than **FOUR** distinct bugs around negative pids. And they all shipped in Ubuntu LTS versions.
+| Date and time UTC | Event |
+| --- | --- |
+| Oct. 24, 20:30 | Challenge timer starts. |
+| Oct. 24, 20:30 | I publish “Show HN: Steal My Bitcoin” ([https://news.ycombinator.com/item?id=50224916)](https://news.ycombinator.com/item?id=50224916%29). |
+| Oct. 25, 01:14 | First recorded PHP SIGSEGV after the challenge timer started. Note: it predates `php-version.php`, seven subsequent PHP SIGSEGVs occurred on this first version of the challenge. |
+| Oct. 25, 12:59 | I add `php-version.php`, which returns the PHP version and UTC time. |
+| Oct. 25, 15:44 | I add `ping.php`, a small POST endpoint that returns pong for message=ping. |
+| Oct. 25, 15:47 | A PHP process successfully runs `print-flag`. This execution is associated with the eventual winner. The `ping.php` page was not utilized in the exploit chain. |
+| Oct. 25, 20:32 | I receive an email from the winner asking if I had the incorrect bitcoin wallet address for the key on the server. The winner provides the exact flag, timestamp, IP address, and payload associated with the 15:47 event listed above along with a writeup describing the winning exploit. |
+| Oct. 25, 21:06 | I review the winner’s claims against the server logs and validate that the flag is an exact match for the flag on the server and matches the web traffic logs surrounding the successful execution. |
+| Oct. 25, 22:38 | I post the solve announcement on Hacker News ([https://news.ycombinator.com/item?id=50236736)](https://news.ycombinator.com/item?id=50236736%29). |
+| Oct. 25, ~22:59 | I review the winner’s final writeup and transfer the wallet contents directly. |
 
-## [The History](https://alangrow.com/blog/a-decade-of-kill-bugs#the-history)
+## Difficulties Along the Way
 
-Before I tell the tale of four bugs, let's go even farther back in Unix history.
+My original expectation is that this would be a low traffic honeypot. A few people would poke at it on Hacker News and then it would eventually get snagged by some botnet/scanner/automated exploitation tool that would steal my bitcoin. I’d write a little blog post about the logs from the hour or so around the exploit and then move on.
 
-In the beginning Unix had processes. By 1973 it had the `kill(1)` program. But it took a decade to evolve process groups as we now know them. It wasn't until [Unix V9 in 1986](https://www.tuhs.org/cgi-bin/utree.pl?file=V9/cmd/kill.c) that you could kill a process group via negative pid. Near as I can tell, negative pid killing has worked fine in the BSDs all these years.
+I didn’t remotely expect it to go viral in the way that it did. The virality was nice - it brought a lot of eyes on the challenge, got me a quick answer to my research question, and some people even chipped in and increased the size of the bitcoin prize wallet.
 
-In the early 90s this thing called Linux came along. Although Linux initially borrowed a lot of BSD code for its userland, by the late 90s this approach was in legal jeopardy. Everything had to be rewritten, every wheel reinvented. And quickly. It was an exciting time to be a unix programmer.
+The virality was also rough in that suddenly many *actual* PHP security experts (and many non-experts too) had *opinions* about me, my motivations, and my web administration skills!
 
-And so it came to pass that Linux's `kill` was reinvented written by [Albert Calahan](https://lwn.net/Articles/851716/). After Albert DoSed himself by forking 5 children, Debian downstream maintainer [Craig Small](https://dropbear.xyz/software/) took over poor old neglected [procps](https://gitlab.com/procps-ng/procps).
+### What should the backend do?
 
-Negative pid killing seems to have worked fine until 2013. Then the trouble began.
+The first critique was that the server was unexploitable. Some claimed that it was literally just an nginx page (e.g. no PHP at all), while others claimed that the specific configuration of the server made it impossible to exploit.
 
-### [Bug 1: Ubuntu 14 Can't Kill -1](https://alangrow.com/blog/a-decade-of-kill-bugs#bug-1-ubuntu-14-cant-kill-1)
-
-Ubuntu 14.04 LTS included procps 3.3.9. Prior to this, the `kill` code did what the BSDs do and used pointer arithmetic to walk and parse `argv`.
-
-Personally I'm fond of that approach. Stallman isn't so fond of it though. In GNU world, you're supposed to standardize command line parsing via `getopt`. This is probably a good idea in the general case, but as we'll see, it was probably the wrong choice in the specific case of `kill(1)`.
-
-Here's the relevant code after the conversion to `getopt`:
-
-```
-opterr=0; /* suppress errors on -123 */
-while (loop == 1 && (i = getopt_long(argc, argv, "l::Ls:hV", longopts, NULL)) != -1)
-  switch (i) {
-    /* ... */
-    case '?':
-      if (!isdigit(optopt)) {
-        xwarnx(_("invalid argument %c"), optopt);
-        kill_usage(stderr);
-      }
-      loop=0;
-      break;
-    /* ... */
-  }
+I’m still not 100% sure how correct these claims were, as some people were causing SIGSEGVs to throw on the original version of the challenge.
 
-argc -= optind + sigopt;
-argv += optind;
+However, I did make several modifications to the website that I felt were fair adjustments to increase the feasibility of the challenge without just deliberately making the server vulnerable.
 
-for (i = 0; i < argc; i++) {
-  pid = strtol_or_err(argv[i], _("failed to parse argument"));
-  if (!kill((pid_t) pid, signo))
-    continue;
-  exitvalue = EXIT_FAILURE;
-  continue;
-}
-```
+First, I added a `php-version.php` page, which was served alongside the already PHP-hosted `index.html` page, in case the active participation of the PHP interpreter was necessary for the exploit. While some of the early reporting on PHP2Shell suggested this maybe wasn’t a strict requirement of exploitation (e.g. [https://www.wiz.io/blog/php2shell-php-rce](https://www.wiz.io/blog/php2shell-php-rce) : “Exploitation does not depend on a flaw in the application’s code: even a simple “Hello World” application running on an affected PHP version can be vulnerable.”), it seems plausible to me that the part of the PHP SAPI server that serves `.html` files could be immune to these tasks.
 
-The code worked fine for multidigit negative pids. However, if you were one of those freaks creative sysadmins who delighted in a `kill -HUP -1` now and again to restart all your services, you noticed a bug: nothing happened.
+I also added a `ping.php` page that responds with the word `pong` whenever someone POSTS the value `ping` to the server. This very simple application was added in case exploitation required PHP to dynamically react to user-supplied input. To me these two requirements (reacts to user-supplied input, runs .php pages) are pretty universal across real-world applications, so adding support for these code paths did not undermine the spirit of the challenge.
 
-The bug is due to [option bundling](https://www.matejka.ninja/software/argv.html#bundled-options).
+There was some other feedback, which I largely ignored, requesting specific variants of the PHP applications, or modifications to the (very basic) nginx proxy configuration I put in front of the website to help with routing, challenge isolation, and logging. It’s possible that if I made further modifications in this vein, more people would’ve been able to solve the challenge. There is no specific evidence to prove that this would be the case.
 
-1. **Multidigit case**: With `kill -HUP -123`, `getopt` acts as if `-1`, `-2`, and `-3` were all separately passed. The unrecognized option case will be hit three times, and only at `-3` will the `-123` argument be consumed by incrementing `optind`. Because the code breaks out of the `getopt` loop early at `-1`, an unconsumed `-123` argument correctly makes it to the pid killer.
-2. **Single digit case**: With `kill -HUP -1`, however, `getopt` has fully consumed that argument and incremented `optind` before we break out of the loop. The pid killer sees no arguments and nothing happens.
+### What’s a bitcoin key anyways?
 
-### [Bug 2: Ubuntu 16 Accidentally Kills -1](https://alangrow.com/blog/a-decade-of-kill-bugs#bug-2-ubuntu-16-accidentally-kills-1)
+The second major hosting issue I had is more easily expressed by a video. This is how I exported the WIF private key for my bitcoin wallet that I used in the challenge (Note: the wallet shown here is a different empty wallet. Please don’t use this key since I’ve recorded a video of it online!):
 
-A cure was in order. Unfortunately it was worse than the disease.
+I thought I was putting the key to the wallet in the challenge based on this flow. Turns out I wasn’t. The WIF I exported turned out to be a parent key in a derivation path for the wallet address holding the bitcoin. I’m still not entirely sure which combination of credentials I *should’ve* provided to make the bitcoin stealable. If I run future challenges of this nature, I’ll probably make the flag the full wallet recovery key instead of any individual private key.
 
-Ubuntu 16.04 LTS shipped with procps 3.3.10. The `kill -HUP -1` bug was fixed at the expense of multidigit negative pid kills: a `kill -TERM -12345` now killed everything.
+So the winner got the real bitcoin key from the server, but couldn’t use it to move any of the money in the branch wallet derived from that parent key.
 
-This is the same bug that caused the outage under Ubuntu 24. We reviewed this [above](https://alangrow.com/blog/a-decade-of-kill-bugs#the-bug). The only mystery here is why procps circa Ubuntu 24 resurrected the known-buggy code circa Ubuntu 16. My best guess is that the following bugs were deemed even worse.
+Luckily, they reached out over email and provided exceptionally detailed proof including: the full text of the wallet key on the server, its hash, the exact timestamp when they exploited the server, the exact IP address they used to exploit the server, the exact payload they used to exploit the server, AI chat turns from when they developed the exploit, and a full writeup of the exploit they used.
 
-### [Bug 3: Ubuntu 18 Segfaults Killing -1](https://alangrow.com/blog/a-decade-of-kill-bugs#bug-3-ubuntu-18-segfaults-killing-1)
+With this information I was able to pull up the full trace in my logs, match down to the second the exploitation time with my logs on the `print-flag` binary and confirm that they did in fact know the full value of the `flag` file on the server.
 
-Ubuntu 18.04 LTS shipped with procps 3.3.12.
+Congrats to the winner for not only solving the challenge, but also solving the secret hidden challenge of keeping excellent exploit logs!
 
-This attempted to fix multidigit negative pid killing. Instead of parsing `optopt`, which only corresponds to a single bundled character like `-1` when `-123` is passed, the new code stops and tries to parse the whole argument:
+## Conclusion
 
-```
-opterr=0; /* suppress errors on -123 */
-while (loop == 1 && (i = getopt_long(argc, argv, "l::Ls:hV", longopts, NULL)) != -1)
-  switch (i) {
-    /* ... */
-    case '?':
-      if (!isdigit(optopt)) {
-        xwarnx(_("invalid argument %c"), optopt);
-        kill_usage(stderr);
-      } else {
-        /* Special case for signal digit negative
-         * PIDs */
-        pid = atoi(argv[optind]);
-        if (kill((pid_t)pid, signo) != 0)
-        exitvalue = EXIT_FAILURE;
-        exit(exitvalue);
-      }
-      loop=0;
-      break;
-    /* ... */
-  }
-```
+So what did I learn from this experience?
 
-This works correctly for multidigit negative pids. But if you passed a single digit negative pid, as in a `kill -TERM -1`, the pid argument was fully consumed, and `optind` would run off the end of `argv[]`. Segfault!
+I launched the website out of a degree of skepticism around the breathless reporting of a serious PHP CVE despite a dearth of real-world victims of this attack.
 
-### [Bug 4: Ubuntu 22 Kills Your Shell](https://alangrow.com/blog/a-decade-of-kill-bugs#bug-4-ubuntu-22-kills-your-shell)
+To be honest, I think that was a **bad take** on my part. PHP2Shell is the real deal. It’s an exploitable vulnerability and a sufficiently motivated adversary, with the help of AI, can absolutely use it to hack a website even when they do not have direct access to memory addresses or the physical server to tailor their exploitation pathway.
 
-Ubuntu 22.04 LTS shipped with procps 3.3.17.
+If you are running a PHP-based website today, you should absolutely patch PHP2Shell.
 
-This fixed the segfault by ensuring `optind` never ran off the end of `argv[]`:
+I fully expect over the coming months we will see more and more working general purpose exploit chains for PHP2Shell.
 
-```
-opterr=0; /* suppress errors on -123 */
-while ((i = getopt_long(argc, argv, "l::Ls:hVq:", longopts, NULL)) != -1)
-  switch (i) {
-    /* ... */
-    case '?':
-      if (!isdigit(optopt)) {
-        xwarnx(_("invalid argument %c"), optopt);
-        kill_usage(stderr);
-      } else {
-        /* Special case for signal digit negative
-         * PIDs */
-        pid = atoi(argv[optind-1]);
-        if (kill((pid_t)pid, signo) != 0)
-        exitvalue = EXIT_FAILURE;
-        exit(exitvalue);
-      }
-      xerrx(EXIT_FAILURE, _("internal error"));
-    /* ... */
-  }
-```
+If you operate a service that is sufficiently valuable or public enough to warrant specialized attention, my experience with stealmybitcoin.com makes me believe it is a matter of when, not if, someone could target a working PHP2Shell exploit specifically to your system configuration.
 
-Once again, it seems the contributor didn't understood how `getopt` option bundling interacts with `optind`, and hopefully by this point you're developing some sympathy for them. With this patch a `kill -TERM -1` works correctly and no longer segfaults. But multidigit negative pid killing was broken for a second time, in a brand new way.
+On the flip side, I believe stealmybitcoin.com tells us a lot about the current state of AI-assisted cyber exploitation. Out of tens of thousands of people attempting to hack a website with a publicly known (and exploitable!) CVE on it, only two managed to get close to triggering the vulnerability.
 
-Suppose we try to `kill -TERM -123`. Thanks to option bundling, `optind` isn't incremented yet when we hit the unrecognized option case. Per some [quirky behavior noted below](https://alangrow.com/blog/a-decade-of-kill-bugs#oh-were-halfway-there), `argv[optind-1]` is now the string `kill`.
+While some of the server-side changes I made to make exploitation easier may have had an impact (e.g. the winner solved the challenge about 3 hours after I added `php-version.php` to the server), many thousands of hackers were unable to trigger the flag binary over the 9-ish hours between the winner’s successful solve and the time when I took the challenge offline.
 
-How does [`atoi(3)`](https://man7.org/linux/man-pages/man3/atoi.3.html) handle a non-numeric string like `"kill"`? It returns `0`.
+It’s pretty clear that we aren’t at a time, yet, where an inexpert attacker can take a top LLM + a *difficult* CVE (like PHP2Shell was) and turn it into a reliable cyber-attack tool.
 
-And what does the [kill](https://man7.org/linux/man-pages/man2/kill.2.html) system call do with zero?
+It does seem that we’re drawing closer to that point every day though. I don’t think there’s any good way to stuff this cat back into the bag, but I do hope that hard work over the coming months across the open source and systems security ecosystem will make it so that hard exploits remain hard.
 
-> If pid equals 0, then sig is sent to every process in the process group of the calling process.
-
-Because it's a simple command, your shell won't isolate `kill -TERM -123` in a new process group. So this bug will unexpectedly kill your shell. Poof!
-
-## [What Did We Learn, Palmer?](https://alangrow.com/blog/a-decade-of-kill-bugs#what-did-we-learn-palmer)
-
-There are several takeaways.
-
-### [The Narrow Learning](https://alangrow.com/blog/a-decade-of-kill-bugs#the-narrow-learning)
-
-For one, the way `getopt` only advances `optind` with the final bundled option is deeply non-obvious. I didn't find evidence that any contributor understood this. I didn't understand it myself at first. That took careful study.
-
-It's a real surprise. Surprising behavior like this should be avoided.
-
-I feel this learning is too myopic though. Can one even avoid this surprising `getopt` behavior? You can't disable option bundling.
-
-### [The Broader Learning](https://alangrow.com/blog/a-decade-of-kill-bugs#the-broader-learning)
-
-Getopt Considered Harmful.
-
-Well okay, at least in this specific case. The `kill(1)` program is just an unusual beast. It accepts options that are actually signal names, like `-KILL`. You can also specify that same signal by number, like `-9`. And pgids are negative numbers that look deceptively like options.
-
-How should a command line like `kill -1 -9` be interpreted?
-
-- Should it send SIGHUP to pgid 9?
-- Should it send SIGKILL to pgid 1, aka everything?
-- Should it send SIGTERM, the default signal, to pgids 1 and 9?
-
-All of these interpretations are potentially valid if any `argv` element can be an option or a pid.
-
-The solution is to instead parse `argv` positionally. Don't use `getopt` here. Abandon capabilities like option bundling and option reordering that are more footgun than feature in this context. The [POSIX spec](https://pubs.opengroup.org/onlinepubs/9699919799/utilities/kill.html) says that only `argv[1]` can specify the signal to send, and arguments beyond that are pids and pgids. These are nice simplifying assumptions.
-
-I think the old-school Unix and BSD approach is the right one. Have a look at FreeBSD's [kill.c](https://github.com/freebsd/freebsd-src/blob/bd4975e5fb051c2b2e8d5218940b7e8ef87b5bdf/bin/kill/kill.c#L53-L136). Like ancestral Unix did back in the 70s, it parses `argv` positionally. The approach is simple and the code is simple. By contrast with Linux's `kill`, FreeBSD's `kill` has had no command line parsing bugs.
-
-I do regard `getopt` dogma as the real root cause of the outage.
-
-### [Oh, We're Halfway There](https://alangrow.com/blog/a-decade-of-kill-bugs#oh-were-halfway-there)
-
-If abandoning `getopt` for "primitive" `argv` parsing still feels sinful, just look at what procps does before even calling `getopt_long`:
-
-```
-if (argc < 2)
-  print_usage(stderr);
-
-signo = skill_sig_option(&argc, argv);
-if (signo < 0)
-  signo = SIGTERM;
-
-opterr=0; /* suppress errors on -123 */
-while ((i = getopt_long(argc, argv, "l::Ls:hVq:", longopts, &optindex)) != -1)
-/* ... */
-```
-
-What does `skill_sig_option` do?
-
-```
-int skill_sig_option(int *argc, char **argv)
-{
-  int i;
-  int signo = -1;
-  for (i = 1; i < *argc; i++) {
-    if (argv[i][0] == '-') {
-      signo = signal_name_to_number(argv[i] + 1);
-      if (-1 < signo) {
-        memmove(argv + i, argv + i + 1,
-            sizeof(char *) * (*argc - i));
-        (*argc)--;
-        return signo;
-      }
-    }
-  }
-  return signo;
-}
-```
-
-It scans `argv` looking for the first signal spec. If it finds a `-KILL`, a `-9`, or similar, it modifies `argv` in place (!) so `getopt` doesn't have to deal with that.
-
-This is already "primitive" `argv` parsing! We're halfway there.
-
-### [Some Final Practical Advice](https://alangrow.com/blog/a-decade-of-kill-bugs#some-final-practical-advice)
-
-The previous takeaways were aimed at software developers. For users of `kill`, I'd recommend the following.
-
-First, use `--` to separate options from pids and pgids:
-
-```
-kill -TERM -1490947     # no
-kill -TERM -- -1490947  # yes
-```
-
-The second form is parsed correctly even by the buggy procps versions listed above.
-
-Second, kill with least privilege. If I'd done a `sudo -u render kill` instead of a `sudo kill`, it would have only killed in-flight renders instead of all processes on the box. I feel a little insane recommending this kind of defensive tool usage — let's be clear, we're defending against bugs in `kill`, a small, mature, widely-used and very important tool — but here we are.
-
-Finally, the good news is that a [bugfix for Ubuntu 24](https://lists.ubuntu.com/archives/ubuntu-sponsors/2026-September/088746.html) is already on its way at the time of publication. I still favor a simplifying rewrite of procps's `kill` though.
+As someone who has spent a good chunk of my career doing offensive security research, PHP2Shell seems like another example of why enabling good people to find bugs quickly and publicly, so that everyone can get a jump on patching them, is as important as it has ever been.

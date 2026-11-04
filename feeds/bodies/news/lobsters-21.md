@@ -1,250 +1,212 @@
-REPACK is my favorite feature in Postgres 19. It's not the flashiest, but it is the one that’s going to matter most if you’re running a production database. Vacuum, autovacuum and bloat have always been this sore spot for Postgres users. On the one hand, Postgres MVCC design is not new. And yet, on high update systems, this churn of having dead rows that get freed up later, vacuum being tweaked to the right levels to maintain low bloat is still a bit of an inexact science.
+A robot needs to fetch a packet from the shelf and put it down on the workbench.
+Easy enough: drive over to the shelf, pick up the packet, drive back, and put it down.
+Four actions.
+Unless the battery is low.
+Then the robot has to visit the charger first, and the questions become where in the plan that visit should go, and how long the robot should stay there.
 
-Once bloat does exist, it’s just sitting there. And you see that unclaimed space not being used.
+This is planning in miniature: a start, some actions, a goal, and nobody telling us how long the plan should be.
 
-Before Postgres 19, your options for reclaiming that space were:
+Planning is a research field of its own, and a common first idea is to describe the problem in [PDDL](https://en.wikipedia.org/wiki/Planning_Domain_Definition_Language) and hand it to one of the many planning systems that read it.
+For a lot of problems, that is the right choice.
+Constraint programming is another natural fit, especially when the actions come with restrictions like a battery that runs down.
+The common objection is that most constraint programming solvers fix the set of variables before search starts, so we need a bound on the length of the plan before we know how long it will be.
 
-- VACUUM FULL: Built-in, but takes a read/write lock for the entire duration. On a large table, that means minutes of downtime.
-- dump/restore: Fail over to a fresh database that is a clean snapshot.
-- pg_repack: A third-party extension for online rebuilds from an external process. Generally a good option, but not without caveats and risks.
-- pg_squeeze: Another third-party extension for online rebuilds via a background worker, also solid in production but again not without caveats and risks.
+Gecode has always allowed new variables and constraints to be added during search, but before [Gecode 6.5.0](https://www.gecode.dev/news/#2026-10-31-gecode-6-5-0) there was no explicit support for it.
+Gecode 6.5.0 adds that support as [*open variable lists*](https://www.gecode.dev/doc/latest/modeling/modeling/open-list/).
+An `OpenIntVarList` is a list of ordinary `IntVar`s that are created when propagation or search needs another position, together with an ordinary `IntVar` for its length.
+When a position is added, a [transition callback](https://www.gecode.dev/doc/latest/modeling/modeling/open-list/#cloning-and-callbacks) can create more variables and post constraints for that step, such as the next state of a plan, so any constraint in Gecode can be used in a model that grows.
 
-Enter Postgres 19:
+In addition, the release has open versions of some common constraints, such as `regular`, `distinct`, and `sequence`, which are posted once on the whole list and follow it as it grows.
+A list brancher decides both the next value and whether the list should grow, and most of the usual variable and value selectors work on the positions.<sup>[1](https://zayenz.se/blog/post/open-cp-in-gecode/#user-content-fn-selectors)</sup>
+All of this is built with the propagator and brancher interfaces that Gecode already had, plus a few small additions to the kernel.<sup>[2](https://zayenz.se/blog/post/open-cp-in-gecode/#user-content-fn-gpi)</sup>
 
-- REPACK CONCURRENTLY: reclaims bloated table space while the table stays fully readable and writable, takes only a brief lock at the very end, and runs without any extension
+The release also includes two experimental search engines, A* and complete anytime beam search.
+This post models the robot, then the fifteen-puzzle, and ends with the new engines.
 
-## How Postgres tables become bloated
+The shelf, the workbench, and the charger are connected in a line, in that order, as in the picture at the top.
+The robot starts at the workbench with one unit of charge.
+Each move uses one unit, each charge action at the charger adds one, and the battery holds five.
+Picking up and putting down the packet are free.
 
-Let’s back up. You may be familiar with bloat as a seasoned Postgres user, but just to make sure we’re all on the same page… It's one of those Postgres realities, the tradeoff for MVCC. Tables accumulate dead tuples over time: when rows are updated or deleted, the old versions stick around. Regular autovacuum typically marks that space as reusable. For most tables, that's enough. But for large, update-intensive tables, vacuum can fall behind. Dead rows accumulate as table bloat. The file grows, but since VACUUM can only mark that space as internally reusable, it doesn't shrink the table or return space to the OS. To actually reclaim disk space, you need to rebuild the table.
+With one unit, the robot can reach the shelf, but then it is stuck there with the packet.
+The shortest working plan visits the charger first.
 
-How do you know if you have a bloat problem? You can do a quick check using pg_stat_user_tables. The tuple counts are estimates, but this is one good diagnostic signal.
-
-```sql
-SELECT
-    schemaname,
-    relname,
-    pg_size_pretty(pg_relation_size(schemaname || '.' || relname)) AS size,
-    n_live_tup,
-    n_dead_tup,
-    CASE WHEN n_live_tup > 0
-         THEN round((n_dead_tup::float / n_live_tup::float)::numeric, 4)
-    END AS dead_tup_ratio,
-    last_autovacuum,
-    last_autoanalyze
-FROM pg_stat_user_tables
-ORDER BY dead_tup_ratio DESC NULLS LAST;
-```
-
-*(Query adapted from [Crunchy Data's bloat checking guide](https://www.crunchydata.com/blog/checking-for-postgresql-bloat))*
-
-A rough rule of thumb:
-
-**Below 50% bloat**: Generally acceptable. Monitor it and check autovacuum settings, but no urgent action needed.
-
-**Above 50% bloat**: You're likely wasting disk space and paying a performance cost from extra page reads. It's at least worth investigating — and possibly addressing — if you see slow queries or growing table sizes.
-
-There is no single bloat percentage that determines whether a table needs attention. Consider wasted bytes, workload, growth, and whether reclaiming space is worth the rewrite.
-
-### How pg_repack works
-
-The [pg_repack extension](https://reorg.github.io/pg_repack/) was the option for online table rebuilds for years. Here's how it works:
-
-- External tool: pg_repack runs as a command-line utility (pg_repack --table my_table -d mydb) from an external server or management host. You needed to install both the extension inside Postgres (CREATE EXTENSION pg_repack) and the client binary on whatever machine would run it.
-- Trigger-based change capture: It creates a log table and installs triggers on your target table to capture all INSERT/UPDATE/DELETE operations during the rebuild. This adds trigger overhead on every write for the duration of the operation.
-- Shadow table approach: It creates a new copy of the table, populates it from the original, replays the trigger log, then does a brief lock-and-swap, along with a final table rename.
-
-This worked well, and many production systems relied on it for years. But installing third-party extensions makes some teams nervous, and the external binary adds operational overhead.
-
-### How pg_squeeze works
-
-[pg_squeeze](https://github.com/cybertec-postgresql/pg_squeeze) (from CYBERTEC, the same team behind much of the Postgres 19 REPACK work) came along and took a more modern approach. It's also seen wide production use.
-
-- Logical decoding: pg_squeeze uses Postgres’ WAL-based logical decoding to capture concurrent changes. This means no triggers are installed on your table. This is the same approach that PG 19's built-in REPACK (CONCURRENTLY) now uses.
-- Background worker: This runs entirely inside the database as a background worker process which means unlike pg_repack, you don’t need an external CLI tool. You can also configure it to run automatically when bloat thresholds are exceeded.
-- Still an extension: Lots of folks prefer a built-in option, but this still requires wal_level = logical, a replication slot, compiling and installing the extension, and adding it to shared_preload_libraries.
-
-pg_squeeze in a sense is the prototype for what became PG 19's REPACK (CONCURRENTLY). The built-in version inherits the logical decoding approach but integrates it directly into the server without an extension, shared_preload_libraries, or separate configuration tables.
-
-### Enter REPACK
-
-Postgres 19 adds REPACK as a first-class SQL command with three modes:
-
-```sql
--- Basic repack, like VACUUM FULL — takes ACCESS EXCLUSIVE lock
-REPACK my_table;
-
--- Online repack using CONCURRENTLY just like you would with indexes
-REPACK (CONCURRENTLY) my_table;
-
--- Online repack + reorder by index 
-REPACK (CONCURRENTLY) my_table USING INDEX my_index;
-```
-
-## REPACK (CONCURRENTLY)
-
-This is what makes the feature production-ready. With CONCURRENTLY, the ACCESS EXCLUSIVE lock is only held briefly at the end. During the bulk of the operation, which for a large table could take minutes, the table remains fully readable and writable.
-
-Here's what happens internally:
-
-```sql
-REPACK (CONCURRENTLY, VERBOSE, ANALYZE) repack_test;
-```
-
-```
-INFO:  repacking "public.repack_test" in physical order
-INFO:  "public.repack_test": found 0 removable, 1000000 nonremovable
-       row versions in 38452 pages
-Time: 9406.788 ms (00:09.407)
-
-Before: 493 MB → After: 228 MB (54% reduction)
-```
-
-Three options in play here:
-
-- CONCURRENTLY: Rebuilds online, with only a brief exclusive lock at the very end for the file swap.
-- VERBOSE: Prints progress at INFO level.
-- ANALYZE: Runs ANALYZE after the repack completes to update planner statistics.
-
-### REPACK with USING INDEX
-
-REPACK can also physically reorder your table's rows to match an index. If your workload frequently reads ranges of related rows, clustering with USING INDEX may improve locality. Measure the effect on your own queries; later updates are not automatically clustered.
-
-This is a big deal for the REPACK feature beyond just bloat removal. It's a performance feature in its own right. For example, say you have an orders table and frequently query WHERE created_at BETWEEN '2026-01-01' AND '2026-01-31'. Without physical ordering, those rows could be scattered across hundreds of pages. With REPACK orders USING INDEX idx_orders_created_at, the rows are stored sequentially on disk in date order, so a range scan reads pages in sequence instead of random I/O across the whole table.
-
-You might know CLUSTER from older Postgres versions. It did the same thing, but took a lock.
-
-```sql
-REPACK (VERBOSE, ANALYZE) product_inventory USING INDEX idx_product_category;
-```
-
-```
-INFO:  repacking "public.product_inventory" using index scan
-       on "idx_product_category"
-Time: 15230.264 ms (00:15.230)
-
-Before: 618 MB → After: 320 MB (48% reduction, rows now ordered by category)
-```
-
-### REPACK vs. VACUUM FULL sample performance
-
-I did some testing just to verify how this works. For the 493 MB test case with 1M live rows remaining after deleting 1M of the original 2M rows, the reported timings were:
-
-| Method | Time | Result | Table Accessible? |
+| Action | Location afterwards | Charge remaining | Packet |
 | --- | --- | --- | --- |
-| VACUUM FULL | 2.7s | 228 MB | No (locked entire time) |
-| REPACK | 5.9s | 228 MB | No (locked entire time) |
-| REPACK (CONCURRENTLY) | 9.4s | 228 MB | Yes (brief lock at end only) |
+| Initial state | Workbench | 1 | On the shelf |
+| Move to charger | Charger | 0 | On the shelf |
+| Charge | Charger | 1 | On the shelf |
+| Charge | Charger | 2 | On the shelf |
+| Charge | Charger | 3 | On the shelf |
+| Move to workbench | Workbench | 2 | On the shelf |
+| Move to shelf | Shelf | 1 | On the shelf |
+| Pick up | Shelf | 1 | Carried by the robot |
+| Move to workbench | Workbench | 0 | Carried by the robot |
+| Deliver | Workbench | 0 | Delivered |
 
-In one test on a constrained system, REPACK (CONCURRENTLY) took 9.4 seconds for the stated table and test conditions. Results vary with table, indexes, workload, and hardware.
+Three charges are exactly enough, and with two the robot is stuck at the shelf.
+Charging four or five times also works, but every extra charge makes the plan longer, so the first plan a solver finds need not be the shortest.
+Try it below, and head straight for the shelf first to see what happens.
 
-REPACK CONCURRENTLY is slower in wall-clock time. It's doing more work: logical decoding and WAL replay on top of the table rebuild. The tradeoff here is more time to keep your table online.
+### Workshop planning
 
-### Requirements for REPACK CONCURRENTLY
+Each move uses one unit of charge.
 
-- You need 2x the space for the table and indexes you are repacking, since for a period, you will have two copies of it.
-- The table must be logged with WAL, cannot be UNLOGGED.
-- The table cannot be partitioned.
-- The table must have an indexable primary key.
-- The table cannot be a system catalog or TOAST table.
-- Only one concurrent REPACK can run per database at a time.
-- Tables using non-heap access methods are not supported.
+#### Manual controls
 
-**A note on MVCC safety**: REPACK CONCURRENTLY is not fully MVCC-safe. During the brief final swap, a long-running transaction could theoretically miss concurrent changes. A concurrent transaction using a snapshot taken before repacking began can see the table as empty. This is the same limitation pg_repack had, and it's documented in the Postgres 19 release notes. Review this behavior against your workload’s transaction and consistency requirements.
+#### Follow the plan
 
-### When to use REPACK vs. VACUUM
+**Optimal plan:** Right → Charge → Charge → Charge → Left → Left → Take packet → Right → Deposit packet
 
-Regular VACUUM and REPACK solve different problems:
+What I want is a model that just describes the actions and their effects, and lets the solver discover the detour on its own.
 
-| Situation | Use | Why |
-| --- | --- | --- |
-| Routine maintenance | VACUUM (autovacuum) | Marks dead tuples reusable, updates visibility map. Fast, no lock, runs automatically. |
-| Some bloat, may be growing faster than autovacuum clears dead rows | Tune autovacuum settings | Adjust autovacuum_vacuum_scale_factor for large/busy tables. Also worth trying the parallel vacuum features in Postgres 19. |
-| Table has high bloat AND you need disk space back | REPACK (CONCURRENTLY) | Rewrites the table, returns space to OS, table stays online |
-| Table has high bloat AND you have a maintenance window | REPACK or VACUUM FULL | Faster than REPACK CONCURRENTLY, but locks the table |
-| Range queries are slow on a column that has an index | REPACK CONCURRENTLY ... USING INDEX | Physically reorders rows for better sequential access patterns |
-| Index is bloated but table is fine | REINDEX CONCURRENTLY | Rebuilds just the index without touching the table |
+A straightforward CP model has a variable for each action, variables for the state before and after each action, and a transition constraint relating them.
+For a plan with four actions, there are four action variables and five states, with the first state fixed to the initial situation and the last required to satisfy the goal.
+For our example, that model has no solution.
+Planning encodings have traditionally dealt with the unknown length in two ways.
+One is to solve again with five actions, then six, and so on up to nine, so that the first plan found is also a shortest one.
+The other is to choose an upper bound, say twelve actions, and allow an unused suffix, at the price of modelling which positions are active and having every position up to the bound in the model from the start.
 
-The rule of thumb: autovacuum handles day-to-day maintenance. REPACK is for when you need to reclaim space back to the OS or physically reorder data, —hings that regular VACUUM fundamentally cannot do.
+An open list gives a third option: keep the bound of twelve, but create positions only when search or propagation needs them.
+The model then grows the way a plan does when you work it out by hand: first the charging visit, then the trip to the shelf, and once the packet is delivered, we can stop.
 
-### Estimating how long REPACK will take
+The full model is in [open-robot.cpp](https://zayenz.se/files/blog/open-cp-in-gecode/open-robot.cpp).
+The actions are kept in an open list, and the states between them in three more: where the robot is, how much charge it has, and where the packet is.
 
-REPACK time scales with table size, index count and available I/O. A rough model:
+Each action is an `IntVar` over the six action codes, and there are at most twelve of them.
+`actions.length()` is the length of the finished plan, and `actions.known_length()` counts the positions created so far.
+Creating a position is called *materialization*, and it does not assign a value.
 
-```
-REPACK time ≈ (time to read entire table) + (time to write new copy) + (time to rebuild all indexes)
-```
+When the plan grows, the new action is materialized and the callback calls `step`, which materializes the state after it and posts the constraints between them.
 
-You can estimate this before running REPACK:
+The callback is shared between copies of the space, so it casts the space it is given instead of capturing `this`.
+It must also be deterministic, since recomputation and parallel search may repeat an extension in another space.
 
-```sql
--- How large is the table + indexes that need to be rewritten?
-SELECT
-    pg_size_pretty(pg_relation_size(relid)) AS table_data,
-    pg_size_pretty(pg_indexes_size(relid)) AS all_indexes,
-    pg_size_pretty(pg_total_relation_size(relid)) AS total,
-    n_live_tup AS rows_to_copy
-FROM pg_stat_user_tables
-WHERE relname = 'my_table';
-```
+The legal steps are a table with one tuple for each action and the states before and after it, posted as an extensional constraint for each step.
 
-From my tests on a constrained system (1 CPU, 512 MB, 4 MB maintenance_work_mem):
+The goal decides where the plan ends.
 
-| Table Size (before) | Live Rows | Time (REPACK) | Time (CONCURRENTLY) |
-| --- | --- | --- | --- |
-| 493 MB | 1M | 5.9s | 9.4s |
-| 839 MB | 2M | 7.5s | ~12s (estimated) |
-| 1,252 MB | 1.7M | 17.2s | ~27s (estimated) |
+The plan can only end where the packet has been delivered, and it ends as soon as it has.
 
-The CONCURRENTLY overhead is roughly 1.5x to 2x the basic REPACK time, because it has to set up logical decoding and replay any concurrent changes. On a real production server with fast NVMe and more CPUs, these times would be significantly lower, but the ratio holds.
+Propagation does some planning before search starts.
+The packet cannot be delivered in fewer than four actions, so the root already has four, the first a move to the shelf or the charger and the second picking up or charging.
+Branch-and-bound then finds the nine-action plan.
 
-For very large tables (100+ GB), expect REPACK to take minutes to tens of minutes. Plan accordingly, and use pg_stat_progress_repack to monitor.
+We can also use the [*regular constraint*](https://www.gecode.dev/doc/latest/modeling/modeling/integer/#extensional-constraints) to encode the state as a transition system, folding the values of `at`, `charge`, and `packet` into the states of a finite automaton instead of keeping them in variables.
+Each tuple in the table becomes a transition labelled with its action, so the accepted words are exactly the delivery plans.
 
-### Monitoring REPACK progress
+The model is then just the action list and one constraint, with no state lists and no callback.
 
-While REPACK is running, query pg_stat_progress_repack from another session:
+The interesting part is what an open regular constraint does with an unfinished plan.
+After moving to the charger and charging once, the packet is still on the shelf, but the plan can still reach the goal.
+Moving straight to the shelf is a dead end, and is rejected while the list is still open.
+So while the list is open, a prefix is kept if it can reach an accepting state within the maximum length, and once it is closed, its last state must be accepting.
 
-```sql
-SELECT
-    pid,
-    datname,
-    relid::regclass AS table_name,
-    command,
-    phase,
-    heap_tuples_scanned,
-    heap_tuples_inserted,
-    heap_blks_total,
-    heap_blks_scanned,
-    index_rebuild_count
-FROM pg_stat_progress_repack;
-```
+Regular propagation works on a *layered graph*, with a layer of automaton states for each position and edges labelled with the values in each domain.
+The widget uses a small automaton for the words that start with `a` and end with `b`.
+With a fixed length of two, only `ab` has a path.
+The open list has the same two positions but a length of up to four, so a prefix like `aa` can still become `aab`.
+Lower the maximum length to two, and the open list behaves like the fixed one.
 
-The phases you'll see progress through:
+### A DFA and its unfoldings
 
-| Phase | What's Happening |
-| --- | --- |
-| initializing | Preparing to scan |
-| seq scanning heap | Reading the old table sequentially |
-| index scanning heap | Reading via index |
-| sorting tuples | Sorting rows by index order |
-| writing new heap | Writing compacted rows to new file |
-| catch-up | Replaying concurrent DML (CONCURRENTLY only) |
-| swapping relation files | Brief lock, swapping old/new files |
-| rebuilding index | Rebuilding each index on the new heap |
-| performing final cleanup | Done, cleaning up |
+#### The DFA
 
-You can estimate percent complete during the scan phase:
+#### Fixed-length unfolding
 
-```sql
-SELECT
-    phase,
-    heap_blks_scanned,
-    heap_blks_total,
-    CASE WHEN heap_blks_total > 0
-         THEN round(100.0 * heap_blks_scanned / heap_blks_total, 1)
-    END AS pct_complete
-FROM pg_stat_progress_repack;
-```
+#### Open list and possible continuations
 
-REPACK CONCURRENTLY is the most significant DBA-facing feature in Postgres 19. It brings online table rebuilds into core, eliminates the need for pg_repack, in most cases, and gives you a cleaner interface than the VACUUM FULL / CLUSTER split that's existed forever. If you manage tables with significant bloat in production, this is your upgrade reason.
+Open, so a prefix ending in q₁ can still finish with b.
 
-Postgres 19 currently has a first release candidate (RC1) with an expected RC2 Nov 12 and GA expected later in November/December 2026. If you want to try REPACK today, spin up a beta instance and see how it performs on your most bloated tables.
+Gecode does not build the future layers.
+It computes the shortest distance from each automaton state to an accepting state, and keeps an end state of the prefix only if that distance fits within `length().max() - known_length()`.
+
+Both the table and the automaton list every combination of location, charge, and packet status.
+That works for the robot, but with more packets and a second robot the combined states explode, and the transitions are better posted as ordinary constraints over the state variables, as in the fifteen-puzzle below.
+
+The list brancher assigns the materialized positions, and once they all have values, it tries closing the list, with extending it as the alternative.
+For the robot, closing fails until the packet is delivered.
+
+The usual selectors choose among the materialized positions.
+To settle the number of actions first, branch on the length before the actions, and depth-first search with minimum-value selection then tries shorter plans first.
+
+Building the plan incrementally can find a longer plan before a shorter one, so the companion minimizes the length with branch-and-bound.
+With `-branching max`, it tries the highest action code first, which means charging whenever it can, and finds plans of eleven, ten, and finally nine actions.
+
+Real planning models collect side rules: don’t repeat an action, don’t keep the charger busy too long, pick up before you deliver.
+The open constraints in the release express rules like these, posted once and applied to every new position.
+
+The last three assume other open lists, of jobs, loads, and battery levels.
+Side rules can change which plans exist at all.
+For the robot, forbidding immediate repeats leaves no plan, since a single charge never pays for the trip there and back, while at most three charges in every window of four removes the two longer plans and keeps the nine-action one.
+
+What makes these constraints different from their closed versions is the positions that do not exist yet.
+`sequence` and `sliding_sum` only count complete windows, so a plan shorter than the window is unrestricted.
+`distinct` remembers the assigned values and removes them from positions created later.
+`min` and `max` can only bound the result from one side while the list is open, since a later position can still lower the minimum or raise the maximum.
+
+The fifteen-puzzle is the classic test problem for heuristic search, with far too many boards for a table or an automaton.
+Fifteen numbered tiles and a blank occupy a four-by-four board, and a move slides a tile next to the blank into the blank.
+The goal has the tiles in order, with the blank at the bottom right.
+This board needs two moves: slide tile 14 left, and then tile 15.
+
+Seen from the blank, it moves right twice, so a plan can be described by the successive positions of the blank.
+Gecode’s [fifteen-puzzle.cpp](https://github.com/Gecode/gecode/blob/release-6.5.0/examples/fifteen-puzzle.cpp) uses two open lists: `path[i]` is the cell of the blank in board `i`, and the sixteen entries from `tiles[16*i]` are board `i`, with 0 for the blank.
+
+Only `path` has a transition callback, which creates the board for each new blank position.
+
+The constructor body ties the two lengths together, fixes the first board, and bounds the length from below.
+
+The Manhattan distance, the sum of each tile’s distance to its goal cell, is a lower bound on the number of moves, so propagation creates several boards before any move is chosen.
+Each new blank position materializes its board, connects it to the previous one, and posts the goal, just like the robot’s `step`.
+
+A slide moves the blank to a neighbouring cell, puts the moved tile in the old blank cell, and leaves every other cell unchanged.
+
+Every board is a permutation of the tiles, so an assigned path determines all the boards, and it is enough to branch on `path`.
+
+The example also has a fixed model, `-model fixed`, that creates every board up to the move limit and uses a branch filter so that search does not choose moves after the goal.
+For a two-move solution with a limit of eight, it has nine boards where the open model has three.
+
+This finds plans of eight, six, and finally four moves, which matches the initial Manhattan distance, and `-model fixed` finds the same optimum.
+
+Gecode 6.5.0 also includes two experimental search engines, `AStar` and `CABS` (complete anytime beam search), enabled with `GECODE_ENABLE_EXPERIMENTAL=ON` in CMake or `--enable-experimental` with Autoconf.
+They work with any Gecode space, with or without open lists, and their APIs may still change.
+
+Branch-and-bound explores depth-first, and has no idea which of the pending partial plans looks most promising.
+Heuristic search estimates how good the best completion of each partial plan can be, and explores the most promising ones first.
+It is also the workhorse behind many of the planning systems mentioned at the start.
+The estimate must be *admissible*, never above the true cost.
+For the robot, ignoring the battery gives one: after moving to the charger and charging once, two actions are used and at least five remain, a bound of seven where the true total is nine.
+
+Both engines take a `Search::HeuristicGuidance`, whose bound callback returns an optimistic value for the *total* objective, including the cost so far, and must be exact on solutions.
+For the puzzle, the bound is the number of moves made so far plus the Manhattan distance of the board they lead to.
+
+`depth` stops at the first undecided move, even when later boards have been created, and the length gives the bound instead when it is stronger.
+
+Both engines use the model’s `constrain` to require improvement after each solution, so as with branch-and-bound, the first solution need not be optimal.
+A* keeps every pending state.
+CABS keeps only a beam of candidates at each layer of the search tree, starting with a width of one and doubling it while the discarded candidates might still lead to a better solution.
+That finds a plan quickly, and spends more effort later on improving it and proving optimality.
+CABS can also use a dominance test, which discards a candidate when another one can match each of its completions with one that is no worse.
+
+Gecode’s [tsptw.cpp](https://github.com/Gecode/gecode/blob/release-6.5.0/examples/tsptw.cpp), for the travelling salesman problem with time windows, offers all three engines on a closed model.
+I wrote an [open-list variant](https://zayenz.se/files/blog/open-cp-in-gecode/open-tsptw.cpp) that creates each position of the tour when the tour reaches it.
+Every tour visits all customers, so stating its length would create every position at the root.
+Instead, the variant states the goal as a condition on the visited customers.
+
+Both models find and prove the optimal travel times for the two built-in instances with branch-and-bound, A*, and CABS.
+The instances are far too small to say which combination works best on hard problems.
+
+Leaving future positions uncreated is a tradeoff.
+They take no storage, but their domains are not available for propagation either, so a fixed-horizon model may detect some failures earlier.
+My guess is that open lists pay off when a large upper bound is needed to admit all plans, while most of the search works with much shorter prefixes, but that needs measuring.
+For classical planning problems, a dedicated planner will often be the better tool.
+A constraint model becomes interesting when the plan also has to satisfy side constraints, like resource limits, time windows, or the rules above.
+
+Back in the workshop, the model is the same whatever the initial charge.
+With a full battery, the shortest plan is the direct four actions, and with a single unit, it is the nine-action detour.
+Nobody had to guess the length of the plan in advance.
+The model describes what the robot can do, and search works out how long it takes.
+
+1. The exceptions are the activity-based ([Action](https://www.gecode.dev/doc/latest/modeling/modeling/branch/#selection-using-action)) and conflict-history ([CHB](https://www.gecode.dev/doc/latest/modeling/modeling/branch/#selection-using-chb)) variable selectors. They require the complete list to be materialized when the brancher is posted, so they cannot be used for positions created later. [↩](https://zayenz.se/blog/post/open-cp-in-gecode/#user-content-fnref-selectors)
+2. For example, callbacks run inside a `Space::NoGPI` scope, so that propagators created and discarded during search do not accumulate [global propagator information](https://www.gecode.dev/doc/latest/modeling/modeling/branch/#scoped-control-of-propagator-information) such as the [accumulated failure count (AFC)](https://www.gecode.dev/doc/latest/modeling/modeling/branch/#selection-using-accumulated-failure-count). A callback can open a `Space::UseGPI` scope for postings that should be tracked as usual. [↩](https://zayenz.se/blog/post/open-cp-in-gecode/#user-content-fnref-gpi)

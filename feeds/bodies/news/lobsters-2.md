@@ -210,5 +210,3 @@ Which leads to the question: just how much are we leaving on the table with mode
 
 (Also, uh, if anyone has any ideas for projects I could do with a Pentium Pro in a few weeks
         once I no longer need it to host this chess engine ... do let me know!)
-
-[Discuss on Hacker News](https://news.ycombinator.com/item?id=50349276)

@@ -1,45 +1,81 @@
-Five months ago, we rebuilt [PostHog's warehouse product](https://posthog.com/warehouse) on DuckDB instead of ClickHouse, as [we explained at the time](https://posthog.com/blog/why-we-rebuilt-our-data-warehouse). We did it because a shared ClickHouse cluster couldn't handle hours-long modeling queries, and it lacked a cost-based query optimizer. DuckDB gave every customer their own instance, and tools like dbt could connect over Postgres. We're still fans.
+I’m not a big owner of things, but the best laptop I’ve ever owned is a roughed-up
+2015 Thinkpad X250.
 
-But we underestimated how big and complex our customers' workloads would get. We didn't want them to have just a good experience, we wanted the best experience you can get when you pay someone else to run your warehouse. It should work at any scale, at a fair price.
+For the flex, here it is running a GUI shell sat on top of the microkernel I’m currently
+working on (blog post about this incoming… eventually).
 
-So we spent the last three months re-architecting it, this time without DuckDB.
+![Thinkpad X250](https://blog.jsbarretto.com/img/laptop.png)
 
-We love DuckDB. It's probably the best single-node tool for analyzing heaps of data, and that node can be your laptop. It's robust and reliable. It almost always finishes your query, and if it runs out of memory, it spills to disk.
+Here’s a list of things that I think make it brilliant. I don’t want to pretend that any
+of these things are uniquely exemplary: far from it. It is the confluence of them, and
+not any one in particular, that makes me love using it.
 
-The same features that are great locally gave us problems in the cloud. Customers ran more complex queries than we expected, so we had to add huge instances. Adding disks was an option, but queries would have been too slow and expensive to be viable.
+## Size
 
-To run a single-node engine safely in the cloud, we have to size the worker before the query arrives. The ergonomics here are wonky. We couldn't find a good way to tell customers what resources their queries would need. Predicting CPU and memory for a specific query was even harder.
+It’s pretty tiny. Its form-factor fits snuggly into the footprint of an A4 piece of
+paper, so it sits alongside books and folders when placed in a small rucksack without
+risking damage.
 
-Users shouldn't have to worry about this. They should be able to run whatever they need to get their work done. Our job is to handle the rest and make it as predictable as possible.
+It weighs almost nothing too: even with the extra capacity battery, it’s only about 1.45
+Kg. Light enough that you almost don’t notice it when travelling.
 
-We hit other bottlenecks too, like fetching lots of data from S3 without async fetching. DuckDB only added that recently.
+## Performance
 
-To use DuckDB as a fully-fledged data warehouse, we installed the [DuckLake](https://ducklake.select/2025/05/27/ducklake-01/) extension by default. It is a new lakehouse format from the same creators and follows the same principles as DuckDB: keep things simple and run on almost any setup. That works well up to a point, but at PostHog's scale, we needed something designed for distributed scale from the start.
+Mine has an i5-5200U: 4 logical cores, maxing out at 2.7 GHz. I upgraded it to 8 GB of
+RAM a while back: more than enough for some light on-the-go programming.
 
-DuckLake's catalog schema has to stay portable across many SQL databases, which limits engine-specific optimizations. At our scale, a single-table write could take more than three minutes because every commit re-read the statistics for the entire catalog.
+Even at full pelt, I’ve never heard the fan kicking up much of a fuss. Now that I think
+about it, I’m not even certain that it works.
 
-We tuned DuckLake with table indexes and similar tweaks. But to keep offering DuckLake, we had to stay 100% compatible with its existing, "official" schema. This left us with fewer optimization options.
+## Battery
 
-Another problem is that over 99% of the catalog's statistics rows belonged to tables that no longer existed. Cleaning them up made writes 30 to 50 times faster, but the rows kept growing back.
+The X250 has both an internal battery and an external battery slot. I’ve opted for the
+largest after-market external battery I could find. When doing casual work the laptop
+will easily survive for north of 10 hours without a charge, stretching to 12 hours if
+I’m careful.
 
-We also spent a lot of time on the number of connections DuckLake opens to metadata databases. That hurts on shared Postgres instances, where every connection has a real cost.
+## Repairability
 
-DuckLake at PostHog didn't start small and ramp up. We fully committed and put all of PostHog in a DuckLake to dogfood as the first customer.
+The X250 was quite popular and replacement parts retail very cheaply on ebay. It’s not
+the easiest to disassemble Thinkpad by any means but I can tear it apart entirely with
+the pocket phillips I keep on my keyring. I have previously replaced:
 
-When we moved off it, it held about 2 PB: roughly 1 trillion rows and 15.3 million snapshots. It broke in lots of ways that were hard to fix within DuckLake's scope.
+- The internal battery
+- The lid camera
+- The keyboard
+- The motherboard
 
-We'd rather have contributed to the existing community and helped it grow. But we couldn't land changes as fast as we needed, so we ended up carrying patches in a fork which defeats one of the main benefits of using DuckLake: the community.
+Every time you open up a laptop you run the risk of damaging something important either
+via a slip of the hand or simply the accumulated toll of loosening and tightening dozens
+of tiny screw threads. Despite that, my X250 has proved remarkably resilient and has
+never sustained any major damage despite more than more than a dozen tear-downs.
 
-Offering direct Postgres connections over port 5432 sounds like a great idea. In practice, it was much harder to scale than HTTP.
+## Keyboard
 
-Missing reconnects and managing TTLs and idle connections at scale is hard, and long-running connections are expensive. There's also very little tooling for load balancing pgwire compared with HTTP. Compare the ergonomics of an AWS NLB with an ALB and you'll see what we mean. HTTP headers also make routing in Kubernetes much more flexible.
+As with most Thinkpads, the keyboard feels lovely to use. When you spend a lot of time
+writing code the reliability and sensitivity of a keyboard starts to matter a lot.
+Coupled with my [text editor](https://blog.jsbarretto.com/post/text-editor), the experience of writing code on the thing
+is beautifully snappy.
 
-There's also an endless list of Postgres clients, and each expects its own niche Postgres behavior. Customers kept asking us to fix their client or library. We spent a lot of time shipping many of those fixes, but coverage never got good enough. We'd rather spend our time building an excellent warehouse product than chasing the long tail of Postgres compatibility.
+## Operating System
 
-We've learned not to hype the tech behind a warehouse so much. What counts is the experience it gives you.
+I opted for Endeavour OS. In the usual Arch Linux tradition, it favours native
+package installs over sandboxed applications. As a result my install sits at around 30
+GB. A 128 GB M.2 SSD raided from another second-hand machine is more than enough to
+cover that and everything I’m working on.
 
-Still, we're happy to share what we're cooking next. We rebuilt everything around our own flavor of [Trino](https://trino.io/) and created our own open table format, HogLake. And yes, we're testing it at PostHog's petabyte scale first. We made it solid before handing it to design partners.
+I’ve slimmed down my systemd setup as much as possible and the thing boots from cold in
+about 8 seconds.
 
-If your current warehouse is slow or expensive, [let's talk](mailto:benjamin.k@posthog.com), especially if you have a lot of data to query. We're always looking for design partners.
+## Cost
 
-> PostHog is your product's context layer. With a full suite of developer tools –  [AI observability](https://posthog.com/ai-observability), [product analytics](https://posthog.com/product-analytics),  [session replay](https://posthog.com/session-replay), [feature flags](https://posthog.com/feature-flags),  [experiments](https://posthog.com/experiments), [error tracking](https://posthog.com/error-tracking),  [logs](https://posthog.com/logs), and more – PostHog ingests and stores all the data agents need to diagnose problems, uncover opportunities, and ship fixes. A [data warehouse](https://posthog.com/warehouse) and  [CDP](https://posthog.com/data-pipelines) tie it all together, unifying that context into one source agents can read across. You can steer it all from [Slack](https://posthog.com/slack), [the web app](https://posthog.com/ai), the desktop ([PostHog Desktop](https://posthog.com/desktop)), or your own editor via [the MCP](https://posthog.com/mcp).
+Here’s where the X250 beats out most competition. I bought mine second-hand for about
+£100 in 2018. They’ve only got cheaper since then. I’m not afraid to take it anywhere
+because it’s barely worth stealing and would be cheap to replace even if that were to
+happen. Its value is very much not in its on-paper specs and instead in how I use it.
+
+## Conclusion
+
+I get a certain glee in keeping older or second-hand hardware running as a daily driver.
+It sounds silly, but it feels like a quiet revolt against bigger-faster-costlier
+consumption culture. Come the end times, this is the machine I’ll be riding it out with.

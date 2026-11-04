@@ -1,207 +1,121 @@
-In 2012, I published an iPhone app called [SuperVote](https://supervote.org), which allowed Facebook
-users to share political endorsements with their friends via a shared ballot. Other than two posts
-on Hacker News (one in [September 2018](https://news.ycombinator.com/item?id=18032943) and
-another in [November 2018](https://news.ycombinator.com/item?id=18388446)), I never had a
-proper retrospective on my work. Because it’s been 15 years since I first started working on
-the app, I felt it was a good time to revisit the development process and reflect on what
-I’ve learned since.
+*This article—the second in a series of four, examining the complex legacy, technical evolution, and future prospects of DNSSEC—sets out to fact-check common beliefs on DNSSEC, point to future-proof data collections on DNSSEC matters and provides an up-to-date perspective on what DNSSEC is like today. It was widely circulated for comments and has been endorsed by over 60 people across the Internet industry (see list<sup>[1](https://circleid.com/posts/common-beliefs-about-dnssec-put-to-the-test-an-invitation-to-fact-check-your-assumptions#fn1)</sup>).*
 
-Back in the early 2010s, California voters would receive a voter guide provided by the state
-([June 2010 voter guide](https://vig.cdn.sos.ca.gov/2010/primary/pdf/english/complete-vig.pdf)),
-which would include a list of propositions, with arguments in favor and arguments against a proposition,
-along with rebuttals for both sides. A dedicated voter would need to spend a considerable amount
-of time investigating all the options. At the time, I had a small network of friends and coworkers
-that were well-informed and kept up to date with the latest on state politics. I felt that putting
-together a single app that showed a custom ballot for yourself, along with the endorsements of your
-friends, it would make voting easier.
+In the [first article](https://circleid.com/posts/the-excruciating-slow-rise-of-dnssec) from our series on DNSSEC, long-standing DNS luminary Roy Arends and Barbara Jantzen (communicator at the DNSSEC-focused non-profit organization deSEC) have engaged in a dialogue, recounting how DNSSEC adoption has been substantially hindered by the protocol’s bad image—an image that cannot be accounted for by factual failures alone, demonstrating the impact of narratives on the perception of technical devices.
 
-# Origins
+Image-wise, two narrative items have indeed been particularly influential: First, the [IANIX list](https://ianix.com/pub/dnssec-outages.html) of DNSSEC-related outages since 2009, and second, [“Against DNSSEC”](https://sockpuppet.org/blog/2015/01/15/against-dnssec/) (with its follow-up [FAQ](https://sockpuppet.org/stuff/dnssec-qa.html)), a DNSSEC-critical blog post written by Thomas H. Ptáček in 2015. Both helped harden the perception that DNSSEC is more trouble than it is worth, and references to them still surface in forum threads on DNS matters, even as the protocol, tooling, and operational practices have evolved. It therefore seems timely to check how fit they still are to help assess DNSSEC’s usefulness today.
 
-In 2003, I built this mockup page with the general idea of building a political site targeted
-towards informing voters:
+In every field of knowledge, if we want to assess phenomena, we need thorough documentation to establish and collect facts, to witness evolutions, to develop hypotheses as to underlying causalities and try them. And although absolute numbers can provide a fair amount of insight, relative numbers are more helpful in assessing significance—especially when data is collected multi-dimensionally, allowing analysts to grasp inter-dependencies and derive a hint at potential causes. Because ideally, when dealing with broken things, we need to know not only how broken they are, but also how they broke.
 
-![supervote.com mockup](https://callejas.com/assets/images/supervote/mockup.png)
+A list can be a starting point for documentary work, though. The [IANIX list](https://ianix.com/pub/dnssec-outages.html), however, despite its objective looks, is more of a discourse than a documentation (as highlighted<sup>[2](https://circleid.com/posts/common-beliefs-about-dnssec-put-to-the-test-an-invitation-to-fact-check-your-assumptions#fn2)</sup> in our first article). In addition, it lacks transparency about its collection and curation methodology, making it difficult for readers to assess the list’s reliability and significance. As the IANIX site further does not disclose its operator’s name or contact, information on its modus operandi cannot be obtained.
 
-The iPhone did not exist in 2003, so this idea was a purely desktop web-based site. Beyond this
-screenshot, no site was ever built, but conceptually it was a forum site with different boards.
+Looking back, the IANIX list can be credited for having drawn the DNS community’s attention on DNSSEC-related outages and, in doing so, having acted as a strong driver for improving the protocol. However, with its bulk of information lying far in the past, and entries becoming scarce since 2020 (without any possibility to know if that is due to a recent decrease in reportable events or simply to less active maintenance), the IANIX list does not make a meaningful contribution today.
 
-I found a file called `supervote.txt` with the following description, which apparently drove the mockup
-above:
+To broadly assess the actual outage impact of DNSSEC, we need state-of-the-art alternatives. What should these look like?
 
-```
-Non-partisan, online political community where voters and political
-organizations come together to discuss current ballot initiatives and
-elections.
+Such longitudinal studies, consequently, could prove insightful in putting DNSSEC-induced resolution failures into perspective to other failure modes, in particular network issues or HTTPS misconfigurations that impact availability.
 
-Participants contribute their opinions on a variety of
-discussion forums.
+Good starting points in that direction are the [DNSSEC and DANE Deployment Statistics page](https://stats.dnssec-tools.org/), which also has statistics on misconfiguration rates per TLD; a [timeline](https://desec-io.github.io/tld-dnssec-timeline/) of measured TLD validation statuses, provided by deSEC (the author’s non-profit employer) and based on [prior work](https://archive.icann.org/meetings/icann55/marrakech/downloads/presentation-dnssec-monitoring-07mar16-en.pdf) by Jaap Akkerhuis; the comprehensive dataset (2010-2025) used in a recent study by John Kristoff et al. (expected to be published later this month, at which time it will be linked here) which explores DNSSEC-induced outages and provides unweighed as well as downtime- and impact-weighed analysis (results cited at the end of this article); new [measurements](https://icann86.sched.com/event/2NQNm/dnssec-security-workshop) by deSEC contrasting percent-level error rates of both DNSSEC and HTTPS amongst the top 1M most popular domains. Another useful metric would be a public record (as recently [started](https://quad9.net/news/blog/dnssec-ntas-no-good-compromises/) by Quad9) of how frequently resolvers use so-called Negative Trust Anchors (NTAs) to temporarily turn off DNSSEC validation when working around human errors, with the long-term trend being of particular interest.
 
-Voter services include:
+The blog post “[Against DNSSEC](https://sockpuppet.org/blog/2015/01/15/against-dnssec/)” was published by Thomas H. Ptáček in 2015, and got widely relayed. Its harsh critique of DNSSEC fell on fertile ground as numerous DNSSEC-related outages were happening and were given visibility by the IANIX list. This helped turn the blog post’s set of negative claims into potent beliefs that persist to this day and obscure actual implementation reality.
 
-() Online voter registration
-() Polling place locator
-() Email alerts to new propositions in their district/state
-() Access to discussion boards
-() Participate in straw polls
+At the time of its publication, some of the blog’s criticisms reflected genuine limitations and operational experience, others were disputed even then. A decade of protocol, tooling, and operational evolution makes it useful to revisit how well they describe DNSSEC today, for the sake of a fresh assessment of implementation options.
 
-Organization services include:
+To be fair, this is not the first effort to matter-of-factly assess the claims voiced in “Against DNSSEC”, but one of several such publications, spanning from 2015 to the present<sup>[3](https://circleid.com/posts/common-beliefs-about-dnssec-put-to-the-test-an-invitation-to-fact-check-your-assumptions#fn3)</sup>—which incidentally corroborates the blog’s perceived influence.
 
-() Posting official positions on initiatives/propositions
-() Posting announcements of activities and events
-()
+These level-headed accounts, although they have not spread through the tech community as easily as earlier criticism did, still reflect (and contribute to) a gradual shift both in tone and in content, observable for instance in Hacker News forum threads where sweeping allegations on DNSSEC now [get challenged](https://news.ycombinator.com/item?id=44320497) instead of being swiftly echoed. However, even today in 2026, with automation standards having brought a substantial improvement to the protocol (RFCs [7344](https://www.rfc-editor.org/info/rfc7344/), [9615](https://www.rfc-editor.org/info/rfc9615/), [9859](https://www.rfc-editor.org/info/rfc9859/), [10026](https://www.rfc-editor.org/info/rfc10026/)), common beliefs die hard—mostly among those less directly involved in technical matters, but with the power to weigh on decisions.
 
-Organizations pay a monthly/yearly membership to join.
-Individuals participants can join for free.
-```
+So, what are the common beliefs around DNSSEC? And how much truth is there in them today, in 2026? Because, obviously, common beliefs can also be true, half-true or formerly true.
 
-I owned the `supervote.com` domain from 2002 until 2008, with the intention of building out the
-site, but for some unknown reason, I let my
-ownership lapse. In 2012, I contacted the owner of the domain, asking if they were willing to sell it,
-but I never heard back.
+The first set of claims brought forward by “Against DNSSEC” dismisses the DNSSEC protocol as fundamentally flawed, for being structurally incompatible with its objective (preventing the manipulation of DNS answers). Verbatim: “DNSSEC is Unnecessary”, “DNSSEC is a Government-Controlled PKI”, “DNSSEC is Incomplete”.
 
-# Building SuperVote
+**Is DNSSEC unnecessary?—*NO***
 
-For version control, I started off using Subversion, but eventually switched
-to using Git. GitHub did not have free private repositories at the time,
-so I set up a single Git remote server, hosting my repositories on a Linode instance.
+The main argument used in “Against DNSSEC” to dismiss DNSSEC as unnecessary is that “with TLS properly configured, DNSSEC adds nothing”, and that the security of TLS certificates is mainly bounded by an attacker’s ability to hijack a domain validation email sent to a domain owner (and thus, bounded by the security of email).
 
-Jira was a popular project tracking system for developers in the early 2010s.
-Bugzilla was considered clunky and I had previous experience with Redmine and Trac,
-but I was most familiar with Jira from my day job. I purchased a license when it was
-possible to self-host on your own machine. I still have Z shell aliases to this day:
+The first part of this argument ignores real-world attacks that DNSSEC would have prevented while TLS could not, as for example the [nameserver routing hijack of MyEtherWallet.com in 2018](https://www.bleepingcomputer.com/news/security/hacker-hijacks-dns-server-of-myetherwallet-to-steal-160-000/), enabling the theft of $160,000 within two hours.
 
-```
-alias start-jira='sudo /usr/local/jira/jira-5.2.10-standalone/bin/startup.sh'
-alias stop-jira='sudo /usr/local/jira/jira-5.2.10-standalone/bin/shutdown.sh'
-```
+The second part overlooks that a significant part of data fetched from the DNS are not about finding an IP address for establishing a TLS-secured connection (like HTTPS web site connections), but about providing other information—such as TXT records (used for a myriad of purposes), or NS and (upcoming) DELEG records (both used for declaring a domain’s responsible nameserver). Without DNSSEC, these are prone to various kinds of attacks, which can enable impersonation of the domain owner, traffic interception, or a hijack of the entire domain. Most notably, without a DNSSEC-based indicator, the MX records used to find a domain’s mail server cannot enforce that the subsequent email delivery happens through an encrypted connection (unlike in the web, where the “https://” URL prefix indicates the encryption request).
 
-At this point in my career, I had about 10 years of experience with Java, so I picked
-Jetty to serve my API. I had experience with Ruby on Rails on a personal site, but they did not introduce a built-in API-only application mode until version 5.0 in 2016. I chose to use MySQL because of my
-previous experience and ease of use.
+In addition, while “Against DNSSEC” acknowledges that insecure email can be a problem during certificate issuance, it fails to recognize that DNS lookups are involved in *any* certificate issuance process, regardless of whether validation happens trough email, or one of the other (and more common) validation methods which involve publishing a validation string under the domain.
 
-I wanted to keep certain operations out of the request-response cycle (like building a user’s custom ballot), so I evaluated several message queues before settling on RabbitMQ. It offered a straightforward integration with the Java backend and was relatively easy to operate.
+Actually, today, you can use CAA records to restrict methods for domain control validation during certificate issuance and simply ban the insecure email method for your domain. As a byproduct, DNSSEC not only secures certificate issuance by hardening domain control validation, but also provides an indicator to secure email, by linking the email server’s TLS key to the domain directly within the DNS. This technology, called DANE, has already been rolled out by large players such as Microsoft, and secures about [4.6M email domains today](https://stats.dnssec-tools.org/).
 
-For this post, I made my source code available as a read-only archive on [GitHub](https://github.com/augustocallejas/SupervoteServer).
+Which means that actually both email and certificate issuance security are bounded by the security of the DNS, and that’s why it is material to up the authenticity level at this crucial layer of technology.
 
-# Data Model
+All in all, DNSSEC provides a much needed capability that TLS/HTTPS alone does not: It delivers signed, verifiable proof of origin for anything a registrant publishes, independently of any single application or delivery method. As such, it is a key enabling technology that lays a highly effective trust foundation on which applications such as DANE or CAA/TLS can rely to protect Internet users.
 
-One of the more challenging aspects of SuperVote was designing a database that could represent the structure of U.S. elections and generate personalized ballots based on a user’s location. I designed a relational data model around governments, electoral districts, elections, ballots, and endorsements. The complete [database schema](https://github.com/augustocallejas/SupervoteServer/blob/master/core/data/schema.sql) is available on GitHub.
+**Is DNSSEC a government-controlled PKI?—*YES and NO***
 
-The foundation was a hierarchy of governments, including countries, states, counties, cities, and other municipalities, with support for exceptions such as independent cities and municipalities spanning multiple counties (e.g. New York City, whose five boroughs correspond to five counties). Electoral districts were modeled separately to represent congressional, state legislative, and local voting boundaries, which could change over time. During registration, users provided their address and ZIP code so the application could identify their associated governments and electoral districts, determining which elections and contests were relevant to them.
+DNSSEC is the PKI for the Internet’s unique global namespace. It is a globally consistent, well-governed, and well-managed namespace that applications can rely on for identifying servers, devices, and other named resources.
 
-Elections were modeled as dated events associated with governments, containing contests for elected positions and ballot measures. Positions were separate from candidates, allowing the same office to be contested by different individuals across elections, while ballot measures represented questions requiring a yes-or-no vote. Each user’s ballot was associated with an election, with individual selections stored separately for candidates and measures. Users could optionally include a written explanation for their endorsements and control whether those endorsements were visible to others.
+Just like in the certificate PKI world (where trusting a certificate typically requires trusting a chain of Certificate Authorities (CAs) tying back to a “root CA”), DNSSEC’s security guarantees rely on intermediaries, namely the TLD registries (and potentially other sub-registries, if the domain has multiple dots). These registries, as all organizations (CAs included), are indeed subject to some degree of government control, in particular of the jurisdiction in which they are based. That fact, however, is unrelated to DNSSEC: the same security model applies to DNS without DNSSEC. DNSSEC itself does not increase or decrease the risk of legal action. That said, if this is a source of concern to you as a domain owner, you are free to choose which TLD you want to use, according to whom you trust and what is your control preference—without relying on CAs or third parties you don’t have a prior relationship with.<sup>[4](https://circleid.com/posts/common-beliefs-about-dnssec-put-to-the-test-an-invitation-to-fact-check-your-assumptions#fn4)</sup>
 
-# Election Data
+As far as the root zone keys are concerned, government control has been significantly reduced by what is known as the “IANA transition” in 2016, when IANA functions were shifted away from direct control by US-government’s telecommunications agency NTIA to ICANN’s multi-stakeholder governance. As a result, DNSSEC’s root governance and operation are grounded in a transparent multi-stakeholder model, its implementation is highly distributed, and many operational practices (such as key ceremonies and DNSSEC practice statements) are intentionally transparent and publicly observable.
 
-I started off by using the [VoteSmart API](https://www.votesmart.org/votesmart-api) to identify
-legislative district by ZIP+4 code, but then I switched over to the
-[Sunlight Labs API](https://sunlightfoundation.com/2009/09/24/sunlight-labs-api-one-year-later/) by the [Sunlight Foundation](https://sunlightfoundation.com), and a subset of the [Freebase database](https://en.wikipedia.org/wiki/Freebase_(dataset)) to map ZIP code to a U.S. county. I later switched to using the [Cicero API](https://www.cicerodata.com/api/) for mapping to legislative districts.
+**Is DNSSEC incomplete?—*YES and NO***
 
-# iPhone App
+“Incomplete”, in the blog’s elaboration, refers to DNSSEC not covering the so-called “last mile”, because validation often happens on a DNS resolver trusted by the client<sup>[5](https://circleid.com/posts/common-beliefs-about-dnssec-put-to-the-test-an-invitation-to-fact-check-your-assumptions#fn5)</sup>, instead of happening on the client itself. While true, making this choice is a trust decision, not a design limitation of DNSSEC. In fact, Apple [has been supporting client-side validation](https://developer.apple.com/videos/play/wwdc2022/10079/?time=219) since 2022, and Section 5.3 of NIST’s [“Secure Domain Name System (DNS) Deployment Guide”](https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-81r3.pdf) does recognize such deployment realities. Explicit requests for client-side validation features, if directed at software vendors that currently lack support, could create momentum for others to introduce client-side validation as well.
 
-Before this project, I had not written a single line of Objective-C. I downloaded the language guide,
-along with the object-oriented programming guide, printed them out and read them over time:
+Meanwhile, it is worth noting that most Internet traffic is protected with authentication and encryption certificates (first and foremost: HTTPS web traffic). For certificate issuance, Section 4.2.2.2 of the [certification rules](https://cabforum.org/working-groups/server/baseline-requirements/documents/CA-Browser-Forum-TLS-BR-2.3.0.pdf) requires Certificate Authorities (CAs) to perform DNSSEC validation when making DNS queries, including the DNS queries made to verify that the requestor is actually under control of the desired certificate domain name. This legitimacy check is vulnerable to DNS attacks, but DNSSEC, if in place, prevents the check from being hijacked.
 
-- The Objective-C Programming Language (2010-12-08)
-- Object-Oriented Programming with Objective-C (2010-11-15)
+This means DNSSEC makes sure that an illegitimate requestor cannot actually obtain a certificate based on a DNS attack. Barring non-DNS attacks (such as a compromise at the registrar or the CA itself), only the legitimate certificate will be in circulation. Browsers in turn will only communicate with servers that have this certificate configured. In other words: DNSSEC’s security guarantees transfer to the domain’s HTTPS certificate, ensuring that a browser does not communicate with a rogue actor: Even if a browser or other end-user application does not itself perform DNSSEC validation, the fact that CAs do perform it effectively protects the client’s last mile HTTPS traffic.
 
-Reviewing my source code, I relied on several third-party libraries to simplify common development tasks. These included AFNetworking and ASIHTTPRequest for network requests, SBJson for JSON parsing, and EGOTableViewPullRefresh for implementing pull-to-refresh interactions. I also used utilities for displaying progress indicators, logging, and crash reporting. Many of these libraries have since been deprecated or superseded by functionality built directly into iOS.
+Besides, many important DNSSEC use cases do not have a “last mile” and thus don’t suffer from this problem: Both DANE-secured email and DNSSEC validation during certificate issuance does not involve end user devices, but only server-to-server communication where the validating resolver typically is directly under control of the participants (CAs and email providers). In these use cases, server-to-server not only equals end-to-end, but is at least equally important.
 
-I was aware of PhoneGap (now [Apache Cordova](https://en.wikipedia.org/wiki/Apache_Cordova)) as
-an option to build for both Android and iOS, but I mainly focused on iOS since I had an iPhone
-and did not have access to an Android device for testing.
+Finally, the word “incomplete” raises the expectation that technologies may reach completion. Like just every other protocol (including TLS, whose incremental versioning is met with equanimity), DNSSEC is incomplete insofar as it is a living standard.
 
-For this post, I made my source code available as a read-only archive on [GitHub](https://github.com/augustocallejas/iOSVoter).
+Operational practices and standards continue to improve, including:
 
-These screenshots show the typical flow of a new user:
+Regarding the “last mile” issue specifically, there are experimental efforts to facilitate end-to-end validation on the client without paying the latency price from additional DNSSEC-related lookups, by replacing them with pre-fetched DNSSEC chain data included in the TLS handshake ([RFC 9102](https://www.rfc-editor.org/rfc/rfc9102.html)).
 
-1. Registration screen requiring the user’s voting address.
-2. A simple privacy tutorial describing that endorsements can be made private.
-3. A list of past and upcoming elections, based on your legislative district.
-4. A ballot view, showing all available options.
-5. A candidate view with the total number of endorsements by your friends by candidate.
-6. An endorsement view allowing you to optionally explain your endorsement.
+Three further claims revolve around the idea of DNSSEC being technically defective. Verbatim: “DNSSEC is Cryptographically Weak”, “DNSSEC is Unsafe”, “DNSSEC is Architecturally Unsound”.
 
-![Supervote iOS app welcome screen](https://callejas.com/assets/images/supervote/Screenshot_1.png)
-![Tutorial](https://callejas.com/assets/images/supervote/Screenshot_1a.png)
+**Is DNSSEC cryptographically weak?—*NO***
 
-![Upcoming elections](https://callejas.com/assets/images/supervote/Screenshot_2.png)
-![Presidential ballot](https://callejas.com/assets/images/supervote/Screenshot_3.png)
+DNSSEC is often dismissed as cryptographically deficient because it doesn’t encrypt DNS responses. That criticism misses the point: DNSSEC is not designed to protect the confidentiality of DNS responses, but their integrity—by cryptographically signing them<sup>[6](https://circleid.com/posts/common-beliefs-about-dnssec-put-to-the-test-an-invitation-to-fact-check-your-assumptions#fn6)</sup>.
 
-![Presidential candidates](https://callejas.com/assets/images/supervote/Screenshot_4.png)
-![Create an endorsement](https://callejas.com/assets/images/supervote/Screenshot_5.png)
+For that purpose, DNSSEC adopts well-tested cryptography and continues to move with operational reality, including [broad migration](https://stats.dnssec-tools.org/#/?dnssec_param_tab=0) to and use of the Elliptic Curve Digital Signature Algorithm, dubbed ECDSA (algorithm 13) and well-matched to DNSSEC’s resource constraints. The same algorithm [globally leads](https://technologychecker.io/blog/ssl-certificate-transparency-report-insights) and [is generally recommended](https://docs.tlsref.org/server-side-tls.html#modern-compatibility) for the signatures that constitute HTTPS certificates.
 
-![Created endorsement](https://callejas.com/assets/images/supervote/Screenshot_6.png)
+Moreover, work on post-quantum cryptography for DNSSEC is underway in the research and standards community. The PQC DNSSEC agenda includes [efforts](https://wiki.ietf.org/en/group/pq-dnssec) to assess and mitigate the resource impact of newly standardized and proposed PQC signature algorithms—which generally have much larger signature and/or key sizes than ECDSA.
 
-# Facebook Integration
+In short, DNSSEC’s cryptographic strength has successfully evolved to meet modern cryptographic demands, and is poised to continue evolving to support the post-quantum future.
 
-Facebook integration occurred on the client-side. It was as simple as cloning the
-`facebook-ios-sdk` Git repository alongside my project. the Facebook SDK allowed me to retrieve a user’s
- riend list with their permission. If two Facebook friends
-both used my app and created non-private endorsements, then they would be able to
-see them.
+**Is DNSSEC unsafe?—*NO***
 
-Facebook also allowed registered apps to create custom activities on the timeline.
-When a user created an endorsement on their iPhone, it would automatically publish
-an activity on their timeline. This would allow friends who hadn’t downloaded the
-app to see SuperVote activity of their friend, which would then encourage them to
-download the app.
+Under the umbrella of (un)safety, “Against DNSSEC” points out that DNSSEC (in its original form) allows obtaining detailed zone information by so-called “zone walking” (i.e., retrieving the list of all the subdomains of a domain from the responses to systematic DNS queries). That’s because DNSSEC provides signed assurance about which subdomains do not exist, and from that information one can easily conclude which do. While this is essentially a privacy issue more than a safety one, it can be addressed by enabling NSEC3—an automated setting to transform the non-existence response proofs into a hashed form of data, so that subdomains cannot readily be obtained unless explicitly queried for, if that is deemed necessary. (More complicated proposals like NSEC5, also mentioned in the blog post, were not pursued beyond the ideation stage by the DNSSEC community.) Alternatively, DNS operators that sign DNS responses on the fly can solve this problem using Compact Denial of Existence ([RFC 9824](https://www.rfc-editor.org/rfc/rfc9824.html)).
 
-![Facebook activity log](https://callejas.com/assets/images/supervote/activity-log.png)
+However**,** even then, it is important to realize that the existence of most subdomains is exposed through Certificate Transparency (CT) logs: Both DNS and CT data, by their nature, are public, as there is no access control on who queries them. Hiding domain names therefore is an unreliable privacy strategy.
 
-![Measure timeline](https://callejas.com/assets/images/supervote/timeline-measure.png)
+That said, DNSSEC can very well work in favor of privacy: in certain cases<sup>[7](https://circleid.com/posts/common-beliefs-about-dnssec-put-to-the-test-an-invitation-to-fact-check-your-assumptions#fn7)</sup>, it allows a resolver to answer queries for non-existent names from its cache when it has seen a related (but not the same) DNS query before. This helps privacy (because data that is not sent to the domain’s nameserver cannot be eavesdropped on) and enables new defenses against common types of denial-of-service attacks (such as the Pseudo-random Subdomain Attack), turning DNSSEC into a safety belt that is useful beyond just protecting response contents.
 
-![Candidate timeline](https://callejas.com/assets/images/supervote/timeline-candidate.png)
+**Is DNSSEC architecturally unsound?—*NO***
 
-# Testing & Deployment
+The argument made by “Against DNSSEC” to bring home this point is that security decisions are best made according to each application’s needs, and that DNSSEC is not an application-layer protocol. While this objection seems valid for a range of things (take captchas, for instance: some applications may be fine with bots, others may not), it does indeed seem fair for a domain owner to assert that they want their domain’s DNS information to come along with verifiable signatures, in order to prevent clients from connecting when validation has failed. It is true that this is not always done end-to-end (although that’s not a design limitation, see the “last-mile” problem above)—but the objection that network-level security mechanisms are architecturally unsound by definition is overreaching. The same argument could be made against Wi-Fi encryption, BGP route validation, or IP packet checksums (which are all network-level), but these security mechanisms are generally accepted.
 
-[TestFlight](https://en.wikipedia.org/wiki/TestFlight) was the easiest way to test
-early builds of the SuperVote iOS app with friends via over-the-air.
+One of the most hard-dying assumptions about DNSSEC is its costliness—which is likely to dissuade non-technical people in charge of budgets from engaging in deployment. According to “Against DNSSEC”, both the adoption and the deployment of the protocol are resource-intensive. Verbatim: “DNSSEC is Expensive to Adopt”, “DNSSEC is Expensive to Deploy”.
 
-Linode was an easy way to set up a Linux-based server back in 2011-2012. After building
-a WAR (Web Application Resource) file of the API server, it was just a matter of copying it
-over to my Linode server:
+**Is DNSSEC expensive to adopt and to deploy?—*YES and NO***
 
-```
-alias push='scp -P 44 ${HOME}/workspace/supervote-parent/server/target/server-0.9.0.war canaryfalls.com:.'
-```
+For end users, DNSSEC is essentially free to adopt, with the added benefit of protection against attack-related losses (see the MyEtherWallet.com case above). In practice, all cost is carried by the resolver operator and the signing DNS operator. [Measurements](https://blog.apnic.net/2022/08/22/dnssec-validation-performance-killer/) have shown that resolver-side memory and compute cost is small in practice. On the signing side, cost depends on how much specific expertise the signing operator needs to build<sup>[8](https://circleid.com/posts/common-beliefs-about-dnssec-put-to-the-test-an-invitation-to-fact-check-your-assumptions#fn8)</sup>, and how many domains are being operated. Compared to signatures involved in HTTPS connections, DNSSEC signatures are computed much less frequently, so the cost of signing itself is not significant in light of the overall cost of operating an online service.
 
-The Jetty server, along with an instance of MySQL and RabbitMQ all ran on the same Linode instance.
+Overall, for well-run mid-size to large-scale operations, DNSSEC signing and validation during ongoing operations does not fundamentally change the financial equation.
 
-# Website & Marketing
+Adapting software is certainly costly, but that task has largely been completed, and nameserver software today includes mature DNSSEC implementations by default. Also, while replacing old components in order to adopt more modern (automatic) solutions can be complex, the cost of new deployment and long-term operations has decreased significantly, with many DNS providers (such as Cloudflare, Squarespace, one.com, deSEC) and resolver operators (such as Cloudflare, Google, Quad9, DNS4EU) now routinely operating DNSSEC with full automation. [Some work](https://itp.cdn.icann.org/en/files/publications/sac126v2-dnssec-delegation-signer-record-automation-31-08-2026-en.pdf) remains to be done with respect to the automation of DNSSEC configuration updates at the registry side, but progress is happening there as well.
 
-I may have looked at Squarespace as an option to build a website, but I wanted full control on
-the website’s layout and did not want to pay a monthly fee. I ended up finding a 
-WYSIWYG website builder called [Freeway 5 Express](https://en.wikipedia.org/wiki/Freeway_(software)#Freeway_Express) that ran as a desktop application. I can no longer run this application on my Apple Silicon MacBook Pro.
+“Against DNSSEC” also argues that network software is not equipped to handle DNSSEC failures smoothly (such as distinguishing expired signatures from an actual attack), and that “mak[ing] DNSSEC workable” would involve a lot of expensive code rewriting. That concern is diminishing, as browsers recently have made an effort to increase visibility into the origin of connection errors by implementing more detailed DNS error feedback based on [RFC 8914](https://www.rfc-editor.org/rfc/rfc8914.html)<sup>[9](https://circleid.com/posts/common-beliefs-about-dnssec-put-to-the-test-an-invitation-to-fact-check-your-assumptions#fn9)</sup>. Such developments indeed come with some cost, but that cost—unlike suggested—does not preclude large-scale deployment, as demonstrated by > 90% [validation deployment](https://stats.labs.apnic.net/dnssec) in countries like New Zealand, Saudi Arabia, Pakistan, and Ghana.
 
-I became aware of stock photography and the different available licenses: royalty-free versus
-rights-managed. With Getty, I was able to find the exact images I was looking for and purchased
-several royalty-free images that still appear on the [website](https://supervote.org).
-Otherwise, I used Flickr images that allowed commerical use at the time with proper attribution.
+The common beliefs that have emerged from “Against DNSSEC”, however extensive and influential, are dwarfed by a much more impactful claim: DNSSEC’s alleged threat to availability—exposed and broadcast by the IANIX list, as laid out above. But, historical records aside, how true is that today? Or, in other words, does DNSSEC have high availability in practice?
 
-For blogging, Tumblr had the easiest user interface for creating posts. I give Tumblr credit
-for the blog looking the same for the last 15 years: [blog.supervote.org](https://blog.supervote.org)
+Yes, it does. The above-mentioned study** **by John Kristoff et al. (expected to be published later this month, at which time it will be linked here) has developed a measurement-based methodology and impact-weighted evaluation to quantify DNSSEC-induced outages. Its results show not only that the global DNSSEC deployment has had availability of over 99.99% in 15 of 16 years measured, but also confirms a sharp decline of incidents over the last five years. Accordingly, the occasional disruptive event (which still occurs, but has become exceptional) should not obscure the practical record of overall DNSSEC deployment.
 
-I created a [Twitter account](https://x.com/supervote), Facebook account and Reddit account.
-On Reddit, I attempted, but mostly failed, to promote the iOS app and blog posts 
-using an [account](https://www.reddit.com/user/canaryfalls/) associated with the LLC I created.
+As with any technology at Internet scale that requires interoperability amongst disparate implementations and operational environments, early DNSSEC adopters were likely to be hit by painful outages, due to misconfigurations or buggy code. Since then, thanks to engineering refinements and community-crafted operational standards, DNSSEC deployment has come to achieve demonstrably high availability across TLDs. All gTLDs as well as an increasing number of ccTLDs sign their zones, and many TLDs have successfully transitioned to new operators and/or algorithms, while remaining fully signed. And even if validation breaks (and the absence of an attack is confirmed), temporary NTAs (negative trust anchors) can restore basic availability—as [done by Cloudflare](https://blog.cloudflare.com/de-tld-outage-dnssec/) and other resolver operators during the [.de May 2026 incident](https://blog.denic.de/en/final-report-dns-outage-of-5-may-2026/).
 
-I spent about $100 on advertising on Reddit. At most, I acquired a handful of users. I’m not sure
-if I targeted specific subreddits or if I targeted the entire site.
+DNSSEC is now considered to be important and stable enough to be a non-negotiable requirement for existing and [future gTLDs](https://newgtldprogram-2026-agb.icann.org/en/7-module-3-application-submission.html#registry-functions-and-types-of-rsps). This policy-side view is matched by real world uptime records: Two of the world’s largest TLDs, .com and .net operated by Verisign, have long been DNSSEC-enabled, with more than 29 years of uninterrupted DNS resolution uptime. Also spotless is the uptime record of the world’s largest portfolio of TLDs, managed by Identity Digital (previously Afilias) and signed as soon as 2009.
 
-# What Happened to SuperVote?
+In conclusion, as the facts presented in this article suggest, DNSSEC in 2026 should not be judged by limitations and operational records from its earlier deployment years (i.e., the trouble that triggered publications like the IANIX list and “Against DNSSEC”). Some concerns remain genuine tradeoffs, others have been substantially reduced by protocol evolution, automation, and operational experience.
 
-After the 2012 election, I updated the app sporadically, since there were no major elections
-except for some municipal primaries in 2013.
+In short, let’s not get stuck in archives. Instead—recognizing that DNSSEC has been stable and well tested in deployments for nearly two decades and continues to evolve when needed—let’s choose to draw on up-to-date information (such as presented in this article) and check out actual and successfully running implementations (like the DNSSEC automation showcases that will be provided by the third article of this series).
 
-In [2015](https://blog.supervote.org/post/112484919687/thanks), I decided to stop updating the iOS app and removed it from the App Store. In the end, the app had 400 registered users. The only
-feedback I still remember to this day was that there wasn’t a full ballot for all users.
+And if after doing so, with your own risk profile in mind, you make the informed decision not to use DNSSEC in your own setting, that’s perfectly fine. But make sure everybody else is also free to make their own choices—and accordingly, if others depend on you for having access to DNSSEC, don’t break their chance to use it, if they wish to.
 
-# What I Would Do Differently Today
-
-Now in 2026, I would not integrate with Facebook for several reasons: 1) I don’t use Facebook
-anymore 2) My Facebook friend’s list represents a snapshot of friends from 15 years ago, but
-not today 3) I no longer believe family and friends are a good source for political opinions.
-
-If I were building SuperVote today, I would place less emphasis on personal friendships and more on giving users access to informed perspectives from organizations and other trusted sources. Social features could still play a role, whether through private discussion groups or publicly shareable endorsements
-(with keeping an eye out for [paid endorsements](https://www.nytimes.com/2026/08/29/us/politics/campaigns-paid-influencers.html)), but I would no longer assume that a person’s existing social network was necessarily the best source of political guidance.
+**Correction – October 20, 2026:** The list of endorsers has been corrected and updated with new endorsements.

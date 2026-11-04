@@ -1,81 +1,63 @@
-I’m not a big owner of things, but the best laptop I’ve ever owned is a roughed-up
-2015 Thinkpad X250.
+Recently, I’ve been losing my mind to **hardcoded timeouts**. Silent, arbitrary, unconfigurable time limits baked into tools by developers who apparently have never had to wait more than 200ms for anything in their lives.
 
-For the flex, here it is running a GUI shell sat on top of the microkernel I’m currently
-working on (blog post about this incoming… eventually).
+Let me tell you about my week.
 
-![Thinkpad X250](https://blog.jsbarretto.com/img/laptop.png)
+### The `skills` Package and the 60-Second Clone
 
-Here’s a list of things that I think make it brilliant. I don’t want to pretend that any
-of these things are uniquely exemplary: far from it. It is the confluence of them, and
-not any one in particular, that makes me love using it.
+Now that coding agents are everywhere, everyone is using skills. The popular way to add them is through packages developed by vercel-labs, and the go-to collection is **awesome-copilot**, a curated set of skills sitting at 30K+ stars at the time of writing. Except I can’t use it. The repository is too big, and the `npx skills` installer just chokes and dies.
 
-## Size
+There’s an open issue about this since February [#278 on the vercel-labs/skills repo](https://github.com/vercel-labs/skills/issues/278) and no one has responded. I’d be happy to send a PR and fix it myself. I just need someone to acknowledge it exists.
 
-It’s pretty tiny. Its form-factor fits snuggly into the footprint of an A4 piece of
-paper, so it sits alongside books and folders when placed in a small rucksack without
-risking damage.
+Is there a configuration option? A `--timeout` flag? An environment variable? No, there is nothing.
 
-It weighs almost nothing too: even with the extra capacity battery, it’s only about 1.45
-Kg. Light enough that you almost don’t notice it when travelling.
+The workaround I found? Clone the repo manually first, then install from the local copy. It works, mostly. Except now `skills-lock.json` points to a path on my machine. My colleagues cannot use it. I also have to update my copy everytime I want update my skills. One workaround creates a lot of other problems.
 
-## Performance
+### Docker Gordon and the 2-Minute Death Timer
 
-Mine has an i5-5200U: 4 logical cores, maxing out at 2.7 GHz. I upgraded it to 8 GB of
-RAM a while back: more than enough for some light on-the-go programming.
+Then came Docker Gordon, the AI-powered debugging assistant baked into Docker. Useful concept. I was stepping through a container build issue, the kind that requires iteration: tweak, rebuild, inspect, repeat. I’ve never used Gordon but when the error manifested itself, it came with a suggestion to try Gordon and so I did.
 
-Even at full pelt, I’ve never heard the fan kicking up much of a fuss. Now that I think
-about it, I’m not even certain that it works.
+Except Gordon has a hard limit: if your container doesn’t finish building within **two minutes**, it gives up. The session dies. You start over.
 
-## Battery
+A two-minute build might sound like plenty if you’re in a fast environment with warm caches and pulled base images. But if you’re pulling a fresh base image over a slower connection? Debugging a multi-stage build with several heavy layers? Forget it. Gordon has already moved on.
 
-The X250 has both an internal battery and an external battery slot. I’ve opted for the
-largest after-market external battery I could find. When doing casual work the laptop
-will easily survive for north of 10 hours without a charge, stretching to 12 hours if
-I’m careful.
+There is no way to configure this. No `GORDON_TIMEOUT=600` env var. No `--build-timeout` flag. Nothing. The tool just assumes that two minutes is forever, and if you need more, that’s your problem.
 
-## Repairability
+### The Pattern That’s Driving Me Crazy
 
-The X250 was quite popular and replacement parts retail very cheaply on ebay. It’s not
-the easiest to disassemble Thinkpad by any means but I can tear it apart entirely with
-the pocket phillips I keep on my keyring. I have previously replaced:
+Developers often working on fast machines, in offices or homes with gigabit connections, in cities with world-class infrastructure. They build tools with timeout defaults that reflect their own experience. And then they ship those tools to the whole world, with no knobs to turn.
 
-- The internal battery
-- The lid camera
-- The keyboard
-- The motherboard
+The thing is, timeouts *need* to exist. Infinite waits are bad. Hanging processes are bad. I’m not arguing against timeouts. I’m arguing against **unconfigurable** timeouts. Against the implicit message that says: *if you can’t do this in 60 seconds, your environment is wrong, not my assumption.*
 
-Every time you open up a laptop you run the risk of damaging something important either
-via a slip of the hand or simply the accumulated toll of loosening and tightening dozens
-of tiny screw threads. Despite that, my X250 has proved remarkably resilient and has
-never sustained any major damage despite more than more than a dozen tear-downs.
+A timeout should be:
 
-## Keyboard
+- A safe default for the common case
+- Clearly documented so users know it exists
+- Overridable via a flag, an environment variable, a config file, something
 
-As with most Thinkpads, the keyboard feels lovely to use. When you spend a lot of time
-writing code the reliability and sensitivity of a keyboard starts to matter a lot.
-Coupled with my [text editor](https://blog.jsbarretto.com/post/text-editor), the experience of writing code on the thing
-is beautifully snappy.
+This isn’t hard. It’s respect for your users.
 
-## Operating System
+### The World Isn’t a Data Center in Virginia
 
-I opted for Endeavour OS. In the usual Arch Linux tradition, it favours native
-package installs over sandboxed applications. As a result my install sits at around 30
-GB. A 128 GB M.2 SSD raided from another second-hand machine is more than enough to
-cover that and everything I’m working on.
+I’m writing this from Cairo. My internet is decent, better than many places in the world. But it’s not 1 Gbps symmetric fiber. It’s not co-located next to an npm registry mirror. A `git clone` of a large repo takes time. Pulling a Docker image takes time. These are not failures. They are physics.
 
-I’ve slimmed down my systemd setup as much as possible and the thing boots from cold in
-about 8 seconds.
+When your tool dies silently after 60 seconds without any way to change that limit, you haven’t built a tool for the world. You’ve built a tool for your office.
 
-## Cost
+And this matters more than most developers acknowledge. The global developer community isn’t located in San Francisco or Amsterdam or London. It’s in Lagos, in Karachi, in Cairo. It’s people on 4G connections, on shared broadband, on connections that have real latency because the nearest CDN edge is 50ms away instead of 5.
 
-Here’s where the X250 beats out most competition. I bought mine second-hand for about
-£100 in 2018. They’ve only got cheaper since then. I’m not afraid to take it anywhere
-because it’s barely worth stealing and would be cheap to replace even if that were to
-happen. Its value is very much not in its on-paper specs and instead in how I use it.
+When you assume a fast connection, you’re not making a neutral technical decision. You’re making a statement about whose experience matters.
 
-## Conclusion
+### A Note to Tool Authors
 
-I get a certain glee in keeping older or second-hand hardware running as a daily driver.
-It sounds silly, but it feels like a quiet revolt against bigger-faster-costlier
-consumption culture. Come the end times, this is the machine I’ll be riding it out with.
+I don’t think anyone is doing this maliciously. I think it’s a blind spot. Your internet is fast, so a 60-second timeout feels generous. Your machines are powerful, so a 2-minute build window seems like plenty.
+
+But please: before you ship a timeout, ask yourself:
+
+- What if the user is on a slower connection?
+- What if their repo is larger than mine?
+- What if they’re debugging something slow, and that’s the whole point?
+
+And then add a config option. One environment variable. One flag. That’s all it takes to go from “this tool doesn’t work for me” to “this tool works for me.”
+
+As Bruce Lawson once said: *it’s the World Wide Web, not the Wealthy Western Web.*
+
+The web and the tools we build on top of it are for everyone. Let’s start acting like it.
