@@ -1,56 +1,59 @@
-On October 23, 2026, the unthinkable happened. It was supposed to be a mere formality: C++26 was up for a vote by the ISO National Bodies (NBs). The options are always approval, rejection, or abstention. Comments are also allowed. Since 1998, this process had run quietly and smoothly. Not so on October 23, 2026. After a twelve-week voting period, the result is in: **Disapproved**!
+We’re excited to announce Adaptive Dark Mode in Safari 27.3 beta. When enabled by a user, Safari adapts light websites and presents them as dark.
 
-*I would like to mention here that I am a member of the C++ Standardization Committee and, together with my colleagues, represent Germany’s vote. ISO rules also stipulate that certain votes are internal to ISO, and the results—or the breakdown of the results—may not be published. This article contains my own personal views.*
+In the spring of 2019, Safari 12.1 became the first browser to support dark mode on the web. A lot of people love using dark mode, but not every website has a dark version. Almost [40% of web page loads](https://chromestatus.com/metrics/feature/timeline/popularity/3580) are from users in dark mode, and yet [only 10%](https://chromestatus.com/metrics/feature/timeline/popularity/3707) of page loads support it. If you love dark mode, you’ve probably hit a site that felt particularly [bright](https://www.tiktok.com/@syntaxfm/video/7307721014891367711). Adaptive Dark Mode is designed to close that gap, providing a consistent dark experience across the web.
 
-## The Current Status
+![A demo website in light mode on the left and dark mode on the right. It's a complex site with lots of UI full of bits of color that's transformed by Adaptive Dark Mode.](https://webkit.org/wp-content/uploads/Demo-of-Adaptive-Dark-Mode_dark.png)
 
-As far as I know, this is the first time in the history of C++ that DIS ballot failed. When I searched the ISO system, I could only find one other DIS that was not approved: ISO/IEC DIS 26926 C++/CLI Language Specification dated August 11, 2006. It’s possible that my search privileges aren’t sufficient to view everything, but all ISO programming languages should be visible to me. The sad end of ISO/IEC DIS 26926: the project was halted. I mention this upfront to clarify the significance of this vote.
+You can try it today in Safari 27.3 beta. To enable, first make sure your system appearance is set to dark. Then browse to a website with a bright background. Safari will offer a preview of Adaptive Dark Mode. Tap ‘Try’.
 
-In the following, I will use various terms from everyday ISO terminology. At [https://isocpp.org/std/iso-iec-jtc1-procedures](https://isocpp.org/std/iso-iec-jtc1-procedures), there is an overview of the various stages of an ISO standard. DIS is the penultimate stage. As the overview also shows, a two-thirds majority is required. This majority was not achieved.
+For websites that signal support of dark mode with `<meta name="color-scheme" content="light dark">` in HTML or `color-scheme: light dark` in CSS, Adaptive Dark Mode does not change a thing. For the rest of the web, it quickly analyzes the page, looking at colors and estimating whether it’s predominantly light or dark. If the page generally has a dark background with light text, nothing is changed. When a page has a light appearance, Adaptive Dark Mode adapts the page to be dark.
 
-The reason for the rejection is quite clear from the comments submitted by the National Bodies (NBs): contracts. Put simply, a number of NBs believe that this feature is not yet ready for release.
+## How does Adaptive Dark Mode work?
 
-## The Process
+At the core of Adaptive Dark Mode is the transformation of color. Sometimes colors are simply decorative, while other times they have semantic meaning. Adaptive Dark Mode determines when to invert colors so elements remain visible or when to leave colors unchanged.
 
-Now it gets complicated. The C++ Standardization Committee, also known as WG21, follows ISO rules but also has some additional rules. One of these is (or was) that opinions are always heard whenever new information becomes available. If an opinion was heard and a feature was nevertheless not changed as desired, the person respects the outcome and accepts that many others disagree.
+While creating Adaptive Dark Mode, we developed a color matrix to invert the luminosity of colors while preserving hue. It’s used to make light backgrounds dark, and dark text light. When transforming text color, Adaptive Dark Mode aims for sufficient contrast as defined by the [WCAG 4.5:1 contrast ratio](https://www.w3.org/WAI/WCAG21/Understanding/contrast-minimum.html). Light CSS gradients are also transformed to dark.
 
-However, the voting body at the NB level may also consist of other individuals, or the NBs are, of course, free to vote differently.
+Adaptive Dark Mode makes careful judgments so transformed content looks good and stays usable: buttons have contrast against backgrounds, text is visible over images, and hover menus look clear.
 
-The previous practice was that NBs would only vote against a standard if new information became available or if errors in the process or similar issues were identified. This changed on October 23, 2026.
+It takes the same care with images. Most are left unchanged, preserving their integrity. But many icons and logos can lose contrast when the background color behind them is inverted. So Adaptive Dark Mode inspects SVG images and transforms colors when needed. For bitmap images, it analyzes the pixel histograms and inverts simple black-and-white logos.
 
-It’s difficult to judge in this complex situation; the NBs who want C++26 without Contracts argue that there is new information. I myself find it hard to share this view. A new paper with old arguments is not new information to me.
+![Side by side screenshots of the Interop 2026 dashboard in Safari. On the left, the original light mode website. On the right, the site transformed by Adaptive Dark Mode. The graph still matches light mode (untransformed) but everything else on the page is dark. ](https://webkit.org/wp-content/uploads/Interop-dashboard-with-Adaptive-Dark-Mode_dark-scaled.png)
 
-## The History of Contracts in C++
+Effects like masks and `mix-blend-mode` can create undesirable results on an element whose colors have been transformed, so in some cases Adaptive Dark Mode turns such effects off. Also, `<canvas>` content is left unchanged, since canvases contain a wide range of content that’s hard to predict.
 
-The feature has been on the wish list for a long time. I was already in the room in Cologne back in 2019, at the time for C++20, when Contracts, in a different form back then, were being included in the standard. I was also in the room when the feature was removed from C++20 again during the same meeting. As a result, a study group was formed to address the topic of Contracts and its various aspects from 2020 to approximately 2024. Afterward, the study group submitted its work and proposals to the Evolution Working Group (EWG), the central body for language extensions. There, the topic was discussed further over several meetings before being included in C++26 by a majority vote.
+It’s precisely because Adaptive Dark Mode is happening deep within the WebKit browser engine that we are able to find creative ways to solve the most complex challenges, apply the transformations with great speed and power efficiency, all while rigorously protecting user privacy.
 
-In the next step, WG21 voted on the C++26 draft in March 2026, which included Contracts. Here, too, a large majority was achieved, though not without dissenting votes.
+## Making your site work even better
 
-And that brings us to the next phase: DIS. At this stage, there were enough “no” votes that a two-thirds majority was not reached.
+In general, a web page will work well with Adaptive Dark Mode if it follows good modern web development practices.
 
-## What happens next?
+If your site still uses older techniques, small updates can help. For logos and icons, swap bitmap images for SVG. Use solid or gradient colors in CSS instead of tiled background images. Replace image sprites with modern CSS for rounded corners, shadows, and button states. Create content images with transparent backgrounds instead of baking the page background color into the image. Add padding to containers to prevent crowding.
 
-The big problem: what happens next? ISO, of course, has a process for this. It offers various options:
+Perhaps you want a specific dark mode experience for a certain portion of the page. Apply [`color-scheme: light dark`](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/color-scheme) to the relevant element and add your own dark styles.
 
-1. Submit a revised draft for a new DIS vote.
-2. Submit a revised draft to the committee (that would be the CD phase).
-3. Publish a revised draft as a Technical Specification.
-4. Cancel the project.
+## Building your own dark mode
 
-All of these possibilities mean a delay in the next C++ standard. Whether it will still be called C++26 is also up in the air, but that’s a much smaller issue.
+For complete control over how your site looks in dark mode, add full support. It’s a terrific time to do so. It’s never been easier.
 
-The difficulty with all four options is that they require a majority within WG21. However, this working group voted to move C++26 *with* Contracts into the next voting phase leading to its release. And it did so with more than just the required two-thirds majority. The feature didn’t come out of nowhere, either; it was developed over the course of years through the work and possibly personal commitment of many people. It’s hard to imagine that this group would simply want to abandon its work, which has received approval on multiple occasions so far. The same applies to the group that is dissatisfied with Contracts. This group, too, has invested effort, in some cases even in alternative implementations. It’s hard to imagine that, after these groups voted “no” in the DIS vote, the result would change without Contracts being removed.
+All the web technology needed to fully support dark mode is widely available today, including:
 
-Even the last option *removing C++26* requires a majority in WG21. As I understand it, this step would mean reverting to C++23 and proceeding to C++29 without a single change. This would affect the work of even more people. WG21 would then be tasked with incorporating features that have already been successfully included in C++26 into C++29. Since this can only be done through a paper backed by at least one person advocating for it, features could be omitted if that person lacks the motivation or time.
+Newer CSS functions like [`color-mix()`](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/color_value/color-mix) and [`contrast-color()`](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/color_value/contrast-color), plus popular techniques for organizing design systems with CSS variables provide additional options and flexibility.
 
-Of course, certainty about the voting outcome can only be achieved if the respective path is actually taken.
+Be sure to declare dark mode support using the `color-scheme` meta tag in your HTML head and/or by setting the `color-scheme` property on `:root` or `body` in your CSS. Don’t wait to inject this information later via JavaScript. This best practice helps ensure your site is rendered correctly as fast as possible.
 
-Unfortunately, the way forward is currently more than uncertain. Perhaps this also explains why ISO/IEC DIS 26926 marked the end of this activity. Consensus is needed to move forward. Trust is always required for consensus. Unfortunately, that trust has just been shaken.
+## Using the “light only” color scheme
 
-The next C++ standard, and thus the future of C++, is currently at an impasse.
+If you would like your web app or website to not be transformed by Adaptive Dark Mode, you can communicate this using `color-scheme`. The HTML `<meta name="color-scheme" content="light only">` tag lets browsers know that 1) this page supports `light` mode and 2) should `only` be displayed in light mode. The `color-scheme: light only` rule does the same thing, but with the flexibility of CSS, allowing you to just target specific elements on the page — or of course, you can target the whole page with `:root { }`. (Note: the ‘only’ keyword is not supported in Safari 27.3 beta 1. Check back as Adaptive Dark Mode evolves through the beta process.)
 
-The good news is that the next meeting will take place on November 16, which is just a few days away. The top priority will be to break the deadlock. This will very likely have implications for C++29 as well; in fact, there is currently no reason to continue working on this project.
+## Protecting user privacy
 
-## My Personal Opinion
+Apple firmly believes user privacy is a fundamental human right. If websites could detect when a user has enabled Adaptive Dark Mode, that would increase the amount of fingerprintable information and weaken privacy protections against trackers.
 
-Normally, my articles are technically focused and free of personal opinion. Regarding the rejected DIS, I can only say that I consider it a massive disaster and feel sorry for the entire C++ community. Regardless of whether someone likes Contracts, considers them important, or sees major weaknesses in them, the topic has been worked on for years and has received a majority vote multiple times in its current form. By voting “no,” an established system, one based primarily on trust and respectful collaboration, has been shaken. Every ISO standard is simply a set of compromises. Everyone loses sometimes, and everyone wins sometimes. Overall, the result is one in which all participants have given their best. During the DIS vote, the losing parties refused to accept their loss. The question that primarily determines *how to move forward* is whether the group can rebuild trust.
+As a result, Safari prevents websites from detecting when Adaptive Dark Mode has been applied. JavaScript that queries CSS colors will get the original authored colors, not the transformed ones. Any images drawn into canvas render in their original form.
+
+## Feedback
+
+If you manage a website or web app, and would like to discuss how Adaptive Dark Mode is adapting your project, feel free to reach out at [web-evangelist@apple.com](mailto:web-evangelist@apple.com).
+
+If you try out Adaptive Dark Mode as a user, and find a site that does not work well, we’d love for you to file a report with [Feedback Assistant](https://feedbackassistant.apple.com/). (Learn more about [filing Feedback](https://developer.apple.com/bug-reporting/)).

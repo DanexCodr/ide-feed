@@ -1,25 +1,23 @@
-You're probably reading this page because you've attempted to
-access some part of [my blog (Wandering
-Thoughts)](https://utcc.utoronto.ca/~cks/space/blog/space/blog/) or [CSpace](https://utcc.utoronto.ca/~cks/space/blog/space/), the wiki thing it's
-part of. Unfortunately you're using a browser (or client library)
-that my anti-crawler precautions consider suspicious because it's
-forcing completely uncompressed replies in a suspicious way that
-is a signature of high volume crawlers that are trying to deflect
-gzip bombs. Specifically, your browser or client is advertising
-one of the following `Accept-Encoding` values:
+Last halloween, [Google decided to kill XSLT](https://groups.google.com/a/chromium.org/g/blink-dev/c/CxL4gYZeSJA/m/yNs4EsD5AQAJ). That was not a [unilateral decision](https://meyerweb.com/eric/thoughts/2025/08/22/no-google-did-not-unilaterally-decide-to-kill-xslt/) mind you, Google said “jump” and other browser vendors said “how high?”
 
-Accept-Encoding: identity
-Accept-Encoding: identity;q=1, *;q=0
-Accept-Encoding: gzip;q=0
+In response, I published my [Intent to Deprecate and Remove Google Chrome](https://dbushell.com/2025/11/01/intent-to-deprecate-and-remove-google-chrome/). A performative declaration of course, I don’t install spyware.
 
- Due to the ongoing problems with abusive high volume crawlers
-using forged User-Agent values (apparently in part to gather data
-for LLM training), those Accept-Encoding values are not normally
-accepted.
+Fearing my parody lacked seriousness, I created [XSLT.RIP](https://xslt.rip/) to ensure the developer world was informed of Google’s [death note](https://en.wikipedia.org/wiki/Death_Note). This did the trick, although a [few commenters](https://news.ycombinator.com/item?id=45873434) believed it was satire. There is subtlety to [XSLT.RIP](https://xslt.rip/). The website itself is built with XSLT and when Google kills XSLT they’ll kill my website.
 
- If this is in error and you're using a current version of your
-browser of choice, you can contact me at [my current place at the
-university](https://www.cs.toronto.edu/~cks/) (you should be able to work out the email address
-from that). If possible, please let me know what browser you're
-using and so on, ideally with its exact User-Agent string.
-Chris Siebenmann, 2025-08-14
+The web standards process and its stewards (*Big Browser*) used to adhere to a social contract. Backwards compatibility was a major design principle. Under no circumstances do you ever purposefully break the web.
+
+Google decided to renege and break the web.
+
+[XSLT.RIP](https://xslt.rip/) will be broken soon and I’ll sit back and watch Google break it. [17 November 2026](https://doctor-seo.net/en/blog/news/chrome-edge-removing-xslt/) appears to be the date of execution. Some Chromium-based browsers have been running a [man-in-the-middle attack](https://en.wikipedia.org/wiki/Man-in-the-middle_attack) by injecting propaganda into XSLT websites.
+
+> This site uses XSLT; that functionality is being removed from this browser very soon. When that happens, this page will likely no longer display correctly. You might be able to install a browser extension that allows you to continue viewing it. Otherwise, you should contact the maintainer of the site for further information.
+>
+> Source: [This site uses XSLT: what Chrome’s banner means](https://xsltplayground.com/blog/chrome-xslt/this-site-uses-xslt-warning/) - XSLT Playground
+
+This appears to be an `<xslt-warning-banner>` custom element that fails to render when it violates [content security policy](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CSP).
+
+I’m testing on [ungoogled-chromium](https://github.com/ungoogled-software/ungoogled-chromium) so who knows how it’s intended to look.
+
+[The line of death](https://textslashplain.com/2017/01/14/the-line-of-death/) is another “social contract” that Google has forgotten. They’re blaming website owners and acting like questionable purveyors of free public Wi-Fi. This is arrogant and intrusive.
+
+“contact the maintainer of the site” — you broke the web Google, own it at least.

@@ -1,59 +1,64 @@
-We’re excited to announce Adaptive Dark Mode in Safari 27.3 beta. When enabled by a user, Safari adapts light websites and presents them as dark.
+What if making a diagram draggable was as simple as specifying what it can become?
 
-In the spring of 2019, Safari 12.1 became the first browser to support dark mode on the web. A lot of people love using dark mode, but not every website has a dark version. Almost [40% of web page loads](https://chromestatus.com/metrics/feature/timeline/popularity/3580) are from users in dark mode, and yet [only 10%](https://chromestatus.com/metrics/feature/timeline/popularity/3707) of page loads support it. If you love dark mode, you’ve probably hit a site that felt particularly [bright](https://www.tiktok.com/@syntaxfm/video/7307721014891367711). Adaptive Dark Mode is designed to close that gap, providing a consistent dark experience across the web.
+Drag-and-drop makes the digital graspable. But designing bespoke drag interactions involves a lot of fiddly code to
+        handle geometry, feedback, and animations. As a result, many people, from educators to game designers,
+        mathematicians to creative tool builders, often don't bother.
 
-![A demo website in light mode on the left and dark mode on the right. It's a complex site with lots of UI full of bits of color that's transformed by Adaptive Dark Mode.](https://webkit.org/wp-content/uploads/Demo-of-Adaptive-Dark-Mode_dark.png)
+**Declarative dragging** inverts the problem. Rather than programming all that visual behavior directly, you
+        simply say, for each element you want to make draggable, which future states of your application dragging it
+        should lead to. Our system speculatively renders those states to work
+        out where things can go, then combines these possible worlds into a smooth, responsive drag-and-drop
+        interaction.
 
-You can try it today in Safari 27.3 beta. To enable, first make sure your system appearance is set to dark. Then browse to a website with a bright background. Safari will offer a preview of Adaptive Dark Mode. Tap ‘Try’.
+Our goal with this project is to let people keep working within the semantic
+        worlds they inhabit, while helping them turn the rules of their worlds into rich tactile interactions in ours.
 
-For websites that signal support of dark mode with `<meta name="color-scheme" content="light dark">` in HTML or `color-scheme: light dark` in CSS, Adaptive Dark Mode does not change a thing. For the rest of the web, it quickly analyzes the page, looking at colors and estimating whether it’s predominantly light or dark. If the page generally has a dark background with light text, nothing is changed. When a page has a light appearance, Adaptive Dark Mode adapts the page to be dark.
+A five-minute video introducing declarative dragging.
 
-## How does Adaptive Dark Mode work?
+## How it works
 
-At the core of Adaptive Dark Mode is the transformation of color. Sometimes colors are simply decorative, while other times they have semantic meaning. Adaptive Dark Mode determines when to invert colors so elements remain visible or when to leave colors unchanged.
+D2 is *model-driven*: An interface author makes an element draggable by specifying which future model
+      states should be accessible by dragging it. An engine speculatively renders these states to view trees,
+      extracts the position of the dragged element in each of these renderings, and uses these to synthesize a
+      drag-and-drop interaction, all without detailed work required by the interface author.
 
-While creating Adaptive Dark Mode, we developed a color matrix to invert the luminosity of colors while preserving hue. It’s used to make light backgrounds dark, and dark text light. When transforming text color, Adaptive Dark Mode aims for sufficient contrast as defined by the [WCAG 4.5:1 contrast ratio](https://www.w3.org/WAI/WCAG21/Understanding/contrast-minimum.html). Light CSS gradients are also transformed to dark.
+To provide greater expressive range and customizability, D2 is *composable*: simple model-driven
+      drag-and-drop behaviors can be combined to create more complex ones, and modifiers can layer features like
+      floating, snapping, and transitions. For more details, see
+      [the paper](https://andrewblinn.com/papers/D2.pdf).
 
-Adaptive Dark Mode makes careful judgments so transformed content looks good and stays usable: buttons have contrast against backgrounds, text is visible over images, and hover menus look clear.
+## Dragology demos
 
-It takes the same care with images. Most are left unchanged, preserving their integrity. But many icons and logos can lose contrast when the background color behind them is inverted. So Adaptive Dark Mode inspects SVG images and transforms colors when needed. For bitmap images, it analyzes the pixel histograms and inverts simple black-and-white logos.
+We implemented D2 in a library called [Dragology](https://github.com/declarative-dragging/dragology), built
+      for SVG interfaces on the web.
 
-![Side by side screenshots of the Interop 2026 dashboard in Safari. On the left, the original light mode website. On the right, the site transformed by Adaptive Dark Mode. The graph still matches light mode (untransformed) but everything else on the page is dark. ](https://webkit.org/wp-content/uploads/Interop-dashboard-with-Adaptive-Dark-Mode_dark-scaled.png)
+See our [demo gallery](https://joshuahhh.com/dragology/#/demos) for many more interactives built with
+      Dragology.
 
-Effects like masks and `mix-blend-mode` can create undesirable results on an element whose colors have been transformed, so in some cases Adaptive Dark Mode turns such effects off. Also, `<canvas>` content is left unchanged, since canvases contain a wide range of content that’s hard to predict.
+## Where it came from
 
-It’s precisely because Adaptive Dark Mode is happening deep within the WebKit browser engine that we are able to find creative ways to solve the most complex challenges, apply the transformations with great speed and power efficiency, all while rigorously protecting user privacy.
+> Back in 2022, I had a prototype of a game aimed at making math more tangible, a long-running obsession of
+>       mine. It had a lot going for it, but the fundamental mechanic, based on selecting transformations from a menu,
+>       lacked the juicy tactility I craved. I eventually came up with a primitive version of what would become
+>       model-driven dragging, but implementing it seemed daunting, so it sat on my whiteboard for the next two years,
+>       haunting me every time I went to make a sandwich.
+>       — Andrew
 
-## Making your site work even better
+> On a really nice walk in Seattle back in 2023, Andrew shared his draggy ideas with me. I kept thinking about
+>       them over the years, but didn't do anything about it. And then last year, it all came together. My buddy Elliot
+>       was playing with order-preserving maps between trees. I came up with a fun way to draw these structures, but I
+>       realized I didn't just want to draw them – I wanted to reach in and pull them around, and feel out their
+>       dynamics (what became the twisted trees demo above). That felt pretty tough, until I remembered Andrew's ideas.
+>       I got working on a library that, with Andrew's help, grew into declarative dragging.
+>       — Josh
 
-In general, a web page will work well with Adaptive Dark Mode if it follows good modern web development practices.
+## Since the paper
 
-If your site still uses older techniques, small updates can help. For logos and icons, swap bitmap images for SVG. Use solid or gradient colors in CSS instead of tiled background images. Replace image sprites with modern CSS for rounded corners, shadows, and button states. Create content images with transparent backgrounds instead of baking the page background color into the image. Add padding to containers to prevent crowding.
+Josh has been working on a variety of new, more intricate mathematical explorables. We've found Dragology
+        particularly suited to interfaces that combine parallel representations, where you see the same system from
+        different perspectives. In the permutation lab below, interacting with any one representation fluidly updates
+        the others, even halfway through a drag, showing their relationships in real time.
 
-Perhaps you want a specific dark mode experience for a certain portion of the page. Apply [`color-scheme: light dark`](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/color-scheme) to the relevant element and add your own dark styles.
-
-## Building your own dark mode
-
-For complete control over how your site looks in dark mode, add full support. It’s a terrific time to do so. It’s never been easier.
-
-All the web technology needed to fully support dark mode is widely available today, including:
-
-Newer CSS functions like [`color-mix()`](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/color_value/color-mix) and [`contrast-color()`](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/color_value/contrast-color), plus popular techniques for organizing design systems with CSS variables provide additional options and flexibility.
-
-Be sure to declare dark mode support using the `color-scheme` meta tag in your HTML head and/or by setting the `color-scheme` property on `:root` or `body` in your CSS. Don’t wait to inject this information later via JavaScript. This best practice helps ensure your site is rendered correctly as fast as possible.
-
-## Using the “light only” color scheme
-
-If you would like your web app or website to not be transformed by Adaptive Dark Mode, you can communicate this using `color-scheme`. The HTML `<meta name="color-scheme" content="light only">` tag lets browsers know that 1) this page supports `light` mode and 2) should `only` be displayed in light mode. The `color-scheme: light only` rule does the same thing, but with the flexibility of CSS, allowing you to just target specific elements on the page — or of course, you can target the whole page with `:root { }`. (Note: the ‘only’ keyword is not supported in Safari 27.3 beta 1. Check back as Adaptive Dark Mode evolves through the beta process.)
-
-## Protecting user privacy
-
-Apple firmly believes user privacy is a fundamental human right. If websites could detect when a user has enabled Adaptive Dark Mode, that would increase the amount of fingerprintable information and weaken privacy protections against trackers.
-
-As a result, Safari prevents websites from detecting when Adaptive Dark Mode has been applied. JavaScript that queries CSS colors will get the original authored colors, not the transformed ones. Any images drawn into canvas render in their original form.
-
-## Feedback
-
-If you manage a website or web app, and would like to discuss how Adaptive Dark Mode is adapting your project, feel free to reach out at [web-evangelist@apple.com](mailto:web-evangelist@apple.com).
-
-If you try out Adaptive Dark Mode as a user, and find a site that does not work well, we’d love for you to file a report with [Feedback Assistant](https://feedbackassistant.apple.com/). (Learn more about [filing Feedback](https://developer.apple.com/bug-reporting/)).
+Andrew has been working to bring declarative dragging to existing applications, including his research on user
+        interfaces for programming languages, as well as restarting work on the math game concept that
+        kicked it all off.

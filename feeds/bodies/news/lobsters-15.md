@@ -1,212 +1,72 @@
-On February 10th, 1996, a computer program (IBM's Deep Blue)
-        defeated the reigning chess champion (Garry Kasparov) in a game of chess for the first time.
-        Deep Blue would go on to lose the match,
-        but a year later, would get its revenge in a 3.5-2.5 rematch.
+> *A good example is the media’s distorted history of NSA’s 1994 Clipper chip. That chip embodied the Clinton administration’s proposal for strong encryption that “escrowed” the encryption keys to allow government access with a warrant. … The Clipper chip and its key escrow mechanism were heavily scrutinized by hostile technologists, and one, Matthew Blaze, discovered that it was possible with considerable effort to use the encryption offered by the chip while bypassing the mechanism that escrowed the key and thus guaranteed government access. … In any event, nothing about Matt Blaze’s paper questioned the security being offered by the chip, as his paper candidly admitted.**  
+>
+> **…**  
+>
+> ****The press has largely ignored Blaze’s caveat.  It doesn’t fit the anti-FBI narrative, which is that government access always creates new security holes. I don’t think it’s an accident that no one talks these days about what Matt Blaze actually found except to say that he discovered “security flaws” in Clipper.  This formulation allows the reader to (falsely) assume that Blaze’s research shows that government access always undermines security. ***
 
-In order to achieve this feat, IBM spent several million dollars on research and
-        development building a special-purpose computer specifically for this purpose.
-        Deep Blue itself (the victorious, upgraded version)
-        was powered by 30 P2SC processors each running at roughly 120 MHz,
-        and (most importantly) 480 custom VLSI chess co-processors used to perform chess-specific
-        operations like move generation and position evaluation.
-        When it was built, Deep Blue was the 259th most powerful supercomputer in the world,
-        and could analyze over 200 million chess positions per second.
+It’s not clear why Mr. Baker is focusing on Clipper, rather than the [much](https://freakattack.com/) [more recent](https://blog.cryptographyengineering.com/2015/05/attack-of-week-logjam.html) train wreck of NSA’s ‘export-grade crypto’ access proposals. It’s possible that Baker just isn’t that familiar with the issue. Indeed, it’s the almost proud absence of technological expertise on the pro-‘government access’ side that has made this debate so worrying.
 
-But was Deep Blue necessary to beat Kasparov?
-        Or could we have gotten away with an off-the-shelf 1996 desktop
-        running a smarter chess engine?
+But before we get to the more recent history, we should clarify a few things. Yes: the fact that Clipper — a multi-million dollar, NSA designed technology — emerged with fundamental flaws in its design is *a big deal. *It matters regardless of whether the exploit led to plaintext recovery or *merely* allowed criminals to misuse the technology in ways they weren’t supposed to.
 
-As it turns out, we could easily have beaten Kasparov without building Deep Blue, using only commodity hardware,
-        and it (almost certainly) wouldn't have even been close.
-        I know this because, as I write this very sentence, I have sitting next to me a
-        200 MHz Intel Pentium Pro (released exactly 31 years ago---November 1st, 1995) with 64MB of RAM
-        running a custom port of [Stockfish](https://stockfishchess.org/) that plays at an estimated Elo of
-        3300 ± 87 at classical time controls---far beyond the strength of any human, or indeed Kasparov's Elo of just under 2800.
-        But wait, there's more! I've hooked this machine up to the internet with a Realtek RTL8139C Ethernet card,
-        so you can play it below!
+But Clipper is hardly the end of the story. In fact, Clipper is only one of *several* examples of ‘government access’ mechanisms that failed and blew back on us catastrophically. More recent examples have occurred as recently as this year with the FREAK and LogJam attacks on TLS, resulting in vulnerabilities that affected [nearly 1/3 of secure websites](https://blog.cryptographyengineering.com/2015/03/attack-of-week-freak-or-factoring-nsa.html) — including (embarrassingly) the [FBI and NSA](https://www.washingtonpost.com/blogs/the-switch/wp/2015/03/03/freak-flaw-undermines-security-for-apple-and-google-users-researchers-discover/) themselves. And these *did *undermine security.
 
-There are three ways to get stronger at chess: you can
-        analyze *more* moves, analyze *better* moves, or analyze moves *better*.
-        Famously, humans improve by doing the latter two:
-        the average chess grandmaster during a classical game will analyze [roughly the same number
-        of moves](https://psycnet.apa.org/record/1982-00955-001) as an amateur player, but they analyze only the most critical moves and
-        do a better job with that analysis.
-        Chess engines like [Stockfish](https://stockfishchess.org/), running on silicon instead of our human brains,
-        dominate us at the first of these
-        and analyze millions of positions per second.
-        And because there's not *that* much room for micro-optimizations on modern engines that will let a given
-        CPU process more positions per second,
-        most progress in chess AI also tends to follow how humans improve and finds better methods
-        for selecting moves and analyzing boards.
+With Mr. Baker’s post as inspiration, I’m going to spend the rest of this post talking about how real-world government access proposals have fared in practice — and how the actual record is worse than any technologist could have imagined at the time.
 
-Skill in chess is measured by an Elo score.
-        A difference of 200 Elo means that you should expect the stronger
-        player to win three out of every four games, and multiplicatively from there: a 400 Elo gap corresponds
-        to a 90% expected score and a 1000 Elo gap gives a 99.7% expected score.
-        The best chess engines that you could run on commodity 1996 hardware were rated roughly 2300 Elo.
-        Deep Blue was rated 2700.
-        In contrast, modern Stockfish is rated closer to 3700.
+### **The Clipper chip**
 
-This raises the question: how much of the advantage of a modern chess engine comes down
-        to the fact that a modern desktop computer is *extremely* fast, and how much of the
-        advantage comes down to the fact that we've just gotten better at programming chess engines?
-        As it turns out, the majority of the Elo gains (+720 of the +1335 gained) can be attributed to better programming,
-        and not better hardware.
+Clipper was designed by the NSA, with key pieces of its design kept secret and hidden within tamper-resistant hardware. One major secret was the design of the [Skipjack](https://en.wikipedia.org/wiki/Skipjack_(cipher)) block cipher it used for encryption. All of this secrecy made it hard to evaluate the design, but the secrecy wasn’t simply the result of paranoia. Its purpose was to inhibit the development of unsanctioned* *Clipper-compatible devices that bypass Clipper’s primary selling point — an overt law enforcement backdoor.
 
-To test this, I ran two experiments.
-        The first experiment uses [Crafty](https://en.wikipedia.org/wiki/Crafty), a competitive engine from 1996
-        whose source code is now available.
-        On my Pentium Pro, the 1996 build of Crafty version 11.13 has an Elo of 1999 ± 90 at 1 second per move, and 2383 ± 77 at 10 seconds per move.
-        On modern hardware (a Ryzen 7) this engine's Elo jumps massively to 2614 ± 97 at the same 1 second per move.
-        But if I take this engine and slowly start to add all the knowledge we have about
-        how to design better chess engines---adding modern search algorithms like fail-soft, LMR, correction history; adding better quiescence methods; and adding neural-net evals (NNUE)---then you can
-        increase the Elo up to 2718 ± 34 on the Pentium Pro at 1 second per move, and 2974 ± 74 at 10 seconds per move.
+The backdoor worked as follows. Each Clipper chip shipped with a unique identifier and *unit key* that was programmed by blowing fuses during manufacture. Upon negotiating a session key with another Clipper, the chip would transmit a 128-bit Law Enforcement Access Field (LEAF) that contained an encrypted version of the ID and session key, wrapped using the device’s unit key. The government maintained a copy of each device’s access key, split and stored at two different sites.
 
-In the second experiment I go somewhat further: instead of trying to update Crafty, let's just try to get Stockfish---the
-        best chess engine today---running on 1996 hardware and see how it does.
-        This takes some work
-        and is mainly a matter of rewriting the
-        code so that it uses 32-bit arithmetic (a PPro is a 32-bit machine) and doesn't
-        use more than 64MB of RAM.
-        This naive port has an Elo of roughly 2496 ± 64 at 1 second per move (2940 ± 76 at 10 seconds per move).
-        But we can do better! A modern Stockfish engine is designed to run on a modern CPU.
-        By making a number of adjustments to the algorithm and tuning it to the Pentium,
-        we can increase its Elo to 2846 ± 35 at 1 second per move,
-        3109 ± 79 at 10 seconds per move,
-        and 3180 ± 80 at 30 seconds per move.
+To protect the government’s enormous investment in hardware and secret algorithms, the Clipper designers also incorporated an authentication mechanism consisting of a further 16-bit checksum on the two components of the LEAF key, further encrypted using a *family key* shared between all devices. This prevented a user from tampering with or destroying the LEAF checksum as it transited the wire — any other compatible Clipper could decrypt and verify the checksum, then refuse the connection if it was invalid.
 
-The most concise way to summarize all of the above is just to have them play a match of 100 games against each other.
-        And when I do this, I find that a modern chess engine running on a 1996 Pentium Pro
-        wins 78, draws 17, and loses 5 games against
-        the 1996 Crafty engine running on modern hardware.
+A simple way to visualize the Clipper design is to present it as three legs of a tripod, (badly) illustrated as follows:
 
-The remainder of this article provides the details.
+The standout feature of Clipper’s design is its essential *fragility. *If one leg of the tripod fails, the entire construction tumbles down around it. For example: if the algorithms and family keys became public, then any bad actor can build a software emulator that produced *apparently valid *but useless LEAFs. If tamper resistance failed, the family key and algorithm designs would leak out. And most critically: if the LEAF checksum failed to protect against on-the-wire modification, then all the rest of would be a waste of money and time. Criminals could hack *legitimate* Clippers to interoperate without fear of interception.
 
-There's not much to say about the hardware, to be honest.
-        I bought a used (*"vintage"* said the listing; I feel old.) desktop PC with standard period-appropriate hardware.
-        The desktop is running a 200 MHz Intel Pentium Pro connected
-        to an Intel VS440FX motherboard with 64MB of SIMM RAM clocked at 66 MHz.
-        The operating system boot off of a 1.44MB 3.5 inch floppy disk,
-        and connect to the Internet via a Realtek RTL8139C.
-        I also have a 1MB Trio64V+ graphics card connected over VGA to my monitor,
-        with input coming from a PS/2 keyboard---but I don't much use either of those and instead
-        communicate with it over a serial port connected to my modern desktop.
+In other words, everything had to work, or nothing made any sense at all. Moreover, since most of the design was secret, users were forced to trust in its security. One high-profile engineering failure would tend to undermine that confidence.
 
-For those readers who may not be able to appropriately contextualize this hardware,
-        a 200 MHz Pentium Pro sold for $1,325 at launch in November 1995,
-        and four 16 MB SIMMs would have cost about $2,000.
-        Add on the other peripherals, and this machine would likely have gone for about four or five thousand dollars.
-        So it's a nice workstation, but by no means a supercomputer.
-        However, given the rate of depreciation and the exponential rate of improvements to hardware,
-        this same machine in 1997, when the second match occurred,
-        would likely go for just a thousand dollars (because who would want to buy
-        a Pentium Pro when the better-in-almost-every-way Pentium MMX was now available for just $400?)
+Which brings us to Matt Blaze’s results. In a [famous 1994 paper](http://www.crypto.com/papers/eesproto.pdf), Blaze looked specifically at the LEAF authentication mechanism, and outlined several techniques for bypassing it on real Clipper prototypes. These ranged from the ‘collaborative’ — the sender omits the LEAF from its transmission, and the receiver reflects *its own *LEAF back into its device — to the ‘unidirectional’ where a sender simply generates *random* garbage LEAFs and until it finds one with a valid checksum. With only a 16-bit checksum, the latter techniques requires on average 65,536 attempts, and the sender’s own device can be used as an oracle to check the consistency of each candidate. Blaze was able to implement a system that did this in minutes — and potentially in seconds, with parallelization.
 
-The interface between the chess engine and the internet is a custom-built "operating system"
-        whose sole job is to spin up the chess engine and connect it directly to the networking card.
-        (Throughout this article, when I say "I wrote", what I really mean is "I asked an LLM to write".
-        I used a combination of Fable 5.1, Opus 5.5, and GPT-6 to implement the code here. (This article, though, is human text.).)
-        It's designed to be as compact as possible: the operating system (which, in fact, is more like
-        a hypervisor, or something) is sitting on a bootable floppy disk.
-        Its sole job is to boot the Pentium Pro into 32-bit protected mode,
-        initialize the networking card,
-        and await further instructions.
-        I can then send it any arbitrary "userspace" guest program that I want into RAM and it'll
-        boot that up and start running it.
-        The chess program I wrote starts up a custom-built HTTP server which waits for
-        incoming HTTP requests with a given position (as a FEN string)
-        and maximum run time, and on each request runs the engine until the timer expires, and returns a response.
+That was essentially the ballgame for Clipper.
 
-As mentioned earlier I (again: a language model) actually modified two engines.
-        The stronger of the two is powered by Stockfish adapted to run efficiently
-        on a thirty-year-old processor.
-        It plays at an estimated Elo of 3300 at classical time controls
+And now we can meditate on both the accuracy and utter irrelevance of Mr. Baker’s point. It’s true that Blaze’s findings didn’t break the *confidentiality* of Clipper conversations, nor were the techniques themselves terribly practical. *But none of that mattered. *  
 
-[[a]](https://nicholas.carlini.com/writing/2026/algorithmic-improvements-chess.html#footnote1)
+What did matter were the implications for the Clipper system as a whole. The flaws in authentication illustrated that the designers and implementers of Clipper had made elementary mistakes that fundamentally undermined the purpose of all those other, expensive design components*. *Without the confidence of users *or* law enforcement, there was no reason for Clipper to exist.
 
-            Because I can't run nearly enough games at classical time controls on my single machine
-            to get this number, I've extrapolated it from shorter time controls.
-            I measured 3180 ± 80 at 30 seconds per move, and it gained +70 Elo per tripling of
-            the time between 1 second to 10 seconds and 10 seconds to 30 seconds. Because a classical
-            game gives about six minutes per move (including thinking on the opponent's turn)
-            we should expect an Elo of 3350. Allowing for some diminishing returns,
-            a safe estimate is an Elo of 3300.
+This would be the end of story if Clipper was the only ‘government access’ proposal to run off the road due to bad design and unintended consequences. Mr. Baker and Matt Blaze could call it a draw and go their separate ways. But of course, the story doesn’t end with Clipper.
 
-, high enough above Kasparov's 2800 Elo that we should expect Stockfish-1996
-        to come out ahead with a score of roughly 9/10.
-        The (only slightly) weaker engine starts with the source code to Crafty 11.13,
-        and is brought forward in time by adding all the lessons we've learned about how to
-        write a better chess engine over the past thirty years.
+Mr. Baker doesn’t mention this in his article, but we’re still living with a much more pertinent example of a ‘government access’ system that failed catastrophically. Unlike Clipper, this failure *really did* have a devastating impact on the security of real encrypted connections. Indeed, it renders web browsing sessions completely transparent to a moderately clever attacker. Even worse, it affected hundreds of thousands of websites [as recently as 2015](https://www.washingtonpost.com/blogs/the-switch/wp/2015/03/03/freak-flaw-undermines-security-for-apple-and-google-users-researchers-discover/).
 
-The first engine I (read: my LLM) worked on was Crafty 11.13, its 1996 release.
-        On this engine the LLM had to do the most work to backport ideas we've learned over
-        the last 30 years. Below is a breakdown of where the Elo gains come from,
-        when evaluating either at 1 second per move or 10 seconds per move.
+The flaws I’m referring to stem from the U.S. government’s pre-2000 [promotion of ‘export’-grade cryptography](https://en.wikipedia.org/wiki/Export_of_cryptography_from_the_United_States) in the SSL and TLS protocols, which are used to secure web traffic and email all over the world. In order to export cryptography outside of the United States, the U.S. government required that web browsers and servers incorporate deliberately weakened ciphers that were (presumably) within the NSA’s ability to access.
 
-[[b]](https://nicholas.carlini.com/writing/2026/algorithmic-improvements-chess.html#footnote2)
+Unsurprisingly, while the export regulations were largely abandoned as a bad job in the late 1990s, the ciphersuites themselves live on in modern TLS implementations *because that’s what happens when you inter a broken thing into a widely-used standard. *  
 
-            Sometimes you'll find the 1s vs 10s improvements disagree. Part of this clearly could be noise---I only ran a few hundred games which leaves a relatively large margin of error---but there is also quite a lot of signal here. Because the 1996 computer is so much slower, at 1s/move it has a very low search depth and so how fast the evaluation runs matters more than how good it is. But at larger search depths, once you stop making tactical blunders, the position evaluation becomes much more important.
+*  
 
-| 1 s/move | 10 s/move | Change |
-| --- | --- | --- |
-| **1999 ± 90** | **2383 ± 77** | Crafty 11.13, released December 1996, as shipped. The initial alpha-beta engine as written. It has a custom evaluation function, with standard 90's-era search algorithms. |
-| **2063 ± 73** (+64 ± 116) | **2323 ± 75** (−60 ± 107) | The first improvement is mostly micro-optimizations. It replaces two 64K-entry lookup tables with calls to the `bsf`/`bsr` instructions; and sliding-piece attacks are migrated away from the older rotated-bitboard function call. In total these changes make the engine 15% faster, but it uses the same algorithms. |
-| **2022 ± 73** (−41 ± 103) | **2420 ± 76** (+97 ± 106) | The next improvement goes for the search algorithms. This includes techniques like fail-soft (which returns the real score instead of clipping), futility and late-move pruning (which skips quiet moves near the leaves), late move reduction (which searches later moves one ply shallower), and orders moves by counter-move and history tables. |
-| **2224 ± 72** (+202 ± 103) | **2520 ± 74** (+100 ± 106) | The next change tunes the search and the evaluation function. It first runs SPSA to tune all search constants based on several thousand games of self-play. It then gives evaluation terms separate middlegame and endgame values (blended by remaining material) and re-fits all the evaluation weights (Texel tuning). Finally the evaluation function introduces mobility terms rewarding the safe squares that pieces attack. |
-| **2192 ± 72** (−32 ± 102) | **2565 ± 74** (+45 ± 104) | From here, the evaluation function is rewritten and replaced with a neural network evaluation with a small network trained on 11 million positions of self-play, labeled by its own searches. This step doesn't do much by itself but it prepares the next step... |
-| **2420 ± 82** (+228 ± 109) | **2712 ± 74** (+147 ± 104) | Updates the NNUE that was just generated with a stronger teacher instead of self-play. In principle, I could have used the same engine itself as the teacher, but just to save on wall clock time I used Stockfish. This reduced the wall-clock time from ~4000 1996-core-years (something entirely doable in 1996---but sadly not something I can do with my single lonely desktop) to just a few days on a modern desktop running a modern engine. |
-| **2630 ± 82** (+210 ± 116) | **2810 ± 75** (+98 ± 105) | With a much stronger evaluation function, the search can now actually rely on it. It adds reverse futility pruning to early-return when the evaluation says the position is already won. It also adds some performance improvements to the evaluator (with an evaluation cache, and accumulators shared with null moves). This lets it widen the network 6x. It also cleans up some code, for example by getting rid of some of Crafty's special cases that mattered with weaker evaluation functions but don't matter any more with the NNUE. |
-| **2720 ± 82** (+90 ± 116) | **2938 ± 74** (+128 ± 105) | The parameters are again re-tuned with SPSA given the new evaluation function. It also fixes some bugs in the code, amusingly. And finally it adds some changes to the NNUE: it adds more output heads and picks based on the number of pieces on the board, adds some hidden units, and doubles the training data with more self-play. |
+*For the most part these weakened ciphers lay abandoned and ignored (but still active on many web servers) until *this year, *when [researchers showed](https://blog.cryptographyengineering.com/2015/03/attack-of-week-freak-or-factoring-nsa.html) [that it was possible](https://blog.cryptographyengineering.com/2015/05/attack-of-week-logjam.html) to [downgrade](https://en.wikipedia.org/wiki/Downgrade_attack) normal TLS connections to use export-grade ciphers. Ciphers that are, at this point, so weak that they can be broken in seconds on single personal computer.
 
-On the second engine, as mentioned above, I did the inverse. I (again, read: my LLM) ported
-        Stockfish to run on 1996 hardware, and then tweaked the parameters so that it would be better
-        suited to lower search depth. The gains here are thus somewhat more modest, because there
-        are no large algorithm wins that remain.
+At the high watermark in March of this year, more than one out of three websites were vulnerable to either FREAK or LogJam downgrade attacks. This included banks, e-commerce sites, and yes — the [NSA website](https://www.smacktls.com/i/freak-nsa-demo.mp4) and [FBI tip reporting line](https://tips.fbi.gov/). Hope you didn’t care much about that last one.
 
-| 1 s/move | 10 s/move | Change |
-| --- | --- | --- |
-| **2496 ± 64** | **2940 ± 76** | Stockfish 17 squeezed onto the machine. The first naive port rewrites Stockfish 17 for a 1996 machine: single core, no SIMD, no 64-bit registers and no C++ standard library. It removes the threading, the endgame tablebases, and the 71 MB NNUE replacing it with a much smaller one. It rewrites bitboards as a pair of 32-bit ints, and it evaluates the small NNUE with plain integer arithmetic. |
-| **2590 ± 67** (+94 ± 93) | **2961 ± 74** (+21 ± 106) | Faster accumulator upkeep. The second fix makes sure the NNUE running sums are better kept up to date, and improves the performance of the evaluator. |
-| **2752 ± 68** (+162 ± 95) | **3006 ± 74** (+45 ± 105) | Cheaper evaluation function, use a PeSTO blend, change the compiler flags. Next it again changes the NNUE and reduces the size and tunes it to run faster on the Pentium Pro, reducing the evaluation time by 3x. Combined with a few more optimization changes this pass gains the most of any step at 1 second per move, where raw speed matters most, and much less at 10 seconds per move. |
-| **2780 ± 67** (+28 ± 95) | **3070 ± 72** (+64 ± 103) | Fine-tune the NNUE on-policy. Basically repeats the prior work but on Stockfish, scoring several million positions with Stockfish to re-derive the NNUE weights. |
-| **2784 ± 65** (+4 ± 93) | **3070 ± 72** (+0 ± 101) | SPSA to re-tune the search, remove PeSTO given the improved NNUE. The original Stockfish assumed that it would run at several million nodes per second, so on the slower CPU it's necessary to re-tune the parameters with another pass of SPSA. These changes also make it so the PeSTO pass is no longer needed. |
-| **2819 ± 65** (+35 ± 92) | **3074 ± 72** (+4 ± 101) | Add correction history, jointly tune other parameters and the NNUE. The next pass brings back Stockfish's non-pawn correction history, jointly optimizes (again via SPSA) the parameters, and re-fits the NNUE. |
-| **2846 ± 35** (+27 ± 74) | **3109 ± 79** (+35 ± 107) | The final step changes no code and just changes the compiler, adds some link-time optimization, and adds 32-byte code alignment. |
+Now you could argue that the export requirements weren’t designed to facilitate law enforcement access. But that’s just shifting the blame from one government agency to another. Worse, it invites us to consider the notion that *the FBI is going to get cryptography right when the NSA didn’t*. This is not a conceptual framework you want to hang your policies on.
 
-I think it's overwhelmingly likely to be the case,
-        but it's actually a little bit more tricky of a situation than you might hope.
-        You see, I've done a bit of sleight of hand throughout this article.
-        The problem is that Elo scores are relative, and I've been comparing my engine's Elo to that of various Stockfish engines
-        that have known strengths on the [Computer Chess Rating Lists](https://computerchess.org.uk/4040/rating_list_all.html) (CCRL).
-        But because humans don't play against engines very frequently, there can be some small divergences between scores on the
-        FIDE Elo ladder and the CCRL ladder, in the same way a player's FIDE Elo doesn't directly translate to their Elo on online chess.
-        Fortunately, because I've gotten these engines to play at an Elo rating of 3200-3300,
-        and Kasparov was rated just under 2800, there should be more than sufficient buffer
-        to absorb any discrepancy.
+### **Conclusion**
 
-But if you happen to know a 2700+ Super GM who wants to try and defeat a 2026 chess engine playing on 1996 hardware,
-        I'd be happy to accept the challenge!
+This may sound disingenuous, but the truth is that I sympathize with Mr. Baker. It’s *frustrating* that we’re so bad at building security systems in this day and age. It’s *maddening *that we can’t engineer crypto reliably *even when we’re trying our very best*.
 
-The first time we humans do anything, we rarely do it efficiently.
-        Once we see a path that would clearly work if only we scaled it up, we do just that.
-        Only later, after we've had the time to better understand the problem at hand,
-        do we come to recognize that we could have achieved the same feat much more efficiently
-        by being clever.
+But that’s the world we live in. It’s a world where we know our code is broken, and a world where a single stupid [Heartbleed](https://en.wikipedia.org/wiki/Heartbleed) or [Shellshock](https://en.wikipedia.org/wiki/Shellshock_(software_bug)) can burn off millions of dollars in a few hours*.* These bugs exist, and not just the ones I listed. They exist right now as new flaws* *that we haven’t discovered yet*. *Sooner or later maybe I’ll get to write about them.
 
-I mostly did this for fun, because whether I could have beaten Kasparov with commodity hardware
-        sounded like a fun question to answer,
-        but I also hoped it would provide a tiny bit of insight
-        into the rate of algorithmic progress in "AI".
-        Chess engines in 1997 were already quite advanced;
-        after all, Alan Turing helped write the first chess program nearly fifty years earlier.
-        So I suppose at the time it seemed plausible that maybe there weren't that many more ideas left to find.
-        And with hindsight it's easy to see that's wrong.
+The idea of *deliberately* engineering weakened crypto is, quite frankly, terrifying to experts. It gives us the willies. We’re not just afraid to try it. We *have* seen it tried — in the examples I list above, and [in still others](http://windowsitpro.com/security/pgp-allows-use-unauthorized-additional-decryption-keys) — and it’s just failed terribly.
 
-Which leads to the question: just how much are we leaving on the table with modern-day "AI"---that is to say, language models.
-        Will the advances we accrue over the next few years from software outpace the advances in hardware scale?
-        Clearly this toy experiment doesn't answer that question definitively, but it does gesture at a potential future.
-        (There's also probably some kind of meta-lesson about using LLMs---"AI"---to speed up our
-        ability to answer weird research questions like this.)
-
-(Also, uh, if anyone has any ideas for projects I could do with a Pentium Pro in a few weeks
-        once I no longer need it to host this chess engine ... do let me know!)
+1. ![Unknown's avatar](https://0.gravatar.com/avatar/?s=192&d=identicon&r=PG) **[BCS](https://www.blogger.com/profile/16290373784404152656)** says: .comment-author [July 20, 2015 at 4:16 pm](https://blog.cryptographyengineering.com/2015/07/20/a-history-of-backdoors/#comment-1754) .comment-metadata .comment-meta There seems to be a common phenomenon in computing where abilities go from rather weak to fully universal in a single step. We can build systems that are (supposed to be) secure from everyone or that are secure from basically no one, but we can't seem to build anything in between. We can build computers that can only solve very limited sets of problems or that can solve every problem that we know how to solve, but we can't build once that can only solve selected problems. I wonder if there is some sort of common theoretical underpinning to both of these? .comment-content .comment-body
+2. ![Unknown's avatar](https://0.gravatar.com/avatar/?s=192&d=identicon&r=PG) **[Al](https://twitter.com/_alclark_)** says: .comment-author [July 20, 2015 at 4:40 pm](https://blog.cryptographyengineering.com/2015/07/20/a-history-of-backdoors/#comment-1755) .comment-metadata .comment-meta Nice recap. Baker could clearly use the history lesson. I'm still waiting for terrorists to use gene-printing technology to re-release anthrax and smallpox, like he predicted in his book. Dude could have been a great novelist if he hadn't become a lawyer. .comment-content .comment-body
+3. ![Unknown's avatar](https://0.gravatar.com/avatar/?s=192&d=identicon&r=PG) **[Terry A Davis](https://www.blogger.com/profile/14511072296974464383)** says: .comment-author [July 20, 2015 at 7:27 pm](https://blog.cryptographyengineering.com/2015/07/20/a-history-of-backdoors/#comment-1756) .comment-metadata .comment-meta You think the ancient Greeks were so stupid they put trust in the Oracle for nothing? .comment-content .comment-body
+4. ![Unknown's avatar](https://0.gravatar.com/avatar/?s=192&d=identicon&r=PG) **Anonymous** says: .comment-author [July 20, 2015 at 9:17 pm](https://blog.cryptographyengineering.com/2015/07/20/a-history-of-backdoors/#comment-1757) .comment-metadata .comment-meta “With only a 16-bit checksum, the latter techniques requires on average 65,536 attempts”. Should the average not be 32,768 due to the birthday paradox? .comment-content .comment-body
+5. ![Unknown's avatar](https://0.gravatar.com/avatar/?s=192&d=identicon&r=PG) **[Yuhong Bao](https://www.blogger.com/profile/14519473280837410246)** says: .comment-author [July 20, 2015 at 9:33 pm](https://blog.cryptographyengineering.com/2015/07/20/a-history-of-backdoors/#comment-1758) .comment-metadata .comment-meta “Ciphers that are, at this point, so weak that they can be broken in seconds on single personal computer.” Not really. oclHashCat's 40-bit RC4 brute force (for Office, but TLS would be similar) still takes 4 hours on a single GPU. .comment-content .comment-body
+6. ![Unknown's avatar](https://0.gravatar.com/avatar/?s=192&d=identicon&r=PG) **Anonymous** says: .comment-author [July 21, 2015 at 12:03 am](https://blog.cryptographyengineering.com/2015/07/20/a-history-of-backdoors/#comment-1759) .comment-metadata .comment-meta You aren't looking for a collision (i.e. any two messages that share the same tag) so the birthday paradox does not apply. Even if it did it would be ~256 instead. However, you are correct in that it does take 32,768 on average because that is half of the keyspace so you will have found a correct answer half of the time. .comment-content .comment-body
+7. ![Unknown's avatar](https://0.gravatar.com/avatar/?s=192&d=identicon&r=PG) **Anonymous** says: .comment-author [July 21, 2015 at 12:18 am](https://blog.cryptographyengineering.com/2015/07/20/a-history-of-backdoors/#comment-1760) .comment-metadata .comment-meta No, it's 65536, since you're not checking each of the checksums, but instead generating messages and then checking if their checksum matches what you want. Each try has a probability of 1/65536 of succeeding, and so the number of tries required follows a geomwtric distribution with mean 65536. .comment-content .comment-body
+8. ![Unknown's avatar](https://0.gravatar.com/avatar/?s=192&d=identicon&r=PG) **[Sc00bz](https://twitter.com/Sc00bzT)** says: .comment-author [July 21, 2015 at 4:54 am](https://blog.cryptographyengineering.com/2015/07/20/a-history-of-backdoors/#comment-1761) .comment-metadata .comment-meta That's 4 hours for any number of documents or 0.1 second/document if you have about 3 TiB of disk… wait did Atom add “unsalted document” support? There's a bug, the salt is applied before the 40 bit key is generated. Thus making the salt worthless if you can find known plaintext. Which there is a lot of. Even at 4 hours/doc that's super broken. I found a bug in a ColdFusion9 library's key generator for encrypting passwords. So Atom and I recently tried to crack the Adobe dump key with this information. The bug is the key is hex and with 3DES the least significant bit in each byte/character is a parity bit (you can thank NSA's contributions for this). This makes the key space crackable. The cost is about 2^51 time and 2^25 memory. This never hit the news because Adobe didn't use the default way to generate keys and therefore the key was no found :(. Same bug is in ColdFusion11, but it's a safer key space, 2^64. This would be another awesome example for why backdoors in crypto are bad but meh. .comment-content .comment-body
+9. ![Unknown's avatar](https://0.gravatar.com/avatar/?s=192&d=identicon&r=PG) **[Martin Haeberli](https://www.blogger.com/profile/11583263470081358942)** says: .comment-author [July 21, 2015 at 5:00 am](https://blog.cryptographyengineering.com/2015/07/20/a-history-of-backdoors/#comment-1762) .comment-metadata .comment-meta The MAXIMUM is 65536. The average is 32768. .comment-content .comment-body
+10. ![Unknown's avatar](https://0.gravatar.com/avatar/?s=192&d=identicon&r=PG) **[Marc Mengel](https://www.blogger.com/profile/13246178564153072493)** says: .comment-author [July 22, 2015 at 1:08 am](https://blog.cryptographyengineering.com/2015/07/20/a-history-of-backdoors/#comment-1764) .comment-metadata .comment-meta There is. Turing came up with it. It is called “Turing Equivalence” — if it can emulate a Turing Machine, it can do anything any general purpose computer can do. It is a surprisingly low bar. .comment-content .comment-body
+11. ![Unknown's avatar](https://0.gravatar.com/avatar/?s=192&d=identicon&r=PG) **[fitrarahim](http://fitrarahim.blogspot.com)** says: .comment-author [July 27, 2015 at 6:26 am](https://blog.cryptographyengineering.com/2015/07/20/a-history-of-backdoors/#comment-1765) .comment-metadata .comment-meta Wow… small chip processor .comment-content .comment-body
+12. ![Unknown's avatar](https://0.gravatar.com/avatar/?s=192&d=identicon&r=PG) **[Mauro](https://www.blogger.com/profile/01938161238892649411)** says: .comment-author [July 31, 2015 at 1:46 pm](https://blog.cryptographyengineering.com/2015/07/20/a-history-of-backdoors/#comment-1766) .comment-metadata .comment-meta Hi Matthew, It would be great if you can write somenthing about CloudFlare, specifically regarding to the “two ssl connections” that may leave unencrypted information in the CloudFlare's servers. Regards from Chile! .comment-content .comment-body

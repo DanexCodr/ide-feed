@@ -1,1124 +1,150 @@
-I’ve had a little time off of work as of late, and been spending it in characteristically unwise ways. In particular, I’ve written a [little programming language that compiles to SQL](https://github.com/isovector/catlang). I call it *catlang*. That’s not to say that I’ve written a new query language. It’s a programming language, whose compiler spits out one giant `SELECT` statement. When you run that query in postgres, you get the output of your program.
+Chances are [you’ve seen me on X](https://x.com/namespacelabs/status/2091895197151952950): unpacking hundreds of MacBook Pros to deploy in a datacenter. The video hit a nerve: insane enough at the first sight, yet kind of rational if you know what we know now.
 
-Why have I done this? Because I needed a funny compilation target to test out the actual features of the language, which is that its intermediary language is a bunch of abstract category theory nonsense. Which I’ll get to. But I’m sure you first want to see this bad boy in action.
+Unboxing Macs at scale for our new server racks.
 
-Behold, the function that returns 100 regardless of what input you give it. But it does it with the equivalent of a while loop:
+So today I want to give some background into what it takes to build custom Mac racks, how we can start macOS instances from scratch in seconds and deliver new Xcode versions [mere hours after Apple releases them](https://x.com/nichtverstehen/status/1932224710928216116).
 
-```
-count : Int -> Int
-count =
-  x ->
-    loop x
-      i ->
-        n <- join id id -< i
-        z <- abs . (-) -< (n, 100)
-        case z of
-          inl _ -> inr . (+) -< (n, 1)
-          inr _ -> inl -< n
-```
+## So why MacBooks?
 
-If you’re familiar with [arrow notation](https://reasonablypolymorphic.com/blog/arrowized-frp/), you’ll notice the above looks kinda like one big `proc` block. This is not a coincidence (because nothing is a coincidence). I figured if I were to go through all of this work, we might as well get a working arrow desugarer out of the mix. But I digress; that’s a story for another time.
+Because our customers need Macs. And because Apple didn’t give us another option.
 
-Anyway, what’s going on here is we have an arrow `count`, which takes a single argument `x`. We then loop, starting from the value of `x`. Inside the loop, we now have a new variable `i`, which we do some voodoo on to compute `n`—the current value of the loop variable. Then we subtract 100 from `n`, and take the absolute value. The `abs` function here is a bit odd; it returns `Left (abs x)` if the input was negative, and `Right x` otherwise. Then we branch on the output of `abs`, where `Left` and `Right` have been renamed `inl` and `inr` respectively. If `n - 100` was less than zero, we find ourselves in the `inl` case, where we add 1 to `n` and wrap the whole thing in `inr`—which the loop interprets as “loop again with this new value.” Otherwise, `n - 100` was non-negative, and so we can return `n` directly.
+Many of our customers build and test iOS apps. You can't build iOS apps without a Mac. The iOS Simulator only runs on a Mac. Moreover, in order to release an app to the App Store, Apple requires using a recent Xcode version.xtool[xtool](https://github.com/xtool-org/xtool) is cool, but it is not (yet) a serious replacement. So your coding agent needs a Mac.
 
-Is it roundabout? You bet! The obtuseness here is not directly a feature, I was just looking for conceptually simple things I could do which would be easy to desugar into category-theoretical stuff. Which brings us to the intermediary language. After desugaring the source syntax for `count` above, we’re left with this IL representation:
+But still, why laptops? Isn’t it a major waste of screen pixels and keyboard buttons and battery ions? Well yes, Mac Mini would be a better choice for a datacenter. Sure, it has very rudimentary remote management, no redundant power, and a beautiful case that ensures that cooling will be difficult regardless of which side you lay it on. But these are all known challenges that we have learned to manage.
 
-```
-  id △ id
-⨟ cochoice
-    ( undist
-    ⨟   ( (prj₁ ⨟ id ▽ id) △ id
-          ⨟   ( prj₁ △ 100
-              ⨟ (-)
-              ⨟ abs
-              )
-            △ id
-          ⨟ prj₁ △ id
-          ⨟ dist
-          ⨟   ( (prj₂ ⨟ prj₂ ⨟ prj₁) △ 1
-              ⨟ (+)
-              ⨟ inr
-              )
-            ▽ ( prj₂
-              ⨟ prj₂
-              ⨟ prj₁
-              ⨟ inl
-              )
-        )
-      △ prj₂
-    ⨟ dist
-    )
-⨟ prj₁
-```
+But have you actually tried to order a couple hundred Minis? We have. Ordered in January, delivered in July. Welcome to the world of 2026 when the supply chains are in disarray. Never mind that Apple doesn’t release updated CPU models to all devices at once. So Mac Mini didn’t get M5 cores for 10 months (and then suddenly got M6 before any other device model!). We promise the best and the newest to our customers so we had to be inventive. That’s how the MacBook-in-Datacenter project was born.
 
-We’ll discuss all of this momentarily, but for now, just let your eyes glaze over the pretty unicode.
+## Our beautiful Mac racks
 
-The underlying idea here is that each of these remaining symbols has very simple and specific algebraic semantics. For example, `A ⨟ B` means “do `A` and pipe the result into `B`.” By giving a transformation from this categorical IL into other domains, it becomes trivial to compile catlang to all sorts of weird compilation targets. Like SQL.
+Good design takes iterations; and we surely didn’t get everything right from the first try. But I think we have the system nailed down.
 
-You’re probably wondering what the generated SQL looks like. Take a peek if you dare.
+![MacBooks in a Namespace rack](https://namespace.so/_next/image?url=%2F_next%2Fstatic%2Fmedia%2Fmac-rack.657593ec.jpg&w=1080&q=75)
 
-```
-SELECT
-f0 AS f0
-FROM
-(SELECT
- f0 AS f0, f1 AS f1
- FROM
- (SELECT *
-  FROM
-  (WITH t0 AS
-   (SELECT *
-    FROM
-    (WITH RECURSIVE recursion AS
-     (SELECT
-      clock_timestamp() as step
-      , *
-      FROM
-      (WITH t1 AS
-       (SELECT *
-        FROM
-        (SELECT
-         f0 AS f0, f1 AS f1, NULL::integer AS f2, NULL::integer AS f3
-         FROM
-         (WITH t2 AS
-          (SELECT * FROM (SELECT 0 as f0) AS _)
-          SELECT *
-          FROM
-          (SELECT * FROM (SELECT f0 AS f0 FROM t2 AS _) AS _
-           CROSS JOIN
-           (SELECT f0 AS f1 FROM t2 AS _))
-          AS _)
-         AS _)
-        AS _)
-       SELECT *
-       FROM
-       (WITH t3 AS
-        (SELECT *
-         FROM
-         (-- undist
-          SELECT *
-          FROM
-          (SELECT
-           f0 AS f0, NULL::integer AS f1, f1 AS f2
-           FROM
-           (-- undist1
-            SELECT * FROM t1 AS _ WHERE "f0" IS NOT NULL)
-           AS _)
-          AS _
-          UNION
-          SELECT *
-          FROM
-          (SELECT
-           NULL::integer AS f0, f2 AS f1, f3 AS f2
-           FROM
-           (-- dist2
-            SELECT * FROM t1 AS _ WHERE "f2" IS NOT NULL)
-           AS _)
-          AS _)
-         AS _)
-        SELECT *
-        FROM
-        (WITH t4 AS
-         (SELECT *
-          FROM
-          (SELECT *
-           FROM
-           (SELECT
-            f0 AS f0, f1 AS f1
-            FROM
-            (WITH t5 AS
-             (SELECT * FROM t3 AS _)
-             SELECT *
-             FROM
-             (WITH t6 AS
-              (SELECT *
-               FROM
-               (SELECT *
-                FROM
-                (SELECT
-                 f0 AS f0
-                 FROM
-                 (WITH t7 AS
-                  (SELECT * FROM (SELECT f0 AS f0, f1 AS f1 FROM t5 AS _) AS _)
-                  SELECT *
-                  FROM
-                  (SELECT *
-                   FROM
-                   (SELECT
-                    f0 AS f0
-                    FROM
-                    (-- join1
-                     SELECT * FROM t7 AS _ WHERE "f0" IS NOT NULL)
-                    AS _)
-                   AS _
-                   UNION
-                   SELECT *
-                   FROM
-                   (SELECT
-                    f1 AS f0
-                    FROM
-                    (-- join2
-                     SELECT * FROM t7 AS _ WHERE "f1" IS NOT NULL)
-                    AS _)
-                   AS _)
-                  AS _)
-                 AS _)
-                AS _
-                CROSS JOIN
-                (SELECT f0 AS f1, f1 AS f2, f2 AS f3 FROM t5 AS _))
-               AS _)
-              SELECT *
-              FROM
-              (WITH t8 AS
-               (SELECT *
-                FROM
-                (SELECT *
-                 FROM
-                 (SELECT
-                  f0 AS f0, f1 AS f1
-                  FROM
-                  (WITH t9 AS
-                   (SELECT *
-                    FROM
-                    (SELECT
-                     f0 - f1 AS f0
-                     FROM
-                     (WITH t10 AS
-                      (SELECT * FROM t6 AS _)
-                      SELECT *
-                      FROM
-                      (SELECT *
-                       FROM
-                       (SELECT f0 AS f0 FROM (SELECT f0 AS f0 FROM t10 AS _) AS _)
-                       AS _
-                       CROSS JOIN
-                       (SELECT f0 AS f1 FROM (SELECT 100 as f0 FROM t10 AS _) AS _))
-                      AS _)
-                     AS _)
-                    AS _)
-                   SELECT *
-                   FROM
-                   (SELECT *
-                    FROM
-                    (SELECT
-                     abs(f0) as f0, NULL::integer as f1
-                     FROM
-                     t9
-                     AS _
-                     WHERE
-                     f0 < 0)
-                    AS _
-                    UNION
-                    SELECT *
-                    FROM
-                    (SELECT NULL::integer as f0, f0 as f1 FROM t9 AS _ WHERE f0 >= 0)
-                    AS _)
-                   AS _)
-                  AS _)
-                 AS _
-                 CROSS JOIN
-                 (SELECT f0 AS f2, f1 AS f3, f2 AS f4, f3 AS f5 FROM t6 AS _))
-                AS _)
-               SELECT *
-               FROM
-               (WITH t11 AS
-                (SELECT *
-                 FROM
-                 (SELECT *
-                  FROM
-                  (SELECT
-                   f0 AS f0, f1 AS f1
-                   FROM
-                   (SELECT f0 AS f0, f1 AS f1 FROM t8 AS _)
-                   AS _)
-                  AS _
-                  CROSS JOIN
-                  (SELECT
-                   f0 AS f2, f1 AS f3, f2 AS f4, f3 AS f5, f4 AS f6, f5 AS f7
-                   FROM
-                   t8
-                   AS _))
-                 AS _)
-                SELECT *
-                FROM
-                (WITH t12 AS
-                 (SELECT *
-                  FROM
-                  (-- dist
-                   SELECT *
-                   FROM
-                   (SELECT
-                    f0 AS f0, f2 AS f1, NULL::integer AS f10, NULL::integer AS f11, NULL::integer AS f12, NULL::integer AS f13, f3 AS f2, f4 AS f3, f5 AS f4, f6 AS f5, f7 AS f6, NULL::integer AS f7, NULL::integer AS f8, NULL::integer AS f9
-                    FROM
-                    (-- dist1
-                     SELECT * FROM t11 AS _ WHERE "f0" IS NOT NULL)
-                    AS _)
-                   AS _
-                   UNION
-                   SELECT *
-                   FROM
-                   (SELECT
-                    NULL::integer AS f0, NULL::integer AS f1, f4 AS f10, f5 AS f11, f6 AS f12, f7 AS f13, NULL::integer AS f2, NULL::integer AS f3, NULL::integer AS f4, NULL::integer AS f5, NULL::integer AS f6, f1 AS f7, f2 AS f8, f3 AS f9
-                    FROM
-                    (-- dist2
-                     SELECT * FROM t11 AS _ WHERE "f1" IS NOT NULL)
-                    AS _)
-                   AS _)
-                  AS _)
-                 SELECT *
-                 FROM
-                 (SELECT *
-                  FROM
-                  (SELECT
-                   NULL::integer AS f0, f0 AS f1
-                   FROM
-                   (SELECT
-                    f0 + f1 AS f0
-                    FROM
-                    (WITH t13 AS
-                     (SELECT *
-                      FROM
-                      (SELECT
-                       f0 AS f0, f1 AS f1, f2 AS f2, f3 AS f3, f4 AS f4, f5 AS f5, f6 AS f6
-                       FROM
-                       (-- join1
-                        SELECT * FROM t12 AS _
-                        WHERE
-                        ("f0" IS NOT NULL) AND ((("f1" IS NOT NULL) OR ("f2" IS NOT NULL)) AND (("f3" IS NOT NULL) AND ((("f4" IS NOT NULL) OR ("f5" IS NOT NULL)) AND ("f6" IS NOT NULL)))))
-                       AS _)
-                      AS _)
-                     SELECT *
-                     FROM
-                     (SELECT *
-                      FROM
-                      (SELECT
-                       f0 AS f0
-                       FROM
-                       (SELECT
-                        f0 AS f0
-                        FROM
-                        (SELECT
-                         f2 AS f0, f3 AS f1, f4 AS f2, f5 AS f3
-                         FROM
-                         (SELECT
-                          f1 AS f0, f2 AS f1, f3 AS f2, f4 AS f3, f5 AS f4, f6 AS f5
-                          FROM
-                          t13
-                          AS _)
-                         AS _)
-                        AS _)
-                       AS _)
-                      AS _
-                      CROSS JOIN
-                      (SELECT f0 AS f1 FROM (SELECT 1 as f0 FROM t13 AS _) AS _))
-                     AS _)
-                    AS _)
-                   AS _)
-                  AS _
-                  UNION
-                  SELECT *
-                  FROM
-                  (SELECT
-                   f0 AS f0, NULL::integer AS f1
-                   FROM
-                   (SELECT
-                    f0 AS f0
-                    FROM
-                    (SELECT
-                     f2 AS f0, f3 AS f1, f4 AS f2, f5 AS f3
-                     FROM
-                     (SELECT
-                      f1 AS f0, f2 AS f1, f3 AS f2, f4 AS f3, f5 AS f4, f6 AS f5
-                      FROM
-                      (SELECT
-                       f7 AS f0, f8 AS f1, f9 AS f2, f10 AS f3, f11 AS f4, f12 AS f5, f13 AS f6
-                       FROM
-                       (-- join2
-                        SELECT * FROM t12 AS _
-                        WHERE
-                        ("f7" IS NOT NULL) AND ((("f8" IS NOT NULL) OR ("f9" IS NOT NULL)) AND (("f10" IS NOT NULL) AND ((("f11" IS NOT NULL) OR ("f12" IS NOT NULL)) AND ("f13" IS NOT NULL)))))
-                       AS _)
-                      AS _)
-                     AS _)
-                    AS _)
-                   AS _)
-                  AS _)
-                 AS _)
-                AS _)
-               AS _)
-              AS _)
-             AS _)
-            AS _)
-           AS _
-           CROSS JOIN
-           (SELECT f0 AS f2 FROM (SELECT f2 AS f0 FROM t3 AS _) AS _))
-          AS _)
-         SELECT *
-         FROM
-         (-- dist
-          SELECT *
-          FROM
-          (SELECT
-           f0 AS f0, f2 AS f1, NULL::integer AS f2, NULL::integer AS f3
-           FROM
-           (-- dist1
-            SELECT * FROM t4 AS _ WHERE "f0" IS NOT NULL)
-           AS _)
-          AS _
-          UNION
-          SELECT *
-          FROM
-          (SELECT
-           NULL::integer AS f0, NULL::integer AS f1, f1 AS f2, f2 AS f3
-           FROM
-           (-- dist2
-            SELECT * FROM t4 AS _ WHERE "f1" IS NOT NULL)
-           AS _)
-          AS _)
-         AS _)
-        AS _)
-       AS _)
-      AS _
-      UNION ALL
-      SELECT
-      clock_timestamp() as step
-      , *
-      FROM
-      (SELECT *
-       FROM
-       (WITH t14 AS
-        (SELECT * FROM recursion AS _)
-        SELECT *
-        FROM
-        (WITH t15 AS
-         (SELECT *
-          FROM
-          (-- undist
-           SELECT *
-           FROM
-           (SELECT
-            f0 AS f0, NULL::integer AS f1, f1 AS f2
-            FROM
-            (-- undist1
-             SELECT * FROM t14 AS _ WHERE "f0" IS NOT NULL)
-            AS _)
-           AS _
-           UNION
-           SELECT *
-           FROM
-           (SELECT
-            NULL::integer AS f0, f2 AS f1, f3 AS f2
-            FROM
-            (-- dist2
-             SELECT * FROM t14 AS _ WHERE "f2" IS NOT NULL)
-            AS _)
-           AS _)
-          AS _)
-         SELECT *
-         FROM
-         (WITH t16 AS
-          (SELECT *
-           FROM
-           (SELECT *
-            FROM
-            (SELECT
-             f0 AS f0, f1 AS f1
-             FROM
-             (WITH t17 AS
-              (SELECT * FROM t15 AS _)
-              SELECT *
-              FROM
-              (WITH t18 AS
-               (SELECT *
-                FROM
-                (SELECT *
-                 FROM
-                 (SELECT
-                  f0 AS f0
-                  FROM
-                  (WITH t19 AS
-                   (SELECT * FROM (SELECT f0 AS f0, f1 AS f1 FROM t17 AS _) AS _)
-                   SELECT *
-                   FROM
-                   (SELECT *
-                    FROM
-                    (SELECT
-                     f0 AS f0
-                     FROM
-                     (-- join1
-                      SELECT * FROM t19 AS _ WHERE "f0" IS NOT NULL)
-                     AS _)
-                    AS _
-                    UNION
-                    SELECT *
-                    FROM
-                    (SELECT
-                     f1 AS f0
-                     FROM
-                     (-- join2
-                      SELECT * FROM t19 AS _ WHERE "f1" IS NOT NULL)
-                     AS _)
-                    AS _)
-                   AS _)
-                  AS _)
-                 AS _
-                 CROSS JOIN
-                 (SELECT f0 AS f1, f1 AS f2, f2 AS f3 FROM t17 AS _))
-                AS _)
-               SELECT *
-               FROM
-               (WITH t20 AS
-                (SELECT *
-                 FROM
-                 (SELECT *
-                  FROM
-                  (SELECT
-                   f0 AS f0, f1 AS f1
-                   FROM
-                   (WITH t21 AS
-                    (SELECT *
-                     FROM
-                     (SELECT
-                      f0 - f1 AS f0
-                      FROM
-                      (WITH t22 AS
-                       (SELECT * FROM t18 AS _)
-                       SELECT *
-                       FROM
-                       (SELECT *
-                        FROM
-                        (SELECT f0 AS f0 FROM (SELECT f0 AS f0 FROM t22 AS _) AS _)
-                        AS _
-                        CROSS JOIN
-                        (SELECT f0 AS f1 FROM (SELECT 100 as f0 FROM t22 AS _) AS _))
-                       AS _)
-                      AS _)
-                     AS _)
-                    SELECT *
-                    FROM
-                    (SELECT *
-                     FROM
-                     (SELECT
-                      abs(f0) as f0, NULL::integer as f1
-                      FROM
-                      t21
-                      AS _
-                      WHERE
-                      f0 < 0)
-                     AS _
-                     UNION
-                     SELECT *
-                     FROM
-                     (SELECT NULL::integer as f0, f0 as f1 FROM t21 AS _ WHERE f0 >= 0)
-                     AS _)
-                    AS _)
-                   AS _)
-                  AS _
-                  CROSS JOIN
-                  (SELECT f0 AS f2, f1 AS f3, f2 AS f4, f3 AS f5 FROM t18 AS _))
-                 AS _)
-                SELECT *
-                FROM
-                (WITH t23 AS
-                 (SELECT *
-                  FROM
-                  (SELECT *
-                   FROM
-                   (SELECT
-                    f0 AS f0, f1 AS f1
-                    FROM
-                    (SELECT f0 AS f0, f1 AS f1 FROM t20 AS _)
-                    AS _)
-                   AS _
-                   CROSS JOIN
-                   (SELECT
-                    f0 AS f2, f1 AS f3, f2 AS f4, f3 AS f5, f4 AS f6, f5 AS f7
-                    FROM
-                    t20
-                    AS _))
-                  AS _)
-                 SELECT *
-                 FROM
-                 (WITH t24 AS
-                  (SELECT *
-                   FROM
-                   (-- dist
-                    SELECT *
-                    FROM
-                    (SELECT
-                     f0 AS f0, f2 AS f1, NULL::integer AS f10, NULL::integer AS f11, NULL::integer AS f12, NULL::integer AS f13, f3 AS f2, f4 AS f3, f5 AS f4, f6 AS f5, f7 AS f6, NULL::integer AS f7, NULL::integer AS f8, NULL::integer AS f9
-                     FROM
-                     (-- dist1
-                      SELECT * FROM t23 AS _ WHERE "f0" IS NOT NULL)
-                     AS _)
-                    AS _
-                    UNION
-                    SELECT *
-                    FROM
-                    (SELECT
-                     NULL::integer AS f0, NULL::integer AS f1, f4 AS f10, f5 AS f11, f6 AS f12, f7 AS f13, NULL::integer AS f2, NULL::integer AS f3, NULL::integer AS f4, NULL::integer AS f5, NULL::integer AS f6, f1 AS f7, f2 AS f8, f3 AS f9
-                     FROM
-                     (-- dist2
-                      SELECT * FROM t23 AS _ WHERE "f1" IS NOT NULL)
-                     AS _)
-                    AS _)
-                   AS _)
-                  SELECT *
-                  FROM
-                  (SELECT *
-                   FROM
-                   (SELECT
-                    NULL::integer AS f0, f0 AS f1
-                    FROM
-                    (SELECT
-                     f0 + f1 AS f0
-                     FROM
-                     (WITH t25 AS
-                      (SELECT *
-                       FROM
-                       (SELECT
-                        f0 AS f0, f1 AS f1, f2 AS f2, f3 AS f3, f4 AS f4, f5 AS f5, f6 AS f6
-                        FROM
-                        (-- join1
-                         SELECT * FROM t24 AS _
-                         WHERE
-                         ("f0" IS NOT NULL) AND ((("f1" IS NOT NULL) OR ("f2" IS NOT NULL)) AND (("f3" IS NOT NULL) AND ((("f4" IS NOT NULL) OR ("f5" IS NOT NULL)) AND ("f6" IS NOT NULL)))))
-                        AS _)
-                       AS _)
-                      SELECT *
-                      FROM
-                      (SELECT *
-                       FROM
-                       (SELECT
-                        f0 AS f0
-                        FROM
-                        (SELECT
-                         f0 AS f0
-                         FROM
-                         (SELECT
-                          f2 AS f0, f3 AS f1, f4 AS f2, f5 AS f3
-                          FROM
-                          (SELECT
-                           f1 AS f0, f2 AS f1, f3 AS f2, f4 AS f3, f5 AS f4, f6 AS f5
-                           FROM
-                           t25
-                           AS _)
-                          AS _)
-                         AS _)
-                        AS _)
-                       AS _
-                       CROSS JOIN
-                       (SELECT f0 AS f1 FROM (SELECT 1 as f0 FROM t25 AS _) AS _))
-                      AS _)
-                     AS _)
-                    AS _)
-                   AS _
-                   UNION
-                   SELECT *
-                   FROM
-                   (SELECT
-                    f0 AS f0, NULL::integer AS f1
-                    FROM
-                    (SELECT
-                     f0 AS f0
-                     FROM
-                     (SELECT
-                      f2 AS f0, f3 AS f1, f4 AS f2, f5 AS f3
-                      FROM
-                      (SELECT
-                       f1 AS f0, f2 AS f1, f3 AS f2, f4 AS f3, f5 AS f4, f6 AS f5
-                       FROM
-                       (SELECT
-                        f7 AS f0, f8 AS f1, f9 AS f2, f10 AS f3, f11 AS f4, f12 AS f5, f13 AS f6
-                        FROM
-                        (-- join2
-                         SELECT * FROM t24 AS _
-                         WHERE
-                         ("f7" IS NOT NULL) AND ((("f8" IS NOT NULL) OR ("f9" IS NOT NULL)) AND (("f10" IS NOT NULL) AND ((("f11" IS NOT NULL) OR ("f12" IS NOT NULL)) AND ("f13" IS NOT NULL)))))
-                        AS _)
-                       AS _)
-                      AS _)
-                     AS _)
-                    AS _)
-                   AS _)
-                  AS _)
-                 AS _)
-                AS _)
-               AS _)
-              AS _)
-             AS _)
-            AS _
-            CROSS JOIN
-            (SELECT f0 AS f2 FROM (SELECT f2 AS f0 FROM t15 AS _) AS _))
-           AS _)
-          SELECT *
-          FROM
-          (-- dist
-           SELECT *
-           FROM
-           (SELECT
-            f0 AS f0, f2 AS f1, NULL::integer AS f2, NULL::integer AS f3
-            FROM
-            (-- dist1
-             SELECT * FROM t16 AS _ WHERE "f0" IS NOT NULL)
-            AS _)
-           AS _
-           UNION
-           SELECT *
-           FROM
-           (SELECT
-            NULL::integer AS f0, NULL::integer AS f1, f1 AS f2, f2 AS f3
-            FROM
-            (-- dist2
-             SELECT * FROM t16 AS _ WHERE "f1" IS NOT NULL)
-            AS _)
-           AS _)
-          AS _)
-         AS _)
-        AS _)
-       AS _
-       WHERE
-       ("f2" IS NOT NULL) AND ("f3" IS NOT NULL))
-      AS _)
-     SELECT * FROM recursion ORDER BY step DESC LIMIT 1)
-    AS _)
-   SELECT *
-   FROM
-   (WITH t26 AS
-    (SELECT *
-     FROM
-     (-- undist
-      SELECT *
-      FROM
-      (SELECT
-       f0 AS f0, NULL::integer AS f1, f1 AS f2
-       FROM
-       (-- undist1
-        SELECT * FROM t0 AS _ WHERE "f0" IS NOT NULL)
-       AS _)
-      AS _
-      UNION
-      SELECT *
-      FROM
-      (SELECT
-       NULL::integer AS f0, f2 AS f1, f3 AS f2
-       FROM
-       (-- dist2
-        SELECT * FROM t0 AS _ WHERE "f2" IS NOT NULL)
-       AS _)
-      AS _)
-     AS _)
-    SELECT *
-    FROM
-    (WITH t27 AS
-     (SELECT *
-      FROM
-      (SELECT *
-       FROM
-       (SELECT
-        f0 AS f0, f1 AS f1
-        FROM
-        (WITH t28 AS
-         (SELECT * FROM t26 AS _)
-         SELECT *
-         FROM
-         (WITH t29 AS
-          (SELECT *
-           FROM
-           (SELECT *
-            FROM
-            (SELECT
-             f0 AS f0
-             FROM
-             (WITH t30 AS
-              (SELECT * FROM (SELECT f0 AS f0, f1 AS f1 FROM t28 AS _) AS _)
-              SELECT *
-              FROM
-              (SELECT *
-               FROM
-               (SELECT
-                f0 AS f0
-                FROM
-                (-- join1
-                 SELECT * FROM t30 AS _ WHERE "f0" IS NOT NULL)
-                AS _)
-               AS _
-               UNION
-               SELECT *
-               FROM
-               (SELECT
-                f1 AS f0
-                FROM
-                (-- join2
-                 SELECT * FROM t30 AS _ WHERE "f1" IS NOT NULL)
-                AS _)
-               AS _)
-              AS _)
-             AS _)
-            AS _
-            CROSS JOIN
-            (SELECT f0 AS f1, f1 AS f2, f2 AS f3 FROM t28 AS _))
-           AS _)
-          SELECT *
-          FROM
-          (WITH t31 AS
-           (SELECT *
-            FROM
-            (SELECT *
-             FROM
-             (SELECT
-              f0 AS f0, f1 AS f1
-              FROM
-              (WITH t32 AS
-               (SELECT *
-                FROM
-                (SELECT
-                 f0 - f1 AS f0
-                 FROM
-                 (WITH t33 AS
-                  (SELECT * FROM t29 AS _)
-                  SELECT *
-                  FROM
-                  (SELECT *
-                   FROM
-                   (SELECT f0 AS f0 FROM (SELECT f0 AS f0 FROM t33 AS _) AS _)
-                   AS _
-                   CROSS JOIN
-                   (SELECT f0 AS f1 FROM (SELECT 100 as f0 FROM t33 AS _) AS _))
-                  AS _)
-                 AS _)
-                AS _)
-               SELECT *
-               FROM
-               (SELECT *
-                FROM
-                (SELECT
-                 abs(f0) as f0, NULL::integer as f1
-                 FROM
-                 t32
-                 AS _
-                 WHERE
-                 f0 < 0)
-                AS _
-                UNION
-                SELECT *
-                FROM
-                (SELECT NULL::integer as f0, f0 as f1 FROM t32 AS _ WHERE f0 >= 0)
-                AS _)
-               AS _)
-              AS _)
-             AS _
-             CROSS JOIN
-             (SELECT f0 AS f2, f1 AS f3, f2 AS f4, f3 AS f5 FROM t29 AS _))
-            AS _)
-           SELECT *
-           FROM
-           (WITH t34 AS
-            (SELECT *
-             FROM
-             (SELECT *
-              FROM
-              (SELECT
-               f0 AS f0, f1 AS f1
-               FROM
-               (SELECT f0 AS f0, f1 AS f1 FROM t31 AS _)
-               AS _)
-              AS _
-              CROSS JOIN
-              (SELECT
-               f0 AS f2, f1 AS f3, f2 AS f4, f3 AS f5, f4 AS f6, f5 AS f7
-               FROM
-               t31
-               AS _))
-             AS _)
-            SELECT *
-            FROM
-            (WITH t35 AS
-             (SELECT *
-              FROM
-              (-- dist
-               SELECT *
-               FROM
-               (SELECT
-                f0 AS f0, f2 AS f1, NULL::integer AS f10, NULL::integer AS f11, NULL::integer AS f12, NULL::integer AS f13, f3 AS f2, f4 AS f3, f5 AS f4, f6 AS f5, f7 AS f6, NULL::integer AS f7, NULL::integer AS f8, NULL::integer AS f9
-                FROM
-                (-- dist1
-                 SELECT * FROM t34 AS _ WHERE "f0" IS NOT NULL)
-                AS _)
-               AS _
-               UNION
-               SELECT *
-               FROM
-               (SELECT
-                NULL::integer AS f0, NULL::integer AS f1, f4 AS f10, f5 AS f11, f6 AS f12, f7 AS f13, NULL::integer AS f2, NULL::integer AS f3, NULL::integer AS f4, NULL::integer AS f5, NULL::integer AS f6, f1 AS f7, f2 AS f8, f3 AS f9
-                FROM
-                (-- dist2
-                 SELECT * FROM t34 AS _ WHERE "f1" IS NOT NULL)
-                AS _)
-               AS _)
-              AS _)
-             SELECT *
-             FROM
-             (SELECT *
-              FROM
-              (SELECT
-               NULL::integer AS f0, f0 AS f1
-               FROM
-               (SELECT
-                f0 + f1 AS f0
-                FROM
-                (WITH t36 AS
-                 (SELECT *
-                  FROM
-                  (SELECT
-                   f0 AS f0, f1 AS f1, f2 AS f2, f3 AS f3, f4 AS f4, f5 AS f5, f6 AS f6
-                   FROM
-                   (-- join1
-                    SELECT * FROM t35 AS _
-                    WHERE
-                    ("f0" IS NOT NULL) AND ((("f1" IS NOT NULL) OR ("f2" IS NOT NULL)) AND (("f3" IS NOT NULL) AND ((("f4" IS NOT NULL) OR ("f5" IS NOT NULL)) AND ("f6" IS NOT NULL)))))
-                   AS _)
-                  AS _)
-                 SELECT *
-                 FROM
-                 (SELECT *
-                  FROM
-                  (SELECT
-                   f0 AS f0
-                   FROM
-                   (SELECT
-                    f0 AS f0
-                    FROM
-                    (SELECT
-                     f2 AS f0, f3 AS f1, f4 AS f2, f5 AS f3
-                     FROM
-                     (SELECT
-                      f1 AS f0, f2 AS f1, f3 AS f2, f4 AS f3, f5 AS f4, f6 AS f5
-                      FROM
-                      t36
-                      AS _)
-                     AS _)
-                    AS _)
-                   AS _)
-                  AS _
-                  CROSS JOIN
-                  (SELECT f0 AS f1 FROM (SELECT 1 as f0 FROM t36 AS _) AS _))
-                 AS _)
-                AS _)
-               AS _)
-              AS _
-              UNION
-              SELECT *
-              FROM
-              (SELECT
-               f0 AS f0, NULL::integer AS f1
-               FROM
-               (SELECT
-                f0 AS f0
-                FROM
-                (SELECT
-                 f2 AS f0, f3 AS f1, f4 AS f2, f5 AS f3
-                 FROM
-                 (SELECT
-                  f1 AS f0, f2 AS f1, f3 AS f2, f4 AS f3, f5 AS f4, f6 AS f5
-                  FROM
-                  (SELECT
-                   f7 AS f0, f8 AS f1, f9 AS f2, f10 AS f3, f11 AS f4, f12 AS f5, f13 AS f6
-                   FROM
-                   (-- join2
-                    SELECT * FROM t35 AS _
-                    WHERE
-                    ("f7" IS NOT NULL) AND ((("f8" IS NOT NULL) OR ("f9" IS NOT NULL)) AND (("f10" IS NOT NULL) AND ((("f11" IS NOT NULL) OR ("f12" IS NOT NULL)) AND ("f13" IS NOT NULL)))))
-                   AS _)
-                  AS _)
-                 AS _)
-                AS _)
-               AS _)
-              AS _)
-             AS _)
-            AS _)
-           AS _)
-          AS _)
-         AS _)
-        AS _)
-       AS _
-       CROSS JOIN
-       (SELECT f0 AS f2 FROM (SELECT f2 AS f0 FROM t26 AS _) AS _))
-      AS _)
-     SELECT *
-     FROM
-     (-- dist
-      SELECT *
-      FROM
-      (SELECT
-       f0 AS f0, f2 AS f1, NULL::integer AS f2, NULL::integer AS f3
-       FROM
-       (-- dist1
-        SELECT * FROM t27 AS _ WHERE "f0" IS NOT NULL)
-       AS _)
-      AS _
-      UNION
-      SELECT *
-      FROM
-      (SELECT
-       NULL::integer AS f0, NULL::integer AS f1, f1 AS f2, f2 AS f3
-       FROM
-       (-- dist2
-        SELECT * FROM t27 AS _ WHERE "f1" IS NOT NULL)
-       AS _)
-      AS _)
-     AS _)
-    AS _)
-   AS _)
-  AS _
-  WHERE
-  ("f0" IS NOT NULL) AND ("f1" IS NOT NULL))
- AS _)
-AS _;
-```
+Every MacBook is connected to an IP KVM for remote management. Indispensable when dealing with laptops. Unlike Mac Mini, laptop firmware is designed with the screen in mind: some maintenance actions can only be done by clicking buttons in the beautiful GUI.
 
-It’s not pretty, rather amazingly, running the above query in postgres 17 will in fact return a single row with a single column whose value is 100. And you’d better believe it does it by *actually looping its way up to 100.* If you don’t believe me, make the following change:
+Of course, every MacBook gets an external 10G Ethernet NIC. Many folks at Namespace are networking geeks and we are proud of the connection speed and reliability that we provide to customers.
+
+And then there is power. So in total, four cables per laptop, forty-eight per shelf, plus twelve for Ethernet, plus KVM wiring. Let’s just say that careful cable management is essential.
+
+Heat management too. Currently we are deploying custom-made holders, designed to wick the heat from the hotspots and guide hot air away instead of blowing it at the nearby machines.
+
+### Not the problems we expected: HDMI, FileVault, and USB NICs
+
+Naturally, we expected problems and challenges. Just not where they appeared.
+
+I bet some of you looked at the pic above, saw MagSafe cables plugged in and already started writing a snarky tweet that MagSafe is not safe and may get accidentally disconnected.
+
+And yes, I was worried about that too. But the reality is that we have seen very few cases of MagSafe disconnections.
+
+The most unreliable cable? HDMI! Often thick and inflexible. Tends to fall out every time you touch the shelf.
+
+Luckily by now we found almost perfect cables that bend exactly as we want them to bend. And we bought the entire supply of them. There are zero more of them available to order on Amazon.
+
+Another source of pain: FileVault disk encryption. Or rather decryption. When a MacBook reboots (in an unplanned fashion) it prompts for a password to unlock the local disk. The prompt is shown on the screen (of a closed laptop somewhere in the rack, doh). No problem, we thought: we have the KVM connected just for this case!
+
+Nope, not so easy. The password prompt disappears from the external screen after 5 minutes of inactivity. Then we remembered that macOS Tahoe introduced a useful feature: we could [unlock FileVault remotely](https://keith.github.io/xcode-man-pages/apple_ssh_and_filevault.7.html) using SSH protocol. Still no luck. On laptops it expires after 5 minutes too. Looks like the only way out of this state is to reboot by physically pressing the button and racing to unlock in time.Mac rebootWhile on this topic, a small tip: you can reboot a Mac in a way that will keep the disk unlocked when you need it: `fdesetup authrestart`.
+
+And then there are simply bugs. Under certain conditions, an external USB NIC stops working and acts as if it is not powered and shows no link. Trying another cable, another NIC, another switch port, no luck. But a quick visit to Network Preferences, deleting and recreating the “network service” in MacOS Settings brings it back to life.
+
+### What about Mac Minis and Studios?
+
+At the moment we actually have it easy: M5 and M6 Mac Minis and Studios are coming into our fleet soon. They are way simpler to manage in the DC: they have a built-in 10 Gb network card, they boot up automatically after a power cycle and the OS can be configured entirely automatically via MDM.
+
+But Namespace has some special sauce for the Minis too. We design custom-made shelves that hold the machines with focus on efficient cooling. We have tested a few designs using airflow simulation to arrive at what we are deploying now.
+
+In the end installing Mac Minis is a breeze: unpack them, throw 10 pieces into the holder, connect power and network and press the power button once (famously inconveniently located). From there on automation takes care of them.
+
+## Virtualizing Macs
+
+Under the hood a Namespace instance is backed by a virtual machine. We have multiple virtual machine engines integrated into a unified platform to run Linux, Windows, and Mac instances in the most efficient way. This way we can provide the same features that make Namespace special, like [cache volumes](https://namespace.so/docs/architecture/storage/cache-volumes), telemetry, or VPC connections.
+
+Unsurprisingly, our Mac solution is based on Apple’s excellent [Virtualization framework](https://developer.apple.com/documentation/virtualization). It is an embeddable and flexible virtual machine engine. It’s easiest to compare it to Firecracker in how it fits the system architecture: it implements generic VM operations end-to-end as well as typical peripherals.
+
+For completeness, Apple also provides a lower-level [Hypervisor framework](https://developer.apple.com/documentation/hypervisor), which is comparable to the KVM API of Linux. For instance QEMU uses it on macOS under the hood. Hypervisor provides a way to execute machine code in isolation, but requires the application developer to implement the bulk of machine architecture and peripherals. It could give us a lot of control, but unfortunately it cannot run macOS (it requires an Apple proprietary environment that third parties cannot, or shouldn’t, try to recreate).
+
+In fact, most competing platforms are built on the same foundation. But the details matter: Apple gives us a few primitives that need to be arranged in just the right way to work fast and be secure. The more interesting thing is to watch how different people solve similar problems with different constraints.
+
+### Limitations of Apple Virtualization
+
+A well-known limitation is that Apple only allows two macOS VMs per physical Mac. It can be a Mac Pro with 24 cores and 192 GB memory, yet it is limited to running only two guest VMs. This limitation leaks into our product offering: we can only slice Mac resources in two halves. So we run instances with 6 or 12 cores on 14-core Mac Minis and 8/16-core instances on 18-core MacBooks (we reserve a couple cores for management overhead).
+
+An important consideration of Virtualization VMs is that the virtual CPU is executed by a separate OS process (VMM process in the diagram) from the software integrating Virtualization (here Namespace VM host). If we want to hook some VM behavior or implement custom virtual devices, every interaction with them requires an IPC roundtrip between the VM process and the “host” process. Such context switches are unavoidable and need to be taken into account when designing the system.
+
+### Virtual networking
+
+Virtualization framework offers a few ways to connect a virtual machine to the network. For instance, bridged and NAT networking modes route traffic directly from the VMM process to the host network interfaces. These are suitable for VMs running on a local computer where the workload is trusted.
+
+Namespace instances run untrusted code and we need to enforce policies on what a VM can or cannot access (these policies [can also be customer-defined!](https://namespace.so/docs/security/egress-policy)). Also we provide a few additional services to the instances that should appear “as if” they were on the local network for the guest system.
+
+This requires us to take full control of guest networking in the mode where we process every packet that comes out and into the VM in software. We based our guest networking on a userspace TCP/IP stack from Google gVisor project and use it to implement an IP gateway/firewall for the instances. This way we minimize exposure of the host OS to unprocessed packets controlled by the guest.
+
+Network packet handling needs to be very efficient, but as outlined above the path involves IPC. The VMM process needs first to pass the packets to the “VM host” process, which then processes and passes them to the network interface. It takes careful implementation and batch processing wherever possible to minimize the number of IPC roundtrips.
+
+The above approach allows Namespace MacOS instances to reach 4 Gbps upstream bandwidth (per [Fast.com](https://fast.com)). This is unfortunately still lower than the line rate. We have been exploring alternative approaches, including ideas on how to avoid IPC for network processing entirely. But productionizing the new setup is still left for the future. After all, 4 Gbps is still quite respectable.
+
+## VM images
+
+Creating your first VM using Apple Virtualization is very easy: download a macOS IPSW restore image, use UTM/Tart/any of the dozens of open-source Virtualization wrappers to start a machine, click through Setup Assistant, install Xcode and you are good to go. Now you have a VM image that you can fork and run any workload locally.
+
+But you need to test on multiple versions of iOS, so you install a few iOS runtimes. And then you install the upcoming Xcode beta version (and new runtimes too). And before you know it your VM image has grown to 500 GB (iOS runtime packages are huge).
+
+You also want to have the previous version of macOS for testing that one little thing. Another 500 GB right here. Apple releases the new macOS developer preview, one more image.
+
+And then you realize that the Xcode beta version subtly breaks the non-beta Xcodes on the same system (true story!). After all, Xcode installation bumps the “global” versions of CoreDevice and CoreSimulator. Hence any bugs in the beta Xcode simulator are visible when you’re using ostensibly stable Xcode versions. So now you are maintaining image versions with and without the pre-release Xcodes.
+
+And now you have 2 TB of VM images. On what? A 2 TB MacBook hard drive?
+
+That’s the challenge we faced: we need to build, distribute, and store huge images across the fleet of hundreds of machines.
+
+### Build process
+
+Building images is a repeatable process so that we can reliably produce new images when Apple releases new software versions. Building is driven by a script that replicates installation and configuration as a human user would do it (e.g. the build script can run shell commands, click UI buttons or reboot the VM). Wherever possible we stick to using controls designed by Apple to configure the VMs in order to avoid surprising behaviours inconsistent with what a typical local user would be seeing. Naturally, building images is an automated and repeatable process. It is driven by a workflow expressed as a sequence of operations in a YAML file. Operations can be VM control (e.g. reboot), running a shell script or programmatic interaction with the system or setup UI over VNC.
+
+Resulting VM images are handed over to [Namespace internal Image Registry](https://namespace.so/docs/architecture/storage/container-registry), in fact the same one that handles Linux and Windows image storage, replication and distribution (covered in [the excellent article by Matteo](https://namespace.so/blog/container-image-loading)). Disk images are of course quite different from normal container images: OCI layers are simple tarballs of files, while disks are generally flat arrays of bytes. Very large arrays in fact. And to a large extent they contain empty space: that’s the disk space that would be available to users as free space.
+
+Naturally, it would be very wasteful to transfer and store the “empty” data in the registry. So we developed a simple format that allows us to preserve the “sparse-ness” of the images when stored in the registry. Unallocated spans of the image take just a few bytes.
+
+And there is another important optimization. Remember the example scenario mentioned in the VM Images section: we have an image of the same system that differs only in addition of an extra Xcode installation. Obviously the latter image is built using the former as a base and most of the bytes are unchanged.
+
+Our storage format preserves the “shallow copy” relationship and stores such images as multiple layers: the base layer is shared between them, while subsequent layers only contain the modified blocks.
+
+### Distribution
+
+At this point we have the images in an OCI registry now. But of course Virtualization framework cannot start a VM directly using a disk residing in the registry. It needs to have something on the node itself: a VM disk can be backed by either an image file on the local host SSD, or it can route disk I/O requests to a server using Network Block Device (NBD) protocol. The latter would allow us to intelligently serve highly demanded data from a local cache, while conserving on-device space by not storing unneeded blocks.
+
+But NBD has the same drawback as userspace networking from above: every I/O operation would incur an IPC roundtrip at minimum, including buffer copying and context switches. You see the same pattern as with networking: a very direct hardwired and fast option and an indirect “software-defined” but disappointingly slow option.
+
+At Namespace we value performance a lot, so the choice is clear: we’ll serve the images from the local disk. We need to materialize them from OCI images in the registry on the SSD of every node in the fleet. 500 gig images to hundreds and thousands of nodes. And we need to do it fast.
+
+Obviously, every node naively downloading from the central registry was not going to work. With the example numbers we are talking about half a petabyte of traffic transferred within, conservatively, tens of minutes. The registry (and the network fabric) would need to serve terabits per second!
+
+The bytes that we are distributing are the same going to every node so the obvious solution is to organize a peer-to-peer delivery of these blobs. Each block only needs to be downloaded from the registry once by some node. Then another node that is close by (by certain metric) can download the block directly from the peer and we have two copies. So two more nodes can pull these bytes and so on. The fleet is exponentially flooded.BitTorrentObviously, BitTorrent was a heavy inspiration for this design. But unlike BitTorrent, which works in a public network of untrusted peers, we could make different tradeoffs leading to better efficiency and predictability. But that’s a topic for another post.
+
+### Storage
+
+Now the bytes are on the node disk. But remember the storage optimizations we did in the Build Process? With the naive approach of storing the images on disk there are a lot of bytes that are useless: they are either holes or could be shared with another image.
+
+Some of you probably know that these are exactly the types of storage optimization techniques that are possible with modern file systems, namely APFS.ZFSLinux users have seen the same features in ZFS.
+
+Using these cool features is also pretty easy: open a new file for writing, seek to offset 100G, write a block. And there you just made a file with a large hole in it. Only the block you wrote is allocated on disk, the rest is 100 GB of imaginary zeroes. When reading the file you won’t even notice the holes. The OS will return actual zeros.
 
 ```
--     SELECT * FROM recursion ORDER BY step DESC LIMIT 1)
-+     SELECT * FROM recursion ORDER BY step DESC)
+% truncate -s 1g hole.bin
+% dd if=/dev/random of=hole.bin bs=4k seek=256k count=256 
+% ls -lh hole.bin
+-rw-r--r--  1 kirill  staff   1.0G Sep 29 05:36 hole.bin
+% du -h hole.bin
+ 1M	hole.bin
 ```
 
-which will instead return a row for each step of the iteration.
+Sharing the blocks is similarly transparent: just use the `cp -c` mode or `clonefile` syscall. The new file will share the same disk blocks and essentially not take any space.
 
-There are some obvious optimizations I could make to the generated SQL, but it didn’t seem worth my time, since that’s not the interesting part of the project.
+Writing to the cloned file is also transparent: as soon as you try to overwrite some blocks, these particular blocks will be allocated on the disk, while the shared portion will remain shared.
 
-## What the Hell Is Going On?
+## What’s next?
 
-Let’s take some time to discuss the underlying category theory here. I am by no means an expert, but what I have learned after a decade of bashing my head against this stuff is that a little goes a long way.
+The pace at which we are expanding our fleet is increasing and the experience from all the above has transformed into a repeatable process. We know exactly how long it takes to bring a MacBook rack into prod. The rack assembly line is dialed in. DCOps people are trained. Disk images are built and distributed. We can bring whatever number of machines our customers need into the fleet when we need to (well, as long as we can purchase them at all).
 
-For our intents and purposes, we have types, and arrows (functions) between types. We always have the identity “do nothing arrow” `id`:
+We can still do better! What if there was a “holy-grail” device to host a shelf of MacBooks, providing power, ethernet and KVM connections over a single USB-C cable? It should be possible, yet there is currently no hardware on the open market that satisfies our requirements. So we are working on something very custom.
 
-```
-id  :: a ~> a
-```
-
-and we can compose arrows by lining up one end to another:[<sup>1</sup>](https://reasonablypolymorphic.com/blog/arrows-to-arrows/#fn1)
-
-```
-(⨟) :: (a ~> b) -> (b ~> c) -> (a ~> c)
-```
-
-Unlike Haskell (or really any programming language, for that matter), we DO NOT have the notion of function application. That is, there is no arrow:
-
-```
--- doesn't exist!
-($) :: (a ~> b) -> a -> b
-```
-
-You can only compose arrows, you can’t apply them. That’s why we call these things “arrows” rather than “functions.”
-
-There are a bundle of arrows for working with product types. The two projection functions correspond to `fst` and `snd`, taking individual components out of pairs:
-
-```
-prj₁ :: (a, b) ~> a
-prj₂ :: (a, b) ~> b
-```
-
-How do we get things into pairs in the first place? We can use the “fork” operation, which takes two arrows computing `b` and `c`, and generates a new arrow which generates a pair of `(b, c)`:
-
-```
-(△)  :: (a ~> b) -> (a ~> c) -> (a ~> (b, c))
-```
-
-If you’re coming from a Haskell background, it’s tempting to think of this operation *merely* as the `(,)` pair constructor. But you’ll notice from the type of the computation that there can be no data dependency between `b` and `c`, thus we are free to parallelize each side of the pair.
-
-In category theory, the distinction between left and right sides of an arrow is rather arbitrary. This gives rise to a notion called *duality* where we can flip the arrows around, and get cool new behavior. If we dualize all of our product machinery, we get the *coproduct* machinery, where a coproduct of `a` and `b` is “either `a` or `b`, but definitely not both nor neither.”
-
-Swapping the arrow direction of `prj₁` and `prj₂`, and replacing `(,)` with `Either` gives us the following injections:
-
-```
-inl :: a ~> Either a b
-inr :: b ~> Either a b
-```
-
-and the following “join” operation for eliminating coproducts:
-
-```
-(▽) :: (a ~> c) -> (b ~> c) -> (Either a b ~> c)
-```
-
-Again, coming from Haskell this is just the standard `either` function. It corresponds to a branch between one of two cases.
-
-As you can see, with just these eight operations, we already have a tremendous amount of expressivity. We can express data dependencies via `⨟` and branching via `▽`. With `△` we automatically encode opportunities for parallelism, and gain the ability to build complicated data structures, with `prj₁` and `prj₂` allowing us to get the information *back out* of the data structures.
-
-You’ll notice in the IL that there are no variable names anywhere to be found. The desugaring of the source language builds a stack (via the `something to allocate △ id` pattern), and replaces subsequent variable lookups with a series of projections on the stack to find the value again. On one hand, this makes the categorical IL rather hard to read, but it makes it very easy to re-target! Many domains do have a notion of grouping, but don’t have a native notion of naming.
-
-For example, in an electronic circuit, I can have a ribbon of 32 wires which represents an `Int32`. If I have another ribbon of 32 wires, I can trivially route both wires into a 64-wire ribbon corresponding to a pair of `(Int32, Int32)`.
-
-By eliminating names before we get to the IL, it means no compiler backend ever needs to deal with names. They can just work on a stack representation, and are free to special-case optimize series of projections if they are able to.
-
-Of particular interest to this discussion is how we desugar loops in catlang. The underlying primitive is `cochoice`:
-
-```
-cochoice :: (Either a c ~> Either b c) -> (a ~> b)
-```
-
-which magically turns an arrow on `Either`s into an arrow without the eithers. We obviously must *run* that arrow on eithers. If that function returns `inl`, then we’re happy and we can just output that. But if the function returns `inr`, we have no choice but to pass it back in to the eithered arrow. In Haskell, cochoice is implemented as:
-
-```
-cochoiceHask :: (Either a c -> Either b c) -> a -> c
-cochoiceHask f = go . Left
-  where
-    go :: Either a c -> b
-    go eac =
-      case f eac of
-        Left b -> b
-        Right c -> go (Right c)
-```
-
-which as you can see, will loop until `f` finally returns a `Left`. What’s neat about this formulation of a loop is that we can statically differentiate between our first and subsequent passes through the loop body. The first time through `eac` is `Left`, while for all other times it is `Right`. We don’t take advantage of it in the original `count` program, but how many times have you written loop code that needs to initialize something its first time through?
-
-## Compiling to SQL
-
-So that’s the underlying theory behind the IL. How can we compile this to SQL now?
-
-As alluded to before, we simply need to give SQL implementations for each of the operations in the intermediary language. As a simple example, `id` compiles to `SELECT * FROM {}`, where `{}` is the input of the arrow.
-
-The hardest part here was working out a data representation. It seems obvious to encode each element of a product as a new column, but what do we do about coproducts? After much work thought, I decided to flatten out the coproducts. So, for example, the type:
-
-```
-(Int, Either Int Int)
-```
-
-would be represented as three columns:
-
-```
-( f1 INT NOT NULL
-, f2 INT
-, f3 INT
-)
-```
-
-with the constraint that exactly one of `f2` or `f3` would be `IS NOT NULL` at any given point in time.
-
-With this hammered out, almost everything else is pretty trivial. Composition corresponds to a nested query. Forks are `CROSS JOIN`s which concatenate the columns of each sub-query. Joins are `UNION`s, where we add a `WHERE field IS NOT NULL` clause to enforce we’re looking at the correct coproduct constructor.
-
-Cochoice is the only really tricky thing, but it corresponds to a [recursive CTE](https://www.postgresql.org/docs/current/queries-with.html#QUERIES-WITH-RECURSIVE). Generating a recursive CTE table for the computation isn’t too hard, but getting the final value out of it was surprisingly tricky. The semantics of SQL tables is that they are multisets and come with an arbitrary greatest element. Which is to say, you need an column structured in a relevant way in order to query the final result. Due to some quirks in what postgres accepts, and in how I structured my queries, it was prohibitively hard to insert a “how many times have I looped” column and order by that. So instead I cheated and added a `clock_timestamp() as step` column which looks at the processor clock and ordered by that.
-
-This is clearly a hack, and presumably will cause problems if I ever add some primitives which generate more than one row, but again, this is just for fun and who cares. Send me a [pull request](https://github.com/isovector/catlang) if you’re offended by my chicanery!
-
-## Stupid Directions To Go In the Future
-
-I’ve run out of vacation time to work on this project, so I’m probably not going to get around to the meta-circular stupidity I was planning.
-
-The compiler still needs a few string-crunching primitives (which are easy to add), but then it would be simple to write a little [brainfuck](https://en.wikipedia.org/wiki/Brainfuck) interpreter in catlang. Which I could then compile to SQL. Now we’ve got a brainfuck interpreter running in postgres. Of course, this has been done by hand before, but to my knowledge, never via compilation.
-
-There exist C to brainfuck compilers. And postgres is written in C. So in a move that would make Xzibit proud, we could run postgres in postgres. And of course, it would be fun to run brainfuck in brainfuck. That’d be a cool catlang backend if someone wanted to contribute such a thing.
-
-## Notes and Due Diligence and What Have You
-
-I am not the first person to do anything like this. The source language of catlang is heavily inspired by [Haskell’s arrow syntax](https://www.staff.city.ac.uk/~ross/papers/notation.pdf), which in turn is essentially a desugaring algorithm for [Arrows](https://www.cse.chalmers.se/~rjmh/afp-arrows.pdf). Arrows are slightly the wrong abstraction because they require an operation `arr :: (a -> b) -> (a ~> b)`—which requires you to be able to embed Haskell functions in your category, something which is *almost never possible.*
-
-Unfortunately, arrow syntax in Haskell desugars down to `arr` for almost everything it does, which in turn makes arrow notation effectively useless. In an ideal world, everything I described in this blog post would be a tiny little Haskell library, with arrow notation doing the heavy lifting. But that is just not the world we live in.
-
-Nor am I the first person to notice that there are categorical semantics behind programming languages. I don’t actually know whom to cite on this one, but it is well-established folklore that the lambda calculus corresponds to [cartesian-closed categories](https://en.wikipedia.org/wiki/Cartesian_closed_category). The “closed” part of “cartesian-closed” means we have an operation `eval :: (a ~> b, a) ~> b`, but everyone and their dog has implemented the lambda calculus, so I thought it would be fun to see how far we can get without it. This is not a limitation on catlang’s turing completeness (since `cochoice` gives us everything we need.)
-
-I’ve been thinking about writing a *category-first* programming language for the better part of a decade, ever since I read [Compiling to Categories](http://conal.net/papers/compiling-to-categories/compiling-to-categories.pdf). That paper takes Haskell and desugars it back down to categories. I stole many of the tricks here from that paper.
-
-Anyway. All of the code is available on [github](https://github.com/isovector/catlang) if you’re interested in taking a look. The repo isn’t up to my usual coding standards, for which you have my apologies. Of note is the template-haskell backend which can spit out Haskell code; meaning it wouldn’t be very hard to make a quasiquoter to compile catlang into what Haskell’s arrow desugaring *ought to be.* If there’s enough clamor for such a thing, I’ll see about turning this part into a library.
+Or maybe we’ll do another crazy thing? What if we deploy phones to the datacenter? See what the future brings on our X soon!
