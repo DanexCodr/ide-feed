@@ -1,212 +1,145 @@
-On February 10th, 1996, a computer program (IBM's Deep Blue)
-        defeated the reigning chess champion (Garry Kasparov) in a game of chess for the first time.
-        Deep Blue would go on to lose the match,
-        but a year later, would get its revenge in a 3.5-2.5 rematch.
+Last week, I saw an article on the front page of the New York Times [website](https://www.nytimes.com/2026/10/21/us/politics/php-vulnerability-ai-openai-cybersecurity.html) reporting that a critical vulnerability in PHP had been found. The article, and [others](https://www.theguardian.com/technology/2026/oct/22/websites-across-world-hit-by-millions-of-attempts-to-exploit-php-code-flaw) [like](https://www.cbsnews.com/news/php2shell-vulnerability-ai-security-flaw/) [it](https://apnews.com/article/php-vulnerabilities-security-threat-38d37c4c18bf8355b02d85b5a73ed642), claimed any attacker could achieve arbitrary remote code execution on any of the millions of running PHP services worldwide simply by sending a few unauthenticated web requests that exploited the PHP2Shell vulnerability.
 
-In order to achieve this feat, IBM spent several million dollars on research and
-        development building a special-purpose computer specifically for this purpose.
-        Deep Blue itself (the victorious, upgraded version)
-        was powered by 30 P2SC processors each running at roughly 120 MHz,
-        and (most importantly) 480 custom VLSI chess co-processors used to perform chess-specific
-        operations like move generation and position evaluation.
-        When it was built, Deep Blue was the 259th most powerful supercomputer in the world,
-        and could analyze over 200 million chess positions per second.
+My office Slack was buzzing, as were several of my Signal chats with colleagues and friends across the security community.
 
-But was Deep Blue necessary to beat Kasparov?
-        Or could we have gotten away with an off-the-shelf 1996 desktop
-        running a smarter chess engine?
+Rumors swirled about how in-the-wild exploitation caused one tech company to break embargo and leak news of the vulnerability hours before the rest of the community could coordinate disclosure. That hackers were *already* hacking websites, in the wild, with this exploit and that every hour mattered to get the patches rolled out across 70% of the internet.
 
-As it turns out, we could easily have beaten Kasparov without building Deep Blue, using only commodity hardware,
-        and it (almost certainly) wouldn't have even been close.
-        I know this because, as I write this very sentence, I have sitting next to me a
-        200 MHz Intel Pentium Pro (released exactly 31 years ago---November 1st, 1995) with 64MB of RAM
-        running a custom port of [Stockfish](https://stockfishchess.org/) that plays at an estimated Elo of
-        3300 ± 87 at classical time controls---far beyond the strength of any human, or indeed Kasparov's Elo of just under 2800.
-        But wait, there's more! I've hooked this machine up to the internet with a Realtek RTL8139C Ethernet card,
-        so you can play it below!
+## The Question
 
-There are three ways to get stronger at chess: you can
-        analyze *more* moves, analyze *better* moves, or analyze moves *better*.
-        Famously, humans improve by doing the latter two:
-        the average chess grandmaster during a classical game will analyze [roughly the same number
-        of moves](https://psycnet.apa.org/record/1982-00955-001) as an amateur player, but they analyze only the most critical moves and
-        do a better job with that analysis.
-        Chess engines like [Stockfish](https://stockfishchess.org/), running on silicon instead of our human brains,
-        dominate us at the first of these
-        and analyze millions of positions per second.
-        And because there's not *that* much room for micro-optimizations on modern engines that will let a given
-        CPU process more positions per second,
-        most progress in chess AI also tends to follow how humans improve and finds better methods
-        for selecting moves and analyzing boards.
+Was PHP2Shell the hallmark of a new era whereby uplifted randos could hack any website with a few well-crafted prompts to an AI model?
 
-Skill in chess is measured by an Elo score.
-        A difference of 200 Elo means that you should expect the stronger
-        player to win three out of every four games, and multiplicatively from there: a 400 Elo gap corresponds
-        to a 90% expected score and a 1000 Elo gap gives a 99.7% expected score.
-        The best chess engines that you could run on commodity 1996 hardware were rated roughly 2300 Elo.
-        Deep Blue was rated 2700.
-        In contrast, modern Stockfish is rated closer to 3700.
+I looked out my window, expecting perhaps to see the dull apocalyptic glow of fires on the horizon as society collapsed in real time. Nothing.
 
-This raises the question: how much of the advantage of a modern chess engine comes down
-        to the fact that a modern desktop computer is *extremely* fast, and how much of the
-        advantage comes down to the fact that we've just gotten better at programming chess engines?
-        As it turns out, the majority of the Elo gains (+720 of the +1335 gained) can be attributed to better programming,
-        and not better hardware.
+While online articles and tweets made the rounds about the eleven alarm cyberapocalypse upon us, I struggled to find any reference to a specific website that had been hacked.
 
-To test this, I ran two experiments.
-        The first experiment uses [Crafty](https://en.wikipedia.org/wiki/Crafty), a competitive engine from 1996
-        whose source code is now available.
-        On my Pentium Pro, the 1996 build of Crafty version 11.13 has an Elo of 1999 ± 90 at 1 second per move, and 2383 ± 77 at 10 seconds per move.
-        On modern hardware (a Ryzen 7) this engine's Elo jumps massively to 2614 ± 97 at the same 1 second per move.
-        But if I take this engine and slowly start to add all the knowledge we have about
-        how to design better chess engines---adding modern search algorithms like fail-soft, LMR, correction history; adding better quiescence methods; and adding neural-net evals (NNUE)---then you can
-        increase the Elo up to 2718 ± 34 on the Pentium Pro at 1 second per move, and 2974 ± 74 at 10 seconds per move.
+Over the following days, a few iconoclasts had pointed out that the vulnerability was rather fiddly in practice ([Elias Taylor](https://eliastaylor.com/noexploit/); [Lucas Luitjes](https://blog.luitjes.it/posts/i-want-my-wednesday-back/)) and that hacker groups, while initially quite excited by the exploit’s potential, had started to view it as impractical or difficult ([KELA](https://www.kelacyber.com/blog/php2shell-underground-response/)).
 
-In the second experiment I go somewhat further: instead of trying to update Crafty, let's just try to get Stockfish---the
-        best chess engine today---running on 1996 hardware and see how it does.
-        This takes some work
-        and is mainly a matter of rewriting the
-        code so that it uses 32-bit arithmetic (a PPro is a 32-bit machine) and doesn't
-        use more than 64MB of RAM.
-        This naive port has an Elo of roughly 2496 ± 64 at 1 second per move (2940 ± 76 at 10 seconds per move).
-        But we can do better! A modern Stockfish engine is designed to run on a modern CPU.
-        By making a number of adjustments to the algorithm and tuning it to the Pentium,
-        we can increase its Elo to 2846 ± 35 at 1 second per move,
-        3109 ± 79 at 10 seconds per move,
-        and 3180 ± 80 at 30 seconds per move.
+Yet at the same time, the national and international press continued to cover a herculean emergency effort to hunt down and patch PHP-based websites across the internet.
 
-The most concise way to summarize all of the above is just to have them play a match of 100 games against each other.
-        And when I do this, I find that a modern chess engine running on a 1996 Pentium Pro
-        wins 78, draws 17, and loses 5 games against
-        the 1996 Crafty engine running on modern hardware.
+Rather than wait around and wonder, I decided to try to figure things out for myself. I had two fundamental questions:
 
-The remainder of this article provides the details.
+1. Was PHP2Shell actually exploitable outside of a lab environment?
+2. Would relatively unskilled attackers with access to AI and the PHP source code be able to exploit this class of vulnerability?
 
-There's not much to say about the hardware, to be honest.
-        I bought a used (*"vintage"* said the listing; I feel old.) desktop PC with standard period-appropriate hardware.
-        The desktop is running a 200 MHz Intel Pentium Pro connected
-        to an Intel VS440FX motherboard with 64MB of SIMM RAM clocked at 66 MHz.
-        The operating system boot off of a 1.44MB 3.5 inch floppy disk,
-        and connect to the Internet via a Realtek RTL8139C.
-        I also have a 1MB Trio64V+ graphics card connected over VGA to my monitor,
-        with input coming from a PS/2 keyboard---but I don't much use either of those and instead
-        communicate with it over a serial port connected to my modern desktop.
+## The Results
 
-For those readers who may not be able to appropriately contextualize this hardware,
-        a 200 MHz Pentium Pro sold for $1,325 at launch in November 1995,
-        and four 16 MB SIMMs would have cost about $2,000.
-        Add on the other peripherals, and this machine would likely have gone for about four or five thousand dollars.
-        So it's a nice workstation, but by no means a supercomputer.
-        However, given the rate of depreciation and the exponential rate of improvements to hardware,
-        this same machine in 1997, when the second match occurred,
-        would likely go for just a thousand dollars (because who would want to buy
-        a Pentium Pro when the better-in-almost-every-way Pentium MMX was now available for just $400?)
+Directly, the answers to the questions are:
 
-The interface between the chess engine and the internet is a custom-built "operating system"
-        whose sole job is to spin up the chess engine and connect it directly to the networking card.
-        (Throughout this article, when I say "I wrote", what I really mean is "I asked an LLM to write".
-        I used a combination of Fable 5.1, Opus 5.5, and GPT-6 to implement the code here. (This article, though, is human text.).)
-        It's designed to be as compact as possible: the operating system (which, in fact, is more like
-        a hypervisor, or something) is sitting on a bootable floppy disk.
-        Its sole job is to boot the Pentium Pro into 32-bit protected mode,
-        initialize the networking card,
-        and await further instructions.
-        I can then send it any arbitrary "userspace" guest program that I want into RAM and it'll
-        boot that up and start running it.
-        The chess program I wrote starts up a custom-built HTTP server which waits for
-        incoming HTTP requests with a given position (as a FEN string)
-        and maximum run time, and on each request runs the engine until the timer expires, and returns a response.
+### 1) Was PHP2Shell actually exploitable outside of a lab environment?
 
-As mentioned earlier I (again: a language model) actually modified two engines.
-        The stronger of the two is powered by Stockfish adapted to run efficiently
-        on a thirty-year-old processor.
-        It plays at an estimated Elo of 3300 at classical time controls
+**Yes.** Absolutely. The challenge winner, who has posted a [writeup](https://github.com/KillaBoi/StealMyBitcoin-PoC), exploited my server directly over an open internet connection and did so using the PHP2Shell vulnerability (e.g. he did not exploit some other vulnerability in my setup). He did this through a specially crafted exploit which targeted the specific configuration of my PHP installation and the ways in which it was set up on the server.
 
-[[a]](https://nicholas.carlini.com/writing/2026/algorithmic-improvements-chess.html#footnote1)
+### 2) Would relatively unskilled attackers with access to AI and the PHP source code be able to exploit this class of vulnerability?
 
-            Because I can't run nearly enough games at classical time controls on my single machine
-            to get this number, I've extrapolated it from shorter time controls.
-            I measured 3180 ± 80 at 30 seconds per move, and it gained +70 Elo per tripling of
-            the time between 1 second to 10 seconds and 10 seconds to 30 seconds. Because a classical
-            game gives about six minutes per move (including thinking on the opponent's turn)
-            we should expect an Elo of 3350. Allowing for some diminishing returns,
-            a safe estimate is an Elo of 3300.
+**Not yet.** Of tens of thousands of people who attempted the exploit - including in a 9 hour period when the challenge was active after the first successful solve (more on that below…) - only two managed to trigger the `print-flag` binary and only one, the winner of the challenge, managed to do so in such a way as to extract useful content from the application.
 
-, high enough above Kasparov's 2800 Elo that we should expect Stockfish-1996
-        to come out ahead with a score of roughly 9/10.
-        The (only slightly) weaker engine starts with the source code to Crafty 11.13,
-        and is brought forward in time by adding all the lessons we've learned about how to
-        write a better chess engine over the past thirty years.
+## The Experiment
 
-The first engine I (read: my LLM) worked on was Crafty 11.13, its 1996 release.
-        On this engine the LLM had to do the most work to backport ideas we've learned over
-        the last 30 years. Below is a breakdown of where the Elo gains come from,
-        when evaluating either at 1 second per move or 10 seconds per move.
+The core idea was pretty simple. I’d rent a cheap VPS for a few weeks, slap a PHP website on it along with the key to a bitcoin wallet, and then wait and see if anyone managed to drain the wallet. Miraculously, the domain name “stealmybitcoin.com” was available, so I took this as a sign from the fates themselves that this experiment had the mandate of heaven.
 
-[[b]](https://nicholas.carlini.com/writing/2026/algorithmic-improvements-chess.html#footnote2)
+I slapped $500 of bitcoin into a clean wallet, rented a $2.50/month Debian VPS from a web hosting provider, and told Codex to make me a basic webpage and stick it on the internet with PHP. I configured the server such that a single executable binary `print-flag` had permissions to read a `flag` file containing the WIF, took down my firewall, and posted the link to Hacker News to see if anyone would give the challenge a shot.
 
-            Sometimes you'll find the 1s vs 10s improvements disagree. Part of this clearly could be noise---I only ran a few hundred games which leaves a relatively large margin of error---but there is also quite a lot of signal here. Because the 1996 computer is so much slower, at 1s/move it has a very low search depth and so how fast the evaluation runs matters more than how good it is. But at larger search depths, once you stop making tactical blunders, the position evaluation becomes much more important.
+![Screenshot of the challenge landing page](https://pavursec.com/blog/stealmybitcoin/challenge-landing-page_hu7c355689413d8c2ac11ec25fb3ef8e8b_520195_1200x1200_fit_q75_h2_lanczos_3.webp)
 
-| 1 s/move | 10 s/move | Change |
-| --- | --- | --- |
-| **1999 ± 90** | **2383 ± 77** | Crafty 11.13, released December 1996, as shipped. The initial alpha-beta engine as written. It has a custom evaluation function, with standard 90's-era search algorithms. |
-| **2063 ± 73** (+64 ± 116) | **2323 ± 75** (−60 ± 107) | The first improvement is mostly micro-optimizations. It replaces two 64K-entry lookup tables with calls to the `bsf`/`bsr` instructions; and sliding-piece attacks are migrated away from the older rotated-bitboard function call. In total these changes make the engine 15% faster, but it uses the same algorithms. |
-| **2022 ± 73** (−41 ± 103) | **2420 ± 76** (+97 ± 106) | The next improvement goes for the search algorithms. This includes techniques like fail-soft (which returns the real score instead of clipping), futility and late-move pruning (which skips quiet moves near the leaves), late move reduction (which searches later moves one ply shallower), and orders moves by counter-move and history tables. |
-| **2224 ± 72** (+202 ± 103) | **2520 ± 74** (+100 ± 106) | The next change tunes the search and the evaluation function. It first runs SPSA to tune all search constants based on several thousand games of self-play. It then gives evaluation terms separate middlegame and endgame values (blended by remaining material) and re-fits all the evaluation weights (Texel tuning). Finally the evaluation function introduces mobility terms rewarding the safe squares that pieces attack. |
-| **2192 ± 72** (−32 ± 102) | **2565 ± 74** (+45 ± 104) | From here, the evaluation function is rewritten and replaced with a neural network evaluation with a small network trained on 11 million positions of self-play, labeled by its own searches. This step doesn't do much by itself but it prepares the next step... |
-| **2420 ± 82** (+228 ± 109) | **2712 ± 74** (+147 ± 104) | Updates the NNUE that was just generated with a stronger teacher instead of self-play. In principle, I could have used the same engine itself as the teacher, but just to save on wall clock time I used Stockfish. This reduced the wall-clock time from ~4000 1996-core-years (something entirely doable in 1996---but sadly not something I can do with my single lonely desktop) to just a few days on a modern desktop running a modern engine. |
-| **2630 ± 82** (+210 ± 116) | **2810 ± 75** (+98 ± 105) | With a much stronger evaluation function, the search can now actually rely on it. It adds reverse futility pruning to early-return when the evaluation says the position is already won. It also adds some performance improvements to the evaluator (with an evaluation cache, and accumulators shared with null moves). This lets it widen the network 6x. It also cleans up some code, for example by getting rid of some of Crafty's special cases that mattered with weaker evaluation functions but don't matter any more with the NNUE. |
-| **2720 ± 82** (+90 ± 116) | **2938 ± 74** (+128 ± 105) | The parameters are again re-tuned with SPSA given the new evaluation function. It also fixes some bugs in the code, amusingly. And finally it adds some changes to the NNUE: it adds more output heads and picks based on the number of pieces on the board, adds some hidden units, and doubles the training data with more self-play. |
+Things got a little crazy from there. Within the first hour of posting, the link had climbed to the front page of Hacker News (where it stayed for essentially an entire day) and my $2.50/month VPS was under so much load I couldn’t maintain an SSH session.
 
-On the second engine, as mentioned above, I did the inverse. I (again, read: my LLM) ported
-        Stockfish to run on 1996 hardware, and then tweaked the parameters so that it would be better
-        suited to lower search depth. The gains here are thus somewhat more modest, because there
-        are no large algorithm wins that remain.
+I eventually scaled my VPS up from 1 vCPU, 500 MB RAM and 10GB of disk space all the way to 2 vCPU, 4096 MB RAM, and 80 GB of SSD. Over the course of the challenge my VPS host temporarily took my site down once because they suspected it was subject to a Distributed Denial of Service attack and once because “we have determined your CPU resource utilization profile is excessive.”
 
-| 1 s/move | 10 s/move | Change |
-| --- | --- | --- |
-| **2496 ± 64** | **2940 ± 76** | Stockfish 17 squeezed onto the machine. The first naive port rewrites Stockfish 17 for a 1996 machine: single core, no SIMD, no 64-bit registers and no C++ standard library. It removes the threading, the endgame tablebases, and the 71 MB NNUE replacing it with a much smaller one. It rewrites bitboards as a pair of 32-bit ints, and it evaluates the small NNUE with plain integer arithmetic. |
-| **2590 ± 67** (+94 ± 93) | **2961 ± 74** (+21 ± 106) | Faster accumulator upkeep. The second fix makes sure the NNUE running sums are better kept up to date, and improves the performance of the evaluator. |
-| **2752 ± 68** (+162 ± 95) | **3006 ± 74** (+45 ± 105) | Cheaper evaluation function, use a PeSTO blend, change the compiler flags. Next it again changes the NNUE and reduces the size and tunes it to run faster on the Pentium Pro, reducing the evaluation time by 3x. Combined with a few more optimization changes this pass gains the most of any step at 1 second per move, where raw speed matters most, and much less at 10 seconds per move. |
-| **2780 ± 67** (+28 ± 95) | **3070 ± 72** (+64 ± 103) | Fine-tune the NNUE on-policy. Basically repeats the prior work but on Stockfish, scoring several million positions with Stockfish to re-derive the NNUE weights. |
-| **2784 ± 65** (+4 ± 93) | **3070 ± 72** (+0 ± 101) | SPSA to re-tune the search, remove PeSTO given the improved NNUE. The original Stockfish assumed that it would run at several million nodes per second, so on the slower CPU it's necessary to re-tune the parameters with another pass of SPSA. These changes also make it so the PeSTO pass is no longer needed. |
-| **2819 ± 65** (+35 ± 92) | **3074 ± 72** (+4 ± 101) | Add correction history, jointly tune other parameters and the NNUE. The next pass brings back Stockfish's non-pawn correction history, jointly optimizes (again via SPSA) the parameters, and re-fits the NNUE. |
-| **2846 ± 35** (+27 ± 74) | **3109 ± 79** (+35 ± 107) | The final step changes no code and just changes the compiler, adds some link-time optimization, and adds 32-byte code alignment. |
+Additionally, due to the nature of the exploit, people were pretty continuously taking down individual PHP workers from high request load, partially successful memory exploitation attempts, and general shenanigans.
 
-I think it's overwhelmingly likely to be the case,
-        but it's actually a little bit more tricky of a situation than you might hope.
-        You see, I've done a bit of sleight of hand throughout this article.
-        The problem is that Elo scores are relative, and I've been comparing my engine's Elo to that of various Stockfish engines
-        that have known strengths on the [Computer Chess Rating Lists](https://computerchess.org.uk/4040/rating_list_all.html) (CCRL).
-        But because humans don't play against engines very frequently, there can be some small divergences between scores on the
-        FIDE Elo ladder and the CCRL ladder, in the same way a player's FIDE Elo doesn't directly translate to their Elo on online chess.
-        Fortunately, because I've gotten these engines to play at an Elo rating of 3200-3300,
-        and Kasparov was rated just under 2800, there should be more than sufficient buffer
-        to absorb any discrepancy.
+Eventually I managed to get things into a relatively steady state (e.g. most people could connect to the website most of the time), with regular resets and health checks standing in for true high-availability hosting. Once the link dropped off the front page of Hacker News, traffic quieted down quite a bit as well.
 
-But if you happen to know a 2700+ Super GM who wants to try and defeat a 2026 chess engine playing on 1996 hardware,
-        I'd be happy to accept the challenge!
+### Some Stats
 
-The first time we humans do anything, we rarely do it efficiently.
-        Once we see a path that would clearly work if only we scaled it up, we do just that.
-        Only later, after we've had the time to better understand the problem at hand,
-        do we come to recognize that we could have achieved the same feat much more efficiently
-        by being clever.
+Due to flaky monitoring, it’s hard to get representative statistics regarding visitor count and traffic patterns. I had set up some pretty reliable logging so I could know if/when the `print-flag` binary was called and some best-effort logging of web request headers and payloads so I could hopefully understand what happened around that time; for the first few hours of virality, I was blowing through my logrotate configuration (for ~80MB of storage) roughly every 4 minutes thanks to the attention on the site.
 
-I mostly did this for fun, because whether I could have beaten Kasparov with commodity hardware
-        sounded like a fun question to answer,
-        but I also hoped it would provide a tiny bit of insight
-        into the rate of algorithmic progress in "AI".
-        Chess engines in 1997 were already quite advanced;
-        after all, Alan Turing helped write the first chess program nearly fifty years earlier.
-        So I suppose at the time it seemed plausible that maybe there weren't that many more ideas left to find.
-        And with hindsight it's easy to see that's wrong.
+As a result, logs of certain PHP crashes and activity around the `print-flag` file were essentially complete over the duration of the challenge. Broader web request logging only covered 600-ish of the challenge’s 1,600-ish minute duration.
 
-Which leads to the question: just how much are we leaving on the table with modern-day "AI"---that is to say, language models.
-        Will the advances we accrue over the next few years from software outpace the advances in hardware scale?
-        Clearly this toy experiment doesn't answer that question definitively, but it does gesture at a potential future.
-        (There's also probably some kind of meta-lesson about using LLMs---"AI"---to speed up our
-        ability to answer weird research questions like this.)
+During the 10 hours when I had reliable web request logging:
 
-(Also, uh, if anyone has any ideas for projects I could do with a Pentium Pro in a few weeks
-        once I no longer need it to host this chess engine ... do let me know!)
+- Around 20,000 unique IP addresses engaged with the challenge in some substantive way (rather than just visiting the home page).
+- Around 120,000 distinct source IPs visited the site.
+- The server recieved more than 13 million HTTP requests.
+- At peak load, the server received over 18,000 requests a minute.
+
+There’s no statistically credible way to extrapolate over the missing netflow data, but I can confidently say that tens of thousands of players attempted to steal my bitcoin.
+
+I had much more reliable logs of PHP server errors and `print-flag` executions since they were not rotated under heavy load and were relatively low volume. In these logs, over 26-ish hours, I observed:
+
+- Approximately 2,075 distinct PHP SIGSEGV events. While these could be caused by other bugs in PHP, they are not something you’d typically expect to see and may roughly correlate with attempts that were closer to triggering the exploit.
+- Only two IPs managed to trigger the print-flag executable and only one person did so in such a way that data was exfiltrated successfully from the server.
+
+## Timeline
+
+| Date and time UTC | Event |
+| --- | --- |
+| Oct. 24, 20:30 | Challenge timer starts. |
+| Oct. 24, 20:30 | I publish “Show HN: Steal My Bitcoin” ([https://news.ycombinator.com/item?id=50224916)](https://news.ycombinator.com/item?id=50224916%29). |
+| Oct. 25, 01:14 | First recorded PHP SIGSEGV after the challenge timer started. Note: it predates `php-version.php`, seven subsequent PHP SIGSEGVs occurred on this first version of the challenge. |
+| Oct. 25, 12:59 | I add `php-version.php`, which returns the PHP version and UTC time. |
+| Oct. 25, 15:44 | I add `ping.php`, a small POST endpoint that returns pong for message=ping. |
+| Oct. 25, 15:47 | A PHP process successfully runs `print-flag`. This execution is associated with the eventual winner. The `ping.php` page was not utilized in the exploit chain. |
+| Oct. 25, 20:32 | I receive an email from the winner asking if I had the incorrect bitcoin wallet address for the key on the server. The winner provides the exact flag, timestamp, IP address, and payload associated with the 15:47 event listed above along with a writeup describing the winning exploit. |
+| Oct. 25, 21:06 | I review the winner’s claims against the server logs and validate that the flag is an exact match for the flag on the server and matches the web traffic logs surrounding the successful execution. |
+| Oct. 25, 22:38 | I post the solve announcement on Hacker News ([https://news.ycombinator.com/item?id=50236736)](https://news.ycombinator.com/item?id=50236736%29). |
+| Oct. 25, ~22:59 | I review the winner’s final writeup and transfer the wallet contents directly. |
+
+## Difficulties Along the Way
+
+My original expectation is that this would be a low traffic honeypot. A few people would poke at it on Hacker News and then it would eventually get snagged by some botnet/scanner/automated exploitation tool that would steal my bitcoin. I’d write a little blog post about the logs from the hour or so around the exploit and then move on.
+
+I didn’t remotely expect it to go viral in the way that it did. The virality was nice - it brought a lot of eyes on the challenge, got me a quick answer to my research question, and some people even chipped in and increased the size of the bitcoin prize wallet.
+
+The virality was also rough in that suddenly many *actual* PHP security experts (and many non-experts too) had *opinions* about me, my motivations, and my web administration skills!
+
+### What should the backend do?
+
+The first critique was that the server was unexploitable. Some claimed that it was literally just an nginx page (e.g. no PHP at all), while others claimed that the specific configuration of the server made it impossible to exploit.
+
+I’m still not 100% sure how correct these claims were, as some people were causing SIGSEGVs to throw on the original version of the challenge.
+
+However, I did make several modifications to the website that I felt were fair adjustments to increase the feasibility of the challenge without just deliberately making the server vulnerable.
+
+First, I added a `php-version.php` page, which was served alongside the already PHP-hosted `index.html` page, in case the active participation of the PHP interpreter was necessary for the exploit. While some of the early reporting on PHP2Shell suggested this maybe wasn’t a strict requirement of exploitation (e.g. [https://www.wiz.io/blog/php2shell-php-rce](https://www.wiz.io/blog/php2shell-php-rce) : “Exploitation does not depend on a flaw in the application’s code: even a simple “Hello World” application running on an affected PHP version can be vulnerable.”), it seems plausible to me that the part of the PHP SAPI server that serves `.html` files could be immune to these tasks.
+
+I also added a `ping.php` page that responds with the word `pong` whenever someone POSTS the value `ping` to the server. This very simple application was added in case exploitation required PHP to dynamically react to user-supplied input. To me these two requirements (reacts to user-supplied input, runs .php pages) are pretty universal across real-world applications, so adding support for these code paths did not undermine the spirit of the challenge.
+
+There was some other feedback, which I largely ignored, requesting specific variants of the PHP applications, or modifications to the (very basic) nginx proxy configuration I put in front of the website to help with routing, challenge isolation, and logging. It’s possible that if I made further modifications in this vein, more people would’ve been able to solve the challenge. There is no specific evidence to prove that this would be the case.
+
+### What’s a bitcoin key anyways?
+
+The second major hosting issue I had is more easily expressed by a video. This is how I exported the WIF private key for my bitcoin wallet that I used in the challenge (Note: the wallet shown here is a different empty wallet. Please don’t use this key since I’ve recorded a video of it online!):
+
+I thought I was putting the key to the wallet in the challenge based on this flow. Turns out I wasn’t. The WIF I exported turned out to be a parent key in a derivation path for the wallet address holding the bitcoin. I’m still not entirely sure which combination of credentials I *should’ve* provided to make the bitcoin stealable. If I run future challenges of this nature, I’ll probably make the flag the full wallet recovery key instead of any individual private key.
+
+So the winner got the real bitcoin key from the server, but couldn’t use it to move any of the money in the branch wallet derived from that parent key.
+
+Luckily, they reached out over email and provided exceptionally detailed proof including: the full text of the wallet key on the server, its hash, the exact timestamp when they exploited the server, the exact IP address they used to exploit the server, the exact payload they used to exploit the server, AI chat turns from when they developed the exploit, and a full writeup of the exploit they used.
+
+With this information I was able to pull up the full trace in my logs, match down to the second the exploitation time with my logs on the `print-flag` binary and confirm that they did in fact know the full value of the `flag` file on the server.
+
+Congrats to the winner for not only solving the challenge, but also solving the secret hidden challenge of keeping excellent exploit logs!
+
+## Conclusion
+
+So what did I learn from this experience?
+
+I launched the website out of a degree of skepticism around the breathless reporting of a serious PHP CVE despite a dearth of real-world victims of this attack.
+
+To be honest, I think that was a **bad take** on my part. PHP2Shell is the real deal. It’s an exploitable vulnerability and a sufficiently motivated adversary, with the help of AI, can absolutely use it to hack a website even when they do not have direct access to memory addresses or the physical server to tailor their exploitation pathway.
+
+If you are running a PHP-based website today, you should absolutely patch PHP2Shell.
+
+I fully expect over the coming months we will see more and more working general purpose exploit chains for PHP2Shell.
+
+If you operate a service that is sufficiently valuable or public enough to warrant specialized attention, my experience with stealmybitcoin.com makes me believe it is a matter of when, not if, someone could target a working PHP2Shell exploit specifically to your system configuration.
+
+On the flip side, I believe stealmybitcoin.com tells us a lot about the current state of AI-assisted cyber exploitation. Out of tens of thousands of people attempting to hack a website with a publicly known (and exploitable!) CVE on it, only two managed to get close to triggering the vulnerability.
+
+While some of the server-side changes I made to make exploitation easier may have had an impact (e.g. the winner solved the challenge about 3 hours after I added `php-version.php` to the server), many thousands of hackers were unable to trigger the flag binary over the 9-ish hours between the winner’s successful solve and the time when I took the challenge offline.
+
+It’s pretty clear that we aren’t at a time, yet, where an inexpert attacker can take a top LLM + a *difficult* CVE (like PHP2Shell was) and turn it into a reliable cyber-attack tool.
+
+It does seem that we’re drawing closer to that point every day though. I don’t think there’s any good way to stuff this cat back into the bag, but I do hope that hard work over the coming months across the open source and systems security ecosystem will make it so that hard exploits remain hard.
+
+As someone who has spent a good chunk of my career doing offensive security research, PHP2Shell seems like another example of why enabling good people to find bugs quickly and publicly, so that everyone can get a jump on patching them, is as important as it has ever been.

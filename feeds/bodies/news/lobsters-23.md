@@ -1,150 +1,52 @@
-Chances are [you’ve seen me on X](https://x.com/namespacelabs/status/2091895197151952950): unpacking hundreds of MacBook Pros to deploy in a datacenter. The video hit a nerve: insane enough at the first sight, yet kind of rational if you know what we know now.
+I love testing in production. The thrill of accidentally publishing some dummy data - or taking down an entire website - is similar to skydiving without a parachute. Exquisite excitement followed by heart-stopping terror.
 
-Unboxing Macs at scale for our new server racks.
+Before going live with a new website or service, it's sensible to test how text looks on it.  Most people don't test with *readable* text - it's too easy for management to start reading the content rather than looking at the layout. So the default is [the Latin text "Lorem ipsum"](https://www.lipsum.com/). Latin looks enough like English to get a feel for how text will render - but most people can't read it so they gloss over the words and look at the layout.
 
-So today I want to give some background into what it takes to build custom Mac racks, how we can start macOS instances from scratch in seconds and deliver new Xcode versions [mere hours after Apple releases them](https://x.com/nichtverstehen/status/1932224710928216116).
+Say, it sure would be annoying if those dummy pages ever made their way to production, right?!?
 
-## So why MacBooks?
+[![FCDO blog post with dummy text.](https://shkspr.mobi/blog/wp-content/uploads/2026/11/lorem-ipsum-dolor-sit-amet-5-–-Foreign-Commonwealth-Development-Office-Blogs.webp)](https://blogs.fcdo.gov.uk/lorem-ipsum-dolor-sit-amet-5/)
 
-Because our customers need Macs. And because Apple didn’t give us another option.
+One of the things that's fascinating about seeing testing data in a live environment is that you get a small peek behind the curtain of how a site was made. A tiny glimpse into the minds of the people who made it.
 
-Many of our customers build and test iOS apps. You can't build iOS apps without a Mac. The iOS Simulator only runs on a Mac. Moreover, in order to release an app to the App Store, Apple requires using a recent Xcode version.xtool[xtool](https://github.com/xtool-org/xtool) is cool, but it is not (yet) a serious replacement. So your coding agent needs a Mac.
+Who was Alice? Did she enjoy her time working on the [London Councils' website](https://www.londoncouncils.gov.uk/test-page-example-all-components-do-not-delete)?
 
-But still, why laptops? Isn’t it a major waste of screen pixels and keyboard buttons and battery ions? Well yes, Mac Mini would be a better choice for a datacenter. Sure, it has very rudimentary remote management, no redundant power, and a beautiful case that ensures that cooling will be difficult regardless of which side you lay it on. But these are all known challenges that we have learned to manage.
+[![Lorem ipsum text, and a link to "Alice Test Docx".](https://shkspr.mobi/blog/wp-content/uploads/2026/11/Test-Page-Example-of-all-components-DO-NOT-DELETE-London-Councils.webp)](https://www.londoncouncils.gov.uk/test-page-example-all-components-do-not-delete)
 
-But have you actually tried to order a couple hundred Minis? We have. Ordered in January, delivered in July. Welcome to the world of 2026 when the supply chains are in disarray. Never mind that Apple doesn’t release updated CPU models to all devices at once. So Mac Mini didn’t get M5 cores for 10 months (and then suddenly got M6 before any other device model!). We promise the best and the newest to our customers so we had to be inventive. That’s how the MacBook-in-Datacenter project was born.
+Was she friends with [Henry at Lambeth council](https://www.lambeth.gov.uk/henrys-test-subsite-overview)? We may never know.
 
-## Our beautiful Mac racks
+Some of the placeholders eventually become load-bearing. For reasons which remain inscrutable to those who follow, the Elders declared some pages must remain sacrosanct *forever!*
 
-Good design takes iterations; and we surely didn’t get everything right from the first try. But I think we have the system nailed down.
+[![A page of dummy text on the Human Tissue Authority website with the title "DO NOT DELETE".](https://shkspr.mobi/blog/wp-content/uploads/2026/11/DO-NOT-DELETE.-Human-Tissue-Authority.webp)](https://www.hta.gov.uk/news/news-do-not-delete)
 
-![MacBooks in a Namespace rack](https://namespace.so/_next/image?url=%2F_next%2Fstatic%2Fmedia%2Fmac-rack.657593ec.jpg&w=1080&q=75)
+What would happen if that page were deleted? Would you dare risk it?
 
-Every MacBook is connected to an IP KVM for remote management. Indispensable when dealing with laptops. Unlike Mac Mini, laptop firmware is designed with the screen in mind: some maintenance actions can only be done by clicking buttons in the beautiful GUI.
+Sometimes finding a test page leads to a dead end. A [stub of a page](https://www.knutsfordtowncouncil.gov.uk/council-) which should have been purged before go-live.
 
-Of course, every MacBook gets an external 10G Ethernet NIC. Many folks at Namespace are networking geeks and we are proud of the connection speed and reliability that we provide to customers.
+[![Knutsford town council page with dummy text.](https://shkspr.mobi/blog/wp-content/uploads/2026/11/Council-Knutsford-Town-Council.webp)](https://www.knutsfordtowncouncil.gov.uk/council-)
 
-And then there is power. So in total, four cables per laptop, forty-eight per shelf, plus twelve for Ethernet, plus KVM wiring. Let’s just say that careful cable management is essential.
+But other times it can lead us to a page hinting at something more. Deeper tests of long-forgotten functionality.
 
-Heat management too. Currently we are deploying custom-made holders, designed to wick the heat from the hotspots and guide hot air away instead of blowing it at the nearby machines.
+[![Surrey Council events page with lorem text and links to attendee plugin pages. One link says aaaaaaaa.](https://shkspr.mobi/blog/wp-content/uploads/2026/11/Events-Surrey-County-Council.webp)](https://customer.surreycc.gov.uk/article/824/Events)
 
-### Not the problems we expected: HDMI, FileVault, and USB NICs
+What did those plugins do? Aaaaaaaa indeed!
 
-Naturally, we expected problems and challenges. Just not where they appeared.
+The purpose of this post isn't to point and laugh, it's to show that searching for dummy data is a good way to find interesting things. It might show you a style-guide, or lead to you to a forgotten and outdated plugin, or it might lead you to an [entire pre-production environment](https://pre.redirect.contractawardservice.gca.gov.uk/digital-outcomes/opportunities).
 
-I bet some of you looked at the pic above, saw MagSafe cables plugged in and already started writing a snarky tweet that MagSafe is not safe and may get accidentally disconnected.
+[![Digital Outcomes page with a large "pre prod" banner and dummy text. This is a composite image.](https://shkspr.mobi/blog/wp-content/uploads/2026/11/preprod-gca.webp)](https://pre.redirect.contractawardservice.gca.gov.uk/digital-outcomes/opportunities)
 
-And yes, I was worried about that too. But the reality is that we have seen very few cases of MagSafe disconnections.
+Finally, this image was on one of the FCDO blog posts. I assume that means it is available under the [Open Government Licence](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/) and, therefore, [I can start T-Shirt production immediately](https://www.redbubble.com/shop/ap/184149181?ref=studio-promote)!
 
-The most unreliable cable? HDMI! Often thick and inflexible. Tends to fall out every time you touch the shelf.
+[![The keep calm and carry on poster, but with the words Lorem Ipsum Dolor Sit Amet.](https://shkspr.mobi/blog/wp-content/uploads/2026/11/lorem-ipsum-dolor-sit-amet.webp)](https://www.redbubble.com/shop/ap/184149181?ref=studio-promote)
 
-Luckily by now we found almost perfect cables that bend exactly as we want them to bend. And we bought the entire supply of them. There are zero more of them available to order on Amazon.
+## 9 thoughts on “Lorem Ipsum Dot Gov Dot UK”
 
-Another source of pain: FileVault disk encryption. Or rather decryption. When a MacBook reboots (in an unplanned fashion) it prompts for a password to unlock the local disk. The prompt is shown on the screen (of a closed laptop somewhere in the rack, doh). No problem, we thought: we have the KVM connected just for this case!
-
-Nope, not so easy. The password prompt disappears from the external screen after 5 minutes of inactivity. Then we remembered that macOS Tahoe introduced a useful feature: we could [unlock FileVault remotely](https://keith.github.io/xcode-man-pages/apple_ssh_and_filevault.7.html) using SSH protocol. Still no luck. On laptops it expires after 5 minutes too. Looks like the only way out of this state is to reboot by physically pressing the button and racing to unlock in time.Mac rebootWhile on this topic, a small tip: you can reboot a Mac in a way that will keep the disk unlocked when you need it: `fdesetup authrestart`.
-
-And then there are simply bugs. Under certain conditions, an external USB NIC stops working and acts as if it is not powered and shows no link. Trying another cable, another NIC, another switch port, no luck. But a quick visit to Network Preferences, deleting and recreating the “network service” in MacOS Settings brings it back to life.
-
-### What about Mac Minis and Studios?
-
-At the moment we actually have it easy: M5 and M6 Mac Minis and Studios are coming into our fleet soon. They are way simpler to manage in the DC: they have a built-in 10 Gb network card, they boot up automatically after a power cycle and the OS can be configured entirely automatically via MDM.
-
-But Namespace has some special sauce for the Minis too. We design custom-made shelves that hold the machines with focus on efficient cooling. We have tested a few designs using airflow simulation to arrive at what we are deploying now.
-
-In the end installing Mac Minis is a breeze: unpack them, throw 10 pieces into the holder, connect power and network and press the power button once (famously inconveniently located). From there on automation takes care of them.
-
-## Virtualizing Macs
-
-Under the hood a Namespace instance is backed by a virtual machine. We have multiple virtual machine engines integrated into a unified platform to run Linux, Windows, and Mac instances in the most efficient way. This way we can provide the same features that make Namespace special, like [cache volumes](https://namespace.so/docs/architecture/storage/cache-volumes), telemetry, or VPC connections.
-
-Unsurprisingly, our Mac solution is based on Apple’s excellent [Virtualization framework](https://developer.apple.com/documentation/virtualization). It is an embeddable and flexible virtual machine engine. It’s easiest to compare it to Firecracker in how it fits the system architecture: it implements generic VM operations end-to-end as well as typical peripherals.
-
-For completeness, Apple also provides a lower-level [Hypervisor framework](https://developer.apple.com/documentation/hypervisor), which is comparable to the KVM API of Linux. For instance QEMU uses it on macOS under the hood. Hypervisor provides a way to execute machine code in isolation, but requires the application developer to implement the bulk of machine architecture and peripherals. It could give us a lot of control, but unfortunately it cannot run macOS (it requires an Apple proprietary environment that third parties cannot, or shouldn’t, try to recreate).
-
-In fact, most competing platforms are built on the same foundation. But the details matter: Apple gives us a few primitives that need to be arranged in just the right way to work fast and be secure. The more interesting thing is to watch how different people solve similar problems with different constraints.
-
-### Limitations of Apple Virtualization
-
-A well-known limitation is that Apple only allows two macOS VMs per physical Mac. It can be a Mac Pro with 24 cores and 192 GB memory, yet it is limited to running only two guest VMs. This limitation leaks into our product offering: we can only slice Mac resources in two halves. So we run instances with 6 or 12 cores on 14-core Mac Minis and 8/16-core instances on 18-core MacBooks (we reserve a couple cores for management overhead).
-
-An important consideration of Virtualization VMs is that the virtual CPU is executed by a separate OS process (VMM process in the diagram) from the software integrating Virtualization (here Namespace VM host). If we want to hook some VM behavior or implement custom virtual devices, every interaction with them requires an IPC roundtrip between the VM process and the “host” process. Such context switches are unavoidable and need to be taken into account when designing the system.
-
-### Virtual networking
-
-Virtualization framework offers a few ways to connect a virtual machine to the network. For instance, bridged and NAT networking modes route traffic directly from the VMM process to the host network interfaces. These are suitable for VMs running on a local computer where the workload is trusted.
-
-Namespace instances run untrusted code and we need to enforce policies on what a VM can or cannot access (these policies [can also be customer-defined!](https://namespace.so/docs/security/egress-policy)). Also we provide a few additional services to the instances that should appear “as if” they were on the local network for the guest system.
-
-This requires us to take full control of guest networking in the mode where we process every packet that comes out and into the VM in software. We based our guest networking on a userspace TCP/IP stack from Google gVisor project and use it to implement an IP gateway/firewall for the instances. This way we minimize exposure of the host OS to unprocessed packets controlled by the guest.
-
-Network packet handling needs to be very efficient, but as outlined above the path involves IPC. The VMM process needs first to pass the packets to the “VM host” process, which then processes and passes them to the network interface. It takes careful implementation and batch processing wherever possible to minimize the number of IPC roundtrips.
-
-The above approach allows Namespace MacOS instances to reach 4 Gbps upstream bandwidth (per [Fast.com](https://fast.com)). This is unfortunately still lower than the line rate. We have been exploring alternative approaches, including ideas on how to avoid IPC for network processing entirely. But productionizing the new setup is still left for the future. After all, 4 Gbps is still quite respectable.
-
-## VM images
-
-Creating your first VM using Apple Virtualization is very easy: download a macOS IPSW restore image, use UTM/Tart/any of the dozens of open-source Virtualization wrappers to start a machine, click through Setup Assistant, install Xcode and you are good to go. Now you have a VM image that you can fork and run any workload locally.
-
-But you need to test on multiple versions of iOS, so you install a few iOS runtimes. And then you install the upcoming Xcode beta version (and new runtimes too). And before you know it your VM image has grown to 500 GB (iOS runtime packages are huge).
-
-You also want to have the previous version of macOS for testing that one little thing. Another 500 GB right here. Apple releases the new macOS developer preview, one more image.
-
-And then you realize that the Xcode beta version subtly breaks the non-beta Xcodes on the same system (true story!). After all, Xcode installation bumps the “global” versions of CoreDevice and CoreSimulator. Hence any bugs in the beta Xcode simulator are visible when you’re using ostensibly stable Xcode versions. So now you are maintaining image versions with and without the pre-release Xcodes.
-
-And now you have 2 TB of VM images. On what? A 2 TB MacBook hard drive?
-
-That’s the challenge we faced: we need to build, distribute, and store huge images across the fleet of hundreds of machines.
-
-### Build process
-
-Building images is a repeatable process so that we can reliably produce new images when Apple releases new software versions. Building is driven by a script that replicates installation and configuration as a human user would do it (e.g. the build script can run shell commands, click UI buttons or reboot the VM). Wherever possible we stick to using controls designed by Apple to configure the VMs in order to avoid surprising behaviours inconsistent with what a typical local user would be seeing. Naturally, building images is an automated and repeatable process. It is driven by a workflow expressed as a sequence of operations in a YAML file. Operations can be VM control (e.g. reboot), running a shell script or programmatic interaction with the system or setup UI over VNC.
-
-Resulting VM images are handed over to [Namespace internal Image Registry](https://namespace.so/docs/architecture/storage/container-registry), in fact the same one that handles Linux and Windows image storage, replication and distribution (covered in [the excellent article by Matteo](https://namespace.so/blog/container-image-loading)). Disk images are of course quite different from normal container images: OCI layers are simple tarballs of files, while disks are generally flat arrays of bytes. Very large arrays in fact. And to a large extent they contain empty space: that’s the disk space that would be available to users as free space.
-
-Naturally, it would be very wasteful to transfer and store the “empty” data in the registry. So we developed a simple format that allows us to preserve the “sparse-ness” of the images when stored in the registry. Unallocated spans of the image take just a few bytes.
-
-And there is another important optimization. Remember the example scenario mentioned in the VM Images section: we have an image of the same system that differs only in addition of an extra Xcode installation. Obviously the latter image is built using the former as a base and most of the bytes are unchanged.
-
-Our storage format preserves the “shallow copy” relationship and stores such images as multiple layers: the base layer is shared between them, while subsequent layers only contain the modified blocks.
-
-### Distribution
-
-At this point we have the images in an OCI registry now. But of course Virtualization framework cannot start a VM directly using a disk residing in the registry. It needs to have something on the node itself: a VM disk can be backed by either an image file on the local host SSD, or it can route disk I/O requests to a server using Network Block Device (NBD) protocol. The latter would allow us to intelligently serve highly demanded data from a local cache, while conserving on-device space by not storing unneeded blocks.
-
-But NBD has the same drawback as userspace networking from above: every I/O operation would incur an IPC roundtrip at minimum, including buffer copying and context switches. You see the same pattern as with networking: a very direct hardwired and fast option and an indirect “software-defined” but disappointingly slow option.
-
-At Namespace we value performance a lot, so the choice is clear: we’ll serve the images from the local disk. We need to materialize them from OCI images in the registry on the SSD of every node in the fleet. 500 gig images to hundreds and thousands of nodes. And we need to do it fast.
-
-Obviously, every node naively downloading from the central registry was not going to work. With the example numbers we are talking about half a petabyte of traffic transferred within, conservatively, tens of minutes. The registry (and the network fabric) would need to serve terabits per second!
-
-The bytes that we are distributing are the same going to every node so the obvious solution is to organize a peer-to-peer delivery of these blobs. Each block only needs to be downloaded from the registry once by some node. Then another node that is close by (by certain metric) can download the block directly from the peer and we have two copies. So two more nodes can pull these bytes and so on. The fleet is exponentially flooded.BitTorrentObviously, BitTorrent was a heavy inspiration for this design. But unlike BitTorrent, which works in a public network of untrusted peers, we could make different tradeoffs leading to better efficiency and predictability. But that’s a topic for another post.
-
-### Storage
-
-Now the bytes are on the node disk. But remember the storage optimizations we did in the Build Process? With the naive approach of storing the images on disk there are a lot of bytes that are useless: they are either holes or could be shared with another image.
-
-Some of you probably know that these are exactly the types of storage optimization techniques that are possible with modern file systems, namely APFS.ZFSLinux users have seen the same features in ZFS.
-
-Using these cool features is also pretty easy: open a new file for writing, seek to offset 100G, write a block. And there you just made a file with a large hole in it. Only the block you wrote is allocated on disk, the rest is 100 GB of imaginary zeroes. When reading the file you won’t even notice the holes. The OS will return actual zeros.
-
-```
-% truncate -s 1g hole.bin
-% dd if=/dev/random of=hole.bin bs=4k seek=256k count=256 
-% ls -lh hole.bin
--rw-r--r--  1 kirill  staff   1.0G Sep 29 05:36 hole.bin
-% du -h hole.bin
- 1M	hole.bin
-```
-
-Sharing the blocks is similarly transparent: just use the `cp -c` mode or `clonefile` syscall. The new file will share the same disk blocks and essentially not take any space.
-
-Writing to the cloned file is also transparent: as soon as you try to overwrite some blocks, these particular blocks will be allocated on the disk, while the shared portion will remain shared.
-
-## What’s next?
-
-The pace at which we are expanding our fleet is increasing and the experience from all the above has transformed into a repeatable process. We know exactly how long it takes to bring a MacBook rack into prod. The rack assembly line is dialed in. DCOps people are trained. Disk images are built and distributed. We can bring whatever number of machines our customers need into the fleet when we need to (well, as long as we can purchase them at all).
-
-We can still do better! What if there was a “holy-grail” device to host a shelf of MacBooks, providing power, ethernet and KVM connections over a single USB-C cable? It should be possible, yet there is currently no hardware on the open market that satisfies our requirements. So we are working on something very custom.
-
-Or maybe we’ll do another crazy thing? What if we deploy phones to the datacenter? See what the future brings on our X soon!
+1. ![](https://shkspr.mobi/favicons/?domain=inkwell.social) [mw](https://inkwell.social/m_w) There's a fun game on sites like [archive.org](http://archive.org) to search for these kinds of filler phrases in old published books. There's another one which I forget which I found in a newspaper article from a long time ago - they used filler expecting an article which then was never used.. [Reply](https://shkspr.mobi/blog/2026/11/lorem-ipsum-dot-gov-dot-uk/?replytocom=479714#respond) | [Reply to original comment on inkwell.social](https://inkwell.social/comments/7fedfcfa-0159-4858-8dbc-4594549b1c7a) [2026-11-02 12:45](https://shkspr.mobi/blog/2026/11/lorem-ipsum-dot-gov-dot-uk/#comment-479714)
+2. ![](https://shkspr.mobi/blog/wp-content/uploads/webmention/avatars/bsky.app/a9baaea666408b2d6085f469f8983700.jpg?d=initials&name=Stefan+Czerniawski) ![](https://shkspr.mobi/favicons/?domain=bsky.app) [Stefan Czerniawski](https://bsky.app/profile/pubstr.at/post/3mzdemtgypc2v) Semi-related, [@lesteph.com](https://bsky.app/profile/did:plc:dqctwex2lsjzmlkh4cr6j3ou) made a lorem ipsum generator years ago which used random paragraphs from government press releases, which neatly made things more realistic while still avoiding being real. But would make finding accidentally published pages rather harder. [Reply](https://shkspr.mobi/blog/2026/11/lorem-ipsum-dot-gov-dot-uk/?replytocom=479715#respond) | [Reply to original comment on bsky.app](https://bsky.app/profile/pubstr.at/post/3mzdemtgypc2v) [2026-11-02 12:54](https://shkspr.mobi/blog/2026/11/lorem-ipsum-dot-gov-dot-uk/#comment-479715)
+3. ![](https://shkspr.mobi/blog/wp-content/uploads/webmention/avatars/mastodon.scot/bf36331d3c37e463b41457f577394be5.jpg?d=initials&name=Dan) ![](https://shkspr.mobi/favicons/?domain=mastodon.scot) [Dan](https://mastodon.scot/@thatdamnqa/117547055729426236) [@Edent](https://mastodon.social/@Edent) once I have time I still intend to make a blog post called “but its only test data, it’ll never make it to production” with these kind of examples [Reply](https://shkspr.mobi/blog/2026/11/lorem-ipsum-dot-gov-dot-uk/?replytocom=479723#respond) | [Reply to original comment on mastodon.scot](https://mastodon.scot/@thatdamnqa/117547055729426236) [2026-11-02 13:22](https://shkspr.mobi/blog/2026/11/lorem-ipsum-dot-gov-dot-uk/#comment-479723)
+4. ![](https://shkspr.mobi/blog/wp-content/litespeed/avatar/62a6ceffa6a31b2422151b5f768a80fb.jpg?ver=1793875322?d=initials&name=Andrew+Fielding) ![](https://shkspr.mobi/favicons/?domain=wobable.com) [Andrew Fielding](http://wobable.com) There's a fascinating documentary on YouTube about the origins of Lorum Ipsum - how Letraset was so pivotal to it's adoption and the search for the original text (because although it's sorry of Latin, it also doesn't make sense!). [https://youtu.be/kL1PDqzqhM4?is=T67xFmY4yLF7lgze](https://youtu.be/kL1PDqzqhM4?is=T67xFmY4yLF7lgze) [Reply](https://shkspr.mobi/blog/2026/11/lorem-ipsum-dot-gov-dot-uk/?replytocom=479726#respond) [2026-11-02 13:53](https://shkspr.mobi/blog/2026/11/lorem-ipsum-dot-gov-dot-uk/#comment-479726)
+5. ![](https://shkspr.mobi/blog/wp-content/litespeed/avatar/cfa244cbd24b5f7a60b968266888865e.jpg?ver=1793634997?d=initials&name=Lauren+Ipsum) Lauren Ipsum Eu minim sint in duis ipsum sint sit consectetur pariatur velit aliquip proident pariatur nisi. Sint dolor qui voluptate proident nostrud laborum labore nisi. Velit ullamco ullamco eu. Consequat et veniam in pariatur eiusmod cillum cillum sit incididunt aliquip velit culpa enim sint incididunt. Qui enim ullamco minim qui reprehenderit est elit irure sint consectetur nisi. Consequat ut anim reprehenderit officia reprehenderit in amet ea voluptate. [Reply](https://shkspr.mobi/blog/2026/11/lorem-ipsum-dot-gov-dot-uk/?replytocom=479734#respond) [2026-11-02 15:56](https://shkspr.mobi/blog/2026/11/lorem-ipsum-dot-gov-dot-uk/#comment-479734)
+6. ![](https://shkspr.mobi/blog/wp-content/uploads/webmention/avatars/bsky.app/a563e6937ea2ac531c7417839123b4ca.jpg?d=initials&name=Steph+Gray) ![](https://shkspr.mobi/favicons/?domain=bsky.app) [Steph Gray](https://bsky.app/profile/lesteph.com/post/3mzdppy5pls26) It's quite possible I'm even more directly to blame for that FC(D)O blogs example c.2014... It's a shame such a powerful platform hasn't seen a fresh post since February. Hard to justify its existence and probably a sign that nobody really cares about it now. [Reply](https://shkspr.mobi/blog/2026/11/lorem-ipsum-dot-gov-dot-uk/?replytocom=479795#respond) | [Reply to original comment on bsky.app](https://bsky.app/profile/lesteph.com/post/3mzdppy5pls26) [2026-11-02 16:13](https://shkspr.mobi/blog/2026/11/lorem-ipsum-dot-gov-dot-uk/#comment-479795)
+7. ![](https://shkspr.mobi/blog/wp-content/litespeed/avatar/16a5e8a09d7a2f831d8a41b0d0f46dfd.jpg?ver=1793831838?d=initials&name=Andy+Mabbett) ![](https://shkspr.mobi/favicons/?domain=pigsonthewing.org.uk) [Andy Mabbett](https://pigsonthewing.org.uk) One of my favourite `site:gov.uk` searches is `"Not for public release"`. But no test data will ever beat that used for a stock-control programme by my former colleague at Cadbury, in Bournville: `Exploding cream eggs` [Reply](https://shkspr.mobi/blog/2026/11/lorem-ipsum-dot-gov-dot-uk/?replytocom=479749#respond) [2026-11-02 20:28](https://shkspr.mobi/blog/2026/11/lorem-ipsum-dot-gov-dot-uk/#comment-479749)
+8. ![](https://shkspr.mobi/blog/wp-content/litespeed/avatar/de9fab984a1baa741abb5b95e11b2f62.jpg?ver=1793720265?d=initials&name=Edwin+K) Edwin K Funny enough, this content at the London Council Site was still active some moments ago.😁 [Reply](https://shkspr.mobi/blog/2026/11/lorem-ipsum-dot-gov-dot-uk/?replytocom=479786#respond) [2026-11-03 15:39](https://shkspr.mobi/blog/2026/11/lorem-ipsum-dot-gov-dot-uk/#comment-479786)
+9. ![](https://shkspr.mobi/blog/wp-content/uploads/webmention/avatars/bsky.app/21b3d0adf8fd04ed016d2f9582e21e2a.jpg?d=initials&name=Daniel+Knell) ![](https://shkspr.mobi/favicons/?domain=bsky.app) [Daniel Knell](https://bsky.app/profile/artisan.io/post/3mzgbadmn5c2b) If you haven't brought down at least one production system in your career, can you really call yourself a dev? 😂 [Reply](https://shkspr.mobi/blog/2026/11/lorem-ipsum-dot-gov-dot-uk/?replytocom=479796#respond) | [Reply to original comment on bsky.app](https://bsky.app/profile/artisan.io/post/3mzgbadmn5c2b) [2026-11-03 16:31](https://shkspr.mobi/blog/2026/11/lorem-ipsum-dot-gov-dot-uk/#comment-479796)
+10. [More comments on Mastodon](https://mastodon.social/@Edent/117546866607463314).

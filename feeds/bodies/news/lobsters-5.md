@@ -240,5 +240,3 @@ stick with common, off-the-shelf things there.
 
 In the next post I'll show how we solve the entire word ladder problem,
 using the anagrams we've found as a part of it.
-
-[Discuss on Hacker News](https://news.ycombinator.com/item?id=50363353)

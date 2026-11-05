@@ -1,235 +1,72 @@
-Download 11.1 from our CDN:
-[amd64 USB](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/images/NetBSD-11.1-amd64-install.img.gz),
-[amd64 DVD](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/images/NetBSD-11.1-amd64-dvd.iso),
-[i386 USB](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/images/NetBSD-11.1-i386-install.img.gz),
-[i386 CD-ROM](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/images/NetBSD-11.1-i386.iso),
-[sparc64 DVD](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/images/NetBSD-11.1-sparc64-dvd.iso),
-[sparc64 CD-ROM](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/images/NetBSD-11.1-sparc64.iso),
-[macppc CD-ROM](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/images/NetBSD-11.1-macppc.iso),
-[RISC-V devices](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/riscv-riscv64/binary/gzimg/riscv64.img.gz),
-[Cavium Octeon MIPS devices](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/evbmips-mips64eb/binary/gzimg/octeon.img.gz),
-[Nintendo Wii](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/evbppc/binary/gzimg/wii.img.gz),
-[various Arm devices](https://armbsd.org/),
-[full release dir with everything else](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/).
+> *A good example is the media’s distorted history of NSA’s 1994 Clipper chip. That chip embodied the Clinton administration’s proposal for strong encryption that “escrowed” the encryption keys to allow government access with a warrant. … The Clipper chip and its key escrow mechanism were heavily scrutinized by hostile technologists, and one, Matthew Blaze, discovered that it was possible with considerable effort to use the encryption offered by the chip while bypassing the mechanism that escrowed the key and thus guaranteed government access. … In any event, nothing about Matt Blaze’s paper questioned the security being offered by the chip, as his paper candidly admitted.**  
+>
+> **…**  
+>
+> ****The press has largely ignored Blaze’s caveat.  It doesn’t fit the anti-FBI narrative, which is that government access always creates new security holes. I don’t think it’s an accident that no one talks these days about what Matt Blaze actually found except to say that he discovered “security flaws” in Clipper.  This formulation allows the reader to (falsely) assume that Blaze’s research shows that government access always undermines security. ***
 
-[Hashes](https://cdn.NetBSD.org/pub/NetBSD/security/hashes/NetBSD-11.1_hashes.asc),
-signed with the [NetBSD Security Officer's PGP key](https://cdn.NetBSD.org/pub/NetBSD/security/PGP/security-officer@netbsd.org.asc), of all files in the distribution.
+It’s not clear why Mr. Baker is focusing on Clipper, rather than the [much](https://freakattack.com/) [more recent](https://blog.cryptographyengineering.com/2015/05/attack-of-week-logjam.html) train wreck of NSA’s ‘export-grade crypto’ access proposals. It’s possible that Baker just isn’t that familiar with the issue. Indeed, it’s the almost proud absence of technological expertise on the pro-‘government access’ side that has made this debate so worrying.
 
-## Introduction
+But before we get to the more recent history, we should clarify a few things. Yes: the fact that Clipper — a multi-million dollar, NSA designed technology — emerged with fundamental flaws in its design is *a big deal. *It matters regardless of whether the exploit led to plaintext recovery or *merely* allowed criminals to misuse the technology in ways they weren’t supposed to.
 
-The NetBSD Project is pleased to announce NetBSD 11.1, the first point release of the NetBSD 11 stable branch.
+But Clipper is hardly the end of the story. In fact, Clipper is only one of *several* examples of ‘government access’ mechanisms that failed and blew back on us catastrophically. More recent examples have occurred as recently as this year with the FREAK and LogJam attacks on TLS, resulting in vulnerabilities that affected [nearly 1/3 of secure websites](https://blog.cryptographyengineering.com/2015/03/attack-of-week-freak-or-factoring-nsa.html) — including (embarrassingly) the [FBI and NSA](https://www.washingtonpost.com/blogs/the-switch/wp/2015/03/03/freak-flaw-undermines-security-for-apple-and-google-users-researchers-discover/) themselves. And these *did *undermine security.
 
-## Upgrade instructions
+With Mr. Baker’s post as inspiration, I’m going to spend the rest of this post talking about how real-world government access proposals have fared in practice — and how the actual record is worse than any technologist could have imagined at the time.
 
-An existing installation can be upgraded by booting an installation image
-and selecting the Upgrade option.
+### **The Clipper chip**
 
-If you are using other update methods, update the kernel and modules *first*, then reboot and update your userspace.
+Clipper was designed by the NSA, with key pieces of its design kept secret and hidden within tamper-resistant hardware. One major secret was the design of the [Skipjack](https://en.wikipedia.org/wiki/Skipjack_(cipher)) block cipher it used for encryption. All of this secrecy made it hard to evaluate the design, but the secrecy wasn’t simply the result of paranoia. Its purpose was to inhibit the development of unsanctioned* *Clipper-compatible devices that bypass Clipper’s primary selling point — an overt law enforcement backdoor.
 
-## Changes since NetBSD 11.0
+The backdoor worked as follows. Each Clipper chip shipped with a unique identifier and *unit key* that was programmed by blowing fuses during manufacture. Upon negotiating a session key with another Clipper, the chip would transmit a 128-bit Law Enforcement Access Field (LEAF) that contained an encrypted version of the ID and session key, wrapped using the device’s unit key. The government maintained a copy of each device’s access key, split and stored at two different sites.
 
-This release primarily focuses on security and bug fixes, since our aim
-was to get it released as soon as possible to address certain security
-issues.
+To protect the government’s enormous investment in hardware and secret algorithms, the Clipper designers also incorporated an authentication mechanism consisting of a further 16-bit checksum on the two components of the LEAF key, further encrypted using a *family key* shared between all devices. This prevented a user from tampering with or destroying the LEAF checksum as it transited the wire — any other compatible Clipper could decrypt and verify the checksum, then refuse the connection if it was invalid.
 
-## Ports
+A simple way to visualize the Clipper design is to present it as three legs of a tripod, (badly) illustrated as follows:
 
-- alpha: Fixed a boot hang occurring on unpatched QEMU.
-- alpha: Fixed kernel stack pointer alignment leading to panics during test suite runs. (PR 60865)
-- amd64, i386: Reduced the strictness of the "WARNING: no TOD clock present" check.
-- amd64, i386: Fixed a panic on the Zhaoxin KX-7000 and other late-model CPUs from VIA/Zhaoxin.
-- amd64: Fixed libc behaviour when calling memchr(3) with certain unusual arguments. (PR 60744)
-- atari: Fixed ATARITT kernels failing to boot on Atari TT030.
-- evbarm: Fixed stability problems with certain USB devices on Raspberry Pi.
-- evbarm: Fixed thread local storage on ARMv5 with soft floats. (PR 57638)
-- evbarm: Fixed "am335x omaptimer fails to attach". (PR 60910)
-- hppa: Added support for eager FPU switching. Currently enabled only for QEMU to work around an emulation bug, may eventually become the default for improved safety.
-- mac68k: Honour requested keyboard bell volume for akbd(4) devices. (PR 60691)
-- mips: Fixed problems with MIPS Malta platform code found running under QEMU.
-- mips: Fixed various problems discovered with the Kernel Undefined Behaviour Sanitizer. (PR 60780)
-- sparc64: Enhanced support for sensors on Sun Ultra 25/45 and Sun Fire V215/V245, including front panel temperatures, fan speeds, and disk presence indicators. LEDs on Sun Fire machines can now be controlled via sysctl.
-- sparc64: Added support for the i2c controller found in Pyro-based machines (e.g. Sun Ultra 45, Sun Fire V245).
-- sparc64: Added support for the real-time clock used in the Sun Ultra 45.
-- sun68k: Fixed booting from SCSI disks with certain PROM revisions.
+The standout feature of Clipper’s design is its essential *fragility. *If one leg of the tripod fails, the entire construction tumbles down around it. For example: if the algorithms and family keys became public, then any bad actor can build a software emulator that produced *apparently valid *but useless LEAFs. If tamper resistance failed, the family key and algorithm designs would leak out. And most critically: if the LEAF checksum failed to protect against on-the-wire modification, then all the rest of would be a waste of money and time. Criminals could hack *legitimate* Clippers to interoperate without fear of interception.
 
-## Kernel and MI device drivers
+In other words, everything had to work, or nothing made any sense at all. Moreover, since most of the design was secret, users were forced to trust in its security. One high-profile engineering failure would tend to undermine that confidence.
 
-- ffs: Fixed an uvm_fault occurring during snapshot dump/restore. (PR 59663)
-- ipfilter: Fixed a NULL pointer dereference leading to potential DoS while parsing ICMP6 packets. (PR 60484)
-- net: Fixed an off-by-error in a bounds check in bsd_decompress().
-- uvm: Fixed a race condition in the page daemon.
-- vfs: Limit snapshot-related vflushbuf: dirty: vnode [...] console spew under heavy load.
-- acpibat(4): Added support for battery monitoring on the Microsoft Surface Go 3.
-- hdaudio(4): Apply access checks to configuration operations on /dev/hdaudioX. (PR 60492)
-- ixl(4): Fixed driver hang, then failure on ifconfig, if SFP module present at boot time and media connected. (PR 60736)
-- mpii(4): Fixed stability of Symbios Logic SAS3008 RAID controllers. (PR 58684)
-- raid(4): Fixed an incorrect assertion during reconstruction. (PR 60477)
-- run(4), rum(4), various other USB Wi-Fi drivers: Fixed a kernel panic seen when hotplugging a device with wpa_supplicant(8) running. (PR 60665)
-- virtio(4): Improve documentation.
-- vr(4): Fixed stability problems observed after warm reboots. (PR 60848)
-- wdc(4): Avoid a three-second delay during boot with PCI IDE controllers.
-- compat_linux(8): Fixed an edge-case panic in Linux’s copy_file_range system call.
+Which brings us to Matt Blaze’s results. In a [famous 1994 paper](http://www.crypto.com/papers/eesproto.pdf), Blaze looked specifically at the LEAF authentication mechanism, and outlined several techniques for bypassing it on real Clipper prototypes. These ranged from the ‘collaborative’ — the sender omits the LEAF from its transmission, and the receiver reflects *its own *LEAF back into its device — to the ‘unidirectional’ where a sender simply generates *random* garbage LEAFs and until it finds one with a valid checksum. With only a 16-bit checksum, the latter techniques requires on average 65,536 attempts, and the sender’s own device can be used as an oracle to check the consistency of each candidate. Blaze was able to implement a system that did this in minutes — and potentially in seconds, with parallelization.
 
-## Userspace and build system
+That was essentially the ballgame for Clipper.
 
-- build.sh: Fixed building certain legacy GPLv2 GNU tools with modern compilers; used for GCC compiler bootstrapping.
-- build.sh: Fixed building with MKBINUTILS=no set.
-- build.sh: Fixed cross-builds from MacOS on Apple Silicon. (PR 60904)
-- build.sh: Fixed parallel builds of debug data.
-- build.sh: Generate hashes for bootable images in the gzimg directory. (PR 59195, PR 60302)
-- libc: Fixed issues with printf(3) thousands separators and positional arguments. (PR 60708, PR 60496)
-- ld.elf_so(1): Fixed incorrect thread-local storage alignment assertions with DEBUG enabled.
-- wgetscrreg(3): Added a manual page.
-- httpd(8): Clarified documentation of CGI options.
-- syslogd(8): Fixed buffering of incomplete lines from /dev/klog.
+And now we can meditate on both the accuracy and utter irrelevance of Mr. Baker’s point. It’s true that Blaze’s findings didn’t break the *confidentiality* of Clipper conversations, nor were the techniques themselves terribly practical. *But none of that mattered. *  
 
-## Third-party components
+What did matter were the implications for the Clipper system as a whole. The flaws in authentication illustrated that the designers and implementers of Clipper had made elementary mistakes that fundamentally undermined the purpose of all those other, expensive design components*. *Without the confidence of users *or* law enforcement, there was no reason for Clipper to exist.
 
-- brotli: Sync with -current to fix CVE 2026-111497.
-- libXfont2: Updated to 2.0.9, fixes CVE-2026-44950 and CVE-2026-59679.
-- libX11: Updated to 1.8.14.
-- libXi: Updated to 1.8.4.
-- libXpm: Updated to 3.5.20.
-- libXrender: Updated to 1.9.13.
-- libXtst: Updated to 1.2.6.
-- mozilla-rootcerts: Update for compromised certificate authorities. (PR 60908)
-- xf86-video-intel: Sync version with pkgsrc.
-- Xorg(1): Updated to xorg-server 21.1.25.
-- ssh(1), sshd(8): Updated to OpenSSH 10.6.
-- unbound(8): Updated to 1.26.1.
+This would be the end of story if Clipper was the only ‘government access’ proposal to run off the road due to bad design and unintended consequences. Mr. Baker and Matt Blaze could call it a draw and go their separate ways. But of course, the story doesn’t end with Clipper.
 
-The complete list of changes can be found in the 
-  [CHANGES](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/CHANGES)
-  and [CHANGES-11.1](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/CHANGES-11.1) files in the top level directory of the NetBSD 11.1
-  release tree.
+Mr. Baker doesn’t mention this in his article, but we’re still living with a much more pertinent example of a ‘government access’ system that failed catastrophically. Unlike Clipper, this failure *really did* have a devastating impact on the security of real encrypted connections. Indeed, it renders web browsing sessions completely transparent to a moderately clever attacker. Even worse, it affected hundreds of thousands of websites [as recently as 2015](https://www.washingtonpost.com/blogs/the-switch/wp/2015/03/03/freak-flaw-undermines-security-for-apple-and-google-users-researchers-discover/).
 
-## Getting NetBSD 11.1
+The flaws I’m referring to stem from the U.S. government’s pre-2000 [promotion of ‘export’-grade cryptography](https://en.wikipedia.org/wiki/Export_of_cryptography_from_the_United_States) in the SSL and TLS protocols, which are used to secure web traffic and email all over the world. In order to export cryptography outside of the United States, the U.S. government required that web browsers and servers incorporate deliberately weakened ciphers that were (presumably) within the NSA’s ability to access.
 
-Complete source and binaries for NetBSD 11.1 are available for download
-  at many sites around the world. You can download NetBSD 11.1 from our
-  [main CDN](https://cdn.NetBSD.org/pub/NetBSD/NetBSD-11.1/),
-  or use a
-  [mirror site](https://www.NetBSD.org/mirrors/)
-  close to you.
-  A list of hashes, signed by the
-  [NetBSD Security Officer's PGP key](https://cdn.NetBSD.org/pub/NetBSD/security/PGP/security-officer@netbsd.org.asc), is
-  available for the NetBSD 11.1 distribution in
-  [this file](https://cdn.NetBSD.org/pub/NetBSD/security/hashes/NetBSD-11.1_hashes.asc).
+Unsurprisingly, while the export regulations were largely abandoned as a bad job in the late 1990s, the ciphersuites themselves live on in modern TLS implementations *because that’s what happens when you inter a broken thing into a widely-used standard. *  
 
-NetBSD is free. All of the code is under non-restrictive licenses,
-    and may be used without paying royalties to anyone. Free support
-    services are available via our mailing lists and website.  Commercial
-    support is available from a variety of sources.  More extensive
-    information on NetBSD is available from our website:
+*  
 
-> [www.NetBSD.org](https://www.NetBSD.org/)
+*For the most part these weakened ciphers lay abandoned and ignored (but still active on many web servers) until *this year, *when [researchers showed](https://blog.cryptographyengineering.com/2015/03/attack-of-week-freak-or-factoring-nsa.html) [that it was possible](https://blog.cryptographyengineering.com/2015/05/attack-of-week-logjam.html) to [downgrade](https://en.wikipedia.org/wiki/Downgrade_attack) normal TLS connections to use export-grade ciphers. Ciphers that are, at this point, so weak that they can be broken in seconds on single personal computer.
 
-## System families supported by NetBSD 11.1
+At the high watermark in March of this year, more than one out of three websites were vulnerable to either FREAK or LogJam downgrade attacks. This included banks, e-commerce sites, and yes — the [NSA website](https://www.smacktls.com/i/freak-nsa-demo.mp4) and [FBI tip reporting line](https://tips.fbi.gov/). Hope you didn’t care much about that last one.
 
-The NetBSD 11.1 release provides supported binary distributions for
-    the following systems:
+Now you could argue that the export requirements weren’t designed to facilitate law enforcement access. But that’s just shifting the blame from one government agency to another. Worse, it invites us to consider the notion that *the FBI is going to get cryptography right when the NSA didn’t*. This is not a conceptual framework you want to hang your policies on.
 
-| [NetBSD/aarch64](https://wiki.NetBSD.org/ports/aarch64/) | Arm 64-bit |
-| --- | --- |
-| [NetBSD/acorn32](https://wiki.NetBSD.org/ports/acorn32/) | Acorn RiscPC/A7000, VLSI RC7500 |
-| [NetBSD/algor](https://wiki.NetBSD.org/ports/algor/) | Algorithmics, Ltd. MIPS evaluation boards |
-| [NetBSD/alpha](https://wiki.NetBSD.org/ports/alpha/) | Digital/Compaq Alpha (64-bit) |
-| [NetBSD/amd64](https://wiki.NetBSD.org/ports/amd64/) | AMD family processors like Opteron, Athlon64, and Intel CPUs with EM64T extension |
-| [NetBSD/amiga](https://wiki.NetBSD.org/ports/amiga/) | Commodore Amiga and MacroSystem DraCo |
-| [NetBSD/amigappc](https://wiki.NetBSD.org/ports/amigappc/) | PowerPC-based Amiga boards. |
-| [NetBSD/arc](https://wiki.NetBSD.org/ports/arc/) | MIPS-based machines following the Advanced RISC Computing spec |
-| [NetBSD/atari](https://wiki.NetBSD.org/ports/atari/) | Atari TT030, Falcon, Hades |
-| [NetBSD/bebox](https://wiki.NetBSD.org/ports/bebox/) | Be Inc's BeBox |
-| [NetBSD/cats](https://wiki.NetBSD.org/ports/cats/) | Chalice Technology's CATS and Intel's EBSA-285 evaluation boards |
-| [NetBSD/cesfic](https://wiki.NetBSD.org/ports/cesfic/) | CES FIC8234 VME processor board |
-| [NetBSD/cobalt](https://wiki.NetBSD.org/ports/cobalt/) | Cobalt Networks' MIPS-based Microservers |
-| [NetBSD/dreamcast](https://wiki.NetBSD.org/ports/dreamcast/) | Sega Dreamcast game console |
-| [NetBSD/emips](https://wiki.NetBSD.org/ports/emips/) | The Extensible MIPS architecture from Microsoft Research |
-| [NetBSD/epoc32](https://wiki.NetBSD.org/ports/epoc32/) | Psion EPOC PDAs |
-| [NetBSD/evbarm](https://wiki.NetBSD.org/ports/evbarm/) | Various Arm-based evaluation boards and appliances |
-| [NetBSD/evbmips](https://wiki.NetBSD.org/ports/evbmips/) | Various MIPS-based evaluation boards and appliances |
-| [NetBSD/evbppc](https://wiki.NetBSD.org/ports/evbppc/) | Various PowerPC-based evaluation boards and appliances |
-| [NetBSD/evbsh3](https://wiki.NetBSD.org/ports/evbsh3/) | Various Hitachi Super-H SH3 and SH4-based evaluation boards and appliances |
-| [NetBSD/ews4800mips](https://wiki.NetBSD.org/ports/ews4800mips/) | NEC's MIPS-based EWS4800 workstation |
-| [NetBSD/hp300](https://wiki.NetBSD.org/ports/hp300/) | Hewlett-Packard 9000/300 and 400 series |
-| [NetBSD/hpcarm](https://wiki.NetBSD.org/ports/hpcarm/) | StrongArm based Windows CE PDA machines |
-| [NetBSD/hpcmips](https://wiki.NetBSD.org/ports/hpcmips/) | MIPS-based Windows CE PDA machines |
-| [NetBSD/hpcsh](https://wiki.NetBSD.org/ports/hpcsh/) | Hitachi Super-H based Windows CE PDA machines |
-| [NetBSD/hppa](https://wiki.NetBSD.org/ports/hppa/) | Hewlett-Packard 9000 Series 700 workstations |
-| [NetBSD/i386](https://wiki.NetBSD.org/ports/i386/) | IBM PCs and PC clones with i486-family processors and up |
-| [NetBSD/ibmnws](https://wiki.NetBSD.org/ports/ibmnws/) | IBM Network Station 1000 |
-| [NetBSD/iyonix](https://wiki.NetBSD.org/ports/iyonix/) | Castle Technology's Iyonix Arm based PCs |
-| [NetBSD/landisk](https://wiki.NetBSD.org/ports/landisk/) | SH4 processor based NAS appliances |
-| [NetBSD/luna68k](https://wiki.NetBSD.org/ports/luna68k/) | OMRON Tateisi Electric's LUNA series |
-| [NetBSD/mac68k](https://wiki.NetBSD.org/ports/mac68k/) | Apple Macintosh with Motorola 68k CPU |
-| [NetBSD/macppc](https://wiki.NetBSD.org/ports/macppc/) | Apple PowerPC-based Macintosh and clones |
-| [NetBSD/mipsco](https://wiki.NetBSD.org/ports/mipsco/) | MIPS Computer Systems Inc. family of workstations and servers |
-| [NetBSD/mmeye](https://wiki.NetBSD.org/ports/mmeye/) | Brains mmEye multimedia server |
-| [NetBSD/mvme68k](https://wiki.NetBSD.org/ports/mvme68k/) | Motorola MVME 68k Single Board Computers |
-| [NetBSD/mvmeppc](https://wiki.NetBSD.org/ports/mvmeppc/) | Motorola PowerPC VME Single Board Computers |
-| [NetBSD/netwinder](https://wiki.NetBSD.org/ports/netwinder/) | StrongArm based NetWinder machines |
-| [NetBSD/news68k](https://wiki.NetBSD.org/ports/news68k/) | Sony's 68k-based “NET WORK STATION” series |
-| [NetBSD/newsmips](https://wiki.NetBSD.org/ports/newsmips/) | Sony's MIPS-based “NET WORK STATION” series |
-| [NetBSD/next68k](https://wiki.NetBSD.org/ports/next68k/) | NeXT 68k “black” hardware |
-| [NetBSD/ofppc](https://wiki.NetBSD.org/ports/ofppc/) | OpenFirmware PowerPC machines |
-| [NetBSD/pmax](https://wiki.NetBSD.org/ports/pmax/) | Digital MIPS-based DECstations and DECsystems |
-| [NetBSD/prep](https://wiki.NetBSD.org/ports/prep/) | PReP (PowerPC Reference Platform) and CHRP machines |
-| [NetBSD/riscv](https://wiki.NetBSD.org/ports/riscv/) | RISC-V-based devices |
-| [NetBSD/rs6000](https://wiki.NetBSD.org/ports/rs6000/) | IBM RS/6000 MCA-based PowerPC machines. |
-| [NetBSD/sandpoint](https://wiki.NetBSD.org/ports/sandpoint/) | Motorola Sandpoint reference platform, including many PPC-based NAS boxes |
-| [NetBSD/sgimips](https://wiki.NetBSD.org/ports/sgimips/) | Silicon Graphics' MIPS-based workstations |
-| [NetBSD/shark](https://wiki.NetBSD.org/ports/shark/) | Digital DNARD (“shark”) |
-| [NetBSD/sparc](https://wiki.NetBSD.org/ports/sparc/) | Sun SPARC (32-bit) and UltraSPARC (in 32-bit mode) |
-| [NetBSD/sparc64](https://wiki.NetBSD.org/ports/sparc64/) | Sun UltraSPARC (in native 64-bit mode) |
-| [NetBSD/sun2](https://wiki.NetBSD.org/ports/sun2/) | Sun Microsystems Sun 2 machines with Motorola 68010 CPU |
-| [NetBSD/sun3](https://wiki.NetBSD.org/ports/sun3/) | Motorola 68020 and 030 based Sun 3 and 3x machines |
-| [NetBSD/vax](https://wiki.NetBSD.org/ports/vax/) | Digital VAX |
-| [NetBSD/x68k](https://wiki.NetBSD.org/ports/x68k/) | Sharp X680x0 series |
-| [NetBSD/xen](https://wiki.NetBSD.org/ports/xen/) | The Xen virtual machine monitor |
-| [NetBSD/zaurus](https://wiki.NetBSD.org/ports/zaurus/) | Sharp Arm PDAs |
+### **Conclusion**
 
-Ports included in the release but not fully supported or functional:
+This may sound disingenuous, but the truth is that I sympathize with Mr. Baker. It’s *frustrating* that we’re so bad at building security systems in this day and age. It’s *maddening *that we can’t engineer crypto reliably *even when we’re trying our very best*.
 
-## Acknowledgments
+But that’s the world we live in. It’s a world where we know our code is broken, and a world where a single stupid [Heartbleed](https://en.wikipedia.org/wiki/Heartbleed) or [Shellshock](https://en.wikipedia.org/wiki/Shellshock_(software_bug)) can burn off millions of dollars in a few hours*.* These bugs exist, and not just the ones I listed. They exist right now as new flaws* *that we haven’t discovered yet*. *Sooner or later maybe I’ll get to write about them.
 
-The NetBSD Foundation would like to thank all those who have
-    contributed code, hardware, documentation, funds, colocation for
-    our servers, web pages and other documentation, release engineering,
-    and other resources over the years. More information on the people who
-    make NetBSD happen is available at:
+The idea of *deliberately* engineering weakened crypto is, quite frankly, terrifying to experts. It gives us the willies. We’re not just afraid to try it. We *have* seen it tried — in the examples I list above, and [in still others](http://windowsitpro.com/security/pgp-allows-use-unauthorized-additional-decryption-keys) — and it’s just failed terribly.
 
-## About NetBSD
-
-NetBSD is a free, fast, secure, and highly portable Unix-like
-  Open Source operating system. It is available for a wide range
-  of platforms, from large-scale servers and powerful desktop
-  systems to handheld and embedded devices. Its clean design
-  and advanced features make it excellent for use in both
-  production and research environments, and the source code is
-  freely available under a business-friendly license. NetBSD is
-  developed and supported by a large and vibrant international
-  community.  Many applications are readily available through
-  [pkgsrc,
-  the NetBSD Packages Collection](https://pkgsrc.org).
-
-## About the NetBSD Foundation
-
-The [NetBSD Foundation](https://www.netbsd.org/foundation/) was
-    chartered in 1995, with the task of overseeing core NetBSD project
-    services, promoting the project within industry and the open
-    source community, and holding intellectual property rights on much
-    of the NetBSD code base. Day-to-day operations of the project are
-    handled by volunteers.
-
-As a non-profit organization with no commercial backing, the NetBSD
-    Foundation depends on donations from its users, and we would like to ask
-    you to consider [making a donation](https://www.netbsd.org/donations/)
-    to the NetBSD Foundation in support of continuing production of our
-    fine operating system. Your generous donation would be particularly
-    welcome to help with ongoing upgrades and maintenance, as well as
-    with operating expenses for the NetBSD Foundation.
-
-Donations can be done via PayPal to
-    `<paypal@NetBSD.org>`, or via Google Checkout and are fully
-    tax-deductible in the US.  See [www.NetBSD.org/donations/](https://www.NetBSD.org/donations/#how-to-donate) for more information, or
-    contact `<finance-exec@NetBSD.org>` directly.
+1. ![Unknown's avatar](https://0.gravatar.com/avatar/?s=192&d=identicon&r=PG) **[BCS](https://www.blogger.com/profile/16290373784404152656)** says: .comment-author [July 20, 2015 at 4:16 pm](https://blog.cryptographyengineering.com/2015/07/20/a-history-of-backdoors/#comment-1754) .comment-metadata .comment-meta There seems to be a common phenomenon in computing where abilities go from rather weak to fully universal in a single step. We can build systems that are (supposed to be) secure from everyone or that are secure from basically no one, but we can't seem to build anything in between. We can build computers that can only solve very limited sets of problems or that can solve every problem that we know how to solve, but we can't build once that can only solve selected problems. I wonder if there is some sort of common theoretical underpinning to both of these? .comment-content .comment-body
+2. ![Unknown's avatar](https://0.gravatar.com/avatar/?s=192&d=identicon&r=PG) **[Al](https://twitter.com/_alclark_)** says: .comment-author [July 20, 2015 at 4:40 pm](https://blog.cryptographyengineering.com/2015/07/20/a-history-of-backdoors/#comment-1755) .comment-metadata .comment-meta Nice recap. Baker could clearly use the history lesson. I'm still waiting for terrorists to use gene-printing technology to re-release anthrax and smallpox, like he predicted in his book. Dude could have been a great novelist if he hadn't become a lawyer. .comment-content .comment-body
+3. ![Unknown's avatar](https://0.gravatar.com/avatar/?s=192&d=identicon&r=PG) **[Terry A Davis](https://www.blogger.com/profile/14511072296974464383)** says: .comment-author [July 20, 2015 at 7:27 pm](https://blog.cryptographyengineering.com/2015/07/20/a-history-of-backdoors/#comment-1756) .comment-metadata .comment-meta You think the ancient Greeks were so stupid they put trust in the Oracle for nothing? .comment-content .comment-body
+4. ![Unknown's avatar](https://0.gravatar.com/avatar/?s=192&d=identicon&r=PG) **Anonymous** says: .comment-author [July 20, 2015 at 9:17 pm](https://blog.cryptographyengineering.com/2015/07/20/a-history-of-backdoors/#comment-1757) .comment-metadata .comment-meta “With only a 16-bit checksum, the latter techniques requires on average 65,536 attempts”. Should the average not be 32,768 due to the birthday paradox? .comment-content .comment-body
+5. ![Unknown's avatar](https://0.gravatar.com/avatar/?s=192&d=identicon&r=PG) **[Yuhong Bao](https://www.blogger.com/profile/14519473280837410246)** says: .comment-author [July 20, 2015 at 9:33 pm](https://blog.cryptographyengineering.com/2015/07/20/a-history-of-backdoors/#comment-1758) .comment-metadata .comment-meta “Ciphers that are, at this point, so weak that they can be broken in seconds on single personal computer.” Not really. oclHashCat's 40-bit RC4 brute force (for Office, but TLS would be similar) still takes 4 hours on a single GPU. .comment-content .comment-body
+6. ![Unknown's avatar](https://0.gravatar.com/avatar/?s=192&d=identicon&r=PG) **Anonymous** says: .comment-author [July 21, 2015 at 12:03 am](https://blog.cryptographyengineering.com/2015/07/20/a-history-of-backdoors/#comment-1759) .comment-metadata .comment-meta You aren't looking for a collision (i.e. any two messages that share the same tag) so the birthday paradox does not apply. Even if it did it would be ~256 instead. However, you are correct in that it does take 32,768 on average because that is half of the keyspace so you will have found a correct answer half of the time. .comment-content .comment-body
+7. ![Unknown's avatar](https://0.gravatar.com/avatar/?s=192&d=identicon&r=PG) **Anonymous** says: .comment-author [July 21, 2015 at 12:18 am](https://blog.cryptographyengineering.com/2015/07/20/a-history-of-backdoors/#comment-1760) .comment-metadata .comment-meta No, it's 65536, since you're not checking each of the checksums, but instead generating messages and then checking if their checksum matches what you want. Each try has a probability of 1/65536 of succeeding, and so the number of tries required follows a geomwtric distribution with mean 65536. .comment-content .comment-body
+8. ![Unknown's avatar](https://0.gravatar.com/avatar/?s=192&d=identicon&r=PG) **[Sc00bz](https://twitter.com/Sc00bzT)** says: .comment-author [July 21, 2015 at 4:54 am](https://blog.cryptographyengineering.com/2015/07/20/a-history-of-backdoors/#comment-1761) .comment-metadata .comment-meta That's 4 hours for any number of documents or 0.1 second/document if you have about 3 TiB of disk… wait did Atom add “unsalted document” support? There's a bug, the salt is applied before the 40 bit key is generated. Thus making the salt worthless if you can find known plaintext. Which there is a lot of. Even at 4 hours/doc that's super broken. I found a bug in a ColdFusion9 library's key generator for encrypting passwords. So Atom and I recently tried to crack the Adobe dump key with this information. The bug is the key is hex and with 3DES the least significant bit in each byte/character is a parity bit (you can thank NSA's contributions for this). This makes the key space crackable. The cost is about 2^51 time and 2^25 memory. This never hit the news because Adobe didn't use the default way to generate keys and therefore the key was no found :(. Same bug is in ColdFusion11, but it's a safer key space, 2^64. This would be another awesome example for why backdoors in crypto are bad but meh. .comment-content .comment-body
+9. ![Unknown's avatar](https://0.gravatar.com/avatar/?s=192&d=identicon&r=PG) **[Martin Haeberli](https://www.blogger.com/profile/11583263470081358942)** says: .comment-author [July 21, 2015 at 5:00 am](https://blog.cryptographyengineering.com/2015/07/20/a-history-of-backdoors/#comment-1762) .comment-metadata .comment-meta The MAXIMUM is 65536. The average is 32768. .comment-content .comment-body
+10. ![Unknown's avatar](https://0.gravatar.com/avatar/?s=192&d=identicon&r=PG) **[Marc Mengel](https://www.blogger.com/profile/13246178564153072493)** says: .comment-author [July 22, 2015 at 1:08 am](https://blog.cryptographyengineering.com/2015/07/20/a-history-of-backdoors/#comment-1764) .comment-metadata .comment-meta There is. Turing came up with it. It is called “Turing Equivalence” — if it can emulate a Turing Machine, it can do anything any general purpose computer can do. It is a surprisingly low bar. .comment-content .comment-body
+11. ![Unknown's avatar](https://0.gravatar.com/avatar/?s=192&d=identicon&r=PG) **[fitrarahim](http://fitrarahim.blogspot.com)** says: .comment-author [July 27, 2015 at 6:26 am](https://blog.cryptographyengineering.com/2015/07/20/a-history-of-backdoors/#comment-1765) .comment-metadata .comment-meta Wow… small chip processor .comment-content .comment-body
+12. ![Unknown's avatar](https://0.gravatar.com/avatar/?s=192&d=identicon&r=PG) **[Mauro](https://www.blogger.com/profile/01938161238892649411)** says: .comment-author [July 31, 2015 at 1:46 pm](https://blog.cryptographyengineering.com/2015/07/20/a-history-of-backdoors/#comment-1766) .comment-metadata .comment-meta Hi Matthew, It would be great if you can write somenthing about CloudFlare, specifically regarding to the “two ssl connections” that may leave unencrypted information in the CloudFlare's servers. Regards from Chile! .comment-content .comment-body

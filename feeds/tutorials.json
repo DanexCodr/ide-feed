@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-05T05:40:46Z",
+  "updated": "2026-11-05T14:13:11Z",
   "items": [
     {
       "id": "devto-4943245",
@@ -110,15 +110,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4839625",
-      "title": "Nothing Reported It",
-      "desc": "By Ken W Alger | 12 min read",
+      "id": "devto-4955249",
+      "title": "All That Glisters Is Softmax: Shiny-Object Interns, Airplane-Magazine Execs, and Why AI Labs Can Only Bake In Half the Scars",
+      "desc": "By Randal L. Schwartz | 29 min read",
       "tag": "tutorial",
-      "published": "2026-10-22T13:34:00Z",
+      "published": "2026-11-01T00:41:17Z",
       "order": 10,
-      "url": "https://dev.to/kenwalger/nothing-reported-it-9ke",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fp0waeaiv76zg8lygmjra.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAAECBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHgQluS/wD/xAAWEAADAAAAAAAAAAAAAAAAAAAQESD/2gAIAQEAAQUCKn//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAUEAEAAAAAAAAAAAAAAAAAAAAw/9oACAEBAAY/Ag//xAAYEAADAQEAAAAAAAAAAAAAAAAAETEBIP/aAAgBAQABPyFCMpHP/9oADAMBAAIAAwAAABD8z//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QP//EABsQAAIDAAMAAAAAAAAAAAAAAAERADGBIEGh/9oACAEBAAE/EKt+QpZWQAUezseLj//Z",
+      "url": "https://dev.to/gde/all-that-glisters-is-softmax-shiny-object-interns-airplane-magazine-execs-and-why-ai-labs-can-18af",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fqlk0251k4s6ucmxlzfnw.jpg",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwIE/8QAFQEBAQAAAAAAAAAAAAAAAAAAAQL/2gAMAwEAAhADEAAAAc6Bd0w3A//EABsQAQACAgMAAAAAAAAAAAAAAAEAAhJBAxEx/9oACAEBAAEFAsSUKjyFVxJ3D3Wv/8QAFhEBAQEAAAAAAAAAAAAAAAAAABEh/9oACAEDAQE/AcR//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAGBAAAgMAAAAAAAAAAAAAAAAAEDEAAVH/2gAIAQEABj8CYyM0P//EABoQAQEAAwEBAAAAAAAAAAAAAAEAESFBUcH/2gAIAQEAAT8hChld2XiR818W6zwgMvbu/9oADAMBAAIAAwAAABD3L//EABYRAQEBAAAAAAAAAAAAAAAAAAEAIf/aAAgBAwEBPxDEg1v/xAAWEQEBAQAAAAAAAAAAAAAAAAABABH/2gAIAQIBAT8QNY2//8QAGxABAAMBAQEBAAAAAAAAAAAAAQARIUGBUfD/2gAIAQEAAT8QctGbpcoZJxCI7RwIIo8hl0wCLEV21+9hAmnX7kvXbvrP/9k=",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4978154",
+      "title": "Crows, Moths, and Makefiles: How 300 Megabytes of Crow DNA Explains Why a 20-Kilobyte Scar File Outsmarts a Terabyte LLM",
+      "desc": "By Randal L. Schwartz | 13 min read",
+      "tag": "tutorial",
+      "published": "2026-11-05T00:02:44Z",
+      "order": 11,
+      "url": "https://dev.to/gde/crows-moths-and-makefiles-how-300-megabytes-of-crow-dna-explains-why-a-20-kilobyte-scar-file-36a",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fp24lnbmzkhrdluxod8g5.jpg",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAAEDBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHAIqpNV//EABkQAQADAQEAAAAAAAAAAAAAAAECEBEAIf/aAAgBAQABBQKomkgCt87/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAWEAEBAQAAAAAAAAAAAAAAAAAQEWH/2gAIAQEABj8CdYf/xAAaEAACAwEBAAAAAAAAAAAAAAAAARARIWEx/9oACAEBAAE/IVo0hO2dPXXBuy/CP//aAAwDAQACAAMAAAAQXM//xAAWEQEBAQAAAAAAAAAAAAAAAAABACH/2gAIAQMBAT8QZcv/xAAVEQEBAAAAAAAAAAAAAAAAAAAAIf/aAAgBAgEBPxBH/8QAGhAAAwEBAQEAAAAAAAAAAAAAAAERITFxQf/aAAgBAQABPxBI3goh6ptc+CCTM3wrUjPAJO/VLh//2Q==",
       "color": "#3B49DF"
     },
     {
@@ -127,22 +139,10 @@
       "desc": "By Elsie Rainee | 2 min read",
       "tag": "tutorial",
       "published": "2026-11-02T11:35:22Z",
-      "order": 11,
+      "order": 12,
       "url": "https://dev.to/elsie-rainee/two-truths-and-a-lie-developer-edition-k8n",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fsyugm3scjglnspzm8ays.jpg",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAgMBBP/EABYBAQEBAAAAAAAAAAAAAAAAAAABAv/aAAwDAQACEAMQAAAB4mWmToGv/8QAGRAAAwADAAAAAAAAAAAAAAAAAAEQAhEh/9oACAEBAAEFAkjUZiPkZ//EABYRAQEBAAAAAAAAAAAAAAAAAAABQf/aAAgBAwEBPwGsf//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABQQAQAAAAAAAAAAAAAAAAAAADD/2gAIAQEABj8CD//EABsQAAICAwEAAAAAAAAAAAAAAAABESExQZEQ/9oACAEBAAE/IUQLauDSjXBKos8lnmR//9oADAMBAAIAAwAAABBZv//EABcRAQEBAQAAAAAAAAAAAAAAAAEAESH/2gAIAQMBAT8QXcIJ/8QAGBEBAQADAAAAAAAAAAAAAAAAAQARIVH/2gAIAQIBAT8QVzqHt//EAB0QAAICAgMBAAAAAAAAAAAAAAERACExUUFxsZH/2gAIAQEAAT8QMAJHLWfsQGBjS0YsKEdcwIqJO1ANtFhTgEkapeRsq1ql5DIQFdT/2Q==",
-      "color": "#3B49DF"
-    },
-    {
-      "id": "devto-4955249",
-      "title": "All That Glisters Is Softmax: Shiny-Object Interns, Airplane-Magazine Execs, and Why AI Labs Can Only Bake In Half the Scars",
-      "desc": "By Randal L. Schwartz | 29 min read",
-      "tag": "tutorial",
-      "published": "2026-11-01T00:41:17Z",
-      "order": 12,
-      "url": "https://dev.to/gde/all-that-glisters-is-softmax-shiny-object-interns-airplane-magazine-execs-and-why-ai-labs-can-18af",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fqlk0251k4s6ucmxlzfnw.jpg",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwIE/8QAFQEBAQAAAAAAAAAAAAAAAAAAAQL/2gAMAwEAAhADEAAAAc6Bd0w3A//EABsQAQACAgMAAAAAAAAAAAAAAAEAAhJBAxEx/9oACAEBAAEFAsSUKjyFVxJ3D3Wv/8QAFhEBAQEAAAAAAAAAAAAAAAAAABEh/9oACAEDAQE/AcR//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAGBAAAgMAAAAAAAAAAAAAAAAAEDEAAVH/2gAIAQEABj8CYyM0P//EABoQAQEAAwEBAAAAAAAAAAAAAAEAESFBUcH/2gAIAQEAAT8hChld2XiR818W6zwgMvbu/9oADAMBAAIAAwAAABD3L//EABYRAQEBAAAAAAAAAAAAAAAAAAEAIf/aAAgBAwEBPxDEg1v/xAAWEQEBAQAAAAAAAAAAAAAAAAABABH/2gAIAQIBAT8QNY2//8QAGxABAAMBAQEBAAAAAAAAAAAAAQARIUGBUfD/2gAIAQEAAT8QctGbpcoZJxCI7RwIIo8hl0wCLEV21+9hAmnX7kvXbvrP/9k=",
       "color": "#3B49DF"
     },
     {
@@ -170,24 +170,12 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4978154",
-      "title": "Crows, Moths, and Makefiles: How 300 Megabytes of Crow DNA Explains Why a 20-Kilobyte Scar File Outsmarts a Terabyte LLM",
-      "desc": "By Randal L. Schwartz | 13 min read",
-      "tag": "tutorial",
-      "published": "2026-11-05T00:02:44Z",
-      "order": 15,
-      "url": "https://dev.to/gde/crows-moths-and-makefiles-how-300-megabytes-of-crow-dna-explains-why-a-20-kilobyte-scar-file-36a",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fp24lnbmzkhrdluxod8g5.jpg",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAAEDBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHAIqpNV//EABkQAQADAQEAAAAAAAAAAAAAAAECEBEAIf/aAAgBAQABBQKomkgCt87/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAWEAEBAQAAAAAAAAAAAAAAAAAQEWH/2gAIAQEABj8CdYf/xAAaEAACAwEBAAAAAAAAAAAAAAAAARARIWEx/9oACAEBAAE/IVo0hO2dPXXBuy/CP//aAAwDAQACAAMAAAAQXM//xAAWEQEBAQAAAAAAAAAAAAAAAAABACH/2gAIAQMBAT8QZcv/xAAVEQEBAAAAAAAAAAAAAAAAAAAAIf/aAAgBAgEBPxBH/8QAGhAAAwEBAQEAAAAAAAAAAAAAAAERITFxQf/aAAgBAQABPxBI3goh6ptc+CCTM3wrUjPAJO/VLh//2Q==",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4974671",
       "title": "After 5 years, Wasp 1.0 is coming: a 6-month plan for our full-stack JS framework",
       "desc": "By Martin Šošić | 6 min read",
       "tag": "tutorial",
       "published": "2026-11-04T10:42:12Z",
-      "order": 16,
+      "order": 15,
       "url": "https://dev.to/wasp/after-5-years-wasp-10-is-coming-a-6-month-plan-for-our-full-stack-js-framework-4hlf",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto/https%3A%2F%2Fwasp.sh%2Fimg%2Fblog%2F2026-10-20-wasp-1-0-is-coming%2Fwasp-1-0-is-coming-banner.webp",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAgEABP/EABYBAQEBAAAAAAAAAAAAAAAAAAADBP/aAAwDAQACEAMQAAAB6phloqEf/8QAGBABAAMBAAAAAAAAAAAAAAAAAQACESH/2gAIAQEAAQUCh0XIdGFMq1EDD//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABoQAAICAwAAAAAAAAAAAAAAAAABERIgIWH/2gAIAQEABj8CxrsXCEf/xAAbEAEAAgMBAQAAAAAAAAAAAAABABEhMXFRYf/aAAgBAQABPyFjoZifY8kFlWnITBp3UNFfDeYZ6Cf/2gAMAwEAAgADAAAAEDTf/8QAFhEBAQEAAAAAAAAAAAAAAAAAABEh/9oACAEDAQE/EG1//8QAFxEAAwEAAAAAAAAAAAAAAAAAAAERIf/aAAgBAgEBPxDIOQ//xAAcEAACAgIDAAAAAAAAAAAAAAABEQAhYXExQVH/2gAIAQEAAT8QZUnmZVgSAlWiTYGN7DskRHc8EB208gQEqR0HcFkuCf/Z",
@@ -199,7 +187,7 @@
       "desc": "By Gulajava Ministudio | 12 min read",
       "tag": "tutorial",
       "published": "2026-10-23T03:57:06Z",
-      "order": 17,
+      "order": 16,
       "url": "https://dev.to/gulajavaministudio/why-an-80-year-old-math-book-fixed-my-ai-coding-agent-517b",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Ffvc55een0ngvqij4cnnm.jpg",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAAEDBP/EABcBAAMBAAAAAAAAAAAAAAAAAAABAgP/2gAMAwEAAhADEAAAAdSnTOkiQ//EABoQAQACAwEAAAAAAAAAAAAAAAECIQAQETH/2gAIAQEAAQUCLi0d5g1A34f/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAXEAEAAwAAAAAAAAAAAAAAAAAQAREg/9oACAEBAAY/AsUSf//EABoQAQADAQEBAAAAAAAAAAAAAAEAESExQWH/2gAIAQEAAT8hJ2yHHuQOQ59gZTjLFskTyJKU3vs//9oADAMBAAIAAwAAABDuD//EABYRAQEBAAAAAAAAAAAAAAAAAAARIf/aAAgBAwEBPxCaj//EABcRAQADAAAAAAAAAAAAAAAAAAABMUH/2gAIAQIBAT8QmmP/xAAbEAEAAwEBAQEAAAAAAAAAAAABABEhMUFRYf/aAAgBAQABPxDAAXWbEoYZ9wqQjSApUYchTnsM2XvYdE92/wBqAjTry5//2Q==",
@@ -211,10 +199,22 @@
       "desc": "By Ken W Alger | 10 min read",
       "tag": "tutorial",
       "published": "2026-11-03T13:53:00Z",
-      "order": 18,
+      "order": 17,
       "url": "https://dev.to/kenwalger/rack-before-you-remember-2jl3",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fjta595mrd2d2908smur0.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAwUAAQT/xAAUAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAGwa1gsYAI//8QAGhAAAwEAAwAAAAAAAAAAAAAAAAECEQMSE//aAAgBAQABBQKn1lcuF0keslLZLWykf//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABURAQEAAAAAAAAAAAAAAAAAAAEQ/9oACAECAQE/ASf/xAAXEAEBAQEAAAAAAAAAAAAAAAAQAQJR/9oACAEBAAY/AidKZp//xAAbEAACAwADAAAAAAAAAAAAAAAAAREhQXGRof/aAAgBAQABPyGxfg7KaNxpHJ0LlESySHcFB//aAAwDAQACAAMAAAAQiO//xAAVEQEBAAAAAAAAAAAAAAAAAAABAP/aAAgBAwEBPxBJv//EABYRAAMAAAAAAAAAAAAAAAAAAAABEf/aAAgBAgEBPxBqRH//xAAdEAEAAwACAwEAAAAAAAAAAAABABEhMUFhcYGh/9oACAEBAAE/EMi1a8I6+pHYO3g4+uz7C++MATXLiaLdlgFtwa67f5P/2Q==",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4948394",
+      "title": "Don't Write Markdown Files for Your Coding Agent. Write Scripts.",
+      "desc": "By Daniel Nwaneri | 4 min read",
+      "tag": "tutorial",
+      "published": "2026-11-05T11:29:41Z",
+      "order": 18,
+      "url": "https://dev.to/dannwaneri/dont-write-markdown-files-for-your-coding-agent-write-scripts-j00",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F701t0c2zifz0n0n7667t.jpg",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAAMCBAX/xAAVAQEBAAAAAAAAAAAAAAAAAAABAv/aAAwDAQACEAMQAAABTdzZVKQE/8QAFxABAQEBAAAAAAAAAAAAAAAAAgMBEP/aAAgBAQABBQKAxqkxk+B6NVEu/wD/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAaEAACAgMAAAAAAAAAAAAAAAAAARAhESIx/9oACAEBAAY/ArHquTlFuf/EABoQAAIDAQEAAAAAAAAAAAAAAAEhABFREDH/2gAIAQEAAT8hLgfjrYRQhOFRTbqnM8wd/9oADAMBAAIAAwAAABBvP//EABYRAQEBAAAAAAAAAAAAAAAAAAEQEf/aAAgBAwEBPxATJ//EABURAQEAAAAAAAAAAAAAAAAAAAEQ/9oACAECAQE/EEVn/8QAGxABAQADAAMAAAAAAAAAAAAAAREAIUEQMcH/2gAIAQEAAT8QQRCQ+spxNU3ebyKgbXAqMvZzFhJLRTD4/HoHz//Z",
       "color": "#3B49DF"
     },
     {
@@ -242,27 +242,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4869371",
-      "title": "How I finally understood the Liskov Substitution Principle",
-      "desc": "By Christian Vasquez | 4 min read",
-      "tag": "tutorial",
-      "published": "2026-10-26T22:03:26Z",
-      "order": 21,
-      "url": "https://dev.to/chrisvasqm/how-i-finally-understood-the-liskov-substitution-principle-19ek",
-      "image": "https://media2.dev.to/dynamic/image/width=1200,height=627,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fzf8i86a7xb222qaa5kwr.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAARACADASIAAhEBAxEB/8QAGAAAAwEBAAAAAAAAAAAAAAAAAAIDAQT/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAHsWukaUUcAMA//xAAbEAACAgMBAAAAAAAAAAAAAAAAAREhECAiMf/aAAgBAQABBQJxNFCSY/VietP/xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAEDAQE/AR//xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAECAQE/AR//xAAcEAABBAMBAAAAAAAAAAAAAAAAAhExQQEQIDL/2gAIAQEABj8ChJCSEnnBZembn//EACAQAAIBAQkAAAAAAAAAAAAAAAERABAgITFhcYGRweH/2gAIAQEAAT8hAU5o8vH74OZ2YD6YJFxbWjYhJuz/AP/aAAwDAQACAAMAAAAQ2+Ac/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAwEBPxAf/8QAFxEAAwEAAAAAAAAAAAAAAAAAAAEREP/aAAgBAgEBPxCsr3//xAAgEAEAAgAFBQAAAAAAAAAAAAABABEhMVFh0SBBcZGh/9oACAEBAAE/ENL28g+qhbdtsUTiX6PhxKCI5UG/kRQRgOICA5h3YyokLy2Jt0//2Q==",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4966183",
       "title": "The Postcard That Ate Six Grammars: 1980 Smalltalk-80, 1976 Make, TDD, and the Four Attractors of Agentic Coding",
       "desc": "By Randal L. Schwartz | 43 min read",
       "tag": "tutorial",
       "published": "2026-11-03T02:41:46Z",
-      "order": 22,
+      "order": 21,
       "url": "https://dev.to/gde/the-postcard-that-ate-six-grammars-1980-smalltalk-80-1976-make-tdd-and-the-four-attractors-of-45me",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F5gl4u3vgt6joi8tfi99i.jpg",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAABAID/8QAFQEBAQAAAAAAAAAAAAAAAAAAAQD/2gAMAwEAAhADEAAAAS2dgxhqZv/EABgQAQEBAQEAAAAAAAAAAAAAAAExABEh/9oACAEBAAEFAlHcOEYU8G7/xAAVEQEBAAAAAAAAAAAAAAAAAAAAAf/aAAgBAwEBPwFX/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAGBABAAMBAAAAAAAAAAAAAAAAAQARISD/2gAIAQEABj8CCZGjev/EABoQAAIDAQEAAAAAAAAAAAAAAAABESFRMaH/2gAIAQEAAT8hQdiCr0lYQXRp09F0XWVaKhDZ/9oADAMBAAIAAwAAABDtz//EABURAQEAAAAAAAAAAAAAAAAAABEQ/9oACAEDAQE/EBj/xAAWEQEBAQAAAAAAAAAAAAAAAAAAARH/2gAIAQIBAT8Q1K//xAAcEAEBAQEAAgMAAAAAAAAAAAABEQAhMUFRkcH/2gAIAQEAAT8QGp6V/M3kFnyzm+oGnXp5ruVAQ+mYUI9jwLjDYFS23Kw9HDf/2Q==",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4869371",
+      "title": "How I finally understood the Liskov Substitution Principle",
+      "desc": "By Christian Vasquez | 4 min read",
+      "tag": "tutorial",
+      "published": "2026-10-26T22:03:26Z",
+      "order": 22,
+      "url": "https://dev.to/chrisvasqm/how-i-finally-understood-the-liskov-substitution-principle-19ek",
+      "image": "https://media2.dev.to/dynamic/image/width=1200,height=627,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fzf8i86a7xb222qaa5kwr.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAARACADASIAAhEBAxEB/8QAGAAAAwEBAAAAAAAAAAAAAAAAAAIDAQT/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAHsWukaUUcAMA//xAAbEAACAgMBAAAAAAAAAAAAAAAAAREhECAiMf/aAAgBAQABBQJxNFCSY/VietP/xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAEDAQE/AR//xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAECAQE/AR//xAAcEAABBAMBAAAAAAAAAAAAAAAAAhExQQEQIDL/2gAIAQEABj8ChJCSEnnBZembn//EACAQAAIBAQkAAAAAAAAAAAAAAAERABAgITFhcYGRweH/2gAIAQEAAT8hAU5o8vH74OZ2YD6YJFxbWjYhJuz/AP/aAAwDAQACAAMAAAAQ2+Ac/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAwEBPxAf/8QAFxEAAwEAAAAAAAAAAAAAAAAAAAEREP/aAAgBAgEBPxCsr3//xAAgEAEAAgAFBQAAAAAAAAAAAAABABEhMVFh0SBBcZGh/9oACAEBAAE/ENL28g+qhbdtsUTiX6PhxKCI5UG/kRQRgOICA5h3YyokLy2Jt0//2Q==",
       "color": "#3B49DF"
     },
     {
@@ -302,15 +302,15 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4931256",
-      "title": "From Code to Culture: Building 101 Indian Monuments in 3D",
-      "desc": "By amananandrai | 36 min read",
+      "id": "devto-4980734",
+      "title": "A Maintainer's Advice on Contributing to Open Source in 2026",
+      "desc": "By Martin Šošić | 7 min read",
       "tag": "tutorial",
-      "published": "2026-10-28T00:39:09Z",
+      "published": "2026-11-05T09:21:35Z",
       "order": 26,
-      "url": "https://dev.to/amananandrai/101-indian-monuments-modelled-in-the-browser-g4f",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Ff5wouh2oemeu0fx5dto3.jpg",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAAEE/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEAMQAAAB3ywA/8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQABBQIP/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAGBAAAgMAAAAAAAAAAAAAAAAAAAEQIEH/2gAIAQEAAT8hQ5W0/9oADAMBAAIAAwAAABARz//EABURAQEAAAAAAAAAAAAAAAAAAAAB/9oACAEDAQE/EFf/xAAVEQEBAAAAAAAAAAAAAAAAAAAAAf/aAAgBAgEBPxBH/8QAGxABAQACAwEAAAAAAAAAAAAAAQARMRAhQXH/2gAIAQEAAT8QQ5lguw84eSOvkai//9k=",
+      "url": "https://dev.to/wasp/a-maintainers-advice-on-contributing-to-open-source-in-2026-4ea1",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto/https%3A%2F%2Fwasp.sh%2Fimg%2Fblog%2F2026-08-13-advice-for-contributing-in-2026%2Fbanner.webp",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAQIE/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEAMQAAAB2JQFSf/EABgQAAIDAAAAAAAAAAAAAAAAAAEhABAg/9oACAEBAAEFAshwqv/EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABcQAQEBAQAAAAAAAAAAAAAAAAABQSD/2gAIAQEABj8CRWca/8QAHxAAAgAGAwEAAAAAAAAAAAAAAAERITFBUXFhgZHR/9oACAEBAAE/IV1HQ5P4JVDcsNCcVf0oPBcyxvn0f//aAAwDAQACAAMAAAAQ0Y//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/ED//xAAdEAACAwACAwAAAAAAAAAAAAABEQAhMUFRgbHB/9oACAEBAAE/EENqh7iU91YXUZHAAhsG3b+SwSS1ZeIAGWHuGmLlO+VNnJQKqHBW3s5//9k=",
       "color": "#3B49DF"
     },
     {
@@ -323,18 +323,6 @@
       "url": "https://dev.to/smtahosin/youre-still-writing-css-like-its-2015-the-modern-architecture-guide-that-fixes-specificity-nlh",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fi.imgur.com%2FhwLuKwj.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAgME/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAH/2gAMAwEAAhADEAAAAcTmg2Il/8QAGxAAAgIDAQAAAAAAAAAAAAAAAAECIRAREkH/2gAIAQEAAQUCTrZZCfOfE0f/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAZEAACAwEAAAAAAAAAAAAAAAAAMQEgMnH/2gAIAQEABj8CRmBHaI//xAAcEAEAAgMAAwAAAAAAAAAAAAABABEhQYFRcZH/2gAIAQEAAT8hABR5L+TEpN7RAhDr1DsWtvsvZt2f/9oADAMBAAIAAwAAABCOL//EABcRAQADAAAAAAAAAAAAAAAAAAABETH/2gAIAQMBAT8QqWP/xAAXEQEBAQEAAAAAAAAAAAAAAAABABEh/9oACAECAQE/EDGe3//EABoQAQADAQEBAAAAAAAAAAAAAAEAETEhQVH/2gAIAQEAAT8QVKD2isSeWLYQdsNAFEG04N8qVFpoZSl4a+y/rF18TY+MxP/Z",
-      "color": "#3B49DF"
-    },
-    {
-      "id": "devto-4803495",
-      "title": "A Message From Our Founder: On the Winding Down of LaaSy™",
-      "desc": "By Ken W Alger | 4 min read",
-      "tag": "tutorial",
-      "published": "2026-10-29T14:00:00Z",
-      "order": 28,
-      "url": "https://dev.to/kenwalger/a-message-from-our-founder-on-the-winding-down-of-laasy-467a",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fla1fru3777ol9bvsae55.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAgMEAf/EABUBAQEAAAAAAAAAAAAAAAAAAAAC/9oADAMBAAIQAxAAAAGWidsiFeH/xAAaEAEBAAMBAQAAAAAAAAAAAAABAAIDERAT/9oACAEBAAEFAsc2NjfadzBy6z5//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFREBAQAAAAAAAAAAAAAAAAAAEBH/2gAIAQIBAT8Bp//EABgQAAMBAQAAAAAAAAAAAAAAAAABMiAx/9oACAEBAAY/AiSUSscP/8QAGxAAAwADAQEAAAAAAAAAAAAAAAERIUFREHH/2gAIAQEAAT8hR3fpjYu+DSSIZNEHbkjmxzg//9oADAMBAAIAAwAAABA7b//EABYRAQEBAAAAAAAAAAAAAAAAAAABIf/aAAgBAwEBPxCNf//EABYRAQEBAAAAAAAAAAAAAAAAAAARAf/aAAgBAgEBPxDYV//EABwQAQADAAMBAQAAAAAAAAAAAAEAESExQVFhwf/aAAgBAQABPxBc4fNQGmBqluLurH6VElomXr+y8gTu5kWUq+4Kjrhqx66Dyf/Z",
       "color": "#3B49DF"
     }
   ]

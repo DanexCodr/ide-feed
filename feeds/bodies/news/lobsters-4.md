@@ -1,59 +1,295 @@
-We’re excited to announce Adaptive Dark Mode in Safari 27.3 beta. When enabled by a user, Safari adapts light websites and presents them as dark.
+- Person: “I have [problem].”
+- Cryptography nerd: “Oh, you probably want to use [sensible recommendation].”
+- Person: “Ah, well, can I really trust that? The NSA probably backdoored it 30 years ago. Dual_EC, amirite?!”
+- Cryptography nerd: …
+- Koblitz and Menezes, unheard: “[You fucking wot m8?](https://eprint.iacr.org/2015/1018)“
 
-In the spring of 2019, Safari 12.1 became the first browser to support dark mode on the web. A lot of people love using dark mode, but not every website has a dark version. Almost [40% of web page loads](https://chromestatus.com/metrics/feature/timeline/popularity/3580) are from users in dark mode, and yet [only 10%](https://chromestatus.com/metrics/feature/timeline/popularity/3707) of page loads support it. If you love dark mode, you’ve probably hit a site that felt particularly [bright](https://www.tiktok.com/@syntaxfm/video/7307721014891367711). Adaptive Dark Mode is designed to close that gap, providing a consistent dark experience across the web.
+Conspiracy theories about the NSA and/or NIST are a dime a dozen these days. And, ever since the Snowden disclosures in 2013, I am politically primed to *directionally agree* with distrusting the US government wholesale.
 
-![A demo website in light mode on the left and dark mode on the right. It's a complex site with lots of UI full of bits of color that's transformed by Adaptive Dark Mode.](https://webkit.org/wp-content/uploads/Demo-of-Adaptive-Dark-Mode_dark.png)
+But most of the technical arguments baked into folks’ conspiracy theories **make no goddamn sense**.
 
-You can try it today in Safari 27.3 beta. To enable, first make sure your system appearance is set to dark. Then browse to a website with a bright background. Safari will offer a preview of Adaptive Dark Mode. Tap ‘Try’.
+> This distrust is not exclusive to only the US government.
+>
+> The goal of this blog post is not to convince you that you should trust *any* government; just that they are not magical or omniscient.
 
-For websites that signal support of dark mode with `<meta name="color-scheme" content="light dark">` in HTML or `color-scheme: light dark` in CSS, Adaptive Dark Mode does not change a thing. For the rest of the web, it quickly analyzes the page, looking at colors and estimating whether it’s predominantly light or dark. If the page generally has a dark background with light text, nothing is changed. When a page has a light appearance, Adaptive Dark Mode adapts the page to be dark.
+To that end, I’m going to explore some of the history of NSA, NIST, and cryptography standardization. Then, to explore some of the conspiracy theories that were being floated about such activity, and what we’ve learned in the years since (especially in the past month). Finally, I’m going to examine some of the current conspiracy theories floating around message boards and social media today, and explain why they’re almost certainly wrong.
 
-## How does Adaptive Dark Mode work?
+Buckle up, this is going to be a tedious one.
 
-At the core of Adaptive Dark Mode is the transformation of color. Sometimes colors are simply decorative, while other times they have semantic meaning. Adaptive Dark Mode determines when to invert colors so elements remain visible or when to leave colors unchanged.
+![Soatok drinking coffee](https://i0.wp.com/soatok.blog/wp-content/uploads/2024/07/SoatokTelegrams2020-15.png?w=512&ssl=1)
 
-While creating Adaptive Dark Mode, we developed a color matrix to invert the luminosity of colors while preserving hue. It’s used to make light backgrounds dark, and dark text light. When transforming text color, Adaptive Dark Mode aims for sufficient contrast as defined by the [WCAG 4.5:1 contrast ratio](https://www.w3.org/WAI/WCAG21/Understanding/contrast-minimum.html). Light CSS gradients are also transformed to dark.
+*[CMYKat](https://cmykatgraphics.carrd.co/)*
 
-Adaptive Dark Mode makes careful judgments so transformed content looks good and stays usable: buttons have contrast against backgrounds, text is visible over images, and hover menus look clear.
+## Why should we listen to you?
 
-It takes the same care with images. Most are left unchanged, preserving their integrity. But many icons and logos can lose contrast when the background color behind them is inverted. So Adaptive Dark Mode inspects SVG images and transforms colors when needed. For bitmap images, it analyzes the pixel histograms and inverts simple black-and-white logos.
+If you find yourself asking a question like this, the correct answer is simply, “You shouldn’t.”
 
-![Side by side screenshots of the Interop 2026 dashboard in Safari. On the left, the original light mode website. On the right, the site transformed by Adaptive Dark Mode. The graph still matches light mode (untransformed) but everything else on the page is dark. ](https://webkit.org/wp-content/uploads/Interop-dashboard-with-Adaptive-Dark-Mode_dark-scaled.png)
+After all, I have never held (let alone even applied for) a security clearance, and have no access to any non-public information. I’m also not a current or former government employee, and have no aspirations to ever become one. I have access to all the same facts anyone else does.
 
-Effects like masks and `mix-blend-mode` can create undesirable results on an element whose colors have been transformed, so in some cases Adaptive Dark Mode turns such effects off. Also, `<canvas>` content is left unchanged, since canvases contain a wide range of content that’s hard to predict.
+In balance, I have no horse in the race of who trusts whom. I’m just tired of hearing the same poorly reasoned arguments all the damn time, and would like to stop having to repeat myself when I encounter one.
 
-It’s precisely because Adaptive Dark Mode is happening deep within the WebKit browser engine that we are able to find creative ways to solve the most complex challenges, apply the transformations with great speed and power efficiency, all while rigorously protecting user privacy.
+## Historical NSA Shenanigans
 
-## Making your site work even better
+The sources for this, by the way, are [the declassified United States Senate Select Committee on Intelligence](https://cryptome.org/2012/05/nsa-crypto-des.pdf) and [United States Cryptologic History](https://archive.org/details/NSA-American-Cryptology-Cold-War/American%20Cryptology-Book%20III/).
 
-In general, a web page will work well with Adaptive Dark Mode if it follows good modern web development practices.
+### DES
 
-If your site still uses older techniques, small updates can help. For logos and icons, swap bitmap images for SVG. Use solid or gradient colors in CSS instead of tiled background images. Replace image sprites with modern CSS for rounded corners, shadows, and button states. Create content images with transparent backgrounds instead of baking the page background color into the image. Add padding to containers to prevent crowding.
+The Data Encryption Standard (DES) was published in the Federal Register in 1975 and then standardized in 1977.
 
-Perhaps you want a specific dark mode experience for a certain portion of the page. Apply [`color-scheme: light dark`](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/color-scheme) to the relevant element and add your own dark styles.
+We consider it weak these days, but DES was a real game-changer for its time: It offered a standard block cipher to use for sensitive (but not classified) commercial applications. Prior to DES, the history of cryptography was largely about military uses (except a few quirky mathematicians here and there), going back before [Caesar’s cipher](https://en.wikipedia.org/wiki/Caesar_cipher).
 
-## Building your own dark mode
+From declassified documents, we now know the full story, but from the time that DES was first standardized, up until recent years, there have been a concerns about [NSA’s involvement](https://en.wikipedia.org/wiki/Data_Encryption_Standard#NSA's_involvement_in_the_design).
 
-For complete control over how your site looks in dark mode, add full support. It’s a terrific time to do so. It’s never been easier.
+> We sent the S-boxes off to Washington. They came back and were all different.
 
-All the web technology needed to fully support dark mode is widely available today, including:
+To say that academics did not trust DES would be putting it mildly: Martin Hellman (who, with Whitfield Diffie and Ralph Merkle, *invented* public-key cryptography) sent a letter in 1975 to the National Bureau of Standards that stated:
 
-Newer CSS functions like [`color-mix()`](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/color_value/color-mix) and [`contrast-color()`](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/color_value/contrast-color), plus popular techniques for organizing design systems with CSS variables provide additional options and flexibility.
+> Whit Diffie and I have become concerned that the proposed data encryption standard, while probably secure against commercial assault, may be extremely vulnerable to attack by an intelligence organization.
 
-Be sure to declare dark mode support using the `color-scheme` meta tag in your HTML head and/or by setting the `color-scheme` property on `:root` or `body` in your CSS. Don’t wait to inject this information later via JavaScript. This best practice helps ensure your site is rendered correctly as fast as possible.
+At the heart of the concern about DES was something called an S-box, which simply maps an input to an output, but whose purpose is to provide a non-linear transformation to obscure the relationship between the ciphertext and the key.
 
-## Using the “light only” color scheme
+The S-box used by DES was chosen by NSA. This led a lot of people to suspect there was a backdoor in the selection of the S-boxes for DES. **It turned out to be the opposite, of course**: The NSA had discovered differential cryptanalysis in secret, and had selected S-boxes that were resistant to this technique, but did not want to reveal it publicly (lest they lose their advantage over rival nations).
 
-If you would like your web app or website to not be transformed by Adaptive Dark Mode, you can communicate this using `color-scheme`. The HTML `<meta name="color-scheme" content="light only">` tag lets browsers know that 1) this page supports `light` mode and 2) should `only` be displayed in light mode. The `color-scheme: light only` rule does the same thing, but with the flexibility of CSS, allowing you to just target specific elements on the page — or of course, you can target the whole page with `:root { }`. (Note: the ‘only’ keyword is not supported in Safari 27.3 beta 1. Check back as Adaptive Dark Mode evolves through the beta process.)
+There’s a lot more details to this story than I want to bore anyone with, so I recommend reading up on the history of cryptography and cryptanalysis if you’re interested in such things.
 
-## Protecting user privacy
+In balance, [at the advice of NSA](https://www.schneier.com/blog/archives/2004/10/the_legacy_of_d.html), the final DES design did only offer 56 bits of security (down from an original key size of 128 bits). This short key ultimately allowed [the EFF to crack DES in 1998](https://w2.eff.org/Privacy/Crypto/Crypto_misc/DESCracker/) with a hardware cost of about $250,000.
 
-Apple firmly believes user privacy is a fundamental human right. If websites could detect when a user has enabled Adaptive Dark Mode, that would increase the amount of fingerprintable information and weaken privacy protections against trackers.
+![Clipboard Sticker](https://i0.wp.com/soatok.blog/wp-content/uploads/2021/04/soatok-telegrams-wave-3-commission-11.png?resize=512%2C512&ssl=1)
 
-As a result, Safari prevents websites from detecting when Adaptive Dark Mode has been applied. JavaScript that queries CSS colors will get the original authored colors, not the transformed ones. Any images drawn into canvas render in their original form.
+*[CMYKat](https://cmykatgraphics.carrd.co/)*
 
-## Feedback
+#### What does this actually tell us?
 
-If you manage a website or web app, and would like to discuss how Adaptive Dark Mode is adapting your project, feel free to reach out at [web-evangelist@apple.com](mailto:web-evangelist@apple.com).
+When IBM was designing DES, with feedback from NSA, the stated purpose was to use for commercial cryptographic applications in the United States.
 
-If you try out Adaptive Dark Mode as a user, and find a site that does not work well, we’d love for you to file a report with [Feedback Assistant](https://feedbackassistant.apple.com/). (Learn more about [filing Feedback](https://developer.apple.com/bug-reporting/)).
+Fact: NSA used secret cryptanalytic capabilities to ensure the resulting block cipher that became DES was *protected from the attack they knew about* without revealing said technique.
+
+Fact: NSA recommended reducing the key length from 128 bits to 64 bits (with 8 of the key bits serving as parity bits, thus making it only have 56-bit security).
+
+This both strengthened and weakened DES in different ways. A 56-bit key can be broken by a distributed computing effort in under 24 hours, as of 2012.
+
+This is confusing until you remember NSA has two opposing missions, with (unfortunately) military jargon names.
+
+- COMSEC (Communications Security) — basically blue-teamers
+- SIGINT (Signals Intelligence) — basically red-teamers
+
+The COMSEC folks have a mission to secure the US government and protect US interests (read: private sector).
+
+The SIGINT folks have a mission to spy on other nations on behalf of the US.
+
+In theory, the SIGINT folks aren’t supposed to spy on Americans *at all*. In practice, their Five Eyes partners gives them a stupid loophole: An allied nation can simply do the spying for them, so long as federal prosecutors are willing to engage in a little bit of [parallel construction](https://en.wikipedia.org/wiki/Parallel_construction).
+
+Take note of the DEA section of the previously linked Wikipedia page.
+
+You cannot trust the government, but if you know the mission each department operates under, you can understand *their incentive structures*. Knowing their incentive structures lets you reason about their actual activities–or, failing that, create conspiracy theories with a cohesive narrative.
+
+The COMSEC mission can be related to the S-box strengthening; the SIGINT mission, to the weaker key length.
+
+### Clipper Chip
+
+Okay, so the DES thing was a messy affair. Let’s look at an example of the NSA clearly being on the wrong side of privacy.
+
+The [Clipper Chip](https://en.wikipedia.org/wiki/Clipper_chip), which was designed and promoted by the NSA in 1993 to secure voice messages, with a backdoor.
+
+Clipper Chip was an early example of a NOBUS (Nobody But Us can exploit it) backdoor. Unlike DES’s 56-bit key, the cipher used (Skipjack) was promoted up to a whopping 80-bits.
+
+But before you celebrate, be aware that there was a “key escrow” feature that allowed law enforcement to decrypt plaintext, and a 16-bit hash in the “Law Enforcement Access Field” (LEAF) that turned out to be a pretty stupid vulnerability, as [Matt Blaze discovered in 1994](https://www.wired.com/1994/09/clipping-clipper-matt-blaze/). If you want a technical breakdown, [Professor Matt Green’s blog post](https://blog.cryptographyengineering.com/2015/07/20/a-history-of-backdoors/) covers this (and other backdoors).
+
+Not only was the Clipper Chip a terrible idea to begin with, it was also technically flawed (to the point of embarrassment). This was the first of many issues in what became known as the Crypto Wars.
+
+#### What does this actually tell us?
+
+When the NSA colluded with law enforcement to spy on Americans’ private conversations, their attempt was met with public backlash from independent technologists (Matt Blaze, the Electronic Frontier Foundation, etc.).
+
+The cryptography community outside the military-industrial complex *today* is largely primed to call out Clipper Chip style bullshit whenever it happens. (See also: the EU’s ChatControl.)
+
+![Soatok pointing at a blackboard.](https://i0.wp.com/soatok.blog/wp-content/uploads/2023/10/SoatokLecture.png?w=512&ssl=1)
+
+*AJ_LovesDinos*
+
+### Dual_EC_DRBG
+
+In 2006, NIST published [SP 800-90](https://csrc.nist.gov/pubs/sp/800/90/final), which recommended deterministic random bit generators (DRBGs):
+
+- Hash_DRBG — generating random bits from cryptographic hash functions computed over input entropy sources
+- HMAC_DRBG — generating random bits from HMAC (which is kind of like if a hash function had a secret key)
+- CTR_DRBG — turning a block cipher into a random bit stream by using Counter Mode
+
+The three I listed above are… well, they’re fine. Pretty much everyone uses hash functions or block ciphers to squeeze random bits out of smaller amounts of entropy.
+
+But the fourth entry in the NIST standard was an odd duck. Dual_EC_DRBG was several times slower than the other recommendations and was [immediately flagged as having a backdoor](https://eprint.iacr.org/2006/190) (which [other cryptographers agreed with](https://web.archive.org/web/20140621062515/http://archive.wired.com/politics/security/commentary/securitymatters/2007/11/securitymatters_1115)).
+
+> I don’t understand why the NSA was so insistent about including Dual_EC_DRBG in the standard. It makes no sense as a trap door: It’s public, and rather obvious. It makes no sense from an engineering perspective: It’s too slow for anyone to willingly use it. And it makes no sense from a backwards-compatibility perspective: Swapping one random-number generator for another is easy.
+>
+> My recommendation, if you’re in need of a random-number generator, is not to use Dual_EC_DRBG under any circumstances. If you have to use something in SP 800-90, use CTR_DRBG or Hash_DRBG.
+>
+> In the meantime, both NIST and the NSA have some explaining to do.
+
+Of course, because of Edward Snowden, we know today that cryptographers [were completely correct about Dual_EC_DRBG being a backdoor by the NSA](https://www.bbc.com/news/technology-24048343).
+
+Ever since that revelation, no discussion about NOBUS (Nobody But Us) backdoors would be complete without at least mentioning Dual_EC_DRBG.
+
+What almost nobody foresaw, however, was that a rival nation state would [replace the public key baked into Dual_EC’s design with their own while backdooring Juniper Networks](https://dl.acm.org/doi/10.1145/2976749.2978395).
+
+*Kind of a stupid fucking approach to NOBUS, ain’t it?*
+
+#### What does this actually tell us?
+
+When the incentives of the NSA aligned with malicious government conspiracies against the American people (sorry to keep specifying this, by the way, but they’re pretty much always malicious to folks outside the USA) and standardization processes, it didn’t fly under the radar and basically every cryptographer said “Hell no” to using it.
+
+Whether NSA is capable of being sneakier while corrupting NIST documents remains to be seen.
+
+![Soatok yelling at his computer](https://i0.wp.com/soatok.blog/wp-content/uploads/2024/08/SoatokNerdRage.png?w=512&ssl=1)
+
+*AJ_LovesDinos*
+
+### The Snowden Disclosures
+
+There’s far too much to talk about here, and of varying usefulness. Consult [the Snowden Archives](https://snowden.xsurveillance.site/) if you want to read more. There were a lot of codenames. There was a lot of jargon.
+
+It spawned a lot of memes.
+
+Some of the codenames (e.g., FOXACID) are the sort of thing that cause eyebrows to raise among computer nerds that are familiar with furries and [vore](https://en.wikipedia.org/wiki/Vorarephilia).
+
+Here’s a lightning round of some of what we learned from Snowden:
+
+1. Bulk collection of Americans’ phone metadata, despite James Clapper committing perjury to the contrary
+2. [PRISM](https://en.wikipedia.org/wiki/PRISM): mass passive surveillance of the Internet, which is largely why TLS became ubiquitous in the years since.
+3. Tempora: copied data from undersea cables for NSA to analyze
+4. BULLRUN / EDGEHILL — see also: Dual_EC_DRBG, but also RSA Security
+5. XKeyscore: basically a private version of Palantir’s product today
+
+There’s so much more we could talk about, but what’s notably absent from Snowden’s leaks is any secret cryptanalytic attacks against standardized cryptography.
+
+Notably, they couldn’t break Tor in any way that wasn’t already known to the Tor developers at the time.
+
+Hell, there were myriad conspiracy theories in late 2013 about the Silk Road marketplace being taken down by a NSA attack on Tor. The slide decks Snowden leaked suggest otherwise.
+
+#### What does this actually tells us?
+
+A lot. Far too much, in fact, for me to dissect it all in this blog post!
+
+But the pertinent detail is this: The absence of cryptanalytic capabilities in Snowden’s leaks can be interpreted one of several ways.
+
+1. The private sector has largely caught up with NSA
+2. NSA’s compartmentalization was somehow successful at preventing Snowden from discovering these mathematical techniques, but not all the other damning evidence
+3. The NSA didn’t bother trying to beat the cryptography because it was, as is often the case today, so much easier to simply bypass it entirely
+
+Personally, I think any of these interpretations is valid. I’d put my money on number 3, of course. After all, that’s what PRISM largely did.
+
+![Soatok glitching out](https://i0.wp.com/soatok.blog/wp-content/uploads/2025/04/SoatokGlitch.png?w=512&ssl=1)
+
+*AJ_LovesDinos*
+
+## People Can’t Be Normal About This
+
+I omitted several controversies from the previous section, because it was getting too long and I feel I justified my point already. However, I’m sure some people will cry foul at omissions as an attempt at deception, so I need to also mention one that was recently solved.
+
+### The NIST P-Curve Seeds
+
+> The what now?
+
+Elliptic curve cryptography is *a whole topic* I’ve talked about on this blog before, at length, but I’m going to simplify for the sake of being somewhat comprehensible to people who don’t make Frobenius trace jokes on IRC.
+
+NIST published [FIPS 186-2 in 2000](https://csrc.nist.gov/pubs/fips/186-2/final) (and later [updated it in 2001](https://csrc.nist.gov/pubs/fips/186-2/upd1/final)), which provided several elliptic curve groups (P-192, P-224, P-256, P-384, P-521).
+
+Each elliptic curve group was parametrized by a seed, `s`, which was never explained by NSA. The output of the SHA-1 hash of `s` was used to calculate the parameters for each elliptic curve group.
+
+Jerry Solinas, who was the mathematician and cryptographer that published the P-curves, couldn’t remember how the seeds were chosen.
+
+In the wake of Dual_EC_DRBG and BULLRUN, any unexplained value being the basis of several NIST standardized elliptic curve groups caused many people to be itchy.
+
+For a while, Daniel J. Bernstein’s Curve25519 algorithms and software gained popularity in the applied cryptography spaces. This was probably a good thing, overall, but there were [some sharp edges](https://moderncrypto.org/mail-archive/curves/2017/000898.html) (that later work [has since improved upon](https://ristretto.group/)).
+
+Speaking from experience, many of these decisions post-Snowden were the result of paranoia about the NSA possibly adding a NOBUS backdoor to the NIST P-Curves too, rather than merely for the technical merits of Curve25519.
+
+However, Koblitz and Menezes already tackled that in a paper titled, “[A Riddle Wrapped In An Enigma](https://eprint.iacr.org/2015/1018).” To summarize their mathematical arguments: If NSA was aware of a secret weakness that only occurs in some number of elliptic curve groups, and wanted to make a NOBUS backdoor that their adversaries couldn’t figure out, it would need to be a structural weakness that only occurs extremely rarely.
+
+So rarely, in fact, that not only would the computational resources available to Jerry Solinas in the late 1990s would not have been sufficient, but you still couldn’t do it today.
+
+> This scenario is highly implausible for several reasons. First, the class of weak curves must be extremely large in order to obtain a weak curve with the seeded-hash method. For concreteness, suppose that p is a fixed 256-bit prime. There are roughly ![2^{257}](https://s0.wp.com/latex.php?latex=2%5E%7B257%7D&bg=0a0a0a&fg=f0f0f0&s=3&c=20201002) isomorphism classes of elliptic curves defined over ![F_p](https://s0.wp.com/latex.php?latex=F_p&bg=0a0a0a&fg=f0f0f0&s=3&c=20201002). Let ![s](https://s0.wp.com/latex.php?latex=s&bg=0a0a0a&fg=f0f0f0&s=3&c=20201002) be the proportion of elliptic curves over ![F_p](https://s0.wp.com/latex.php?latex=F_p&bg=0a0a0a&fg=f0f0f0&s=3&c=20201002) that are believed (by everyone except hypothetically the NSA in 1997) to be safe. This class of curves includes essentially all elliptic curves of prime order (with the exception of prime-field anomalous curves and those that succumb to the Weil/Tate pairing attack). Since the proportion of 256-bit numbers that are prime is approximately ![1/(256 ln 2) \approx 2^{\neg 8}](https://s0.wp.com/latex.php?latex=1%2F%28256+ln+2%29+%5Capprox+2%5E%7B%5Cneg+8%7D&bg=0a0a0a&fg=f0f0f0&s=3&c=20201002), the proportion of curves that are strong is at least ![2^{\neg 8}](https://s0.wp.com/latex.php?latex=2%5E%7B%5Cneg+8%7D&bg=0a0a0a&fg=f0f0f0&s=3&c=20201002). Now suppose that the proportion of these curves that the NSA knew how to break were ![2^{\neg 40}](https://s0.wp.com/latex.php?latex=2%5E%7B%5Cneg+40%7D&bg=0a0a0a&fg=f0f0f0&s=3&c=20201002). In this hypothetical scenario the NSA could select such a weak curve by trying about ![2^{48}](https://s0.wp.com/latex.php?latex=2%5E%7B48%7D&bg=0a0a0a&fg=f0f0f0&s=3&c=20201002) seeds. The number of NSA-weak curves would then be approximately ![2^{209}](https://s0.wp.com/latex.php?latex=2%5E%7B209%7D&bg=0a0a0a&fg=f0f0f0&s=3&c=20201002). This would mean that this huge class of weak curves was known to the NSA in 1997 but is still undiscovered by outside researchers in 2015. **It is highly unlikely that such a large family of weak elliptic curves would have escaped detection by the cryptographic research community from 1997 to the present.**
+
+This quote highlights my broader point in this whole blog post: The NSA isn’t magical. (Nor is AI. Nor are quantum computers.) The NSA’s capabilities and budgets are finite. Their incentives are defined by their mission.
+
+In 2023, Filippo Valsorda and several others (including myself) pledged [a bounty](https://words.filippo.io/seeds-bounty/) (with extra if the award is donated to charity) to anyone that could solve the mystery of the NIST P-curve seeds.
+
+Earlier this month, Anthropic [successfully claimed that bounty](https://words.filippo.io/seeds-solved/), and elected to donate the bounty to the ISRG (the non-profit that operates [the Let’s Encrypt certificate authority](https://letsencrypt.org/)).
+
+There’s a poetic irony here: My pledged donation is going towards the organization that led the way to making TLS ubiquitous online since 2015 in the wake of the NSA’s global mass surveillance… **because one of the NSA mysteries was finally solved**.
+
+This is a nice segue into the final topic I want to discuss today.
+
+![UwU](https://i0.wp.com/soatok.blog/wp-content/uploads/2020/10/soatokuwu.png?resize=512%2C512&ssl=1)
+
+*[CMYKat](https://cmykatgraphics.carrd.co/)*
+
+## Post-Quantum Cryptography
+
+I’ve already covered most of what I want to say here in a previous post titled, *[Hybrid Constructions: The Post-Quantum Safety Blanket](https://soatok.blog/2026/04/13/hybrid-constructions-the-post-quantum-safety-blanket/)*.
+
+I was tagged in a Fediverse post yesterday that punctuated the sort of discourse cryptographers have already seen in the IETF mailing list threads and on technical forums in the past few months:
+
+> NIST works for US fash regime that’s trying to help their AI scammer buddies pivot to quantum scams.
+>
+> That’s the generous interpretation.
+>
+> The worse one is that NSA has known flaws/backdoors in the post quantum systems and wants to shut down the actually-secure ones.
+
+This was a reply to a quote-post of [another thread](https://web.archive.org/web/20261029071728/https://defcon.social/@infosec/117516999211815499) that described NIST publishing its final plan for [IR 8547](https://csrc.nist.gov/pubs/ir/8547/final): the transition to post-quantum cryptography.
+
+The NSA announced, in 2015, [its plans to migrate to “quantum resistant algorithms”](https://web.archive.org/web/20151016020521/https://www.nsa.gov/ia/programs/suiteb_cryptography/).
+
+For the decade or so since, the NIST Post-Quantum Cryptography standardization effort has largely revolved around [the NIST pqc-forum](https://groups.google.com/a/list.nist.gov/g/pqc-forum). You can read the archived email threads, publicly, going back to the forum’s inception. Most of the emails are dry, boring, technical, and/or procedural.
+
+But in the beginning? It was a *bloodbath* of cryptanalytic attacks against proposed KEMs and signature algorithms.
+
+The NIST recommendations and standards for post-quantum cryptography were a transparent effort involving *virtually anyone in the cryptography and security communities that wanted to participate* spanning from 2015 until now, and it is still ongoing.
+
+The selected algorithms (i.e., ML-KEM, formerly known as CRYSTALS-Kyber) were designed by international teams. The principal submitter of ML-KEM, Peter Schwabe, even worked with Daniel J. Bernstein on [NaCl in the 2010s](https://nacl.cr.yp.to/) (and was [one of Bernstein’s Ph.D Students](https://cryptojedi.org/peter/index.shtml)).
+
+> Bernstein, for those not following along, was a large source of irritation on the TLS Working Group mailing list earlier this year for his weird anti-ML-KEM and anti-ML-DSA tirades and concern-trolling.
+>
+> At one point, he tried to summon Twitter mobs to join the mailing list and pack the vote… except, that’s not how Rough Consensus works at IETF at all!
+>
+> Today, many “NIST backdoored post-quantum” conspiracy theories point to Bernstein to support their points.
+>
+> It’s all very stupid and disappointing.
+
+Furthermore, there [isn’t enough structure in ML-KEM, in particular](https://keymaterial.net/2025/11/27/ml-kem-mythbusting/), to squeeze in a public key to make any plausible weakness truly NOBUS.
+
+### How plausible is an NSA backdoor here, really?
+
+I’m no Neil Koblitz or Alfred Menezes, so forgive me if my rebuttal doesn’t contain the mathematical rigor of those two.
+
+Here are some facts to consider.
+
+1. The federal government (through CNSA 2.0) is being told to adopt ML-KEM-1024 and ML-DSA-87. Hybrid constructions are not blessed for protecting federal government systems.
+2. As we saw with the DES S-boxes, the NSA is known to sometimes make decisions that improve security (though may conceal an attack on competing designs).
+3. NSA has a dual mission: COMSEC and SIGINT, as discussed above.
+4. NSA has tried to subvert standards before (DUAL_EC_DRBG).
+
+Is it plausible that the NSA would be so confident in the NOBUS status of a secret flaw or backdoor in ML-KEM (which they did not design) that they’d **move the entire fucking federal government’s systems for TOP SECRET classified information** to adopt it [as fast as possible](https://www.nsa.gov/Press-Room/Press-Releases-Statements/Press-Release-View/Article/4615285/nsa-announces-post-quantum-cryptography-measures-to-safeguard-national-security/)?
+
+I don’t know, man. That sounds kind of fucking stupid to me.
+
+In my opinion, a more compelling conspiracy theory is that NSA already secretly built a quantum computer in [their Utah data center](https://en.wikipedia.org/wiki/Utah_Data_Center), and it’s already being used to spy on everyone today.
+
+It’s a better fit than “ML-KEM is a NSA backdoor, the European cryptographers that designed it are all stupid, and the NSA is eager to move the US government onto a flawed or broken cryptosystem because SIGINT is all they care about, even at the expense of COMSEC, and they also can’t just *look for the plaintext* (which already works 99% of the time) they *gotta* be able to crack the encryption” which is the essence of the conspiracy theories that keep hitting my inbox today.
+
+Conspiracy theories aren’t harmless. They create room for [grifters and hucksters](https://soatok.blog/2021/02/09/crackpot-cryptography-and-security-theater/) to deceive well-intentioned non-experts.
+
+![Confused protogen](https://i0.wp.com/soatok.blog/wp-content/uploads/2021/07/neophyte-confused.png?resize=409%2C512&ssl=1)
+
+*[Harubaki](https://harubaki.carrd.co/)*
+
+## In Closing
+
+If you convinced yourself of a wrong conspiracy theory, that doesn’t mean you are dumb or unlovable.
+
+NSA is certainly up to something. It’s their entire fucking job to be up to something. But it’d very unlikely to be a post-quantum backdoor no matter how much energy is expended on discussion boards and social media trying to convince people of that narrative.
+
+Since neither you nor I have any information on what they’re actually up to, it’s tempting to look at the absence of evidence and fill-in-the-blanks and pattern-match based on what we already know today. That’s not stupidity.
+
+Unfortunately, most of the proponents of these conspiracy theories will cherry-pick the most damning examples (i.e., Dual_EC_DRBG, through the lens of Snowden) while ignoring the messier and more nuanced aspects of the NSA’s [mis]conduct with the larger cryptography community.
+
+So, please: Stay curious and humble. Better and more likely conspiracy theories exist, and may even be true, but you’ll never reach them if you short-circuit your analysis on stale low-hanging fruit and stop wondering.

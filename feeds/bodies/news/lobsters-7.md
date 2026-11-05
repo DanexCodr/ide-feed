@@ -1,56 +1,28 @@
-On October 23, 2026, the unthinkable happened. It was supposed to be a mere formality: C++26 was up for a vote by the ISO National Bodies (NBs). The options are always approval, rejection, or abstention. Comments are also allowed. Since 1998, this process had run quietly and smoothly. Not so on October 23, 2026. After a twelve-week voting period, the result is in: **Disapproved**!
+- Harmonic announced last week that they are using their agent Aristotle for scalable verification of both software and hardware. For example, in a C library for big-number arithmetic, it was able to fix bugs and prove that a faster version was equivalent to the original. The person whose work I particularly follow in this area is Satnam Singh, who has worked on hardware verification for several years.
+- SF-Tensor announced that they were formalizing NVIDIA’s PTX language in Lean to prove the correctness of GPU kernels. SF-Tensor was founded by three brothers at the age of 19, after they had completed their BSc degrees at 16 while attending high school.
+- &Truth came out of stealth, announcing plans to use Lean to prove the correctness of AI-generated software. Key people involved include Clark Barrett, known for his work on cvc5 and CSLib; Ilya Sergey, known for Veil and his work on verification using separation logic; and Sebastian Ullrich, Lean’s second-in-command.
+- Theorem. and Anthropic worked together on verifying open-source software running on a RISC-V processor. Their work covered encode–decode round-tripping, idempotence, algebraic laws, differential testing, self-consistency, and equivalence to reference implementations. They also proved isolation properties of a sandbox built on the xv6 academic kernel.
+- AutoResearch.inc has also announced they have verified 7 web assembly tools down to ELF and sys calls (on x86-64 and RISC-V).
 
-*I would like to mention here that I am a member of the C++ Standardization Committee and, together with my colleagues, represent Germany’s vote. ISO rules also stipulate that certain votes are internal to ISO, and the results—or the breakdown of the results—may not be published. This article contains my own personal views.*
+The common factor in these announcements is the goal of achieving full-stack formalization, either across the software stack or across a combination of software and hardware. In the past, verification was performed only on a small core of the software or on a simplified model of the actual software.
 
-## The Current Status
+![Verification Alternatives Diagram _ ai generated](https://wiki.alcidesfonseca.com/media/images/verification_diagram.png)
 
-As far as I know, this is the first time in the history of C++ that DIS ballot failed. When I searched the ISO system, I could only find one other DIS that was not approved: ISO/IEC DIS 26926 C++/CLI Language Specification dated August 11, 2006. It’s possible that my search privileges aren’t sufficient to view everything, but all ISO programming languages should be visible to me. The sad end of ISO/IEC DIS 26926: the project was halted. I mention this upfront to clarify the significance of this vote.
+For reference, AWS’s access-control language, Cedar, had a Rust implementation running in production and a reference implementation—first in Dafny and later in Lean—that was verified for correctness.
 
-In the following, I will use various terms from everyday ISO terminology. At [https://isocpp.org/std/iso-iec-jtc1-procedures](https://isocpp.org/std/iso-iec-jtc1-procedures), there is an overview of the various stages of an ISO standard. DIS is the penultimate stage. As the overview also shows, a two-thirds majority is required. This majority was not achieved.
+> One approach would be to develop Cedar entirely in Lean, compile to C, and deploy the generated C code in production. In addition to the formal model, we would write an optimized and full-featured implementation (which handles errors and messages more carefully, provides parsers for various formats, etc.) in Lean, and then prove the two equivalent. A key benefit of this approach is that we would formally verify—rather than just test—the equivalence of the deployed code and model. But there are significant downsides to writing production applications in Lean and deploying its generated C code. Lean is a new programming language, so it has a limited developer pool and lacks useful libraries available in mainstream languages. Debugging a failure might necessitate stepping through the generated C code and mapping it back to the Lean source, requiring expertise in C and Lean. Doing so could be particularly difficult if the failure is due to an interaction between handwritten code and Lean-generated C code. In addition, C is a memory-unsafe language, so a bug in the Lean compiler could lead to security issues.
 
-The reason for the rejection is quite clear from the comments submitted by the National Bodies (NBs): contracts. Put simply, a number of NBs believe that this feature is not yet ready for release.
+— [How We Built Cedar: A Verification-Guided Approach](https://arxiv.org/html/2407.01688v1) (April 2024)
 
-## The Process
+Over the past year, I have been talking about liquid types as my personal preference for program verification. Liquid types are a restricted form of value-dependent types whose constraints can be checked automatically using [SMT solvers](https://wiki.alcidesfonseca.com/blog/another-puzzle-z3/). This is my sweet spot: you get much of the benefit of an expressive type system in which you can express properties such as [typestate](https://liquid-java.github.io/), preventing methods from being called when an object is in the wrong state—for example, calling `read()` after `close()`. And it comes at a much lower cost, especially because you do not have to write the proofs: the SMT solver takes care of that.<sup>[1](https://wiki.alcidesfonseca.com/blog/full-stack-verification-is-the-new-trend/#fn:1)</sup>
 
-Now it gets complicated. The C++ Standardization Committee, also known as WG21, follows ISO rules but also has some additional rules. One of these is (or was) that opinions are always heard whenever new information becomes available. If an opinion was heard and a feature was nevertheless not changed as desired, the person respects the outcome and accepts that many others disagree.
+![Liquid types are less expressive than full dependent types](https://wiki.alcidesfonseca.com/media/images/language_spectrum.png)
 
-However, the voting body at the NB level may also consist of other individuals, or the NBs are, of course, free to vote differently.
+Until a few months ago, this trade-off was very important: very few people in the world had the expertise and time to undertake the full verification of a large open-source project (props to the [seL4](https://sel4.systems) folks!). Frontier models’ superhuman ability to generate proofs has since eroded this moat, and subsidized token prices make this the perfect time to conduct these experiments. I have to admit that the image above, which I used in my recent slides, might no longer make sense. It might become relevant again when token prices rise—probably to reflect their actual costs—and we need to save time and tokens while still verifying properties we care about, without going all the way down to the machine-code level.<sup>[2](https://wiki.alcidesfonseca.com/blog/full-stack-verification-is-the-new-trend/#fn:2)</sup>
 
-The previous practice was that NBs would only vote against a standard if new information became available or if errors in the process or similar issues were identified. This changed on October 23, 2026.
+Right now, if we pursue full-stack verification, we might need to write code in a verification-first language like Lean. Dafny and my own [aeon](https://github.com/alcides/aeon) could be candidates, but Lean’s functional programming model and the substantial funding the project receives make it the ideal candidate. Rocq enthusiasts might not like it, but extracting executable code to OCaml is not such a significant advantage in the real world.
 
-It’s difficult to judge in this complex situation; the NBs who want C++26 without Contracts argue that there is new information. I myself find it hard to share this view. A new paper with old arguments is not new information to me.
+But we need Lean to improve. Above all, we need faster type checking and a much better optimizer. That’s the part that [Bend2](https://bend2.dev/notes/what-is-bend2/) got right from the start—the next mainstream language will require both verification and speed.
 
-## The History of Contracts in C++
-
-The feature has been on the wish list for a long time. I was already in the room in Cologne back in 2019, at the time for C++20, when Contracts, in a different form back then, were being included in the standard. I was also in the room when the feature was removed from C++20 again during the same meeting. As a result, a study group was formed to address the topic of Contracts and its various aspects from 2020 to approximately 2024. Afterward, the study group submitted its work and proposals to the Evolution Working Group (EWG), the central body for language extensions. There, the topic was discussed further over several meetings before being included in C++26 by a majority vote.
-
-In the next step, WG21 voted on the C++26 draft in March 2026, which included Contracts. Here, too, a large majority was achieved, though not without dissenting votes.
-
-And that brings us to the next phase: DIS. At this stage, there were enough “no” votes that a two-thirds majority was not reached.
-
-## What happens next?
-
-The big problem: what happens next? ISO, of course, has a process for this. It offers various options:
-
-1. Submit a revised draft for a new DIS vote.
-2. Submit a revised draft to the committee (that would be the CD phase).
-3. Publish a revised draft as a Technical Specification.
-4. Cancel the project.
-
-All of these possibilities mean a delay in the next C++ standard. Whether it will still be called C++26 is also up in the air, but that’s a much smaller issue.
-
-The difficulty with all four options is that they require a majority within WG21. However, this working group voted to move C++26 *with* Contracts into the next voting phase leading to its release. And it did so with more than just the required two-thirds majority. The feature didn’t come out of nowhere, either; it was developed over the course of years through the work and possibly personal commitment of many people. It’s hard to imagine that this group would simply want to abandon its work, which has received approval on multiple occasions so far. The same applies to the group that is dissatisfied with Contracts. This group, too, has invested effort, in some cases even in alternative implementations. It’s hard to imagine that, after these groups voted “no” in the DIS vote, the result would change without Contracts being removed.
-
-Even the last option *removing C++26* requires a majority in WG21. As I understand it, this step would mean reverting to C++23 and proceeding to C++29 without a single change. This would affect the work of even more people. WG21 would then be tasked with incorporating features that have already been successfully included in C++26 into C++29. Since this can only be done through a paper backed by at least one person advocating for it, features could be omitted if that person lacks the motivation or time.
-
-Of course, certainty about the voting outcome can only be achieved if the respective path is actually taken.
-
-Unfortunately, the way forward is currently more than uncertain. Perhaps this also explains why ISO/IEC DIS 26926 marked the end of this activity. Consensus is needed to move forward. Trust is always required for consensus. Unfortunately, that trust has just been shaken.
-
-The next C++ standard, and thus the future of C++, is currently at an impasse.
-
-The good news is that the next meeting will take place on November 16, which is just a few days away. The top priority will be to break the deadlock. This will very likely have implications for C++29 as well; in fact, there is currently no reason to continue working on this project.
-
-## My Personal Opinion
-
-Normally, my articles are technically focused and free of personal opinion. Regarding the rejected DIS, I can only say that I consider it a massive disaster and feel sorry for the entire C++ community. Regardless of whether someone likes Contracts, considers them important, or sees major weaknesses in them, the topic has been worked on for years and has received a majority vote multiple times in its current form. By voting “no,” an established system, one based primarily on trust and respectful collaboration, has been shaken. Every ISO standard is simply a set of compromises. Everyone loses sometimes, and everyone wins sometimes. Overall, the result is one in which all participants have given their best. During the DIS vote, the losing parties refused to accept their loss. The question that primarily determines *how to move forward* is whether the group can rebuild trust.
+1. Using proof combinators, you can use LiquidHaskell to achieve the same expressive power as Lean. Conversely, you can use Lean with only the `grind` tactic to achieve the same lower cost as liquid types. Here, I am considering each as it is typically used. [↩](https://wiki.alcidesfonseca.com/blog/full-stack-verification-is-the-new-trend/#fnref:1)
+2. I am convinced that people will not read the source code and will instead rely on new techniques to establish confidence in the generated code. [↩](https://wiki.alcidesfonseca.com/blog/full-stack-verification-is-the-new-trend/#fnref:2)
