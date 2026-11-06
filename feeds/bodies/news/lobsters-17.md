@@ -1,39 +1,51 @@
-[Alice & Bob](https://alice-bob.com/), a French QC company, [claims (in a paper posted on cryptographers’ ePrint)](https://eprint.iacr.org/2026/2665) that a quantum computer they may eventually build could, with just **22,593 qubits**, break (factor) RSA-2048 in about **𝝅 ≈ 3.14 days**. As an orange–pineapple comparison, Google’s OMG press release in March was about a system with half a million qubits, to break 256-bit ECDLP.
+It was just a boring Saturday afternoon, and I thought I'd fix some of the problems with my homelab. One of those problems was that an external site my Podman container was trying to talk to just wasn't working.
 
-As usual, several people have asked me how scary this is—and as usual some of them have decided that it’s actually scary and expect my confirmation, and ask me for justification when I say it’s not, so this post is kinda serving this purpose.
+I kept getting "Site cannot be reached" almost immediately. This made me suspect something was wrong with my DNS setup, so I started doing a `dig` on the domain. I tried different providers, Google DNS, Cloudflare, pretty much everyone. Almost all of them returned the same IP address. But as soon as I tried Cloudflare's DoH endpoint, I got a completely different IP address.
 
-**The short answer: it’s interesting research, but we (well, A&B) are nowhere near having such a machine—and a lot of “ifs” are involved.   **
+"Huh?" was my exact reaction.
 
-First, quick context: QCs use qubits instead of ordinary bits; a problem is that qubits are extremely fragile, errors happen frequently, they must be corrected, and correcting them requires… more qubits, running quantum error correction. That’s one of the main obstacles to building QCs.
+I took the IP I got from the first DNS resolution and tried to look up who owned it. Lo and behold, it was my goddamn ISP. That's when I realised my ISP was hijacking my DNS queries and returning a tampered IP address.
 
-A&B is developing a special type of qubit, which is a type of **cat qubit** (the “cat” is Schrödinger’s, a reference to the way cat qubits encode information). Cat qubits are designed to make *certain* errors rare. A&B built systems with up to 18 cat qubits.
+Well, the obvious answer was DoT (DNS over TLS) or DoH (DNS over HTTPS). [I made a tweet about this, and it somehow blew up](https://x.com/karthihegde/status/2116533888025874611).
 
-The paper is essentially a thought experiment based on premise “*Imagine we could build a large quantum computer using **improved versions** of our qubits, then how efficiently could it break RSA-2048?” *It’s also sort a bit of a truism “*If we could build what’s necessary to break RSA-2048, then guess what…” *
+But going through the replies, I noticed quite a few misconceptions and questions that I couldn't answer one by one.
 
-A&B’s paper combines assumptions about future hardware with error correction techniques and an optimized implementation of Shor’s algorithms. Their calculations suggest that around 23,000 qubits would be sufficient.
+So I figured I'd use this article to address some of those questions and clear up a few misconceptions along the way.
 
-**But there’s a major catch.**
+## I self host Unbound I am safe
 
-Their main calculation assumes that a particular type of error (bit-flip) would occur, *on average*, only once every **100 years per qubit**. That’s a pretty low error rate for a qubit, even for a cat one:
+For those of you who don't know, Unbound is basically a DNS resolver, kind of like what Cloudflare runs at `1.1.1.1`. The difference is, you can run it locally. It works by querying DNS servers to figure out the IP address for a domain, starting at the root nameservers and eventually making its way to the domain's authoritative nameserver.
 
-![](https://www.bfswa.blog/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fe69f645f-1133-44fa-9a6e-8d7711576375_1226x670.png)
+Now here's the catch. DNS resolution doesn't happen over a single connection. Your resolver might have to talk to multiple nameservers to figure out an IP address, and these queries are traditionally sent over plaintext DNS, usually UDP. Which means, you guessed it, your ISP can snoop on or even tamper with your DNS traffic.
 
-For comparison, A&B’s published experiments demonstrated this kind of error occurring, on average, **once every few minutes** (under certain conditions and much more frequently during some quantum operations.)
+But you can also configure a [forward-zone](https://unbound.docs.nlnetlabs.nl/en/latest/manpages/unbound.conf.html#forward-zone-options) in Unbound. Instead of resolving DNS queries itself, Unbound can forward them to another DNS resolver. And if that resolver supports DoT, the connection to it is encrypted, which means your ISP can't casually snoop on or tamper with your DNS queries in transit.
 
-The paper acknowledges a gap of more than **100 million times** between the assumed reliability and the experimental results it uses for comparison.
+## Just use DNSSEC
 
-There’s also the scale detail: A&B has developed experimental systems with up to 18 qubits; they’d need another 22,575 qubits.
+It's understandable why someone would assume DNSSEC is what protects them here. I mean, it has DNS and Security right in the name. And in a way, it does, but it works through verification, not encryption.
 
-The paper mentions an alternative design with more realistic error rate assumptions, requiring around **45,000 qubits**. But again thus depends on error-correction techniques that haven’t yet been demonstrated.
+You see, DNSSEC doesn't encrypt your DNS traffic before sending it to a resolver. It uses cryptographic signatures to verify that the DNS data is authentic and hasn't been tampered with. But the problem here remains the same: your DNS traffic is still unencrypted in transit. Which means, your ISP can still snoop on it or mess with the responses.
 
-I feel like competition among QC companies is increasingly a competition for attention; it encourages them to publish scary-looking numbers based on more or less plausible assumptions. To be fair, A&B’s paper is transparent about its assumptions and is solid quantum engineering work. The problem is less the research itself than how its results are presented and promoted.
+And for DNSSEC validation to work, the domain you're querying needs to have DNSSEC properly configured, with valid signatures and a chain of trust. And here's another problem: [according to the October 2026 Defaults.Exposed census](https://defaults.exposed/methodology/dnssec), only 7.03% of graded domains have a valid, fully validating DNSSEC chain.
 
-So the research isnt worthless: estimating the resources needed to break crypto is important and improvements to quantum algorithms and architectures deserve attention. But **calculating what an hypothetical machine could do is different from demonstrating that we know how to build that machine**.
+If a tampered response fails DNSSEC validation, your resolver will return SERVFAIL instead of handing you that bogus IP address.
 
-That’s the distinction you must keep in mind when reading OMG-quantum headlines.
+## DoH and DoT are not Tamper free
 
-Oh and another result (claimed under similar assumptions) is an architecture to solve **ECDLP in about one hour** with ~30,000 qubits:
+And yes, this is true. DoT and DoH rely on you trusting the DNS resolver you're sending your queries to. They encrypt the connection, so your ISP can't casually snoop on or tamper with your DNS traffic in transit. But that doesn't mean the resolver itself can't mess with your responses. You're still putting your trust in whoever runs that DNS server.
 
-![](https://www.bfswa.blog/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fecccb9be-90a7-4271-8ed9-62342e589c3a_1224x1050.png)
+## Your ISP can snoop on the sites regardless
 
-Thanks for such a thoughtful post and debunking the scary title of this paper. It’s annoying to me that companies keep on producing assumptions that are hard to parse without deep expertise so they can feed into the cycle of quantum hype and media and PR and panic and amplification. Wish research now focused on helping companies and other choose what to migrate and figure out cheap tooling to facilitate PQC
+Indeed. Although your regular internet traffic is encrypted with TLS, your ISP can see the hostname during the TLS handshake (SNI). They can also figure out which site you're visiting just from the destination IP sometimes.
+
+Unless, of course, you tunnel your traffic through a VPN. I use Mullvad through Tailscale's exit node feature.
+
+Of course, this just shifts some of the trust to your VPN provider. But that's a story for another day.
+
+## So what does my setup look like?
+
+I've been using Pi-hole/AdGuard for over 3 years now. That's actually what got me into self-hosting in the first place.
+
+But there's another reason I don't route every single container through my local DNS server. When I'm updating containers, if something goes wrong and my DNS server goes down, I don't want that to take down DNS resolution for other containers that depend on it. So for some containers, I wanted an external DNS resolver as a fallback.
+
+Right now, I use AdGuard for my DNS, with `dnscrypt-proxy` handling the upstream DNS queries over DNSCrypt, so my DNS traffic is encrypted in transit. For containers where I really can't afford DNS failures, I also have Cloudflare configured as a fallback. My local AdGuard is still the primary DNS for them, though.

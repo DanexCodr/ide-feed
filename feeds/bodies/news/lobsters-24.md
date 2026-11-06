@@ -1,59 +1,38 @@
-We’re excited to announce Adaptive Dark Mode in Safari 27.3 beta. When enabled by a user, Safari adapts light websites and presents them as dark.
+Our [Residential Proxy Observatory](https://layer3intel.com/context), launched earlier this week, is a first-of-its-kind interface that gives researchers a global view of residential proxy and anonymized internet activity.
 
-In the spring of 2019, Safari 12.1 became the first browser to support dark mode on the web. A lot of people love using dark mode, but not every website has a dark version. Almost [40% of web page loads](https://chromestatus.com/metrics/feature/timeline/popularity/3580) are from users in dark mode, and yet [only 10%](https://chromestatus.com/metrics/feature/timeline/popularity/3707) of page loads support it. If you love dark mode, you’ve probably hit a site that felt particularly [bright](https://www.tiktok.com/@syntaxfm/video/7307721014891367711). Adaptive Dark Mode is designed to close that gap, providing a consistent dark experience across the web.
+While our team was looking through it, we noticed residential proxy exit activity on  [AS2650](https://layer3intel.com/context/AS2650). AS2650 is registered to the Executive Office of the President, the federal agency that hosts the White House network.  [Residential proxy services](https://layer3intel.com/what-is-a-residential-proxy) sell access to everyday devices, letting customers send traffic through them so it appears to come from that device's network.
 
-![A demo website in light mode on the left and dark mode on the right. It's a complex site with lots of UI full of bits of color that's transformed by Adaptive Dark Mode.](https://webkit.org/wp-content/uploads/Demo-of-Adaptive-Dark-Mode_dark.png)
+## What we observed
 
-You can try it today in Safari 27.3 beta. To enable, first make sure your system appearance is set to dark. Then browse to a website with a bright background. Safari will offer a preview of Adaptive Dark Mode. Tap ‘Try’.
+From October 5 to November 3:
 
-For websites that signal support of dark mode with `<meta name="color-scheme" content="light dark">` in HTML or `color-scheme: light dark` in CSS, Adaptive Dark Mode does not change a thing. For the rest of the web, it quickly analyzes the page, looking at colors and estimating whether it’s predominantly light or dark. If the page generally has a dark background with light text, nothing is changed. When a page has a light appearance, Adaptive Dark Mode adapts the page to be dark.
+- Our residential proxy enumeration pipeline exited through the White House network 236 separate times.
+- Those exits came from 6 addresses, on 26 of the 30 days.
+- 28 separate residential proxy services were able to exit through this network.
 
-## How does Adaptive Dark Mode work?
+To make sure this was not a fluke, we checked these addresses against other residential proxy detection services, such as Spur and Synthient. Their public IP context pages independently identify these addresses as residential proxy exits.
 
-At the core of Adaptive Dark Mode is the transformation of color. Sometimes colors are simply decorative, while other times they have semantic meaning. Adaptive Dark Mode determines when to invert colors so elements remain visible or when to leave colors unchanged.
+This is public access. Anybody can obtain it by signing up to a public residential proxy service, paying a few dollars and sending requests through it. We did not selectively target this network or try to make our probes exit from it. We caught this by chance, simply by requesting global rotating access through these services.
 
-While creating Adaptive Dark Mode, we developed a color matrix to invert the luminosity of colors while preserving hue. It’s used to make light backgrounds dark, and dark text light. When transforming text color, Adaptive Dark Mode aims for sufficient contrast as defined by the [WCAG 4.5:1 contrast ratio](https://www.w3.org/WAI/WCAG21/Understanding/contrast-minimum.html). Light CSS gradients are also transformed to dark.
+## Why this is concerning
 
-Adaptive Dark Mode makes careful judgments so transformed content looks good and stays usable: buttons have contrast against backgrounds, text is visible over images, and hover menus look clear.
+Most of the activity happens in the evening, Eastern time: about half of it falls between 5 p.m. and midnight, and almost none happens in the early morning. That pattern suggests a person rather than a public guest Wi-Fi network: someone regularly on the White House network late into the evening, whose device is infected with a proxy SDK. Our data shows the exits, not the device or the person behind them.
 
-It takes the same care with images. Most are left unchanged, preserving their integrity. But many icons and logos can lose contrast when the background color behind them is inverted. So Adaptive Dark Mode inspects SVG images and transforms colors when needed. For bitmap images, it analyzes the pixel histograms and inverts simple black-and-white logos.
+Past research has shown that poorly secured proxy SDKs can allow internal network access and lateral movement. This is how past botnets have spread. In  [A Broken System Fueling Botnets](https://synthient.com/blog/a-broken-system-fueling-botnets), the researchers at Synthient documented how the Kimwolf botnet reached at least 2 million devices, mostly Android devices with an exposed ADB service, through residential proxy networks. If an SDK on this network has the same kind of flaw, anyone buying proxy access could use it to reach internal systems.
 
-![Side by side screenshots of the Interop 2026 dashboard in Safari. On the left, the original light mode website. On the right, the site transformed by Adaptive Dark Mode. The graph still matches light mode (untransformed) but everything else on the page is dark. ](https://webkit.org/wp-content/uploads/Interop-dashboard-with-Adaptive-Dark-Mode_dark-scaled.png)
+## No place is too remote
 
-Effects like masks and `mix-blend-mode` can create undesirable results on an element whose colors have been transformed, so in some cases Adaptive Dark Mode turns such effects off. Also, `<canvas>` content is left unchanged, since canvases contain a wide range of content that’s hard to predict.
+The White House is not the only surprise in the observatory. Residential proxies also reach some of the most isolated places on the planet.
 
-It’s precisely because Adaptive Dark Mode is happening deep within the WebKit browser engine that we are able to find creative ways to solve the most complex challenges, apply the transformations with great speed and power efficiency, all while rigorously protecting user privacy.
+[Saint Helena, Ascension and Tristan da Cunha](https://layer3intel.com/context/country/SH) is the South Atlantic territory that includes the most remote inhabited island in the world. We recorded  **413 addresses** and more than **32,000 observations** there, split between Starlink and the island's local internet provider, Sure Saint Helena.
 
-## Making your site work even better
+We also recorded **three observations** from  [Antarctica](https://layer3intel.com/context/country/AQ). All of them come from a Cloudflare WARP address that points to McMurdo Station.
 
-In general, a web page will work well with Adaptive Dark Mode if it follows good modern web development practices.
+Other remote places with activity:
 
-If your site still uses older techniques, small updates can help. For logos and icons, swap bitmap images for SVG. Use solid or gradient colors in CSS instead of tiled background images. Replace image sprites with modern CSS for rounded corners, shadows, and button states. Create content images with transparent backgrounds instead of baking the page background color into the image. Add padding to containers to prevent crowding.
+- Pitcairn: 1 Starlink address, 1 observation.
+- Norfolk Island: 1 Norfolk Telecom address, 4 observations.
+- Svalbard: 1 Starlink address in Longyearbyen, 3 observations.
+- Also seen: the Falklands (388 addresses), the Chagos Islands (43), Tokelau (21) and South Georgia (7).
 
-Perhaps you want a specific dark mode experience for a certain portion of the page. Apply [`color-scheme: light dark`](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/color-scheme) to the relevant element and add your own dark styles.
-
-## Building your own dark mode
-
-For complete control over how your site looks in dark mode, add full support. It’s a terrific time to do so. It’s never been easier.
-
-All the web technology needed to fully support dark mode is widely available today, including:
-
-Newer CSS functions like [`color-mix()`](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/color_value/color-mix) and [`contrast-color()`](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/color_value/contrast-color), plus popular techniques for organizing design systems with CSS variables provide additional options and flexibility.
-
-Be sure to declare dark mode support using the `color-scheme` meta tag in your HTML head and/or by setting the `color-scheme` property on `:root` or `body` in your CSS. Don’t wait to inject this information later via JavaScript. This best practice helps ensure your site is rendered correctly as fast as possible.
-
-## Using the “light only” color scheme
-
-If you would like your web app or website to not be transformed by Adaptive Dark Mode, you can communicate this using `color-scheme`. The HTML `<meta name="color-scheme" content="light only">` tag lets browsers know that 1) this page supports `light` mode and 2) should `only` be displayed in light mode. The `color-scheme: light only` rule does the same thing, but with the flexibility of CSS, allowing you to just target specific elements on the page — or of course, you can target the whole page with `:root { }`. (Note: the ‘only’ keyword is not supported in Safari 27.3 beta 1. Check back as Adaptive Dark Mode evolves through the beta process.)
-
-## Protecting user privacy
-
-Apple firmly believes user privacy is a fundamental human right. If websites could detect when a user has enabled Adaptive Dark Mode, that would increase the amount of fingerprintable information and weaken privacy protections against trackers.
-
-As a result, Safari prevents websites from detecting when Adaptive Dark Mode has been applied. JavaScript that queries CSS colors will get the original authored colors, not the transformed ones. Any images drawn into canvas render in their original form.
-
-## Feedback
-
-If you manage a website or web app, and would like to discuss how Adaptive Dark Mode is adapting your project, feel free to reach out at [web-evangelist@apple.com](mailto:web-evangelist@apple.com).
-
-If you try out Adaptive Dark Mode as a user, and find a site that does not work well, we’d love for you to file a report with [Feedback Assistant](https://feedbackassistant.apple.com/). (Learn more about [filing Feedback](https://developer.apple.com/bug-reporting/)).
+Residential proxies have infected every corner of the world, and it looks like there is no place they cannot reach. Layer3 Intel tracks residential proxy and anonymization infrastructure worldwide. Even when the proxies hide in networks on the farthest corners of the planet, we can still observe them, leaving threat actors no place to hide.
