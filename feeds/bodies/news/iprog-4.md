@@ -1,9 +1,100 @@
-Wing Python IDE version 12.1 has been released with a new Tasks Manager, an agent that runs the Tasks tool's queues for you. Other improvements include support for other AI agents and a redesigned new project page.  Wing Python is an IDE with an intelligent editor and debugger that is designed to make interactive Python development fast, accurate, and fun.  The headline improvement to Wing 12.1 is the addition of 'autonomous development' with the new Tasks Manager. This is an agent that runs the Tasks tool's queues. You write tasks, mark the ones you want started as Ready, and review the results. Developers can pass a variety of things to the manager from a bug report to a high-level specification for a new software project. It can break down larger tasks into a design and development plan, will decide task order, serialize those that are likely to edit the same files, and run closely related tasks in shared session context. It can also message a running agent to tell it about related work or new insights, or redirect it if problems arise.  While the Manager is on, tasks run autonomously. The tasks don't stop to ask questions or present intermediate results, instead they work as far as they can. Once the task has ended, developers get a report of the judgement calls the task made along the way, and any questions it has left. A new Questions tab in the Tasks tool collects everything that is waiting for you, so you can provide answers in one place. If there's a need for follow-up work, or any problems that the agents have noticed while running, they are added to the Plan tab of the Tasks tool as new tasks.  Changes made by the Manager are listed and can be reverted or revised, even after changes have been committed. Developers can ask the Manager about the status of development or give it special instructions.  The Wing Python team says Claude Code and Codex are best for autonomous development, since they self-check the safety of commands that they run, while Antigravity, Copilot, and Cursor also work but don't implement the same level of safety checks.  Away from the Task Manager, Wing 12.1 adds support for other AI agents, now including Claude Code, Codex, Antigravity, Copilot, Cursor, goose, and OpenCode, either using their Textual User Interfaces (TUIs) or the Agent Client Protocol (ACP). The Tasks Tool in Wing Pro now has the option to set goals aside for later, and the Focus mode keeps just one goal open at a time. A The New Project dialog has been redesigned as a single page, with a simple view that asks only for the essentials, with a new directory and a git repository as defaults. Wing Pro and Wing Classic add the ability to sign in to GitHub, clone from a list of your repositories, and publish a new project to GitHub from New Project. Push Changes in the Project Status view pushes your work, and Merge From Branch on the toolbar merges another branch, in each case with an AI agent resolving any conflicts.  There's also an optional new Modern look for the UI and new display themes.  Wing Python 12.1 is available for download now.
+Page 1 of 3If jQuery doesn't do what you want then make it so by writing a plugin - it is suprisingly easy. This is an exclusive extract from Ian Elliot's new book on jQuery 4.
 
-#### More Information
+## Programmer**’s Guide To** jQuery 4
 
-[Wingware](<http://www.wingware.com/>)
+#### By Ian Elliot
 
-#### Related Articles
+[](<https://www.amazon.com/dp/1871962684?_encoding=UTF8&qid=&sr=&linkCode=ll1&tag=iprog-20&linkId=13e3793e24ef8654297f065cab51686a&language=en_US&ref_=as_li_ss_tl>)
 
-[Wing Python 12 Adds Claude Code Tool](<https://www.i-programmer.info/news/216-python/19019-wing-python-12-adds-claude-code-tool.html>) [Wing Python Improves Syntax Highlighting](<https://www.i-programmer.info/news/216-python/18741-wing-python-improves-syntax-highlighting.html>) [Wing Python 11 Increases AI Use](<https://www.i-programmer.info/news/98-languages/18095-wing-python-11-increases-ai-use.html>) [Wing Python 10 Adds AI Code Suggestions](<https://www.i-programmer.info/news/216-python/16915-wing-python-10-adds-ai-code-suggestions.html>) [Wing Python Improves Async Handling](<https://www.i-programmer.info/news/216-python/15099-wing-python-improves-async-handling.html>) To be informed about new articles on I Programmer, sign up for our [weekly newsletter](<https://www.i-programmer.info/edit-profile.html?layout=form>),[ ](<https://s3.amazonaws.com/com.alexa.toolbar/atbp/hfdfGO/download/index.htm>)subscribe to the [RSS feed](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=3&format=raw>) and follow us on [Facebook](<http://www.facebook.com/pages/iProgrammer/127140977307932#%21/pages/iProgrammer/127140977307932?v=wall>) or [Linkedin](<http://www.linkedin.com/company/i-programmer>). [](<https://amzn.to/4iJFqTH>)
+#### Contents****
+
+  1. **Understanding jQuery**
+  2. **Working With The DOM  
+** Extract: [Basic DOM](<https://www.i-programmer.info/programming/207-jquery/18832-jquery-4-basic-dom.html>)****
+  3. **Mastering Selectors: Finding Elements  
+**Extract: [Basic Selectors](<https://www.i-programmer.info/programming/207-jquery/18976-jquery-4-basic-selectors.html>)********
+  4. [The jQuery Object](<https://www.i-programmer.info/programming/207-jquery/18876-jquery-4-the-jquery-object.html>)****
+  5. **Mastering Selectors: Filters  
+** Extract:****[Filters](<https://www.i-programmer.info/programming/207-jquery/19034-jquery-4-filters.html>)
+  6. **Traversal Filters**
+  7. **Modifying DOM Objects  
+** Extract: [Modifying DOM Objects](<https://www.i-programmer.info/programming/207-jquery/19134-jquery-4-modifying-dom-objects.html>)
+  8. **Creating Objects & Modifying The DOM Hierarchy **
+  9. **Working With Data**
+  10. **Forms**
+  11. **Function Queues**
+  12. **Animation**
+  13. [Reinventing Events](<https://www.i-programmer.info/programming/113-javascript/18770-jquery-4-reinventing-events.html>)****
+  14. **Working With Events**
+  15. **AJAX Basics – Get**
+  16. **AJAX Basics – POST**
+  17. **Sending Data To The Server**
+  18. **Sending Data To The Client**
+  19. **JSONP For Transport**
+  20. **The jqXHR Object**
+  21. **Character Encoding**
+  22. [jQuery 4 - Plugins](<https://www.i-programmer.info/programming/207-jquery/19260-jquery-4-plugins.html>) *********NEW!******
+
+<ASIN:187196248X> There comes a point in every jQuery programmer's life when they look at some JavaScript they have just created and realize that it is time to integrate it with jQuery – in short create a plugin. It turns out to be easier than you might expect!  Plugins are simple ways to extend what jQuery does. If you create your plugin correctly then you will get the additional benefits of being more closely integrated with jQuery. In particular, you can make your new facility work with jQuery chaining so that it can be part of a longer sequence of commands. For the sake of an example, let's return to the table-generating function created in Chapter 8:
+
+    function table(n, m) { 
+     var table = $("<table>"); 
+     var tbody = $("<tbody>"); 
+     var row = $("<tr>"); 
+     var cell = $("<td>"); 
+     for (var i = 0; i < n; i++) { 
+      var tempRow = row.clone(); 
+      for (var j = 0; j < m; j++) {
+       tempRow.append(cell.clone().html(i+","+j));
+      } 
+      tbody.append(tempRow); 
+     } 
+     table.append(tbody); 
+     return table; 
+    }
+
+This builds a table element with n rows and m columns which it returns as the result of the function. This is really far too simple to integrate into jQuery, but imagine that it has lots of extra facilities implemented as properties and methods.
+
+## The Basic Plugin
+
+A plugin is just a function – one function is one plugin and, to keep things simple, you should try to include as much functionality as possible within each plugin rather than pollute the jQuery namespace with multiple functions. To add your function to jQuery all you have to do is create a new property on jQuery.fn:
+
+    jQuery.fn.myFunction= function definition
+
+_or:_
+
+    _$.fn.myFunction= function definition_
+
+After this you can use your function with the usual jQuery syntax:
+
+    $().myFunction();
+
+This is almost too easy! If you want to fully understand what is going on then you need a little more explanation. However, if you don't want to know then skip to the next section. The first question is, why do we assign our new method to _jQuery.fn_ and not directly to jQuery, which is the object we are extending? The answer is subtle. The jQuery object that you usually reference with _$_ is just a constructor function for the _jQuery_ function object that you actually use to get things done. Hence the j _Query.prototype_ property can be used to set all of the default properties for the jQuery function object that you use. That is: $.fn is simply an alias for jQuery.prototype. When you add a method here, you are making it available to every instance of a jQuery object (the objects returned by the $(selector) call). So, to add to the jQuery function object you simply add to _jQuery.fn_ , which is set up in the jQuery code to point to the same object as the prototype. After you have added your new function, if you cannot use:
+
+    $.myFunction();
+
+as this will generate an error that jQuery doesn't have a _myFunction_ property. However:
+
+    $().myFunction();
+
+works because $() acts as the constructor for the jQuery function object which is returned in the usual way and this does have a _myFunction_ property via the prototype mechanism. This is subtle and you need to refresh how JavaScript inheritance works if you find it puzzling. If you do want to add a property to the constructor then you add it directly. For example:
+
+    $.myFunction2 = function() {...};
+
+adds the _myFunction2_ property to the jQuery constructor, not to the jQuery function object. Following this you can call _myFunction2_ as:
+
+    $.myFunction2();
+
+as it is a method of the jQuery constructor, but not as:
+
+    $().myFunction2();
+
+as it is not a property of the jQuery function object. When should you add a property directly to the constructor (`$.myFunction`) rather than the prototype (`$.fn.myFunction`)? The answer is simple: use the **constructor** if your plugin doesn't need to operate on a set of selected DOM elements. These are often called "utility" functions. By adding the property to the constructor, you make it clear that the function is a standalone tool. Following this logic, you cannot use selectors with:
+
+    $.myFunction2() 
+
+But you can(and usually should) with:
+
+    $(selectors).myFunction2();
+
+As already mentioned, you don't need to know this to add a new plugin, but it is interesting and might even help you with debugging if anything goes wrong.

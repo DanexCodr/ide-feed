@@ -1,52 +1,38 @@
-I love testing in production. The thrill of accidentally publishing some dummy data - or taking down an entire website - is similar to skydiving without a parachute. Exquisite excitement followed by heart-stopping terror.
+Our [Residential Proxy Observatory](https://layer3intel.com/context), launched earlier this week, is a first-of-its-kind interface that gives researchers a global view of residential proxy and anonymized internet activity.
 
-Before going live with a new website or service, it's sensible to test how text looks on it.  Most people don't test with *readable* text - it's too easy for management to start reading the content rather than looking at the layout. So the default is [the Latin text "Lorem ipsum"](https://www.lipsum.com/). Latin looks enough like English to get a feel for how text will render - but most people can't read it so they gloss over the words and look at the layout.
+While our team was looking through it, we noticed residential proxy exit activity on  [AS2650](https://layer3intel.com/context/AS2650). AS2650 is registered to the Executive Office of the President, the federal agency that hosts the White House network.  [Residential proxy services](https://layer3intel.com/what-is-a-residential-proxy) sell access to everyday devices, letting customers send traffic through them so it appears to come from that device's network.
 
-Say, it sure would be annoying if those dummy pages ever made their way to production, right?!?
+## What we observed
 
-[![FCDO blog post with dummy text.](https://shkspr.mobi/blog/wp-content/uploads/2026/11/lorem-ipsum-dolor-sit-amet-5-–-Foreign-Commonwealth-Development-Office-Blogs.webp)](https://blogs.fcdo.gov.uk/lorem-ipsum-dolor-sit-amet-5/)
+From October 5 to November 3:
 
-One of the things that's fascinating about seeing testing data in a live environment is that you get a small peek behind the curtain of how a site was made. A tiny glimpse into the minds of the people who made it.
+- Our residential proxy enumeration pipeline exited through the White House network 236 separate times.
+- Those exits came from 6 addresses, on 26 of the 30 days.
+- 28 separate residential proxy services were able to exit through this network.
 
-Who was Alice? Did she enjoy her time working on the [London Councils' website](https://www.londoncouncils.gov.uk/test-page-example-all-components-do-not-delete)?
+To make sure this was not a fluke, we checked these addresses against other residential proxy detection services, such as Spur and Synthient. Their public IP context pages independently identify these addresses as residential proxy exits.
 
-[![Lorem ipsum text, and a link to "Alice Test Docx".](https://shkspr.mobi/blog/wp-content/uploads/2026/11/Test-Page-Example-of-all-components-DO-NOT-DELETE-London-Councils.webp)](https://www.londoncouncils.gov.uk/test-page-example-all-components-do-not-delete)
+This is public access. Anybody can obtain it by signing up to a public residential proxy service, paying a few dollars and sending requests through it. We did not selectively target this network or try to make our probes exit from it. We caught this by chance, simply by requesting global rotating access through these services.
 
-Was she friends with [Henry at Lambeth council](https://www.lambeth.gov.uk/henrys-test-subsite-overview)? We may never know.
+## Why this is concerning
 
-Some of the placeholders eventually become load-bearing. For reasons which remain inscrutable to those who follow, the Elders declared some pages must remain sacrosanct *forever!*
+Most of the activity happens in the evening, Eastern time: about half of it falls between 5 p.m. and midnight, and almost none happens in the early morning. That pattern suggests a person rather than a public guest Wi-Fi network: someone regularly on the White House network late into the evening, whose device is infected with a proxy SDK. Our data shows the exits, not the device or the person behind them.
 
-[![A page of dummy text on the Human Tissue Authority website with the title "DO NOT DELETE".](https://shkspr.mobi/blog/wp-content/uploads/2026/11/DO-NOT-DELETE.-Human-Tissue-Authority.webp)](https://www.hta.gov.uk/news/news-do-not-delete)
+Past research has shown that poorly secured proxy SDKs can allow internal network access and lateral movement. This is how past botnets have spread. In  [A Broken System Fueling Botnets](https://synthient.com/blog/a-broken-system-fueling-botnets), the researchers at Synthient documented how the Kimwolf botnet reached at least 2 million devices, mostly Android devices with an exposed ADB service, through residential proxy networks. If an SDK on this network has the same kind of flaw, anyone buying proxy access could use it to reach internal systems.
 
-What would happen if that page were deleted? Would you dare risk it?
+## No place is too remote
 
-Sometimes finding a test page leads to a dead end. A [stub of a page](https://www.knutsfordtowncouncil.gov.uk/council-) which should have been purged before go-live.
+The White House is not the only surprise in the observatory. Residential proxies also reach some of the most isolated places on the planet.
 
-[![Knutsford town council page with dummy text.](https://shkspr.mobi/blog/wp-content/uploads/2026/11/Council-Knutsford-Town-Council.webp)](https://www.knutsfordtowncouncil.gov.uk/council-)
+[Saint Helena, Ascension and Tristan da Cunha](https://layer3intel.com/context/country/SH) is the South Atlantic territory that includes the most remote inhabited island in the world. We recorded  **413 addresses** and more than **32,000 observations** there, split between Starlink and the island's local internet provider, Sure Saint Helena.
 
-But other times it can lead us to a page hinting at something more. Deeper tests of long-forgotten functionality.
+We also recorded **three observations** from  [Antarctica](https://layer3intel.com/context/country/AQ). All of them come from a Cloudflare WARP address that points to McMurdo Station.
 
-[![Surrey Council events page with lorem text and links to attendee plugin pages. One link says aaaaaaaa.](https://shkspr.mobi/blog/wp-content/uploads/2026/11/Events-Surrey-County-Council.webp)](https://customer.surreycc.gov.uk/article/824/Events)
+Other remote places with activity:
 
-What did those plugins do? Aaaaaaaa indeed!
+- Pitcairn: 1 Starlink address, 1 observation.
+- Norfolk Island: 1 Norfolk Telecom address, 4 observations.
+- Svalbard: 1 Starlink address in Longyearbyen, 3 observations.
+- Also seen: the Falklands (388 addresses), the Chagos Islands (43), Tokelau (21) and South Georgia (7).
 
-The purpose of this post isn't to point and laugh, it's to show that searching for dummy data is a good way to find interesting things. It might show you a style-guide, or lead to you to a forgotten and outdated plugin, or it might lead you to an [entire pre-production environment](https://pre.redirect.contractawardservice.gca.gov.uk/digital-outcomes/opportunities).
-
-[![Digital Outcomes page with a large "pre prod" banner and dummy text. This is a composite image.](https://shkspr.mobi/blog/wp-content/uploads/2026/11/preprod-gca.webp)](https://pre.redirect.contractawardservice.gca.gov.uk/digital-outcomes/opportunities)
-
-Finally, this image was on one of the FCDO blog posts. I assume that means it is available under the [Open Government Licence](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/) and, therefore, [I can start T-Shirt production immediately](https://www.redbubble.com/shop/ap/184149181?ref=studio-promote)!
-
-[![The keep calm and carry on poster, but with the words Lorem Ipsum Dolor Sit Amet.](https://shkspr.mobi/blog/wp-content/uploads/2026/11/lorem-ipsum-dolor-sit-amet.webp)](https://www.redbubble.com/shop/ap/184149181?ref=studio-promote)
-
-## 9 thoughts on “Lorem Ipsum Dot Gov Dot UK”
-
-1. ![](https://shkspr.mobi/favicons/?domain=inkwell.social) [mw](https://inkwell.social/m_w) There's a fun game on sites like [archive.org](http://archive.org) to search for these kinds of filler phrases in old published books. There's another one which I forget which I found in a newspaper article from a long time ago - they used filler expecting an article which then was never used.. [Reply](https://shkspr.mobi/blog/2026/11/lorem-ipsum-dot-gov-dot-uk/?replytocom=479714#respond) | [Reply to original comment on inkwell.social](https://inkwell.social/comments/7fedfcfa-0159-4858-8dbc-4594549b1c7a) [2026-11-02 12:45](https://shkspr.mobi/blog/2026/11/lorem-ipsum-dot-gov-dot-uk/#comment-479714)
-2. ![](https://shkspr.mobi/blog/wp-content/uploads/webmention/avatars/bsky.app/a9baaea666408b2d6085f469f8983700.jpg?d=initials&name=Stefan+Czerniawski) ![](https://shkspr.mobi/favicons/?domain=bsky.app) [Stefan Czerniawski](https://bsky.app/profile/pubstr.at/post/3mzdemtgypc2v) Semi-related, [@lesteph.com](https://bsky.app/profile/did:plc:dqctwex2lsjzmlkh4cr6j3ou) made a lorem ipsum generator years ago which used random paragraphs from government press releases, which neatly made things more realistic while still avoiding being real. But would make finding accidentally published pages rather harder. [Reply](https://shkspr.mobi/blog/2026/11/lorem-ipsum-dot-gov-dot-uk/?replytocom=479715#respond) | [Reply to original comment on bsky.app](https://bsky.app/profile/pubstr.at/post/3mzdemtgypc2v) [2026-11-02 12:54](https://shkspr.mobi/blog/2026/11/lorem-ipsum-dot-gov-dot-uk/#comment-479715)
-3. ![](https://shkspr.mobi/blog/wp-content/uploads/webmention/avatars/mastodon.scot/bf36331d3c37e463b41457f577394be5.jpg?d=initials&name=Dan) ![](https://shkspr.mobi/favicons/?domain=mastodon.scot) [Dan](https://mastodon.scot/@thatdamnqa/117547055729426236) [@Edent](https://mastodon.social/@Edent) once I have time I still intend to make a blog post called “but its only test data, it’ll never make it to production” with these kind of examples [Reply](https://shkspr.mobi/blog/2026/11/lorem-ipsum-dot-gov-dot-uk/?replytocom=479723#respond) | [Reply to original comment on mastodon.scot](https://mastodon.scot/@thatdamnqa/117547055729426236) [2026-11-02 13:22](https://shkspr.mobi/blog/2026/11/lorem-ipsum-dot-gov-dot-uk/#comment-479723)
-4. ![](https://shkspr.mobi/blog/wp-content/litespeed/avatar/62a6ceffa6a31b2422151b5f768a80fb.jpg?ver=1793875322?d=initials&name=Andrew+Fielding) ![](https://shkspr.mobi/favicons/?domain=wobable.com) [Andrew Fielding](http://wobable.com) There's a fascinating documentary on YouTube about the origins of Lorum Ipsum - how Letraset was so pivotal to it's adoption and the search for the original text (because although it's sorry of Latin, it also doesn't make sense!). [https://youtu.be/kL1PDqzqhM4?is=T67xFmY4yLF7lgze](https://youtu.be/kL1PDqzqhM4?is=T67xFmY4yLF7lgze) [Reply](https://shkspr.mobi/blog/2026/11/lorem-ipsum-dot-gov-dot-uk/?replytocom=479726#respond) [2026-11-02 13:53](https://shkspr.mobi/blog/2026/11/lorem-ipsum-dot-gov-dot-uk/#comment-479726)
-5. ![](https://shkspr.mobi/blog/wp-content/litespeed/avatar/cfa244cbd24b5f7a60b968266888865e.jpg?ver=1793634997?d=initials&name=Lauren+Ipsum) Lauren Ipsum Eu minim sint in duis ipsum sint sit consectetur pariatur velit aliquip proident pariatur nisi. Sint dolor qui voluptate proident nostrud laborum labore nisi. Velit ullamco ullamco eu. Consequat et veniam in pariatur eiusmod cillum cillum sit incididunt aliquip velit culpa enim sint incididunt. Qui enim ullamco minim qui reprehenderit est elit irure sint consectetur nisi. Consequat ut anim reprehenderit officia reprehenderit in amet ea voluptate. [Reply](https://shkspr.mobi/blog/2026/11/lorem-ipsum-dot-gov-dot-uk/?replytocom=479734#respond) [2026-11-02 15:56](https://shkspr.mobi/blog/2026/11/lorem-ipsum-dot-gov-dot-uk/#comment-479734)
-6. ![](https://shkspr.mobi/blog/wp-content/uploads/webmention/avatars/bsky.app/a563e6937ea2ac531c7417839123b4ca.jpg?d=initials&name=Steph+Gray) ![](https://shkspr.mobi/favicons/?domain=bsky.app) [Steph Gray](https://bsky.app/profile/lesteph.com/post/3mzdppy5pls26) It's quite possible I'm even more directly to blame for that FC(D)O blogs example c.2014... It's a shame such a powerful platform hasn't seen a fresh post since February. Hard to justify its existence and probably a sign that nobody really cares about it now. [Reply](https://shkspr.mobi/blog/2026/11/lorem-ipsum-dot-gov-dot-uk/?replytocom=479795#respond) | [Reply to original comment on bsky.app](https://bsky.app/profile/lesteph.com/post/3mzdppy5pls26) [2026-11-02 16:13](https://shkspr.mobi/blog/2026/11/lorem-ipsum-dot-gov-dot-uk/#comment-479795)
-7. ![](https://shkspr.mobi/blog/wp-content/litespeed/avatar/16a5e8a09d7a2f831d8a41b0d0f46dfd.jpg?ver=1793831838?d=initials&name=Andy+Mabbett) ![](https://shkspr.mobi/favicons/?domain=pigsonthewing.org.uk) [Andy Mabbett](https://pigsonthewing.org.uk) One of my favourite `site:gov.uk` searches is `"Not for public release"`. But no test data will ever beat that used for a stock-control programme by my former colleague at Cadbury, in Bournville: `Exploding cream eggs` [Reply](https://shkspr.mobi/blog/2026/11/lorem-ipsum-dot-gov-dot-uk/?replytocom=479749#respond) [2026-11-02 20:28](https://shkspr.mobi/blog/2026/11/lorem-ipsum-dot-gov-dot-uk/#comment-479749)
-8. ![](https://shkspr.mobi/blog/wp-content/litespeed/avatar/de9fab984a1baa741abb5b95e11b2f62.jpg?ver=1793720265?d=initials&name=Edwin+K) Edwin K Funny enough, this content at the London Council Site was still active some moments ago.😁 [Reply](https://shkspr.mobi/blog/2026/11/lorem-ipsum-dot-gov-dot-uk/?replytocom=479786#respond) [2026-11-03 15:39](https://shkspr.mobi/blog/2026/11/lorem-ipsum-dot-gov-dot-uk/#comment-479786)
-9. ![](https://shkspr.mobi/blog/wp-content/uploads/webmention/avatars/bsky.app/21b3d0adf8fd04ed016d2f9582e21e2a.jpg?d=initials&name=Daniel+Knell) ![](https://shkspr.mobi/favicons/?domain=bsky.app) [Daniel Knell](https://bsky.app/profile/artisan.io/post/3mzgbadmn5c2b) If you haven't brought down at least one production system in your career, can you really call yourself a dev? 😂 [Reply](https://shkspr.mobi/blog/2026/11/lorem-ipsum-dot-gov-dot-uk/?replytocom=479796#respond) | [Reply to original comment on bsky.app](https://bsky.app/profile/artisan.io/post/3mzgbadmn5c2b) [2026-11-03 16:31](https://shkspr.mobi/blog/2026/11/lorem-ipsum-dot-gov-dot-uk/#comment-479796)
-10. [More comments on Mastodon](https://mastodon.social/@Edent/117546866607463314).
+Residential proxies have infected every corner of the world, and it looks like there is no place they cannot reach. Layer3 Intel tracks residential proxy and anonymization infrastructure worldwide. Even when the proxies hide in networks on the farthest corners of the planet, we can still observe them, leaving threat actors no place to hide.

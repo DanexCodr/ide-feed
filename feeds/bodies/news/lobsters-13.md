@@ -1,350 +1,295 @@
-I have always been interested in frontend solutions for building web
-applications. Even though I’m more of a backend programmer, I really dig all the
-different techniques people come up with for creating browser-based apps that
-are both *reactive* (reflecting remote state in real-time) and *interactive*
-(responding to user actions).
+- Person: “I have [problem].”
+- Cryptography nerd: “Oh, you probably want to use [sensible recommendation].”
+- Person: “Ah, well, can I really trust that? The NSA probably backdoored it 30 years ago. Dual_EC, amirite?!”
+- Cryptography nerd: …
+- Koblitz and Menezes, unheard: “[You fucking wot m8?](https://eprint.iacr.org/2015/1018)“
 
-Over the last few years, I’ve been looking at different frontend frameworks and
-libraries, to see how they work, and what I can learn from them. I adore
-[Svelte](https://svelte.dev/), which is really smart and efficient. Its sister
-framework [SvelteKit](https://svelte.dev/docs/kit/introduction) inspired the
-file-based routing in my own web framework for Ruby,
-[Syntropy](https://github.com/noteflakes/syntropy/). I also really like the
-approach of the [Phoenix](https://www.phoenixframework.org/) framework to
-building reactive apps using
-[LiveView](https://phoenix-live-view.hexdocs.pm/welcome.html), which is an
-amazing technology that builds on the solid concurrency foundation of
-Elixir/Erlang.
+Conspiracy theories about the NSA and/or NIST are a dime a dozen these days. And, ever since the Snowden disclosures in 2013, I am politically primed to *directionally agree* with distrusting the US government wholesale.
 
-Many people have tried to recreate the same functionality for other languages or
-frameworks, with varying degrees of success. Recently, [Marco
-Roth](https://marcoroth.dev/) came up with
-[ReActionView](https://reactionview.dev/), which promises to bring reactive
-views to Rails apps, building on his previous work on
-[Herb](https://herb-tools.dev/), a set of tools that improve on the developer
-experience of writing ERB templates for Rails apps.
+But most of the technical arguments baked into folks’ conspiracy theories **make no goddamn sense**.
 
-All those different technologies are certainly impressive, but they all are tied
-to specific languages/frameworks: Svelte/SvelteKit is a JS framework, LiveView
-is for Phoenix/Elixir, ReActionView is for Ruby on Rails, LiveWire is for
-Laravel/PHP, etc.
-
-And then there’s [Datastar](https://data-star.dev/), which dubs itself “the
-Hypermedia framework”. It is somewhat similar to other frontend declarative
-frameworks/libraries such as [HTMX](https://htmx.org/) or
-[Alpine.js](https://alpinejs.dev/), in that interactivity/reactivity is done
-declaratively by adding attributes to HTML tags. But what is different about
-Datastar is that it insists on keeping state where it should be, such that it
-doesn’t try to *copy* server state to the client and keep it in sync with the
-server. Instead, the server continuously sends updates (in the form of HTML
-patches, or [signal](https://data-star.dev/guide/reactive_signals) patches) to
-the client. In that respect, Datastar is more like LiveView, but without the
-coupling to Phoenix/Elixir. In fact, Datastar offers SDKs for different
-languages and frameworks, including Ruby (the Ruby SDK is maintained by [Ismael
-Celis](https://ismaelcelis.com/)).
-
-I find this approach so refereshing! With Datastar, you can use any backend
-technology in order to build reactive web apps. Furthermore, Datastar relies on
-[SSE](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events)
-(server-sent events) for streaming updates from the server to the client,
-instead of the somewhat older approach of using a WebSocket connection used in
-technologies such as LiveView, or HotWire (the current go-to solution for Rails
-apps).
-
-While SSE does not provide a full-duplex connection to the server (meaning, you
-can’t use an SSE request/connection to send data from the client to the
-server), it provides two important advantages over WebSocket: A WebSocket
-connection normally requires establishing a separate HTTP/1.1 connection to the
-server (there’s partial support for WebSocket over HTTP/2, but that depends on
-the browser and the server/reverse proxy used. HTTP/3 support is very limited as
-far as I could tell). In contrast, SSE requests can be multiplexed on top of an
-HTTP/2 or HTTP/3 connection, along with any number of other concurrent requests.
-Secondly, because SSE requests are just normal (streaming) HTTP requests, the
-server can use standard HTTP compression in order to achieve significant
-reduction in bandwidth.
-
-Let’s look at a simple example of working with Datastar. Here’s the markup for a
-simple reactive app that displays the current time on the server:
-
-```
-<html>
-  <head>
-    <script type="module" src="https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.4/bundles/datastar.js">
-    </script>
-  </head>
-  <body>
-    <p data-init="@get('/ds/time_stream')">
-      <span>Time:</span> <span data-text="$time" />
-    </p>
-  </body>
-</html>
-```
-
-This example does three things: load the datastar library (BTW it’s only about
-15KB!), set up a connection to an SSE stream at `/ds/time_stream` using the
-`@get` action, and binds a span to a signal named `$time`. On the server side,
-the controller looks as follows (using Syntropy):
-
-```
-# /ds/time_stream.rb
-export ->(req) {
-  req.respond_sse {
-    send_time_update(req)
-    @machine.periodically(1) { send_time_update(req) }
-  }
-}
-
-def send_time_update(req)
-  json = JSON.dump(time: Time.now.to_s)
-  req.send_event('datastar-patch-signals' => "signals #{json}")
-end
-```
-
-The controller code is quite simple: after calling `respond_sse`, which sends
-some HTTP response headers, we send a first update, then we send further updates
-once per second. What actually gets sent over the wire looks as follows:
-
-```
-HTTP/1.1 200 
-Content-Type: text/event-stream
-
-event: datastar-patch-signals
-data: signals { "time": "2026-11-04 11:54:55 +0200" }
-
-event: datastar-patch-signals
-data: signals { "time": "2026-11-04 11:54:56 +0200" }
-
-event: datastar-patch-signals
-data: signals { "time": "2026-11-04 11:54:57 +0200" }
-...
-```
-
-The Datastar wire protocol is based on the SSE response format, where each event
-contains an (optional) `event:` entry and one or more `data:` entries. Distinct
-events are separated by double newline characters (`\n\n`). In this case, we’re
-sending a `datastar-patch-signals` event that tells the browser to update signal
-values. The patched values are expressed as a JSON object where the keys
-correspond to signal names and the values correspond to the signal values.
-
-You can look at this example on a [separate page](https://noteflakes.com/ds/time),
-but for the sake of convenience I’ll go ahead and embed it right here:
-
-Although this is a very simple example, look at all the things we’re not doing
-😜: we don’t need to set up an `EventSource` object, or use `fetch` to start the
-SSE connection on the client side, we don’t need to go through the DOM and
-update anything that’s bound to the `$time` signal. On the server side we just
-stream changes to the server state to the client (eventually though, we might
-want to introduce some abstractions for sending a `datastar-patch-signals` event
-or other types of events, but this is pretty trivial…)
-
-## Exploring Signals in Datastar
-
-Let’s look at how signals are handled in Datastar a bit more closely. I’ve been
-playing with Datastar in the last few days and have observed the some
-peculiarities:
-
-In Datastar, signals are global to the page. They can’t be scoped to a part of
-the DOM, but they can be namespaced by
-[nesting](https://data-star.dev/guide/backend_requests#nesting-signals) them
-inside objects:
-
-```
-<span data-text:foo.bar.baz />
-```
-
-Alternatively, you can use the following notation, handy when you have key
-values that contain slashes, or other special characters:
-
-```
-<span data-text="$foo['/bar']" />
-```
-
-By default, Datastar will send all signal values back to the server on every
-user action, which may be problematic if you have lots of signals on your page.
-In order to prevent signal values from being sent to the server on each request,
-the signal name must begin with an underscore.
-
-Finally, an important aspect of Datastar signals (and indeed, Datastar in
-general,) is that Datastar doesn’t really have a Javascript API. You can’t just
-access signal values from Javascript (this is by
-[design](https://github.com/starfederation/datastar/issues/1233)), which may
-make it harder to integrate Datastar with other tools. But there is a workaround
-for that and it’s pretty simple:
-
-```
-<body 
-  data-signals="{ foo: { bar: 42 } }"
-  data-init="Foo.start($foo);"
+> This distrust is not exclusive to only the US government.
 >
-  <p>foo.bar: <span data-text="$foo.bar" /></p>
-  <script>
-    window.Foo = {
-      start: (foo) => {
-        Foo.foo = foo;
-        setInterval(() => Foo.foo.bar++, 1000)
-      }
+> The goal of this blog post is not to convince you that you should trust *any* government; just that they are not magical or omniscient.
 
-    };
-  </script>
-</body>
-```
+To that end, I’m going to explore some of the history of NSA, NIST, and cryptography standardization. Then, to explore some of the conspiracy theories that were being floated about such activity, and what we’ve learned in the years since (especially in the past month). Finally, I’m going to examine some of the current conspiracy theories floating around message boards and social media today, and explain why they’re almost certainly wrong.
 
-Here, we use the `data-init` attribute that lets us run an arbitrary piece of
-JS. We call `Datastar.start`, while in a separate `<script>` we declare a global
-`Datastar` object, which stores the reference to the `$foo` signal, and then
-sets up a recurring timer to increment the value of `$foo.bar` once per second:
+Buckle up, this is going to be a tedious one.
 
-This is not too complicated, but then again, a random frontend developer might
-balk at the fact that Datastar actually makes it hard to access the app state
-from any other JS library or script on the browser. But I think this makes
-sense, given the intention behind its design. In [“The Tao of
-Datastar”](https://data-star.dev/guide/the_tao_of_datastar) this is laid out
-quite explicitly:
+![Soatok drinking coffee](https://i0.wp.com/soatok.blog/wp-content/uploads/2024/07/SoatokTelegrams2020-15.png?w=512&ssl=1)
 
-> State in the right place: Most state should live in the backend… the backend
-> should be the source of truth for your application state…
+*[CMYKat](https://cmykatgraphics.carrd.co/)*
+
+## Why should we listen to you?
+
+If you find yourself asking a question like this, the correct answer is simply, “You shouldn’t.”
+
+After all, I have never held (let alone even applied for) a security clearance, and have no access to any non-public information. I’m also not a current or former government employee, and have no aspirations to ever become one. I have access to all the same facts anyone else does.
+
+In balance, I have no horse in the race of who trusts whom. I’m just tired of hearing the same poorly reasoned arguments all the damn time, and would like to stop having to repeat myself when I encounter one.
+
+## Historical NSA Shenanigans
+
+The sources for this, by the way, are [the declassified United States Senate Select Committee on Intelligence](https://cryptome.org/2012/05/nsa-crypto-des.pdf) and [United States Cryptologic History](https://archive.org/details/NSA-American-Cryptology-Cold-War/American%20Cryptology-Book%20III/).
+
+### DES
+
+The Data Encryption Standard (DES) was published in the Federal Register in 1975 and then standardized in 1977.
+
+We consider it weak these days, but DES was a real game-changer for its time: It offered a standard block cipher to use for sensitive (but not classified) commercial applications. Prior to DES, the history of cryptography was largely about military uses (except a few quirky mathematicians here and there), going back before [Caesar’s cipher](https://en.wikipedia.org/wiki/Caesar_cipher).
+
+From declassified documents, we now know the full story, but from the time that DES was first standardized, up until recent years, there have been a concerns about [NSA’s involvement](https://en.wikipedia.org/wiki/Data_Encryption_Standard#NSA's_involvement_in_the_design).
+
+> We sent the S-boxes off to Washington. They came back and were all different.
+
+To say that academics did not trust DES would be putting it mildly: Martin Hellman (who, with Whitfield Diffie and Ralph Merkle, *invented* public-key cryptography) sent a letter in 1975 to the National Bureau of Standards that stated:
+
+> Whit Diffie and I have become concerned that the proposed data encryption standard, while probably secure against commercial assault, may be extremely vulnerable to attack by an intelligence organization.
+
+At the heart of the concern about DES was something called an S-box, which simply maps an input to an output, but whose purpose is to provide a non-linear transformation to obscure the relationship between the ciphertext and the key.
+
+The S-box used by DES was chosen by NSA. This led a lot of people to suspect there was a backdoor in the selection of the S-boxes for DES. **It turned out to be the opposite, of course**: The NSA had discovered differential cryptanalysis in secret, and had selected S-boxes that were resistant to this technique, but did not want to reveal it publicly (lest they lose their advantage over rival nations).
+
+There’s a lot more details to this story than I want to bore anyone with, so I recommend reading up on the history of cryptography and cryptanalysis if you’re interested in such things.
+
+In balance, [at the advice of NSA](https://www.schneier.com/blog/archives/2004/10/the_legacy_of_d.html), the final DES design did only offer 56 bits of security (down from an original key size of 128 bits). This short key ultimately allowed [the EFF to crack DES in 1998](https://w2.eff.org/Privacy/Crypto/Crypto_misc/DESCracker/) with a hardware cost of about $250,000.
+
+![Clipboard Sticker](https://i0.wp.com/soatok.blog/wp-content/uploads/2021/04/soatok-telegrams-wave-3-commission-11.png?resize=512%2C512&ssl=1)
+
+*[CMYKat](https://cmykatgraphics.carrd.co/)*
+
+#### What does this actually tell us?
+
+When IBM was designing DES, with feedback from NSA, the stated purpose was to use for commercial cryptographic applications in the United States.
+
+Fact: NSA used secret cryptanalytic capabilities to ensure the resulting block cipher that became DES was *protected from the attack they knew about* without revealing said technique.
+
+Fact: NSA recommended reducing the key length from 128 bits to 64 bits (with 8 of the key bits serving as parity bits, thus making it only have 56-bit security).
+
+This both strengthened and weakened DES in different ways. A 56-bit key can be broken by a distributed computing effort in under 24 hours, as of 2012.
+
+This is confusing until you remember NSA has two opposing missions, with (unfortunately) military jargon names.
+
+- COMSEC (Communications Security) — basically blue-teamers
+- SIGINT (Signals Intelligence) — basically red-teamers
+
+The COMSEC folks have a mission to secure the US government and protect US interests (read: private sector).
+
+The SIGINT folks have a mission to spy on other nations on behalf of the US.
+
+In theory, the SIGINT folks aren’t supposed to spy on Americans *at all*. In practice, their Five Eyes partners gives them a stupid loophole: An allied nation can simply do the spying for them, so long as federal prosecutors are willing to engage in a little bit of [parallel construction](https://en.wikipedia.org/wiki/Parallel_construction).
+
+Take note of the DEA section of the previously linked Wikipedia page.
+
+You cannot trust the government, but if you know the mission each department operates under, you can understand *their incentive structures*. Knowing their incentive structures lets you reason about their actual activities–or, failing that, create conspiracy theories with a cohesive narrative.
+
+The COMSEC mission can be related to the S-box strengthening; the SIGINT mission, to the weaker key length.
+
+### Clipper Chip
+
+Okay, so the DES thing was a messy affair. Let’s look at an example of the NSA clearly being on the wrong side of privacy.
+
+The [Clipper Chip](https://en.wikipedia.org/wiki/Clipper_chip), which was designed and promoted by the NSA in 1993 to secure voice messages, with a backdoor.
+
+Clipper Chip was an early example of a NOBUS (Nobody But Us can exploit it) backdoor. Unlike DES’s 56-bit key, the cipher used (Skipjack) was promoted up to a whopping 80-bits.
+
+But before you celebrate, be aware that there was a “key escrow” feature that allowed law enforcement to decrypt plaintext, and a 16-bit hash in the “Law Enforcement Access Field” (LEAF) that turned out to be a pretty stupid vulnerability, as [Matt Blaze discovered in 1994](https://www.wired.com/1994/09/clipping-clipper-matt-blaze/). If you want a technical breakdown, [Professor Matt Green’s blog post](https://blog.cryptographyengineering.com/2015/07/20/a-history-of-backdoors/) covers this (and other backdoors).
+
+Not only was the Clipper Chip a terrible idea to begin with, it was also technically flawed (to the point of embarrassment). This was the first of many issues in what became known as the Crypto Wars.
+
+#### What does this actually tell us?
+
+When the NSA colluded with law enforcement to spy on Americans’ private conversations, their attempt was met with public backlash from independent technologists (Matt Blaze, the Electronic Frontier Foundation, etc.).
+
+The cryptography community outside the military-industrial complex *today* is largely primed to call out Clipper Chip style bullshit whenever it happens. (See also: the EU’s ChatControl.)
+
+![Soatok pointing at a blackboard.](https://i0.wp.com/soatok.blog/wp-content/uploads/2023/10/SoatokLecture.png?w=512&ssl=1)
+
+*AJ_LovesDinos*
+
+### Dual_EC_DRBG
+
+In 2006, NIST published [SP 800-90](https://csrc.nist.gov/pubs/sp/800/90/final), which recommended deterministic random bit generators (DRBGs):
+
+- Hash_DRBG — generating random bits from cryptographic hash functions computed over input entropy sources
+- HMAC_DRBG — generating random bits from HMAC (which is kind of like if a hash function had a secret key)
+- CTR_DRBG — turning a block cipher into a random bit stream by using Counter Mode
+
+The three I listed above are… well, they’re fine. Pretty much everyone uses hash functions or block ciphers to squeeze random bits out of smaller amounts of entropy.
+
+But the fourth entry in the NIST standard was an odd duck. Dual_EC_DRBG was several times slower than the other recommendations and was [immediately flagged as having a backdoor](https://eprint.iacr.org/2006/190) (which [other cryptographers agreed with](https://web.archive.org/web/20140621062515/http://archive.wired.com/politics/security/commentary/securitymatters/2007/11/securitymatters_1115)).
+
+> I don’t understand why the NSA was so insistent about including Dual_EC_DRBG in the standard. It makes no sense as a trap door: It’s public, and rather obvious. It makes no sense from an engineering perspective: It’s too slow for anyone to willingly use it. And it makes no sense from a backwards-compatibility perspective: Swapping one random-number generator for another is easy.
 >
-> Use signals sparingly: A good rule of thumb is to only use signals for user
-> interactions (e.g. toggling element visibility) and for sending new state to
-> the backend (e.g. by binding signals to form input elements).
+> My recommendation, if you’re in need of a random-number generator, is not to use Dual_EC_DRBG under any circumstances. If you have to use something in SP 800-90, use CTR_DRBG or Hash_DRBG.
+>
+> In the meantime, both NIST and the NSA have some explaining to do.
 
-I think constraints are good, and in the case of Datastar, the constraints (no
-JS API, don’t overuse signals, state should mostly live on the backend),
-actually make you think hard about the structure of your app, the different
-pages it’s made of and the components therein. You might even need to rethink
-the entire URL structure of your app, and where each part of the app state is
-kept. The more I tinker with Datastar, the more those constraints make sense.
+Of course, because of Edward Snowden, we know today that cryptographers [were completely correct about Dual_EC_DRBG being a backdoor by the NSA](https://www.bbc.com/news/technology-24048343).
 
-That said, for some types of applications those constraints may be, well, too
-constraining. For example, an application in which a single page can display
-thousands of discrete values, and some of them more than once, might need to
-structure their signals accordingly. In that type of app, we can take advantage
-of Datastar’s signal namespacing (nested signals) feature, and we might also
-want to prepend those signals with an underscore, e.g. `$_values`, so as to
-prevent all those values from being sent to the server on each request (and
-anyways the server is the source of those values, so there’s no point in that.)
+Ever since that revelation, no discussion about NOBUS (Nobody But Us) backdoors would be complete without at least mentioning Dual_EC_DRBG.
 
-So if we’re not supposed to use signals for server state, how do we update the
-client when the server state changes? The answer to that is by patching the page
-HTML itself:
+What almost nobody foresaw, however, was that a rival nation state would [replace the public key baked into Dual_EC’s design with their own while backdooring Juniper Networks](https://dl.acm.org/doi/10.1145/2976749.2978395).
 
-```
-# /ds/time_stream_html.rb
+*Kind of a stupid fucking approach to NOBUS, ain’t it?*
 
-@time_template = ->(time) {
-  span "Time: #{time.to_s}", id: "time"
-}
+#### What does this actually tell us?
 
-def send_time_update(req)
-  patch = Papercraft.html(@time_template, Time.now)
-  req.send_event('datastar-patch-elements' => "elements #{patch}")
-end
-```
+When the incentives of the NSA aligned with malicious government conspiracies against the American people (sorry to keep specifying this, by the way, but they’re pretty much always malicious to folks outside the USA) and standardization processes, it didn’t fly under the radar and basically every cryptographer said “Hell no” to using it.
 
-Here we have a micro-template that renders a time span, and we use the
-`datastar-patch-elements` event to patch the browser’s DOM. The result works the
-same as the above example using signals:
+Whether NSA is capable of being sneakier while corrupting NIST documents remains to be seen.
 
-So, this technique of patching the browser DOM requires a somewhat different way
-of thinking. Most importantly, it requires that the elements that need to be
-patched be identifiable, normally using an id. This may not necessarily work for
-all kinds of apps, but in that case you can always use signals. I find that both
-techniques have their advantages and disadvantages. What’s most interesting
-though is that with Datastar there’s no need for writing Javascript, and that in
-itself is a huge advantage.
+![Soatok yelling at his computer](https://i0.wp.com/soatok.blog/wp-content/uploads/2024/08/SoatokNerdRage.png?w=512&ssl=1)
 
-## SPAs vs. MPAs
+*AJ_LovesDinos*
 
-Datastar is expressly geared more towards creating MPAs (multi-page apps) than
-SPAs (single-page apps). From the Datastar Tao:
+### The Snowden Disclosures
 
-> Make an MPA, each page is a resource, keep a stream open on the current state
-> of that resource…
+There’s far too much to talk about here, and of varying usefulness. Consult [the Snowden Archives](https://snowden.xsurveillance.site/) if you want to read more. There were a lot of codenames. There was a lot of jargon.
 
-So, is Datastar incompatible with SPAs? And why would we want to make an SPA in
-the first place? In many web apps there’s going to be some state that pertains
-to the client (for example, is the sidebar collapsed or not, are menu groups
-inside the sidebar collapsed or not, etc.), and some state that’s coming from
-the server. In many web apps, we’d like to retain the client state (the sidebar
-again), even if we move between different resources in our app. Architecting our
-app as an SPA may help us achieve this goal of persisting client state, at the
-possible cost of not being able to correctly handle navigation history.
+It spawned a lot of memes.
 
-From my experiments it seems like it’s totally possible to make an SPA using
-Datastar by filling in the missing parts with some custom Javascript. But why
-would I want to use Datastar in this way? Maybe there’s something I’m missing? I
-must admit that at first I had trouble understanding the tao of Datastar. I
-think my resistance was due to the fact that I’m just used to the “modern”
-approach of implementing reactive and interactive web UIs using Javascript -
-responding to user actions, rendering stuff in the client, etc.
+Some of the codenames (e.g., FOXACID) are the sort of thing that cause eyebrows to raise among computer nerds that are familiar with furries and [vore](https://en.wikipedia.org/wiki/Vorarephilia).
 
-But then I listened to a very interesting
-[talk](https://www.youtube.com/watch?v=2ECucq-mTGg&pp=ygUUZGF2aWQgbm9sZW4gZGF0YXN0YXI%3D)
-between [David Nolen](https://github.com/swannodette) (the creator of
-ClojureScript) and [Ben Croker](https://github.com/bencroker) and [Delaney
-Gilliland](https://github.com/delaneyj) (the guys behind Datastar), where David
-talks about how Datastar was used in building
-[Instabooks](https://instabooks.io/), a fast web UI for Quickbooks. This really
-piqued my curiosity, so I went on the instabooks website and fortunately they
-have offer a [demo that anybody can try](https://instabooks.io/try). Go and have
-a look yourself, it’s really cool!
+Here’s a lightning round of some of what we learned from Snowden:
 
-But what’s even cooler is that, as David tells it in their conversation, any user
-action, such as scrolling records, filtering, searching, etc. results in a full
-rerendering of the page. I actually looked at what their demo is sending on their
-SSE stream - it’s always a fully-rendered version of the page. This means that
-there’s basically (to my understanding) no (or very little) frontend logic that
-intercepts button clicks and renders a bunch of stuff. Instead, when the UI
-state is kept on the server, and each interaction results in an HTTP request to
-the server, which rerenders the page and sends it back to the browser on the
-previously established SSE stream. For example, when clicking the filter button
-on a column header, the server will rerender the page, with a little floating
-filter dialog that’s custom made to the specific column. The updated HTML will
-be sent to the browser, and Datastar will take care of morphing the DOM to
-reflect the updated UI state. It works quite beautifully, and it’s fast as well.
+1. Bulk collection of Americans’ phone metadata, despite James Clapper committing perjury to the contrary
+2. [PRISM](https://en.wikipedia.org/wiki/PRISM): mass passive surveillance of the Internet, which is largely why TLS became ubiquitous in the years since.
+3. Tempora: copied data from undersea cables for NSA to analyze
+4. BULLRUN / EDGEHILL — see also: Dual_EC_DRBG, but also RSA Security
+5. XKeyscore: basically a private version of Palantir’s product today
 
-What does this way of doing things gets us? First and foremost, we get rid of a
-lot of frontend Javascript code. As David mentions in the same video, just the
-thought of having to deal with scrolling, dialogs, live search, etc. is kinda
-daunting - doing all that stuff in Javascript. Secondly, we can build the entire
-UI on the server, and have our UI reflect our application state, as in `UI =
-λ(state)`, just like React! A corollary of this is that testing our app in a way
-becomes much simpler. Maybe we don’t need the whole Capybara setup to test our
-app. Instead, since every interaction causes a change of state, we can just test
-the rendered HTML reflects the state correctly.
+There’s so much more we could talk about, but what’s notably absent from Snowden’s leaks is any secret cryptanalytic attacks against standardized cryptography.
 
-The obvious drawback to this way of doing things is that the server now needs to
-do a lot more work, since it needs to render an entire page’s worth of HTML on
-each user interaction. For a heavyweight, relatively slow framework such as
-Rails, this might be a problem. For any app where you need to fetch a bunch of
-records from a remote database that might be a problem. I imagine that a more
-fine-grained approach to updating the browser upon user actions with Datastar
-might work better for those apps where rendering a page is slow. But if your app
-is built on top of a snappy framework/runtime, and persists its state to e.g. an
-SQLite database, rerendering the whole page on each interaction may work just
-fine.
+Notably, they couldn’t break Tor in any way that wasn’t already known to the Tor developers at the time.
 
-## Conclusion
+Hell, there were myriad conspiracy theories in late 2013 about the Silk Road marketplace being taken down by a NSA attack on Tor. The slide decks Snowden leaked suggest otherwise.
 
-It took me quite a while to understand the Datastar way. At first I really
-resisted it, and this article in some way reflects this fact - it starts with
-whole different attitude than how it ends. Believe me when I tell you the first
-few versions of this article were all about how to work around Datastar’s
-so-called “limitations”. But now I think I get it, and I can’t wait to start
-building stuff the Datastar way.
+#### What does this actually tells us?
 
-One of the things that were hard for me to understand when I just started
-looking at Datastar was, how would the backend need to be structured in order to
-work with Datastar. There was no information about this in the datastar docs,
-and I felt a bit frustrated because of that. But once things clicked for me I
-understood this is in fact a non-issue. As the tao of Datastar says:
+A lot. Far too much, in fact, for me to dissect it all in this blog post!
 
-> Make an MPA, each page is a resource…
+But the pertinent detail is this: The absence of cryptanalytic capabilities in Snowden’s leaks can be interpreted one of several ways.
 
-So the answer is as simple as it gets: build your app normally as a set of
-resources, render everything on the server. This is such a refreshing approach!
-In fact, I think I might integrate Datastar into
-[Syntropy](https://github.com/noteflakes/syntropy/) and provide additional
-abstractions that make it easier to build apps using it. With Datastar, there’s
-a whole new and exciting way of building web apps that’s still waiting to be
-explored.
+1. The private sector has largely caught up with NSA
+2. NSA’s compartmentalization was somehow successful at preventing Snowden from discovering these mathematical techniques, but not all the other damning evidence
+3. The NSA didn’t bother trying to beat the cryptography because it was, as is often the case today, so much easier to simply bypass it entirely
+
+Personally, I think any of these interpretations is valid. I’d put my money on number 3, of course. After all, that’s what PRISM largely did.
+
+![Soatok glitching out](https://i0.wp.com/soatok.blog/wp-content/uploads/2025/04/SoatokGlitch.png?w=512&ssl=1)
+
+*AJ_LovesDinos*
+
+## People Can’t Be Normal About This
+
+I omitted several controversies from the previous section, because it was getting too long and I feel I justified my point already. However, I’m sure some people will cry foul at omissions as an attempt at deception, so I need to also mention one that was recently solved.
+
+### The NIST P-Curve Seeds
+
+> The what now?
+
+Elliptic curve cryptography is *a whole topic* I’ve talked about on this blog before, at length, but I’m going to simplify for the sake of being somewhat comprehensible to people who don’t make Frobenius trace jokes on IRC.
+
+NIST published [FIPS 186-2 in 2000](https://csrc.nist.gov/pubs/fips/186-2/final) (and later [updated it in 2001](https://csrc.nist.gov/pubs/fips/186-2/upd1/final)), which provided several elliptic curve groups (P-192, P-224, P-256, P-384, P-521).
+
+Each elliptic curve group was parametrized by a seed, `s`, which was never explained by NSA. The output of the SHA-1 hash of `s` was used to calculate the parameters for each elliptic curve group.
+
+Jerry Solinas, who was the mathematician and cryptographer that published the P-curves, couldn’t remember how the seeds were chosen.
+
+In the wake of Dual_EC_DRBG and BULLRUN, any unexplained value being the basis of several NIST standardized elliptic curve groups caused many people to be itchy.
+
+For a while, Daniel J. Bernstein’s Curve25519 algorithms and software gained popularity in the applied cryptography spaces. This was probably a good thing, overall, but there were [some sharp edges](https://moderncrypto.org/mail-archive/curves/2017/000898.html) (that later work [has since improved upon](https://ristretto.group/)).
+
+Speaking from experience, many of these decisions post-Snowden were the result of paranoia about the NSA possibly adding a NOBUS backdoor to the NIST P-Curves too, rather than merely for the technical merits of Curve25519.
+
+However, Koblitz and Menezes already tackled that in a paper titled, “[A Riddle Wrapped In An Enigma](https://eprint.iacr.org/2015/1018).” To summarize their mathematical arguments: If NSA was aware of a secret weakness that only occurs in some number of elliptic curve groups, and wanted to make a NOBUS backdoor that their adversaries couldn’t figure out, it would need to be a structural weakness that only occurs extremely rarely.
+
+So rarely, in fact, that not only would the computational resources available to Jerry Solinas in the late 1990s would not have been sufficient, but you still couldn’t do it today.
+
+> This scenario is highly implausible for several reasons. First, the class of weak curves must be extremely large in order to obtain a weak curve with the seeded-hash method. For concreteness, suppose that p is a fixed 256-bit prime. There are roughly ![2^{257}](https://s0.wp.com/latex.php?latex=2%5E%7B257%7D&bg=0a0a0a&fg=f0f0f0&s=3&c=20201002) isomorphism classes of elliptic curves defined over ![F_p](https://s0.wp.com/latex.php?latex=F_p&bg=0a0a0a&fg=f0f0f0&s=3&c=20201002). Let ![s](https://s0.wp.com/latex.php?latex=s&bg=0a0a0a&fg=f0f0f0&s=3&c=20201002) be the proportion of elliptic curves over ![F_p](https://s0.wp.com/latex.php?latex=F_p&bg=0a0a0a&fg=f0f0f0&s=3&c=20201002) that are believed (by everyone except hypothetically the NSA in 1997) to be safe. This class of curves includes essentially all elliptic curves of prime order (with the exception of prime-field anomalous curves and those that succumb to the Weil/Tate pairing attack). Since the proportion of 256-bit numbers that are prime is approximately ![1/(256 ln 2) \approx 2^{\neg 8}](https://s0.wp.com/latex.php?latex=1%2F%28256+ln+2%29+%5Capprox+2%5E%7B%5Cneg+8%7D&bg=0a0a0a&fg=f0f0f0&s=3&c=20201002), the proportion of curves that are strong is at least ![2^{\neg 8}](https://s0.wp.com/latex.php?latex=2%5E%7B%5Cneg+8%7D&bg=0a0a0a&fg=f0f0f0&s=3&c=20201002). Now suppose that the proportion of these curves that the NSA knew how to break were ![2^{\neg 40}](https://s0.wp.com/latex.php?latex=2%5E%7B%5Cneg+40%7D&bg=0a0a0a&fg=f0f0f0&s=3&c=20201002). In this hypothetical scenario the NSA could select such a weak curve by trying about ![2^{48}](https://s0.wp.com/latex.php?latex=2%5E%7B48%7D&bg=0a0a0a&fg=f0f0f0&s=3&c=20201002) seeds. The number of NSA-weak curves would then be approximately ![2^{209}](https://s0.wp.com/latex.php?latex=2%5E%7B209%7D&bg=0a0a0a&fg=f0f0f0&s=3&c=20201002). This would mean that this huge class of weak curves was known to the NSA in 1997 but is still undiscovered by outside researchers in 2015. **It is highly unlikely that such a large family of weak elliptic curves would have escaped detection by the cryptographic research community from 1997 to the present.**
+
+This quote highlights my broader point in this whole blog post: The NSA isn’t magical. (Nor is AI. Nor are quantum computers.) The NSA’s capabilities and budgets are finite. Their incentives are defined by their mission.
+
+In 2023, Filippo Valsorda and several others (including myself) pledged [a bounty](https://words.filippo.io/seeds-bounty/) (with extra if the award is donated to charity) to anyone that could solve the mystery of the NIST P-curve seeds.
+
+Earlier this month, Anthropic [successfully claimed that bounty](https://words.filippo.io/seeds-solved/), and elected to donate the bounty to the ISRG (the non-profit that operates [the Let’s Encrypt certificate authority](https://letsencrypt.org/)).
+
+There’s a poetic irony here: My pledged donation is going towards the organization that led the way to making TLS ubiquitous online since 2015 in the wake of the NSA’s global mass surveillance… **because one of the NSA mysteries was finally solved**.
+
+This is a nice segue into the final topic I want to discuss today.
+
+![UwU](https://i0.wp.com/soatok.blog/wp-content/uploads/2020/10/soatokuwu.png?resize=512%2C512&ssl=1)
+
+*[CMYKat](https://cmykatgraphics.carrd.co/)*
+
+## Post-Quantum Cryptography
+
+I’ve already covered most of what I want to say here in a previous post titled, *[Hybrid Constructions: The Post-Quantum Safety Blanket](https://soatok.blog/2026/04/13/hybrid-constructions-the-post-quantum-safety-blanket/)*.
+
+I was tagged in a Fediverse post yesterday that punctuated the sort of discourse cryptographers have already seen in the IETF mailing list threads and on technical forums in the past few months:
+
+> NIST works for US fash regime that’s trying to help their AI scammer buddies pivot to quantum scams.
+>
+> That’s the generous interpretation.
+>
+> The worse one is that NSA has known flaws/backdoors in the post quantum systems and wants to shut down the actually-secure ones.
+
+This was a reply to a quote-post of [another thread](https://web.archive.org/web/20261029071728/https://defcon.social/@infosec/117516999211815499) that described NIST publishing its final plan for [IR 8547](https://csrc.nist.gov/pubs/ir/8547/final): the transition to post-quantum cryptography.
+
+The NSA announced, in 2015, [its plans to migrate to “quantum resistant algorithms”](https://web.archive.org/web/20151016020521/https://www.nsa.gov/ia/programs/suiteb_cryptography/).
+
+For the decade or so since, the NIST Post-Quantum Cryptography standardization effort has largely revolved around [the NIST pqc-forum](https://groups.google.com/a/list.nist.gov/g/pqc-forum). You can read the archived email threads, publicly, going back to the forum’s inception. Most of the emails are dry, boring, technical, and/or procedural.
+
+But in the beginning? It was a *bloodbath* of cryptanalytic attacks against proposed KEMs and signature algorithms.
+
+The NIST recommendations and standards for post-quantum cryptography were a transparent effort involving *virtually anyone in the cryptography and security communities that wanted to participate* spanning from 2015 until now, and it is still ongoing.
+
+The selected algorithms (i.e., ML-KEM, formerly known as CRYSTALS-Kyber) were designed by international teams. The principal submitter of ML-KEM, Peter Schwabe, even worked with Daniel J. Bernstein on [NaCl in the 2010s](https://nacl.cr.yp.to/) (and was [one of Bernstein’s Ph.D Students](https://cryptojedi.org/peter/index.shtml)).
+
+> Bernstein, for those not following along, was a large source of irritation on the TLS Working Group mailing list earlier this year for his weird anti-ML-KEM and anti-ML-DSA tirades and concern-trolling.
+>
+> At one point, he tried to summon Twitter mobs to join the mailing list and pack the vote… except, that’s not how Rough Consensus works at IETF at all!
+>
+> Today, many “NIST backdoored post-quantum” conspiracy theories point to Bernstein to support their points.
+>
+> It’s all very stupid and disappointing.
+
+Furthermore, there [isn’t enough structure in ML-KEM, in particular](https://keymaterial.net/2025/11/27/ml-kem-mythbusting/), to squeeze in a public key to make any plausible weakness truly NOBUS.
+
+### How plausible is an NSA backdoor here, really?
+
+I’m no Neil Koblitz or Alfred Menezes, so forgive me if my rebuttal doesn’t contain the mathematical rigor of those two.
+
+Here are some facts to consider.
+
+1. The federal government (through CNSA 2.0) is being told to adopt ML-KEM-1024 and ML-DSA-87. Hybrid constructions are not blessed for protecting federal government systems.
+2. As we saw with the DES S-boxes, the NSA is known to sometimes make decisions that improve security (though may conceal an attack on competing designs).
+3. NSA has a dual mission: COMSEC and SIGINT, as discussed above.
+4. NSA has tried to subvert standards before (DUAL_EC_DRBG).
+
+Is it plausible that the NSA would be so confident in the NOBUS status of a secret flaw or backdoor in ML-KEM (which they did not design) that they’d **move the entire fucking federal government’s systems for TOP SECRET classified information** to adopt it [as fast as possible](https://www.nsa.gov/Press-Room/Press-Releases-Statements/Press-Release-View/Article/4615285/nsa-announces-post-quantum-cryptography-measures-to-safeguard-national-security/)?
+
+I don’t know, man. That sounds kind of fucking stupid to me.
+
+In my opinion, a more compelling conspiracy theory is that NSA already secretly built a quantum computer in [their Utah data center](https://en.wikipedia.org/wiki/Utah_Data_Center), and it’s already being used to spy on everyone today.
+
+It’s a better fit than “ML-KEM is a NSA backdoor, the European cryptographers that designed it are all stupid, and the NSA is eager to move the US government onto a flawed or broken cryptosystem because SIGINT is all they care about, even at the expense of COMSEC, and they also can’t just *look for the plaintext* (which already works 99% of the time) they *gotta* be able to crack the encryption” which is the essence of the conspiracy theories that keep hitting my inbox today.
+
+Conspiracy theories aren’t harmless. They create room for [grifters and hucksters](https://soatok.blog/2021/02/09/crackpot-cryptography-and-security-theater/) to deceive well-intentioned non-experts.
+
+![Confused protogen](https://i0.wp.com/soatok.blog/wp-content/uploads/2021/07/neophyte-confused.png?resize=409%2C512&ssl=1)
+
+*[Harubaki](https://harubaki.carrd.co/)*
+
+## In Closing
+
+If you convinced yourself of a wrong conspiracy theory, that doesn’t mean you are dumb or unlovable.
+
+NSA is certainly up to something. It’s their entire fucking job to be up to something. But it’d very unlikely to be a post-quantum backdoor no matter how much energy is expended on discussion boards and social media trying to convince people of that narrative.
+
+Since neither you nor I have any information on what they’re actually up to, it’s tempting to look at the absence of evidence and fill-in-the-blanks and pattern-match based on what we already know today. That’s not stupidity.
+
+Unfortunately, most of the proponents of these conspiracy theories will cherry-pick the most damning examples (i.e., Dual_EC_DRBG, through the lens of Snowden) while ignoring the messier and more nuanced aspects of the NSA’s [mis]conduct with the larger cryptography community.
+
+So, please: Stay curious and humble. Better and more likely conspiracy theories exist, and may even be true, but you’ll never reach them if you short-circuit your analysis on stale low-hanging fruit and stop wondering.

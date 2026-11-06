@@ -1,59 +1,242 @@
-We’re excited to announce Adaptive Dark Mode in Safari 27.3 beta. When enabled by a user, Safari adapts light websites and presents them as dark.
+A friend recently pointed out a new Word Ladder game variant:
+Find a path of mutations from a start word to an end word,
+where mutations can be single letter changes, single letter
+deletions or additions, or anagramming the word. It annoyed me
+(the paths involving anagrams can be wickedly hard to spot),
+so, naturally, I wrote a solver for it. And when the solver
+took over a second to run, I of course had to optimize it. Along the way, I
+found a fun trick for anagram indexing—fitting a collision-free
+prime-product identifier for every word in the dictionary into a
+single 64-bit integer—that I hadn't seen before (though the history
+of computing is long and Knuth probably noticed it in 1965).
 
-In the spring of 2019, Safari 12.1 became the first browser to support dark mode on the web. A lot of people love using dark mode, but not every website has a dark version. Almost [40% of web page loads](https://chromestatus.com/metrics/feature/timeline/popularity/3580) are from users in dark mode, and yet [only 10%](https://chromestatus.com/metrics/feature/timeline/popularity/3707) of page loads support it. If you love dark mode, you’ve probably hit a site that felt particularly [bright](https://www.tiktok.com/@syntaxfm/video/7307721014891367711). Adaptive Dark Mode is designed to close that gap, providing a consistent dark experience across the web.
+For completeness, I should note that what I was interested in
+was finding all anagrams in a dictionary---if you just want
+to find anagrams of a specific word you can probably get away
+with a much simpler hash table design! We'll use all of the
+anagrams in the next post talking about solving the whole word
+ladder.
 
-![A demo website in light mode on the left and dark mode on the right. It's a complex site with lots of UI full of bits of color that's transformed by Adaptive Dark Mode.](https://webkit.org/wp-content/uploads/Demo-of-Adaptive-Dark-Mode_dark.png)
+## Finding anagrams
 
-You can try it today in Safari 27.3 beta. To enable, first make sure your system appearance is set to dark. Then browse to a website with a bright background. Safari will offer a preview of Adaptive Dark Mode. Tap ‘Try’.
+The two usual tricks for finding anagrams are to use
+either a letter-sorted permutation or a letter-count vector
+as a
+unique identifier for the letters in the word in an
+order-independent way:
 
-For websites that signal support of dark mode with `<meta name="color-scheme" content="light dark">` in HTML or `color-scheme: light dark` in CSS, Adaptive Dark Mode does not change a thing. For the rest of the web, it quickly analyzes the page, looking at colors and estimating whether it’s predominantly light or dark. If the page generally has a dark background with light text, nothing is changed. When a page has a light appearance, Adaptive Dark Mode adapts the page to be dark.
+```
+letter_sort("spot") -> "opst"
+```
 
-## How does Adaptive Dark Mode work?
+or
 
-At the core of Adaptive Dark Mode is the transformation of color. Sometimes colors are simply decorative, while other times they have semantic meaning. Adaptive Dark Mode determines when to invert colors so elements remain visible or when to leave colors unchanged.
+```
+letter_count("spot") -> "[... o:1, p: 1, s: 1, t:1 ...]"
+```
 
-While creating Adaptive Dark Mode, we developed a color matrix to invert the luminosity of colors while preserving hue. It’s used to make light backgrounds dark, and dark text light. When transforming text color, Adaptive Dark Mode aims for sufficient contrast as defined by the [WCAG 4.5:1 contrast ratio](https://www.w3.org/WAI/WCAG21/Understanding/contrast-minimum.html). Light CSS gradients are also transformed to dark.
+and then run through the dictionary and insert items
+into a hash table based upon their letter count. In python-ish pseudocode:
 
-Adaptive Dark Mode makes careful judgments so transformed content looks good and stays usable: buttons have contrast against backgrounds, text is visible over images, and hover menus look clear.
+which creates a table with entries like:
 
-It takes the same care with images. Most are left unchanged, preserving their integrity. But many icons and logos can lose contrast when the background color behind them is inverted. So Adaptive Dark Mode inspects SVG images and transforms colors when needed. For bitmap images, it analyzes the pixel histograms and inverts simple black-and-white logos.
+```
+"opst" : ["spot", "post", "tops", "stop"]
+```
 
-![Side by side screenshots of the Interop 2026 dashboard in Safari. On the left, the original light mode website. On the right, the site transformed by Adaptive Dark Mode. The graph still matches light mode (untransformed) but everything else on the page is dark. ](https://webkit.org/wp-content/uploads/Interop-dashboard-with-Adaptive-Dark-Mode_dark-scaled.png)
+### Baseline: Sorting strings
 
-Effects like masks and `mix-blend-mode` can create undesirable results on an element whose colors have been transformed, so in some cases Adaptive Dark Mode turns such effects off. Also, `<canvas>` content is left unchanged, since canvases contain a wide range of content that’s hard to predict.
+Because I'd been feeling a little, uh, rusty in my coding lately, I
+decided to implement this all myself in Rust instead of yelling at an LLM
+to do it (this is a leetcode-like problem so it would have done it trivially).
+That code looked like:
 
-It’s precisely because Adaptive Dark Mode is happening deep within the WebKit browser engine that we are able to find creative ways to solve the most complex challenges, apply the transformations with great speed and power efficiency, all while rigorously protecting user privacy.
+Using the Scrabble(tm) dictionary pre-read into memory, this function
+produces the anagram dictionary in:
 
-## Making your site work even better
+**Result: 31ms (173ns / word)**
 
-In general, a web page will work well with Adaptive Dark Mode if it follows good modern web development practices.
+That seems fine. Oh wait, just kidding, that's INSANELY SLOW. The
+dictionary has 178,690 entries in it, which means we're spending 173
+nanoseconds per word to build up this dictionary. In 173 nanoseconds
+you could execute roughly 4400 instructions on my Macbook Pro M1.
+Who has time to wait for that??
 
-If your site still uses older techniques, small updates can help. For logos and icons, swap bitmap images for SVG. Use solid or gradient colors in CSS instead of tiled background images. Replace image sprites with modern CSS for rounded corners, shadows, and button states. Create content images with transparent backgrounds instead of baking the page background color into the image. Add padding to containers to prevent crowding.
+### Eliminating `Vec` allocations
 
-Perhaps you want a specific dark mode experience for a certain portion of the page. Apply [`color-scheme: light dark`](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/color-scheme) to the relevant element and add your own dark styles.
+When optimizing, one of the first places to be suspicious is
+allocations, and this one has them in droves. Every word results
+in either the allocation of a Vec or an append to a Vec, which
+sometimes needs an allocation. Practically, there are about
+161019 keys in the table, so that's 161k allocations (!!).
+Let's improve those by using a slightly more clever data structure,
+noting two things:
 
-## Building your own dark mode
+- With 161k entries in the hash table and only 178k dictionary items, most of those hash table entries will be singletons.
+- We have the original word list stored in memory and it can be indexed by a u32 given its size.
 
-For complete control over how your site looks in dark mode, add full support. It’s a terrific time to do so. It’s never been easier.
+So we'll do two things: We'll find a way to store singleton
+items without needing a dynamic-length data structure at all,
+and we'll implement the equivalent of a linked list for appending
+items to the lists, since they're append-only and we only scan them
+once at the end. To do this, we'll use a structure like this:
 
-All the web technology needed to fully support dark mode is widely available today, including:
+Where heads is indexed by the anagram-identifying-key (e.g.,
+the character-sorted string). We'll overload that u32 by
+using the high bit (we only have 170k or so words) to let
+it represent
+*either* an actual data value (the index of
+an element in the list) OR an index into the next+word arrays.
+The next array is our linked list - it stores pointers to
+another entry in the next array. The word array stores the
+associated data. It looks like this:
 
-Newer CSS functions like [`color-mix()`](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/color_value/color-mix) and [`contrast-color()`](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/color_value/contrast-color), plus popular techniques for organizing design systems with CSS variables provide additional options and flexibility.
+**Result: 31ms -> 20ms (112ns / word)**
 
-Be sure to declare dark mode support using the `color-scheme` meta tag in your HTML head and/or by setting the `color-scheme` property on `:root` or `body` in your CSS. Don’t wait to inject this information later via JavaScript. This best practice helps ensure your site is rendered correctly as fast as possible.
+### Packing letter counts into a `u128`
 
-## Using the “light only” color scheme
+Much better, but we can do better yet. The time to sort
+that string and create a new string allocation is non-trivial
+and we're doing 178k of them. That's going to be another
+big chunk of nanoseconds.
 
-If you would like your web app or website to not be transformed by Adaptive Dark Mode, you can communicate this using `color-scheme`. The HTML `<meta name="color-scheme" content="light only">` tag lets browsers know that 1) this page supports `light` mode and 2) should `only` be displayed in light mode. The `color-scheme: light only` rule does the same thing, but with the flexibility of CSS, allowing you to just target specific elements on the page — or of course, you can target the whole page with `:root { }`. (Note: the ‘only’ keyword is not supported in Safari 27.3 beta 1. Check back as Adaptive Dark Mode evolves through the beta process.)
+Let's try a letter count vector instead, and pack it tightly into an integer.
+With only 26 characters, if we assume that no word has more than 15
+repetitions of the same character, we could use 4 bits per character
+for 26 x 4=104 bits. That fits comfortably in a u128, and while
+that's not tiny, it's at least a nice fixed size 16 byte thing
+we can use as a fast hash table key.
 
-## Protecting user privacy
+(Note that we've done something else here - we're only returning
+the list of anagrams, not a full dictionary containing all of the
+words that don't have anagrams.)
 
-Apple firmly believes user privacy is a fundamental human right. If websites could detect when a user has enabled Adaptive Dark Mode, that would increase the amount of fingerprintable information and weaken privacy protections against trackers.
+Avoiding the string manipulation and sorting gives a big win:
 
-As a result, Safari prevents websites from detecting when Adaptive Dark Mode has been applied. JavaScript that queries CSS colors will get the original authored colors, not the transformed ones. Any images drawn into canvas render in their original form.
+**Result: 20ms -> 5.6ms (31ns / word)**
 
-## Feedback
+### A faster hash table
 
-If you manage a website or web app, and would like to discuss how Adaptive Dark Mode is adapting your project, feel free to reach out at [web-evangelist@apple.com](mailto:web-evangelist@apple.com).
+At this point, we might ask a question like "how much does
+the slow default Rust hash table cost us?"
 
-If you try out Adaptive Dark Mode as a user, and find a site that does not work well, we’d love for you to file a report with [Feedback Assistant](https://feedbackassistant.apple.com/). (Learn more about [filing Feedback](https://developer.apple.com/bug-reporting/)).
+So we'll switch to the [`rustc_hash`](https://crates.io/crates/rustc-hash) `FxHashMap`, which is much faster
+if you don't have to worry about adversarial inputs to your hash table.
+
+**Result: 5.6ms -> 4.1ms (23ns / word)**
+
+That seems much better. But are we done yet?
+
+### 64-bit Gödel numbering with tuned primes
+
+Of course we're not done!
+
+Storing the letter count as a u128 is also a little slower
+than necessary, because it'll be split across two 64 bit
+registers and requires the compiler to carry that addition
+across them and do twice as much work for equality testing.
+But if we tried lettercounting in 64 bits, we would only be
+able to store 2 bits, and many words have more than 3 of
+the same letter ("MISSISSIPPI", for example, already has 4 S's).
+
+Instead, we'll use an approach based on
+[Gödel numbering](https://en.wikipedia.org/wiki/G%C3%B6del_numbering):
+we'll create a small
+table associating one distinct prime number with each letter, and identify
+each word by the product of the letter-primes. This guarantees a
+unique identifier for each mix of letters. Naively, one might
+assign "a -> 2, b -> 3, c -> 5" and so on. But this is a practical
+blog post, and we'd like to fit the result in 64 bits; if
+we use the naive assignment, we overflow at the 365th word in our
+dictionary, "ABORTIVENESSES". And that's only 14 characters long,
+we have 3157 15-character words as well!
+If we let it wrap,
+we'll have just implemented a hash function, and there's no guarantee
+that two words won't accidentally collide, so then we'd need to add
+some machinery to check that...
+
+So here's the trick: Find an optimized assignment of primes to
+letters in the alphabet such that none of the words in our
+Scrabble dictionary overflow a 64 bit number. I started out
+thinking about the standard English letter frequency
+(ETAOINSHRDLU, etc.), but that turns out to be a little
+wrong: We don't care much about words like "the", we care about
+words like "WRONGHEADEDNESS". So instead, we need to go
+based on the patterns found in the 3157 15-character words. In particular,
+while "E" remains assigned to 2, the common "T" is assigned 29,
+and we use 3 for "I". Our friend "J" is assigned 101, since
+the longest word with two or more J's in it is only 12 characters
+long: JEJUNENESSES. Looking at that, those E's and N's and S's better
+have low values, and they do: 2, 19, 17. We could handle 15 N's in
+a row in 64 bits still.
+
+To solve this, I had a small program start with the letter-frequency
+ordering (which does a lot better than alphabetical but isn't good enough),
+loop finding the first word that overflowed and switch out some of its primes
+for lower valued primes. This would have also been fun to throw at a
+solver.
+
+which doesn't overflow for any word in the Scrabble dictionary.
+We've found a collision-free canonical 64-bit identifier for the bag of letters in a
+(Scrabble) word, which looks like this in code:
+
+In this representation, the largest product word is
+
+```
+PSYCHOPATHOLOGY = 17763551150644031915
+```
+
+which in log2 is 63.945; it's about 96.2% of the way through the 64 bit
+number space. Close, but it fits.
+
+**Result: 4.1ms -> 2.6ms (14.7ns / word — 12x faster than baseline)**
+
+### Using a u128 packed word representation
+
+And then there's a final optimization you can do: Instead of reading
+the dictionary into strings, read them into a packed u128 representation
+using 5 bits per character, and then add some instruction-level parallelism
+for our CPU (ILP) by doing the product accumulation using two independent
+accumulators. This u128 representation is useful for speeding up other
+parts of the word ladder solver later. That code looks like this:
+
+**Result: 2.6ms -> 2.3ms (13 ns/word - 13x faster than baseline)**
+
+### Low-level optimizations: branches and auto-vectorization
+
+This is looking pretty good. The only last optimization I have to add
+is to address some branch mispredictions in that rest != 0 loop. We
+can instead just treat all words as if they're 16 characters long and
+ignore the 0's at the end by mapping them to 1 in our primes table
+(i.e., they have no effect on the product). Using a fixed length of 16
+also permits more auto-vectorization by our friendly compiler.
+To support that, we also separate the computation of the prime product
+from the insertion into the hash table, allowing more ILP from our
+now-vectorized multiplication loop.
+
+That code ends up looking like this:
+
+**Result: 2.3 ms -> 1.96ms (10.9ns/word, 15x faster than baseline)**
+
+We're finally pretty close to what I think a single core on my machine
+can get without explicit vectorization. That 1.96ms is about 1.23ns per
+byte, which could theoretically be about 3.2 x 8 x 1.23 = 31 instructions
+(but realistically fewer), which doesn't leave a *ton* of
+room for optimization---though I could be wrong! There's some space
+in there for an even faster hash table implementation but I'd rather
+stick with common, off-the-shelf things there.
+
+### Summary of optimizations
+
+| Step | Optimization | Total Time | Time / Word | Speedup vs. Baseline |
+| --- | --- | --- | --- | --- |
+| 0 | Baseline (`HashMap<String, Vec<String>>`, sorted string keys) | 31.0 ms | 173 ns | 1.0x |
+| 1 | `KeyGroups` flat arrays & inline singletons | 20.0 ms | 112 ns | 1.6x |
+| 2 | 4-bit letter counts packed into `u128` | 5.6 ms | 31 ns | 5.5x |
+| 3 | Switch to `rustc_hash::FxHashMap` | 4.1 ms | 23 ns | 7.6x |
+| 4 | 64-bit Gödel numbering (corpus-tuned prime products) | 2.6 ms | 14.7 ns | 11.9x |
+| 5 | 5-bit packed `u128` input words + dual-accumulator ILP | 2.3 ms | 13.0 ns | 13.5x |
+| 6 | Branchless fixed-length loop + auto-vectorized product pass | **1.96 ms** | **10.9 ns** | **15.8x** |
+
+In the next post I'll show how we solve the entire word ladder problem,
+using the anagrams we've found as a part of it.
