@@ -1,295 +1,115 @@
-- Person: “I have [problem].”
-- Cryptography nerd: “Oh, you probably want to use [sensible recommendation].”
-- Person: “Ah, well, can I really trust that? The NSA probably backdoored it 30 years ago. Dual_EC, amirite?!”
-- Cryptography nerd: …
-- Koblitz and Menezes, unheard: “[You fucking wot m8?](https://eprint.iacr.org/2015/1018)“
+My previous blog post was a quick one and a reader from Gemini sent me an email asking what exactly I did for implementing the mitigations. Thanks for asking and sorry for making you ask. This article should explain what is done and how to tweak the recipe. The core principle can be found in my much earlier article:
 
-Conspiracy theories about the NSA and/or NIST are a dime a dozen these days. And, ever since the Snowden disclosures in 2013, I am politically primed to *directionally agree* with distrusting the US government wholesale.
+I'll assume you are using systemd as the way for you to manage your services, as systemd has been the default of Ubuntu for more than 10 years. Some defenses can be easily implemented with OpenRC or SysV init too. Some would be 3rd party tools like firejail when systemd is not available, which I have much less experience with, or even a new enough (as in, within a few years) Linux kernel. And I am personally very unfamiliar with Docker.
 
-But most of the technical arguments baked into folks’ conspiracy theories **make no goddamn sense**.
+Also, critically, security is not one single thing. There's different ways your programs can be attacked. Buffer overflows, your server code forgot to check authentication, bad path parsing leading to directory traversal, etc.. etc.. Mitigation for buffer overflow won't stop your server serving files that it shouldn't. They need different mitigations to defend against. However, mitigations are basically a way, from the outside, to say to the program "To my knowledge you should never encounter X. So I'll make you unable to do X. So when an attacker tricked you into doing X, you can't. By making when X is detected, access denied or you crash". Overly strict mitigations will make your program unable to perform it's job.
 
-> This distrust is not exclusive to only the US government.
->
-> The goal of this blog post is not to convince you that you should trust *any* government; just that they are not magical or omniscient.
+Core principle when you are adding mitigations - assume your program is evil and then limit how much evil it can do by removing things it can touch.
 
-To that end, I’m going to explore some of the history of NSA, NIST, and cryptography standardization. Then, to explore some of the conspiracy theories that were being floated about such activity, and what we’ve learned in the years since (especially in the past month). Finally, I’m going to examine some of the current conspiracy theories floating around message boards and social media today, and explain why they’re almost certainly wrong.
+In order of complexity to impact ratio (considering both ease of implementing and mitigation power):
 
-Buckle up, this is going to be a tedious one.
+## [Hardened allocator](https://clehaxze.tw/gemlog/2026/11-04-practical-guide-on-out-of-tree-mitigations-on-linux.gmi#hardened-allocator)
 
-![Soatok drinking coffee](https://i0.wp.com/soatok.blog/wp-content/uploads/2024/07/SoatokTelegrams2020-15.png?w=512&ssl=1)
+I'd argue using a hardened allocator is the most important mitigation if I am forced to pick one. It works on every reasonable Linux version of kernel, does not depend on advanced kernel features and directly attacks one of the most common failure mode in old software - heap overflow and use-after-free. My previous posts recommends hardened_malloc, which I still recommend and is my default choice. But hardened_malloc is slow compared to alternatives that might be good enough for you or have a better trade off for your use. The options you have are:
 
-*[CMYKat](https://cmykatgraphics.carrd.co/)*
+- hardened_malloc
+- mimalloc with secure config
+- scudo
 
-## Why should we listen to you?
+Most advanced attacks require the program to be broken in a very specific way. Hardened allocators intervenes with that process ** and improves security by making programs that enter a broken state die faster** instead of keeping them running something that could be attacker-controlled behaviour. If your program is unstable with a hardened allocator, it's already broken and you need to fix it (or a very specific case of not working, which I'll point to later).
 
-If you find yourself asking a question like this, the correct answer is simply, “You shouldn’t.”
+### [hardened_malloc](https://clehaxze.tw/gemlog/2026/11-04-practical-guide-on-out-of-tree-mitigations-on-linux.gmi#hardened-malloc)
 
-After all, I have never held (let alone even applied for) a security clearance, and have no access to any non-public information. I’m also not a current or former government employee, and have no aspirations to ever become one. I have access to all the same facts anyone else does.
+hardened_malloc is my default choice, it's developed by GrapheneOS and a fork of OpenBSD's allocator. On Arch it is available via AUR. Otherwise on other distributions, you'll need to install it from source, the steps are dead simple:
 
-In balance, I have no horse in the race of who trusts whom. I’m just tired of hearing the same poorly reasoned arguments all the damn time, and would like to stop having to repeat myself when I encounter one.
+### [mimalloc](https://clehaxze.tw/gemlog/2026/11-04-practical-guide-on-out-of-tree-mitigations-on-linux.gmi#mimalloc)
 
-## Historical NSA Shenanigans
+mimalloc is Microsoft's invention and comes with a secure mode. You can choose the secure level with `-DMI_SECURE=OFF|MINIMAL|ON|FULL` -- in my testing even the FULL mode is faster than hardened_malloc. Though hardened_malloc's performance never bothered me, but if your server is constantly busy or for other reasons. Give mimalloc a try and see if one of it's modes are fast enough. I personally use mimalloc when the program just breaks on hardened_malloc. Though not able to run under hardened_malloc is usually a sign that the program is broken and needs fix.
 
-The sources for this, by the way, are [the declassified United States Senate Select Committee on Intelligence](https://cryptome.org/2012/05/nsa-crypto-des.pdf) and [United States Cryptologic History](https://archive.org/details/NSA-American-Cryptology-Cold-War/American%20Cryptology-Book%20III/).
+### [Scudo](https://clehaxze.tw/gemlog/2026/11-04-practical-guide-on-out-of-tree-mitigations-on-linux.gmi#scudo)
 
-### DES
+Scudo is LLVM's secure allocator, it is designed to be fast while giving most security benefits. If that is enough security is up to your interpretation. There's no build step needed as it gets installed with the LLVM toolchain. However, as it is a part of the LLVM toolchain, **the path changes with the LLVM version**. You'll need to keep an eye on the exact LLVM version on rolling distros.
 
-The Data Encryption Standard (DES) was published in the Federal Register in 1975 and then standardized in 1977.
+For my Arch machine. The file lives in `/usr/lib/clang/23/lib/x86_64-pc-linux-gnu/libclang_rt.scudo_standalone.so`. That 23 changes with major clang releases
 
-We consider it weak these days, but DES was a real game-changer for its time: It offered a standard block cipher to use for sensitive (but not classified) commercial applications. Prior to DES, the history of cryptography was largely about military uses (except a few quirky mathematicians here and there), going back before [Caesar’s cipher](https://en.wikipedia.org/wiki/Caesar_cipher).
+### [Using hardened allocators](https://clehaxze.tw/gemlog/2026/11-04-practical-guide-on-out-of-tree-mitigations-on-linux.gmi#using-hardened-allocators)
 
-From declassified documents, we now know the full story, but from the time that DES was first standardized, up until recent years, there have been a concerns about [NSA’s involvement](https://en.wikipedia.org/wiki/Data_Encryption_Standard#NSA's_involvement_in_the_design).
+Using hardened allocators is easy. For dynamically linked programs (which is most of them, including Rust and Go binaries). Set environment `LD_PRELOAD=/path/to/your/installed/liballocator.so` and it'll replace the default allocator glibc provides. On my Arch system, to use hardened_malloc:
 
-> We sent the S-boxes off to Washington. They came back and were all different.
+To demonstrate what a hardened allocator does. Take the following faulty C program:
 
-To say that academics did not trust DES would be putting it mildly: Martin Hellman (who, with Whitfield Diffie and Ralph Merkle, *invented* public-key cryptography) sent a letter in 1975 to the National Bureau of Standards that stated:
+Compiling it with the default glibc allocator allows the program to survive after the bad write. But not under hardened_malloc. The program dies on `free()`. Of course, AddressSanitizer will catch the issue with `-fsanitize=address`. But you don't use AddressSanitizer in production while hardened allocators attempt to stop bad program states during production.
 
-> Whit Diffie and I have become concerned that the proposed data encryption standard, while probably secure against commercial assault, may be extremely vulnerable to attack by an intelligence organization.
+Note that for this specific minor mistake (one byte after the allocation region). Only hardened_malloc and mimalloc on `ON` or `FULL` catches them. Scudo as shipped by Arch did not.
 
-At the heart of the concern about DES was something called an S-box, which simply maps an input to an output, but whose purpose is to provide a non-linear transformation to obscure the relationship between the ciphertext and the key.
+System calls (or syscalls) are how your program ask the kernel to perform task. These include reading and writing files, sending data over the network, executing a new program to even changing the acting user. There's reasons your web application might need to execute other programs or change it's acting user.. but not much and modern web application are designed around never needing to - because managing them is both slow and difficult to get right.
 
-The S-box used by DES was chosen by NSA. This led a lot of people to suspect there was a backdoor in the selection of the S-boxes for DES. **It turned out to be the opposite, of course**: The NSA had discovered differential cryptanalysis in secret, and had selected S-boxes that were resistant to this technique, but did not want to reveal it publicly (lest they lose their advantage over rival nations).
+Systemd supports the `SystemCallFilter` option that disallows the program from making specific syscalls. This is helpful as most attackers normally default to invoking the shell for their attacks, to copy files and to install backdoors so they can get back in later. Running the shell on UNIX and UNIX-like systems are implemented through the `fork` (creating a clone of the current process) and `exec` (replace the current process) syscalls.
 
-There’s a lot more details to this story than I want to bore anyone with, so I recommend reading up on the history of cryptography and cryptanalysis if you’re interested in such things.
+Most webapps have no business calling either.. unless you are PHP and still does remote API calls via curl. Along with another slew of syscalls that most webapps having no business calling, this is the usual systemd config I set:
 
-In balance, [at the advice of NSA](https://www.schneier.com/blog/archives/2004/10/the_legacy_of_d.html), the final DES design did only offer 56 bits of security (down from an original key size of 128 bits). This short key ultimately allowed [the EFF to crack DES in 1998](https://w2.eff.org/Privacy/Crypto/Crypto_misc/DESCracker/) with a hardware cost of about $250,000.
+This way even if an attacker managed to hack your server process, Linux will deny it from spawning new programs. Stopping the attacker from further compromising the easy way. Though importantly, this only stops the attacker from spawning a new shell. The attacker can still attempt to read files if they found a way to do so, via directory traversal or gaining remote code execution.
 
-![Clipboard Sticker](https://i0.wp.com/soatok.blog/wp-content/uploads/2021/04/soatok-telegrams-wave-3-commission-11.png?resize=512%2C512&ssl=1)
+In the case that you actually need both fork and exec. To limit the attacker's reach. The next line of defense is to make the process unable to read files outside of what it should -- "should" means everything it needs over it's entire lifetime. From the dynamic linker loading the program, `/etc/hosts` for local hostname lookup, `/dev/urandom` for UNIX style random data to `/usr/share/ca-certificates/` for TLS verification. Everything.
 
-*[CMYKat](https://cmykatgraphics.carrd.co/)*
+Luckily systemd already gave us a set of reasonably usable flags to set.
 
-#### What does this actually tell us?
+For further protection. You likely don't need /proc. Do test this though. Some applications will attempt to self monitor and does need access to /proc/self.
 
-When IBM was designing DES, with feedback from NSA, the stated purpose was to use for commercial cryptographic applications in the United States.
+Banning accessible paths starts out simple and easy, but quickly becomes whack-a-mole when you start making sure none of your relatively important configurations leak. Read-only `/etc` is good, but `/etc/pacman.conf` is still readable if the process goes rogue and your code really just needs `/etc/ssl` for TLS. You can go the other direction: name the directories the process is allowed to access. Then gradually add more and more until the process runs.
 
-Fact: NSA used secret cryptanalytic capabilities to ensure the resulting block cipher that became DES was *protected from the attack they knew about* without revealing said technique.
+If you can't disabled fork + exec to make the program unable to execute commands. There's another way to get pretty much the same effect with `{No,}ExecPaths`. `NoExecPaths` makes all files under the path unable to be executed (including libraries, which to Linux's eyes are executables). And `ExecPaths` explicitly allows them. By only allowing your server process (plus what your program calls), you effectively make the program unable to execute anything else.
 
-Fact: NSA recommended reducing the key length from 128 bits to 64 bits (with 8 of the key bits serving as parity bits, thus making it only have 56-bit security).
+With the above example configutation. `/usr/bin/my_daemon` can only run `sh` (needed system()) and `awk` (what the server acutally needs) -- everything else, including `cp`, `sed`, `xargs`, `rm` are all unavailable.
 
-This both strengthened and weakened DES in different ways. A 56-bit key can be broken by a distributed computing effort in under 24 hours, as of 2012.
+Hopefully you are running each service as it's own user and minimal privilege. But it's still good practice to limit what the application can access -- even in today's internet where everyone is behind a CDN and stable IP addresses are a myth -- you can make sure the process never tries to reach something it never should. Say someone else on port 80 (you shouldn't be using raw HTTP today), another unrelated service on localhost or someone else's port 22 (SSH). Why would your Apache server try to reach SSH..? Something is wrong.
 
-This is confusing until you remember NSA has two opposing missions, with (unfortunately) military jargon names.
+iptables support per user (and per group) rules. For example, you can disable access to all port 22 and 80 across all network range for user `http` (which usually runs your HTTP server / reverse proxy).
 
-- COMSEC (Communications Security) — basically blue-teamers
-- SIGINT (Signals Intelligence) — basically red-teamers
+Or make user `http` unable to initiate TCP connection to anything but localhost.
 
-The COMSEC folks have a mission to secure the US government and protect US interests (read: private sector).
+This sometimes causes issues if you are like me, lazy. I compile and run services under a dedicated user. But that user also needs access to git (thus port 22) to pull repositories. To handle this, I usually create 2 users. For example `blog` and `_blog`. The `blog` user is the one pulling git and compiling. While `_blog` is added to the `blog` group so it can access the home directory, yet follows a seperate firewall rule so it cannot create it's own outbound network traffic.
 
-The SIGINT folks have a mission to spy on other nations on behalf of the US.
+### [Via systemd](https://clehaxze.tw/gemlog/2026/11-04-practical-guide-on-out-of-tree-mitigations-on-linux.gmi#via-systemd)
 
-In theory, the SIGINT folks aren’t supposed to spy on Americans *at all*. In practice, their Five Eyes partners gives them a stupid loophole: An allied nation can simply do the spying for them, so long as federal prosecutors are willing to engage in a little bit of [parallel construction](https://en.wikipedia.org/wiki/Parallel_construction).
+Of course, systemd has roughly the same features too. `IPAddress{Allow,Deny}` can default deny then explicitly allow subnets that are allowed. Though it does not support limiting port access and requires cgroup and eBPF support (so a new enough kernel). To only allow local addresses via systemd, add the following configuration.
 
-Take note of the DEA section of the previously linked Wikipedia page.
+Systemd has everything. Including several security flags that you may or may not want to set depending on your usecase. Most of the settings are restricting the process from obtaining or exercising management capabilities, as web applications shouldn't need them while attackers do.
 
-You cannot trust the government, but if you know the mission each department operates under, you can understand *their incentive structures*. Knowing their incentive structures lets you reason about their actual activities–or, failing that, create conspiracy theories with a cohesive narrative.
+`NoNewPrivileges` and `MemoryDenyWriteExecute` need some explanation. NoNewPrivileges is a bit convoluted. NoNewPrivileges first and foremost clears the process privilege and prevents the current process switching user/group to another user/group with a greater privilege - including root. But what is privilege? Privilege is the ability to switch to another user/group with a greater privilege or gain more privilege. It's circular but hopefully you can see that once privilege is cleared, you can't escalate your process to root or through a chain of accounts, to root eventually. Or simply, in practice, NoNewPrivileges means the process itself can never be root.
 
-The COMSEC mission can be related to the S-box strengthening; the SIGINT mission, to the weaker key length.
+`MemoryDenyWriteExecute` prevents a piece of memory to ever be both writable and executable at the same time. Attackers who want the server execute their code may decide the easiest way is to upload their code into the server's memory and find a way to make the CPU jump there. This process obviously needs the memory both be writable (to upload code) and executable programs just needs read and executable. Your code is already compiled or there's an interperter interperting your code.. With one exception. JIT compilers. JIT compilers take your source code, both interpert and compiles it on the fly. Which does need both write and executable memory.
 
-### Clipper Chip
+In practice this means all NodeJS, all .NET applications, all JAVA appliactions, newer Ruby, SBCL, LuaJIT, PHP >= 8.0 and anything that depends on PCRE (Perl Compatible Regular Expressions) **cannot** have MemoryDenyWriteExecute set. Everything else mostly likely can. Including but not limited to Lua, Python, Rust, Go, C, C++, D.
 
-Okay, so the DES thing was a messy affair. Let’s look at an example of the NSA clearly being on the wrong side of privacy.
+If you are running on a new enough CPU (Intel 12th gen, AMD Zen3) and is running a new enough kernel and glibc, Shadow Stack is a hardware machinism to make one of the more nasty attacks (ROP, Return Oriented Programming) not viable. How ROP works is quite technical. To give a high level overview: when a program has a memory vulnerability, the attacker can attempt to, though a long chain of manipulations, trick the CPU into returning to a different place then it comes to.
 
-The [Clipper Chip](https://en.wikipedia.org/wiki/Clipper_chip), which was designed and promoted by the NSA in 1993 to secure voice messages, with a backdoor.
+Yeah it's crazy.
 
-Clipper Chip was an early example of a NOBUS (Nobody But Us can exploit it) backdoor. Unlike DES’s 56-bit key, the cipher used (Skipjack) was promoted up to a whopping 80-bits.
+With CPU supporting Shadow Stack, the CPU records where each function call originated into a seperate region of memory (and inaccessable to the program itself) and check if the intended location it's returning to matches the sotred value. This way it's pretty impossible to trick the CPU to return to a location that is not where the function is called.
 
-But before you celebrate, be aware that there was a “key escrow” feature that allowed law enforcement to decrypt plaintext, and a 16-bit hash in the “Law Enforcement Access Field” (LEAF) that turned out to be a pretty stupid vulnerability, as [Matt Blaze discovered in 1994](https://www.wired.com/1994/09/clipping-clipper-matt-blaze/). If you want a technical breakdown, [Professor Matt Green’s blog post](https://blog.cryptographyengineering.com/2015/07/20/a-history-of-backdoors/) covers this (and other backdoors).
+On x64 the hardware implementatino is called CET (Control-flow Enforcement Technology). Unfortunatelly it is not enabled by default - there's cases where older compilers will intend to return to a different location then it's callers - old GCC for example, sometimes for optimizations reasons, modifies the return address for tail calls so it can jump back once instead if severak times through functions. And thus binaries are marked with if they are Shadow Stack compatible and the OS only enables Shadow Stack if all loaded binaries are Shadow Stack compatible. To tell the OS to try to enable shadow stack. Add environment:
 
-Not only was the Clipper Chip a terrible idea to begin with, it was also technically flawed (to the point of embarrassment). This was the first of many issues in what became known as the Crypto Wars.
+And to check if your program have shadow stack enabled. Read /proc and see if `shstk` shows up in the thread features list.
 
-#### What does this actually tell us?
+The only reason I put this low on the list is because it stops a very specific type of attack that I don't see much in the wild. Even if the kind of attack is stops can be realyl nasty.
 
-When the NSA colluded with law enforcement to spy on Americans’ private conversations, their attempt was met with public backlash from independent technologists (Matt Blaze, the Electronic Frontier Foundation, etc.).
+Operationally complicated, but this might just be worth it. Most attacks, if they need a binary exploit, will target glibc because that's the most common thing to be loaded in memory. Nearly all process has it. Espicially if the vulnerability happensi in a library that usually has no natural paths to invoking the shell. These attacks eventually needs to know where `system()` is within the sepcfici glibc binary that's loaded. Compiling your own glibc makes that offset unknown to the attacker (usually they download archives from distributions and inspect) resulting in a crash instead of a successful command execution.
 
-The cryptography community outside the military-industrial complex *today* is largely primed to call out Clipper Chip style bullshit whenever it happens. (See also: the EU’s ChatControl.)
+A benitfit of this approach being it works everywhere. Glibc is famously backwards compatible to applications most of the times. Unfortunatelly if you need glibc to be the line defending your process. Something else is already very broken. Personally I treat it as a nice to have and a final line of defense then thing to deploy first.
 
-![Soatok pointing at a blackboard.](https://i0.wp.com/soatok.blog/wp-content/uploads/2023/10/SoatokLecture.png?w=512&ssl=1)
+To build glibc from source
 
-*AJ_LovesDinos*
+Then to use the newly installed glibc, instead of `LD_PRELOAD`, you have to execute it's dynamic linker as glibc is a special case - that LD_PRELOAD depends on glibc itself.
 
-### Dual_EC_DRBG
+If you are following the previous recommendations and setting `NoExecPaths`. The local glibc install directory needs ot be added into the ExecPaths list.
 
-In 2006, NIST published [SP 800-90](https://csrc.nist.gov/pubs/sp/800/90/final), which recommended deterministic random bit generators (DRBGs):
+PHP is a weird thing. I use PHP through PHP-FPM and PHP-FPM has built-in user managment. Instead of PHP-FPM being run as it's own users. PHP-FPM spawns as root and switchs workers to users that the services should be running at, at runtime. This means we can't simply ban the entire setuid syscall all togerther (see my previous post on what I did).
 
-- Hash_DRBG — generating random bits from cryptographic hash functions computed over input entropy sources
-- HMAC_DRBG — generating random bits from HMAC (which is kind of like if a hash function had a secret key)
-- CTR_DRBG — turning a block cipher into a random bit stream by using Counter Mode
+And some PHP plugins has deep binding enabled. I don't know why they need it but it causes the shared object to use a different allocator then the one you LD_PRELOAD'd and crash because it runs on a different free() implementation.
 
-The three I listed above are… well, they’re fine. Pretty much everyone uses hash functions or block ciphers to squeeze random bits out of smaller amounts of entropy.
+Compile it with `cc php-deepbind-shim.c -fPIC -shared -o php-deepbind-shim.so php-deepbind-shim.c` and LD_PRELOAD it to your PHP(-FPM) instance to get rid of deep binding for PHP modules. If using systemd and denied execution everywhere, remember to add `/path/to/php-deepbind-shim.so` to your ExecPaths
 
-But the fourth entry in the NIST standard was an odd duck. Dual_EC_DRBG was several times slower than the other recommendations and was [immediately flagged as having a backdoor](https://eprint.iacr.org/2006/190) (which [other cryptographers agreed with](https://web.archive.org/web/20140621062515/http://archive.wired.com/politics/security/commentary/securitymatters/2007/11/securitymatters_1115)).
+PHP uses it's own Zend allocator internally. PHP allocations goes through `zend_alloc()` (which is backed up it's own memory pool and then malloc) and reuse memory after `zned_free()`. Which defeats the purpose of having a hardened allocator! Set the enviroment `USE_ZEND_ALLOC=0` to disable the Zend allocator if you wnat your custom allocator to be effective. But because the Zend allocator is the thing reporting and limiting total memory use of PHP. So you'll need to handle that through systemd, limiting how much memory that PHP can use overall
 
-> I don’t understand why the NSA was so insistent about including Dual_EC_DRBG in the standard. It makes no sense as a trap door: It’s public, and rather obvious. It makes no sense from an engineering perspective: It’s too slow for anyone to willingly use it. And it makes no sense from a backwards-compatibility perspective: Swapping one random-number generator for another is easy.
->
-> My recommendation, if you’re in need of a random-number generator, is not to use Dual_EC_DRBG under any circumstances. If you have to use something in SP 800-90, use CTR_DRBG or Hash_DRBG.
->
-> In the meantime, both NIST and the NSA have some explaining to do.
-
-Of course, because of Edward Snowden, we know today that cryptographers [were completely correct about Dual_EC_DRBG being a backdoor by the NSA](https://www.bbc.com/news/technology-24048343).
-
-Ever since that revelation, no discussion about NOBUS (Nobody But Us) backdoors would be complete without at least mentioning Dual_EC_DRBG.
-
-What almost nobody foresaw, however, was that a rival nation state would [replace the public key baked into Dual_EC’s design with their own while backdooring Juniper Networks](https://dl.acm.org/doi/10.1145/2976749.2978395).
-
-*Kind of a stupid fucking approach to NOBUS, ain’t it?*
-
-#### What does this actually tell us?
-
-When the incentives of the NSA aligned with malicious government conspiracies against the American people (sorry to keep specifying this, by the way, but they’re pretty much always malicious to folks outside the USA) and standardization processes, it didn’t fly under the radar and basically every cryptographer said “Hell no” to using it.
-
-Whether NSA is capable of being sneakier while corrupting NIST documents remains to be seen.
-
-![Soatok yelling at his computer](https://i0.wp.com/soatok.blog/wp-content/uploads/2024/08/SoatokNerdRage.png?w=512&ssl=1)
-
-*AJ_LovesDinos*
-
-### The Snowden Disclosures
-
-There’s far too much to talk about here, and of varying usefulness. Consult [the Snowden Archives](https://snowden.xsurveillance.site/) if you want to read more. There were a lot of codenames. There was a lot of jargon.
-
-It spawned a lot of memes.
-
-Some of the codenames (e.g., FOXACID) are the sort of thing that cause eyebrows to raise among computer nerds that are familiar with furries and [vore](https://en.wikipedia.org/wiki/Vorarephilia).
-
-Here’s a lightning round of some of what we learned from Snowden:
-
-1. Bulk collection of Americans’ phone metadata, despite James Clapper committing perjury to the contrary
-2. [PRISM](https://en.wikipedia.org/wiki/PRISM): mass passive surveillance of the Internet, which is largely why TLS became ubiquitous in the years since.
-3. Tempora: copied data from undersea cables for NSA to analyze
-4. BULLRUN / EDGEHILL — see also: Dual_EC_DRBG, but also RSA Security
-5. XKeyscore: basically a private version of Palantir’s product today
-
-There’s so much more we could talk about, but what’s notably absent from Snowden’s leaks is any secret cryptanalytic attacks against standardized cryptography.
-
-Notably, they couldn’t break Tor in any way that wasn’t already known to the Tor developers at the time.
-
-Hell, there were myriad conspiracy theories in late 2013 about the Silk Road marketplace being taken down by a NSA attack on Tor. The slide decks Snowden leaked suggest otherwise.
-
-#### What does this actually tells us?
-
-A lot. Far too much, in fact, for me to dissect it all in this blog post!
-
-But the pertinent detail is this: The absence of cryptanalytic capabilities in Snowden’s leaks can be interpreted one of several ways.
-
-1. The private sector has largely caught up with NSA
-2. NSA’s compartmentalization was somehow successful at preventing Snowden from discovering these mathematical techniques, but not all the other damning evidence
-3. The NSA didn’t bother trying to beat the cryptography because it was, as is often the case today, so much easier to simply bypass it entirely
-
-Personally, I think any of these interpretations is valid. I’d put my money on number 3, of course. After all, that’s what PRISM largely did.
-
-![Soatok glitching out](https://i0.wp.com/soatok.blog/wp-content/uploads/2025/04/SoatokGlitch.png?w=512&ssl=1)
-
-*AJ_LovesDinos*
-
-## People Can’t Be Normal About This
-
-I omitted several controversies from the previous section, because it was getting too long and I feel I justified my point already. However, I’m sure some people will cry foul at omissions as an attempt at deception, so I need to also mention one that was recently solved.
-
-### The NIST P-Curve Seeds
-
-> The what now?
-
-Elliptic curve cryptography is *a whole topic* I’ve talked about on this blog before, at length, but I’m going to simplify for the sake of being somewhat comprehensible to people who don’t make Frobenius trace jokes on IRC.
-
-NIST published [FIPS 186-2 in 2000](https://csrc.nist.gov/pubs/fips/186-2/final) (and later [updated it in 2001](https://csrc.nist.gov/pubs/fips/186-2/upd1/final)), which provided several elliptic curve groups (P-192, P-224, P-256, P-384, P-521).
-
-Each elliptic curve group was parametrized by a seed, `s`, which was never explained by NSA. The output of the SHA-1 hash of `s` was used to calculate the parameters for each elliptic curve group.
-
-Jerry Solinas, who was the mathematician and cryptographer that published the P-curves, couldn’t remember how the seeds were chosen.
-
-In the wake of Dual_EC_DRBG and BULLRUN, any unexplained value being the basis of several NIST standardized elliptic curve groups caused many people to be itchy.
-
-For a while, Daniel J. Bernstein’s Curve25519 algorithms and software gained popularity in the applied cryptography spaces. This was probably a good thing, overall, but there were [some sharp edges](https://moderncrypto.org/mail-archive/curves/2017/000898.html) (that later work [has since improved upon](https://ristretto.group/)).
-
-Speaking from experience, many of these decisions post-Snowden were the result of paranoia about the NSA possibly adding a NOBUS backdoor to the NIST P-Curves too, rather than merely for the technical merits of Curve25519.
-
-However, Koblitz and Menezes already tackled that in a paper titled, “[A Riddle Wrapped In An Enigma](https://eprint.iacr.org/2015/1018).” To summarize their mathematical arguments: If NSA was aware of a secret weakness that only occurs in some number of elliptic curve groups, and wanted to make a NOBUS backdoor that their adversaries couldn’t figure out, it would need to be a structural weakness that only occurs extremely rarely.
-
-So rarely, in fact, that not only would the computational resources available to Jerry Solinas in the late 1990s would not have been sufficient, but you still couldn’t do it today.
-
-> This scenario is highly implausible for several reasons. First, the class of weak curves must be extremely large in order to obtain a weak curve with the seeded-hash method. For concreteness, suppose that p is a fixed 256-bit prime. There are roughly ![2^{257}](https://s0.wp.com/latex.php?latex=2%5E%7B257%7D&bg=0a0a0a&fg=f0f0f0&s=3&c=20201002) isomorphism classes of elliptic curves defined over ![F_p](https://s0.wp.com/latex.php?latex=F_p&bg=0a0a0a&fg=f0f0f0&s=3&c=20201002). Let ![s](https://s0.wp.com/latex.php?latex=s&bg=0a0a0a&fg=f0f0f0&s=3&c=20201002) be the proportion of elliptic curves over ![F_p](https://s0.wp.com/latex.php?latex=F_p&bg=0a0a0a&fg=f0f0f0&s=3&c=20201002) that are believed (by everyone except hypothetically the NSA in 1997) to be safe. This class of curves includes essentially all elliptic curves of prime order (with the exception of prime-field anomalous curves and those that succumb to the Weil/Tate pairing attack). Since the proportion of 256-bit numbers that are prime is approximately ![1/(256 ln 2) \approx 2^{\neg 8}](https://s0.wp.com/latex.php?latex=1%2F%28256+ln+2%29+%5Capprox+2%5E%7B%5Cneg+8%7D&bg=0a0a0a&fg=f0f0f0&s=3&c=20201002), the proportion of curves that are strong is at least ![2^{\neg 8}](https://s0.wp.com/latex.php?latex=2%5E%7B%5Cneg+8%7D&bg=0a0a0a&fg=f0f0f0&s=3&c=20201002). Now suppose that the proportion of these curves that the NSA knew how to break were ![2^{\neg 40}](https://s0.wp.com/latex.php?latex=2%5E%7B%5Cneg+40%7D&bg=0a0a0a&fg=f0f0f0&s=3&c=20201002). In this hypothetical scenario the NSA could select such a weak curve by trying about ![2^{48}](https://s0.wp.com/latex.php?latex=2%5E%7B48%7D&bg=0a0a0a&fg=f0f0f0&s=3&c=20201002) seeds. The number of NSA-weak curves would then be approximately ![2^{209}](https://s0.wp.com/latex.php?latex=2%5E%7B209%7D&bg=0a0a0a&fg=f0f0f0&s=3&c=20201002). This would mean that this huge class of weak curves was known to the NSA in 1997 but is still undiscovered by outside researchers in 2015. **It is highly unlikely that such a large family of weak elliptic curves would have escaped detection by the cryptographic research community from 1997 to the present.**
-
-This quote highlights my broader point in this whole blog post: The NSA isn’t magical. (Nor is AI. Nor are quantum computers.) The NSA’s capabilities and budgets are finite. Their incentives are defined by their mission.
-
-In 2023, Filippo Valsorda and several others (including myself) pledged [a bounty](https://words.filippo.io/seeds-bounty/) (with extra if the award is donated to charity) to anyone that could solve the mystery of the NIST P-curve seeds.
-
-Earlier this month, Anthropic [successfully claimed that bounty](https://words.filippo.io/seeds-solved/), and elected to donate the bounty to the ISRG (the non-profit that operates [the Let’s Encrypt certificate authority](https://letsencrypt.org/)).
-
-There’s a poetic irony here: My pledged donation is going towards the organization that led the way to making TLS ubiquitous online since 2015 in the wake of the NSA’s global mass surveillance… **because one of the NSA mysteries was finally solved**.
-
-This is a nice segue into the final topic I want to discuss today.
-
-![UwU](https://i0.wp.com/soatok.blog/wp-content/uploads/2020/10/soatokuwu.png?resize=512%2C512&ssl=1)
-
-*[CMYKat](https://cmykatgraphics.carrd.co/)*
-
-## Post-Quantum Cryptography
-
-I’ve already covered most of what I want to say here in a previous post titled, *[Hybrid Constructions: The Post-Quantum Safety Blanket](https://soatok.blog/2026/04/13/hybrid-constructions-the-post-quantum-safety-blanket/)*.
-
-I was tagged in a Fediverse post yesterday that punctuated the sort of discourse cryptographers have already seen in the IETF mailing list threads and on technical forums in the past few months:
-
-> NIST works for US fash regime that’s trying to help their AI scammer buddies pivot to quantum scams.
->
-> That’s the generous interpretation.
->
-> The worse one is that NSA has known flaws/backdoors in the post quantum systems and wants to shut down the actually-secure ones.
-
-This was a reply to a quote-post of [another thread](https://web.archive.org/web/20261029071728/https://defcon.social/@infosec/117516999211815499) that described NIST publishing its final plan for [IR 8547](https://csrc.nist.gov/pubs/ir/8547/final): the transition to post-quantum cryptography.
-
-The NSA announced, in 2015, [its plans to migrate to “quantum resistant algorithms”](https://web.archive.org/web/20151016020521/https://www.nsa.gov/ia/programs/suiteb_cryptography/).
-
-For the decade or so since, the NIST Post-Quantum Cryptography standardization effort has largely revolved around [the NIST pqc-forum](https://groups.google.com/a/list.nist.gov/g/pqc-forum). You can read the archived email threads, publicly, going back to the forum’s inception. Most of the emails are dry, boring, technical, and/or procedural.
-
-But in the beginning? It was a *bloodbath* of cryptanalytic attacks against proposed KEMs and signature algorithms.
-
-The NIST recommendations and standards for post-quantum cryptography were a transparent effort involving *virtually anyone in the cryptography and security communities that wanted to participate* spanning from 2015 until now, and it is still ongoing.
-
-The selected algorithms (i.e., ML-KEM, formerly known as CRYSTALS-Kyber) were designed by international teams. The principal submitter of ML-KEM, Peter Schwabe, even worked with Daniel J. Bernstein on [NaCl in the 2010s](https://nacl.cr.yp.to/) (and was [one of Bernstein’s Ph.D Students](https://cryptojedi.org/peter/index.shtml)).
-
-> Bernstein, for those not following along, was a large source of irritation on the TLS Working Group mailing list earlier this year for his weird anti-ML-KEM and anti-ML-DSA tirades and concern-trolling.
->
-> At one point, he tried to summon Twitter mobs to join the mailing list and pack the vote… except, that’s not how Rough Consensus works at IETF at all!
->
-> Today, many “NIST backdoored post-quantum” conspiracy theories point to Bernstein to support their points.
->
-> It’s all very stupid and disappointing.
-
-Furthermore, there [isn’t enough structure in ML-KEM, in particular](https://keymaterial.net/2025/11/27/ml-kem-mythbusting/), to squeeze in a public key to make any plausible weakness truly NOBUS.
-
-### How plausible is an NSA backdoor here, really?
-
-I’m no Neil Koblitz or Alfred Menezes, so forgive me if my rebuttal doesn’t contain the mathematical rigor of those two.
-
-Here are some facts to consider.
-
-1. The federal government (through CNSA 2.0) is being told to adopt ML-KEM-1024 and ML-DSA-87. Hybrid constructions are not blessed for protecting federal government systems.
-2. As we saw with the DES S-boxes, the NSA is known to sometimes make decisions that improve security (though may conceal an attack on competing designs).
-3. NSA has a dual mission: COMSEC and SIGINT, as discussed above.
-4. NSA has tried to subvert standards before (DUAL_EC_DRBG).
-
-Is it plausible that the NSA would be so confident in the NOBUS status of a secret flaw or backdoor in ML-KEM (which they did not design) that they’d **move the entire fucking federal government’s systems for TOP SECRET classified information** to adopt it [as fast as possible](https://www.nsa.gov/Press-Room/Press-Releases-Statements/Press-Release-View/Article/4615285/nsa-announces-post-quantum-cryptography-measures-to-safeguard-national-security/)?
-
-I don’t know, man. That sounds kind of fucking stupid to me.
-
-In my opinion, a more compelling conspiracy theory is that NSA already secretly built a quantum computer in [their Utah data center](https://en.wikipedia.org/wiki/Utah_Data_Center), and it’s already being used to spy on everyone today.
-
-It’s a better fit than “ML-KEM is a NSA backdoor, the European cryptographers that designed it are all stupid, and the NSA is eager to move the US government onto a flawed or broken cryptosystem because SIGINT is all they care about, even at the expense of COMSEC, and they also can’t just *look for the plaintext* (which already works 99% of the time) they *gotta* be able to crack the encryption” which is the essence of the conspiracy theories that keep hitting my inbox today.
-
-Conspiracy theories aren’t harmless. They create room for [grifters and hucksters](https://soatok.blog/2021/02/09/crackpot-cryptography-and-security-theater/) to deceive well-intentioned non-experts.
-
-![Confused protogen](https://i0.wp.com/soatok.blog/wp-content/uploads/2021/07/neophyte-confused.png?resize=409%2C512&ssl=1)
-
-*[Harubaki](https://harubaki.carrd.co/)*
-
-## In Closing
-
-If you convinced yourself of a wrong conspiracy theory, that doesn’t mean you are dumb or unlovable.
-
-NSA is certainly up to something. It’s their entire fucking job to be up to something. But it’d very unlikely to be a post-quantum backdoor no matter how much energy is expended on discussion boards and social media trying to convince people of that narrative.
-
-Since neither you nor I have any information on what they’re actually up to, it’s tempting to look at the absence of evidence and fill-in-the-blanks and pattern-match based on what we already know today. That’s not stupidity.
-
-Unfortunately, most of the proponents of these conspiracy theories will cherry-pick the most damning examples (i.e., Dual_EC_DRBG, through the lens of Snowden) while ignoring the messier and more nuanced aspects of the NSA’s [mis]conduct with the larger cryptography community.
-
-So, please: Stay curious and humble. Better and more likely conspiracy theories exist, and may even be true, but you’ll never reach them if you short-circuit your analysis on stale low-hanging fruit and stop wondering.
+Hopefully this article explains what I do and why I do for proactive mitigations in my machines. And hope it helped people defending themselves.

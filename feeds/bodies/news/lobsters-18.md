@@ -1,48 +1,350 @@
-Back in 2001, Joel Spolsky – whose writings had a big influence my career – wrote a great piece titled [Back to Basics](https://www.joelonsoftware.com/2001/12/11/back-to-basics/). The premise of the piece is that practitioners should understand the basics: However abstract and remote we may seem from the basic algorithms that drive computing, they can unexpectedly have enormous consequences on our projects.
+I have always been interested in frontend solutions for building web
+applications. Even though I’m more of a backend programmer, I really dig all the
+different techniques people come up with for creating browser-based apps that
+are both *reactive* (reflecting remote state in real-time) and *interactive*
+(responding to user actions).
 
-One of his examples is the “Shlemiel the Painter” trap, where a seemingly simple choice leads to quadratic runtime complexity. In that parable, a street line painter never moves his can of paint. As he gets further and further along in the line, increasingly more of his time is spent walking to and from his can of paint.
+Over the last few years, I’ve been looking at different frontend frameworks and
+libraries, to see how they work, and what I can learn from them. I adore
+[Svelte](https://svelte.dev/), which is really smart and efficient. Its sister
+framework [SvelteKit](https://svelte.dev/docs/kit/introduction) inspired the
+file-based routing in my own web framework for Ruby,
+[Syntropy](https://github.com/noteflakes/syntropy/). I also really like the
+approach of the [Phoenix](https://www.phoenixframework.org/) framework to
+building reactive apps using
+[LiveView](https://phoenix-live-view.hexdocs.pm/welcome.html), which is an
+amazing technology that builds on the solid concurrency foundation of
+Elixir/Erlang.
 
-It is astonishing how often this Shlemiel the Painter pattern recurs<sup>[1](https://dennisforbes.ca/blog/microblog/2026/10/the_accidental_12000x_sqlite_slowdown/#user-content-fn-firefox)</sup>, including now in 2026.
+Many people have tried to recreate the same functionality for other languages or
+frameworks, with varying degrees of success. Recently, [Marco
+Roth](https://marcoroth.dev/) came up with
+[ReActionView](https://reactionview.dev/), which promises to bring reactive
+views to Rails apps, building on his previous work on
+[Herb](https://herb-tools.dev/), a set of tools that improve on the developer
+experience of writing ERB templates for Rails apps.
 
-## My Chess Analysis Service Staggers Under Load
+All those different technologies are certainly impressive, but they all are tied
+to specific languages/frameworks: Svelte/SvelteKit is a JS framework, LiveView
+is for Phoenix/Elixir, ReActionView is for Ruby on Rails, LiveWire is for
+Laravel/PHP, etc.
 
-A few days ago I posted about a [chess analysis service I put online](https://dennisforbes.ca/blog/microblog/2026/10/chess_analysis_service)<sup> ↗</sup><sup>[2](https://dennisforbes.ca/blog/microblog/2026/10/the_accidental_12000x_sqlite_slowdown/#user-content-fn-motive)</sup>. This is primarily a Rust service backed by sqlite that dishes out analysis tasks to runners. Each runner processes upwards of hundreds of chess games and return a large set of JSON bundles back to the main service, where they are processed and then stuffed into sqlite.
+And then there’s [Datastar](https://data-star.dev/), which dubs itself “the
+Hypermedia framework”. It is somewhat similar to other frontend declarative
+frameworks/libraries such as [HTMX](https://htmx.org/) or
+[Alpine.js](https://alpinejs.dev/), in that interactivity/reactivity is done
+declaratively by adding attributes to HTML tags. But what is different about
+Datastar is that it insists on keeping state where it should be, such that it
+doesn’t try to *copy* server state to the client and keep it in sync with the
+server. Instead, the server continuously sends updates (in the form of HTML
+patches, or [signal](https://data-star.dev/guide/reactive_signals) patches) to
+the client. In that respect, Datastar is more like LiveView, but without the
+coupling to Phoenix/Elixir. In fact, Datastar offers SDKs for different
+languages and frameworks, including Ruby (the Ruby SDK is maintained by [Ismael
+Celis](https://ismaelcelis.com/)).
 
-While the analysis pegs two dozen cores on a runner for minutes on end, the process of storing the data should take milliseconds. Sub-milliseconds.
+I find this approach so refereshing! With Datastar, you can use any backend
+technology in order to build reactive web apps. Furthermore, Datastar relies on
+[SSE](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events)
+(server-sent events) for streaming updates from the server to the client,
+instead of the somewhat older approach of using a WebSocket connection used in
+technologies such as LiveView, or HotWire (the current go-to solution for Rails
+apps).
 
-Imagine my surprise when on the first really large set of games, the simple process of inserting the JSON data – maybe about 40,000 records – into the data store took *minutes*. During all of my testing this never really appeared as a critical path, but with a large set of records it suddenly was a breaking problem.
+While SSE does not provide a full-duplex connection to the server (meaning, you
+can’t use an SSE request/connection to send data from the client to the
+server), it provides two important advantages over WebSocket: A WebSocket
+connection normally requires establishing a separate HTTP/1.1 connection to the
+server (there’s partial support for WebSocket over HTTP/2, but that depends on
+the browser and the server/reverse proxy used. HTTP/3 support is very limited as
+far as I could tell). In contrast, SSE requests can be multiplexed on top of an
+HTTP/2 or HTTP/3 connection, along with any number of other concurrent requests.
+Secondly, because SSE requests are just normal (streaming) HTTP requests, the
+server can use standard HTTP compression in order to achieve significant
+reduction in bandwidth.
 
-What made this more perplexing was that it completely saturated a core, being a CPU-bound operation. How could inserting simple JSON into SQLite yield minutes of CPU time?
+Let’s look at a simple example of working with Datastar. Here’s the markup for a
+simple reactive app that displays the current time on the server:
 
-Shlemiel the painter has made an appearance. To drop a spoiler, he was introduced to the project via Zig’s cc compiler and its replacement for standard library functions.
+```
+<html>
+  <head>
+    <script type="module" src="https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.4/bundles/datastar.js">
+    </script>
+  </head>
+  <body>
+    <p data-init="@get('/ds/time_stream')">
+      <span>Time:</span> <span data-text="$time" />
+    </p>
+  </body>
+</html>
+```
 
-## A Minor Issue In Zig Becomes A Major Performance Issue
+This example does three things: load the datastar library (BTW it’s only about
+15KB!), set up a connection to an SSE stream at `/ds/time_stream` using the
+`@get` action, and binds a span to a signal named `$time`. On the server side,
+the controller looks as follows (using Syntropy):
 
-The project isn’t built in Zig, but instead uses Rust. The sqlx sqlite crate needs to be compiled for the target environment – sqlite is of course a C project – so to facilitate cross-platform building, generating both Mac ARM64 and Linux ARM64 / x86-64 binaries from this machine in a convenient build and deploy workflow, zig cc is used to compile sqlite when targeting Linux, generously offering up cross-platform targeting via cargo-zigbuild.
+```
+# /ds/time_stream.rb
+export ->(req) {
+  req.respond_sse {
+    send_time_update(req)
+    @machine.periodically(1) { send_time_update(req) }
+  }
+}
 
-From one build and deploy script on my Mac I can target all of my platforms without containers or build machines. Zig’s elegant libzigc re-implements the standard library so you can static link the necessary functionality.
+def send_time_update(req)
+  json = JSON.dump(time: Time.now.to_s)
+  req.send_event('datastar-patch-signals' => "signals #{json}")
+end
+```
 
-Zig uses musl (the standard library rewrite), but they have been rewriting it piece by piece in pure Zig (via libzigc), removing the C dependencies one at a time.
+The controller code is quite simple: after calling `respond_sse`, which sends
+some HTTP response headers, we send a first update, then we send further updates
+once per second. What actually gets sent over the wire looks as follows:
 
-And that’s where the performance issue was introduced.
+```
+HTTP/1.1 200 
+Content-Type: text/event-stream
 
-In the [rewrite of strspn](https://codeberg.org/ziglang/zig/src/commit/ae9a8acc7f232cb78a131b6dc05633f34d0990ad/lib/c/string.zig#L154-L157), [replacing the musl version with the pure zig variant](https://codeberg.org/ziglang/zig/commit/f0649dd9782780f5b608af338b6d4add19ce2730)), the first step measures the entire length of the string. This is also seen in the rewrites of strcspn, strpbrk and strstr.
+event: datastar-patch-signals
+data: signals { "time": "2026-11-04 11:54:55 +0200" }
 
-This is a problem for tokenizers. A tokenizer takes a giant string and a common iterating step is to skip whitespace, getting the new string location and then repeating this pattern iteratively. With this shlemiel the painter pattern introduced with these rewrites, as it steps through the text it is tokenizing it is remeasuring the remaining length of the string endlessly.
+event: datastar-patch-signals
+data: signals { "time": "2026-11-04 11:54:56 +0200" }
 
-This is what caused my performance issue, and it’s why it appeared on Linux but was never seen on my Mac (where zig wasn’t used for compiling sqlite).
+event: datastar-patch-signals
+data: signals { "time": "2026-11-04 11:54:57 +0200" }
+...
+```
 
-Tokenizing a 1.2MB file, which was seen passing json to sqlite, is approximately 12,000x slower with this pattern. As the file gets larger, the slowdown is quadratic.
+The Datastar wire protocol is based on the SSE response format, where each event
+contains an (optional) `event:` entry and one or more `data:` entries. Distinct
+events are separated by double newline characters (`\n\n`). In this case, we’re
+sending a `datastar-patch-signals` event that tells the browser to update signal
+values. The patched values are expressed as a JSON object where the keys
+correspond to signal names and the values correspond to the signal values.
 
-## The Classic Issues Recur
+You can look at this example on a [separate page](https://noteflakes.com/ds/time),
+but for the sake of convenience I’ll go ahead and embed it right here:
 
-I mean no malice or disrespect to anyone involved with these great tools that enable so much. But it’s interesting that in the year 2026, these same old issues can recur, and we all need to be vigilant for them. Something so trivial was grinding a process to a halt, in the most unexpectedly trivial of places.
+Although this is a very simple example, look at all the things we’re not doing
+😜: we don’t need to set up an `EventSource` object, or use `fetch` to start the
+SSE connection on the client side, we don’t need to go through the DOM and
+update anything that’s bound to the `$time` signal. On the server side we just
+stream changes to the server state to the client (eventually though, we might
+want to introduce some abstractions for sending a `datastar-patch-signals` event
+or other types of events, but this is pretty trivial…)
 
-My original fix for this issue, at least in my own code, was to pre-prune whitespace from JSON, which greatly reduced the cost when tokenizing in sqlite3, but not knowing where else it might bite I moved my Linux builds over to Linux containers.
+## Exploring Signals in Datastar
 
-## Footnotes
+Let’s look at how signals are handled in Datastar a bit more closely. I’ve been
+playing with Datastar in the last few days and have observed the some
+peculiarities:
 
-1. Years and years ago, back when Sunspider was the go-to benchmark and browsers would herald their supremacy, the same pattern could be seen in the way Firefox handled string concatenations, causing it to be a laggard in that benchmark. Sunspider’s benchmark run somehow entailed an enormous number of string concatenations – even the tests having little to do with strings – and a simple profile<sup>[3](https://dennisforbes.ca/blog/microblog/2026/10/the_accidental_12000x_sqlite_slowdown/#user-content-fn-profilers)</sup> of a benchmark run showed that a significant amount of the runtime was consumed constantly allocating slightly larger string memory, copying to the new location, and then repeating this pattern. It was Shlemiel the Painter. I corrected this (overallocate strings with a size-dependent buffer such that subsequent concatenations could reuse the buffer until it actually need to be resized again, which again would overallocate), blogged about it, Brendon Eich took note, and voila Firefox took the lead in the benchmark<sup>[4](https://dennisforbes.ca/blog/microblog/2026/10/the_accidental_12000x_sqlite_slowdown/#user-content-fn-real)</sup>. Such a trivial thing turned it from slowpoke to benchmark. [↩](https://dennisforbes.ca/blog/microblog/2026/10/the_accidental_12000x_sqlite_slowdown/#user-content-fnref-firefox)
-2. I’m under no delusions I’m going to support my family with a niche chess analysis service, and at most I’m looking to break even with the costs of running it. I put it online because I found my work to these ends useful to my own game, and hope that occasionally it will find the right user without burdening me with the costs of doing so. [↩](https://dennisforbes.ca/blog/microblog/2026/10/the_accidental_12000x_sqlite_slowdown/#user-content-fnref-motive)
-3. Profilers are awesome. They are the most powerful tool we have available to us, so it’s strange to me how seldom they are utilized. [↩](https://dennisforbes.ca/blog/microblog/2026/10/the_accidental_12000x_sqlite_slowdown/#user-content-fnref-profilers)
-4. And for what it’s worth, string concatenation was extremely common in almost all web projects, so the benefit was substantial in the real world as well. There was a best practice of using string builders, but so often people just slammed strings together in a loop. [↩](https://dennisforbes.ca/blog/microblog/2026/10/the_accidental_12000x_sqlite_slowdown/#user-content-fnref-real)
+In Datastar, signals are global to the page. They can’t be scoped to a part of
+the DOM, but they can be namespaced by
+[nesting](https://data-star.dev/guide/backend_requests#nesting-signals) them
+inside objects:
+
+```
+<span data-text:foo.bar.baz />
+```
+
+Alternatively, you can use the following notation, handy when you have key
+values that contain slashes, or other special characters:
+
+```
+<span data-text="$foo['/bar']" />
+```
+
+By default, Datastar will send all signal values back to the server on every
+user action, which may be problematic if you have lots of signals on your page.
+In order to prevent signal values from being sent to the server on each request,
+the signal name must begin with an underscore.
+
+Finally, an important aspect of Datastar signals (and indeed, Datastar in
+general,) is that Datastar doesn’t really have a Javascript API. You can’t just
+access signal values from Javascript (this is by
+[design](https://github.com/starfederation/datastar/issues/1233)), which may
+make it harder to integrate Datastar with other tools. But there is a workaround
+for that and it’s pretty simple:
+
+```
+<body 
+  data-signals="{ foo: { bar: 42 } }"
+  data-init="Foo.start($foo);"
+>
+  <p>foo.bar: <span data-text="$foo.bar" /></p>
+  <script>
+    window.Foo = {
+      start: (foo) => {
+        Foo.foo = foo;
+        setInterval(() => Foo.foo.bar++, 1000)
+      }
+
+    };
+  </script>
+</body>
+```
+
+Here, we use the `data-init` attribute that lets us run an arbitrary piece of
+JS. We call `Datastar.start`, while in a separate `<script>` we declare a global
+`Datastar` object, which stores the reference to the `$foo` signal, and then
+sets up a recurring timer to increment the value of `$foo.bar` once per second:
+
+This is not too complicated, but then again, a random frontend developer might
+balk at the fact that Datastar actually makes it hard to access the app state
+from any other JS library or script on the browser. But I think this makes
+sense, given the intention behind its design. In [“The Tao of
+Datastar”](https://data-star.dev/guide/the_tao_of_datastar) this is laid out
+quite explicitly:
+
+> State in the right place: Most state should live in the backend… the backend
+> should be the source of truth for your application state…
+>
+> Use signals sparingly: A good rule of thumb is to only use signals for user
+> interactions (e.g. toggling element visibility) and for sending new state to
+> the backend (e.g. by binding signals to form input elements).
+
+I think constraints are good, and in the case of Datastar, the constraints (no
+JS API, don’t overuse signals, state should mostly live on the backend),
+actually make you think hard about the structure of your app, the different
+pages it’s made of and the components therein. You might even need to rethink
+the entire URL structure of your app, and where each part of the app state is
+kept. The more I tinker with Datastar, the more those constraints make sense.
+
+That said, for some types of applications those constraints may be, well, too
+constraining. For example, an application in which a single page can display
+thousands of discrete values, and some of them more than once, might need to
+structure their signals accordingly. In that type of app, we can take advantage
+of Datastar’s signal namespacing (nested signals) feature, and we might also
+want to prepend those signals with an underscore, e.g. `$_values`, so as to
+prevent all those values from being sent to the server on each request (and
+anyways the server is the source of those values, so there’s no point in that.)
+
+So if we’re not supposed to use signals for server state, how do we update the
+client when the server state changes? The answer to that is by patching the page
+HTML itself:
+
+```
+# /ds/time_stream_html.rb
+
+@time_template = ->(time) {
+  span "Time: #{time.to_s}", id: "time"
+}
+
+def send_time_update(req)
+  patch = Papercraft.html(@time_template, Time.now)
+  req.send_event('datastar-patch-elements' => "elements #{patch}")
+end
+```
+
+Here we have a micro-template that renders a time span, and we use the
+`datastar-patch-elements` event to patch the browser’s DOM. The result works the
+same as the above example using signals:
+
+So, this technique of patching the browser DOM requires a somewhat different way
+of thinking. Most importantly, it requires that the elements that need to be
+patched be identifiable, normally using an id. This may not necessarily work for
+all kinds of apps, but in that case you can always use signals. I find that both
+techniques have their advantages and disadvantages. What’s most interesting
+though is that with Datastar there’s no need for writing Javascript, and that in
+itself is a huge advantage.
+
+## SPAs vs. MPAs
+
+Datastar is expressly geared more towards creating MPAs (multi-page apps) than
+SPAs (single-page apps). From the Datastar Tao:
+
+> Make an MPA, each page is a resource, keep a stream open on the current state
+> of that resource…
+
+So, is Datastar incompatible with SPAs? And why would we want to make an SPA in
+the first place? In many web apps there’s going to be some state that pertains
+to the client (for example, is the sidebar collapsed or not, are menu groups
+inside the sidebar collapsed or not, etc.), and some state that’s coming from
+the server. In many web apps, we’d like to retain the client state (the sidebar
+again), even if we move between different resources in our app. Architecting our
+app as an SPA may help us achieve this goal of persisting client state, at the
+possible cost of not being able to correctly handle navigation history.
+
+From my experiments it seems like it’s totally possible to make an SPA using
+Datastar by filling in the missing parts with some custom Javascript. But why
+would I want to use Datastar in this way? Maybe there’s something I’m missing? I
+must admit that at first I had trouble understanding the tao of Datastar. I
+think my resistance was due to the fact that I’m just used to the “modern”
+approach of implementing reactive and interactive web UIs using Javascript -
+responding to user actions, rendering stuff in the client, etc.
+
+But then I listened to a very interesting
+[talk](https://www.youtube.com/watch?v=2ECucq-mTGg&pp=ygUUZGF2aWQgbm9sZW4gZGF0YXN0YXI%3D)
+between [David Nolen](https://github.com/swannodette) (the creator of
+ClojureScript) and [Ben Croker](https://github.com/bencroker) and [Delaney
+Gilliland](https://github.com/delaneyj) (the guys behind Datastar), where David
+talks about how Datastar was used in building
+[Instabooks](https://instabooks.io/), a fast web UI for Quickbooks. This really
+piqued my curiosity, so I went on the instabooks website and fortunately they
+have offer a [demo that anybody can try](https://instabooks.io/try). Go and have
+a look yourself, it’s really cool!
+
+But what’s even cooler is that, as David tells it in their conversation, any user
+action, such as scrolling records, filtering, searching, etc. results in a full
+rerendering of the page. I actually looked at what their demo is sending on their
+SSE stream - it’s always a fully-rendered version of the page. This means that
+there’s basically (to my understanding) no (or very little) frontend logic that
+intercepts button clicks and renders a bunch of stuff. Instead, when the UI
+state is kept on the server, and each interaction results in an HTTP request to
+the server, which rerenders the page and sends it back to the browser on the
+previously established SSE stream. For example, when clicking the filter button
+on a column header, the server will rerender the page, with a little floating
+filter dialog that’s custom made to the specific column. The updated HTML will
+be sent to the browser, and Datastar will take care of morphing the DOM to
+reflect the updated UI state. It works quite beautifully, and it’s fast as well.
+
+What does this way of doing things gets us? First and foremost, we get rid of a
+lot of frontend Javascript code. As David mentions in the same video, just the
+thought of having to deal with scrolling, dialogs, live search, etc. is kinda
+daunting - doing all that stuff in Javascript. Secondly, we can build the entire
+UI on the server, and have our UI reflect our application state, as in `UI =
+λ(state)`, just like React! A corollary of this is that testing our app in a way
+becomes much simpler. Maybe we don’t need the whole Capybara setup to test our
+app. Instead, since every interaction causes a change of state, we can just test
+the rendered HTML reflects the state correctly.
+
+The obvious drawback to this way of doing things is that the server now needs to
+do a lot more work, since it needs to render an entire page’s worth of HTML on
+each user interaction. For a heavyweight, relatively slow framework such as
+Rails, this might be a problem. For any app where you need to fetch a bunch of
+records from a remote database that might be a problem. I imagine that a more
+fine-grained approach to updating the browser upon user actions with Datastar
+might work better for those apps where rendering a page is slow. But if your app
+is built on top of a snappy framework/runtime, and persists its state to e.g. an
+SQLite database, rerendering the whole page on each interaction may work just
+fine.
+
+## Conclusion
+
+It took me quite a while to understand the Datastar way. At first I really
+resisted it, and this article in some way reflects this fact - it starts with
+whole different attitude than how it ends. Believe me when I tell you the first
+few versions of this article were all about how to work around Datastar’s
+so-called “limitations”. But now I think I get it, and I can’t wait to start
+building stuff the Datastar way.
+
+One of the things that were hard for me to understand when I just started
+looking at Datastar was, how would the backend need to be structured in order to
+work with Datastar. There was no information about this in the datastar docs,
+and I felt a bit frustrated because of that. But once things clicked for me I
+understood this is in fact a non-issue. As the tao of Datastar says:
+
+> Make an MPA, each page is a resource…
+
+So the answer is as simple as it gets: build your app normally as a set of
+resources, render everything on the server. This is such a refreshing approach!
+In fact, I think I might integrate Datastar into
+[Syntropy](https://github.com/noteflakes/syntropy/) and provide additional
+abstractions that make it easier to build apps using it. With Datastar, there’s
+a whole new and exciting way of building web apps that’s still waiting to be
+explored.

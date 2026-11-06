@@ -1,350 +1,164 @@
-I have always been interested in frontend solutions for building web
-applications. Even though I’m more of a backend programmer, I really dig all the
-different techniques people come up with for creating browser-based apps that
-are both *reactive* (reflecting remote state in real-time) and *interactive*
-(responding to user actions).
+That is a real ping, to a real box, and it got a real reply. The thing after `ping -c1` is a mix of LCD segmented digits, superscripts, subscripts, circled digits, a double-struck `X` and math-alphabet digits, with nine invisible characters that my terminal drew as white boxes because it had no idea what else to do with them. Paste it into a terminal and it looks like line noise. Hand it to `getaddrinfo()` and it is `69.30.206.130`.
 
-Over the last few years, I’ve been looking at different frontend frameworks and
-libraries, to see how they work, and what I can learn from them. I adore
-[Svelte](https://svelte.dev/), which is really smart and efficient. Its sister
-framework [SvelteKit](https://svelte.dev/docs/kit/introduction) inspired the
-file-based routing in my own web framework for Ruby,
-[Syntropy](https://github.com/noteflakes/syntropy/). I also really like the
-approach of the [Phoenix](https://www.phoenixframework.org/) framework to
-building reactive apps using
-[LiveView](https://phoenix-live-view.hexdocs.pm/welcome.html), which is an
-amazing technology that builds on the solid concurrency foundation of
-Elixir/Erlang.
+Every example in this post points at the same server, `69.30.206.130`. It answers ping, and it serves exactly one page, `/poc.html`, on its bare IP so you can prove the HTTP side works too. Every screenshot is real output, captured on Ubuntu 24.04 with glibc 2.39, iputils 20240117 and curl 8.5.0.
 
-Many people have tried to recreate the same functionality for other languages or
-frameworks, with varying degrees of success. Recently, [Marco
-Roth](https://marcoroth.dev/) came up with
-[ReActionView](https://reactionview.dev/), which promises to bring reactive
-views to Rails apps, building on his previous work on
-[Herb](https://herb-tools.dev/), a set of tools that improve on the developer
-experience of writing ERB templates for Rails apps.
-
-All those different technologies are certainly impressive, but they all are tied
-to specific languages/frameworks: Svelte/SvelteKit is a JS framework, LiveView
-is for Phoenix/Elixir, ReActionView is for Ruby on Rails, LiveWire is for
-Laravel/PHP, etc.
-
-And then there’s [Datastar](https://data-star.dev/), which dubs itself “the
-Hypermedia framework”. It is somewhat similar to other frontend declarative
-frameworks/libraries such as [HTMX](https://htmx.org/) or
-[Alpine.js](https://alpinejs.dev/), in that interactivity/reactivity is done
-declaratively by adding attributes to HTML tags. But what is different about
-Datastar is that it insists on keeping state where it should be, such that it
-doesn’t try to *copy* server state to the client and keep it in sync with the
-server. Instead, the server continuously sends updates (in the form of HTML
-patches, or [signal](https://data-star.dev/guide/reactive_signals) patches) to
-the client. In that respect, Datastar is more like LiveView, but without the
-coupling to Phoenix/Elixir. In fact, Datastar offers SDKs for different
-languages and frameworks, including Ruby (the Ruby SDK is maintained by [Ismael
-Celis](https://ismaelcelis.com/)).
-
-I find this approach so refereshing! With Datastar, you can use any backend
-technology in order to build reactive web apps. Furthermore, Datastar relies on
-[SSE](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events)
-(server-sent events) for streaming updates from the server to the client,
-instead of the somewhat older approach of using a WebSocket connection used in
-technologies such as LiveView, or HotWire (the current go-to solution for Rails
-apps).
-
-While SSE does not provide a full-duplex connection to the server (meaning, you
-can’t use an SSE request/connection to send data from the client to the
-server), it provides two important advantages over WebSocket: A WebSocket
-connection normally requires establishing a separate HTTP/1.1 connection to the
-server (there’s partial support for WebSocket over HTTP/2, but that depends on
-the browser and the server/reverse proxy used. HTTP/3 support is very limited as
-far as I could tell). In contrast, SSE requests can be multiplexed on top of an
-HTTP/2 or HTTP/3 connection, along with any number of other concurrent requests.
-Secondly, because SSE requests are just normal (streaming) HTTP requests, the
-server can use standard HTTP compression in order to achieve significant
-reduction in bandwidth.
-
-Let’s look at a simple example of working with Datastar. Here’s the markup for a
-simple reactive app that displays the current time on the server:
+Start with the boring part, which is already weirder than most people expect. An IPv4 address is a 32-bit unsigned integer. The dotted quad is just how we have agreed to write it down. The parser that turns text into that integer is `inet_aton()`, and its rules date back to 4.2BSD. In glibc it lives in `resolv/inet_addr.c`, and each part is read like this:
 
 ```
-<html>
-  <head>
-    <script type="module" src="https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.4/bundles/datastar.js">
-    </script>
-  </head>
-  <body>
-    <p data-init="@get('/ds/time_stream')">
-      <span>Time:</span> <span data-text="$time" />
-    </p>
-  </body>
-</html>
-```
-
-This example does three things: load the datastar library (BTW it’s only about
-15KB!), set up a connection to an SSE stream at `/ds/time_stream` using the
-`@get` action, and binds a span to a signal named `$time`. On the server side,
-the controller looks as follows (using Syntropy):
-
-```
-# /ds/time_stream.rb
-export ->(req) {
-  req.respond_sse {
-    send_time_update(req)
-    @machine.periodically(1) { send_time_update(req) }
-  }
-}
-
-def send_time_update(req)
-  json = JSON.dump(time: Time.now.to_s)
-  req.send_event('datastar-patch-signals' => "signals #{json}")
-end
-```
-
-The controller code is quite simple: after calling `respond_sse`, which sends
-some HTTP response headers, we send a first update, then we send further updates
-once per second. What actually gets sent over the wire looks as follows:
-
-```
-HTTP/1.1 200 
-Content-Type: text/event-stream
-
-event: datastar-patch-signals
-data: signals { "time": "2026-11-04 11:54:55 +0200" }
-
-event: datastar-patch-signals
-data: signals { "time": "2026-11-04 11:54:56 +0200" }
-
-event: datastar-patch-signals
-data: signals { "time": "2026-11-04 11:54:57 +0200" }
+/* Collect number up to ``.''.  Values are specified as for C:
+   0x=hex, 0=octal, isdigit=decimal.  */
 ...
+unsigned long ul = __strtoul_internal (cp, &endp, 0, 0);
 ```
 
-The Datastar wire protocol is based on the SSE response format, where each event
-contains an (optional) `event:` entry and one or more `data:` entries. Distinct
-events are separated by double newline characters (`\n\n`). In this case, we’re
-sending a `datastar-patch-signals` event that tells the browser to update signal
-values. The patched values are expressed as a JSON object where the keys
-correspond to signal names and the values correspond to the signal values.
-
-You can look at this example on a [separate page](https://noteflakes.com/ds/time),
-but for the sake of convenience I’ll go ahead and embed it right here:
-
-Although this is a very simple example, look at all the things we’re not doing
-😜: we don’t need to set up an `EventSource` object, or use `fetch` to start the
-SSE connection on the client side, we don’t need to go through the DOM and
-update anything that’s bound to the `$time` signal. On the server side we just
-stream changes to the server state to the client (eventually though, we might
-want to introduce some abstractions for sending a `datastar-patch-signals` event
-or other types of events, but this is pretty trivial…)
-
-## Exploring Signals in Datastar
-
-Let’s look at how signals are handled in Datastar a bit more closely. I’ve been
-playing with Datastar in the last few days and have observed the some
-peculiarities:
-
-In Datastar, signals are global to the page. They can’t be scoped to a part of
-the DOM, but they can be namespaced by
-[nesting](https://data-star.dev/guide/backend_requests#nesting-signals) them
-inside objects:
+Base 0 means `strtoul()` picks the base from the prefix: `0x` is hex, a leading `0` is octal, anything else is decimal. Each dotted part gets its own prefix, so you can mix bases inside one address. Then there is the part count:
 
 ```
-<span data-text:foo.bar.baz />
+/* Internet format:
+     a.b.c.d
+     a.b.c    (with c treated as 16 bits)
+     a.b      (with b treated as 24 bits).  */
 ```
 
-Alternatively, you can use the following notation, handy when you have key
-values that contain slashes, or other special characters:
+One part is the whole 32-bit number. Two parts are an 8-bit network and a 24-bit host. Three parts are 8, 8 and 16 bits. These were meant for the old class A/B/C networks, and nobody ever took them out. Leading zeros are unlimited too, as long as the value still fits.
+
+| Form | 69.30.206.130 as |
+| --- | --- |
+| Decimal integer | `1159646850` |
+| Hex integer | `0x451ece82` |
+| Octal integer | `010507547202` |
+| Dotted hex | `0x45.0x1e.0xce.0x82` |
+| Dotted octal | `0105.036.0316.0202` |
+| 3 parts, last one 16 bits | `69.30.52866` |
+| 2 parts, last one 24 bits | `69.2018946` or `69.0x1ece82` |
+| Mixed bases | `0x45.036.206.0202` |
+| Over-padded hex | `0x00000000000000451ece82` |
+
+Everything above is well known. It is the reason SSRF filters are supposed to parse addresses instead of regexing them. The fun starts with a flag most people never look at: `AI_IDN`.
+
+`AI_IDN` is a glibc extension that tells `getaddrinfo()` the name might be an internationalized domain name, so it should be converted to ASCII before lookup. ping sets it, because iputils is built with IDN support. Here is what glibc does with it, in `sysdeps/posix/getaddrinfo.c`:
 
 ```
-<span data-text="$foo['/bar']" />
+if (req->ai_flags & AI_IDN)
+  {
+    char *out;
+    result = __idna_to_dns_encoding (name, &out);
+    if (result != 0)
+      return -result;
+    name = out;
+    malloc_name = true;
+  }
+
+if ((result = text_to_binary_address (name, req, &res)) != 0)
+  goto free_and_return;
 ```
 
-By default, Datastar will send all signal values back to the server on every
-user action, which may be problematic if you have lots of signals on your page.
-In order to prevent signal values from being sent to the server on each request,
-the signal name must begin with an underscore.
-
-Finally, an important aspect of Datastar signals (and indeed, Datastar in
-general,) is that Datastar doesn’t really have a Javascript API. You can’t just
-access signal values from Javascript (this is by
-[design](https://github.com/starfederation/datastar/issues/1233)), which may
-make it harder to integrate Datastar with other tools. But there is a workaround
-for that and it’s pretty simple:
+Look at the order. The IDNA conversion runs **first**, and the numeric address parser only sees the output. `__idna_to_dns_encoding()` hands the string to libidn2, which applies [UTS #46](https://www.unicode.org/reports/tr46/) mapping. UTS #46 exists so that a user typing a domain in a different width or style still lands on the same name. To do that it folds a huge range of compatibility characters down to plain ASCII. That table does not care that the result is going to be read as a number.
 
 ```
-<body 
-  data-signals="{ foo: { bar: 42 } }"
-  data-init="Foo.start($foo);"
->
-  <p>foo.bar: <span data-text="$foo.bar" /></p>
-  <script>
-    window.Foo = {
-      start: (foo) => {
-        Foo.foo = foo;
-        setInterval(() => Foo.foo.bar++, 1000)
-      }
-
-    };
-  </script>
-</body>
+2473  ; mapped  ; 0032 0030  # CIRCLED NUMBER TWENTY             ⑳ -> 20
+325A  ; mapped  ; 0033 0030  # CIRCLED NUMBER THIRTY             ㉚ -> 30
+24EA  ; mapped  ; 0030       # CIRCLED DIGIT ZERO                ⓪ -> 0
+1FBF6 ; mapped  ; 0036       # SEGMENTED DIGIT SIX               🯶 -> 6
+1D7CE ; mapped  ; 0030       # MATHEMATICAL BOLD DIGIT ZERO      𝟎 -> 0
+1D501 ; mapped  ; 0078       # MATHEMATICAL BOLD SCRIPT SMALL X  𝔁 -> x
+216D  ; mapped  ; 0063       # ROMAN NUMERAL ONE HUNDRED         Ⅽ -> c
+1D49  ; mapped  ; 0065       # MODIFIER LETTER SMALL E           ᵉ -> e
+3002  ; mapped  ; 002E       # IDEOGRAPHIC FULL STOP             。 -> .
 ```
 
-Here, we use the `data-init` attribute that lets us run an arbitrary piece of
-JS. We call `Datastar.start`, while in a separate `<script>` we declare a global
-`Datastar` object, which stores the reference to the `$foo` signal, and then
-sets up a recurring timer to increment the value of `$foo.bar` once per second:
+Digits are covered, and so are the dots. The `x` in a hex prefix and the `a`–`f` hex letters are covered too, which means every one of the classic forms above can be rebuilt out of Unicode lookalikes:
 
-This is not too complicated, but then again, a random frontend developer might
-balk at the fact that Datastar actually makes it hard to access the app state
-from any other JS library or script on the browser. But I think this makes
-sense, given the intention behind its design. In [“The Tao of
-Datastar”](https://data-star.dev/guide/the_tao_of_datastar) this is laid out
-quite explicitly:
+Circled two-digit numbers are a nice touch: `⑥⑨.㉚.⑳⑥.⑬⓪` is four characters shorter than the plain address it decodes to. Hex works the same way, with a bold script `x` for the prefix, a Roman numeral one hundred standing in for `c`, and modifier letters for `e`:
 
-> State in the right place: Most state should live in the backend… the backend
-> should be the source of truth for your application state…
->
-> Use signals sparingly: A good rule of thumb is to only use signals for user
-> interactions (e.g. toggling element visibility) and for sending new state to
-> the backend (e.g. by binding signals to form input elements).
+Notice that ping echoes back `0x451ece82` in its `PING` line. ping also asks for `AI_CANONIDN`, so what it prints is the name *after* IDNA mapping. That is the clearest view you will get of what the resolver actually parsed.
 
-I think constraints are good, and in the case of Datastar, the constraints (no
-JS API, don’t overuse signals, state should mostly live on the backend),
-actually make you think hard about the structure of your app, the different
-pages it’s made of and the components therein. You might even need to rethink
-the entire URL structure of your app, and where each part of the app state is
-kept. The more I tinker with Datastar, the more those constraints make sense.
+## Full Chaos
 
-That said, for some types of applications those constraints may be, well, too
-constraining. For example, an application in which a single page can display
-thousands of discrete values, and some of them more than once, might need to
-structure their signals accordingly. In that type of app, we can take advantage
-of Datastar’s signal namespacing (nested signals) feature, and we might also
-want to prepend those signals with an underscore, e.g. `$_values`, so as to
-prevent all those values from being sent to the server on each request (and
-anyways the server is the source of those values, so there’s no point in that.)
+Nothing says a single address has to stick to one style. The mapping is done one character at a time, so every digit, dot and hex letter can come from a different block. I wrote a small script that reads `IdnaMappingTable.txt`, collects every code point that maps to `0`–`9`, `a`–`f`, `x` or `.`, and rebuilds each classic form by picking a random lookalike for every character: fullwidth, superscript, subscript, circled, math bold, sans-serif, monospace, double-struck, script, fraktur, Roman numerals, and the LCD segmented digits from `🯰` to `🯹`. Every result resolved:
 
-So if we’re not supposed to use signals for server state, how do we update the
-client when the server state changes? The answer to that is by patching the page
-HTML itself:
+Here are a few more, all `69.30.206.130`, ready to paste:
 
 ```
-# /ds/time_stream_html.rb
-
-@time_template = ->(time) {
-  span "Time: #{time.to_s}", id: "time"
-}
-
-def send_time_update(req)
-  patch = Papercraft.html(@time_template, Time.now)
-  req.send_event('datastar-patch-elements' => "elements #{patch}")
-end
+ping -c1 𝟼𝟵．🯳𝟶。𝟚𝟘🯶．𝟏𝟥⓪  # 69.30.206.130
+ping -c1 🯰𝖝⁴𝟝｡⁰𝚇𝟙𝗲｡０ₓ𝖢ｅ｡⓪𝑋𝟖🯲  # 0x45.0x1e.0xce.0x82
+ping -c1 𝟢𝓧④𝟱₁ᵉⒸ𝘌🯸🯲  # 0x451ece82
+ping -c1 ０１⓪₅｡𝟘🯳𝟞．₀３𝟙𝟞。𝟶𝟤₀𝟮  # 0105.036.0316.0202
+ping -c1 𝟞𝟗。𝟑𝟢｡🯵𝟤₈𝟼６  # 69.30.52866
+ping -c1 𝟨⑨．𝟬𝕩𝟏Ｅ𝐜ᵉ🯸𝟸  # 69.0x1ece82
+ping -c1 ⁰𝑋⁴5．🯰３₆。⁵₂₈𝟲🯶  # 0x45.036.52866
+ping -c1 𝟣🯱𝟻⑨6𝟜⑥🯸𝟝𝟎  # 1159646850
+ping -c1 𝟬ｘ🯴𝟝．𝟹𝟬．₀3𝟣６｡𝟎Ⅹ🯸𝟚  # 0x45.30.0316.0x82
 ```
 
-Here we have a micro-template that renders a time span, and we use the
-`datastar-patch-elements` event to patch the browser’s DOM. The result works the
-same as the above example using signals:
+UTS #46 does not only map characters. It also has a category called **ignored**, and an ignored code point is simply deleted from the input:
 
-So, this technique of patching the browser DOM requires a somewhat different way
-of thinking. Most importantly, it requires that the elements that need to be
-patched be identifiable, normally using an id. This may not necessarily work for
-all kinds of apps, but in that case you can always use signals. I find that both
-techniques have their advantages and disadvantages. What’s most interesting
-though is that with Datastar there’s no need for writing Javascript, and that in
-itself is a huge advantage.
+```
+00AD          ; ignored  # SOFT HYPHEN
+200B          ; ignored  # ZERO WIDTH SPACE
+2064          ; ignored  # INVISIBLE PLUS
+E0100..E01EF  ; ignored  # VARIATION SELECTOR-17..VARIATION SELECTOR-256
+1BCA0..1BCA3  ; ignored  # SHORTHAND FORMAT LETTER OVERLAP..UP STEP
+```
 
-## SPAs vs. MPAs
+So you can put invisible characters before, inside and after the address, and they are gone before `inet_aton` ever sees the string. I verified soft hyphen, zero width space, word joiner, invisible plus, combining grapheme joiner, Mongolian free variation selector, variation selectors 1, 16 and 17, the BOM, and the shorthand format controls. Most terminals render them as nothing. Mine renders them as the white `<fe0f>` boxes in the cover image, which is how I noticed the copy-pasted address was not what it looked like.
 
-Datastar is expressly geared more towards creating MPAs (multi-page apps) than
-SPAs (single-page apps). From the Datastar Tao:
+The cover combines all of it: a zero-padded hex first part, a zero-padded octal second part, and a 16-bit decimal tail, with every character swapped for a random lookalike and nine ignored code points scattered through it. After mapping it is `0x00000045.00036.52866`, which `inet_aton` reads as 0x45, 036 (octal 30) and 52866 (206 × 256 + 130).
 
-> Make an MPA, each page is a resource, keep a stream open on the current state
-> of that resource…
+None of this is magic in `getaddrinfo()` itself. It only happens when the caller passes `AI_IDN`. Without the flag, glibc goes straight to the numeric parser, sees a circled zero, and falls through to a DNS lookup that fails. Python makes the difference easy to see:
 
-So, is Datastar incompatible with SPAs? And why would we want to make an SPA in
-the first place? In many web apps there’s going to be some state that pertains
-to the client (for example, is the sidebar collapsed or not, are menu groups
-inside the sidebar collapsed or not, etc.), and some state that’s coming from
-the server. In many web apps, we’d like to retain the client state (the sidebar
-again), even if we move between different resources in our app. Architecting our
-app as an SPA may help us achieve this goal of persisting client state, at the
-possible cost of not being able to correctly handle navigation history.
+```
+>>> socket.getaddrinfo('⓪𝔁④⑤①𝕖𝒸ⓔ⑧②'.encode(), None, socket.AF_INET, 0, 0, 0)
+socket.gaierror: [Errno -2] Name or service not known
+>>> socket.getaddrinfo('⓪𝔁④⑤①𝕖𝒸ⓔ⑧②'.encode(), None, socket.AF_INET, 0, 0, 0x40)  # AI_IDN
+[(<AddressFamily.AF_INET: 2>, ..., ('69.30.206.130', 0))]
+```
 
-From my experiments it seems like it’s totally possible to make an SPA using
-Datastar by filling in the missing parts with some custom Javascript. But why
-would I want to use Datastar in this way? Maybe there’s something I’m missing? I
-must admit that at first I had trouble understanding the tao of Datastar. I
-think my resistance was due to the fact that I’m just used to the “modern”
-approach of implementing reactive and interactive web UIs using Javascript -
-responding to user actions, rendering stuff in the client, etc.
+Tools that do their own IDN conversion work as well. curl and wget both link libidn2 and run the hostname through it before resolving. OpenBSD netcat does not, and fails:
 
-But then I listened to a very interesting
-[talk](https://www.youtube.com/watch?v=2ECucq-mTGg&pp=ygUUZGF2aWQgbm9sZW4gZGF0YXN0YXI%3D)
-between [David Nolen](https://github.com/swannodette) (the creator of
-ClojureScript) and [Ben Croker](https://github.com/bencroker) and [Delaney
-Gilliland](https://github.com/delaneyj) (the guys behind Datastar), where David
-talks about how Datastar was used in building
-[Instabooks](https://instabooks.io/), a fast web UI for Quickbooks. This really
-piqued my curiosity, so I went on the instabooks website and fortunately they
-have offer a [demo that anybody can try](https://instabooks.io/try). Go and have
-a look yourself, it’s really cool!
+The last command there is a different failure. IPv4-mapped IPv6 such as `::ffff:69.30.206.130` works in curl, because the kernel turns a connect on an IPv6 TCP socket to a mapped address into IPv4. ping instead opens an ICMPv6 socket and sends a real IPv6 packet to `::ffff:0:0/96`, which no router will carry.
 
-But what’s even cooler is that, as David tells it in their conversation, any user
-action, such as scrolling records, filtering, searching, etc. results in a full
-rerendering of the page. I actually looked at what their demo is sending on their
-SSE stream - it’s always a fully-rendered version of the page. This means that
-there’s basically (to my understanding) no (or very little) frontend logic that
-intercepts button clicks and renders a bunch of stuff. Instead, when the UI
-state is kept on the server, and each interaction results in an HTTP request to
-the server, which rerenders the page and sends it back to the browser on the
-previously established SSE stream. For example, when clicking the filter button
-on a column header, the server will rerender the page, with a little floating
-filter dialog that’s custom made to the specific column. The updated HTML will
-be sent to the browser, and Datastar will take care of morphing the DOM to
-reflect the updated UI state. It works quite beautifully, and it’s fast as well.
+curl has its own wrinkle. Its URL parser has an `ipv4_normalize()` step that rewrites `0x451ece82` or `69.2018946` to `69.30.206.130`, but that runs *before* IDN conversion. A Unicode host skips normalization, gets converted to ASCII afterwards, and goes out on the wire like that. The server receives a `Host:` header of `0x451ece82`:
 
-What does this way of doing things gets us? First and foremost, we get rid of a
-lot of frontend Javascript code. As David mentions in the same video, just the
-thought of having to deal with scrolling, dialogs, live search, etc. is kinda
-daunting - doing all that stuff in Javascript. Secondly, we can build the entire
-UI on the server, and have our UI reflect our application state, as in `UI =
-λ(state)`, just like React! A corollary of this is that testing our app in a way
-becomes much simpler. Maybe we don’t need the whole Capybara setup to test our
-app. Instead, since every interaction causes a change of state, we can just test
-the rendered HTML reflects the state correctly.
+curl also percent-decodes the host part of a URL, so `http://%36%39.30.206.130/`, `http://69%2E30%2E206%2E130/`, and the fully percent-encoded UTF-8 of the circled hex address all connect as well.
 
-The obvious drawback to this way of doing things is that the server now needs to
-do a lot more work, since it needs to render an entire page’s worth of HTML on
-each user interaction. For a heavyweight, relatively slow framework such as
-Rails, this might be a problem. For any app where you need to fetch a bunch of
-records from a remote database that might be a problem. I imagine that a more
-fine-grained approach to updating the browser upon user actions with Datastar
-might work better for those apps where rendering a page is slow. But if your app
-is built on top of a snappy framework/runtime, and persists its state to e.g. an
-SQLite database, rerendering the whole page on each interaction may work just
-fine.
+Because a lot of code decides whether something is an IP address by looking at it. Blocklists, SSRF guards that regex for `169.254.` or `127.`, log searches, chat filters, and a human reading a config file all compare strings. If the thing doing the check does not run the same IDNA mapping and the same `inet_aton` rules as the thing doing the connect, the check and the connection are looking at two different strings. `⓪𝔁⑦𝒇⓪⓪⓪⓪⓪①` is `127.0.0.1`, and so is `①②⑦。①`.
 
-## Conclusion
+`⁰𝑋⁴5．🯰３₆。⁵₂₈𝟲🯶` is a valid IP address. It resolves to `69.30.206.130`, and that is fucking weird.
 
-It took me quite a while to understand the Datastar way. At first I really
-resisted it, and this article in some way reflects this fact - it starts with
-whole different attitude than how it ends. Believe me when I tell you the first
-few versions of this article were all about how to work around Datastar’s
-so-called “limitations”. But now I think I get it, and I can’t wait to start
-building stuff the Datastar way.
+It is also more than a party trick. Malware has used the plainer versions of this for years: [Emotet spam in 2022](https://www.trendmicro.com/en_us/research/22/a/emotet-spam-abuses-unconventional-ip-address-formats-spread-malware.html) wrote its download URLs with hex and octal IP addresses, likely to dodge pattern matching. The same idea applies to any filter that only reads the input. If something refuses `127.0.0.1`, you could hand it `⁰𝑋𝟳𝖿．①` instead, and `ping` lands on loopback all the same.
 
-One of the things that were hard for me to understand when I just started
-looking at Datastar was, how would the backend need to be structured in order to
-work with Datastar. There was no information about this in the datastar docs,
-and I felt a bit frustrated because of that. But once things clicked for me I
-understood this is in fact a non-issue. As the tao of Datastar says:
+The defence is the boring one: resolve first, then check the address you actually got back, and connect to that exact address. Never check the string.
 
-> Make an MPA, each page is a resource…
+The address is still just a number, so the trick is not in `getaddrinfo()` — it is in the address bar. Drop a fully percent-encoded Unicode host into a URL with a made-up `user:pass@` prefix and a `/?` query, and the host stops being the part a human reads.
 
-So the answer is as simple as it gets: build your app normally as a set of
-resources, render everything on the server. This is such a refreshing approach!
-In fact, I think I might integrate Datastar into
-[Syntropy](https://github.com/noteflakes/syntropy/) and provide additional
-abstractions that make it easier to build apps using it. With Datastar, there’s
-a whole new and exciting way of building web apps that’s still waiting to be
-explored.
+```
+http://images.google.com:static-uploads@%E2%93%AA%F0%9D%94%81%E2%85%AD%E2%85%AEb97a5a/?picture_of_you.png
+        └── user ──┘ └── pass ──┘ └────────── host ──────────┘ └── path ───┘
+                          (circled + math-bold hex, the integer 0xcdb97a5a)
+```
+
+Glance at it and the eye lands on the trusted-looking parts: `images.google.com` as the user, `static-uploads` as the password, `?picture_of_you.png` as a path to a photo. But the host is the hex integer `0xcdb97a5a`, and `inet_aton()` turns it into `205.185.122.90`. curl connects there, sends `Host: 0xcdb97a5a`, and ignores the credentials and the path entirely — they are decoration. A single one is easy to pass; a list of them is how a phishing link looks like a Google image.
+
+The same trick works with the plain hex form, which is the cleanest because nothing has to be mapped:
+
+```
+curl images.google.com:static-uploads@0xcdb97a5a/?picture_of_you.png
+        └── user ──┘ └── pass ──┘ └── host = 205.185.122.90 ──┘ └── path ─┘
+```
+
+Two things make it stick. First, humans read a URL as one token and rarely isolate the host field; the `user:pass@` prefix and the `/?file` suffix both read as authoritative and pull attention away from the middle. Second, the decoy and the real target disagree about what the URL means. The browser or the reader sees a path to an image; `getaddrinfo()` sees a number and connects to it. The decoy does not have to be wrong — `0xcdb97a5a` really is `205.185.122.90` — it only has to be something the reader does not expand.
+
+It is the same gap as the blocklist check, aimed at the eye instead of the regex. A guard that regexes `127.` or `169.254.` on the string still misses `0x7f000001`; a person who reads `0xcdb97a5a` as "some hex" misses it too. The defence is the same: expand the host to the number it really is, and connect to that.
+
+curl is not the only tool that reads a number where you do not. `wget` takes the URL as its first positional argument and treats everything after it as an option. Drop a bare integer in place of the URL and a URL-looking value in an option, and the eye lands on the option — but the number is what actually gets fetched.
+
+```
+wget -q 1159646850 -A=http://images.google.com/static/pic_of_you.png
+     └── host ──┘       └──────────── decoy ─────────────┘
+     69.30.206.130
+```
+
+`1159646850` is just `69.30.206.130` in decimal, and it is the URL — wget connects there and sends `Host: 1159646850`. `-A` is `--user-agent`, but most people read it as just a flag and take the `images.google.com` link as the target, thinking the number belongs to `-q`. The number is the host; the link is the decoy, and it does not have to be wrong — the same gap, a tool that reads the option as the target instead of the argument. `-A` works better than `--comment` for the trick: short, nearly invisible, and nobody assumes a user-agent is a URL.
+
+Every form I tested, against `69.30.206.130`. `ping` is iputils ping with one packet. `curl` fetched `http://<address>/poc.html` and got a 200. Every address is the real string, so you can copy it straight into a terminal. The invisible characters are in there even though you cannot see them.

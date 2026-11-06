@@ -1,53 +1,167 @@
-We’re looking for a **senior software line specialist, in TypeScript**!
+I recently discovered a handy way to make Go tests more readable and less repetitive.
 
-ACME Inc. is a fast-growing startup helping small businesses monitor their financials. We work with business owners across the globe, turning their feedback into actionable insights. Backed by Maltese Falcon Capital, we recently raised a $15M Series A to bring effortless monitoring to every brick-and-mortar store.
+Suppose I have a constructor that can fail:
 
-You’ll be joining a high-performance, close-knit team of AI natives! We’ve been AI-first for the past 2 years, with every part of the product agent-friendly and interconnected: design, development, QA, CI/CD, infra, data analysis. We like to say that our stack is English!
+```go
+func NewUsername(raw string) (Username, error) { ... }
+```
 
-While English has gotten us 99.5% of the way there, we’re in need of a hands-on engineer ready to close the final 0.5%. Over time, we’ve noticed some issues that are immune to prompts and catch agents in loops. Sometimes, the issue at hand gets fixed, but it results in another issue. This is where you step in. As a line specialist, your job will be to investigate and fix complex issues, primarily by reading the underlying code.
+And I have another function that takes a `Username` as an argument:
 
-We’re looking for someone ready to open an IDE and dive deep into an unknown codebase — a fearless detective who is comfortable inspecting logs and database rows, and has the know-how to piece all the information together. The perfect candidate should be willing to work on a problem for hours, sometimes even days.
+```go
+func (ds Datastore) ReadUser(username Username) (User, error) { ... }
+```
 
-This is a new position for us. We expect someone who works autonomously, makes sound decisions independently and takes full ownership of their work. We are happy to help in any way we can (you’ll have access to agents’ reasoning traces), but ultimately we depend on your confidence in understanding the problem and shipping a solution.
+When I write tests for `ReadUser`, I call `NewUsername` with a value I know is valid, but I still have to include a lot of verbose error-checking code to convince the compiler that everything is okay:
 
-### Your responsibilities
+```go
+username, err := NewUsername("joe123")
 
-- take over unresolved issues from agents
-- read the codebase, go over application logs, query the database
-- prepare, test, review and ship fixes by yourself
-- write postmortems for agent training
-- occasionally consult on unreleased features
-- onboard and mentor a future junior line specialist
+// This is silly because *I* know joe123 is a valid username, so this should
+// never happen.
+if err != nil {
+  t.Fatalf("failed to create username: %v", err)
+}
 
-### We think you’d be great if you…
+// Perform the test assertion I actually care about.
+user, err := store.ReadUser(username)
+if got, want := user.Name.String(), "joe123"; got != want {
+  t.Errorf("username=%v, want=%v", got, want)
+}
+```
 
-- have at least 5 years of pre-2022 TypeScript experience
-- are comfortable running tests manually and using a “debugger”
-- can reason from first principles
-- can work on a problem with sustained attention for hours
-- are autonomous and an independent thinker
+## My old solution: one new helper function per type[🔗︎](https://mtlynch.io/notes/go-must-create-pattern/#my-old-solution-one-new-helper-function-per-type)
 
-### Nice to have
+Until a few months ago, I avoided the verbose error checking by writing a helper function like `MustCreateUsername` that wraps `NewUsername` with the expectation that it never returns a non-`nil` `error` value:
 
-- previous experience as a line specialist
-- DB administration experience (our agents say it’s Postgres)
-- AI prompting basics
+```go
+user, err := store.ReadUser(MustCreateUsername(t, "joe123"))
+if got, want := user.Name.String(), "joe123"; got != want {
+  t.Errorf("username=%v, want=%v", got, want)
+}
+```
 
-### Interview process
+The implementation of `MustCreateUsername` looks how you’d expect:
 
-1. CV screening
-2. HR phone screen
-3. In-house paper-and-pencil exam
-  - multiple-choice questions (e.g. you’re given a TypeScript expression, choose the correct result)
-  - explain concepts in your own words (for example, ACID)
-  - complete the code block
-  - find the bug in a function
-4. Live debugging assignment
-  - application with an intentional defect; candidates are required to find and fix the issue without the use of AI
-5. Culture fit interview
-6. CTO interview
-7. Offer
+```go
+func MustCreateUsername(t testing.TB, raw string) Username {
+  t.Helper()
+  username, err := NewUsername(raw)
+  if err != nil {
+    t.Fatalf("invalid username: %s", raw)
+  }
+}
+```
 
-We feel it prudent to point out that you will be allowed to work on one thing at a time in this role. While parallel development is the default, we understand line specialists prefer to tackle problems in a single-threaded manner, so we will do our best to provide a distraction-free environment for your best work.
+The helper function strategy worked fine, but it scales poorly. Eventually, my repos become littered with `MustCreateFoo` and `MustCreateBar` for every type in my app.
 
-To be clear, this role does **not** include feature development. You’re welcome to look at our AI-native listings if you have more interest in such work!
+## New solution: A single, generic `MustCreate` helper[🔗︎](https://mtlynch.io/notes/go-must-create-pattern/#new-solution-a-single-generic-mustcreate-helper)
+
+In 2022, Go 1.18 [added support for generics](https://go.dev/doc/go1.18#generics). I like the idea of generics, but I rarely encounter problems where generics are the solution.
+
+I recently realized that generics are the better way to solve my sprawling `MustCreateX` problem. Instead of defining a helper `MustCreateX` for every type, I defined a single, generic `MustCreate` test helper, so my test becomes:
+
+```go
+user, err := store.ReadUser(testutil.MustCreate(t, NewUsername, "joe123"))
+if got, want := user.Name.String(), "joe123"; got != want {
+  t.Errorf("username=%v, want=%v", got, want)
+}
+```
+
+The magic is the generic `MustCreate` function:
+
+```go
+func MustCreate[RawInput, CreatedValue any](
+  t testing.TB,
+  create func(RawInput) (CreatedValue, error),
+  rawInput RawInput,
+) CreatedValue {
+  t.Helper()
+  createdValue, err := create(rawInput)
+  if err != nil {
+    t.Fatalf("failed to create test value: %v", err)
+  }
+  return createdValue
+}
+```
+
+I have trouble reasoning about generics, so I’ll walk through the function implementation. I invoke `MustCreate` like this in my tests:
+
+```go
+testutil.MustCreate(t, NewUsername, "joe123")
+```
+
+The above call is equivalent to this more explicit version:
+
+```go
+testutil.MustCreate[string, Username](t, NewUsername, "joe123")
+```
+
+When I call `MustCreate` here, `RawInput` is `string` (the type of the raw username value), and `CreatedValue` is `Username` (the return type). It’s equivalent to an implementation that looks like this:
+
+```go
+func MustCreate(
+  t testing.TB,
+  create func(string) (Username, error),
+  rawInput string,
+) CreatedValue {
+  t.Helper()
+  createdValue, err := create(rawInput)
+  if err != nil {
+    t.Fatalf("failed to create test value: %v", err)
+  }
+  return createdValue
+}
+```
+
+### Extending to multi-param constructors[🔗︎](https://mtlynch.io/notes/go-must-create-pattern/#extending-to-multi-param-constructors)
+
+What about constructors that have more than one parameter?
+
+```go
+func NewRange(start int, end int) (Range, error) { ... }
+```
+
+In those cases, I write an additional helper called `MustCreate2`:
+
+```go
+range := testutil.MustCreate2(t, models.NewRange, 0, 5)
+```
+
+The implementation of `MustCreate2` looks just like `MustCreate` but with an additional type for the second parameter:
+
+```go
+func MustCreate2[RawInput1, RawInput2, CreatedValue any](
+  t testing.TB,
+  create func(RawInput1, RawInput2) (CreatedValue, error),
+  rawInput1 RawInput1,
+  rawInput2 RawInput2,
+) CreatedValue {
+  t.Helper()
+  createdValue, err := create(rawInput1, rawInput2)
+  if err != nil {
+    t.Fatalf("failed to create test value: %v", err)
+  }
+  return createdValue
+}
+```
+
+## Conclusion[🔗︎](https://mtlynch.io/notes/go-must-create-pattern/#conclusion)
+
+The `MustCreate` pattern is nothing revolutionary, but it’s a technique that improved my Go tests and reduced some mindless toil from my dev work.
+
+## Read My Book
+
+I wrote a book about simple techniques to help developers improve their
+writing.
+
+My book will teach you how to:
+
+- Create clear and pleasant software tutorials
+- Attract readers and customers through blogging
+- Write effective emails
+- Minimize pain in writing design documents
+
+### Be the first to know when I post cool stuff
+
+Subscribe to get my latest posts by email.

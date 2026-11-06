@@ -1,115 +1,149 @@
-My previous blog post was a quick one and a reader from Gemini sent me an email asking what exactly I did for implementing the mitigations. Thanks for asking and sorry for making you ask. This article should explain what is done and how to tweak the recipe. The core principle can be found in my much earlier article:
+Formal specifications can help engineers reason about complex distributed systems and verify critical correctness properties. But they remain valuable only as long as they reflect reality. At Datadog, we encountered this challenge while working on** **[**Husky**](https://www.datadoghq.com/blog/engineering/introducing-husky/), our event database. We had a formally verified model of Husky’s routing system that matched production behavior when we created it. Over time, however, Husky evolved, and a change to its placement logic allowed conflicting placements to persist in production for about a year. Although harmless during normal operation, just two conflicting placements would have caused Husky’s backfill system to crash while recovering from placement data loss. We found the issue not by triggering that failure, but by checking production behavior against our TLA+ specifications.
 
-I'll assume you are using systemd as the way for you to manage your services, as systemd has been the default of Ubuntu for more than 10 years. Some defenses can be easily implemented with OpenRC or SysV init too. Some would be 3rd party tools like firejail when systemd is not available, which I have much less experience with, or even a new enough (as in, within a few years) Linux kernel. And I am personally very unfamiliar with Docker.
+That raised a question: **How do you know when a specification has drifted away from the system it was meant to describe?**
 
-Also, critically, security is not one single thing. There's different ways your programs can be attacked. Buffer overflows, your server code forgot to check authentication, bad path parsing leading to directory traversal, etc.. etc.. Mitigation for buffer overflow won't stop your server serving files that it shouldn't. They need different mitigations to defend against. However, mitigations are basically a way, from the outside, to say to the program "To my knowledge you should never encounter X. So I'll make you unable to do X. So when an attacker tricked you into doing X, you can't. By making when X is detected, access denied or you crash". Overly strict mitigations will make your program unable to perform it's job.
+To answer that question, we built **FETCh** (Formal Execution Trace Checker), a system that turns TLA+ specifications into runtime monitors. FETCh lets us continuously validate production behavior against formal models at scale and detect discrepancies that traditional testing, code review, and manual specification review can miss.
 
-Core principle when you are adding mitigations - assume your program is evil and then limit how much evil it can do by removing things it can touch.
+In this post, we’ll show how we built FETCh, how we deployed it to validate Husky’s routing system, and how it helped us uncover a subtle bug conventional testing had not exposed.
 
-In order of complexity to impact ratio (considering both ease of implementing and mitigation power):
+Formal specifications define what a system can and cannot do in any given state. Model checking takes a specification and generates a tree of possible states, allowing us to verify properties such as “Can the system ever reach an invalid state?” or “Does a desired condition always eventually become true?”
 
-## [Hardened allocator](https://clehaxze.tw/gemlog/2026/11-04-practical-guide-on-out-of-tree-mitigations-on-linux.gmi#hardened-allocator)
+A formal specification is valuable only if it is **tractable**, meaning that the tree of possible states can be generated in a reasonable amount of time. As a result, a specification cannot match reality exactly. It has to be an abstraction.
 
-I'd argue using a hardened allocator is the most important mitigation if I am forced to pick one. It works on every reasonable Linux version of kernel, does not depend on advanced kernel features and directly attacks one of the most common failure mode in old software - heap overflow and use-after-free. My previous posts recommends hardened_malloc, which I still recommend and is my default choice. But hardened_malloc is slow compared to alternatives that might be good enough for you or have a better trade off for your use. The options you have are:
+So we simplified parts of the system to make our specification tractable. But how do we know whether we simplified too much? How do we know whether the specification is still close enough to reality to be useful?
 
-- hardened_malloc
-- mimalloc with secure config
-- scudo
+Traditionally, the answer is expert review. Engineers who understand both the implementation and the formal model evaluate whether the abstraction is still sound. That approach works well when a specification is first written, but it has an important limitation: Reviews provide a point-in-time evaluation, while production systems continue to evolve.
 
-Most advanced attacks require the program to be broken in a very specific way. Hardened allocators intervenes with that process ** and improves security by making programs that enter a broken state die faster** instead of keeping them running something that could be attacker-controlled behaviour. If your program is unstable with a hardened allocator, it's already broken and you need to fix it (or a very specific case of not working, which I'll point to later).
+Over time, implementations change. New features are added, performance optimizations alter execution paths, and operational requirements shift. Even if a specification was accurate when it was written, it can gradually drift away from the system it was intended to describe. Because the specification itself still appears correct, that drift can create a false sense of confidence.
 
-### [hardened_malloc](https://clehaxze.tw/gemlog/2026/11-04-practical-guide-on-out-of-tree-mitigations-on-linux.gmi#hardened-malloc)
+We encountered this problem with Husky, Datadog’s third-generation event store, for which we wrote several formal specifications years ago. We introduced Husky’s routing architecture in a [previous blog post](https://www.datadoghq.com/blog/engineering/husky-deep-dive/). In short, Husky is a distributed streaming system that processes millions of events per second and must satisfy several correctness properties so that data is ingested exactly once.
 
-hardened_malloc is my default choice, it's developed by GrapheneOS and a fork of OpenBSD's allocator. On Arch it is available via AUR. Otherwise on other distributions, you'll need to install it from source, the steps are dead simple:
+Although we had not observed any major defect over the years, we had never formally validated at scale that the system continued to follow the specifications.
 
-### [mimalloc](https://clehaxze.tw/gemlog/2026/11-04-practical-guide-on-out-of-tree-mitigations-on-linux.gmi#mimalloc)
+Continuously validating the alignment between a real system and its specification is not a new idea. But the requirements that make a specification **observable** conflict with those that make it **model-checkable**.
 
-mimalloc is Microsoft's invention and comes with a secure mode. You can choose the secure level with `-DMI_SECURE=OFF|MINIMAL|ON|FULL` -- in my testing even the FULL mode is faster than hardened_malloc. Though hardened_malloc's performance never bothered me, but if your server is constantly busy or for other reasons. Give mimalloc a try and see if one of it's modes are fast enough. I personally use mimalloc when the program just breaks on hardened_malloc. Though not able to run under hardened_malloc is usually a sign that the program is broken and needs fix.
+A model-checkable specification needs bounded inputs to remain tractable—for example, a set of two clients and three events. It also needs to describe how things happen—for example, by modeling a network as a queue of incoming requests—so that all possible executions can be explored.
 
-### [Scudo](https://clehaxze.tw/gemlog/2026/11-04-practical-guide-on-out-of-tree-mitigations-on-linux.gmi#scudo)
+In contrast, an observable specification needs to support unbounded inputs because a real system can process a continuous stream of requests. It should declare what is allowed, not how it happens. How requests are queued, for example, is usually an implementation detail.
 
-Scudo is LLVM's secure allocator, it is designed to be fast while giving most security benefits. If that is enough security is up to your interpretation. There's no build step needed as it gets installed with the LLVM toolchain. However, as it is a part of the LLVM toolchain, **the path changes with the LLVM version**. You'll need to keep an eye on the exact LLVM version on rolling distros.
+Consider a simple lock server that tracks currently held locks in memory, along with a counter indicating whether each lock is held (1) or not (0). The following specification captures the allowed state transitions for acquiring and releasing a lock:
 
-For my Arch machine. The file lives in `/usr/lib/clang/23/lib/x86_64-pc-linux-gnu/libclang_rt.scudo_standalone.so`. That 23 changes with major clang releases
+This specification is observable because it describes only what can happen. But it cannot be model checked as is. The model checker needs to know what `Locks` is—for example, a set of values `{1, 2, 3}`—and what incoming requests are possible—for example, `Acquire(1)`, `Acquire(2)`, and `Release(1)`—to generate all possible states.
 
-### [Using hardened allocators](https://clehaxze.tw/gemlog/2026/11-04-practical-guide-on-out-of-tree-mitigations-on-linux.gmi#using-hardened-allocators)
+This tension between observable and model-checkable specifications helps explain why existing approaches often focus on observing byproducts, such as invariants, rather than the specifications themselves. One example is [PObserve](https://p-org.github.io/P/advanced/pobserve/pobserve/), an open source project that uses real traces to monitor  P specifications. While useful, verifying that invariants hold is not enough to show that a specification is still valid.
 
-Using hardened allocators is easy. For dynamically linked programs (which is most of them, including Rust and Go binaries). Set environment `LD_PRELOAD=/path/to/your/installed/liballocator.so` and it'll replace the default allocator glibc provides. On my Arch system, to use hardened_malloc:
+In the lock server example, we can derive the invariant “no locks are acquired twice” from the specification:
 
-To demonstrate what a hardened allocator does. Take the following faulty C program:
+`NotAcquiredTwice == \A l \in locks : locks[l] <= 1 \* no locks can be held by more than one client`
 
-Compiling it with the default glibc allocator allows the program to survive after the bad write. But not under hardened_malloc. The program dies on `free()`. Of course, AddressSanitizer will catch the issue with `-fsanitize=address`. But you don't use AddressSanitizer in production while hardened allocators attempt to stop bad program states during production.
+Now consider a naive implementation:
 
-Note that for this specific minor mistake (one byte after the allocation region). Only hardened_malloc and mimalloc on `ON` or `FULL` catches them. Scudo as shipped by Arch did not.
+The invariant holds because of the assertion. But the implementation still violates the specification because it can release the same lock twice, even though that transition is forbidden by the model.
 
-System calls (or syscalls) are how your program ask the kernel to perform task. These include reading and writing files, sending data over the network, executing a new program to even changing the acting user. There's reasons your web application might need to execute other programs or change it's acting user.. but not much and modern web application are designed around never needing to - because managing them is both slow and difficult to get right.
+For us, this distinction was important. We didn’t just want to know whether a few high-level properties continued to hold in production. We wanted to know whether the system itself still behaved according to the specification.
 
-Systemd supports the `SystemCallFilter` option that disallows the program from making specific syscalls. This is helpful as most attackers normally default to invoking the shell for their attacks, to copy files and to install backdoors so they can get back in later. Running the shell on UNIX and UNIX-like systems are implemented through the `fork` (creating a clone of the current process) and `exec` (replace the current process) syscalls.
+At Datadog, we view specifications as more than a design tool. They also provide a sandbox for exploring changes to a system before writing production code. Engineers can test whether a proposed optimization or simplification preserves correctness by modifying the specification and running the model checker, often at a fraction of the cost of building a prototype.
 
-Most webapps have no business calling either.. unless you are PHP and still does remote API calls via curl. Along with another slew of syscalls that most webapps having no business calling, this is the usual systemd config I set:
+We’ve used this approach to simplify complex parts of our systems with confidence. But that confidence depends on the specification remaining aligned with reality. For Husky’s routing system, we wanted a way to continuously validate the specifications themselves, not just the implementation.
 
-This way even if an attacker managed to hack your server process, Linux will deny it from spawning new programs. Stopping the attacker from further compromising the easy way. Though importantly, this only stops the attacker from spawning a new shell. The attacker can still attempt to read files if they found a way to do so, via directory traversal or gaining remote code execution.
+More specifically, we wanted a framework that could use the same formal foundation for model checking, runtime validation, and mathematical proofs. So we built FETCh.
 
-In the case that you actually need both fork and exec. To limit the attacker's reach. The next line of defense is to make the process unable to read files outside of what it should -- "should" means everything it needs over it's entire lifetime. From the dynamic linker loading the program, `/etc/hosts` for local hostname lookup, `/dev/urandom` for UNIX style random data to `/usr/share/ca-certificates/` for TLS verification. Everything.
+FETCh turns [TLA+](https://en.wikipedia.org/wiki/TLA%2B) specifications into Rust-based runtime monitors. These monitors can consume telemetry data, such as Datadog logs, and report when the system violates the specification.
 
-Luckily systemd already gave us a set of reasonably usable flags to set.
+TLA+, a formal specification language developed by Leslie Lamport, supports model checking and machine-checked mathematical proofs. But the main reason we chose TLA+ was its support for refinement.
 
-For further protection. You likely don't need /proc. Do test this though. Some applications will attempt to self monitor and does need access to /proc/self.
+In TLA+, refinement is a formal relationship between two specifications. A specification B refines a specification A if every behavior allowed by B is also allowed by A. This relationship allows us to bridge the gap between observable and model-checkable specifications: We can define an observable specification A that describes real-world behavior and a model-checkable specification B that refines A by introducing the bounds needed for tractable analysis.
 
-Banning accessible paths starts out simple and easy, but quickly becomes whack-a-mole when you start making sure none of your relatively important configurations leak. Read-only `/etc` is good, but `/etc/pacman.conf` is still readable if the process goes rogue and your code really just needs `/etc/ssl` for TLS. You can go the other direction: name the directories the process is allowed to access. Then gradually add more and more until the process runs.
+We can then iterate on specification B while using the model checker to verify that B does not permit behavior forbidden by A. At the same time, we can continuously validate A against production behavior by using FETCh-generated runtime monitors.
 
-If you can't disabled fork + exec to make the program unable to execute commands. There's another way to get pretty much the same effect with `{No,}ExecPaths`. `NoExecPaths` makes all files under the path unable to be executed (including libraries, which to Linux's eyes are executables). And `ExecPaths` explicitly allows them. By only allowing your server process (plus what your program calls), you effectively make the program unable to execute anything else.
+With FETCh, a single formal foundation can be:
 
-With the above example configutation. `/usr/bin/my_daemon` can only run `sh` (needed system()) and `awk` (what the server acutally needs) -- everything else, including `cp`, `sed`, `xargs`, `rm` are all unavailable.
+- Observable through automatically generated runtime monitors
+- Model-checkable through refinements
+- Provable using theorem provers such as Isabelle or Zenon
 
-Hopefully you are running each service as it's own user and minimal privilege. But it's still good practice to limit what the application can access -- even in today's internet where everyone is behind a CDN and stable IP addresses are a myth -- you can make sure the process never tries to reach something it never should. Say someone else on port 80 (you shouldn't be using raw HTTP today), another unrelated service on localhost or someone else's port 22 (SSH). Why would your Apache server try to reach SSH..? Something is wrong.
+FETCh relies on the general structure of TLA+ specifications to generate Rust monitors. A specification contains variables that track system state and a `Next` formula that describes the allowed state transitions. FETCh maps those concepts directly to a monitor that maintains the state variables and defines one function for each action in `Next`.
 
-iptables support per user (and per group) rules. For example, you can disable access to all port 22 and 80 across all network range for user `http` (which usually runs your HTTP server / reverse proxy).
+For each incoming event, the monitor identifies the corresponding function, checks its preconditions, and applies the state update. If a precondition is violated, the system has performed an action that the specification does not allow, indicating that the implementation and specification have diverged.
 
-Or make user `http` unable to initiate TCP connection to anything but localhost.
+One key part of translating TLA+ to Rust is identifying the input parameters for each transition function because TLA+ is not a typed language. Consider the lock server example from the previous section:
 
-This sometimes causes issues if you are like me, lazy. I compile and run services under a dedicated user. But that user also needs access to git (thus port 22) to pull repositories. To handle this, I usually create 2 users. For example `blog` and `_blog`. The `blog` user is the one pulling git and compiling. While `_blog` is added to the `blog` group so it can access the home directory, yet follows a seperate firewall rule so it cannot create it's own outbound network traffic.
+The specification neither defines `Locks` nor explicitly states that the `lock` parameter must be a member of the `Locks` set.
 
-### [Via systemd](https://clehaxze.tw/gemlog/2026/11-04-practical-guide-on-out-of-tree-mitigations-on-linux.gmi#via-systemd)
+FETCh takes advantage of the fact that an observable specification focuses on the **what**, not the **how**. Each action can therefore be prefixed with “there exists x in a set S such that…” (`\E x \in S: …`), effectively creating a lightweight typing system for TLA+. Constants can also be mapped to Rust types with annotations such as `\* fetch:u32`. Finally, a `TypeOK` conjunct defines the types of variables, which is already common practice in TLA+.
 
-Of course, systemd has roughly the same features too. `IPAddress{Allow,Deny}` can default deny then explicitly allow subnets that are allowed. Though it does not support limiting port access and requires cgroup and eBPF support (so a new enough kernel). To only allow local addresses via systemd, add the following configuration.
+Putting these pieces together, the previous specification becomes:
 
-Systemd has everything. Including several security flags that you may or may not want to set depending on your usecase. Most of the settings are restricting the process from obtaining or exercising management capabilities, as web applications shouldn't need them while attackers do.
+Once those type constraints are added, the specification can be translated directly into a monitor:
 
-`NoNewPrivileges` and `MemoryDenyWriteExecute` need some explanation. NoNewPrivileges is a bit convoluted. NoNewPrivileges first and foremost clears the process privilege and prevents the current process switching user/group to another user/group with a greater privilege - including root. But what is privilege? Privilege is the ability to switch to another user/group with a greater privilege or gain more privilege. It's circular but hopefully you can see that once privilege is cleared, you can't escalate your process to root or through a chain of accounts, to root eventually. Or simply, in practice, NoNewPrivileges means the process itself can never be root.
+If you look closely at the FETCh-generated code, you’ll notice types such as `FetchMap` instead of `HashMap`. Those abstractions exist because FETCh was designed for validation at production scale. `FetchMap` is one of several components that let FETCh handle large amounts of state efficiently, which becomes important when validating Husky’s routing system.
 
-`MemoryDenyWriteExecute` prevents a piece of memory to ever be both writable and executable at the same time. Attackers who want the server execute their code may decide the easiest way is to upload their code into the server's memory and find a way to make the CPU jump there. This process obviously needs the memory both be writable (to upload code) and executable programs just needs read and executable. Your code is already compiled or there's an interperter interperting your code.. With one exception. JIT compilers. JIT compilers take your source code, both interpert and compiles it on the fly. Which does need both write and executable memory.
+We built FETCh to verify that Husky’s distributed routing system conforms to its specifications. Specifically, we wanted to validate that two events with the same ID are always sent to the same shard, an abstraction over a set of Kafka partitions. For our purposes, we can simplify Husky’s routing system to two components:
 
-In practice this means all NodeJS, all .NET applications, all JAVA appliactions, newer Ruby, SBCL, LuaJIT, PHP >= 8.0 and anything that depends on PCRE (Perl Compatible Regular Expressions) **cannot** have MemoryDenyWriteExecute set. Everything else mostly likely can. Including but not limited to Lua, Python, Rust, Go, C, C++, D.
+- A database that stores placements, which map an ID range to a list of shards, and enforces the constraint that no two placements overlap for a given ID range
+- A routing service that requests and caches placements as it receives events and uses a hash function to deterministically map each event ID to a shard within the assigned placement
 
-If you are running on a new enough CPU (Intel 12th gen, AMD Zen3) and is running a new enough kernel and glibc, Shadow Stack is a hardware machinism to make one of the more nasty attacks (ROP, Return Oriented Programming) not viable. How ROP works is quite technical. To give a high level overview: when a program has a memory vulnerability, the attacker can attempt to, though a long chain of manipulations, trick the CPU into returning to a different place then it comes to.
+A defect anywhere in this system—such as an improperly handled placement, placement data loss, or a transient split brain in the placement allocation service—could result in duplicate events being silently inserted into Husky. Duplicates can increase billing for customers, corrupt query results, and cause false positives or false negatives in monitor evaluations.
 
-Yeah it's crazy.
+Initially, we wrote a single specification that modeled our routing system as a function mapping event IDs to shards. From a TLA+ standpoint, the specification was simple, easy to reuse, and abstract enough to be converted to a runtime monitor. But we quickly ran into a scaling problem: The monitor had to keep track of every event processed during a rolling ingestion window. That state needed to persist if the service running the monitor restarted, and its size made this approach impractical at Datadog’s scale. With trillions of distinct event IDs over an ingestion window, the monitor would need to maintain an impractical amount of state.
 
-With CPU supporting Shadow Stack, the CPU records where each function call originated into a seperate region of memory (and inaccessable to the program itself) and check if the intended location it's returning to matches the sotred value. This way it's pretty impossible to trick the CPU to return to a location that is not where the function is called.
+We went back to the drawing board.
 
-On x64 the hardware implementatino is called CET (Control-flow Enforcement Technology). Unfortunatelly it is not enabled by default - there's cases where older compilers will intend to return to a different location then it's callers - old GCC for example, sometimes for optimizations reasons, modifies the return address for tail calls so it can jump back once instead if severak times through functions. And thus binaries are marked with if they are Shadow Stack compatible and the OS only enables Shadow Stack if all loaded binaries are Shadow Stack compatible. To tell the OS to try to enable shadow stack. Add environment:
+We considered using statistical data structures like Bloom filters instead of conventional maps. However, because we expected routing errors to be rare—no significant routing issues had been observed in production over the years—we needed exact results rather than probabilistic ones. That meant tracking every event and checking every placement created during the ingestion window for overlaps.
 
-And to check if your program have shadow stack enabled. Read /proc and see if `shstk` shows up in the thread features list.
+What made this approach practical was scoping part of the specification—and therefore part of the monitor’s state—to individual routing service processes. Although we process trillions of events per window, those events are distributed across thousands of instances, while we allocate only a few million placements. We can validate globally that placements do not overlap because there are far fewer of them. Then, each pod can validate its own subset of events to verify that placements are used correctly.
 
-The only reason I put this low on the list is because it stops a very specific type of attack that I don't see much in the wild. Even if the kind of attack is stops can be realyl nasty.
+Validating part of the behavior locally within a sidecar keeps the state manageable and has other advantages. Because events need to be validated only over the lifetime of an individual instance, we don’t need to persist that state across restarts. It also reduces telemetry costs because we don’t need to send a validation payload for every event over the network.
 
-Operationally complicated, but this might just be worth it. Most attacks, if they need a binary exploit, will target glibc because that's the most common thing to be loaded in memory. Nearly all process has it. Espicially if the vulnerability happensi in a library that usually has no natural paths to invoking the shell. These attacks eventually needs to know where `system()` is within the sepcfici glibc binary that's loaded. Compiling your own glibc makes that offset unknown to the attacker (usually they download archives from distributions and inspect) resulting in a crash instead of a successful command execution.
+We defined two FETCh-compatible abstract specifications:
 
-A benitfit of this approach being it works everywhere. Glibc is famously backwards compatible to applications most of the times. Unfortunatelly if you need glibc to be the line defending your process. Something else is already very broken. Personally I treat it as a nice to have and a final line of defense then thing to deploy first.
+- `Router.tla` models receiving and using placements and validates that events are published using previously received, unmodified placements and the correct hash function.
+- `PlacementStorage.tla` models placement storage and validates that no conflicting placements overlap.
 
-To build glibc from source
+We then refactored our existing specifications so that they refined both abstract specifications. We also created a formal proof demonstrating that consistent routing cannot be broken if both specifications are respected. Finally, we used FETCh to generate two runtime monitors, one for each specification.
 
-Then to use the newly installed glibc, instead of `LD_PRELOAD`, you have to execute it's dynamic linker as glibc is a special case - that LD_PRELOAD depends on glibc itself.
+We then ran into another issue. We wanted the monitors generated from `Router.tla` to operate per process, but TLA+ specifications represent system state globally. To make FETCh-generated monitors work with local state only, we added support for process-local monitors through the `fetch:proc_type` and `fetch:per_proc` annotations:
 
-If you are following the previous recommendations and setting `NoExecPaths`. The local glibc install directory needs ot be added into the ExecPaths list.
+Given the specification above, FETCh generates a process-local monitor. Notice that `Processes` does not appear anywhere in the generated monitor:
 
-PHP is a weird thing. I use PHP through PHP-FPM and PHP-FPM has built-in user managment. Instead of PHP-FPM being run as it's own users. PHP-FPM spawns as root and switchs workers to users that the services should be running at, at runtime. This means we can't simply ban the entire setuid syscall all togerther (see my previous post on what I did).
+Next came `PlacementStorage.tla`. Although we have far fewer placements than events, the number of placements is still large. Keeping all of that state in memory would be impractical.
 
-And some PHP plugins has deep binding enabled. I don't know why they need it but it causes the shared object to use a different allocator then the one you LD_PRELOAD'd and crash because it runs on a different free() implementation.
+This is where the `FetchMap` and `FetchSet` indirections mentioned in the previous section come into play. They make it possible to plug in custom map and set implementations, including more complex combinations such as maps of sets. We created RocksDB-backed implementations for them, which let us handle the required state size.
 
-Compile it with `cc php-deepbind-shim.c -fPIC -shared -o php-deepbind-shim.so php-deepbind-shim.c` and LD_PRELOAD it to your PHP(-FPM) instance to get rid of deep binding for PHP modules. If using systemd and denied execution everywhere, remember to add `/path/to/php-deepbind-shim.so` to your ExecPaths
+Running FETCh in production introduced relatively little overhead. In the sidecar running alongside our routing service, we measured p90 overhead of about 2% CPU and less than 0.2% memory across thousands of pods processing tens of millions of events per second.
 
-PHP uses it's own Zend allocator internally. PHP allocations goes through `zend_alloc()` (which is backed up it's own memory pool and then malloc) and reuse memory after `zned_free()`. Which defeats the purpose of having a hardened allocator! Set the enviroment `USE_ZEND_ALLOC=0` to disable the Zend allocator if you wnat your custom allocator to be effective. But because the Zend allocator is the thing reporting and limiting total memory use of PHP. So you'll need to handle that through systemd, limiting how much memory that PHP can use overall
+Batch validation of placement overlap processed several days of data containing several million placements in around an hour by using 1 CPU and a few gigabytes of memory.
 
-Hopefully this article explains what I do and why I do for proactive mitigations in my machines. And hope it helped people defending themselves.
+The routing service conformed to `Router.tla`: We detected no violations in the monitored traffic.
+
+The monitor generated from `PlacementStorage.tla`, however, did trigger. It detected conflicting placements that should not have been stored in the database.
+
+A year earlier, we had added special cases in which we intentionally skipped deduplication and allowed conflicting placements to improve balancing. What we missed was that those placements were still being persisted. We estimate that fewer than 0.01% of placements conflict. Even at that rate, two conflicting placements are enough to cause our backfill system to crash.
+
+The backfill system is designed to recover from placement data loss, but it does not tolerate placement conflicts, which should be forbidden outside of these special cases. As a result, a placement data-loss event would have prevented the backfill system from recovering correctly.
+
+How did this issue remain hidden for so long? The conflicting placements were harmless during normal operation. They would have caused problems only during a specific and relatively rare failure scenario involving placement data loss. That’s not a scenario we can realistically exercise through conventional test suites.
+
+FETCh found the issue by validating system behavior against the specification itself rather than waiting for customer-visible symptoms to appear. After we stopped persisting the conflicting placements, FETCh detected no further violations in the monitored traffic.
+
+The specifications continued to provide value after deployment.
+
+By continuously validating production behavior against a specification, we detected an issue that neither testing nor routine review of production telemetry data had revealed. FETCh helps us detect when models and implementations diverge as systems evolve.
+
+Our approach has limitations. The FETCh transpiler supports only a subset of TLA+ and currently checks preconditions only against the current state. Monitoring a distributed system with FETCh also requires engineering effort to instrument it. Validating global state at production scale remains challenging and often requires system-specific solutions.
+
+Even with those limitations, continuously validating specifications against production behavior gives us a way to detect drift and continue using specifications as an active part of the engineering process.
+
+Formal methods are becoming more common across the industry. Companies such as [AWS](https://www.amazon.science/publications/how-amazon-web-services-uses-formal-methods) and [Microsoft](https://www.youtube.com/watch?v=L_PPKyAsR3w) have publicly discussed using formal specifications to design complex distributed systems and uncover subtle correctness issues. At Datadog, we’ve found them valuable for the same reasons: They help us reason about difficult edge cases, uncover issues early in the design process, and give our team confidence to simplify and evolve systems.
+
+Despite those benefits, formal methods remain difficult to adopt. Their syntax is often unfamiliar to software engineers, much of their tooling originated in academia, and choosing the right level of abstraction requires a deep understanding of both the system and the modeling framework.
+
+Keeping specifications aligned with production systems requires ongoing effort. As systems evolve, specifications can drift from the implementations they were designed to describe. Continuous validation gives us a way to detect that drift and helps keep specifications grounded in how production systems actually behave.
+
+We expect this alignment to become increasingly important as more code is generated by AI systems. Formal specifications can provide a machine-checkable definition of correctness for generated code.
+
+With FETCh, we validated a critical production system against its formal specifications and uncovered an issue that had gone undetected for years. More importantly, we found that specifications can continue to provide value long after the design phase ends.
+
+We’re continuing to expand our use of formal specifications across Datadog. We’re improving FETCh itself, integrating it more deeply into CI/CD workflows, and exploring additional systems that could benefit from runtime validation.
+
+If this sounds like the kind of engineering challenge you’d enjoy working on, check out our [open engineering roles at Datadog](https://careers.datadoghq.com/all-jobs/?parent_department_Engineering%5B0%5D=Engineering&utm_source=engblog&utm_medium=corpsite&utm_campaign=engcommunity-2026-testing-husky&gh_src=hm4uekgj1us).

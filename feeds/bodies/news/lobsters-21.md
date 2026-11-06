@@ -1,39 +1,64 @@
-[Alice & Bob](https://alice-bob.com/), a French QC company, [claims (in a paper posted on cryptographers’ ePrint)](https://eprint.iacr.org/2026/2665) that a quantum computer they may eventually build could, with just **22,593 qubits**, break (factor) RSA-2048 in about **𝝅 ≈ 3.14 days**. As an orange–pineapple comparison, Google’s OMG press release in March was about a system with half a million qubits, to break 256-bit ECDLP.
+What if making a diagram draggable was as simple as specifying what it can become?
 
-As usual, several people have asked me how scary this is—and as usual some of them have decided that it’s actually scary and expect my confirmation, and ask me for justification when I say it’s not, so this post is kinda serving this purpose.
+Drag-and-drop makes the digital graspable. But designing bespoke drag interactions involves a lot of fiddly code to
+        handle geometry, feedback, and animations. As a result, many people, from educators to game designers,
+        mathematicians to creative tool builders, often don't bother.
 
-**The short answer: it’s interesting research, but we (well, A&B) are nowhere near having such a machine—and a lot of “ifs” are involved.   **
+**Declarative dragging** inverts the problem. Rather than programming all that visual behavior directly, you
+        simply say, for each element you want to make draggable, which future states of your application dragging it
+        should lead to. Our system speculatively renders those states to work
+        out where things can go, then combines these possible worlds into a smooth, responsive drag-and-drop
+        interaction.
 
-First, quick context: QCs use qubits instead of ordinary bits; a problem is that qubits are extremely fragile, errors happen frequently, they must be corrected, and correcting them requires… more qubits, running quantum error correction. That’s one of the main obstacles to building QCs.
+Our goal with this project is to let people keep working within the semantic
+        worlds they inhabit, while helping them turn the rules of their worlds into rich tactile interactions in ours.
 
-A&B is developing a special type of qubit, which is a type of **cat qubit** (the “cat” is Schrödinger’s, a reference to the way cat qubits encode information). Cat qubits are designed to make *certain* errors rare. A&B built systems with up to 18 cat qubits.
+A five-minute video introducing declarative dragging.
 
-The paper is essentially a thought experiment based on premise “*Imagine we could build a large quantum computer using **improved versions** of our qubits, then how efficiently could it break RSA-2048?” *It’s also sort a bit of a truism “*If we could build what’s necessary to break RSA-2048, then guess what…” *
+## How it works
 
-A&B’s paper combines assumptions about future hardware with error correction techniques and an optimized implementation of Shor’s algorithms. Their calculations suggest that around 23,000 qubits would be sufficient.
+D2 is *model-driven*: An interface author makes an element draggable by specifying which future model
+      states should be accessible by dragging it. An engine speculatively renders these states to view trees,
+      extracts the position of the dragged element in each of these renderings, and uses these to synthesize a
+      drag-and-drop interaction, all without detailed work required by the interface author.
 
-**But there’s a major catch.**
+To provide greater expressive range and customizability, D2 is *composable*: simple model-driven
+      drag-and-drop behaviors can be combined to create more complex ones, and modifiers can layer features like
+      floating, snapping, and transitions. For more details, see
+      [the paper](https://andrewblinn.com/papers/D2.pdf).
 
-Their main calculation assumes that a particular type of error (bit-flip) would occur, *on average*, only once every **100 years per qubit**. That’s a pretty low error rate for a qubit, even for a cat one:
+## Dragology demos
 
-![](https://www.bfswa.blog/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fe69f645f-1133-44fa-9a6e-8d7711576375_1226x670.png)
+We implemented D2 in a library called [Dragology](https://github.com/declarative-dragging/dragology), built
+      for SVG interfaces on the web.
 
-For comparison, A&B’s published experiments demonstrated this kind of error occurring, on average, **once every few minutes** (under certain conditions and much more frequently during some quantum operations.)
+See our [demo gallery](https://joshuahhh.com/dragology/#/demos) for many more interactives built with
+      Dragology.
 
-The paper acknowledges a gap of more than **100 million times** between the assumed reliability and the experimental results it uses for comparison.
+## Where it came from
 
-There’s also the scale detail: A&B has developed experimental systems with up to 18 qubits; they’d need another 22,575 qubits.
+> Back in 2022, I had a prototype of a game aimed at making math more tangible, a long-running obsession of
+>       mine. It had a lot going for it, but the fundamental mechanic, based on selecting transformations from a menu,
+>       lacked the juicy tactility I craved. I eventually came up with a primitive version of what would become
+>       model-driven dragging, but implementing it seemed daunting, so it sat on my whiteboard for the next two years,
+>       haunting me every time I went to make a sandwich.
+>       — Andrew
 
-The paper mentions an alternative design with more realistic error rate assumptions, requiring around **45,000 qubits**. But again thus depends on error-correction techniques that haven’t yet been demonstrated.
+> On a really nice walk in Seattle back in 2023, Andrew shared his draggy ideas with me. I kept thinking about
+>       them over the years, but didn't do anything about it. And then last year, it all came together. My buddy Elliot
+>       was playing with order-preserving maps between trees. I came up with a fun way to draw these structures, but I
+>       realized I didn't just want to draw them – I wanted to reach in and pull them around, and feel out their
+>       dynamics (what became the twisted trees demo above). That felt pretty tough, until I remembered Andrew's ideas.
+>       I got working on a library that, with Andrew's help, grew into declarative dragging.
+>       — Josh
 
-I feel like competition among QC companies is increasingly a competition for attention; it encourages them to publish scary-looking numbers based on more or less plausible assumptions. To be fair, A&B’s paper is transparent about its assumptions and is solid quantum engineering work. The problem is less the research itself than how its results are presented and promoted.
+## Since the paper
 
-So the research isnt worthless: estimating the resources needed to break crypto is important and improvements to quantum algorithms and architectures deserve attention. But **calculating what an hypothetical machine could do is different from demonstrating that we know how to build that machine**.
+Josh has been working on a variety of new, more intricate mathematical explorables. We've found Dragology
+        particularly suited to interfaces that combine parallel representations, where you see the same system from
+        different perspectives. In the permutation lab below, interacting with any one representation fluidly updates
+        the others, even halfway through a drag, showing their relationships in real time.
 
-That’s the distinction you must keep in mind when reading OMG-quantum headlines.
-
-Oh and another result (claimed under similar assumptions) is an architecture to solve **ECDLP in about one hour** with ~30,000 qubits:
-
-![](https://www.bfswa.blog/p/fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fecccb9be-90a7-4271-8ed9-62342e589c3a_1224x1050.png)
-
-Thanks for such a thoughtful post and debunking the scary title of this paper. It’s annoying to me that companies keep on producing assumptions that are hard to parse without deep expertise so they can feed into the cycle of quantum hype and media and PR and panic and amplification. Wish research now focused on helping companies and other choose what to migrate and figure out cheap tooling to facilitate PQC
+Andrew has been working to bring declarative dragging to existing applications, including his research on user
+        interfaces for programming languages, as well as restarting work on the math game concept that
+        kicked it all off.
