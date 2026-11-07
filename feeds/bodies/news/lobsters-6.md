@@ -1,53 +1,50 @@
-We’re looking for a **senior software line specialist, in TypeScript**!
+This was my first time upgrading NetBSD and I’m happy with how it all turned out!
 
-ACME Inc. is a fast-growing startup helping small businesses monitor their financials. We work with business owners across the globe, turning their feedback into actionable insights. Backed by Maltese Falcon Capital, we recently raised a $15M Series A to bring effortless monitoring to every brick-and-mortar store.
+[NetBSD’s Guide](https://www.netbsd.org/docs/guide/en/chap-upgrading.html) describes two different methods for performing an upgrade: boot from NetBSD install media and use `sysinst(8)`, or use `sysupgrade(8)` to do an in-place upgrade of the system. With a bit of research, I get the sense that for major version changes (i.e 10.1 -> 11.1) `sysinst` is the preferred method, while `sysupgrade` is a convenient alternative for minor version bumps.
 
-You’ll be joining a high-performance, close-knit team of AI natives! We’ve been AI-first for the past 2 years, with every part of the product agent-friendly and interconnected: design, development, QA, CI/CD, infra, data analysis. We like to say that our stack is English!
+So `sysupgrade` it is. First, I install the package:
 
-While English has gotten us 99.5% of the way there, we’re in need of a hands-on engineer ready to close the final 0.5%. Over time, we’ve noticed some issues that are immune to prompts and catch agents in loops. Sometimes, the issue at hand gets fixed, but it results in another issue. This is where you step in. As a line specialist, your job will be to investigate and fix complex issues, primarily by reading the underlying code.
+```
+# pkgin update
+# pkgin install sysupgrade
+```
 
-We’re looking for someone ready to open an IDE and dive deep into an unknown codebase — a fearless detective who is comfortable inspecting logs and database rows, and has the know-how to piece all the information together. The perfect candidate should be willing to work on a problem for hours, sometimes even days.
+Then simply run:
 
-This is a new position for us. We expect someone who works autonomously, makes sound decisions independently and takes full ownership of their work. We are happy to help in any way we can (you’ll have access to agents’ reasoning traces), but ultimately we depend on your confidence in understanding the problem and shipping a solution.
+```
+# sysupgrade auto https://cdn.netbsd.org/pub/NetBSD/NetBSD-11.1/$(uname -m)/
+```
 
-### Your responsibilities
+This will proceed to download the kernel and sets appropriate for your computer, unpack them, then prompt you to review and merge new configuration changes. There were only a few files that needed hands-on editing like `passwd` and `sshd_config` and I liked how NetBSD shows the diffs between the old and new files and its handling of merging differences.
 
-- take over unresolved issues from agents
-- read the codebase, go over application logs, query the database
-- prepare, test, review and ship fixes by yourself
-- write postmortems for agent training
-- occasionally consult on unreleased features
-- onboard and mentor a future junior line specialist
+I had one postinstall check that failed:
 
-### We think you’d be great if you…
+```
+# postinstall checks failed: opensslcertsrehash
+```
 
-- have at least 5 years of pre-2022 TypeScript experience
-- are comfortable running tests manually and using a “debugger”
-- can reason from first principles
-- can work on a problem with sustained attention for hours
-- are autonomous and an independent thinker
+I resolved the issue by wiping the legacy cache, then letting `certctl(8)` take over by rehasing the certs:
 
-### Nice to have
+```
+# rm -rf /etc/openssl/certs/*
+# certctl rehash
+```
 
-- previous experience as a line specialist
-- DB administration experience (our agents say it’s Postgres)
-- AI prompting basics
+Verify `certctl` successfully populated the directory:
 
-### Interview process
+```
+# certctl list
+```
 
-1. CV screening
-2. HR phone screen
-3. In-house paper-and-pencil exam
-  - multiple-choice questions (e.g. you’re given a TypeScript expression, choose the correct result)
-  - explain concepts in your own words (for example, ACID)
-  - complete the code block
-  - find the bug in a function
-4. Live debugging assignment
-  - application with an intentional defect; candidates are required to find and fix the issue without the use of AI
-5. Culture fit interview
-6. CTO interview
-7. Offer
+I manually re-run `postinstall fix [issue]` and confirm that it now passes inspection (which it did):
 
-We feel it prudent to point out that you will be allowed to work on one thing at a time in this role. While parallel development is the default, we understand line specialists prefer to tackle problems in a single-threaded manner, so we will do our best to provide a distraction-free environment for your best work.
+```
+# sysupgrade postinstall fix opensslcertsrehash
+# sysupgrade clean
+```
 
-To be clear, this role does **not** include feature development. You’re welcome to look at our AI-native listings if you have more interest in such work!
+Reboot the computer and start enjoying the upgrade!
+
+**NOTE**  
+
+In addition, edit `/usr/pkg/etc/pkgin/repositories.conf` and point `pkgin` to the new `11.1` repositories.

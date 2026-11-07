@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-06T22:49:30Z",
+  "updated": "2026-11-07T05:04:57Z",
   "items": [
     {
       "id": "devto-4943245",
@@ -122,27 +122,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4921112",
-      "title": "Your secrets don't need a git commit to leak into an AI tool",
-      "desc": "By Dimitris Kyrkos  | 3 min read",
-      "tag": "tutorial",
-      "published": "2026-10-26T10:47:57Z",
-      "order": 11,
-      "url": "https://dev.to/cyclopt_dimitrisk/your-secrets-dont-need-a-git-commit-to-leak-into-an-ai-tool-be2",
-      "image": "https://media2.dev.to/dynamic/image/width=1200,height=627,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fxt2i8uqhs43rkydwpuhy.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAARACADASIAAhEBAxEB/8QAGAABAQEBAQAAAAAAAAAAAAAAAAIDAQT/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAH2TrRhW0lgcD//xAAaEAEAAwADAAAAAAAAAAAAAAABAAIiEBEg/9oACAEBAAEFAkqOZmBVjDjvXj//xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAEDAQE/AR//xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAECAQE/AR//xAAaEAADAQADAAAAAAAAAAAAAAAAAjIRECBB/9oACAEBAAY/ApUlCUJU95zOv//EAB0QAAIBBAMAAAAAAAAAAAAAAAARIQEQUcEgYYH/2gAIAQEAAT8hTBRF3DXJROhhPtsgk3x//9oADAMBAAIAAwAAABAxwBz/xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAEDAQE/EB//xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAECAQE/EB//xAAdEAEAAQQDAQAAAAAAAAAAAAABEQAhMaEQIGHB/9oACAEBAAE/EMFYSyAmqF3XLaogZjZLW1T6M0TAH5TrRMhkVIBFhlDPCwXzwnnX/9k=",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4958335",
       "title": "One Markdown File Can Hijack Your AI Coding Agent: The Hidden Cost of Blindly Trusting AGENTS.md",
       "desc": "By 𝗝𝗼𝗵𝗻 | 8 min read",
       "tag": "tutorial",
       "published": "2026-11-05T15:30:00Z",
-      "order": 12,
+      "order": 11,
       "url": "https://dev.to/johnnylemonny/one-markdown-file-can-hijack-your-ai-coding-agent-the-hidden-cost-of-blindly-trusting-agentsmd-167n",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fgp9mzlfxjcl32v27828r.jpg",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAgMABP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHhtFIicf/EABkQAAEFAAAAAAAAAAAAAAAAABAAARESIf/aAAgBAQABBQJVwy5//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFxAAAwEAAAAAAAAAAAAAAAAAEBEgIf/aAAgBAQAGPwIaq//EABsQAQADAQADAAAAAAAAAAAAAAEAESExEHGR/9oACAEBAAE/ITkprPsAFoj3Crh2NVXkDfH/2gAMAwEAAgADAAAAECx//8QAFREBAQAAAAAAAAAAAAAAAAAAAAH/2gAIAQMBAT8QR//EABYRAQEBAAAAAAAAAAAAAAAAAAABYf/aAAgBAgEBPxC4r//EABsQAAMBAQADAAAAAAAAAAAAAAABESExYXGB/9oACAEBAAE/EEXuZ0dTbI8ILJyJyYo6kokon408n//Z",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4921112",
+      "title": "Your secrets don't need a git commit to leak into an AI tool",
+      "desc": "By Dimitris Kyrkos  | 3 min read",
+      "tag": "tutorial",
+      "published": "2026-10-26T10:47:57Z",
+      "order": 12,
+      "url": "https://dev.to/cyclopt_dimitrisk/your-secrets-dont-need-a-git-commit-to-leak-into-an-ai-tool-be2",
+      "image": "https://media2.dev.to/dynamic/image/width=1200,height=627,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fxt2i8uqhs43rkydwpuhy.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAARACADASIAAhEBAxEB/8QAGAABAQEBAQAAAAAAAAAAAAAAAAIDAQT/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAH2TrRhW0lgcD//xAAaEAEAAwADAAAAAAAAAAAAAAABAAIiEBEg/9oACAEBAAEFAkqOZmBVjDjvXj//xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAEDAQE/AR//xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAECAQE/AR//xAAaEAADAQADAAAAAAAAAAAAAAAAAjIRECBB/9oACAEBAAY/ApUlCUJU95zOv//EAB0QAAIBBAMAAAAAAAAAAAAAAAARIQEQUcEgYYH/2gAIAQEAAT8hTBRF3DXJROhhPtsgk3x//9oADAMBAAIAAwAAABAxwBz/xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAEDAQE/EB//xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAECAQE/EB//xAAdEAEAAQQDAQAAAAAAAAAAAAABEQAhMaEQIGHB/9oACAEBAAE/EMFYSyAmqF3XLaogZjZLW1T6M0TAH5TrRMhkVIBFhlDPCwXzwnnX/9k=",
       "color": "#3B49DF"
     },
     {
@@ -326,12 +326,24 @@
       "color": "#3B49DF"
     },
     {
+      "id": "devto-4991005",
+      "title": "Being, Doing, Having: Why 50 Years of Senior Craft Lives in Context, Not Code",
+      "desc": "By Randal L. Schwartz | 29 min read",
+      "tag": "tutorial",
+      "published": "2026-11-06T23:51:03Z",
+      "order": 28,
+      "url": "https://dev.to/gde/being-doing-having-why-50-years-of-senior-craft-lives-in-context-not-code-29dl",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fmc7bd0mpw7k0aq4vsqj4.jpg",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwIE/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAH/2gAMAwEAAhADEAAAAcbBdrSMH//EABkQAAMAAwAAAAAAAAAAAAAAAAABEQIQIv/aAAgBAQABBQIUIjLlao3T/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFhAAAwAAAAAAAAAAAAAAAAAAECAh/9oACAEBAAY/AhG//8QAGxAAAwEBAAMAAAAAAAAAAAAAAAERITFBUYH/2gAIAQEAAT8h8X0W79LPWCqgjiKuDm0//9oADAMBAAIAAwAAABCn3//EABcRAAMBAAAAAAAAAAAAAAAAAAABETH/2gAIAQMBAT8QKph//8QAFxEBAAMAAAAAAAAAAAAAAAAAABEhMf/aAAgBAgEBPxBc6//EABsQAQACAwEBAAAAAAAAAAAAAAEAESExQVFh/9oACAEBAAE/EBblTxxnaqmBMst2XoiuD6x4Styq66dgVsJlDWif/9k=",
+      "color": "#3B49DF"
+    },
+    {
       "id": "devto-4919175",
       "title": "Python 3.14's concurrent.interpreters module turns a 3.6-second GIL bottleneck into 0.9 seconds",
       "desc": "By Alex Georgiev | 8 min read",
       "tag": "tutorial",
       "published": "2026-10-26T11:00:00Z",
-      "order": 28,
+      "order": 29,
       "url": "https://dev.to/alexgeorgiev17/python-314s-concurrentinterpreters-module-turns-a-36-second-gil-bottleneck-into-09-seconds-219",
       "image": "https://media2.dev.to/dynamic/image/width=1200,height=627,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fuedye7tw0if5gejxoawi.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAARACADASIAAhEBAxEB/8QAGAABAQEBAQAAAAAAAAAAAAAAAAECAwT/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAH2TYzdw6AQP//EABsQAAMAAgMAAAAAAAAAAAAAAAABAhESIDJC/9oACAEBAAEFAnKMSYgUwPtqao9cP//EABQRAQAAAAAAAAAAAAAAAAAAACD/2gAIAQMBAT8BH//EABQRAQAAAAAAAAAAAAAAAAAAACD/2gAIAQIBAT8BH//EAB0QAAICAQUAAAAAAAAAAAAAAAAyAZEQIDGBoeH/2gAIAQEABj8CWKEihOhIrHhsLzp//8QAHhAAAgICAgMAAAAAAAAAAAAAAAERITFhIEGRwfH/2gAIAQEAAT8hRdHusOoWPYEnB4zCL/BpeCElS6TTj//aAAwDAQACAAMAAAAQQ4Ac/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAwEBPxAf/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAgEBPxAf/8QAIRAAAgEDAwUAAAAAAAAAAAAAAREAITFhIEFRcZGx0fH/2gAIAQEAAT8QWUVn4gvCOBXAT1oRSMhEfC0F0O5gZVDrD4aBMuwBDGn/2Q==",

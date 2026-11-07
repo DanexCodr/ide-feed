@@ -1,103 +1,169 @@
-back in old unix your password hash just sat in `/etc/passwd`, right next to your username. in a file everyone could read.
+Back in July I wanted to check out the pwn2own targets for 2026. Since the rules hadn’t been released yet, I decided I would check last year’s targets in the hope that it would be similar.
 
-in 1980 bill joy put a `*` there for an account called `daemon`. nobody's supposed to ever log in as it.
+Imagine my surprise when I managed to get arbitrary code execution on the glasses and they weren’t in the wearables category anymore :’).
 
-a `*` isn't a hash, so no password can match it. unix still does this today
+It’s fine though because I still reported it to meta, and after fighting the payout a few times, we settled (ok there was no settling but I agreed to the new payout).
 
-the next field is the real name. he wrote "the devil himself"
+Before attempting this, I remember telling my friend about it. They said “ooof good luck. These are usually pretty hardened and no-one attempted them last year at p2o.”
 
-1990s
+My response: Watch me.
 
-## how sshd checks your password
+![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-3.png?w=3000&ssl=1)
 
-ok so these days the hash lives in `/etc/shadow` and looks like `$6$abc$k2P9…`. the `$6$` means sha512, `abc` is the salt, the rest is the actual hash
+### Acquiring glasses because who’s paying €500 (not me)
 
-you type your password, sshd hashes it with that same salt and checks if it comes out identical. same = you're in. that's it
+First step was acquiring the glasses. I am lucky that my brother-in-law had a pair he didn’t really use, so I could steal them for a few weeks.
 
-and if the field is just `*`? there's nothing to match. type whatever you want, it's never getting you in
+### First recon
 
-1990s
+I installed the Meta AI app, which is the app to control the glasses (connecting them, synchronizing pictures, and so on).
 
-## the fine print
+In order to extract the firmware, I obviously wasn’t going to tear the glasses apart and start fiddling with probes n shit. So I went for extracting it using the OTA (over-the-air) update.
 
-one more rule. if `crypt()` can't do its job, it returns NULL. like if the salt asks for some algorithm the system doesn't have, there's nothing to compute, so you get NULL instead of a hash
+When connecting the glasses for the first time, it immediately offered to update the firmware. So naturally, I was intrigued. Using JADX, I reversed the Meta AI app to see how the update is fetched.
 
-pretty clear.
+`OtaArtifactFetcher` prepares and sends the update request. The response is converted into an `OTAArtifactInfo` object containing metadata such as the device/build information.
 
-except a lot of programs never check for NULL. they just compare whatever `crypt()` gives back with the stored field, hit the NULL, and crash
+```java
+arrayListA0y2.add(new OTAArtifactInfo([...], downloadUri, [...]));
+```
 
-2012
+I then notice this assignment in `OTAArtifactInfo`():
 
-## crypt stops saying NULL
+```
+this.downloadUri = str3;
+```
 
-so musl (the libc under alpine) goes ok fine, `crypt()` just won't return NULL anymore. if it fails, it returns a single character instead. that character can never match a real password, so programs don't crash, they just see a wrong password
+I found that I could just hook into `OTAArtifactInfo` and print `str3` which contained the CDN update URL :))) and then I just printed it.
 
-now guess which character they picked for that
+```javascript
+Java.perform(function () {var OTAArtifactInfo = Java.use("com.facebook.wearable.common.ota.models.OTAArtifactInfo");OTAArtifactInfo["$init"].implementation = function (l, j, oTAArtifactType, ..., str3, ...) {   this["$init"](l, j, oTAArtifactType, ..., str3, ...);    console.log("downloadUri:");    console.log(str3);};});
+```
 
-yep. the star. again.
+![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-6.png?w=1462&ssl=1)
 
-"reportedly."
+That URL contained a zip, so that looked like the right candidate. **HOWEVER**, this was around 156 MB and its payload depended on the device’s existing build. It was an incremental update… I wanted the full update.
 
-"should not happen" gone, NULL gone, `"*"` in
+**Getting the full firmware update**
 
-2012
+Decompiling further code revealed a GraphQL input named `device_firmware_full_update_only`. The app normally populated it with false, so I hooked the generic method responsible for adding GraphQL fields and replaced the value with true only when the field name matched exactly. This allowed me to fetch the full firmware update URL.
 
-## three weeks later
+I was then able to retrieve the zip from the CDN. Unzipping it showed me that this was an Android update, including the **payload.bin**.
 
-then musl adds sha512 crypt. the thing is, sha512crypt gets slower the longer the password is, so someone could send one giant password and keep your server busy for a long time. so musl just caps it at 256 bytes and refuses anything longer
+![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-4.png?w=1230&ssl=1)
 
-twenty days after the "*" commit btw
+Using [payload-dumper](https://github.com/ssut/payload-dumper-go) on payload.bin, I could dump the images and mount them into a filesystem.
 
-so past 256 bytes crypt fails. and when crypt fails… it says `"*"`.
+![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-5-edited.png?w=1203&ssl=1)
 
-literally in the comment the whole time
+Firmware was acquired but how do I get a shell on the glasses?
 
-2016
+### Device Access Toolkit
 
-## sshd borrows bob's salt
+There is a developer mode on the Meta AI app that allows devs to write apps that can interact with the glasses. It is called DAT SDK (Device Access Toolkit).
 
-CVE-2016-6210. ask sshd about a user that doesn't exist and it says no instantly, cause there's nothing to hash. real users take a few ms longer. so just time it and you know who exists
+In order to do that, you need to install the DAT APK on the glasses. The MetaAI app basically downloads it in real-time and fetches the DAT application to install it on the device. Do you see where I am going with this?
 
-the fix is kinda funny. no real hash to check? sshd grabs some other account's salt and hashes your password anyway, just to waste the same amount of time. still a no, just a slower no
+![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-2.png?w=1668&ssl=1)
 
-"for invalid users." and also, it turns out, real users with a `*`.
+### Installing self-signed app on the glasses
 
-2019 → 2022
+Up until and including firmware 126, the firmware did not verify that the DAT APK was signed by Meta. So it was theoretically possible to install any app on the glasses because there was no verification as to if it was a legit app or not.
 
-## the fix for the fix
+An easy-not-so-easy swap was possible. I could, using frida, swap out the legit DAT application for a self-signed application of my own. That meant I could run any app on the glasses.
 
-**2019.** turns out alpine's docker images had no root password. at all. CVE-2019-5021. alpine fixes it by locking root with `!`
+```javascript
+// hook DAT Installerfield(this, "$localFile")  .set(this, replacement);field(this, "$appName")  .set(this, "DAT Probe");packageField.set(this, cachedPackage);// Meta AI sends my apkreturn invokeSuspend.call(this, result);
+```
 
-but without pam, `!` also kills ssh keys. and cloud images log in with keys.
+Now I have my own self-signed DAT apk running on the glasses! bosh!! 😎
 
-**2022.** alpine 3.16 switches root to `*`. still locked, keys work again
+### How to run the DAT APK on the glasses
 
-narrator: it did not.
+The DAT apk runs only when a DAT session is requested by the developer app to interact with the glasses.
 
-2016 → 2026
+So, in order to run the fake DAT apk, I installed a sample app from Meta called **Camera Access**, which would then create a DAT session with the app on the glasses.
 
-## ten quiet years
+![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-1.png?w=1764&ssl=1)
 
-why did nobody notice? well, maybe someone did. maybe someone pasted the wrong thing into a password prompt, half a slack message or a whole ssh key, and it just let them in. you've never pasted the wrong thing into a password prompt?? amazing. a fresh box with no passwords set isn't affected. a `*` in shadow needs a wrong try first. openssh tests on openbsd and glibc, musl doesn't test sshd, and most distros go through pam, which never even calls crypt for a `*`.
+However, I couldn’t really check that it was running properly. It was difficult to debug.
 
-so as far as anyone knows, nobody noticed. as far as anyone knows.
+### Beep is the new printf
 
-some people got really close though
+There is no screen on this pair of sunglasses. No console, no logs, no “yoo your code is running”. So how could I make sure my code was even executing? The answer is by *listening* to it.
 
-a debian dev asks glibc to copy musl's `"*"`. six years later debian moves to libxcrypt, which says `"*0"`, and closes the bug. one character away.
+I used **android.media.ToneGenerator** in my DAT APK to signal which part of the code was executing:
 
-this thread is about busybox `passwd` breaking on a 257 character password. same `"*"`, same limit. nobody says "sshd"
+- 3 beeps: listener started, looking for a Wi-Fi Direct address
+- 5 beeps: found one (in wifi group 192.168.49.x)
+- 4 beeps: TCP 31337 bound, we’re in business
+- 6 beeps: something went wrong
 
-a security review fixes `pick_salt()`. the bug is four lines below it. four days before i found it.
+So using this sequence, I managed to debug a big issue that I hadn’t considered: the Camera Access app was failing because it was expecting the real DAT apk on the glasses. When it couldn’t start DWA,` startDwaReadinessProbe()` would report `START_ERROR_DWA_UNAVAILABLE`.
 
-nov 2026
+And every time it failed, it closed my connection.
 
-## how i ran into it
+**The fix**  
+I used frida to hook `startDwaReadinessProbe()` in order to disable the DWA timeout and keep the connection alive.
 
-i was messing around with openssh, mostly the boring parts where it talks to libc, like the password code. people don't really look at that stuff, they look at the crypto. so i built sshd every way i could think of (glibc, musl, pam, no pam, shadow, no shadow) and threw like 17,600 weird logins at it. weird hashes, broken accounts, passwords way too long
+```javascript
+startDwaReadinessProbe.implementation =function () {// No operation};
+```
 
-oh did i say "i"? sorry. i had agent swarms. a lot of them. let's not get into it
+### Bind shell
 
-every build agreed on every login. except musl without pam. that one said yes to things it shouldn't
+When the Meta AI app wants to sync photos & videos from the glasses, it will create a WiFi Direct group on subnet 192.168.49.x. The glasses will connect to that group and they get an IP address.
 
-![six panel comic: 1980 daemon gets a star; 2012 musl crypt returns star instead of NULL; 2016 openssh borrows bob's salt; 2021 alpine changes root from ! to star, narrator: it did not; 2016 to 2026 a cat sleeps on a server; 2026 me and some agents, 300 A's give uid 0](https://sshhole.com/comic.svg)
+In order to get the glasses to connect to the Wi-Fi Direct group, I used Frida to hook into the CameraAccess app and request the “high link lease” from the Meta AI app.
+
+```
+sub = device.createLinkLease(2, 1, cb); highLeaseSubscriptions.push(sub);
+```
+
+My implanted app bound a listener on TCP 31337 on that address, which dropped me into an interactive shell.
+
+So from the phone I could just nc’d into it and sent commands, like `id`, to get shell-level execution in the app’s context.
+
+```
+ServerSocket listener = new ServerSocket(31337, 4, address))
+```
+
+```shell
+nc <glasses-ip> 31337# iduid=10097(u0_a97) gid=10097(u0_a97) groups=3003(inet) ...great power comes great opsec
+```
+
+**great power comes great opsec**
+
+### Great power requires great opsec
+
+I had this uncontrollable power for about 5 days, and while I was searching for a privesc on the glasses, my shell access had disappeared.
+
+Unfortunately, I either had terrible opsec back then (possible) or unluckily they looked into it and patched it.
+
+But fear not !!
+
+### Mobile Config
+
+Firmware 127 started enforcing signature verification of the DAT apk, so self-signing my own DAT apk wasn’t working anymore.
+
+The check was done by `wss_appmanager.signature_verification_enabled` in the MobileConfig file.
+
+The glasses ask the phone for their config, so the phone fetches it from Meta’s servers and forwards it back over Airship. It controls a bunch of feature flags on the glasses without requiring a firmware update.
+
+One of those flags requires the firmware to check that apps are signed by Meta before installing them.
+
+![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image.png?w=1492&ssl=1)
+
+It arrives on the glasses from the paired phone, and the device loads it only after verifying the file is *structurally* correct, not that it hadn’t been tampered with.
+
+That makes every flag in it, including `signature_verification_enabled`, modifiable by the phone and accepted by the glasses.
+
+So by flipping a byte in the `0.mctable` (which is the file that holds the values) from `0x80` to `0x00` (enabled to disabled), I was able to **bypass** the signature verification that they were originally enforcing, and re-install my self-signed APK on the glasses.
+
+We’re soooo back.
+
+### Where to from here
+
+This was all reported to Meta through their bug bounty platform. They have approved my blogpost which makes me assume it is now fixed.
+
+Now that I had shell access, it was a lot easier to start mapping the attack surface. That, my friends, is a story for another time!

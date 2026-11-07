@@ -1,64 +1,92 @@
-What if making a diagram draggable was as simple as specifying what it can become?
+![Two people holding hands while surrounded by binary code.](https://wasp.sh/img/blog/2026-08-13-advice-for-contributing-in-2026/banner.webp)
 
-Drag-and-drop makes the digital graspable. But designing bespoke drag interactions involves a lot of fiddly code to
-        handle geometry, feedback, and animations. As a result, many people, from educators to game designers,
-        mathematicians to creative tool builders, often don't bother.
+## The ideal contributor[​](https://wasp.sh/blog/2026/08/13/advice-for-contributing-in-2026#the-ideal-contributor)
 
-**Declarative dragging** inverts the problem. Rather than programming all that visual behavior directly, you
-        simply say, for each element you want to make draggable, which future states of your application dragging it
-        should lead to. Our system speculatively renders those states to work
-        out where things can go, then combines these possible worlds into a smooth, responsive drag-and-drop
-        interaction.
+As an open-source maintainer, you imagine the ideal contributor as an individual that is excited about your project, uses it and understands it, and wants to contribute to make it better for themselves, others, or because of an exciting technical problem.
+You get to share ideas with them, learn from each other, maybe even get to know them a bit as a person in the process, and they inspire you to do better work. A profoundly human, intellectual interaction, inspiring and fulfilling, sometimes even resulting in a life-long relationship.
 
-Our goal with this project is to let people keep working within the semantic
-        worlds they inhabit, while helping them turn the rules of their worlds into rich tactile interactions in ours.
+When that happens, it is an amazing experience, absolutely my favorite part of building open-source software.
 
-A five-minute video introducing declarative dragging.
+I still remember when Craig, whom we didn't know yet then, came out of nowhere and [shared his proposal](https://github.com/wasp-lang/wasp/issues/109#issuecomment-841235518) for formal language grammar for Wasp, a proper [Latex document](https://github.com/wasp-lang/wasp/files/6478938/wasplang.pdf): I had to take a week to refresh my knowledge of type inference and language grammars just to be able to respond. The whole team looked together at that document, not believing the work put into it. He ended up doing 3 summer internships in a row with us, implementing a big part of Wasp compiler and language server, and was a delight to work with.
 
-## How it works
+Or, another, more recent situation, when I got somewhat stuck on pushing Windows support for Wasp forward, and [@nodtem66 came in](https://github.com/wasp-lang/wasp/pull/3020#issuecomment-3192811586) with investigation and experiments of his own, effectively unblocking me and becoming a brainstorming partner for driving the feature forward. I remember being impressed by the thoroughness of the work from his side, there was that level of rigor to it that took me back to the uni times, and it was quite an inspiration at the moment.
 
-D2 is *model-driven*: An interface author makes an element draggable by specifying which future model
-      states should be accessible by dragging it. An engine speculatively renders these states to view trees,
-      extracts the position of the dragged element in each of these renderings, and uses these to synthesize a
-      drag-and-drop interaction, all without detailed work required by the interface author.
+## The reality[​](https://wasp.sh/blog/2026/08/13/advice-for-contributing-in-2026#the-reality)
 
-To provide greater expressive range and customizability, D2 is *composable*: simple model-driven
-      drag-and-drop behaviors can be combined to create more complex ones, and modifiers can layer features like
-      floating, snapping, and transitions. For more details, see
-      [the paper](https://andrewblinn.com/papers/D2.pdf).
+However, for every such interaction, there is probably 10x or more low-quality contributions.
 
-## Dragology demos
+And I don't mean low-quality because the contributor is missing technical knowledge, but low-quality because motivation was never right: no real interest for the project, focus instead being on merging the PRs for the sake of merging them, to pump up the author's GitHub account or CV with the proof of contributing to popular open-source repos, or to win some kind of award (e.g. during Hacktoberfest).
 
-We implemented D2 in a library called [Dragology](https://github.com/declarative-dragging/dragology), built
-      for SVG interfaces on the web.
+What I find most demotivating regarding such low-quality interactions is that when I see a new PR, I can't help but get excited: maybe this is a "good" one, the one where rich, inspiring interaction will happen. But what most likely follows is a dissapointment, and this is a part of what grinds the open-source maintainers down with time.
 
-See our [demo gallery](https://joshuahhh.com/dragology/#/demos) for many more interactives built with
-      Dragology.
+## How AI made it worse[​](https://wasp.sh/blog/2026/08/13/advice-for-contributing-in-2026#how-ai-made-it-worse)
 
-## Where it came from
+The main thing that changed for worse recently though, with the rise of AI, is that it became very easy to create open-source contributions that look good at first, but there is no real substance or quality behind them.
 
-> Back in 2022, I had a prototype of a game aimed at making math more tangible, a long-running obsession of
->       mine. It had a lot going for it, but the fundamental mechanic, based on selecting transformations from a menu,
->       lacked the juicy tactility I craved. I eventually came up with a primitive version of what would become
->       model-driven dragging, but implementing it seemed daunting, so it sat on my whiteboard for the next two years,
->       haunting me every time I went to make a sandwich.
->       — Andrew
+Before, one could quickly assess the PR for quality: if it looked complex and good, the person behind it for sure had to put the effort and obtain a certain level of understanding of the codebase and the subject matter.
+Effort was put in, so you didn't feel bad putting effort from your side also, while reviewing it.
 
-> On a really nice walk in Seattle back in 2023, Andrew shared his draggy ideas with me. I kept thinking about
->       them over the years, but didn't do anything about it. And then last year, it all came together. My buddy Elliot
->       was playing with order-preserving maps between trees. I came up with a fun way to draw these structures, but I
->       realized I didn't just want to draw them – I wanted to reach in and pull them around, and feel out their
->       dynamics (what became the twisted trees demo above). That felt pretty tough, until I remembered Andrew's ideas.
->       I got working on a library that, with Andrew's help, grew into declarative dragging.
->       — Josh
+Now, you often just can't know till you dive in deeper.
 
-## Since the paper
+Good example is Craig's contribution of a Latex document with the new formal grammar for Wasp that I mentioned above. When Craig submitted that in 2021, I didn't think twice about investing a whole week of my own time to be able to review that PR properly. I was brimming with excitement. Even though I knew nothing about Craig.
 
-Josh has been working on a variety of new, more intricate mathematical explorables. We've found Dragology
-        particularly suited to interfaces that combine parallel representations, where you see the same system from
-        different perspectives. In the permutation lab below, interacting with any one representation fluidly updates
-        the others, even halfway through a drag, showing their relationships in real time.
+Today, if I received such a contribution, my first assumption would be that it was AI generated, with no deep understanding of the matter by the author. I wouldn't dare invest a week, or even a day of my own time, to evaluate it.
 
-Andrew has been working to bring declarative dragging to existing applications, including his research on user
-        interfaces for programming languages, as well as restarting work on the math game concept that
-        kicked it all off.
+And to be clear, it's not even about purely evaluating the correctness of the submitted work: maybe it is correct, maybe it works well, maybe it is even well designed. The problem is, I can't rely on the person behind it. I can't hope that there will be a rich, fulfilling cooperation coming out of this, resulting in new ideas, in growing together, creating something together. And if so, if the whole contribution is indeed primarily AI driven, then what is the point? If I wanted to tackle it myself like that, I will prompt my own AI, likely with a better prompt and better context.
+
+This sucks. It sucks that my first assumption these days on seeing a contribution is that it is AI generated, and I wish it wasn't so, but that is how it is at the moment. It sucks for the maintainers, and it also sucks for the honest contributors that are putting in the real work.
+
+What can one do then, as a new contributor to an open-source project, to surpass this?
+I thought about this recently, and I believe it comes down to a single thing: **building trust**.
+
+## How to build trust as a new open-source contributor[​](https://wasp.sh/blog/2026/08/13/advice-for-contributing-in-2026#how-to-build-trust-as-a-new-open-source-contributor)
+
+Before, that was relatively easy: a well-crafted, quality PR would get you a long way.
+
+Today, more is needed, and I will give some ideas below on how to do this, that would do it for me as an open-source maintainer.
+
+### Be sincere, be human[​](https://wasp.sh/blog/2026/08/13/advice-for-contributing-in-2026#be-sincere-be-human)
+
+Be an honest human and treat others as such.
+
+This is it really. It was always important, but now it is crucial. Everything else stems from it.
+
+Don't treat the project and people behind it as resources or means to an end, e.g. just for getting a notch for your CV. Instead find a project for which you have an honest interest, and it will immediately show.
+
+Also don't be shy to engage in conversation. Maintainers are also humans and will appreciate sincere interaction.
+
+### Coommunicate your motivation[​](https://wasp.sh/blog/2026/08/13/advice-for-contributing-in-2026#coommunicate-your-motivation)
+
+Communicate why you are excited about the project, what you have used it for so far, why you want to contribute. You might think it is obvious, but it's often not. It helps maintainers "place you", figure out how to best direct you, what they can expect from you.
+
+### Don't use AI for writing (e.g. PR descriptions)[​](https://wasp.sh/blog/2026/08/13/advice-for-contributing-in-2026#dont-use-ai-for-writing-eg-pr-descriptions)
+
+Don't let the AI write for you, or even enhance your writing. This goes for any text others will have to read really. Better to have it not be perfect, than to make others doubt if there is a human behind that text or not. Even if you are not native speaker and are just using AI to "fix" your text: either prompt it to only fix the most minor grammar issues, or use something else like Grammarly, to ensure it doesn't change your tone.
+
+### Own the contribution[​](https://wasp.sh/blog/2026/08/13/advice-for-contributing-in-2026#own-the-contribution)
+
+Check the specific project's contributing guidelines, but most projects won't mind you using AI, as long as you own the contribution: you should own and stand behind every line of code and every decision in your PR, exactly as if no AI was involved. That means you've read it, run it, understood it, and you can explain and defend it under review.
+
+### Start with easier, smaller issues[​](https://wasp.sh/blog/2026/08/13/advice-for-contributing-in-2026#start-with-easier-smaller-issues)
+
+Pick issues that are not demanding on maintainers to review, so they can get to know you and your work before having to invest a lot of time. Make it as easy as possible to review, and explain your reasoning and approach.
+
+### Agree with maintainers on what to work on before you start[​](https://wasp.sh/blog/2026/08/13/advice-for-contributing-in-2026#agree-with-maintainers-on-what-to-work-on-before-you-start)
+
+Learn which issues would maintainers be happy with you taking on. Old issues might have become irrelevant, issues requiring a lot of "taste" for the project or issues touching core parts of the project might be quite mentally taxing to review, etc.
+
+That said, just asking "what are good issues for a beginner" might not be enough. Some repos might have those organized and ready, but many don't, and it also depends on your skills and interests.
+
+What is better is to come already with some suggestions of your own and ask if any of these would be right to start with. While also explaining why each of these is interesting to you and why you would like to tackle it. Even if none of those are a good starting issue, maintainers will now have a much better idea of what you are looking for and will be able to more easily suggest some other issue.
+
+### Use the project[​](https://wasp.sh/blog/2026/08/13/advice-for-contributing-in-2026#use-the-project)
+
+Ideally, this would be the reason why you want to contribute: you are a user that wants to give back, make it better for themselves and others.
+
+But even if this is not the case and you want to contribute for some other reason, e.g. because you really like the tech stack and want to gain some experience with it, you should take some time to use the project and learn about it, understand it better.
+
+This will also help with coming up with the ideas for the issues you want to contribute to: you will identify parts of the project you think could be better, and can start from there.
+
+## Final thoughts[​](https://wasp.sh/blog/2026/08/13/advice-for-contributing-in-2026#final-thoughts)
+
+While it is harder to establish trust as an open-source contributor these days than it was before due to AI, there is a silver lining to it: solution is to be more human and more mindful, which was always the right way to do it.

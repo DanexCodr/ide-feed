@@ -1,64 +1,195 @@
-In 1991, a Finnish graduate student in computer science named Linus Torvalds sent a brief announcement to an online discussion group, saying he had been working on parts of a new operating system in his spare time. Torvalds described his project as “just a hobby [that] won’t be big and professional” and insisted that it would be free to use, study, modify, and distribute. Torvalds was building a technically challenging piece of software called an operating system “kernel,” which handles the most basic functions related to communication between a computer’s hardware and software. Unlike past operating system projects, Torvalds invited feedback and contributions from anyone on the Internet.
+Last week I attended [IFL2026](https://ifl26.cse.chalmers.se/), which was
+probably one of the best conference experiences I have ever had. One of the many
+good presentations was by [Michael Haddon](https://michael.haddon.me/), who
+presented [The Replay
+Lattice](https://michael.haddon.me/research/replay-lattice), which is a type
+system for floating-point reproducibility. The type system was presented for a
+demonstration language called Lane, but it inspired me to think more carefully
+about nondeterminism in Futhark (there is some), and what it might cost to get
+rid of it.
 
-![](https://thereader.mitpress.mit.edu/wp-content/uploads/2026/09/Peer-Production.jpg)
+I often use the terms “determinism” or “deterministic” when explaining why I
+think data parallel programming is such a good paradigm, so perhaps it is
+surprising to see me write a blog post about nondeterminism in Futhark. But as
+is so often the case with such bold promises, they often tend to get a little
+weaker once you look closely enough. Michael Haddon’s work defines some
+nomenclature that is helpful for this discussion:
 
-*Benjamin Mako Hill, Christian Pentzold, and Aaron Shaw coauthored “[Peer Production](https://mitpress.mit.edu/9780262054805/peer-production/),” from which this article is adapted.*
+- **Exact** means that the computation produces the same result every time, guaranteed. (Michael describes this as matching the “serial reference”, which I think is not the best way of looking at it, but that’s a question of perspective)
+- **Replay** means that if you rerun the computation with the same “schedule” (in some sense “machine”), you will get the same result, but other machines may give different results.
+- **Approx** means potentially nondeterministic results.
 
-With time, Torvalds’ kernel attracted other developers who worked with him to turn the hobby project into an established piece of software that the group called “Linux.” This team combined their new kernel with another Internet-based collaborative project, GNU, whose goal was to create a replacement for the UNIX operating system but which had not yet produced a usable kernel. The result was the GNU/Linux operating system.
+The kind of nondeterminism we are talking about here is not the kind of
+free-form nondeterminism that arises from classic shared-state concurrent
+programming. Indeed, both Lane and Futhark are pretty much exclusively concerned
+with the kind of nondeterminism that arises from floating-point rounding errors.
+The simplest example is the non-associativity of addition:
 
-More than 30 years later, GNU/Linux (or just “Linux,” as most people call it) runs on billions of computers worldwide and has become one of the most important pieces of software in history. Nearly all supercomputers, a large majority of Internet servers, a majority of smartphones, and a growing number of “embedded systems” in devices like televisions run some version of Linux. In all of these markets, Linux did not simply fill an empty niche. Rather, it displaced many proprietary server operating systems from major manufacturers at the time, including Sun Microsystems, HP, and IBM.
+```
+> (0.1 + 0.2) + 0.3 == 0.1 + (0.2 + 0.3)
+false
+```
 
-Linux’s success upended the prevailing wisdom about how to build software. In the 1980s and 1990s, most world-class software was written by large, hierarchically managed teams of developers within immense, multinational corporations such as AT&T and Microsoft. Software developers worked full time for these companies and were well paid. The companies retained vast legal teams who used restrictive copyright licenses, proprietary patents, and technological measures to ensure that none of the code their developers wrote could ever be used — or, in most cases, even *seen* — by anyone outside the firm.
+If we have an array of numbers we need to sum, then the result depends on the
+order in which you sum them. When parallelising a summation, you often do things
+like split the numbers into blocks, sum each block on a separate processor, then
+combine the partial results. This changes the order of addition, and hence the
+result. Now, an important point is that there is no reason to think that the
+parallelised result is numerically *worse* than a serial left-to-right
+summation, but it will be different. Further, an efficient implementation will
+likely choose a number of chunks somewhat proportional to the number of
+processors on the machine, which means the result may also be different on other
+machines (but again, *not necessarily worse*). This corresponds to the “Replay”
+class of nondeterminism. Finally, the partial results may be combined using
+[atomic instructions](https://futhark-lang.org/blog/2024-09-23-faster-opencl-float-atomics.html), which may be
+resolved in a different order when the program is rerun on the same machine.
+This is then “Approx”.
 
-Linux took nearly every aspect of this proprietary software development approach and threw it out the window. The Linux kernel and the GNU/Linux operating system were built by volunteers collaborating outside firms, without hierarchical management structures, without money as the primary incentive, and without the typical legal or technical arrangements to restrict access, adaptation, or reuse of the underlying source code. The vast majority of early Linux contributors only wrote small amounts of code. But despite this unusual production model, Linux’s high quality and growing market share were undeniable by the end of the 1990s.
+Even in this simple example of summing a bunch of numbers, we encounter both
+classes of nondeterminism. Note that none of them are “race conditions” in the
+usual sense of the program sometimes just *malfunctioning*: the point is that
+the result changes, but given that the result is in some sense already “wrong”
+(due to roundoff error), the main issue is that there are cases where we care
+about getting the *same* “wrong” result every time.
 
-Since then, Linux has inspired millions of attempts to build knowledge goods in a similarly open and collaborative manner. The most famous is the free, collaboratively produced encyclopedia Wikipedia. Like Linux, Wikipedia began with an open call for volunteer contributions to “an encyclopedia that anyone can edit” in January 2001. Wikipedia [includes](https://en.wikipedia.org/wiki/Wikipedia) about 68 million articles across more than 300 different language editions. In the English-language version alone, the articles were built from more than a billion distinct contributions, or “edits,” by more than 121 million user accounts and many millions of anonymous contributors. Nearly all of these edits are from volunteers. Today, Wikipedia is one of the most-visited websites in the world and the largest and most comprehensive encyclopedia in history by nearly every metric.
+So in Futhark, ostensibly a deterministic language, where does the
+nondeterminism come from? There are a few sources. Some of them come when
+programmers violate mandated constraints (but which are unchecked for various
+reasons), and others are basically down to floating-point roundoff error.
 
-The collaborative production model that underlies Linux and Wikipedia has also been used thousands of times at a smaller scale.
+### [Language abuse](https://futhark-lang.org/blog/2026-11-04-nondeterminism.html#language-abuse)
 
-For example, while preparing his syllabus for a class in 2011, a law professor named Andreas Fischer-Lescano stumbled upon dubious passages in the doctoral thesis of the German politician and then-Minister of Defense Karl-Theodor zu Guttenberg. Fischer-Lescano searched the Internet and discovered that they had been copied from other sources without credit. In February 2011, a Twitter user raised the issue and asked for help with a thorough analysis of zu Guttenberg’s dissertation. Many volunteers joined GuttenPlag Wiki — a participatory online platform created for that purpose — and within a couple of days, hundreds of pages of zu Guttenberg’s thesis were marked up with detailed documentation of apparent plagiarism in many places. About two weeks later, [zu Guttenberg resigned](https://www.wsj.com/articles/SB10001424052748703561604576150341564716876) from all political offices in light of the incriminating findings.
+Let us start by considering language abuse. The worst but also least interesting
+case is using the `#[unsafe]` [attribute](https://futhark-lang.org/blog/2020-06-28-attributes-in-futhark.html)
+to disable safety checks, after which you can do arbitrary memory reads and
+[writes](https://futhark-lang.org/blog/2022-06-13-uniqueness-types.html). This can be avoided by passing
+`--safe` to the compiler, or perhaps by just not doing this kind of cowboy
+coding in the first place. If you are a good enough programmer that your code
+does not need any safety checks, why not just go and write in C? Those folks
+never make mistakes.
 
-Although radically different in terms of size, scale, and scope, Linux, Wikipedia, and GuttenPlag Wiki are all examples of what you might call “commons-based peer production,” a term coined in the early 2000s by a law professor named Yochai Benkler.
+Another more insidious problem is related to the `scatter` construct. The
+semantics of an expression `scatter d is vs` are simple enough, and can be
+expressed with this imperative pseudocode:
 
-Drawing on Benkler’s work, we propose a new definition of peer production. We hold that these projects must do four things:
+```
+for (i,v) in zip(is, vs):
+  res[i] = v
+```
 
-1. Motivate participants to contribute using diverse incentives that are frequently, if not exclusively, nonmonetary.
-2. Be decentralized in that they are collectively self-governed and organized by participants.
-3. Be decentralized in terms of how tasks are executed.
-4. Create content that is protected as part of the public commons.
+That is, `scatter d is vs` pairs the indexes in `is` with the corresponding
+values in `vs` and writes each value to the corresponding index. It is a
+parallel random-access write. To ensure that the writes can indeed be written in
+parallel, Futhark requires that `is` contains no duplicates, or in a slight
+weakening, that if `is` contains duplicates, then the corresponding values are
+also identical. This is *not* checked dynamically, and a program can get in an
+awful lot of trouble by violating this property. Which write “wins” is
+unpredictable - in the worst case, you can even get a “torn” write that combines
+two different values.
 
-Peer production projects may be similar to markets in that they rely on the distributed, self-directed actions of individuals to create information and other kinds of goods. However, *un*like markets, peer production involves neither financial incentives nor prices nor exclusive property regimes. And unlike firms or government organizations, peer production involves neither contractual obligations, pre-defined work plans, nor hierarchical forms of management and task assignment. While some people may contribute to peer production as part of their job, many do so as volunteers. When people *do *engage in peer production as part of their jobs, employers usually do not dictate the type of peer production work they pursue.
+This behaviour of `scatter` is thorny, and even experienced Futhark programmers
+sometimes make this mistake. The reason it has no safety checks is twofold:
 
-It’s worth repeating that these characteristics defy conventional assumptions about organizations and economic production.
+1. `scatter` is a [fundamental construct](https://futhark-lang.org/blog/2019-04-10-what-is-the-minimal-basis-for-futhark.html) used in most sophisticated parallel algorithms, and so its performance is paramount.
+2. I’m not sure how to detect duplicate writes in a way that does not violate the [cost model](https://futhark-lang.org/blog/2022-01-27-cost-models-are-contracts.html) (although [`scatter` is already a bit iffy in that regard](https://futhark-lang.org/blog/2026-02-04-when-cost-models-hit-the-wall-clock.html)). Basically, the cost of `scatter` must be proportional to the number of elements written, not to the total size of the target array, and that makes it difficult to construct appropriate auxiliary structures for safety checks.
 
-According to classical economic wisdom, if you want people to collaborate and efficiently distribute the outputs of that collaboration, the best way to do so is through private, for-profit firms that sell goods or services in an open market. Firms hire and pay employees who are then contractually bound to pursue the work assigned to them by managers. The products of the work these employees do become company property, which sets their price, manages sales transactions, and distributes salaries and any profits generated along the way.
+And yes, I do realise the irony of insisting on an unsafe `scatter` after making
+fun of C programmers for using an unsafe language.
 
-In theory, these techniques address the challenges of aligning incentives, organizing tasks, and ensuring that the resulting outputs are distributed to those willing and able to pay for them.
+Anyway, let’s move on to `reduce`. Parallel reductions, just like parallel
+scans, histograms, and so on, work only if the provided operator is
+[associative](https://en.wikipedia.org/wiki/Operator_associativity) and in some
+cases also commutative. This is documented but unchecked - in Futhark you can
+do a `reduce` with an arbitrary operator of the right type, and it just might
+give you nonsensical or nondeterministic results. It is a common error among new
+Futhark programmers to treat `reduce` as a general fold and use operators that
+are not associative, but it seems not to show up so much among more experienced
+programmers. The reason we do not check for associativity is that [it is
+impossible](https://en.wikipedia.org/wiki/Rice%27s_theorem), and even when it is
+possible it remains hard - well beyond what a practical type checker is capable
+of. It is not too hard to [empirically test
+associativity](https://futhark-lang.org/examples/testing-associativity.html) and other properties, and so it seems
+that this source of nondeterminism is not so problematic in practice.
 
-But peer production represents an alternative to the behavioral models at the heart of classical economic wisdom. Neither contractual obligations, financial incentives, nor bureaucratic authority ensures that participants contribute their work or that the work is organized effectively. The resulting products are public commons protected as non-exclusive (rather than private) forms of intellectual property. This means that peer-produced resources cannot be priced directly on the open market.
+That actually concludes the list of “true” nondeterminism in Futhark, and in
+both cases we can wash our hands and blame the programmer. Of course, there is
+one rather important caveat here…
 
-In its Platonic ideal, peer production projects retain complete collective, autonomous control over the scope of their work, the legitimacy of their leaders’ authority, and the selection of tasks worth pursuing. In practice, though, peer production is often employed to varying degrees — by institutions that do not neatly check all the definitional boxes.
+Strictly speaking, floating-point addition is not associative, and so we could
+just declare that `reduce (+) 0` on floating-point numbers is simply wrong.
+However, Futhark is not mainly intended as a framework for explaining why the
+program you wrote is wrong, but rather as a practical tool for parallel
+programming, and clearly people *want* to sum floating-point numbers. Indeed,
+summing and multiplying floating-point numbers is worth trillions of currency
+units these days!
 
-Peer production represents an alternative to the behavioral models at the heart of classical economic wisdom.
+As such, Futhark’s `reduce` (and similar functions) do not say that the result
+you get back is completely arbitrary in case the provided operator is
+nonassociative. Instead, they say that the result you get back is some
+*arbitrary ordering* of applying the operator to the input elements. The precise
+ordering is unspecified (we’ll return to this), but it will be *some order*, and
+if the function is associative, it just so happens that the order *does not
+matter for the final result*.
 
-Take, for example, a site like Reddit. On Reddit, people join topically defined subcommunities, or subreddits, where they voluntarily share information in “posts,” then vote on and comment on those posts. The aggregation — also known as collaborative filtering — of the voting and commenting activity produces a collective sense of what’s most interesting or important. Thinking back to our definition above of peer production, we would say that Reddit relies on diverse nonmonetary motivations and decentralized goal-setting and execution, but the products have always been formally controlled by Reddit’s corporate owners (i.e., not a commons).
+The application order chosen by Futhark depends on the backend and the hardware.
+With the `c` backend, it will be a straightforward left-to-right loop across the
+input array. With the GPU backend, it will split the input into chunks, sum them
+separately, and combine the partial results. The number of chunks depends on
+runtime queries of the GPU hardware topology, and can also be configured by the
+user via [tuning parameters](https://futhark-lang.org/blog/2026-02-03-tuning-params.html). Since the chunking
+strategy (the “schedule”) depends on the hardware and the input size, repeatedly
+re-running the same reduction on the same system will consistently give the same
+result - the “Replay” case in Michael Haddon’s terminology. This is not a
+language guarantee, but it is how it is implemented right now.
 
-Reddit’s owners initially adopted a very permissive attitude toward data redistribution and reuse that made Reddit function like a commons. Over time, however, this changed as Reddit prepared for its initial public offering (IPO) in 2024. AI companies engaged in bulk collection and reuse of Reddit data, raising the financial stakes and introducing threats to the site’s viewership and engagement. In Spring 2023, [Reddit’s owners restricted access to their data](https://en.wikipedia.org/wiki/Reddit_API_controversy) and began charging for it, making the site much less commons-like and provoking a backlash among some of the most committed volunteer contributors.
+A reasonable question is whether we could implement summation in a different way
+that will *always* give the same result, no matter the input. Indeed, this is
+possible. Consider for simplicity that the input array is a power of two. We can
+then implement reduction by repeatedly splitting the array in half, combining
+the two halves using the provided operator, and continuing until only a single
+element is left:
 
-Online sites and services like Yelp and YouTube have similarly eroded the boundaries between markets and peer production. On these platforms, participants contribute content for free while others are compensated through advertising revenues, product placement, or access to private events. In cases like Airbnb, private companies profit from an activity (hosting guests through “couchsurfing”) that was previously managed in a non-monetized way by a peer-production community offering nearly identical services, such as [Couchsurfing](https://www.couchsurfing.com/) and [Hospitality Club](https://www.hospitalityclub.org/). Airbnb is not peer production, but it also seems unlikely that it could have existed without peer production to show it the way.
+```
+def sum_tree (as: []f64): f64 =
+  let as' = loop as while length as > 1 do
+              let m = length as / 2
+              in map2 (+) (take m as)
+                          (take m (drop m as))
 
-When you really think about peer production at its most basic level, you might ask: What is a bunch of unpaid volunteers doing at the heart of the modern commercial Internet? How do these volunteers get anything done if nobody is in charge and nobody pays them for their work? Why should we trust anything these communities create to support so many fundamental parts of our digital lives?
+  in as'[0]
+```
 
-These are, fundamentally, some of the most core questions in the field.
+We can generalise this to arbitrary operators (even non-commutative ones) and
+non-power-of-two sizes with a bit more complexity. Note that this implementation
+does not use any Futhark constructs that are nondeterministic, hence *by
+construction* it is also fully deterministic. Will it produce the same result as
+a sequential `foldl (+) 0`? No, because the order of application is different,
+but if you compile `sum_tree` with the `c` backend then it will produce
+*exactly* the same results as if you compile with the `cuda` backend. This is
+the “Exact” case.
 
-After all, despite all the fanfare about “the wisdom of crowds,” collaborative production on the Internet remains both rare and challenging. For every example of a peer-produced product, there are many unsuccessful attempts to build a collaborative community. Many of these failed efforts to build communities produced valuable knowledge commons in their own right. For example, in a study of software commons, Charles Schweik and Robert English [found](https://direct.mit.edu/books/monograph/3364/Internet-SuccessA-Study-of-Open-Source-Software) that a large portion of successful software commons — nearly half — only involve a single developer writing code on their own and sharing it with the world. In other words, many software commons are entirely uncollaborative.
+There is a reason we don’t implement `reduce` like that, of course. In a quick
+experiment for summing 100 million numbers, I observe that using `reduce (+) 0`
+is almost *3x* faster than `sum_tree` on an MI100 GPU. The gap can be narrowed
+by using blocking to reduce the number of GPU kernels necessary, but ultimately
+the fastest way to perform a reduction does depend on fine details of the
+hardware, and when your operator is not truly associative, that will result in
+observable differences.
 
-You might ask: How do these volunteers get anything done if nobody is in charge?
+The same situation arises with Futhark’s other basic building blocks. I suspect
+`reduce` is actually the *best* case, in the sense that a hand-written version
+can approach the performance of the built-in one. For `scan`, I know that the
+compiler’s fancy [decoupled
+lookback](https://research.nvidia.com/sites/default/files/pubs/2016-03_Single-pass-Parallel-Prefix/nvr-2016-002.pdf)
+is much faster than anything that can be written in Futhark itself, and for
+`reduce_by_index` a fully deterministic implementation involves a [sort and a
+segmented
+reduction](https://futhark-lang.org/blog/2018-09-21-futhark-0.7.1-released.html#histogram-computations), which
+is *wildly* slower than the code produced by the compiler, which makes careful
+use of atomic instructions.
 
-As peer production communities have matured, they have also encountered challenges and limitations. Broadly speaking, peer production has advanced most rapidly in the Global North and tends to reflect the demographic attributes and interests of the wealthiest and most digitally literate. Inside communities, hierarchies and power relations have emerged, and sexism and harassment can be widespread. Additionally, projects that grow tend to become more formalized, resulting in open communities that are, at the same time, highly structured, bureaucratic organizations. Even when communities welcome newcomers, arriving volunteers often meet multiple obstacles that effectively exclude all but the most highly educated and Internet-savvy individuals.
-
-Nevertheless, peer production has continued to shape the world in both direct and indirect ways. As wikis, distributed software development, and related modes of online collaboration have become more widespread, they have influenced how more traditional organizations structure themselves. This includes the so-called “sharing economy,” crowdfunding, distributed computing, user-generated content production on commercial platforms such as YouTube and Yelp, hacking and fabrication spaces in the DIY movement, social media systems, and even blockchain-based technologies such as cryptocurrencies. Generative artificial intelligence systems and digital assistants, such as OpenAI’s ChatGPT, answer questions using data from peer-produced sources.
-
-When Linux was released, not even its authors foresaw the emergence of peer production, nor could they have imagined that anyone would still be writing about their work decades later. But now, at a time when many of the world’s most powerful companies and governments struggle with misinformation, declining civic participation, and growing social divisions, peer production offers an alternative model for addressing these new challenges.
-
-***Benjamin Mako Hill ****is a social scientist and technologist; ****Christian Pentzold**** is Professor and Chair of Media and Communications in the Department of Communication and Media Studies at Leipzig University; and ****Aaron Shaw**** is Professor of Communication Studies and Sociology at Northwestern University. They coauthored “*[*Peer Production*](https://mitpress.mit.edu/9780262054805/peer-production/)*,” from which this article is adapted.*
+This does make me wonder if one could write a Futhark library that replaces all
+the SOAC implementations with guaranteed deterministic implementations, and what
+the performance of that might be across the [benchmark
+suite](https://github.com/diku-dk/futhark-benchmarks), but that will have to
+wait for a future post.

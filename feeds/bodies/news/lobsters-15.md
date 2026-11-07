@@ -1,169 +1,149 @@
-Back in July I wanted to check out the pwn2own targets for 2026. Since the rules hadn’t been released yet, I decided I would check last year’s targets in the hope that it would be similar.
+Formal specifications can help engineers reason about complex distributed systems and verify critical correctness properties. But they remain valuable only as long as they reflect reality. At Datadog, we encountered this challenge while working on** **[**Husky**](https://www.datadoghq.com/blog/engineering/introducing-husky/), our event database. We had a formally verified model of Husky’s routing system that matched production behavior when we created it. Over time, however, Husky evolved, and a change to its placement logic allowed conflicting placements to persist in production for about a year. Although harmless during normal operation, just two conflicting placements would have caused Husky’s backfill system to crash while recovering from placement data loss. We found the issue not by triggering that failure, but by checking production behavior against our TLA+ specifications.
 
-Imagine my surprise when I managed to get arbitrary code execution on the glasses and they weren’t in the wearables category anymore :’).
+That raised a question: **How do you know when a specification has drifted away from the system it was meant to describe?**
 
-It’s fine though because I still reported it to meta, and after fighting the payout a few times, we settled (ok there was no settling but I agreed to the new payout).
+To answer that question, we built **FETCh** (Formal Execution Trace Checker), a system that turns TLA+ specifications into runtime monitors. FETCh lets us continuously validate production behavior against formal models at scale and detect discrepancies that traditional testing, code review, and manual specification review can miss.
 
-Before attempting this, I remember telling my friend about it. They said “ooof good luck. These are usually pretty hardened and no-one attempted them last year at p2o.”
+In this post, we’ll show how we built FETCh, how we deployed it to validate Husky’s routing system, and how it helped us uncover a subtle bug conventional testing had not exposed.
 
-My response: Watch me.
+Formal specifications define what a system can and cannot do in any given state. Model checking takes a specification and generates a tree of possible states, allowing us to verify properties such as “Can the system ever reach an invalid state?” or “Does a desired condition always eventually become true?”
 
-![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-3.png?w=3000&ssl=1)
+A formal specification is valuable only if it is **tractable**, meaning that the tree of possible states can be generated in a reasonable amount of time. As a result, a specification cannot match reality exactly. It has to be an abstraction.
 
-### Acquiring glasses because who’s paying €500 (not me)
+So we simplified parts of the system to make our specification tractable. But how do we know whether we simplified too much? How do we know whether the specification is still close enough to reality to be useful?
 
-First step was acquiring the glasses. I am lucky that my brother-in-law had a pair he didn’t really use, so I could steal them for a few weeks.
+Traditionally, the answer is expert review. Engineers who understand both the implementation and the formal model evaluate whether the abstraction is still sound. That approach works well when a specification is first written, but it has an important limitation: Reviews provide a point-in-time evaluation, while production systems continue to evolve.
 
-### First recon
+Over time, implementations change. New features are added, performance optimizations alter execution paths, and operational requirements shift. Even if a specification was accurate when it was written, it can gradually drift away from the system it was intended to describe. Because the specification itself still appears correct, that drift can create a false sense of confidence.
 
-I installed the Meta AI app, which is the app to control the glasses (connecting them, synchronizing pictures, and so on).
+We encountered this problem with Husky, Datadog’s third-generation event store, for which we wrote several formal specifications years ago. We introduced Husky’s routing architecture in a [previous blog post](https://www.datadoghq.com/blog/engineering/husky-deep-dive/). In short, Husky is a distributed streaming system that processes millions of events per second and must satisfy several correctness properties so that data is ingested exactly once.
 
-In order to extract the firmware, I obviously wasn’t going to tear the glasses apart and start fiddling with probes n shit. So I went for extracting it using the OTA (over-the-air) update.
+Although we had not observed any major defect over the years, we had never formally validated at scale that the system continued to follow the specifications.
 
-When connecting the glasses for the first time, it immediately offered to update the firmware. So naturally, I was intrigued. Using JADX, I reversed the Meta AI app to see how the update is fetched.
+Continuously validating the alignment between a real system and its specification is not a new idea. But the requirements that make a specification **observable** conflict with those that make it **model-checkable**.
 
-`OtaArtifactFetcher` prepares and sends the update request. The response is converted into an `OTAArtifactInfo` object containing metadata such as the device/build information.
+A model-checkable specification needs bounded inputs to remain tractable—for example, a set of two clients and three events. It also needs to describe how things happen—for example, by modeling a network as a queue of incoming requests—so that all possible executions can be explored.
 
-```java
-arrayListA0y2.add(new OTAArtifactInfo([...], downloadUri, [...]));
-```
+In contrast, an observable specification needs to support unbounded inputs because a real system can process a continuous stream of requests. It should declare what is allowed, not how it happens. How requests are queued, for example, is usually an implementation detail.
 
-I then notice this assignment in `OTAArtifactInfo`():
+Consider a simple lock server that tracks currently held locks in memory, along with a counter indicating whether each lock is held (1) or not (0). The following specification captures the allowed state transitions for acquiring and releasing a lock:
 
-```
-this.downloadUri = str3;
-```
+This specification is observable because it describes only what can happen. But it cannot be model checked as is. The model checker needs to know what `Locks` is—for example, a set of values `{1, 2, 3}`—and what incoming requests are possible—for example, `Acquire(1)`, `Acquire(2)`, and `Release(1)`—to generate all possible states.
 
-I found that I could just hook into `OTAArtifactInfo` and print `str3` which contained the CDN update URL :))) and then I just printed it.
+This tension between observable and model-checkable specifications helps explain why existing approaches often focus on observing byproducts, such as invariants, rather than the specifications themselves. One example is [PObserve](https://p-org.github.io/P/advanced/pobserve/pobserve/), an open source project that uses real traces to monitor  P specifications. While useful, verifying that invariants hold is not enough to show that a specification is still valid.
 
-```javascript
-Java.perform(function () {var OTAArtifactInfo = Java.use("com.facebook.wearable.common.ota.models.OTAArtifactInfo");OTAArtifactInfo["$init"].implementation = function (l, j, oTAArtifactType, ..., str3, ...) {   this["$init"](l, j, oTAArtifactType, ..., str3, ...);    console.log("downloadUri:");    console.log(str3);};});
-```
+In the lock server example, we can derive the invariant “no locks are acquired twice” from the specification:
 
-![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-6.png?w=1462&ssl=1)
+`NotAcquiredTwice == \A l \in locks : locks[l] <= 1 \* no locks can be held by more than one client`
 
-That URL contained a zip, so that looked like the right candidate. **HOWEVER**, this was around 156 MB and its payload depended on the device’s existing build. It was an incremental update… I wanted the full update.
+Now consider a naive implementation:
 
-**Getting the full firmware update**
+The invariant holds because of the assertion. But the implementation still violates the specification because it can release the same lock twice, even though that transition is forbidden by the model.
 
-Decompiling further code revealed a GraphQL input named `device_firmware_full_update_only`. The app normally populated it with false, so I hooked the generic method responsible for adding GraphQL fields and replaced the value with true only when the field name matched exactly. This allowed me to fetch the full firmware update URL.
+For us, this distinction was important. We didn’t just want to know whether a few high-level properties continued to hold in production. We wanted to know whether the system itself still behaved according to the specification.
 
-I was then able to retrieve the zip from the CDN. Unzipping it showed me that this was an Android update, including the **payload.bin**.
+At Datadog, we view specifications as more than a design tool. They also provide a sandbox for exploring changes to a system before writing production code. Engineers can test whether a proposed optimization or simplification preserves correctness by modifying the specification and running the model checker, often at a fraction of the cost of building a prototype.
 
-![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-4.png?w=1230&ssl=1)
+We’ve used this approach to simplify complex parts of our systems with confidence. But that confidence depends on the specification remaining aligned with reality. For Husky’s routing system, we wanted a way to continuously validate the specifications themselves, not just the implementation.
 
-Using [payload-dumper](https://github.com/ssut/payload-dumper-go) on payload.bin, I could dump the images and mount them into a filesystem.
+More specifically, we wanted a framework that could use the same formal foundation for model checking, runtime validation, and mathematical proofs. So we built FETCh.
 
-![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-5-edited.png?w=1203&ssl=1)
+FETCh turns [TLA+](https://en.wikipedia.org/wiki/TLA%2B) specifications into Rust-based runtime monitors. These monitors can consume telemetry data, such as Datadog logs, and report when the system violates the specification.
 
-Firmware was acquired but how do I get a shell on the glasses?
+TLA+, a formal specification language developed by Leslie Lamport, supports model checking and machine-checked mathematical proofs. But the main reason we chose TLA+ was its support for refinement.
 
-### Device Access Toolkit
+In TLA+, refinement is a formal relationship between two specifications. A specification B refines a specification A if every behavior allowed by B is also allowed by A. This relationship allows us to bridge the gap between observable and model-checkable specifications: We can define an observable specification A that describes real-world behavior and a model-checkable specification B that refines A by introducing the bounds needed for tractable analysis.
 
-There is a developer mode on the Meta AI app that allows devs to write apps that can interact with the glasses. It is called DAT SDK (Device Access Toolkit).
+We can then iterate on specification B while using the model checker to verify that B does not permit behavior forbidden by A. At the same time, we can continuously validate A against production behavior by using FETCh-generated runtime monitors.
 
-In order to do that, you need to install the DAT APK on the glasses. The MetaAI app basically downloads it in real-time and fetches the DAT application to install it on the device. Do you see where I am going with this?
+With FETCh, a single formal foundation can be:
 
-![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-2.png?w=1668&ssl=1)
+- Observable through automatically generated runtime monitors
+- Model-checkable through refinements
+- Provable using theorem provers such as Isabelle or Zenon
 
-### Installing self-signed app on the glasses
+FETCh relies on the general structure of TLA+ specifications to generate Rust monitors. A specification contains variables that track system state and a `Next` formula that describes the allowed state transitions. FETCh maps those concepts directly to a monitor that maintains the state variables and defines one function for each action in `Next`.
 
-Up until and including firmware 126, the firmware did not verify that the DAT APK was signed by Meta. So it was theoretically possible to install any app on the glasses because there was no verification as to if it was a legit app or not.
+For each incoming event, the monitor identifies the corresponding function, checks its preconditions, and applies the state update. If a precondition is violated, the system has performed an action that the specification does not allow, indicating that the implementation and specification have diverged.
 
-An easy-not-so-easy swap was possible. I could, using frida, swap out the legit DAT application for a self-signed application of my own. That meant I could run any app on the glasses.
+One key part of translating TLA+ to Rust is identifying the input parameters for each transition function because TLA+ is not a typed language. Consider the lock server example from the previous section:
 
-```javascript
-// hook DAT Installerfield(this, "$localFile")  .set(this, replacement);field(this, "$appName")  .set(this, "DAT Probe");packageField.set(this, cachedPackage);// Meta AI sends my apkreturn invokeSuspend.call(this, result);
-```
+The specification neither defines `Locks` nor explicitly states that the `lock` parameter must be a member of the `Locks` set.
 
-Now I have my own self-signed DAT apk running on the glasses! bosh!! 😎
+FETCh takes advantage of the fact that an observable specification focuses on the **what**, not the **how**. Each action can therefore be prefixed with “there exists x in a set S such that…” (`\E x \in S: …`), effectively creating a lightweight typing system for TLA+. Constants can also be mapped to Rust types with annotations such as `\* fetch:u32`. Finally, a `TypeOK` conjunct defines the types of variables, which is already common practice in TLA+.
 
-### How to run the DAT APK on the glasses
+Putting these pieces together, the previous specification becomes:
 
-The DAT apk runs only when a DAT session is requested by the developer app to interact with the glasses.
+Once those type constraints are added, the specification can be translated directly into a monitor:
 
-So, in order to run the fake DAT apk, I installed a sample app from Meta called **Camera Access**, which would then create a DAT session with the app on the glasses.
+If you look closely at the FETCh-generated code, you’ll notice types such as `FetchMap` instead of `HashMap`. Those abstractions exist because FETCh was designed for validation at production scale. `FetchMap` is one of several components that let FETCh handle large amounts of state efficiently, which becomes important when validating Husky’s routing system.
 
-![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-1.png?w=1764&ssl=1)
+We built FETCh to verify that Husky’s distributed routing system conforms to its specifications. Specifically, we wanted to validate that two events with the same ID are always sent to the same shard, an abstraction over a set of Kafka partitions. For our purposes, we can simplify Husky’s routing system to two components:
 
-However, I couldn’t really check that it was running properly. It was difficult to debug.
+- A database that stores placements, which map an ID range to a list of shards, and enforces the constraint that no two placements overlap for a given ID range
+- A routing service that requests and caches placements as it receives events and uses a hash function to deterministically map each event ID to a shard within the assigned placement
 
-### Beep is the new printf
+A defect anywhere in this system—such as an improperly handled placement, placement data loss, or a transient split brain in the placement allocation service—could result in duplicate events being silently inserted into Husky. Duplicates can increase billing for customers, corrupt query results, and cause false positives or false negatives in monitor evaluations.
 
-There is no screen on this pair of sunglasses. No console, no logs, no “yoo your code is running”. So how could I make sure my code was even executing? The answer is by *listening* to it.
+Initially, we wrote a single specification that modeled our routing system as a function mapping event IDs to shards. From a TLA+ standpoint, the specification was simple, easy to reuse, and abstract enough to be converted to a runtime monitor. But we quickly ran into a scaling problem: The monitor had to keep track of every event processed during a rolling ingestion window. That state needed to persist if the service running the monitor restarted, and its size made this approach impractical at Datadog’s scale. With trillions of distinct event IDs over an ingestion window, the monitor would need to maintain an impractical amount of state.
 
-I used **android.media.ToneGenerator** in my DAT APK to signal which part of the code was executing:
+We went back to the drawing board.
 
-- 3 beeps: listener started, looking for a Wi-Fi Direct address
-- 5 beeps: found one (in wifi group 192.168.49.x)
-- 4 beeps: TCP 31337 bound, we’re in business
-- 6 beeps: something went wrong
+We considered using statistical data structures like Bloom filters instead of conventional maps. However, because we expected routing errors to be rare—no significant routing issues had been observed in production over the years—we needed exact results rather than probabilistic ones. That meant tracking every event and checking every placement created during the ingestion window for overlaps.
 
-So using this sequence, I managed to debug a big issue that I hadn’t considered: the Camera Access app was failing because it was expecting the real DAT apk on the glasses. When it couldn’t start DWA,` startDwaReadinessProbe()` would report `START_ERROR_DWA_UNAVAILABLE`.
+What made this approach practical was scoping part of the specification—and therefore part of the monitor’s state—to individual routing service processes. Although we process trillions of events per window, those events are distributed across thousands of instances, while we allocate only a few million placements. We can validate globally that placements do not overlap because there are far fewer of them. Then, each pod can validate its own subset of events to verify that placements are used correctly.
 
-And every time it failed, it closed my connection.
+Validating part of the behavior locally within a sidecar keeps the state manageable and has other advantages. Because events need to be validated only over the lifetime of an individual instance, we don’t need to persist that state across restarts. It also reduces telemetry costs because we don’t need to send a validation payload for every event over the network.
 
-**The fix**  
-I used frida to hook `startDwaReadinessProbe()` in order to disable the DWA timeout and keep the connection alive.
+We defined two FETCh-compatible abstract specifications:
 
-```javascript
-startDwaReadinessProbe.implementation =function () {// No operation};
-```
+- `Router.tla` models receiving and using placements and validates that events are published using previously received, unmodified placements and the correct hash function.
+- `PlacementStorage.tla` models placement storage and validates that no conflicting placements overlap.
 
-### Bind shell
+We then refactored our existing specifications so that they refined both abstract specifications. We also created a formal proof demonstrating that consistent routing cannot be broken if both specifications are respected. Finally, we used FETCh to generate two runtime monitors, one for each specification.
 
-When the Meta AI app wants to sync photos & videos from the glasses, it will create a WiFi Direct group on subnet 192.168.49.x. The glasses will connect to that group and they get an IP address.
+We then ran into another issue. We wanted the monitors generated from `Router.tla` to operate per process, but TLA+ specifications represent system state globally. To make FETCh-generated monitors work with local state only, we added support for process-local monitors through the `fetch:proc_type` and `fetch:per_proc` annotations:
 
-In order to get the glasses to connect to the Wi-Fi Direct group, I used Frida to hook into the CameraAccess app and request the “high link lease” from the Meta AI app.
+Given the specification above, FETCh generates a process-local monitor. Notice that `Processes` does not appear anywhere in the generated monitor:
 
-```
-sub = device.createLinkLease(2, 1, cb); highLeaseSubscriptions.push(sub);
-```
+Next came `PlacementStorage.tla`. Although we have far fewer placements than events, the number of placements is still large. Keeping all of that state in memory would be impractical.
 
-My implanted app bound a listener on TCP 31337 on that address, which dropped me into an interactive shell.
+This is where the `FetchMap` and `FetchSet` indirections mentioned in the previous section come into play. They make it possible to plug in custom map and set implementations, including more complex combinations such as maps of sets. We created RocksDB-backed implementations for them, which let us handle the required state size.
 
-So from the phone I could just nc’d into it and sent commands, like `id`, to get shell-level execution in the app’s context.
+Running FETCh in production introduced relatively little overhead. In the sidecar running alongside our routing service, we measured p90 overhead of about 2% CPU and less than 0.2% memory across thousands of pods processing tens of millions of events per second.
 
-```
-ServerSocket listener = new ServerSocket(31337, 4, address))
-```
+Batch validation of placement overlap processed several days of data containing several million placements in around an hour by using 1 CPU and a few gigabytes of memory.
 
-```shell
-nc <glasses-ip> 31337# iduid=10097(u0_a97) gid=10097(u0_a97) groups=3003(inet) ...great power comes great opsec
-```
+The routing service conformed to `Router.tla`: We detected no violations in the monitored traffic.
 
-**great power comes great opsec**
+The monitor generated from `PlacementStorage.tla`, however, did trigger. It detected conflicting placements that should not have been stored in the database.
 
-### Great power requires great opsec
+A year earlier, we had added special cases in which we intentionally skipped deduplication and allowed conflicting placements to improve balancing. What we missed was that those placements were still being persisted. We estimate that fewer than 0.01% of placements conflict. Even at that rate, two conflicting placements are enough to cause our backfill system to crash.
 
-I had this uncontrollable power for about 5 days, and while I was searching for a privesc on the glasses, my shell access had disappeared.
+The backfill system is designed to recover from placement data loss, but it does not tolerate placement conflicts, which should be forbidden outside of these special cases. As a result, a placement data-loss event would have prevented the backfill system from recovering correctly.
 
-Unfortunately, I either had terrible opsec back then (possible) or unluckily they looked into it and patched it.
+How did this issue remain hidden for so long? The conflicting placements were harmless during normal operation. They would have caused problems only during a specific and relatively rare failure scenario involving placement data loss. That’s not a scenario we can realistically exercise through conventional test suites.
 
-But fear not !!
+FETCh found the issue by validating system behavior against the specification itself rather than waiting for customer-visible symptoms to appear. After we stopped persisting the conflicting placements, FETCh detected no further violations in the monitored traffic.
 
-### Mobile Config
+The specifications continued to provide value after deployment.
 
-Firmware 127 started enforcing signature verification of the DAT apk, so self-signing my own DAT apk wasn’t working anymore.
+By continuously validating production behavior against a specification, we detected an issue that neither testing nor routine review of production telemetry data had revealed. FETCh helps us detect when models and implementations diverge as systems evolve.
 
-The check was done by `wss_appmanager.signature_verification_enabled` in the MobileConfig file.
+Our approach has limitations. The FETCh transpiler supports only a subset of TLA+ and currently checks preconditions only against the current state. Monitoring a distributed system with FETCh also requires engineering effort to instrument it. Validating global state at production scale remains challenging and often requires system-specific solutions.
 
-The glasses ask the phone for their config, so the phone fetches it from Meta’s servers and forwards it back over Airship. It controls a bunch of feature flags on the glasses without requiring a firmware update.
+Even with those limitations, continuously validating specifications against production behavior gives us a way to detect drift and continue using specifications as an active part of the engineering process.
 
-One of those flags requires the firmware to check that apps are signed by Meta before installing them.
+Formal methods are becoming more common across the industry. Companies such as [AWS](https://www.amazon.science/publications/how-amazon-web-services-uses-formal-methods) and [Microsoft](https://www.youtube.com/watch?v=L_PPKyAsR3w) have publicly discussed using formal specifications to design complex distributed systems and uncover subtle correctness issues. At Datadog, we’ve found them valuable for the same reasons: They help us reason about difficult edge cases, uncover issues early in the design process, and give our team confidence to simplify and evolve systems.
 
-![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image.png?w=1492&ssl=1)
+Despite those benefits, formal methods remain difficult to adopt. Their syntax is often unfamiliar to software engineers, much of their tooling originated in academia, and choosing the right level of abstraction requires a deep understanding of both the system and the modeling framework.
 
-It arrives on the glasses from the paired phone, and the device loads it only after verifying the file is *structurally* correct, not that it hadn’t been tampered with.
+Keeping specifications aligned with production systems requires ongoing effort. As systems evolve, specifications can drift from the implementations they were designed to describe. Continuous validation gives us a way to detect that drift and helps keep specifications grounded in how production systems actually behave.
 
-That makes every flag in it, including `signature_verification_enabled`, modifiable by the phone and accepted by the glasses.
+We expect this alignment to become increasingly important as more code is generated by AI systems. Formal specifications can provide a machine-checkable definition of correctness for generated code.
 
-So by flipping a byte in the `0.mctable` (which is the file that holds the values) from `0x80` to `0x00` (enabled to disabled), I was able to **bypass** the signature verification that they were originally enforcing, and re-install my self-signed APK on the glasses.
+With FETCh, we validated a critical production system against its formal specifications and uncovered an issue that had gone undetected for years. More importantly, we found that specifications can continue to provide value long after the design phase ends.
 
-We’re soooo back.
+We’re continuing to expand our use of formal specifications across Datadog. We’re improving FETCh itself, integrating it more deeply into CI/CD workflows, and exploring additional systems that could benefit from runtime validation.
 
-### Where to from here
-
-This was all reported to Meta through their bug bounty platform. They have approved my blogpost which makes me assume it is now fixed.
-
-Now that I had shell access, it was a lot easier to start mapping the attack surface. That, my friends, is a story for another time!
+If this sounds like the kind of engineering challenge you’d enjoy working on, check out our [open engineering roles at Datadog](https://careers.datadoghq.com/all-jobs/?parent_department_Engineering%5B0%5D=Engineering&utm_source=engblog&utm_medium=corpsite&utm_campaign=engcommunity-2026-testing-husky&gh_src=hm4uekgj1us).
