@@ -1,53 +1,75 @@
-We’re looking for a **senior software line specialist, in TypeScript**!
+This summer I participated in [the r/roguelikedev summer event
+where we write a Roguelike game](https://old.reddit.com/r/roguelikedev/wiki/python_tutorial_series)<sup>[1]</sup>, following one of the Roguelike
+coding tutorials. I’m not trying to learn coding, so I use this
+event to try learning something else. This year, one of the things
+I wanted to tackle was two-dimensional version control.
 
-ACME Inc. is a fast-growing startup helping small businesses monitor their financials. We work with business owners across the globe, turning their feedback into actionable insights. Backed by Maltese Falcon Capital, we recently raised a $15M Series A to bring effortless monitoring to every brick-and-mortar store.
+The tutorial we’re following has 14 chapters. I wanted to use
+version control while writing my code. But I *also* wanted to use
+version control to match the tutorial’s chapters:
 
-You’ll be joining a high-performance, close-knit team of AI natives! We’ve been AI-first for the past 2 years, with every part of the product agent-friendly and interconnected: design, development, QA, CI/CD, infra, data analysis. We like to say that our stack is English!
+At the end of the project, I want a history of changes I made
+while writing the tutorial (horizontal axis) and *also* a history of
+changes the reader should make while following the tutorial
+(vertical axis).
 
-While English has gotten us 99.5% of the way there, we’re in need of a hands-on engineer ready to close the final 0.5%. Over time, we’ve noticed some issues that are immune to prompts and catch agents in loops. Sometimes, the issue at hand gets fixed, but it results in another issue. This is where you step in. As a line specialist, your job will be to investigate and fix complex issues, primarily by reading the underlying code.
+I can get the structure I want by setting up one Git branch per chapter,
+pointing to the previous chapter as the parent. Then when I update
+chapter 1’s code, I can push that forwards into chapter 2, 3, etc.
 
-We’re looking for someone ready to open an IDE and dive deep into an unknown codebase — a fearless detective who is comfortable inspecting logs and database rows, and has the know-how to piece all the information together. The perfect candidate should be willing to work on a problem for hours, sometimes even days.
+However, the [Jujutsu version control system](https://docs.jj-vcs.dev/latest/git-comparison/)<sup>[2]</sup> can do this
+*automatically*. Instead of managing all the branches and merges, I
+can focus on the “writeup” column of the diagram, where I can edit
+any of the chapters at any time. Jujutsu will roll forward the
+changes from one chapter to the others. I decided to try it for
+this project. Other people have blogged about Jujutsu’s features;
+I’m going to focus on the two dimensional output I want.
 
-This is a new position for us. We expect someone who works autonomously, makes sound decisions independently and takes full ownership of their work. We are happy to help in any way we can (you’ll have access to agents’ reasoning traces), but ultimately we depend on your confidence in understanding the problem and shipping a solution.
+**Example**: While working on the dungeon generation chapter, I
+realized I could’ve made the tile data structure better. It was
+easy to make those changes happen *before* the dungeon code. In this
+diagram, the horizontal axis is time and the vertical axis is
+chapter. I went back and forth between dungeon generation and the
+tile map structure. Once I was happy with both of those, I moved
+on to a better data structure:
 
-### Your responsibilities
+![](https://www.redblobgames.com/blog/2026-09-27-jujutsu-experience/images/part-3.png?2026-09-27-13-31-40)
 
-- take over unresolved issues from agents
-- read the codebase, go over application logs, query the database
-- prepare, test, review and ship fixes by yourself
-- write postmortems for agent training
-- occasionally consult on unreleased features
-- onboard and mentor a future junior line specialist
+*Mostly forward, occasionally backward*
 
-### We think you’d be great if you…
+Ignore the colors; they were from a visualization tool.
 
-- have at least 5 years of pre-2022 TypeScript experience
-- are comfortable running tests manually and using a “debugger”
-- can reason from first principles
-- can work on a problem with sustained attention for hours
-- are autonomous and an independent thinker
+**Example**: While working on the field of view chapter, I found
+plenty of things I could’ve improved in earlier chapters. I had
+become comfortable enough with Jujutsu that my brain stopped
+thinking of commits as “set in stone” but instead as “I can fix
+that!” And I did.
 
-### Nice to have
+**Example**: Most of the changes are to the most recent chapters (bottom of this diagram). But occasionally I went back to earlier chapters (top of this diagram). The red shows that I had merge conflicts that I had to resolve before I went back to working on the recent chapters.
 
-- previous experience as a line specialist
-- DB administration experience (our agents say it’s Postgres)
-- AI prompting basics
+**Example**: As I became even more comfortable with making changes across commits, I came up with better names to use throughout the project. I wanted to make these changes from the beginning, so I used a combination of regular <kbd>jj edit</kbd>, which propagates changes forwards to later chapters, and the <kbd>jj absorb</kbd> command, which propagates changes *backwards* to earlier chapters.
 
-### Interview process
+This required a lot of cleanup. The changes didn’t have merge conflicts, but the resulting code didn’t always compile. If I changed `apple` to `zebra` in chapter 1, and I had used `apple` in chapter 2, Jujutsu wouldn’t know to change *that* name too. So I had to make those changes and test every chapter.
 
-1. CV screening
-2. HR phone screen
-3. In-house paper-and-pencil exam
-  - multiple-choice questions (e.g. you’re given a TypeScript expression, choose the correct result)
-  - explain concepts in your own words (for example, ACID)
-  - complete the code block
-  - find the bug in a function
-4. Live debugging assignment
-  - application with an intentional defect; candidates are required to find and fix the issue without the use of AI
-5. Culture fit interview
-6. CTO interview
-7. Offer
+**Example**: I *loved* that I can improve the version control change descriptions retroactively. Here’s me going back through all the change descriptions to format them consistently:
 
-We feel it prudent to point out that you will be allowed to work on one thing at a time in this role. While parallel development is the default, we understand line specialists prefer to tackle problems in a single-threaded manner, so we will do our best to provide a distraction-free environment for your best work.
+![](https://www.redblobgames.com/blog/2026-09-27-jujutsu-experience/images/jujutsu-rebase.png?2026-09-27-13-32-00)
 
-To be clear, this role does **not** include feature development. You’re welcome to look at our AI-native listings if you have more interest in such work!
+*Editing everything*
+
+**Thoughts**: It’s hard to learn by just reading about something. For this project I wanted to try doing lots of things to see what worked well and what didn’t. This project is a bit unusual in that I’m trying to not only produce a final version of the game, but also produce 50 intermediate versions that all run, *and* have clean code that I can present in a tutorial series.
+
+![](https://www.redblobgames.com/blog/2026-09-27-jujutsu-experience/images/jujutsu-types-all.png?2026-09-27-13-31-51)
+
+*complete project history*
+
+I think Jujutsu was a reasonable tool for this project. I can use it for developing, and also export to Git so that other people don’t have to use Jujutsu. [The GitHub repository](https://github.com/redblobgames/2634-roguelikedev)<sup>[3]</sup> has 54 git commits, not the ~5000 internal Jujutsu commits.
+
+The main downside for me so far is that a lot of things happen
+automatically and I couldn’t keep track of them all. I need
+to get better at understanding what it’s doing behind the scenes
+so that I can use it with more confidence while avoiding some of
+the pitfalls.
+
+The resulting game is [playable on the web](https://www.redblobgames.com/x/2634-roguelike-dev/). I wrote
+notes but didn’t write a tutorial this time.

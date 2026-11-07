@@ -1,195 +1,169 @@
-Last week I attended [IFL2026](https://ifl26.cse.chalmers.se/), which was
-probably one of the best conference experiences I have ever had. One of the many
-good presentations was by [Michael Haddon](https://michael.haddon.me/), who
-presented [The Replay
-Lattice](https://michael.haddon.me/research/replay-lattice), which is a type
-system for floating-point reproducibility. The type system was presented for a
-demonstration language called Lane, but it inspired me to think more carefully
-about nondeterminism in Futhark (there is some), and what it might cost to get
-rid of it.
+Back in July I wanted to check out the pwn2own targets for 2026. Since the rules hadn’t been released yet, I decided I would check last year’s targets in the hope that it would be similar.
 
-I often use the terms “determinism” or “deterministic” when explaining why I
-think data parallel programming is such a good paradigm, so perhaps it is
-surprising to see me write a blog post about nondeterminism in Futhark. But as
-is so often the case with such bold promises, they often tend to get a little
-weaker once you look closely enough. Michael Haddon’s work defines some
-nomenclature that is helpful for this discussion:
+Imagine my surprise when I managed to get arbitrary code execution on the glasses and they weren’t in the wearables category anymore :’).
 
-- **Exact** means that the computation produces the same result every time, guaranteed. (Michael describes this as matching the “serial reference”, which I think is not the best way of looking at it, but that’s a question of perspective)
-- **Replay** means that if you rerun the computation with the same “schedule” (in some sense “machine”), you will get the same result, but other machines may give different results.
-- **Approx** means potentially nondeterministic results.
+It’s fine though because I still reported it to meta, and after fighting the payout a few times, we settled (ok there was no settling but I agreed to the new payout).
 
-The kind of nondeterminism we are talking about here is not the kind of
-free-form nondeterminism that arises from classic shared-state concurrent
-programming. Indeed, both Lane and Futhark are pretty much exclusively concerned
-with the kind of nondeterminism that arises from floating-point rounding errors.
-The simplest example is the non-associativity of addition:
+Before attempting this, I remember telling my friend about it. They said “ooof good luck. These are usually pretty hardened and no-one attempted them last year at p2o.”
 
-```
-> (0.1 + 0.2) + 0.3 == 0.1 + (0.2 + 0.3)
-false
+My response: Watch me.
+
+![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-3.png?w=3000&ssl=1)
+
+### Acquiring glasses because who’s paying €500 (not me)
+
+First step was acquiring the glasses. I am lucky that my brother-in-law had a pair he didn’t really use, so I could steal them for a few weeks.
+
+### First recon
+
+I installed the Meta AI app, which is the app to control the glasses (connecting them, synchronizing pictures, and so on).
+
+In order to extract the firmware, I obviously wasn’t going to tear the glasses apart and start fiddling with probes n shit. So I went for extracting it using the OTA (over-the-air) update.
+
+When connecting the glasses for the first time, it immediately offered to update the firmware. So naturally, I was intrigued. Using JADX, I reversed the Meta AI app to see how the update is fetched.
+
+`OtaArtifactFetcher` prepares and sends the update request. The response is converted into an `OTAArtifactInfo` object containing metadata such as the device/build information.
+
+```java
+arrayListA0y2.add(new OTAArtifactInfo([...], downloadUri, [...]));
 ```
 
-If we have an array of numbers we need to sum, then the result depends on the
-order in which you sum them. When parallelising a summation, you often do things
-like split the numbers into blocks, sum each block on a separate processor, then
-combine the partial results. This changes the order of addition, and hence the
-result. Now, an important point is that there is no reason to think that the
-parallelised result is numerically *worse* than a serial left-to-right
-summation, but it will be different. Further, an efficient implementation will
-likely choose a number of chunks somewhat proportional to the number of
-processors on the machine, which means the result may also be different on other
-machines (but again, *not necessarily worse*). This corresponds to the “Replay”
-class of nondeterminism. Finally, the partial results may be combined using
-[atomic instructions](https://futhark-lang.org/blog/2024-09-23-faster-opencl-float-atomics.html), which may be
-resolved in a different order when the program is rerun on the same machine.
-This is then “Approx”.
-
-Even in this simple example of summing a bunch of numbers, we encounter both
-classes of nondeterminism. Note that none of them are “race conditions” in the
-usual sense of the program sometimes just *malfunctioning*: the point is that
-the result changes, but given that the result is in some sense already “wrong”
-(due to roundoff error), the main issue is that there are cases where we care
-about getting the *same* “wrong” result every time.
-
-So in Futhark, ostensibly a deterministic language, where does the
-nondeterminism come from? There are a few sources. Some of them come when
-programmers violate mandated constraints (but which are unchecked for various
-reasons), and others are basically down to floating-point roundoff error.
-
-### [Language abuse](https://futhark-lang.org/blog/2026-11-04-nondeterminism.html#language-abuse)
-
-Let us start by considering language abuse. The worst but also least interesting
-case is using the `#[unsafe]` [attribute](https://futhark-lang.org/blog/2020-06-28-attributes-in-futhark.html)
-to disable safety checks, after which you can do arbitrary memory reads and
-[writes](https://futhark-lang.org/blog/2022-06-13-uniqueness-types.html). This can be avoided by passing
-`--safe` to the compiler, or perhaps by just not doing this kind of cowboy
-coding in the first place. If you are a good enough programmer that your code
-does not need any safety checks, why not just go and write in C? Those folks
-never make mistakes.
-
-Another more insidious problem is related to the `scatter` construct. The
-semantics of an expression `scatter d is vs` are simple enough, and can be
-expressed with this imperative pseudocode:
+I then notice this assignment in `OTAArtifactInfo`():
 
 ```
-for (i,v) in zip(is, vs):
-  res[i] = v
+this.downloadUri = str3;
 ```
 
-That is, `scatter d is vs` pairs the indexes in `is` with the corresponding
-values in `vs` and writes each value to the corresponding index. It is a
-parallel random-access write. To ensure that the writes can indeed be written in
-parallel, Futhark requires that `is` contains no duplicates, or in a slight
-weakening, that if `is` contains duplicates, then the corresponding values are
-also identical. This is *not* checked dynamically, and a program can get in an
-awful lot of trouble by violating this property. Which write “wins” is
-unpredictable - in the worst case, you can even get a “torn” write that combines
-two different values.
+I found that I could just hook into `OTAArtifactInfo` and print `str3` which contained the CDN update URL :))) and then I just printed it.
 
-This behaviour of `scatter` is thorny, and even experienced Futhark programmers
-sometimes make this mistake. The reason it has no safety checks is twofold:
-
-1. `scatter` is a [fundamental construct](https://futhark-lang.org/blog/2019-04-10-what-is-the-minimal-basis-for-futhark.html) used in most sophisticated parallel algorithms, and so its performance is paramount.
-2. I’m not sure how to detect duplicate writes in a way that does not violate the [cost model](https://futhark-lang.org/blog/2022-01-27-cost-models-are-contracts.html) (although [`scatter` is already a bit iffy in that regard](https://futhark-lang.org/blog/2026-02-04-when-cost-models-hit-the-wall-clock.html)). Basically, the cost of `scatter` must be proportional to the number of elements written, not to the total size of the target array, and that makes it difficult to construct appropriate auxiliary structures for safety checks.
-
-And yes, I do realise the irony of insisting on an unsafe `scatter` after making
-fun of C programmers for using an unsafe language.
-
-Anyway, let’s move on to `reduce`. Parallel reductions, just like parallel
-scans, histograms, and so on, work only if the provided operator is
-[associative](https://en.wikipedia.org/wiki/Operator_associativity) and in some
-cases also commutative. This is documented but unchecked - in Futhark you can
-do a `reduce` with an arbitrary operator of the right type, and it just might
-give you nonsensical or nondeterministic results. It is a common error among new
-Futhark programmers to treat `reduce` as a general fold and use operators that
-are not associative, but it seems not to show up so much among more experienced
-programmers. The reason we do not check for associativity is that [it is
-impossible](https://en.wikipedia.org/wiki/Rice%27s_theorem), and even when it is
-possible it remains hard - well beyond what a practical type checker is capable
-of. It is not too hard to [empirically test
-associativity](https://futhark-lang.org/examples/testing-associativity.html) and other properties, and so it seems
-that this source of nondeterminism is not so problematic in practice.
-
-That actually concludes the list of “true” nondeterminism in Futhark, and in
-both cases we can wash our hands and blame the programmer. Of course, there is
-one rather important caveat here…
-
-Strictly speaking, floating-point addition is not associative, and so we could
-just declare that `reduce (+) 0` on floating-point numbers is simply wrong.
-However, Futhark is not mainly intended as a framework for explaining why the
-program you wrote is wrong, but rather as a practical tool for parallel
-programming, and clearly people *want* to sum floating-point numbers. Indeed,
-summing and multiplying floating-point numbers is worth trillions of currency
-units these days!
-
-As such, Futhark’s `reduce` (and similar functions) do not say that the result
-you get back is completely arbitrary in case the provided operator is
-nonassociative. Instead, they say that the result you get back is some
-*arbitrary ordering* of applying the operator to the input elements. The precise
-ordering is unspecified (we’ll return to this), but it will be *some order*, and
-if the function is associative, it just so happens that the order *does not
-matter for the final result*.
-
-The application order chosen by Futhark depends on the backend and the hardware.
-With the `c` backend, it will be a straightforward left-to-right loop across the
-input array. With the GPU backend, it will split the input into chunks, sum them
-separately, and combine the partial results. The number of chunks depends on
-runtime queries of the GPU hardware topology, and can also be configured by the
-user via [tuning parameters](https://futhark-lang.org/blog/2026-02-03-tuning-params.html). Since the chunking
-strategy (the “schedule”) depends on the hardware and the input size, repeatedly
-re-running the same reduction on the same system will consistently give the same
-result - the “Replay” case in Michael Haddon’s terminology. This is not a
-language guarantee, but it is how it is implemented right now.
-
-A reasonable question is whether we could implement summation in a different way
-that will *always* give the same result, no matter the input. Indeed, this is
-possible. Consider for simplicity that the input array is a power of two. We can
-then implement reduction by repeatedly splitting the array in half, combining
-the two halves using the provided operator, and continuing until only a single
-element is left:
-
-```
-def sum_tree (as: []f64): f64 =
-  let as' = loop as while length as > 1 do
-              let m = length as / 2
-              in map2 (+) (take m as)
-                          (take m (drop m as))
-
-  in as'[0]
+```javascript
+Java.perform(function () {var OTAArtifactInfo = Java.use("com.facebook.wearable.common.ota.models.OTAArtifactInfo");OTAArtifactInfo["$init"].implementation = function (l, j, oTAArtifactType, ..., str3, ...) {   this["$init"](l, j, oTAArtifactType, ..., str3, ...);    console.log("downloadUri:");    console.log(str3);};});
 ```
 
-We can generalise this to arbitrary operators (even non-commutative ones) and
-non-power-of-two sizes with a bit more complexity. Note that this implementation
-does not use any Futhark constructs that are nondeterministic, hence *by
-construction* it is also fully deterministic. Will it produce the same result as
-a sequential `foldl (+) 0`? No, because the order of application is different,
-but if you compile `sum_tree` with the `c` backend then it will produce
-*exactly* the same results as if you compile with the `cuda` backend. This is
-the “Exact” case.
+![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-6.png?w=1462&ssl=1)
 
-There is a reason we don’t implement `reduce` like that, of course. In a quick
-experiment for summing 100 million numbers, I observe that using `reduce (+) 0`
-is almost *3x* faster than `sum_tree` on an MI100 GPU. The gap can be narrowed
-by using blocking to reduce the number of GPU kernels necessary, but ultimately
-the fastest way to perform a reduction does depend on fine details of the
-hardware, and when your operator is not truly associative, that will result in
-observable differences.
+That URL contained a zip, so that looked like the right candidate. **HOWEVER**, this was around 156 MB and its payload depended on the device’s existing build. It was an incremental update… I wanted the full update.
 
-The same situation arises with Futhark’s other basic building blocks. I suspect
-`reduce` is actually the *best* case, in the sense that a hand-written version
-can approach the performance of the built-in one. For `scan`, I know that the
-compiler’s fancy [decoupled
-lookback](https://research.nvidia.com/sites/default/files/pubs/2016-03_Single-pass-Parallel-Prefix/nvr-2016-002.pdf)
-is much faster than anything that can be written in Futhark itself, and for
-`reduce_by_index` a fully deterministic implementation involves a [sort and a
-segmented
-reduction](https://futhark-lang.org/blog/2018-09-21-futhark-0.7.1-released.html#histogram-computations), which
-is *wildly* slower than the code produced by the compiler, which makes careful
-use of atomic instructions.
+**Getting the full firmware update**
 
-This does make me wonder if one could write a Futhark library that replaces all
-the SOAC implementations with guaranteed deterministic implementations, and what
-the performance of that might be across the [benchmark
-suite](https://github.com/diku-dk/futhark-benchmarks), but that will have to
-wait for a future post.
+Decompiling further code revealed a GraphQL input named `device_firmware_full_update_only`. The app normally populated it with false, so I hooked the generic method responsible for adding GraphQL fields and replaced the value with true only when the field name matched exactly. This allowed me to fetch the full firmware update URL.
+
+I was then able to retrieve the zip from the CDN. Unzipping it showed me that this was an Android update, including the **payload.bin**.
+
+![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-4.png?w=1230&ssl=1)
+
+Using [payload-dumper](https://github.com/ssut/payload-dumper-go) on payload.bin, I could dump the images and mount them into a filesystem.
+
+![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-5-edited.png?w=1203&ssl=1)
+
+Firmware was acquired but how do I get a shell on the glasses?
+
+### Device Access Toolkit
+
+There is a developer mode on the Meta AI app that allows devs to write apps that can interact with the glasses. It is called DAT SDK (Device Access Toolkit).
+
+In order to do that, you need to install the DAT APK on the glasses. The MetaAI app basically downloads it in real-time and fetches the DAT application to install it on the device. Do you see where I am going with this?
+
+![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-2.png?w=1668&ssl=1)
+
+### Installing self-signed app on the glasses
+
+Up until and including firmware 126, the firmware did not verify that the DAT APK was signed by Meta. So it was theoretically possible to install any app on the glasses because there was no verification as to if it was a legit app or not.
+
+An easy-not-so-easy swap was possible. I could, using frida, swap out the legit DAT application for a self-signed application of my own. That meant I could run any app on the glasses.
+
+```javascript
+// hook DAT Installerfield(this, "$localFile")  .set(this, replacement);field(this, "$appName")  .set(this, "DAT Probe");packageField.set(this, cachedPackage);// Meta AI sends my apkreturn invokeSuspend.call(this, result);
+```
+
+Now I have my own self-signed DAT apk running on the glasses! bosh!! 😎
+
+### How to run the DAT APK on the glasses
+
+The DAT apk runs only when a DAT session is requested by the developer app to interact with the glasses.
+
+So, in order to run the fake DAT apk, I installed a sample app from Meta called **Camera Access**, which would then create a DAT session with the app on the glasses.
+
+![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-1.png?w=1764&ssl=1)
+
+However, I couldn’t really check that it was running properly. It was difficult to debug.
+
+### Beep is the new printf
+
+There is no screen on this pair of sunglasses. No console, no logs, no “yoo your code is running”. So how could I make sure my code was even executing? The answer is by *listening* to it.
+
+I used **android.media.ToneGenerator** in my DAT APK to signal which part of the code was executing:
+
+- 3 beeps: listener started, looking for a Wi-Fi Direct address
+- 5 beeps: found one (in wifi group 192.168.49.x)
+- 4 beeps: TCP 31337 bound, we’re in business
+- 6 beeps: something went wrong
+
+So using this sequence, I managed to debug a big issue that I hadn’t considered: the Camera Access app was failing because it was expecting the real DAT apk on the glasses. When it couldn’t start DWA,` startDwaReadinessProbe()` would report `START_ERROR_DWA_UNAVAILABLE`.
+
+And every time it failed, it closed my connection.
+
+**The fix**  
+I used frida to hook `startDwaReadinessProbe()` in order to disable the DWA timeout and keep the connection alive.
+
+```javascript
+startDwaReadinessProbe.implementation =function () {// No operation};
+```
+
+### Bind shell
+
+When the Meta AI app wants to sync photos & videos from the glasses, it will create a WiFi Direct group on subnet 192.168.49.x. The glasses will connect to that group and they get an IP address.
+
+In order to get the glasses to connect to the Wi-Fi Direct group, I used Frida to hook into the CameraAccess app and request the “high link lease” from the Meta AI app.
+
+```
+sub = device.createLinkLease(2, 1, cb); highLeaseSubscriptions.push(sub);
+```
+
+My implanted app bound a listener on TCP 31337 on that address, which dropped me into an interactive shell.
+
+So from the phone I could just nc’d into it and sent commands, like `id`, to get shell-level execution in the app’s context.
+
+```
+ServerSocket listener = new ServerSocket(31337, 4, address))
+```
+
+```shell
+nc <glasses-ip> 31337# iduid=10097(u0_a97) gid=10097(u0_a97) groups=3003(inet) ...great power comes great opsec
+```
+
+**great power comes great opsec**
+
+### Great power requires great opsec
+
+I had this uncontrollable power for about 5 days, and while I was searching for a privesc on the glasses, my shell access had disappeared.
+
+Unfortunately, I either had terrible opsec back then (possible) or unluckily they looked into it and patched it.
+
+But fear not !!
+
+### Mobile Config
+
+Firmware 127 started enforcing signature verification of the DAT apk, so self-signing my own DAT apk wasn’t working anymore.
+
+The check was done by `wss_appmanager.signature_verification_enabled` in the MobileConfig file.
+
+The glasses ask the phone for their config, so the phone fetches it from Meta’s servers and forwards it back over Airship. It controls a bunch of feature flags on the glasses without requiring a firmware update.
+
+One of those flags requires the firmware to check that apps are signed by Meta before installing them.
+
+![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image.png?w=1492&ssl=1)
+
+It arrives on the glasses from the paired phone, and the device loads it only after verifying the file is *structurally* correct, not that it hadn’t been tampered with.
+
+That makes every flag in it, including `signature_verification_enabled`, modifiable by the phone and accepted by the glasses.
+
+So by flipping a byte in the `0.mctable` (which is the file that holds the values) from `0x80` to `0x00` (enabled to disabled), I was able to **bypass** the signature verification that they were originally enforcing, and re-install my self-signed APK on the glasses.
+
+We’re soooo back.
+
+### Where to from here
+
+This was all reported to Meta through their bug bounty platform. They have approved my blogpost which makes me assume it is now fixed.
+
+Now that I had shell access, it was a lot easier to start mapping the attack surface. That, my friends, is a story for another time!

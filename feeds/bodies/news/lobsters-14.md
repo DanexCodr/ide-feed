@@ -1,164 +1,195 @@
-That is a real ping, to a real box, and it got a real reply. The thing after `ping -c1` is a mix of LCD segmented digits, superscripts, subscripts, circled digits, a double-struck `X` and math-alphabet digits, with nine invisible characters that my terminal drew as white boxes because it had no idea what else to do with them. Paste it into a terminal and it looks like line noise. Hand it to `getaddrinfo()` and it is `69.30.206.130`.
+Last week I attended [IFL2026](https://ifl26.cse.chalmers.se/), which was
+probably one of the best conference experiences I have ever had. One of the many
+good presentations was by [Michael Haddon](https://michael.haddon.me/), who
+presented [The Replay
+Lattice](https://michael.haddon.me/research/replay-lattice), which is a type
+system for floating-point reproducibility. The type system was presented for a
+demonstration language called Lane, but it inspired me to think more carefully
+about nondeterminism in Futhark (there is some), and what it might cost to get
+rid of it.
 
-Every example in this post points at the same server, `69.30.206.130`. It answers ping, and it serves exactly one page, `/poc.html`, on its bare IP so you can prove the HTTP side works too. Every screenshot is real output, captured on Ubuntu 24.04 with glibc 2.39, iputils 20240117 and curl 8.5.0.
+I often use the terms “determinism” or “deterministic” when explaining why I
+think data parallel programming is such a good paradigm, so perhaps it is
+surprising to see me write a blog post about nondeterminism in Futhark. But as
+is so often the case with such bold promises, they often tend to get a little
+weaker once you look closely enough. Michael Haddon’s work defines some
+nomenclature that is helpful for this discussion:
 
-Start with the boring part, which is already weirder than most people expect. An IPv4 address is a 32-bit unsigned integer. The dotted quad is just how we have agreed to write it down. The parser that turns text into that integer is `inet_aton()`, and its rules date back to 4.2BSD. In glibc it lives in `resolv/inet_addr.c`, and each part is read like this:
+- **Exact** means that the computation produces the same result every time, guaranteed. (Michael describes this as matching the “serial reference”, which I think is not the best way of looking at it, but that’s a question of perspective)
+- **Replay** means that if you rerun the computation with the same “schedule” (in some sense “machine”), you will get the same result, but other machines may give different results.
+- **Approx** means potentially nondeterministic results.
 
-```
-/* Collect number up to ``.''.  Values are specified as for C:
-   0x=hex, 0=octal, isdigit=decimal.  */
-...
-unsigned long ul = __strtoul_internal (cp, &endp, 0, 0);
-```
-
-Base 0 means `strtoul()` picks the base from the prefix: `0x` is hex, a leading `0` is octal, anything else is decimal. Each dotted part gets its own prefix, so you can mix bases inside one address. Then there is the part count:
-
-```
-/* Internet format:
-     a.b.c.d
-     a.b.c    (with c treated as 16 bits)
-     a.b      (with b treated as 24 bits).  */
-```
-
-One part is the whole 32-bit number. Two parts are an 8-bit network and a 24-bit host. Three parts are 8, 8 and 16 bits. These were meant for the old class A/B/C networks, and nobody ever took them out. Leading zeros are unlimited too, as long as the value still fits.
-
-| Form | 69.30.206.130 as |
-| --- | --- |
-| Decimal integer | `1159646850` |
-| Hex integer | `0x451ece82` |
-| Octal integer | `010507547202` |
-| Dotted hex | `0x45.0x1e.0xce.0x82` |
-| Dotted octal | `0105.036.0316.0202` |
-| 3 parts, last one 16 bits | `69.30.52866` |
-| 2 parts, last one 24 bits | `69.2018946` or `69.0x1ece82` |
-| Mixed bases | `0x45.036.206.0202` |
-| Over-padded hex | `0x00000000000000451ece82` |
-
-Everything above is well known. It is the reason SSRF filters are supposed to parse addresses instead of regexing them. The fun starts with a flag most people never look at: `AI_IDN`.
-
-`AI_IDN` is a glibc extension that tells `getaddrinfo()` the name might be an internationalized domain name, so it should be converted to ASCII before lookup. ping sets it, because iputils is built with IDN support. Here is what glibc does with it, in `sysdeps/posix/getaddrinfo.c`:
+The kind of nondeterminism we are talking about here is not the kind of
+free-form nondeterminism that arises from classic shared-state concurrent
+programming. Indeed, both Lane and Futhark are pretty much exclusively concerned
+with the kind of nondeterminism that arises from floating-point rounding errors.
+The simplest example is the non-associativity of addition:
 
 ```
-if (req->ai_flags & AI_IDN)
-  {
-    char *out;
-    result = __idna_to_dns_encoding (name, &out);
-    if (result != 0)
-      return -result;
-    name = out;
-    malloc_name = true;
-  }
-
-if ((result = text_to_binary_address (name, req, &res)) != 0)
-  goto free_and_return;
+> (0.1 + 0.2) + 0.3 == 0.1 + (0.2 + 0.3)
+false
 ```
 
-Look at the order. The IDNA conversion runs **first**, and the numeric address parser only sees the output. `__idna_to_dns_encoding()` hands the string to libidn2, which applies [UTS #46](https://www.unicode.org/reports/tr46/) mapping. UTS #46 exists so that a user typing a domain in a different width or style still lands on the same name. To do that it folds a huge range of compatibility characters down to plain ASCII. That table does not care that the result is going to be read as a number.
+If we have an array of numbers we need to sum, then the result depends on the
+order in which you sum them. When parallelising a summation, you often do things
+like split the numbers into blocks, sum each block on a separate processor, then
+combine the partial results. This changes the order of addition, and hence the
+result. Now, an important point is that there is no reason to think that the
+parallelised result is numerically *worse* than a serial left-to-right
+summation, but it will be different. Further, an efficient implementation will
+likely choose a number of chunks somewhat proportional to the number of
+processors on the machine, which means the result may also be different on other
+machines (but again, *not necessarily worse*). This corresponds to the “Replay”
+class of nondeterminism. Finally, the partial results may be combined using
+[atomic instructions](https://futhark-lang.org/blog/2024-09-23-faster-opencl-float-atomics.html), which may be
+resolved in a different order when the program is rerun on the same machine.
+This is then “Approx”.
+
+Even in this simple example of summing a bunch of numbers, we encounter both
+classes of nondeterminism. Note that none of them are “race conditions” in the
+usual sense of the program sometimes just *malfunctioning*: the point is that
+the result changes, but given that the result is in some sense already “wrong”
+(due to roundoff error), the main issue is that there are cases where we care
+about getting the *same* “wrong” result every time.
+
+So in Futhark, ostensibly a deterministic language, where does the
+nondeterminism come from? There are a few sources. Some of them come when
+programmers violate mandated constraints (but which are unchecked for various
+reasons), and others are basically down to floating-point roundoff error.
+
+### [Language abuse](https://futhark-lang.org/blog/2026-11-04-nondeterminism.html#language-abuse)
+
+Let us start by considering language abuse. The worst but also least interesting
+case is using the `#[unsafe]` [attribute](https://futhark-lang.org/blog/2020-06-28-attributes-in-futhark.html)
+to disable safety checks, after which you can do arbitrary memory reads and
+[writes](https://futhark-lang.org/blog/2022-06-13-uniqueness-types.html). This can be avoided by passing
+`--safe` to the compiler, or perhaps by just not doing this kind of cowboy
+coding in the first place. If you are a good enough programmer that your code
+does not need any safety checks, why not just go and write in C? Those folks
+never make mistakes.
+
+Another more insidious problem is related to the `scatter` construct. The
+semantics of an expression `scatter d is vs` are simple enough, and can be
+expressed with this imperative pseudocode:
 
 ```
-2473  ; mapped  ; 0032 0030  # CIRCLED NUMBER TWENTY             ⑳ -> 20
-325A  ; mapped  ; 0033 0030  # CIRCLED NUMBER THIRTY             ㉚ -> 30
-24EA  ; mapped  ; 0030       # CIRCLED DIGIT ZERO                ⓪ -> 0
-1FBF6 ; mapped  ; 0036       # SEGMENTED DIGIT SIX               🯶 -> 6
-1D7CE ; mapped  ; 0030       # MATHEMATICAL BOLD DIGIT ZERO      𝟎 -> 0
-1D501 ; mapped  ; 0078       # MATHEMATICAL BOLD SCRIPT SMALL X  𝔁 -> x
-216D  ; mapped  ; 0063       # ROMAN NUMERAL ONE HUNDRED         Ⅽ -> c
-1D49  ; mapped  ; 0065       # MODIFIER LETTER SMALL E           ᵉ -> e
-3002  ; mapped  ; 002E       # IDEOGRAPHIC FULL STOP             。 -> .
+for (i,v) in zip(is, vs):
+  res[i] = v
 ```
 
-Digits are covered, and so are the dots. The `x` in a hex prefix and the `a`–`f` hex letters are covered too, which means every one of the classic forms above can be rebuilt out of Unicode lookalikes:
+That is, `scatter d is vs` pairs the indexes in `is` with the corresponding
+values in `vs` and writes each value to the corresponding index. It is a
+parallel random-access write. To ensure that the writes can indeed be written in
+parallel, Futhark requires that `is` contains no duplicates, or in a slight
+weakening, that if `is` contains duplicates, then the corresponding values are
+also identical. This is *not* checked dynamically, and a program can get in an
+awful lot of trouble by violating this property. Which write “wins” is
+unpredictable - in the worst case, you can even get a “torn” write that combines
+two different values.
 
-Circled two-digit numbers are a nice touch: `⑥⑨.㉚.⑳⑥.⑬⓪` is four characters shorter than the plain address it decodes to. Hex works the same way, with a bold script `x` for the prefix, a Roman numeral one hundred standing in for `c`, and modifier letters for `e`:
+This behaviour of `scatter` is thorny, and even experienced Futhark programmers
+sometimes make this mistake. The reason it has no safety checks is twofold:
 
-Notice that ping echoes back `0x451ece82` in its `PING` line. ping also asks for `AI_CANONIDN`, so what it prints is the name *after* IDNA mapping. That is the clearest view you will get of what the resolver actually parsed.
+1. `scatter` is a [fundamental construct](https://futhark-lang.org/blog/2019-04-10-what-is-the-minimal-basis-for-futhark.html) used in most sophisticated parallel algorithms, and so its performance is paramount.
+2. I’m not sure how to detect duplicate writes in a way that does not violate the [cost model](https://futhark-lang.org/blog/2022-01-27-cost-models-are-contracts.html) (although [`scatter` is already a bit iffy in that regard](https://futhark-lang.org/blog/2026-02-04-when-cost-models-hit-the-wall-clock.html)). Basically, the cost of `scatter` must be proportional to the number of elements written, not to the total size of the target array, and that makes it difficult to construct appropriate auxiliary structures for safety checks.
 
-## Full Chaos
+And yes, I do realise the irony of insisting on an unsafe `scatter` after making
+fun of C programmers for using an unsafe language.
 
-Nothing says a single address has to stick to one style. The mapping is done one character at a time, so every digit, dot and hex letter can come from a different block. I wrote a small script that reads `IdnaMappingTable.txt`, collects every code point that maps to `0`–`9`, `a`–`f`, `x` or `.`, and rebuilds each classic form by picking a random lookalike for every character: fullwidth, superscript, subscript, circled, math bold, sans-serif, monospace, double-struck, script, fraktur, Roman numerals, and the LCD segmented digits from `🯰` to `🯹`. Every result resolved:
+Anyway, let’s move on to `reduce`. Parallel reductions, just like parallel
+scans, histograms, and so on, work only if the provided operator is
+[associative](https://en.wikipedia.org/wiki/Operator_associativity) and in some
+cases also commutative. This is documented but unchecked - in Futhark you can
+do a `reduce` with an arbitrary operator of the right type, and it just might
+give you nonsensical or nondeterministic results. It is a common error among new
+Futhark programmers to treat `reduce` as a general fold and use operators that
+are not associative, but it seems not to show up so much among more experienced
+programmers. The reason we do not check for associativity is that [it is
+impossible](https://en.wikipedia.org/wiki/Rice%27s_theorem), and even when it is
+possible it remains hard - well beyond what a practical type checker is capable
+of. It is not too hard to [empirically test
+associativity](https://futhark-lang.org/examples/testing-associativity.html) and other properties, and so it seems
+that this source of nondeterminism is not so problematic in practice.
 
-Here are a few more, all `69.30.206.130`, ready to paste:
+That actually concludes the list of “true” nondeterminism in Futhark, and in
+both cases we can wash our hands and blame the programmer. Of course, there is
+one rather important caveat here…
 
-```
-ping -c1 𝟼𝟵．🯳𝟶。𝟚𝟘🯶．𝟏𝟥⓪  # 69.30.206.130
-ping -c1 🯰𝖝⁴𝟝｡⁰𝚇𝟙𝗲｡０ₓ𝖢ｅ｡⓪𝑋𝟖🯲  # 0x45.0x1e.0xce.0x82
-ping -c1 𝟢𝓧④𝟱₁ᵉⒸ𝘌🯸🯲  # 0x451ece82
-ping -c1 ０１⓪₅｡𝟘🯳𝟞．₀３𝟙𝟞。𝟶𝟤₀𝟮  # 0105.036.0316.0202
-ping -c1 𝟞𝟗。𝟑𝟢｡🯵𝟤₈𝟼６  # 69.30.52866
-ping -c1 𝟨⑨．𝟬𝕩𝟏Ｅ𝐜ᵉ🯸𝟸  # 69.0x1ece82
-ping -c1 ⁰𝑋⁴5．🯰３₆。⁵₂₈𝟲🯶  # 0x45.036.52866
-ping -c1 𝟣🯱𝟻⑨6𝟜⑥🯸𝟝𝟎  # 1159646850
-ping -c1 𝟬ｘ🯴𝟝．𝟹𝟬．₀3𝟣６｡𝟎Ⅹ🯸𝟚  # 0x45.30.0316.0x82
-```
+Strictly speaking, floating-point addition is not associative, and so we could
+just declare that `reduce (+) 0` on floating-point numbers is simply wrong.
+However, Futhark is not mainly intended as a framework for explaining why the
+program you wrote is wrong, but rather as a practical tool for parallel
+programming, and clearly people *want* to sum floating-point numbers. Indeed,
+summing and multiplying floating-point numbers is worth trillions of currency
+units these days!
 
-UTS #46 does not only map characters. It also has a category called **ignored**, and an ignored code point is simply deleted from the input:
+As such, Futhark’s `reduce` (and similar functions) do not say that the result
+you get back is completely arbitrary in case the provided operator is
+nonassociative. Instead, they say that the result you get back is some
+*arbitrary ordering* of applying the operator to the input elements. The precise
+ordering is unspecified (we’ll return to this), but it will be *some order*, and
+if the function is associative, it just so happens that the order *does not
+matter for the final result*.
 
-```
-00AD          ; ignored  # SOFT HYPHEN
-200B          ; ignored  # ZERO WIDTH SPACE
-2064          ; ignored  # INVISIBLE PLUS
-E0100..E01EF  ; ignored  # VARIATION SELECTOR-17..VARIATION SELECTOR-256
-1BCA0..1BCA3  ; ignored  # SHORTHAND FORMAT LETTER OVERLAP..UP STEP
-```
+The application order chosen by Futhark depends on the backend and the hardware.
+With the `c` backend, it will be a straightforward left-to-right loop across the
+input array. With the GPU backend, it will split the input into chunks, sum them
+separately, and combine the partial results. The number of chunks depends on
+runtime queries of the GPU hardware topology, and can also be configured by the
+user via [tuning parameters](https://futhark-lang.org/blog/2026-02-03-tuning-params.html). Since the chunking
+strategy (the “schedule”) depends on the hardware and the input size, repeatedly
+re-running the same reduction on the same system will consistently give the same
+result - the “Replay” case in Michael Haddon’s terminology. This is not a
+language guarantee, but it is how it is implemented right now.
 
-So you can put invisible characters before, inside and after the address, and they are gone before `inet_aton` ever sees the string. I verified soft hyphen, zero width space, word joiner, invisible plus, combining grapheme joiner, Mongolian free variation selector, variation selectors 1, 16 and 17, the BOM, and the shorthand format controls. Most terminals render them as nothing. Mine renders them as the white `<fe0f>` boxes in the cover image, which is how I noticed the copy-pasted address was not what it looked like.
-
-The cover combines all of it: a zero-padded hex first part, a zero-padded octal second part, and a 16-bit decimal tail, with every character swapped for a random lookalike and nine ignored code points scattered through it. After mapping it is `0x00000045.00036.52866`, which `inet_aton` reads as 0x45, 036 (octal 30) and 52866 (206 × 256 + 130).
-
-None of this is magic in `getaddrinfo()` itself. It only happens when the caller passes `AI_IDN`. Without the flag, glibc goes straight to the numeric parser, sees a circled zero, and falls through to a DNS lookup that fails. Python makes the difference easy to see:
-
-```
->>> socket.getaddrinfo('⓪𝔁④⑤①𝕖𝒸ⓔ⑧②'.encode(), None, socket.AF_INET, 0, 0, 0)
-socket.gaierror: [Errno -2] Name or service not known
->>> socket.getaddrinfo('⓪𝔁④⑤①𝕖𝒸ⓔ⑧②'.encode(), None, socket.AF_INET, 0, 0, 0x40)  # AI_IDN
-[(<AddressFamily.AF_INET: 2>, ..., ('69.30.206.130', 0))]
-```
-
-Tools that do their own IDN conversion work as well. curl and wget both link libidn2 and run the hostname through it before resolving. OpenBSD netcat does not, and fails:
-
-The last command there is a different failure. IPv4-mapped IPv6 such as `::ffff:69.30.206.130` works in curl, because the kernel turns a connect on an IPv6 TCP socket to a mapped address into IPv4. ping instead opens an ICMPv6 socket and sends a real IPv6 packet to `::ffff:0:0/96`, which no router will carry.
-
-curl has its own wrinkle. Its URL parser has an `ipv4_normalize()` step that rewrites `0x451ece82` or `69.2018946` to `69.30.206.130`, but that runs *before* IDN conversion. A Unicode host skips normalization, gets converted to ASCII afterwards, and goes out on the wire like that. The server receives a `Host:` header of `0x451ece82`:
-
-curl also percent-decodes the host part of a URL, so `http://%36%39.30.206.130/`, `http://69%2E30%2E206%2E130/`, and the fully percent-encoded UTF-8 of the circled hex address all connect as well.
-
-Because a lot of code decides whether something is an IP address by looking at it. Blocklists, SSRF guards that regex for `169.254.` or `127.`, log searches, chat filters, and a human reading a config file all compare strings. If the thing doing the check does not run the same IDNA mapping and the same `inet_aton` rules as the thing doing the connect, the check and the connection are looking at two different strings. `⓪𝔁⑦𝒇⓪⓪⓪⓪⓪①` is `127.0.0.1`, and so is `①②⑦。①`.
-
-`⁰𝑋⁴5．🯰３₆。⁵₂₈𝟲🯶` is a valid IP address. It resolves to `69.30.206.130`, and that is fucking weird.
-
-It is also more than a party trick. Malware has used the plainer versions of this for years: [Emotet spam in 2022](https://www.trendmicro.com/en_us/research/22/a/emotet-spam-abuses-unconventional-ip-address-formats-spread-malware.html) wrote its download URLs with hex and octal IP addresses, likely to dodge pattern matching. The same idea applies to any filter that only reads the input. If something refuses `127.0.0.1`, you could hand it `⁰𝑋𝟳𝖿．①` instead, and `ping` lands on loopback all the same.
-
-The defence is the boring one: resolve first, then check the address you actually got back, and connect to that exact address. Never check the string.
-
-The address is still just a number, so the trick is not in `getaddrinfo()` — it is in the address bar. Drop a fully percent-encoded Unicode host into a URL with a made-up `user:pass@` prefix and a `/?` query, and the host stops being the part a human reads.
-
-```
-http://images.google.com:static-uploads@%E2%93%AA%F0%9D%94%81%E2%85%AD%E2%85%AEb97a5a/?picture_of_you.png
-        └── user ──┘ └── pass ──┘ └────────── host ──────────┘ └── path ───┘
-                          (circled + math-bold hex, the integer 0xcdb97a5a)
-```
-
-Glance at it and the eye lands on the trusted-looking parts: `images.google.com` as the user, `static-uploads` as the password, `?picture_of_you.png` as a path to a photo. But the host is the hex integer `0xcdb97a5a`, and `inet_aton()` turns it into `205.185.122.90`. curl connects there, sends `Host: 0xcdb97a5a`, and ignores the credentials and the path entirely — they are decoration. A single one is easy to pass; a list of them is how a phishing link looks like a Google image.
-
-The same trick works with the plain hex form, which is the cleanest because nothing has to be mapped:
+A reasonable question is whether we could implement summation in a different way
+that will *always* give the same result, no matter the input. Indeed, this is
+possible. Consider for simplicity that the input array is a power of two. We can
+then implement reduction by repeatedly splitting the array in half, combining
+the two halves using the provided operator, and continuing until only a single
+element is left:
 
 ```
-curl images.google.com:static-uploads@0xcdb97a5a/?picture_of_you.png
-        └── user ──┘ └── pass ──┘ └── host = 205.185.122.90 ──┘ └── path ─┘
+def sum_tree (as: []f64): f64 =
+  let as' = loop as while length as > 1 do
+              let m = length as / 2
+              in map2 (+) (take m as)
+                          (take m (drop m as))
+
+  in as'[0]
 ```
 
-Two things make it stick. First, humans read a URL as one token and rarely isolate the host field; the `user:pass@` prefix and the `/?file` suffix both read as authoritative and pull attention away from the middle. Second, the decoy and the real target disagree about what the URL means. The browser or the reader sees a path to an image; `getaddrinfo()` sees a number and connects to it. The decoy does not have to be wrong — `0xcdb97a5a` really is `205.185.122.90` — it only has to be something the reader does not expand.
+We can generalise this to arbitrary operators (even non-commutative ones) and
+non-power-of-two sizes with a bit more complexity. Note that this implementation
+does not use any Futhark constructs that are nondeterministic, hence *by
+construction* it is also fully deterministic. Will it produce the same result as
+a sequential `foldl (+) 0`? No, because the order of application is different,
+but if you compile `sum_tree` with the `c` backend then it will produce
+*exactly* the same results as if you compile with the `cuda` backend. This is
+the “Exact” case.
 
-It is the same gap as the blocklist check, aimed at the eye instead of the regex. A guard that regexes `127.` or `169.254.` on the string still misses `0x7f000001`; a person who reads `0xcdb97a5a` as "some hex" misses it too. The defence is the same: expand the host to the number it really is, and connect to that.
+There is a reason we don’t implement `reduce` like that, of course. In a quick
+experiment for summing 100 million numbers, I observe that using `reduce (+) 0`
+is almost *3x* faster than `sum_tree` on an MI100 GPU. The gap can be narrowed
+by using blocking to reduce the number of GPU kernels necessary, but ultimately
+the fastest way to perform a reduction does depend on fine details of the
+hardware, and when your operator is not truly associative, that will result in
+observable differences.
 
-curl is not the only tool that reads a number where you do not. `wget` takes the URL as its first positional argument and treats everything after it as an option. Drop a bare integer in place of the URL and a URL-looking value in an option, and the eye lands on the option — but the number is what actually gets fetched.
+The same situation arises with Futhark’s other basic building blocks. I suspect
+`reduce` is actually the *best* case, in the sense that a hand-written version
+can approach the performance of the built-in one. For `scan`, I know that the
+compiler’s fancy [decoupled
+lookback](https://research.nvidia.com/sites/default/files/pubs/2016-03_Single-pass-Parallel-Prefix/nvr-2016-002.pdf)
+is much faster than anything that can be written in Futhark itself, and for
+`reduce_by_index` a fully deterministic implementation involves a [sort and a
+segmented
+reduction](https://futhark-lang.org/blog/2018-09-21-futhark-0.7.1-released.html#histogram-computations), which
+is *wildly* slower than the code produced by the compiler, which makes careful
+use of atomic instructions.
 
-```
-wget -q 1159646850 -A=http://images.google.com/static/pic_of_you.png
-     └── host ──┘       └──────────── decoy ─────────────┘
-     69.30.206.130
-```
-
-`1159646850` is just `69.30.206.130` in decimal, and it is the URL — wget connects there and sends `Host: 1159646850`. `-A` is `--user-agent`, but most people read it as just a flag and take the `images.google.com` link as the target, thinking the number belongs to `-q`. The number is the host; the link is the decoy, and it does not have to be wrong — the same gap, a tool that reads the option as the target instead of the argument. `-A` works better than `--comment` for the trick: short, nearly invisible, and nobody assumes a user-agent is a URL.
-
-Every form I tested, against `69.30.206.130`. `ping` is iputils ping with one packet. `curl` fetched `http://<address>/poc.html` and got a 200. Every address is the real string, so you can copy it straight into a terminal. The invisible characters are in there even though you cannot see them.
+This does make me wonder if one could write a Futhark library that replaces all
+the SOAC implementations with guaranteed deterministic implementations, and what
+the performance of that might be across the [benchmark
+suite](https://github.com/diku-dk/futhark-benchmarks), but that will have to
+wait for a future post.
