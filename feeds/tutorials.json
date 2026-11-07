@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-07T12:40:02Z",
+  "updated": "2026-11-07T21:34:27Z",
   "items": [
     {
       "id": "devto-4943245",
@@ -170,39 +170,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4955249",
-      "title": "All That Glisters Is Softmax: Shiny-Object Interns, Airplane-Magazine Execs, and Why AI Labs Can Only Bake In Half the Scars",
-      "desc": "By Randal L. Schwartz | 29 min read",
-      "tag": "tutorial",
-      "published": "2026-11-01T00:41:17Z",
-      "order": 15,
-      "url": "https://dev.to/gde/all-that-glisters-is-softmax-shiny-object-interns-airplane-magazine-execs-and-why-ai-labs-can-18af",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fqlk0251k4s6ucmxlzfnw.jpg",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwIE/8QAFQEBAQAAAAAAAAAAAAAAAAAAAQL/2gAMAwEAAhADEAAAAc6Bd0w3A//EABsQAQACAgMAAAAAAAAAAAAAAAEAAhJBAxEx/9oACAEBAAEFAsSUKjyFVxJ3D3Wv/8QAFhEBAQEAAAAAAAAAAAAAAAAAABEh/9oACAEDAQE/AcR//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAGBAAAgMAAAAAAAAAAAAAAAAAEDEAAVH/2gAIAQEABj8CYyM0P//EABoQAQEAAwEBAAAAAAAAAAAAAAEAESFBUcH/2gAIAQEAAT8hChld2XiR818W6zwgMvbu/9oADAMBAAIAAwAAABD3L//EABYRAQEBAAAAAAAAAAAAAAAAAAEAIf/aAAgBAwEBPxDEg1v/xAAWEQEBAQAAAAAAAAAAAAAAAAABABH/2gAIAQIBAT8QNY2//8QAGxABAAMBAQEBAAAAAAAAAAAAAQARIUGBUfD/2gAIAQEAAT8QctGbpcoZJxCI7RwIIo8hl0wCLEV21+9hAmnX7kvXbvrP/9k=",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4962723",
       "title": "Two Truths and a Lie: Developer Edition.",
       "desc": "By Elsie Rainee | 2 min read",
       "tag": "tutorial",
       "published": "2026-11-02T11:35:22Z",
-      "order": 16,
+      "order": 15,
       "url": "https://dev.to/elsie-rainee/two-truths-and-a-lie-developer-edition-k8n",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fsyugm3scjglnspzm8ays.jpg",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAgMBBP/EABYBAQEBAAAAAAAAAAAAAAAAAAABAv/aAAwDAQACEAMQAAAB4mWmToGv/8QAGRAAAwADAAAAAAAAAAAAAAAAAAEQAhEh/9oACAEBAAEFAkjUZiPkZ//EABYRAQEBAAAAAAAAAAAAAAAAAAABQf/aAAgBAwEBPwGsf//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABQQAQAAAAAAAAAAAAAAAAAAADD/2gAIAQEABj8CD//EABsQAAICAwEAAAAAAAAAAAAAAAABESExQZEQ/9oACAEBAAE/IUQLauDSjXBKos8lnmR//9oADAMBAAIAAwAAABBZv//EABcRAQEBAQAAAAAAAAAAAAAAAAEAESH/2gAIAQMBAT8QXcIJ/8QAGBEBAQADAAAAAAAAAAAAAAAAAQARIVH/2gAIAQIBAT8QVzqHt//EAB0QAAICAgMBAAAAAAAAAAAAAAERACExUUFxsZH/2gAIAQEAAT8QMAJHLWfsQGBjS0YsKEdcwIqJO1ANtFhTgEkapeRsq1ql5DIQFdT/2Q==",
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4796922",
-      "title": "Three Times My Test Failed and the LLM Was Right",
-      "desc": "By Debashish Ghosal | 6 min read",
+      "id": "devto-4955249",
+      "title": "All That Glisters Is Softmax: Shiny-Object Interns, Airplane-Magazine Execs, and Why AI Labs Can Only Bake In Half the Scars",
+      "desc": "By Randal L. Schwartz | 29 min read",
       "tag": "tutorial",
-      "published": "2026-10-25T01:03:43Z",
-      "order": 17,
-      "url": "https://dev.to/debashish_ghosal/three-times-my-test-failed-and-the-llm-was-right-43l2",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F4o2covnae1ry3vu9zaln.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAQIE/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAH/2gAMAwEAAhADEAAAAcVS1QJ//8QAGRAAAwEBAQAAAAAAAAAAAAAAAAECITFB/9oACAEBAAEFAiRiPJx1r4f/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAWEAADAAAAAAAAAAAAAAAAAAAQESD/2gAIAQEABj8CpD//xAAaEAEBAQADAQAAAAAAAAAAAAABABEhMUGB/9oACAEBAAE/IU9u2kfX7CDYnDZPIjhf/9oADAMBAAIAAwAAABDOv//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QP//EABoQAAIDAQEAAAAAAAAAAAAAAAERACFBMRD/2gAIAQEAAT8QYEsNOMAS3WxhJgdSvBhagqNE+QsKqB5DI9c//9k=",
+      "published": "2026-11-01T00:41:17Z",
+      "order": 16,
+      "url": "https://dev.to/gde/all-that-glisters-is-softmax-shiny-object-interns-airplane-magazine-execs-and-why-ai-labs-can-18af",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fqlk0251k4s6ucmxlzfnw.jpg",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwIE/8QAFQEBAQAAAAAAAAAAAAAAAAAAAQL/2gAMAwEAAhADEAAAAc6Bd0w3A//EABsQAQACAgMAAAAAAAAAAAAAAAEAAhJBAxEx/9oACAEBAAEFAsSUKjyFVxJ3D3Wv/8QAFhEBAQEAAAAAAAAAAAAAAAAAABEh/9oACAEDAQE/AcR//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAGBAAAgMAAAAAAAAAAAAAAAAAEDEAAVH/2gAIAQEABj8CYyM0P//EABoQAQEAAwEBAAAAAAAAAAAAAAEAESFBUcH/2gAIAQEAAT8hChld2XiR818W6zwgMvbu/9oADAMBAAIAAwAAABD3L//EABYRAQEBAAAAAAAAAAAAAAAAAAEAIf/aAAgBAwEBPxDEg1v/xAAWEQEBAQAAAAAAAAAAAAAAAAABABH/2gAIAQIBAT8QNY2//8QAGxABAAMBAQEBAAAAAAAAAAAAAQARIUGBUfD/2gAIAQEAAT8QctGbpcoZJxCI7RwIIo8hl0wCLEV21+9hAmnX7kvXbvrP/9k=",
       "color": "#3B49DF"
     },
     {
@@ -211,10 +199,22 @@
       "desc": "By Clinton Rocha | 7 min read",
       "tag": "tutorial",
       "published": "2026-11-05T17:49:45Z",
-      "order": 18,
+      "order": 17,
       "url": "https://dev.to/he4rt/trocar-de-provedor-nao-deveria-ser-uma-dor-de-cabeca-50ee",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F5t380u5l0r4uezqilpd5.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAQMAAv/EABYBAQEBAAAAAAAAAAAAAAAAAAACBP/aAAwDAQACEAMQAAABiT2mk5T/xAAVEAEBAAAAAAAAAAAAAAAAAAARIP/aAAgBAQABBQJhj//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABURAQEAAAAAAAAAAAAAAAAAAAAh/9oACAECAQE/Aar/xAAWEAADAAAAAAAAAAAAAAAAAAAQIDH/2gAIAQEABj8CWn//xAAeEAEAAQMFAQAAAAAAAAAAAAABABExoRAhQVFhcf/aAAgBAQABPyGq+J8cRY24lRsMV7R90//aAAwDAQACAAMAAAAQQq//xAAVEQEBAAAAAAAAAAAAAAAAAAAAIf/aAAgBAwEBPxCq/8QAGBEAAgMAAAAAAAAAAAAAAAAAAAERMUH/2gAIAQIBAT8QjDG6H//EABwQAQEAAgIDAAAAAAAAAAAAAAERACExYVGBkf/aAAgBAQABPxCylS00U9Ypwkuy3ErvR1lNX63gSgOecD2d4lalfLgEuf/Z",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4796922",
+      "title": "Three Times My Test Failed and the LLM Was Right",
+      "desc": "By Debashish Ghosal | 6 min read",
+      "tag": "tutorial",
+      "published": "2026-10-25T01:03:43Z",
+      "order": 18,
+      "url": "https://dev.to/debashish_ghosal/three-times-my-test-failed-and-the-llm-was-right-43l2",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F4o2covnae1ry3vu9zaln.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAQIE/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAH/2gAMAwEAAhADEAAAAcVS1QJ//8QAGRAAAwEBAQAAAAAAAAAAAAAAAAECITFB/9oACAEBAAEFAiRiPJx1r4f/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAWEAADAAAAAAAAAAAAAAAAAAAQESD/2gAIAQEABj8CpD//xAAaEAEBAQADAQAAAAAAAAAAAAABABEhMUGB/9oACAEBAAE/IU9u2kfX7CDYnDZPIjhf/9oADAMBAAIAAwAAABDOv//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QP//EABoQAAIDAQEAAAAAAAAAAAAAAAERACFBMRD/2gAIAQEAAT8QYEsNOMAS3WxhJgdSvBhagqNE+QsKqB5DI9c//9k=",
       "color": "#3B49DF"
     },
     {
@@ -230,12 +230,24 @@
       "color": "#3B49DF"
     },
     {
+      "id": "devto-4991005",
+      "title": "Being, Doing, Having: Why 50 Years of Senior Craft Lives in Context, Not Code",
+      "desc": "By Randal L. Schwartz | 29 min read",
+      "tag": "tutorial",
+      "published": "2026-11-06T23:51:03Z",
+      "order": 20,
+      "url": "https://dev.to/gde/being-doing-having-why-50-years-of-senior-craft-lives-in-context-not-code-29dl",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fmc7bd0mpw7k0aq4vsqj4.jpg",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwIE/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAH/2gAMAwEAAhADEAAAAcbBdrSMH//EABkQAAMAAwAAAAAAAAAAAAAAAAABEQIQIv/aAAgBAQABBQIUIjLlao3T/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFhAAAwAAAAAAAAAAAAAAAAAAECAh/9oACAEBAAY/AhG//8QAGxAAAwEBAAMAAAAAAAAAAAAAAAERITFBUYH/2gAIAQEAAT8h8X0W79LPWCqgjiKuDm0//9oADAMBAAIAAwAAABCn3//EABcRAAMBAAAAAAAAAAAAAAAAAAABETH/2gAIAQMBAT8QKph//8QAFxEBAAMAAAAAAAAAAAAAAAAAABEhMf/aAAgBAgEBPxBc6//EABsQAQACAwEBAAAAAAAAAAAAAAEAESExQVFh/9oACAEBAAE/EBblTxxnaqmBMst2XoiuD6x4Styq66dgVsJlDWif/9k=",
+      "color": "#3B49DF"
+    },
+    {
       "id": "devto-4974671",
       "title": "After 5 years, Wasp 1.0 is coming: a 6-month plan for our full-stack JS framework",
       "desc": "By Martin Šošić | 6 min read",
       "tag": "tutorial",
       "published": "2026-11-04T10:42:12Z",
-      "order": 20,
+      "order": 21,
       "url": "https://dev.to/wasp/after-5-years-wasp-10-is-coming-a-6-month-plan-for-our-full-stack-js-framework-4hlf",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto/https%3A%2F%2Fwasp.sh%2Fimg%2Fblog%2F2026-10-20-wasp-1-0-is-coming%2Fwasp-1-0-is-coming-banner.webp",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAgEABP/EABYBAQEBAAAAAAAAAAAAAAAAAAADBP/aAAwDAQACEAMQAAAB6phloqEf/8QAGBABAAMBAAAAAAAAAAAAAAAAAQACESH/2gAIAQEAAQUCh0XIdGFMq1EDD//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABoQAAICAwAAAAAAAAAAAAAAAAABERIgIWH/2gAIAQEABj8CxrsXCEf/xAAbEAEAAgMBAQAAAAAAAAAAAAABABEhMXFRYf/aAAgBAQABPyFjoZifY8kFlWnITBp3UNFfDeYZ6Cf/2gAMAwEAAgADAAAAEDTf/8QAFhEBAQEAAAAAAAAAAAAAAAAAABEh/9oACAEDAQE/EG1//8QAFxEAAwEAAAAAAAAAAAAAAAAAAAERIf/aAAgBAgEBPxDIOQ//xAAcEAACAgIDAAAAAAAAAAAAAAABEQAhYXExQVH/2gAIAQEAAT8QZUnmZVgSAlWiTYGN7DskRHc8EB208gQEqR0HcFkuCf/Z",
@@ -247,7 +259,7 @@
       "desc": "By Ken W Alger | 10 min read",
       "tag": "tutorial",
       "published": "2026-11-03T13:53:00Z",
-      "order": 21,
+      "order": 22,
       "url": "https://dev.to/kenwalger/rack-before-you-remember-2jl3",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fjta595mrd2d2908smur0.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAwUAAQT/xAAUAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAGwa1gsYAI//8QAGhAAAwEAAwAAAAAAAAAAAAAAAAECEQMSE//aAAgBAQABBQKn1lcuF0keslLZLWykf//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABURAQEAAAAAAAAAAAAAAAAAAAEQ/9oACAECAQE/ASf/xAAXEAEBAQEAAAAAAAAAAAAAAAAQAQJR/9oACAEBAAY/AidKZp//xAAbEAACAwADAAAAAAAAAAAAAAAAAREhQXGRof/aAAgBAQABPyGxfg7KaNxpHJ0LlESySHcFB//aAAwDAQACAAMAAAAQiO//xAAVEQEBAAAAAAAAAAAAAAAAAAABAP/aAAgBAwEBPxBJv//EABYRAAMAAAAAAAAAAAAAAAAAAAABEf/aAAgBAgEBPxBqRH//xAAdEAEAAwACAwEAAAAAAAAAAAABABEhMUFhcYGh/9oACAEBAAE/EMi1a8I6+pHYO3g4+uz7C++MATXLiaLdlgFtwa67f5P/2Q==",
@@ -259,22 +271,10 @@
       "desc": "By Harsh  | 4 min read",
       "tag": "tutorial",
       "published": "2026-11-03T13:36:07Z",
-      "order": 22,
+      "order": 23,
       "url": "https://dev.to/harsh2644/i-let-ai-build-a-feature-without-giving-it-the-full-context-6h",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fvjfvxjyuym3m70wcniah.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAgQBAwX/xAAUAQEAAAAAAAAAAAAAAAAAAAAC/9oADAMBAAIQAxAAAAFjPOEVyGwr/8QAHBABAAIBBQAAAAAAAAAAAAAAAQACEQMQEhMh/9oACAEBAAEFAvF7LbNLEolJyM5jqWT/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAcEAACAgIDAAAAAAAAAAAAAAABEQAQEiExMnH/2gAIAQEABj8CU5p46mgX7OtIkqf/xAAdEAEBAQABBQEAAAAAAAAAAAABEQBBITFRYZGx/9oACAEBAAE/IR6jULMCd+hMfSBzlr7DG5/Wjw/dakuHf//aAAwDAQACAAMAAAAQcX//xAAVEQEBAAAAAAAAAAAAAAAAAAAAAf/aAAgBAwEBPxBX/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPxA//8QAHRABAQACAgMBAAAAAAAAAAAAAREAITGhUWFxwf/aAAgBAQABPxCvBBVsyQnPeLNCt84pHm0aMSpIiufWAKdtl4q6+TX5jrkohHrP/9k=",
-      "color": "#3B49DF"
-    },
-    {
-      "id": "devto-4991005",
-      "title": "Being, Doing, Having: Why 50 Years of Senior Craft Lives in Context, Not Code",
-      "desc": "By Randal L. Schwartz | 29 min read",
-      "tag": "tutorial",
-      "published": "2026-11-06T23:51:03Z",
-      "order": 23,
-      "url": "https://dev.to/gde/being-doing-having-why-50-years-of-senior-craft-lives-in-context-not-code-29dl",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fmc7bd0mpw7k0aq4vsqj4.jpg",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwIE/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAH/2gAMAwEAAhADEAAAAcbBdrSMH//EABkQAAMAAwAAAAAAAAAAAAAAAAABEQIQIv/aAAgBAQABBQIUIjLlao3T/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFhAAAwAAAAAAAAAAAAAAAAAAECAh/9oACAEBAAY/AhG//8QAGxAAAwEBAAMAAAAAAAAAAAAAAAERITFBUYH/2gAIAQEAAT8h8X0W79LPWCqgjiKuDm0//9oADAMBAAIAAwAAABCn3//EABcRAAMBAAAAAAAAAAAAAAAAAAABETH/2gAIAQMBAT8QKph//8QAFxEBAAMAAAAAAAAAAAAAAAAAABEhMf/aAAgBAgEBPxBc6//EABsQAQACAwEBAAAAAAAAAAAAAAEAESExQVFh/9oACAEBAAE/EBblTxxnaqmBMst2XoiuD6x4Styq66dgVsJlDWif/9k=",
       "color": "#3B49DF"
     },
     {
@@ -290,24 +290,12 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4912485",
-      "title": "My Passion for Coding Isn't 404. It's 503.",
-      "desc": "By Tombri Bowei | 6 min read",
-      "tag": "tutorial",
-      "published": "2026-10-24T21:51:05Z",
-      "order": 25,
-      "url": "https://dev.to/_boweii/my-passion-for-coding-isnt-404-its-503-446h",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fa320n0vxtnspy5sqt7ms.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAQIDBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHhvKokSv/EABkQAAIDAQAAAAAAAAAAAAAAAAARARASAv/aAAgBAQABBQLmGZVxKNDr/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAGRAAAwADAAAAAAAAAAAAAAAAAAEREEFR/9oACAEBAAE/IaIN0szoFFdY3T//2gAMAwEAAgADAAAAEA/v/8QAFREBAQAAAAAAAAAAAAAAAAAAECH/2gAIAQMBAT8Qh//EABcRAAMBAAAAAAAAAAAAAAAAAAEQESH/2gAIAQIBAT8QNuL/xAAcEAEAAgMAAwAAAAAAAAAAAAABADERIVFhkfH/2gAIAQEAAT8QUjjfY5Q0DfYm6jURZseYuYy+2fUiW2z/2Q==",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4966183",
       "title": "The Postcard That Ate Six Grammars: 1980 Smalltalk-80, 1976 Make, TDD, and the Four Attractors of Agentic Coding",
       "desc": "By Randal L. Schwartz | 43 min read",
       "tag": "tutorial",
       "published": "2026-11-03T02:41:46Z",
-      "order": 26,
+      "order": 25,
       "url": "https://dev.to/gde/the-postcard-that-ate-six-grammars-1980-smalltalk-80-1976-make-tdd-and-the-four-attractors-of-45me",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F5gl4u3vgt6joi8tfi99i.jpg",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAABAID/8QAFQEBAQAAAAAAAAAAAAAAAAAAAQD/2gAMAwEAAhADEAAAAS2dgxhqZv/EABgQAQEBAQEAAAAAAAAAAAAAAAExABEh/9oACAEBAAEFAlHcOEYU8G7/xAAVEQEBAAAAAAAAAAAAAAAAAAAAAf/aAAgBAwEBPwFX/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAGBABAAMBAAAAAAAAAAAAAAAAAQARISD/2gAIAQEABj8CCZGjev/EABoQAAIDAQEAAAAAAAAAAAAAAAABESFRMaH/2gAIAQEAAT8hQdiCr0lYQXRp09F0XWVaKhDZ/9oADAMBAAIAAwAAABDtz//EABURAQEAAAAAAAAAAAAAAAAAABEQ/9oACAEDAQE/EBj/xAAWEQEBAQAAAAAAAAAAAAAAAAAAARH/2gAIAQIBAT8Q1K//xAAcEAEBAQEAAgMAAAAAAAAAAAABEQAhMUFRkcH/2gAIAQEAAT8QGp6V/M3kFnyzm+oGnXp5ruVAQ+mYUI9jwLjDYFS23Kw9HDf/2Q==",
@@ -319,10 +307,22 @@
       "desc": "By Christian Vasquez | 4 min read",
       "tag": "tutorial",
       "published": "2026-10-26T22:03:26Z",
-      "order": 27,
+      "order": 26,
       "url": "https://dev.to/chrisvasqm/how-i-finally-understood-the-liskov-substitution-principle-19ek",
       "image": "https://media2.dev.to/dynamic/image/width=1200,height=627,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fzf8i86a7xb222qaa5kwr.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAARACADASIAAhEBAxEB/8QAGAAAAwEBAAAAAAAAAAAAAAAAAAIDAQT/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAHsWukaUUcAMA//xAAbEAACAgMBAAAAAAAAAAAAAAAAAREhECAiMf/aAAgBAQABBQJxNFCSY/VietP/xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAEDAQE/AR//xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAECAQE/AR//xAAcEAABBAMBAAAAAAAAAAAAAAAAAhExQQEQIDL/2gAIAQEABj8ChJCSEnnBZembn//EACAQAAIBAQkAAAAAAAAAAAAAAAERABAgITFhcYGRweH/2gAIAQEAAT8hAU5o8vH74OZ2YD6YJFxbWjYhJuz/AP/aAAwDAQACAAMAAAAQ2+Ac/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAwEBPxAf/8QAFxEAAwEAAAAAAAAAAAAAAAAAAAEREP/aAAgBAgEBPxCsr3//xAAgEAEAAgAFBQAAAAAAAAAAAAABABEhMVFh0SBBcZGh/9oACAEBAAE/ENL28g+qhbdtsUTiX6PhxKCI5UG/kRQRgOICA5h3YyokLy2Jt0//2Q==",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4912485",
+      "title": "My Passion for Coding Isn't 404. It's 503.",
+      "desc": "By Tombri Bowei | 6 min read",
+      "tag": "tutorial",
+      "published": "2026-10-24T21:51:05Z",
+      "order": 27,
+      "url": "https://dev.to/_boweii/my-passion-for-coding-isnt-404-its-503-446h",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fa320n0vxtnspy5sqt7ms.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAQIDBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHhvKokSv/EABkQAAIDAQAAAAAAAAAAAAAAAAARARASAv/aAAgBAQABBQLmGZVxKNDr/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAGRAAAwADAAAAAAAAAAAAAAAAAAEREEFR/9oACAEBAAE/IaIN0szoFFdY3T//2gAMAwEAAgADAAAAEA/v/8QAFREBAQAAAAAAAAAAAAAAAAAAECH/2gAIAQMBAT8Qh//EABcRAAMBAAAAAAAAAAAAAAAAAAEQESH/2gAIAQIBAT8QNuL/xAAcEAEAAgMAAwAAAAAAAAAAAAABADERIVFhkfH/2gAIAQEAAT8QUjjfY5Q0DfYm6jURZseYuYy+2fUiW2z/2Q==",
       "color": "#3B49DF"
     },
     {

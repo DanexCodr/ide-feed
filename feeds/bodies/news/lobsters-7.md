@@ -1,167 +1,75 @@
-I recently discovered a handy way to make Go tests more readable and less repetitive.
+This summer I participated in [the r/roguelikedev summer event
+where we write a Roguelike game](https://old.reddit.com/r/roguelikedev/wiki/python_tutorial_series)<sup>[1]</sup>, following one of the Roguelike
+coding tutorials. I’m not trying to learn coding, so I use this
+event to try learning something else. This year, one of the things
+I wanted to tackle was two-dimensional version control.
 
-Suppose I have a constructor that can fail:
+The tutorial we’re following has 14 chapters. I wanted to use
+version control while writing my code. But I *also* wanted to use
+version control to match the tutorial’s chapters:
 
-```go
-func NewUsername(raw string) (Username, error) { ... }
-```
+At the end of the project, I want a history of changes I made
+while writing the tutorial (horizontal axis) and *also* a history of
+changes the reader should make while following the tutorial
+(vertical axis).
 
-And I have another function that takes a `Username` as an argument:
+I can get the structure I want by setting up one Git branch per chapter,
+pointing to the previous chapter as the parent. Then when I update
+chapter 1’s code, I can push that forwards into chapter 2, 3, etc.
 
-```go
-func (ds Datastore) ReadUser(username Username) (User, error) { ... }
-```
+However, the [Jujutsu version control system](https://docs.jj-vcs.dev/latest/git-comparison/)<sup>[2]</sup> can do this
+*automatically*. Instead of managing all the branches and merges, I
+can focus on the “writeup” column of the diagram, where I can edit
+any of the chapters at any time. Jujutsu will roll forward the
+changes from one chapter to the others. I decided to try it for
+this project. Other people have blogged about Jujutsu’s features;
+I’m going to focus on the two dimensional output I want.
 
-When I write tests for `ReadUser`, I call `NewUsername` with a value I know is valid, but I still have to include a lot of verbose error-checking code to convince the compiler that everything is okay:
+**Example**: While working on the dungeon generation chapter, I
+realized I could’ve made the tile data structure better. It was
+easy to make those changes happen *before* the dungeon code. In this
+diagram, the horizontal axis is time and the vertical axis is
+chapter. I went back and forth between dungeon generation and the
+tile map structure. Once I was happy with both of those, I moved
+on to a better data structure:
 
-```go
-username, err := NewUsername("joe123")
+![](https://www.redblobgames.com/blog/2026-09-27-jujutsu-experience/images/part-3.png?2026-09-27-13-31-40)
 
-// This is silly because *I* know joe123 is a valid username, so this should
-// never happen.
-if err != nil {
-  t.Fatalf("failed to create username: %v", err)
-}
+*Mostly forward, occasionally backward*
 
-// Perform the test assertion I actually care about.
-user, err := store.ReadUser(username)
-if got, want := user.Name.String(), "joe123"; got != want {
-  t.Errorf("username=%v, want=%v", got, want)
-}
-```
+Ignore the colors; they were from a visualization tool.
 
-## My old solution: one new helper function per type[🔗︎](https://mtlynch.io/notes/go-must-create-pattern/#my-old-solution-one-new-helper-function-per-type)
+**Example**: While working on the field of view chapter, I found
+plenty of things I could’ve improved in earlier chapters. I had
+become comfortable enough with Jujutsu that my brain stopped
+thinking of commits as “set in stone” but instead as “I can fix
+that!” And I did.
 
-Until a few months ago, I avoided the verbose error checking by writing a helper function like `MustCreateUsername` that wraps `NewUsername` with the expectation that it never returns a non-`nil` `error` value:
+**Example**: Most of the changes are to the most recent chapters (bottom of this diagram). But occasionally I went back to earlier chapters (top of this diagram). The red shows that I had merge conflicts that I had to resolve before I went back to working on the recent chapters.
 
-```go
-user, err := store.ReadUser(MustCreateUsername(t, "joe123"))
-if got, want := user.Name.String(), "joe123"; got != want {
-  t.Errorf("username=%v, want=%v", got, want)
-}
-```
+**Example**: As I became even more comfortable with making changes across commits, I came up with better names to use throughout the project. I wanted to make these changes from the beginning, so I used a combination of regular <kbd>jj edit</kbd>, which propagates changes forwards to later chapters, and the <kbd>jj absorb</kbd> command, which propagates changes *backwards* to earlier chapters.
 
-The implementation of `MustCreateUsername` looks how you’d expect:
+This required a lot of cleanup. The changes didn’t have merge conflicts, but the resulting code didn’t always compile. If I changed `apple` to `zebra` in chapter 1, and I had used `apple` in chapter 2, Jujutsu wouldn’t know to change *that* name too. So I had to make those changes and test every chapter.
 
-```go
-func MustCreateUsername(t testing.TB, raw string) Username {
-  t.Helper()
-  username, err := NewUsername(raw)
-  if err != nil {
-    t.Fatalf("invalid username: %s", raw)
-  }
-}
-```
+**Example**: I *loved* that I can improve the version control change descriptions retroactively. Here’s me going back through all the change descriptions to format them consistently:
 
-The helper function strategy worked fine, but it scales poorly. Eventually, my repos become littered with `MustCreateFoo` and `MustCreateBar` for every type in my app.
+![](https://www.redblobgames.com/blog/2026-09-27-jujutsu-experience/images/jujutsu-rebase.png?2026-09-27-13-32-00)
 
-## New solution: A single, generic `MustCreate` helper[🔗︎](https://mtlynch.io/notes/go-must-create-pattern/#new-solution-a-single-generic-mustcreate-helper)
+*Editing everything*
 
-In 2022, Go 1.18 [added support for generics](https://go.dev/doc/go1.18#generics). I like the idea of generics, but I rarely encounter problems where generics are the solution.
+**Thoughts**: It’s hard to learn by just reading about something. For this project I wanted to try doing lots of things to see what worked well and what didn’t. This project is a bit unusual in that I’m trying to not only produce a final version of the game, but also produce 50 intermediate versions that all run, *and* have clean code that I can present in a tutorial series.
 
-I recently realized that generics are the better way to solve my sprawling `MustCreateX` problem. Instead of defining a helper `MustCreateX` for every type, I defined a single, generic `MustCreate` test helper, so my test becomes:
+![](https://www.redblobgames.com/blog/2026-09-27-jujutsu-experience/images/jujutsu-types-all.png?2026-09-27-13-31-51)
 
-```go
-user, err := store.ReadUser(testutil.MustCreate(t, NewUsername, "joe123"))
-if got, want := user.Name.String(), "joe123"; got != want {
-  t.Errorf("username=%v, want=%v", got, want)
-}
-```
+*complete project history*
 
-The magic is the generic `MustCreate` function:
+I think Jujutsu was a reasonable tool for this project. I can use it for developing, and also export to Git so that other people don’t have to use Jujutsu. [The GitHub repository](https://github.com/redblobgames/2634-roguelikedev)<sup>[3]</sup> has 54 git commits, not the ~5000 internal Jujutsu commits.
 
-```go
-func MustCreate[RawInput, CreatedValue any](
-  t testing.TB,
-  create func(RawInput) (CreatedValue, error),
-  rawInput RawInput,
-) CreatedValue {
-  t.Helper()
-  createdValue, err := create(rawInput)
-  if err != nil {
-    t.Fatalf("failed to create test value: %v", err)
-  }
-  return createdValue
-}
-```
+The main downside for me so far is that a lot of things happen
+automatically and I couldn’t keep track of them all. I need
+to get better at understanding what it’s doing behind the scenes
+so that I can use it with more confidence while avoiding some of
+the pitfalls.
 
-I have trouble reasoning about generics, so I’ll walk through the function implementation. I invoke `MustCreate` like this in my tests:
-
-```go
-testutil.MustCreate(t, NewUsername, "joe123")
-```
-
-The above call is equivalent to this more explicit version:
-
-```go
-testutil.MustCreate[string, Username](t, NewUsername, "joe123")
-```
-
-When I call `MustCreate` here, `RawInput` is `string` (the type of the raw username value), and `CreatedValue` is `Username` (the return type). It’s equivalent to an implementation that looks like this:
-
-```go
-func MustCreate(
-  t testing.TB,
-  create func(string) (Username, error),
-  rawInput string,
-) CreatedValue {
-  t.Helper()
-  createdValue, err := create(rawInput)
-  if err != nil {
-    t.Fatalf("failed to create test value: %v", err)
-  }
-  return createdValue
-}
-```
-
-### Extending to multi-param constructors[🔗︎](https://mtlynch.io/notes/go-must-create-pattern/#extending-to-multi-param-constructors)
-
-What about constructors that have more than one parameter?
-
-```go
-func NewRange(start int, end int) (Range, error) { ... }
-```
-
-In those cases, I write an additional helper called `MustCreate2`:
-
-```go
-range := testutil.MustCreate2(t, models.NewRange, 0, 5)
-```
-
-The implementation of `MustCreate2` looks just like `MustCreate` but with an additional type for the second parameter:
-
-```go
-func MustCreate2[RawInput1, RawInput2, CreatedValue any](
-  t testing.TB,
-  create func(RawInput1, RawInput2) (CreatedValue, error),
-  rawInput1 RawInput1,
-  rawInput2 RawInput2,
-) CreatedValue {
-  t.Helper()
-  createdValue, err := create(rawInput1, rawInput2)
-  if err != nil {
-    t.Fatalf("failed to create test value: %v", err)
-  }
-  return createdValue
-}
-```
-
-## Conclusion[🔗︎](https://mtlynch.io/notes/go-must-create-pattern/#conclusion)
-
-The `MustCreate` pattern is nothing revolutionary, but it’s a technique that improved my Go tests and reduced some mindless toil from my dev work.
-
-## Read My Book
-
-I wrote a book about simple techniques to help developers improve their
-writing.
-
-My book will teach you how to:
-
-- Create clear and pleasant software tutorials
-- Attract readers and customers through blogging
-- Write effective emails
-- Minimize pain in writing design documents
-
-### Be the first to know when I post cool stuff
-
-Subscribe to get my latest posts by email.
+The resulting game is [playable on the web](https://www.redblobgames.com/x/2634-roguelike-dev/). I wrote
+notes but didn’t write a tutorial this time.

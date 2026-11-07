@@ -1,53 +1,169 @@
-We’re looking for a **senior software line specialist, in TypeScript**!
+Back in July I wanted to check out the pwn2own targets for 2026. Since the rules hadn’t been released yet, I decided I would check last year’s targets in the hope that it would be similar.
 
-ACME Inc. is a fast-growing startup helping small businesses monitor their financials. We work with business owners across the globe, turning their feedback into actionable insights. Backed by Maltese Falcon Capital, we recently raised a $15M Series A to bring effortless monitoring to every brick-and-mortar store.
+Imagine my surprise when I managed to get arbitrary code execution on the glasses and they weren’t in the wearables category anymore :’).
 
-You’ll be joining a high-performance, close-knit team of AI natives! We’ve been AI-first for the past 2 years, with every part of the product agent-friendly and interconnected: design, development, QA, CI/CD, infra, data analysis. We like to say that our stack is English!
+It’s fine though because I still reported it to meta, and after fighting the payout a few times, we settled (ok there was no settling but I agreed to the new payout).
 
-While English has gotten us 99.5% of the way there, we’re in need of a hands-on engineer ready to close the final 0.5%. Over time, we’ve noticed some issues that are immune to prompts and catch agents in loops. Sometimes, the issue at hand gets fixed, but it results in another issue. This is where you step in. As a line specialist, your job will be to investigate and fix complex issues, primarily by reading the underlying code.
+Before attempting this, I remember telling my friend about it. They said “ooof good luck. These are usually pretty hardened and no-one attempted them last year at p2o.”
 
-We’re looking for someone ready to open an IDE and dive deep into an unknown codebase — a fearless detective who is comfortable inspecting logs and database rows, and has the know-how to piece all the information together. The perfect candidate should be willing to work on a problem for hours, sometimes even days.
+My response: Watch me.
 
-This is a new position for us. We expect someone who works autonomously, makes sound decisions independently and takes full ownership of their work. We are happy to help in any way we can (you’ll have access to agents’ reasoning traces), but ultimately we depend on your confidence in understanding the problem and shipping a solution.
+![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-3.png?w=3000&ssl=1)
 
-### Your responsibilities
+### Acquiring glasses because who’s paying €500 (not me)
 
-- take over unresolved issues from agents
-- read the codebase, go over application logs, query the database
-- prepare, test, review and ship fixes by yourself
-- write postmortems for agent training
-- occasionally consult on unreleased features
-- onboard and mentor a future junior line specialist
+First step was acquiring the glasses. I am lucky that my brother-in-law had a pair he didn’t really use, so I could steal them for a few weeks.
 
-### We think you’d be great if you…
+### First recon
 
-- have at least 5 years of pre-2022 TypeScript experience
-- are comfortable running tests manually and using a “debugger”
-- can reason from first principles
-- can work on a problem with sustained attention for hours
-- are autonomous and an independent thinker
+I installed the Meta AI app, which is the app to control the glasses (connecting them, synchronizing pictures, and so on).
 
-### Nice to have
+In order to extract the firmware, I obviously wasn’t going to tear the glasses apart and start fiddling with probes n shit. So I went for extracting it using the OTA (over-the-air) update.
 
-- previous experience as a line specialist
-- DB administration experience (our agents say it’s Postgres)
-- AI prompting basics
+When connecting the glasses for the first time, it immediately offered to update the firmware. So naturally, I was intrigued. Using JADX, I reversed the Meta AI app to see how the update is fetched.
 
-### Interview process
+`OtaArtifactFetcher` prepares and sends the update request. The response is converted into an `OTAArtifactInfo` object containing metadata such as the device/build information.
 
-1. CV screening
-2. HR phone screen
-3. In-house paper-and-pencil exam
-  - multiple-choice questions (e.g. you’re given a TypeScript expression, choose the correct result)
-  - explain concepts in your own words (for example, ACID)
-  - complete the code block
-  - find the bug in a function
-4. Live debugging assignment
-  - application with an intentional defect; candidates are required to find and fix the issue without the use of AI
-5. Culture fit interview
-6. CTO interview
-7. Offer
+```java
+arrayListA0y2.add(new OTAArtifactInfo([...], downloadUri, [...]));
+```
 
-We feel it prudent to point out that you will be allowed to work on one thing at a time in this role. While parallel development is the default, we understand line specialists prefer to tackle problems in a single-threaded manner, so we will do our best to provide a distraction-free environment for your best work.
+I then notice this assignment in `OTAArtifactInfo`():
 
-To be clear, this role does **not** include feature development. You’re welcome to look at our AI-native listings if you have more interest in such work!
+```
+this.downloadUri = str3;
+```
+
+I found that I could just hook into `OTAArtifactInfo` and print `str3` which contained the CDN update URL :))) and then I just printed it.
+
+```javascript
+Java.perform(function () {var OTAArtifactInfo = Java.use("com.facebook.wearable.common.ota.models.OTAArtifactInfo");OTAArtifactInfo["$init"].implementation = function (l, j, oTAArtifactType, ..., str3, ...) {   this["$init"](l, j, oTAArtifactType, ..., str3, ...);    console.log("downloadUri:");    console.log(str3);};});
+```
+
+![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-6.png?w=1462&ssl=1)
+
+That URL contained a zip, so that looked like the right candidate. **HOWEVER**, this was around 156 MB and its payload depended on the device’s existing build. It was an incremental update… I wanted the full update.
+
+**Getting the full firmware update**
+
+Decompiling further code revealed a GraphQL input named `device_firmware_full_update_only`. The app normally populated it with false, so I hooked the generic method responsible for adding GraphQL fields and replaced the value with true only when the field name matched exactly. This allowed me to fetch the full firmware update URL.
+
+I was then able to retrieve the zip from the CDN. Unzipping it showed me that this was an Android update, including the **payload.bin**.
+
+![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-4.png?w=1230&ssl=1)
+
+Using [payload-dumper](https://github.com/ssut/payload-dumper-go) on payload.bin, I could dump the images and mount them into a filesystem.
+
+![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-5-edited.png?w=1203&ssl=1)
+
+Firmware was acquired but how do I get a shell on the glasses?
+
+### Device Access Toolkit
+
+There is a developer mode on the Meta AI app that allows devs to write apps that can interact with the glasses. It is called DAT SDK (Device Access Toolkit).
+
+In order to do that, you need to install the DAT APK on the glasses. The MetaAI app basically downloads it in real-time and fetches the DAT application to install it on the device. Do you see where I am going with this?
+
+![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-2.png?w=1668&ssl=1)
+
+### Installing self-signed app on the glasses
+
+Up until and including firmware 126, the firmware did not verify that the DAT APK was signed by Meta. So it was theoretically possible to install any app on the glasses because there was no verification as to if it was a legit app or not.
+
+An easy-not-so-easy swap was possible. I could, using frida, swap out the legit DAT application for a self-signed application of my own. That meant I could run any app on the glasses.
+
+```javascript
+// hook DAT Installerfield(this, "$localFile")  .set(this, replacement);field(this, "$appName")  .set(this, "DAT Probe");packageField.set(this, cachedPackage);// Meta AI sends my apkreturn invokeSuspend.call(this, result);
+```
+
+Now I have my own self-signed DAT apk running on the glasses! bosh!! 😎
+
+### How to run the DAT APK on the glasses
+
+The DAT apk runs only when a DAT session is requested by the developer app to interact with the glasses.
+
+So, in order to run the fake DAT apk, I installed a sample app from Meta called **Camera Access**, which would then create a DAT session with the app on the glasses.
+
+![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-1.png?w=1764&ssl=1)
+
+However, I couldn’t really check that it was running properly. It was difficult to debug.
+
+### Beep is the new printf
+
+There is no screen on this pair of sunglasses. No console, no logs, no “yoo your code is running”. So how could I make sure my code was even executing? The answer is by *listening* to it.
+
+I used **android.media.ToneGenerator** in my DAT APK to signal which part of the code was executing:
+
+- 3 beeps: listener started, looking for a Wi-Fi Direct address
+- 5 beeps: found one (in wifi group 192.168.49.x)
+- 4 beeps: TCP 31337 bound, we’re in business
+- 6 beeps: something went wrong
+
+So using this sequence, I managed to debug a big issue that I hadn’t considered: the Camera Access app was failing because it was expecting the real DAT apk on the glasses. When it couldn’t start DWA,` startDwaReadinessProbe()` would report `START_ERROR_DWA_UNAVAILABLE`.
+
+And every time it failed, it closed my connection.
+
+**The fix**  
+I used frida to hook `startDwaReadinessProbe()` in order to disable the DWA timeout and keep the connection alive.
+
+```javascript
+startDwaReadinessProbe.implementation =function () {// No operation};
+```
+
+### Bind shell
+
+When the Meta AI app wants to sync photos & videos from the glasses, it will create a WiFi Direct group on subnet 192.168.49.x. The glasses will connect to that group and they get an IP address.
+
+In order to get the glasses to connect to the Wi-Fi Direct group, I used Frida to hook into the CameraAccess app and request the “high link lease” from the Meta AI app.
+
+```
+sub = device.createLinkLease(2, 1, cb); highLeaseSubscriptions.push(sub);
+```
+
+My implanted app bound a listener on TCP 31337 on that address, which dropped me into an interactive shell.
+
+So from the phone I could just nc’d into it and sent commands, like `id`, to get shell-level execution in the app’s context.
+
+```
+ServerSocket listener = new ServerSocket(31337, 4, address))
+```
+
+```shell
+nc <glasses-ip> 31337# iduid=10097(u0_a97) gid=10097(u0_a97) groups=3003(inet) ...great power comes great opsec
+```
+
+**great power comes great opsec**
+
+### Great power requires great opsec
+
+I had this uncontrollable power for about 5 days, and while I was searching for a privesc on the glasses, my shell access had disappeared.
+
+Unfortunately, I either had terrible opsec back then (possible) or unluckily they looked into it and patched it.
+
+But fear not !!
+
+### Mobile Config
+
+Firmware 127 started enforcing signature verification of the DAT apk, so self-signing my own DAT apk wasn’t working anymore.
+
+The check was done by `wss_appmanager.signature_verification_enabled` in the MobileConfig file.
+
+The glasses ask the phone for their config, so the phone fetches it from Meta’s servers and forwards it back over Airship. It controls a bunch of feature flags on the glasses without requiring a firmware update.
+
+One of those flags requires the firmware to check that apps are signed by Meta before installing them.
+
+![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image.png?w=1492&ssl=1)
+
+It arrives on the glasses from the paired phone, and the device loads it only after verifying the file is *structurally* correct, not that it hadn’t been tampered with.
+
+That makes every flag in it, including `signature_verification_enabled`, modifiable by the phone and accepted by the glasses.
+
+So by flipping a byte in the `0.mctable` (which is the file that holds the values) from `0x80` to `0x00` (enabled to disabled), I was able to **bypass** the signature verification that they were originally enforcing, and re-install my self-signed APK on the glasses.
+
+We’re soooo back.
+
+### Where to from here
+
+This was all reported to Meta through their bug bounty platform. They have approved my blogpost which makes me assume it is now fixed.
+
+Now that I had shell access, it was a lot easier to start mapping the attack surface. That, my friends, is a story for another time!

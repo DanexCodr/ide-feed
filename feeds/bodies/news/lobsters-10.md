@@ -1,169 +1,36 @@
-Back in July I wanted to check out the pwn2own targets for 2026. Since the rules hadn’t been released yet, I decided I would check last year’s targets in the hope that it would be similar.
+Yet another day, [yet another vulnerability](https://sshhole.com/) in core C code. This one happened due to two different conditions using the same sentinel value:
 
-Imagine my surprise when I managed to get arbitrary code execution on the glasses and they weren’t in the wearables category anymore :’).
+- On Unix, a password hash of "*" has meant a locked account since the very early days.
+- Since 2012, musl libc’s crypt function has returned the string "*" for a password that’s too long for it to hash.
 
-It’s fine though because I still reported it to meta, and after fighting the payout a few times, we settled (ok there was no settling but I agreed to the new payout).
+The two points combined, along with sshd hashing login attempts for locked accounts to avoid timing leaks, mean that on musl systems without PAM (like, oh, *the official Alpine AWS image*), an unauthenticated user now gets a (possibly root!) shell on your computer. See [this Alpine advisory](https://www.alpinelinux.org/posts/2026-11-05-openssh-password-authentication-bypass/) for more details.
 
-Before attempting this, I remember telling my friend about it. They said “ooof good luck. These are usually pretty hardened and no-one attempted them last year at p2o.”
+This is not a memory safety vulnerability; rather, it is one of those issues that, people often say, languages with better type systems won’t save you from. This is true! You can very well write a Rust function that returns `"*"` if the password is too long. But the big difference between C and Rust in this regard is that *the norms of the Rust community do not allow that*.
 
-My response: Watch me.
+The POSIX spec tries to account for error cases. It [says](https://pubs.opengroup.org/onlinepubs/9799919799/functions/crypt.html):
 
-![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-3.png?w=3000&ssl=1)
+> Upon successful completion, crypt() shall return a pointer to the hashed password; […] Otherwise, it shall return a null pointer and set errno to indicate the error.
 
-### Acquiring glasses because who’s paying €500 (not me)
+But the C type system can’t force developers to check that the return value is NULL. The musl libc developers saw that some binaries weren’t checking for it, and as a result [deviated](https://git.musl-libc.org/cgit/musl/commit/?id=b3c4cc121f70faea45389fe7ddc1127ed5cbd8bb) from the spec, returning the sentinel `"*"` value instead.
 
-First step was acquiring the glasses. I am lucky that my brother-in-law had a pair he didn’t really use, so I could steal them for a few weeks.
+As I’ve [written about before](https://sunshowers.io/posts/types/), type systems have a strong effect on engineering culture. Because C doesn’t have algebraic data types or result types, the engineering norms that form around C communities lead to this kind of in-band signaling. Meanwhile, in Rust, a password that’s too long would be returned as an error variant, and the caller would be compelled to handle it. What if there isn’t an error variant today? Then a breaking change would add an error variant, *and* a [RustSec advisory](https://rustsec.org/) would probably be published as well.
 
-### First recon
+As an aside, it remains surprising to me when Linux distro maintainers complain about projects introducing Rust dependencies. Rather than adapting to the new world where the engineering norms are likely to serve users better, these maintainers insist on the world adapting to them. Yes, compile times and portability to niche architectures are real costs, but are you here to serve your own interests or the bulk of your users’? There’s a real [principal-agent problem](https://en.wikipedia.org/wiki/Principal%E2%80%93agent_problem) going on here.
 
-I installed the Meta AI app, which is the app to control the glasses (connecting them, synchronizing pictures, and so on).
+## Agents won’t save you[#](https://sunshowers.io/posts/sshole/#agents-wont-save-you)
 
-In order to extract the firmware, I obviously wasn’t going to tear the glasses apart and start fiddling with probes n shit. So I went for extracting it using the OTA (over-the-air) update.
+Speaking of agents! There’s a recent strain of argument that goes roughly like this:
 
-When connecting the glasses for the first time, it immediately offered to update the firmware. So naturally, I was intrigued. Using JADX, I reversed the Meta AI app to see how the update is fetched.
+- Rust is admittedly useful for humans to write correct software today.
+- LLMs can now, or in the near future will be able to, reason about memory safety and other error cases directly.
+- So in an agent-heavy development lifecycle there’s no difference in software rigor between Rust and C (or even assembly).
+- But C has certain advantages over Rust in terms of build speed, portability, etc.
+- So we might as well write software in C (or even assembly).
 
-`OtaArtifactFetcher` prepares and sends the update request. The response is converted into an `OTAArtifactInfo` object containing metadata such as the device/build information.
+There is plenty that’s wrong about the argument, including the dubious decision to trust a fuzzy process when we have already shown that a far more deterministic approach works. But the big missing piece is the norms of the respective communities! When you (or your agent) write Rust software, you’re probably going to use Rust libraries, and your agent is probably going to pattern-match on existing Rust code in its training set. As a result, *even if you aren’t already a skilled Rust developer*, there will likely be more invariants encoded in the type system<sup>[1](https://sunshowers.io/posts/sshole/#fn:1)</sup>.
 
-```java
-arrayListA0y2.add(new OTAArtifactInfo([...], downloadUri, [...]));
-```
+The engineering norms of C developers allow for `"*"` to be an acceptable sentinel value indicating an error; the engineering norms of Rust developers simply do not. These norms are the result of the accumulated contributions of a community, and part of the responsibility of a software professional is to think about the kinds of communities one’s work is a part of. But some people have [decided](https://bsky.app/profile/sunshowers.io/post/3mzkaurqkrk2v) that none of this really matters in this shiny new world, and that the contributions of other people can mostly be ignored. Their hubris will be their downfall.
 
-I then notice this assignment in `OTAArtifactInfo`():
+*Discuss on [Hacker News](https://news.ycombinator.com/item?id=50399400).*
 
-```
-this.downloadUri = str3;
-```
-
-I found that I could just hook into `OTAArtifactInfo` and print `str3` which contained the CDN update URL :))) and then I just printed it.
-
-```javascript
-Java.perform(function () {var OTAArtifactInfo = Java.use("com.facebook.wearable.common.ota.models.OTAArtifactInfo");OTAArtifactInfo["$init"].implementation = function (l, j, oTAArtifactType, ..., str3, ...) {   this["$init"](l, j, oTAArtifactType, ..., str3, ...);    console.log("downloadUri:");    console.log(str3);};});
-```
-
-![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-6.png?w=1462&ssl=1)
-
-That URL contained a zip, so that looked like the right candidate. **HOWEVER**, this was around 156 MB and its payload depended on the device’s existing build. It was an incremental update… I wanted the full update.
-
-**Getting the full firmware update**
-
-Decompiling further code revealed a GraphQL input named `device_firmware_full_update_only`. The app normally populated it with false, so I hooked the generic method responsible for adding GraphQL fields and replaced the value with true only when the field name matched exactly. This allowed me to fetch the full firmware update URL.
-
-I was then able to retrieve the zip from the CDN. Unzipping it showed me that this was an Android update, including the **payload.bin**.
-
-![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-4.png?w=1230&ssl=1)
-
-Using [payload-dumper](https://github.com/ssut/payload-dumper-go) on payload.bin, I could dump the images and mount them into a filesystem.
-
-![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-5-edited.png?w=1203&ssl=1)
-
-Firmware was acquired but how do I get a shell on the glasses?
-
-### Device Access Toolkit
-
-There is a developer mode on the Meta AI app that allows devs to write apps that can interact with the glasses. It is called DAT SDK (Device Access Toolkit).
-
-In order to do that, you need to install the DAT APK on the glasses. The MetaAI app basically downloads it in real-time and fetches the DAT application to install it on the device. Do you see where I am going with this?
-
-![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-2.png?w=1668&ssl=1)
-
-### Installing self-signed app on the glasses
-
-Up until and including firmware 126, the firmware did not verify that the DAT APK was signed by Meta. So it was theoretically possible to install any app on the glasses because there was no verification as to if it was a legit app or not.
-
-An easy-not-so-easy swap was possible. I could, using frida, swap out the legit DAT application for a self-signed application of my own. That meant I could run any app on the glasses.
-
-```javascript
-// hook DAT Installerfield(this, "$localFile")  .set(this, replacement);field(this, "$appName")  .set(this, "DAT Probe");packageField.set(this, cachedPackage);// Meta AI sends my apkreturn invokeSuspend.call(this, result);
-```
-
-Now I have my own self-signed DAT apk running on the glasses! bosh!! 😎
-
-### How to run the DAT APK on the glasses
-
-The DAT apk runs only when a DAT session is requested by the developer app to interact with the glasses.
-
-So, in order to run the fake DAT apk, I installed a sample app from Meta called **Camera Access**, which would then create a DAT session with the app on the glasses.
-
-![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-1.png?w=1764&ssl=1)
-
-However, I couldn’t really check that it was running properly. It was difficult to debug.
-
-### Beep is the new printf
-
-There is no screen on this pair of sunglasses. No console, no logs, no “yoo your code is running”. So how could I make sure my code was even executing? The answer is by *listening* to it.
-
-I used **android.media.ToneGenerator** in my DAT APK to signal which part of the code was executing:
-
-- 3 beeps: listener started, looking for a Wi-Fi Direct address
-- 5 beeps: found one (in wifi group 192.168.49.x)
-- 4 beeps: TCP 31337 bound, we’re in business
-- 6 beeps: something went wrong
-
-So using this sequence, I managed to debug a big issue that I hadn’t considered: the Camera Access app was failing because it was expecting the real DAT apk on the glasses. When it couldn’t start DWA,` startDwaReadinessProbe()` would report `START_ERROR_DWA_UNAVAILABLE`.
-
-And every time it failed, it closed my connection.
-
-**The fix**  
-I used frida to hook `startDwaReadinessProbe()` in order to disable the DWA timeout and keep the connection alive.
-
-```javascript
-startDwaReadinessProbe.implementation =function () {// No operation};
-```
-
-### Bind shell
-
-When the Meta AI app wants to sync photos & videos from the glasses, it will create a WiFi Direct group on subnet 192.168.49.x. The glasses will connect to that group and they get an IP address.
-
-In order to get the glasses to connect to the Wi-Fi Direct group, I used Frida to hook into the CameraAccess app and request the “high link lease” from the Meta AI app.
-
-```
-sub = device.createLinkLease(2, 1, cb); highLeaseSubscriptions.push(sub);
-```
-
-My implanted app bound a listener on TCP 31337 on that address, which dropped me into an interactive shell.
-
-So from the phone I could just nc’d into it and sent commands, like `id`, to get shell-level execution in the app’s context.
-
-```
-ServerSocket listener = new ServerSocket(31337, 4, address))
-```
-
-```shell
-nc <glasses-ip> 31337# iduid=10097(u0_a97) gid=10097(u0_a97) groups=3003(inet) ...great power comes great opsec
-```
-
-**great power comes great opsec**
-
-### Great power requires great opsec
-
-I had this uncontrollable power for about 5 days, and while I was searching for a privesc on the glasses, my shell access had disappeared.
-
-Unfortunately, I either had terrible opsec back then (possible) or unluckily they looked into it and patched it.
-
-But fear not !!
-
-### Mobile Config
-
-Firmware 127 started enforcing signature verification of the DAT apk, so self-signing my own DAT apk wasn’t working anymore.
-
-The check was done by `wss_appmanager.signature_verification_enabled` in the MobileConfig file.
-
-The glasses ask the phone for their config, so the phone fetches it from Meta’s servers and forwards it back over Airship. It controls a bunch of feature flags on the glasses without requiring a firmware update.
-
-One of those flags requires the firmware to check that apps are signed by Meta before installing them.
-
-![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image.png?w=1492&ssl=1)
-
-It arrives on the glasses from the paired phone, and the device loads it only after verifying the file is *structurally* correct, not that it hadn’t been tampered with.
-
-That makes every flag in it, including `signature_verification_enabled`, modifiable by the phone and accepted by the glasses.
-
-So by flipping a byte in the `0.mctable` (which is the file that holds the values) from `0x80` to `0x00` (enabled to disabled), I was able to **bypass** the signature verification that they were originally enforcing, and re-install my self-signed APK on the glasses.
-
-We’re soooo back.
-
-### Where to from here
-
-This was all reported to Meta through their bug bounty platform. They have approved my blogpost which makes me assume it is now fixed.
-
-Now that I had shell access, it was a lot easier to start mapping the attack surface. That, my friends, is a story for another time!
+1. If you’re a skilled Rust developer, you’ll likely find the first-pass invariants the agent encodes to be woefully inadequate, and you’ll probably go through a long review cycle where those kinds of issues are fixed. [↩︎](https://sunshowers.io/posts/sshole/#fnref:1)

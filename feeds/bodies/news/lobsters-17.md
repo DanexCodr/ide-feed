@@ -1,280 +1,227 @@
-In January 2026, I somehow ended up leading Pion's DTLS 1.3 implementation and building most of it. It was still mostly an idea at that point, and I didn't really know how DTLS 1.3 worked. Most of the people who ended up building it with me didn't either :)
+[We recently announced Amutable Foundations](https://amutable.com/blog/introducing-amutable-foundations). It’s now time to provide a technical overview of how Amutable Foundations is put together. In this post, we’ll discuss two of the most fundamental components:
 
-Ten months and ~400 commits later, DTLS 1.3 is the default in pion/dtls:
+- **Amutable OS** (“*AOS*”, or “*⊼OS*”), a modern image-based Linux OS. It builds on the foundation of established Linux distributions, but moves them from a package-based world into an image-based, integrity-protected world. It removes drift, and adds robustness, integrity, and reproducibility. On one hand this provides great conceptual compatibility with the status quo ante of enterprise distributions, and on the other hand it’s built from the ground up with image-based OS designs in mind.
+- **Amutable Control Plane** (“*ACP*”, or “*⊼CP*”), a management system that tracks, controls, updates and verifies a fleet of AOS installations.
 
-- a one-round-trip handshake
-- post-quantum key exchange
-- Connection IDs, so your connection survives your phone switching networks
-- 0-RTT resumption
-- Encrypted Client Hello
+## AOS – Amutable Operating System
 
-I wanted to write down the lore of how this happened, and also explain DTLS the way I wish someone had explained it to me. So this is both, with interactive demos you can poke and break along the way.
+Amutable OS is built on classic Linux distributions, initially from [Fedora](https://fedoraproject.org/) packages. Distributions do valuable integration and unification work on the basic components of the OS – work we want to leverage. However, AOS uses distribution packages to pre-assemble immutable disk images at build-time while distributions, traditionally, compose a Linux system by installing packages on the final, deployed system. Let’s take a closer look at what this means.
 
-If you don't want to read the backstory, [skip to the implementation](https://joturk.net/posts/dtls#phone-calls-and-postcards).
+- **Package-based OSes** generally provide the user with a large number of regularly updated software packages (many thousands) with complex dependencies, which are composed into a working OS on the final machine it is deployed on. Installations in this style tend to vary greatly from system to system. Even with an identical selection of packages for the target system, the installation/update order, the stateful update logic and the file system data structures generally mean that the bytes that hit the disk on each machine are always different. This is called *drift*. Systems put together this way are hence not reproducible, not predictable, and hard to compare and analyze which is essential for tracking down security issues. They are also hard to test as the flexibility of selecting packages and assembling them in any order results in a prohibitive combinatorial explosion of systems to test.
+- **Image-based OSes** instead provide pre-built file system images that contain all code and other resources the OS needs. These images are bit-by-bit identical on every deployed system, so that the installations differ only in local state acquired during runtime, but not in the OS code and resources themselves (which stay 100% identical). To improve modularity, AOS extends this concept to allow a small number of coarse images to be merged together. Rather than thousands of packages, each system only combines a small number (typically < 5) of images, so that the system stays reproducible.
 
-Pion's [Plans for DTLS 1.3](https://github.com/pion/dtls/issues/188) issue had been open since February 2020, when the spec was still [a draft](https://datatracker.ietf.org/doc/draft-ietf-tls-dtls13/). It became [RFC 9147](https://www.rfc-editor.org/rfc/rfc9147) in 2022, but nobody had the time it takes to actually commit to it, and every so often someone asked for updates...
+Building from existing distribution packages allows us to guarantee far reaching semantic compatibility with existing systems, while maintaining our image-based focus. In particular, it allows us to potentially prepare – with little effort – individualized disk images that fit perfectly for the customer’s projects.
 
-Meanwhile, in January 2025, Sean DuBois, who created Pion and its libraries, told me (a nobody) I could co-maintain it with him and handed me owner access to the whole thing. Sean trusted me more than I trusted me :)
+### Modularization
 
-I created Pion's Discord server, reviewed PRs every day, contributed new features across the stack, and talked my friends into contributing. But I kept opening that DTLS 1.3 issue, staring at it, and closing the tab. For DTLS fixes and reviews were fine, but anything bigger felt like I'd create an RCE!
+Classic distribution packages are a concept of *modularization*, and useful in that. With our image-based OS approach, we cut down on the modularization at deployment time, but we do allow some. This reflects the fact that while we likely will be able to cover a lot of disparate systems with a single, generic, minimal OS image, some of the components certain systems might require are so large, or specific, that it makes sense to split them out. For example, graphics/AI drivers and cloud-specific agent services tend to be large these days.
 
-Then, in May 2025, Theo ([Theodor Signebøen Midtlien](https://github.com/theodorsm)) said in the issue that he'd applied to [NLnet](https://nlnet.nl/project/PION-DTLS1.3/). The same day, Sean offered to review and merge everything, and to go knock on companies' doors for money if NLnet said no. NLnet said yes, and Theo announced the grant on August 6.
+#### System Extensions
 
-At the time, R Chiu and I were spending a lot of time in Pion's SCTP stack, the thing WebRTC data channels run on. She implemented [RACK loss recovery](https://pion.ly/blog/sctp-and-rack/).
+In order to not require their installation on every deployment host we split some components out into [**system extensions**](https://www.freedesktop.org/software/systemd/man/latest/systemd-sysext.html) (or short: “*sysexts*”) that contain additional files which can be overlaid on top of the OS resources in `/usr/` and augment the system with additional resources. Making these components optional reduces footprint and attack surface.
 
-Adriano Sela Aviles had also joined while working with us on Pion's TURN implementation, and sent really important PRs, but he and R had their own lives and were not able to go all the way with the implementation.
+Note that in many cases the selection of sysexts to activate on a given host is purely a function of the host’s circumstances and equipment. More specifically, the graphics drivers and subsystem should be installed automatically when the matching hardware is detected. Similarly, the cloud-specific agent services should be picked up automatically when the system is detected to run inside a relevant cloud vendor’s environment.
 
-I'd read [the spec](https://www.rfc-editor.org/rfc/rfc9147) once and was comfortable with it from a high-level POV, so I was excited to help with reviews. R Chiu helped with the key schedule. But it was Theo's project, and while we wanted to help, we didn't want to get in the way.
+In AOS the selection of additional images to install is hence somewhat automated. The local AOS system carries a “[hwdb](https://www.freedesktop.org/software/systemd/man/latest/hwdb.html)” database that dictates which additional images to auto-install on the individual node if certain hardware is enumerated or the VMM indicates certain identification or functionality.
 
-People were waiting for it. In December, just as the project was starting, Justin Uberti from OpenAI, where Sean had worked, asked for updates. They wanted "reduced RTTs during connection setup, and also … post-quantum crypto support." Lower RTTs meant you didn't have to wait as long for voice AI to start.
+#### Configuration Extensions
 
-Theo put together a high-level MVP plan and opened skeleton PRs, but then life got busy, including a new job at NetBird! By January 2026, I was starting a new WebRTC job at Upwork, but I don't have a family yet, so I have free time after work :) Theo was happy to hand me the project. I promised we'd do his plan right and extend it, including the parts outside the WebRTC subset. I wanted a real DTLS 1.3 library that Pion also happens to use, because users outside WebRTC need resumption, 0-RTT and Connection IDs too.
+A core functionality of AOS is support for [**configuration extensions**](https://www.freedesktop.org/software/systemd/man/latest/systemd-confext.html) (“confexts”). These are very similar to sysexts, but overlay `/etc/` instead of `/usr/`. They are designed to be the primary configuration management concept on AOS: configuration is pre-built and shipped in an atomically applied image to the AOS nodes, where it appears in full or not at all, but never halfway. Or in other words, not just AOS code but also AOS configuration is free from drift and strictly reproducible.
 
-I don't want to get paid for my work on Pion, because I don't want to treat it as a job. I also wanted people to build it with me. So I asked my friends who had already contributed to Pion, **Jade Kolos**, **Júlia Borges Paschoalinoto** and **Julia-Elena Roman**, and later **Jan Muška**, to join the NLnet-funded effort, and recommended them to Theo. Then DTLS 1.3 was ours to finish :)
+#### Discoverable Disk Images
 
-We had DTLS 1.2 extension parsers that didn't really understand DTLS 1.3, and an unmerged state machine skeleton. No record layer, no key schedule, no encryption, nothing that could finish a DTLS 1.3 handshake. And none of us had a real TLS background.
+The OS image itself, as well as sysext and confext images are implemented as [**UAPI.3 DDIs**](https://uapi-group.org/specifications/specs/discoverable_disk_image/): [EROFS](https://en.wikipedia.org/wiki/EROFS) file system images, combined with [Verity](https://docs.kernel.org/admin-guide/device-mapper/verity.html) protection data, and a cryptographic signature, all wrapped in a GPT partition table as envelope. In the case of confexts, these DDIs are additionally encrypted ([LUKS](https://en.wikipedia.org/wiki/Linux_Unified_Key_Setup)). This means strong integrity is enforced on all these components not just at download time, but continuously during runtime. For configuration, confidentiality is also guaranteed during runtime. Moreover, we not only protect the contents of the images but the file system data structures themselves. Since each image can be cryptographically referenced via their Verity root hash, we also have a useful handle to *measure* before activating each image (see below for what this means).
 
-Roughly four months passed between the handoff and our first record-layer implementation. There were extension and helper commits, but the main implementation was stalled. We kept reading specs and other implementations: [RFC 9147](https://www.rfc-editor.org/rfc/rfc9147), [RFC 8446](https://www.rfc-editor.org/rfc/rfc8446), [RFC 9146](https://www.rfc-editor.org/rfc/rfc9146), IETF write-ups. I was still mostly anxious: I wanted to do this right and didn't want to break stuff people were already using.
+The Linux kernel is shipped as a [**UAPI.5 UKI**](https://uapi-group.org/specifications/specs/unified_kernel_image/). This means it comprehensively protects the kernel itself and its initrd via UEFI SecureBoot, and via [TPM](https://en.wikipedia.org/wiki/Trusted_Platform_Module) measurements and policies.
 
-Then Sean asked how it was going. That's when we got his backing to really go ahead. He helped with the code design (where DTLS 1.3 would fit with 1.2 in a clean way), the FSM, Go idioms, cleaning up some old code, and later most of the DTLS 1.3 ACK reliability.
+![AOS node composition: workload images (containers, VMs, portable services) on top of the operating system, built from confext DDIs, sysext DDIs, the OS DDI and the UKI](https://amutable.com/images/aos-node-composition.svg)
 
-But most importantly, other than the technical parts, he made me confident enough to build it and break stuff along the way. He told me I could merge stuff without review!
+## ACP – Amutable Control Plane
 
-We didn't have to understand every last thing before starting. He reviewed, merged, unblocked and encouraged. Without him, I think this would've taken another year or more.
+Amutable Control Plane (ACP) manages and supervises a fleet of AOS nodes. It primarily encompasses the following functionality:
 
-On May 13 we started the record layer. On June 19 we finally merged the state machine.
+- An enrollment system that allows administrators to enroll AOS nodes using hardware-backed trust.
+- A report receiver, validator, and ledger which is one side of an operational loop which we will look at below.
+- A configuration extension generator, which encrypts confext images for each node.
+- An identity service for issuing short-lived credentials used to authenticate nodes.
+- An image repository based on TUF which we’ve covered in an earlier blog post.
+- A CVE scanner and analysis tool that leverages the verified SBOMs associated with the images that machines are using.
+- A web UI to manage the above-listed functionality.
 
-On July 7 I closed the six-year-old issue with this very reasonable estimate:
+ACP is multi-tenant: each tenant has its own signing keys, storage and roles.
 
-> I think we'll have a working production ready MVP within two weeks.
+The interplay between the incoming reports and the outgoing confext and sysext images creates a loop that we leverage for security and operational robustness. Let’s take a look at that now.
 
-**That wasn't accurate.**
+![Amutable Control Plane components: report reception and verification, ledger, confext builder, web UI, identity provider, enrollment, image repository and CVE analysis](https://amutable.com/images/acp-components.svg)
 
-The server's Finished verified on July 12, and on July 29 the client's Finished verified too. A Pion client and server finally completed a DTLS 1.3 handshake. On August 5 I got the first confirmation of DTLS 1.3 working in WebRTC against Chrome! I hadn't slept for two days, and couldn't believe it. I'd written most of it without testing against another implementation lol.
+## CLL – Cryptographic Locked Loop
 
-[Our team's write-up](https://pion.ly/blog/dtls-one-three/#finished-is-a-different-story-in-1-3) has a line I really like: *"Finished" is a different story.* The handshake was just the beginning. August was more than a hundred commits: Connection IDs, KeyUpdate, HelloRetryRequest, SRTP negotiation, rewriting extension parsing, and a week deleting duplicated code that I badly underestimated.
+ACP keeps track of the enrolled nodes; ensures they are updated, in good health and that their integrity is verified. It also needs to be able to provide new configuration to nodes so they can receive configuration changes or new workloads. This forms a bi-directional relationship:
 
-We tagged the first v4 release candidate on September 26. Two days later I closed the tracking issue, and DTLS 1.3 went into Pion WebRTC's next major version. People outside WebRTC were already trying it on real IoT clusters. Seeing them pick up resumption and the other features motivated me to finish ECH and 0-RTT.
+- Each node sends “**reports**” (generated by the [systemd-report](https://amutable.com/blog/it-starts-upstream-systemd-report) tool) to the ACP instance it is enrolled in, at regular intervals. These reports describe both the runtime/resource state of the system, as well as cryptographic information about the composition of the system.On systems where a TPM is available, this carries a TPM “quote” that cryptographically indicates which UKI and DDIs the system is composed of. On systems where [Confidential Computing](https://en.wikipedia.org/wiki/Confidential_computing) (CoCo) is available, this carries a CPU quote instead that indicates what the initial composition of the node was. Moreover, a pure software signature scheme is available as well.These reports are collected by the ACP instance, verified both superficially (i.e. validating the signature checks out and mapping the signing keys to the source system) and in detail (i.e. checking if the UKI and all DDIs the system is composed of are recognized), in a [**remote attestation**](https://en.wikipedia.org/wiki/Trusted_Computing#Remote_attestation) scheme.This information is then enriched (e.g. SBOM, CVE, … information for the UKIs/DDIs) and everything written to a centralized “**ledger**” database. This ledger tracks the state of the entire fleet, both the image-level composition of it and the runtime state, including resource usage. Reports are the “*way up*” from the AOS nodes to the ACP instance.
+- In the opposite direction, ACP sends **confext DDIs** to the nodes. As mentioned above, these are Verity-protected, signed and encrypted with a key specific to the node. If the node hardware supports cryptographic sealing (as TPMs do), the confext DDI is sealed to the hardware keys of the node. The sealing uses a hardware-enforced access policy that mirrors the most recently seen report of the node (plus various other parameters).This provides very strong security guarantees: configuration and resources for a specific node may only be unlocked by the node if it still is in the state last reported. Or in other words, there’s also **local attestation** in play here: after ACP verifies via remote attestation that the node is in a good state, it provides updates and additional resources that can only be used after the local hardware validates that the machine is still in the expected state.This reduces the vulnerability window between ACP’s determination that the node is in a good state and the actual update for the node, as the state is re-verified at that point. Also note that this mechanism is very compatible with nodes that lack continuous connectivity as they can boot up fine even without being able to contact the ACP instance as the local TPM can reasonably attest the system’s state via the local attestation mechanism. Confext DDIs are the “*way down*” from the ACP instance to the AOS nodes.
 
-On October 14 I said support was complete. Before we released it, Anthropic rolled out their OSS scanner, and we [sent pion/dtls through it](https://github.com/anthropics/oss-scanner/pull/93). It found many old issues, but also new ones in the new implementation. Yey, we got to fix them before release!
+The way up (of the reports) and the way down (of the confext DDIs) together make up what we call the *Cryptographic Locked Loop* (“CLL”). A continuous cycle of reports and confexts tracks and controls the fleet. The ledger always carries a precise, frequently updated description of the fleet’s state.
 
-On October 31, DTLS 1.3 became the default in pion/dtls. No more "not implemented" errors, examples using 1.3 by default, and 1.2 one option away. v4.0.0-rc.8 is tagged, final v4 is next, and Pion WebRTC's next major version will bring it to everyone who uses it.
+![The cryptographic locked loop: AOS nodes send reports to ACP, which verifies, inspects, enriches and records them in the ledger, then sends back confext DDIs locked to the latest report](https://amutable.com/images/aos-acp-locked-loop.svg)
 
-So enough with the yapping! Let's dive in. But before we get into DTLS, what even is the D in DTLS? And how does it relate to TLS?
+Note that our CLL implementation is opportunistic. TPMs and CoCo are not available everywhere. AOS and ACP will make use of this hardware if available (specifically most reasonably modern TPM 2.0 implementations in chip, firmware or virtualized should work, as should [AMD SEV](https://www.amd.com/en/developer/sev.html) and [Intel TDX](https://www.intel.com/content/www/us/en/developer/tools/trust-domain-extensions/overview.html)). The system also uses a pure software scheme.
 
-Everything on the internet travels in packets. What happens when one goes missing depends on how you're sending them.
+Of course, the different technologies provide different security guarantees, and ACP’s UI will surface the used technologies clearly. Note that TPM, AMD SEV, Intel TDX, and software signatures are used opportunistically and in parallel if available. This is to say that in situations where a confidential VM with a vTPM is used, it might happen that reports are signed thrice (one TPM quote, one CoCo quote, and one plain software signature). It’s the job of ACP’s verifier to validate all three signatures and focus on the strongest technology of them all for the right purpose.
 
-**TCP is a phone call.** You get a connection, and everything you say arrives complete and in order, or not at all. If a packet gets lost on the way, TCP notices, sends it again, and makes everything after it *wait* until it arrives. You never see the gap, the conversation just pauses.
+## The Varlink Communication Channel
 
-**UDP is postcards.** Each packet, a *datagram*, travels on its own with its own address, and it either arrives whole or not at all. Postcards get lost, arrive out of order, and sometimes the same one shows up twice. Nobody resends anything and nobody waits.
+Communication between ACP and AOS nodes primarily takes place via reports in one direction and confext DDIs in the other as explained earlier in this post. Both mechanisms are very asynchronous in nature: reports are generated, queued, transferred, and processed asynchronously.
 
-Here are both, carrying the same message, with the same bad luck:
+Confext DDIs are generated for the nodes, made available for download via a separate TUF repo, eventually downloaded by the node, and finally applied. This asynchronous behavior is fantastic for many scenarios and operations since it’s very robust and resilient towards spotty connectivity, unstable power sources and other disruptions. However, it is not nice for operations where interactivity is key, e.g. debugging, certain administrative operations and similar.
 
-Try it a few times and tap a packet or two in flight. TCP always delivers a perfect `HELLO, PION!`, but it can take longer to finish, because one lost letter holds up every letter behind it. This is called *head-of-line blocking* (and it's the boogeyman of the real-time world). UDP finishes sooner, but what arrives is a mess. The app can sort it if it numbered its postcards, but the lost ones are just gone.
+To address this, AOS nodes have the possibility to be put into remote [Varlink](https://varlink.org/) mode that is facilitated via ACP and use the authentication options that the [varlink-http-bridge](https://github.com/systemd/varlink-http-bridge) provides (like mTLS or sshauth). This is built using the zero-trust pattern: ACP is content blind and has no special access.
 
-The mess is fine for a lot of things, because for real-time media late is the same as lost. One can argue that an audio packet that arrives 300ms late is useless: the moment it was meant for has already passed. Video is even worse: a frame is usually split into many packets, and later frames depend on earlier ones, so waiting for one lost packet holds up everything behind it, the same head-of-line blocking as TCP. It's better to keep going and decide what's actually worth recovering.
+When remote Varlink mode is enabled, a node exposes its full Varlink IPC API over HTTPS. That covers everything systemd and the other system services on the node offer via Varlink. For example: `io.systemd.Hostname` for hostname and machine metadata, `io.systemd.Unit` to list units and change their properties, `io.systemd.JournalAccess` to fetch journal entries, `io.systemd.SysUpdate` to check for and apply updates, and `io.systemd.Manager` to reload or reboot the system.
 
-WebRTC, for example, has a few ways to do that on top of UDP. RTP numbers every packet, like the postcards above, so the receiver knows exactly what's missing. With [**NACK**](https://webrtcforthecurious.com/docs/05-real-time-networking/#negative-acknowledgments), it tells the sender which sequence numbers it lost and the sender resends just those. That costs at least one extra round trip, so when there's no time to wait there's **FEC** (forward error correction): the sender adds a few extra parity packets, and the receiver rebuilds a lost packet from them without asking for anything. There's [a whole post about FEC in Pion](https://pion.ly/blog/fec-with-pion/) if you want the details.
+The result is API-driven management with strong typing and a fully self-describing set of rich APIs that any language that speaks JSON and HTTPS can drive. A service that registers a Varlink interface on the node becomes reachable remotely without further changes.
 
-That's why WebRTC *tries*(*) to send its media and data over UDP: it gets to decide what's worth waiting for.
+The API is self-describing, so a client can discover what a node offers. For each API interface the node also serves an [OpenAPI 3.1](https://spec.openapis.org/oas/v3.1.0) description, so you can generate typed client wrappers for Python, Go, TypeScript and other languages with standard tooling.
 
-(*) WebRTC can also use TCP transports, either directly with ICE-TCP or through a relay with TURN over TCP or TLS. DTLS is still used in both: with ICE-TCP the DTLS records are carried inside the TCP stream, and with TURN only the hop to the relay is TCP, and the relay usually forwards the same DTLS packets to the other side over UDP.
+## Cohesive Security Design
 
-Anyway, the problem is that the protocol that keeps the internet private, [TLS](https://www.rfc-editor.org/rfc/rfc9846), was designed for phone calls. It assumes nothing gets lost, reordered or duplicated. Put it on postcards and it falls apart.
+The image-based OS approach enables us to enforce some very strict but powerful security properties, which elevate the security posture of the system substantially above traditional Linux systems. Specifically, let’s highlight seven major essential security properties of AOS here:
 
-DTLS (Datagram TLS) is TLS rebuilt for postcards. To see what had to change, we first need to know what TLS actually promises.
+1. **No Shell + No SSH + No Language Interpreters**. By default AOS does not install a UNIX shell, nor makes remote access via SSH available on the nodes. Moreover, we do not install any of the usual language interpreters (Python, Perl, …) by default. For most nodes a shell or interpreted language support is not required and it removes a whole class of attacks.
+2. **Signed Images Only**. On AOS only images that come with Verity data signed by a signing key listed in the [Verity keyring](https://amutable.com/blog/it-starts-upstream-kernel) may be activated.
+3. **W^X**. We’ve posted about W^X policies before in greater detail. The core idea is that code cannot live on writable file systems and instead must originate from Verity protected sources. This makes injecting code into AOS much harder and hardens it against remote-code-execution vulnerabilities such as the [recent PHP attacks](https://amutable.com/blog/recent-php-cves-retrospective) which we also covered on our blog.
+4. **Everything Is Measured**. We believe that for a secure system it is absolutely essential to maintain a tamper-evident log of all images containing code or configuration. This kind of tamper-evident log is based on *measurements* utilizing hardware features that make it impossible to forge.
+5. **No SUID/SGID or File Capabilities**. The SUID and SGID file access bits are a fundamental privilege escalation mechanism in classic UNIX and have led to a very large number of exploits. On AOS the SUID and SGID bits are therefore disabled completely. Privilege elevation happens securely via IPC such that a suitably privileged process performs operations on behalf of less privileged code.
+6. **Integrity Is Mandatory**. A modern operating system must provide integrity guarantees well beyond traditional systems. It is a conditio sine qua non given the advent of LLM agents. On AOS everything is measured, attested, and comes with fundamental protection mechanisms. For example, all file system images we ship come with block-level Verity and encryption securing complex file system data structures.
+7. **Factory Reset Is Built In**. Any operating system must consider the possibility that it will be hacked. For this reason, a secure OS must come with a “[factory reset](https://www.freedesktop.org/software/systemd/man/latest/systemd-factory-reset.html)” mechanism. AOS makes a lot of exploits *visible* in its Ledger. With factory reset it gains the ability to *act* and put the system back into a good state.
 
-TLS makes three promises about the conversation between Client and Server:
+## Summary
 
-1. Nobody else can read it. (Confidentiality.)
-2. Nobody can change it without getting caught. (Integrity.)
-3. You're talking to who you think you're talking to. (Authentication.)
+**TL;DR**: Putting this all together, Amutable Foundations’ AOS and ACP provide:
 
-Mallory is the reason all three exist. She sits on the wire, which in real life is your coffee shop's Wi-Fi, a compromised router, a shady ISP, or anyone else between you and the server. Every packet goes through her.
+- A modern image-based OS, with far-reaching compatibility with classic Linux distributions
+- AOS is fundamentally designed with security in mind, removing a large portion of the attack surface of classic Linux systems
+- Composition, lifetime and resources of nodes are centrally tracked in the ledger, with tamper-evident properties, via measurements
+- The system covers both OS updates and configuration management via the same (or similar) mechanisms
+- Each node comes with a robust, powerful API to execute operations on it
+- Opportunistic support for modern security hardware (TPM 2.0, CoCo), with graceful degradation to all-software signatures where unavailable
+- Integrity checks every step of the way, via both local and remote attestation
+- Custom configuration and resources are only available to the machine if it is in the expected state
 
-You might think encryption takes care of the second one too. If Mallory can't read the message, how is she going to change it into anything useful? Try it:
+## Sign Up for Our Private Preview Now!
 
-Encryption alone hides *what* you said, but a stream cipher like AES-CTR just XORs your message with a keystream, so flipping a bit in the ciphertext flips the same bit in the plaintext. Mallory doesn't need the key, she only needs to know where `10` is in the message.
+If you are interested in the experience we described above, please [sign up for the Amutable Foundations Private Preview](https://amutable.com/preview) to get a chance to try AOS and ACP first-hand yourself.
 
-That's why every cipher in TLS 1.3 and DTLS 1.3 is an **AEAD** (*authenticated encryption with associated data*). AES-GCM and ChaCha20-Poly1305 encrypt the record and compute a tag over it. Change one bit anywhere and the tag doesn't match, so the record gets dropped. Older TLS versions did encryption and authentication separately and got burned by the gaps between them more than once, so TLS 1.3 removed every cipher that isn't an AEAD.
+[We recently announced Amutable Foundations](https://amutable.com/blog/introducing-amutable-foundations). It’s now time to provide a technical overview of how Amutable Foundations is put together. In this post, we’ll discuss two of the most fundamental components:
 
-AEADs need a key that only Client and Server know. But they've never met before, and every message between them goes through Mallory, so they have to agree on a secret while she listens to every word. We can explain it with paint:
+- **Amutable OS** (“*AOS*”, or “*⊼OS*”), a modern image-based Linux OS. It builds on the foundation of established Linux distributions, but moves them from a package-based world into an image-based, integrity-protected world. It removes drift, and adds robustness, integrity, and reproducibility. On one hand this provides great conceptual compatibility with the status quo ante of enterprise distributions, and on the other hand it’s built from the ground up with image-based OS designs in mind.
+- **Amutable Control Plane** (“*ACP*”, or “*⊼CP*”), a management system that tracks, controls, updates and verifies a fleet of AOS installations.
 
-Each side keeps a secret and only sends a *mix*. Mallory sees both mixes but can't un-mix them, so both sides end up with the same final color and she can't make it herself. In real crypto the "paint" is elliptic-curve math (X25519 is the common one), and "un-mixing" means solving a problem no current computer can solve in any reasonable time.
+## AOS – Amutable Operating System
 
-In TLS 1.3 the client doesn't wait to be asked. It guesses which key exchange the server will accept and puts its half, the `key_share`, in the very first message, the ClientHello. If the guess is right, the server answers with its own half and can start encrypting right away. That's why TLS 1.3 needs one round trip where TLS 1.2 needed two.
+Amutable OS is built on classic Linux distributions, initially from [Fedora](https://fedoraproject.org/) packages. Distributions do valuable integration and unification work on the basic components of the OS – work we want to leverage. However, AOS uses distribution packages to pre-assemble immutable disk images at build-time while distributions, traditionally, compose a Linux system by installing packages on the final, deployed system. Let’s take a closer look at what this means.
 
-Key exchange alone doesn't stop Mallory from sitting in the middle and doing a separate key exchange with each side. That's what promise three is for. The server proves who it is by signing the handshake with its certificate's private key (the `CertificateVerify` message). Then both sides send a `Finished` message, a MAC over every handshake message so far (the *transcript*). If Mallory changed even one byte anywhere in the handshake, the transcripts won't match and the checks fail. Be Mallory and try:
+- **Package-based OSes** generally provide the user with a large number of regularly updated software packages (many thousands) with complex dependencies, which are composed into a working OS on the final machine it is deployed on. Installations in this style tend to vary greatly from system to system. Even with an identical selection of packages for the target system, the installation/update order, the stateful update logic and the file system data structures generally mean that the bytes that hit the disk on each machine are always different. This is called *drift*. Systems put together this way are hence not reproducible, not predictable, and hard to compare and analyze which is essential for tracking down security issues. They are also hard to test as the flexibility of selecting packages and assembling them in any order results in a prohibitive combinatorial explosion of systems to test.
+- **Image-based OSes** instead provide pre-built file system images that contain all code and other resources the OS needs. These images are bit-by-bit identical on every deployed system, so that the installations differ only in local state acquired during runtime, but not in the OS code and resources themselves (which stay 100% identical). To improve modularity, AOS extends this concept to allow a small number of coarse images to be merged together. Rather than thousands of packages, each system only combines a small number (typically < 5) of images, so that the system stays reproducible.
 
-Watch what catches her each time. If she touches the hellos, the transcripts stop matching, so the server's signature and the Finished MACs fail. If she swaps the key shares, she gets surprisingly far, until the server has to prove who it is. She can fake a key exchange, but she can't sign as `server.example` without its private key, and no CA will vouch for her own certificate. Well, unless she finds a CA whose private key is literally `4`, which [actually happened](https://www.helpnetsecurity.com/2026/10/21/emudhra-certificates-private-keys-compromised/) this October :)
+Building from existing distribution packages allows us to guarantee far reaching semantic compatibility with existing systems, while maintaining our image-based focus. In particular, it allows us to potentially prepare – with little effort – individualized disk images that fit perfectly for the customer’s projects.
 
-That's how it works on the web, for example, where a CA says which certificate belongs to `server.example`. Standard WebRTC peers don't use CAs for authentication. Instead, each peer has its own certificate (which can be generated on the spot and self-signed) and puts its **fingerprint**, a SHA-256 hash of that certificate, in the SDP (Session Description Protocol) it sends through your signaling server:
+### Modularization
 
-```
-a=fingerprint:sha-256 4A:AD:B9:B1:3F:82:18:3B:54:02:12:DF:3E:5D:49:6B:...
-```
+Classic distribution packages are a concept of *modularization*, and useful in that. With our image-based OS approach, we cut down on the modularization at deployment time, but we do allow some. This reflects the fact that while we likely will be able to cover a lot of disparate systems with a single, generic, minimal OS image, some of the components certain systems might require are so large, or specific, that it makes sense to split them out. For example, graphics/AI drivers and cloud-specific agent services tend to be large these days.
 
-After the DTLS handshake, each side hashes the certificate the other side actually used and compares it with the fingerprint from the SDP, which is usually sent over HTTPS or a WebSocket over TLS. If Mallory swaps in her own certificate, the hash won't match and the connection fails. In WebRTC both sides send a certificate, so both sides get checked. The catch is that DTLS is only as trustworthy as your signaling: if Mallory can edit the SDP, she can put her own fingerprint in it.
+#### System Extensions
 
-Some connections don't use certificates at all. With a **pre-shared key** (PSK), both sides already share a secret, for example a key that was put on an IoT device at the factory, and knowing the key is the proof of identity. The handshake keys come from the PSK, so without it Mallory can't finish the handshake as either side. It's a lot cheaper than certificates, which is why it's popular on small devices. More on PSKs later.
+In order to not require their installation on every deployment host we split some components out into [**system extensions**](https://www.freedesktop.org/software/systemd/man/latest/systemd-sysext.html) (or short: “*sysexts*”) that contain additional files which can be overlaid on top of the OS resources in `/usr/` and augment the system with additional resources. Making these components optional reduces footprint and attack surface.
 
-So that's TLS in four steps:
+Note that in many cases the selection of sysexts to activate on a given host is purely a function of the host’s circumstances and equipment. More specifically, the graphics drivers and subsystem should be installed automatically when the matching hardware is detected. Similarly, the cloud-specific agent services should be picked up automatically when the system is detected to run inside a relevant cloud vendor’s environment.
 
-1. hello with a key share
-2. hello back with a key share
-3. encrypted proof of identity
-4. Finished
+In AOS the selection of additional images to install is hence somewhat automated. The local AOS system carries a “[hwdb](https://www.freedesktop.org/software/systemd/man/latest/hwdb.html)” database that dictates which additional images to auto-install on the individual node if certain hardware is enumerated or the VMM indicates certain identification or functionality.
 
-Now let's put it on postcards.
+#### Configuration Extensions
 
-TLS assumes it's on a phone call, so it takes some shortcuts, and every one of them breaks on UDP.
+A core functionality of AOS is support for [**configuration extensions**](https://www.freedesktop.org/software/systemd/man/latest/systemd-confext.html) (“confexts”). These are very similar to sysexts, but overlay `/etc/` instead of `/usr/`. They are designed to be the primary configuration management concept on AOS: configuration is pre-built and shipped in an atomically applied image to the AOS nodes, where it appears in full or not at all, but never halfway. Or in other words, not just AOS code but also AOS configuration is free from drift and strictly reproducible.
 
-**It counts silently.** Every TLS record is encrypted with a nonce derived from a sequence number, but the number is never sent, both sides just count 0, 1, 2... On a phone call that's safe. With postcards, one lost record means the receiver thinks record 5 is record 4, uses the wrong nonce, and every record after that fails to decrypt. Drop one record and watch:
+#### Discoverable Disk Images
 
-One lost postcard and the TLS receiver is off by one forever. So DTLS puts the **epoch and sequence number in every record header**, in the clear. (DTLS 1.3 encrypts them again, more on that later.)
+The OS image itself, as well as sysext and confext images are implemented as [**UAPI.3 DDIs**](https://uapi-group.org/specifications/specs/discoverable_disk_image/): [EROFS](https://en.wikipedia.org/wiki/EROFS) file system images, combined with [Verity](https://docs.kernel.org/admin-guide/device-mapper/verity.html) protection data, and a cryptographic signature, all wrapped in a GPT partition table as envelope. In the case of confexts, these DDIs are additionally encrypted ([LUKS](https://en.wikipedia.org/wiki/Linux_Unified_Key_Setup)). This means strong integrity is enforced on all these components not just at download time, but continuously during runtime. For configuration, confidentiality is also guaranteed during runtime. Moreover, we not only protect the contents of the images but the file system data structures themselves. Since each image can be cryptographically referenced via their Verity root hash, we also have a useful handle to *measure* before activating each image (see below for what this means).
 
-**It assumes the handshake arrives.** In TLS a lost handshake message is TCP's problem, in DTLS it's yours. Each side groups its handshake messages into *flights* and starts a **retransmission timer**. If the next flight from the other side doesn't show up in time, it sends its own flight again.
+The Linux kernel is shipped as a [**UAPI.5 UKI**](https://uapi-group.org/specifications/specs/unified_kernel_image/). This means it comprehensively protects the kernel itself and its initrd via UEFI SecureBoot, and via [TPM](https://en.wikipedia.org/wiki/Trusted_Platform_Module) measurements and policies.
 
-**It assumes any message fits.** A TLS handshake message can be up to 16 MB and TCP will happily stream it. A UDP datagram that's too big for the path gets dropped, or chopped into IP fragments that plenty of firewalls and NATs drop anyway, and the safe size on the internet is about 1200 bytes *[give or take](https://github.com/pion/sctp/pull/476)*, while a certificate chain is often several kilobytes. So DTLS adds a 12-byte header to every handshake message that says which message it is, how long the whole thing is, and which bytes this fragment carries:
+![AOS node composition: workload images (containers, VMs, portable services) on top of the operating system, built from confext DDIs, sysext DDIs, the OS DDI and the UKI](https://amutable.com/images/aos-node-composition.svg)
 
-This one actually bit us. A retransmitted message is allowed to be fragmented *differently* from the original. OvenMediaEngine, an OpenSSL-based media server, splits its handshakes into tiny 256-byte fragments, and Pion's DTLS 1.2 reassembly assumed fragment boundaries would line up, so after a single lost datagram the handshake could never finish. Tristan Matthews [fixed it](https://github.com/pion/dtls/pull/1099) by making reassembly track which *bytes* it has instead of which *fragments*.
+## ACP – Amutable Control Plane
 
-Post-quantum crypto makes it worse. The post-quantum key share Pion sends by default is 1216 bytes on its own, so now even the first message of the handshake doesn't fit in one datagram.
+Amutable Control Plane (ACP) manages and supervises a fleet of AOS nodes. It primarily encompasses the following functionality:
 
-And of course that broke something. wolfSSL, which a lot of embedded devices run, wants the first ClientHello in a single datagram so it can answer without keeping any state, and [by default](https://github.com/wolfSSL/wolfssl/blob/b24278145e7a7f3999082b2d793b1febbe665d57/src/dtls.c#L45) it just won't take a fragmented one. Most people using pion/dtls directly are doing IoT, so that's the worst place to break. Raising the MTU doesn't help either, the ClientHello needs 1415 bytes and plenty of networks can't do that. So now Pion [sends an X25519 share next to the hybrid one](https://github.com/pion/dtls/pull/1289) like Go does, and clients [put plain X25519 first](https://github.com/pion/dtls/pull/1292) so the first ClientHello fits again. If the server wants post-quantum, it asks for it with a HelloRetryRequest, so we still get ML-KEM everywhere it's supported. Clients with early data keep ML-KEM first, because a retry throws the early data away. I kinda get the X25519MLKEM768 hate now :(
+- An enrollment system that allows administrators to enroll AOS nodes using hardware-backed trust.
+- A report receiver, validator, and ledger which is one side of an operational loop which we will look at below.
+- A configuration extension generator, which encrypts confext images for each node.
+- An identity service for issuing short-lived credentials used to authenticate nodes.
+- An image repository based on TUF which we’ve covered in an earlier blog post.
+- A CVE scanner and analysis tool that leverages the verified SBOMs associated with the images that machines are using.
+- A web UI to manage the above-listed functionality.
 
-**It assumes nobody repeats things.** Networks do occasionally duplicate packets, but TCP throws away bytes it already has, and if Mallory spliced an old record into the stream, TLS's silent counter would have moved on and it wouldn't decrypt. DTLS just put the sequence number in the header, so with UDP Mallory can record a perfectly valid encrypted packet and send it again as many times as she wants, and it decrypts fine because it *is* valid. So DTLS keeps a sliding **replay window**, a bitmap of recently seen sequence numbers, and drops anything it already saw or that's too old to tell:
+ACP is multi-tenant: each tenant has its own signing keys, storage and roles.
 
-Now switch to "slide, then authenticate" and have Mallory send her garbage. One fake record with a huge sequence number pushes the window a million packets ahead, and every real packet after it looks ancient. That's why the window should only move after a record is authenticated.
+The interplay between the incoming reports and the outgoing confext and sysext images creates a loop that we leverage for security and operational robustness. Let’s take a look at that now.
 
-**It assumes the sender's address is real.** TCP's handshake proves the other side can receive packets at its address before anything else happens. UDP has nothing like that, so Mallory can write anyone's address on her postcards. If she sends a small ClientHello with a victim's address, the server answers the *victim* with its big first flight, certificates and all, turning a few hundred bytes into a few kilobytes aimed at someone else. So DTLS servers answer a new ClientHello with a small **cookie** first, and only do real work after the client echoes the cookie back, proving it can receive mail at that address:
+![Amutable Control Plane components: report reception and verification, ledger, confext builder, web UI, identity provider, enrollment, image repository and CVE analysis](https://amutable.com/images/acp-components.svg)
 
-In WebRTC, ICE's connectivity checks often prove the address before DTLS even starts, so is the cookie still worth a round trip? Not always: SFUs usually run ICE-lite, which only answers checks and never sends its own, so the server never learns whether the client's address is real. Philipp Hancke and I [are working on a more nuanced default](https://github.com/pion/webrtc/pull/3504).
+## CLL – Cryptographic Locked Loop
 
-That's the "D": explicit sequence numbers, timers, fragments, a replay window and cookies, all added to TLS so it survives postcards. DTLS 1.2 already did all of this, and Pion had supported it for years.
+ACP keeps track of the enrolled nodes; ensures they are updated, in good health and that their integrity is verified. It also needs to be able to provide new configuration to nodes so they can receive configuration changes or new workloads. This forms a bi-directional relationship:
 
-DTLS 1.3 starts from TLS 1.3 and redesigns a lot of this. Let's go through the pieces.
+- Each node sends “**reports**” (generated by the [systemd-report](https://amutable.com/blog/it-starts-upstream-systemd-report) tool) to the ACP instance it is enrolled in, at regular intervals. These reports describe both the runtime/resource state of the system, as well as cryptographic information about the composition of the system.On systems where a TPM is available, this carries a TPM “quote” that cryptographically indicates which UKI and DDIs the system is composed of. On systems where [Confidential Computing](https://en.wikipedia.org/wiki/Confidential_computing) (CoCo) is available, this carries a CPU quote instead that indicates what the initial composition of the node was. Moreover, a pure software signature scheme is available as well.These reports are collected by the ACP instance, verified both superficially (i.e. validating the signature checks out and mapping the signing keys to the source system) and in detail (i.e. checking if the UKI and all DDIs the system is composed of are recognized), in a [**remote attestation**](https://en.wikipedia.org/wiki/Trusted_Computing#Remote_attestation) scheme.This information is then enriched (e.g. SBOM, CVE, … information for the UKIs/DDIs) and everything written to a centralized “**ledger**” database. This ledger tracks the state of the entire fleet, both the image-level composition of it and the runtime state, including resource usage. Reports are the “*way up*” from the AOS nodes to the ACP instance.
+- In the opposite direction, ACP sends **confext DDIs** to the nodes. As mentioned above, these are Verity-protected, signed and encrypted with a key specific to the node. If the node hardware supports cryptographic sealing (as TPMs do), the confext DDI is sealed to the hardware keys of the node. The sealing uses a hardware-enforced access policy that mirrors the most recently seen report of the node (plus various other parameters).This provides very strong security guarantees: configuration and resources for a specific node may only be unlocked by the node if it still is in the state last reported. Or in other words, there’s also **local attestation** in play here: after ACP verifies via remote attestation that the node is in a good state, it provides updates and additional resources that can only be used after the local hardware validates that the machine is still in the expected state.This reduces the vulnerability window between ACP’s determination that the node is in a good state and the actual update for the node, as the state is re-verified at that point. Also note that this mechanism is very compatible with nodes that lack continuous connectivity as they can boot up fine even without being able to contact the ACP instance as the local TPM can reasonably attest the system’s state via the local attestation mechanism. Confext DDIs are the “*way down*” from the ACP instance to the AOS nodes.
 
-My first big design decision was that a connection is always in exactly one of three modes. I wanted to make this super explicit because of a [Firefox bug](https://bugzilla.mozilla.org/show_bug.cgi?id=2033783) that broke calls to Pion: Firefox speaks both versions, and its fallback to 1.2 went wrong. We kept coming back to this for the rest of the year:
+The way up (of the reports) and the way down (of the confext DDIs) together make up what we call the *Cryptographic Locked Loop* (“CLL”). A continuous cycle of reports and confexts tracks and controls the fleet. The ledger always carries a precise, frequently updated description of the fleet’s state.
 
-1. DTLS 1.2 only.
-2. DTLS 1.3 only.
-3. Dual, where the version isn't decided yet and the client must still be able to talk to an old 1.2-only server. In this mode we're also explicit about which state we're in:
-  1. Not decided yet.
-  2. Decided to continue with 1.3.
-  3. Decided to downgrade to 1.2.
+![The cryptographic locked loop: AOS nodes send reports to ACP, which verifies, inspects, enriches and records them in the ledger, then sends back confext DDIs locked to the latest report](https://amutable.com/images/aos-acp-locked-loop.svg)
 
-A lot of our hardest bugs were in that third one. Pick a client and a server and connect:
+Note that our CLL implementation is opportunistic. TPMs and CoCo are not available everywhere. AOS and ACP will make use of this hardware if available (specifically most reasonably modern TPM 2.0 implementations in chip, firmware or virtualized should work, as should [AMD SEV](https://www.amd.com/en/developer/sev.html) and [Intel TDX](https://www.intel.com/content/www/us/en/developer/tools/trust-domain-extensions/overview.html)). The system also uses a pure software scheme.
 
-Dual mode is tricky. The client sends one ClientHello that has to be a valid DTLS 1.2 hello *and* a valid DTLS 1.3 hello at the same time, and it only finds out which one it was when the server answers. If the answer is 1.2, everything from the 1.3 attempt has to disappear without a trace. Our first fallback didn't clean everything up. You can switch that bug on in the demo above. And Mallory can't force a downgrade either: a 1.3 server that gets pushed down to 1.2 writes `DOWNGRD` at the end of its random value, and the client notices.
+Of course, the different technologies provide different security guarantees, and ACP’s UI will surface the used technologies clearly. Note that TPM, AMD SEV, Intel TDX, and software signatures are used opportunistically and in parallel if available. This is to say that in situations where a confidential VM with a vTPM is used, it might happen that reports are signed thrice (one TPM quote, one CoCo quote, and one plain software signature). It’s the job of ACP’s verifier to validate all three signatures and focus on the strongest technology of them all for the right purpose.
 
-## [The record layer](https://joturk.net/posts/dtls#the-record-layer)
+## The Varlink Communication Channel
 
-A DTLS 1.2 record header is 13 bytes, on every single packet. For a video call that's a lot of bytes spent on bookkeeping. DTLS 1.3 replaced it with a *unified header*, where the first byte is a set of flags that say what comes after it. Poke the bits:
+Communication between ACP and AOS nodes primarily takes place via reports in one direction and confext DDIs in the other as explained earlier in this post. Both mechanisms are very asynchronous in nature: reports are generated, queued, transferred, and processed asynchronously.
 
-Three things changed.
+Confext DDIs are generated for the nodes, made available for download via a separate TUF repo, eventually downloaded by the node, and finally applied. This asynchronous behavior is fantastic for many scenarios and operations since it’s very robust and resilient towards spotty connectivity, unstable power sources and other disruptions. However, it is not nice for operations where interactivity is key, e.g. debugging, certain administrative operations and similar.
 
-**It's smaller.** The smallest DTLS 1.3 header is 2 bytes. The content type (handshake, alert, application data) isn't in the header anymore, it moved *inside* the encryption, so Mallory can't even tell what kind of record she's looking at.
+To address this, AOS nodes have the possibility to be put into remote [Varlink](https://varlink.org/) mode that is facilitated via ACP and use the authentication options that the [varlink-http-bridge](https://github.com/systemd/varlink-http-bridge) provides (like mTLS or sshauth). This is built using the zero-trust pattern: ACP is content blind and has no special access.
 
-**The sequence number is encrypted.** DTLS had to put the sequence number on every postcard, but that's also a tracking number for Mallory: she can count packets, follow a connection across networks, and measure exactly how much was sent. DTLS 1.3 encrypts those bits with a mask derived from the record's own ciphertext. Toggle "what Mallory sees" and click next a few times: the real numbers go 42, 43, 44, and she just sees noise.
+When remote Varlink mode is enabled, a node exposes its full Varlink IPC API over HTTPS. That covers everything systemd and the other system services on the node offer via Varlink. For example: `io.systemd.Hostname` for hostname and machine metadata, `io.systemd.Unit` to list units and change their properties, `io.systemd.JournalAccess` to fetch journal entries, `io.systemd.SysUpdate` to check for and apply updates, and `io.systemd.Manager` to reload or reboot the system.
 
-**It's mostly implicit.** Only the low 8 or 16 bits of the sequence number and the low 2 bits of the epoch are sent, and the receiver reconstructs the rest from what it expects next. That only works because the receiver keeps careful state about every epoch, which brings us to keys.
+The result is API-driven management with strong typing and a fully self-describing set of rich APIs that any language that speaks JSON and HTTPS can drive. A service that registers a Varlink interface on the node becomes reachable remotely without further changes.
 
-As I wrote in [the team's write-up](https://pion.ly/blog/dtls-one-three/#the-names-are-scarier-than-the-concepts): the names are scarier than the concepts. HKDF, AEAD, transcript hash, epoch, each is a small idea with a scary name.
+The API is self-describing, so a client can discover what a node offers. For each API interface the node also serves an [OpenAPI 3.1](https://spec.openapis.org/oas/v3.1.0) description, so you can generate typed client wrappers for Python, Go, TypeScript and other languages with standard tooling.
 
-TLS 1.3 doesn't use *a* key, it uses a whole family of keys, each derived from the one before it and each protecting a different part of the conversation. Encrypted handshake messages get one key, application data gets another, and after a KeyUpdate you get a fresh one and the old one can be forgotten. In DTLS each of these keys lives in its own *epoch*, and the epoch number in the header tells the receiver which key to use.
+## Cohesive Security Design
 
-The thing that produces them is the *key schedule*, and it's built from one tool: HKDF, which takes some secret material and stretches it into as many independent keys as you need. You can try the actual key schedule here. It's computed in your browser:
+The image-based OS approach enables us to enforce some very strict but powerful security properties, which elevate the security posture of the system substantially above traditional Linux systems. Specifically, let’s highlight seven major essential security properties of AOS here:
 
-Click "new handshake" and watch every value below it change. One fresh key exchange at the top, and every key below it is new and unrelated to any previous connection. This is called *forward secrecy*: if someone steals the server's certificate key next year, they still can't decrypt today's call, because the keys never depended on it.
+1. **No Shell + No SSH + No Language Interpreters**. By default AOS does not install a UNIX shell, nor makes remote access via SSH available on the nodes. Moreover, we do not install any of the usual language interpreters (Python, Perl, …) by default. For most nodes a shell or interpreted language support is not required and it removes a whole class of attacks.
+2. **Signed Images Only**. On AOS only images that come with Verity data signed by a signing key listed in the [Verity keyring](https://amutable.com/blog/it-starts-upstream-kernel) may be activated.
+3. **W^X**. We’ve posted about W^X policies before in greater detail. The core idea is that code cannot live on writable file systems and instead must originate from Verity protected sources. This makes injecting code into AOS much harder and hardens it against remote-code-execution vulnerabilities such as the [recent PHP attacks](https://amutable.com/blog/recent-php-cves-retrospective) which we also covered on our blog.
+4. **Everything Is Measured**. We believe that for a secure system it is absolutely essential to maintain a tamper-evident log of all images containing code or configuration. This kind of tamper-evident log is based on *measurements* utilizing hardware features that make it impossible to forge.
+5. **No SUID/SGID or File Capabilities**. The SUID and SGID file access bits are a fundamental privilege escalation mechanism in classic UNIX and have led to a very large number of exploits. On AOS the SUID and SGID bits are therefore disabled completely. Privilege elevation happens securely via IPC such that a suitably privileged process performs operations on behalf of less privileged code.
+6. **Integrity Is Mandatory**. A modern operating system must provide integrity guarantees well beyond traditional systems. It is a conditio sine qua non given the advent of LLM agents. On AOS everything is measured, attested, and comes with fundamental protection mechanisms. For example, all file system images we ship come with block-level Verity and encryption securing complex file system data structures.
+7. **Factory Reset Is Built In**. Any operating system must consider the possibility that it will be hacked. For this reason, a secure OS must come with a “[factory reset](https://www.freedesktop.org/software/systemd/man/latest/systemd-factory-reset.html)” mechanism. AOS makes a lot of exploits *visible* in its Ledger. With factory reset it gains the ability to *act* and put the system back into a good state.
 
-The other input is the *transcript hash*, a running hash of every handshake message so far. Mixing it into the keys means that if Mallory changed anything, the two sides derive different keys and just can't talk. I spent a good part of June getting that transcript exactly right. Miss one byte, hash a message twice, or accidentally include a retransmission, and nothing works. And nothing tells you why it didn't :)
+## Summary
 
-In July we implemented the ciphers (AES-128-GCM, AES-256-GCM and ChaCha20-Poly1305), record number masks, seal and open. On July 1 Pion also got **X25519MLKEM768**, the hybrid post-quantum key exchange. It does an X25519 exchange and an ML-KEM exchange together, so the result is safe as long as *either* one holds up. This matters because of *harvest now, decrypt later*: someone recording your encrypted call today could decrypt it in fifteen years with a big enough quantum computer, unless the key exchange already resists one. By August it was on by default.
+**TL;DR**: Putting this all together, Amutable Foundations’ AOS and ACP provide:
 
-Not everyone is a fan of ML-KEM, though. Daniel J. Bernstein, the person behind X25519 and ChaCha20, [campaigned against](https://nsa.2026.action.cr.yp.to/) an [IETF draft](https://datatracker.ietf.org/doc/draft-ietf-tls-mlkem/) that uses ML-KEM *on its own* in TLS, and says the NSA is paying to get it standardized. He calls the hybrid, the one Pion uses, "much more sensible". If ML-KEM ever falls, X25519 is still there :)
+- A modern image-based OS, with far-reaching compatibility with classic Linux distributions
+- AOS is fundamentally designed with security in mind, removing a large portion of the attack surface of classic Linux systems
+- Composition, lifetime and resources of nodes are centrally tracked in the ledger, with tamper-evident properties, via measurements
+- The system covers both OS updates and configuration management via the same (or similar) mechanisms
+- Each node comes with a robust, powerful API to execute operations on it
+- Opportunistic support for modern security hardware (TPM 2.0, CoCo), with graceful degradation to all-software signatures where unavailable
+- Integrity checks every step of the way, via both local and remote attestation
+- Custom configuration and resources are only available to the machine if it is in the expected state
 
-Reliability in DTLS 1.2 is pretty basic. Nobody acknowledges anything: if I don't hear back in time, I resend my *entire* flight, even if only one packet out of six was lost. And if the reply was lost instead, the other side resends its entire flight too.
+## Sign Up for Our Private Preview Now!
 
-DTLS 1.3 added an **ACK** message: "here are exactly the records I got." The sender resends only the gaps, and the receiver can send an ACK as soon as it notices a hole, without waiting for a timer. Same bad luck on both sides:
-
-After "Finished", it really was a different story: there's a whole second state machine for session tickets and KeyUpdate, with its own ACKs and retransmissions. So getting Finished to work still leaves you with basically another protocol to implement :(
-
-In WebRTC, calls can use ICE to find a new path when the network changes ([Pion has a post about that](https://pion.ly/blog/automatic-renomination/)), so they don't need Connection IDs, but they [matter for IoT users](https://github.com/pion/dtls/issues/188#issuecomment-1481151054).
-
-Without a Connection ID, a DTLS server finds the connection a packet belongs to by where it came from: the client's IP address and port. Now walk out of your house. Your phone drops Wi-Fi, switches to cellular and gets a new address, and the server has never heard of it.
-
-With a Connection ID, every record carries a short ID that the server picked, and the server finds the connection by ID instead of by address, so your connection survives the walk to the car. Pion already had CIDs for DTLS 1.2. In 1.3 they're part of the core protocol and really different, so we had to rebuild them into the new record layer, while reworking the DTLS 1.2 implementation so we wouldn't have duplicated code.
-
-Of course Mallory can make this a problem too. If the server just follows the newest address a valid record came from, she can record one real packet and resend it with the *victim's* address on it, and the server redirects the whole video stream at someone who never asked for it. The specs saw this coming: CIDs in both DTLS 1.2 and 1.3 already said you must check that a new address can receive before switching to it, but never said how, so many implementation didn't enforce this (including Pion's DTLS 1.2).
-
-**Return Routability Check** ([RFC 9853](https://www.rfc-editor.org/rfc/rfc9853)) is the standard way: before trusting a new address, send it a small challenge, and only switch once the answer comes back. Try the second half of the demo with RRC off, then on.
-
-RRC has a fun backstory. While reading the [IETF shepherd write-up](https://datatracker.ietf.org/doc/draft-ietf-tls-dtls-rrc/shepherdwriteup/) for the RRC draft, I found this: "We have two different clients (Eclipse/Californium & Pion) that interoperate with a server." Someone had used a Pion fork for testing! I got so excited about that, I went and built a real production RRC for upstream Pion while we were still doing DTLS 1.3, instead of postponing it until after the release!
-
-**Pre-shared keys and resumption.** If the client and server talked before, or share a key from somewhere else, they can skip the certificate work entirely. Smaller handshakes, less CPU, and still forward secret when combined with a fresh key exchange.
-
-**0-RTT.** If you talked before, you don't have to wait at all. With a resumed session, the client can send application data in its very first flight, encrypted with keys from last time. Here's how the handshakes compare, and the catch:
-
-0-RTT data can be replayed. There's no fresh input from the server protecting it yet, so Mallory can capture it and send it again. That's fine for "show me the menu", not fine for "pay $10", so applications have to opt in and only send things that are safe to repeat. It also gives up some forward secrecy: go back to the key schedule, turn on "with PSK" and press "new handshake" a few times. The early secret never changes, because it only comes from the PSK, so anyone who steals that PSK later can decrypt the early data.
-
-**Encrypted Client Hello.** TLS 1.3 already encrypts the certificate, so which site you visit is hidden, except for one field: the ClientHello carries the server's name (the *SNI*) in plain text, because the server needs it to pick the right certificate. ECH encrypts the real ClientHello inside an outer one that only names a generic front server:
-
-While implementing ECH, I wanted our implementation to match `crypto/tls`, because I felt it was the right thing to do. But as soon as I started, I found two places where Go's own `crypto/tls` was too lenient with ECH configurations, and sent them patches ([one](https://go-review.googlesource.com/c/go/+/845746), [two](https://go-review.googlesource.com/c/go/+/846885)). So we went back to doing it our own way, which turned out to be the stricter implementation.
-
-I think setting up interop tests was the best decision we made all year. Testing Pion against itself only proves both sides share the same assumptions, so in April I created [`pion/dtls-interop`](https://github.com/pion/dtls-interop) and froze releases from main until interop was ready. It tests Pion against:
-
-- OpenSSL 3 and 4
-- BoringSSL
-- wolfSSL
-- Mbed TLS
-- the TLS-Anvil conformance suite
-- Pion's own v3
-
-On September 28, when DTLS 1.3 went into Pion WebRTC's next major version, I added it to [`pion/browser-tests`](https://github.com/pion/browser-tests), which runs Pion WebRTC against Chrome, Firefox, Edge and Safari.
-
-Anthropic's OSS scanner went through pion/dtls and sent us a report. On October 16 I opened [#1228](https://github.com/pion/dtls/issues/1228), "Fix all issues reported by anthropics/oss-scanner", and spent the busiest two weeks of the whole project working through it. Most of the real issues were in DTLS 1.2, session resumption and shared code that had been in production for years, not the new DTLS 1.3 code, and we fixed them on both main and the v3 branch so existing users can upgrade without changing anything. After spending so much time anxious about breaking stuff, that felt really good :)
-
-**[sirzooro](https://github.com/sirzooro)** independently reported a few of the same issues (and others), found with Claude Opus 5.5.
-
-There was one finding we couldn't fix in code.
-
-Pion v3 lets you export a connection's state and resume it later, for example to hand a connection from one process to another. The scanner pointed out that nothing stops both the original and the restored connection from continuing to send. Both would keep encrypting with the same AES-GCM key and the same sequence numbers, and the nonce is built from the sequence number.
-
-Reusing a nonce with AES-GCM is one of the worst things you can do in cryptography. Here's why:
-
-AES-GCM encrypts by XORing your message with a keystream generated from the key and the nonce. Same key and nonce means same keystream, so XORing the two ciphertexts cancels the keystream out and leaves the two *plaintexts* XORed together. Mallory doesn't need the key: she guesses a likely word in one message, and the other message shows up around it. The same reuse also leaks enough for her to forge tags.
-
-Sadly we couldn't make the v3 API safe without breaking everyone who uses it, so v3 now documents loudly that a restored state must be used exactly once. In v4, `Resume` requires `ExportState`, which closes the original connection as part of the export, so there's no way to keep using both.
-
-## [Thank you](https://joturk.net/posts/dtls#thank-you)
-
-I'm really happy with what we built. I never thought I'd lead a project this big all the way to the end, and that still feels a bit weird. But the part I'm most proud of is the people. Whenever I got stuck, or talked about a problem for hours in our Discord server or group chats, someone was always there to listen and help.
-
-None of this would exist without the people I built it with: [Sean DuBois](https://www.linkedin.com/in/sean-dubois/), [Theodor Signebøen Midtlien](https://www.linkedin.com/in/theodorsm/), [Adriano Sela Aviles](https://www.linkedin.com/in/adrianosela/), [R Chiu](https://www.linkedin.com/in/r-chiu-60b4381b9/), [Jade Kolos](https://www.linkedin.com/in/jade-kolos/), [Júlia Borges Paschoalinoto](https://www.linkedin.com/in/julia-paschoalinoto/en/), [Julia-Elena Roman](https://www.linkedin.com/in/julia-elena/) and [Jan Muška](https://www.linkedin.com/in/frantabot/). Thank you for all the reviews and testing, and sorry for how annoying I was about stuff I found cool :)
-
-Huge thanks to **[Thomas Legris](https://github.com/noboruma)**. He runs DTLS for a very large fleet of IoT devices with Pion on the server side, and at that scale every allocation per connection gets multiplied by hundreds of thousands. [One of his PRs](https://github.com/pion/dtls/pull/1096) starts with "At scale (700k connections) - I detected some heavy allocations, especially at handshake." Over the year he sent a lot of optimizations:
-
-- fewer copies and allocations in the handshake
-- pre-allocated buffers for marshalling
-- pooled timers
-- a reworked PacketConn with fewer goroutines per connection, in pion/dtls and pion/transport
-- a fix for a connection leak
-
-Then he ran the release candidates in production, and they worked without a single problem.
-
-Resumption got tested before it was even tagged, and I can't tell you how happy that made me :) **[ybaldus](https://github.com/ybaldus)** [opened an issue](https://github.com/pion/dtls/issues/1201) about deadlines while building SWIM on pion/dtls, which "requires short lived connections and session resumption to be scalable." When I said resumption wasn't tagged yet: "Don't mind tagging it yet I can also use the current master commit." The report turned into a [fix](https://github.com/pion/dtls/pull/1207) that applies read and write deadlines to the handshake.
-
-**Leonard** ([ltlobaro](https://github.com/ltlobaro)) did the same from the IoT side, where "DTLS 1.2 handshakes easily take up most of the device traffic". They played with the DTLS 1.3 resumption example, [found that key logging didn't work with DTLS 1.3](https://github.com/pion/dtls/issues/1223), and it was [fixed](https://github.com/pion/dtls/pull/1224) in rc.5 the same day.
-
-**[devArnoud](https://github.com/devArnoud)** ran DTLS 1.3 against a cellular modem whose TLS stack is wolfSSL baked into its firmware, and every handshake failed. When the server asked the modem to send its ClientHello again, wolfSSL sent the same extensions in a different order. [The spec](https://www.rfc-editor.org/rfc/rfc9846#section-4.2.2) doesn't strictly allow that, but for compatibility Pion [accepts it now](https://github.com/pion/dtls/pull/1156).
-
-**[enobufs](https://github.com/enobufs)** [tried DTLS 1.3 with WebRTC](https://github.com/enobufs/dtls13-webrtc-demo) early and [helped with the keying-material exporter](https://github.com/pion/dtls/pull/1133).
-
-Thanks to **[Philipp Hancke](https://github.com/fippo)** for testing DTLS 1.3 in his [SPED implementation](https://github.com/pion/webrtc/pull/3362), which embeds the DTLS handshake in STUN, and for [noticing](https://github.com/fippo/warp-snap-sped/issues/20) that Pion sent a session ticket even to clients that never use resumption.
-
-Thank you to everyone who reviewed, tested, reported and fixed things along the way. Thanks to [NLnet](https://nlnet.nl/) and the NGI0 Commons Fund for funding work like this, and to the Anthropic OSS scanner team for the report that made v4 safer before anyone found out the hard way.
-
-And thank you for reading this far :) Now go break something.
-
-Come chat with us on the [Pion Discord](https://discord.gg/HuvXUrvxZ8) about anything.
+If you are interested in the experience we described above, please [sign up for the Amutable Foundations Private Preview](https://amutable.com/preview) to get a chance to try AOS and ACP first-hand yourself.
