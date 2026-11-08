@@ -1,226 +1,38 @@
-this has been bothering me for a while now, so I want to write down my thoughts
-so I can get it out of my head and move on. we’re gonna talk about how Deno approaches
-security, specifically with its permissions system, and why I think this approach
-is fundamentally insecure and misleading.
+Meridian is a web-browser for MacOS built on [GPUI](https://www.gpui.rs) and [Servo](https://servo.org). Meridian is
+    already quite useful to browse websites that are light on javascript and
+    layouting features. The browser is highly configurable: fonts, keybinds,
+    colors, tabs and all.
 
-## wait, what’s Deno?
+![Meridian with vertical tabs, showing the Meridian homepage](https://cdn.oppi.li/meridian/Screenshot%202026-11-05%20at%2018.47.10.png)
 
-[Deno](https://deno.com) is a language runtime for JavaScript. it consists of a standard library, a package manager,
-a TypeScript transpiler and a bunch of other stuff that’s not important for our story. it’s not
-a JavaScript *implementation*, so it does not interpret or compile JavaScript, it reuses V8 for that.
-
-one of the flagship features of Deno is its permission system
-(it’s under the “Secure by default” header on their [landing page](https://deno.com)).
-the idea is simple: as JS code running in Deno needs the standard library to access the outside world,
-Deno can choose which accesses it allows or disallows, so when you run
-
-```shell
-deno run --allow-read=/tmp/dir --allow-run=uname code.ts
-```
-
-the standard library will only allow `code.ts` to read `/tmp/dir` and run `uname`.
-
-additionally, a program can request permissions at runtime, so code like
-
-```typescript
-const r = { name: "read", path: "/tmp/dir" } as const;
-await Deno.permissions.request(r);
-```
-
-will display a nice little prompt in the terminal:
+To try Meridian, you can use nix:
 
 ```
-┌ ⚠️  Deno requests read access to "/tmp/dir".
-├ Requested by `Deno.permissions.request()` API.
-├ Run again with --allow-read to bypass this prompt.
-└ Allow? [y/n/A] (y = yes, allow; n = no, deny; A = allow all read permissions) > 
+nix run git+https://tangled.org/oppi.li/meridian
 ```
 
-and you can grant or refuse it.
+The project is developed on [Tangled](https://tangled.org/oppi.li/meridian), all
+    contributions are welcome, please do browse the list of [open issues](https://tangled.org/oppi.li/meridian/issues) if you
+    are looking to contribute!
 
-(aside: I really miss this feature in browser extensions. currently, if your extension needs *potential*
-access to *any* website, it needs to request *actual* access to *all* the websites, which is less than ideal)
+Meridian supports the following features:
 
-if you like puzzles, this is the point where you can stop and think about what could go wrong with this system.
+![Right-click context menu over a link](https://cdn.oppi.li/meridian/Screenshot%202026-11-05%20at%2018.57.12.png)
 
-## the prompts problem
+*Context menu*
 
-of the two specific issues I want to point out this is the less severe one.
-we’ll discuss it first because this was the first thing I noticed and it kinda immediately irked me when I first read
-about this.
+![Meridian in dark mode](https://cdn.oppi.li/meridian/Screenshot%202026-11-05%20at%2018.55.19.png)
 
-(if you’re only interested in the more juicy part, you can skip to the [next section](https://goldstein.lol/posts/deno-security/#the---allow-run-problem)).
+*Dark mode*
 
-so, this nice little prompt is displayed in the terminal. it’s not, like, a PolKit GUI window or anything,
-it’s just text on stdout waiting for input from stdin. this is a wild thing to do.
+![An article in reader view](https://cdn.oppi.li/meridian/Screenshot%202026-11-05%20at%2018.52.51.png)
 
-you see, terminal has a somewhat weird API. most of the commands / requests application can send to the terminal
-are sent in-band, by printing them to stdout. terminal can then reply by sending data to stdin.
-as Deno allows programs to print arbitrary data to stdout and read from stdin without requiring any permissions
-or doing any filtering, malicious code can send arbitrary commands to the terminal. it’s usually okay,
-because terminals won’t, like, execute shell commands just because stdout told them to, you’re supposed
-to be able to freely `cat` files without risking arbitrary code execution. it’s markedly less okay if
-you allow malicious code to do whatever with the terminal and then print a prompt on the same exact terminal.
+*Reader view*
 
-you could, like, [hide the prompt by messing with terminal colors](https://github.com/denoland/deno/issues/9666).
-(this one got closed in 2026 because the permission prompt is “partially visible”
-(you can see an emoji) and “AI agents tend to” change terminal colors, so that’s a “valid use-case”)
-
-or [trick the terminal into feeding approval into stdin as a response to some request](https://github.com/denoland/deno/issues/9750#issuecomment-796702901).
-(terminal won’t ever send Enter to stdin to avoid executing commands, but “press Enter to continue”
-is common enough to not be suspicious; the user never sees the actual prompt).
-here’s [an asciicast of that](https://asciinema.org/a/9rvK8ANJK0WnQc9nsrFKdC7ir),
-I think it looks quite cool.
-
-the specific issue on the screencast is long patched; the issue with terminal colors is not.
-that doesn’t really matter because the *real* issue is using an attacker-controlled channel for
-security-sensitive information. it’s like executing attacker-controlled JS code on a webpage
-and then asking for password on the same page. you can’t know that the page is in a safe state,
-so you can’t trust any input.
-
-even if Deno manages to patch every single issue with the “standard” escape codes, you never know
-which non-standard codes even exist out there. many terminals have some, it’s impossible to predict
-how they will interact with your prompt.
-
-(aside: how come sudo can do it then? the difference is that sudo asks for the password first,
-before running any other code. to trick sudo that way you’d need to fuck up terminal state before
-you even type `sudo`, and do it quietly enough that you don’t notice it while you type it.
-if some terminal allows it, I’d consider it a bug in the terminal)
-
-## the `--allow-run` problem
-
-so, there’s a weird thing with this command I wrote above (I’ll copy it here for reference):
-
-```shell
-deno run --allow-read=/tmp/dir --allow-run=uname code.ts
-```
-
-what does `--allow-run=uname` even mean? it’s not like programs have canonical names, it’s not `org.gnu.coreutils.uname`,
-it’s not even `/nix/store/8k1dmzr3gwzqdgw45nzj76902ca7g1is-coreutils-full-9.5/bin/uname`. it’s just a shortcut for
-“look at all the directories in `PATH` one-by-one to see if you can find `uname` there”.
-
-you can set environment variables for the child process without needing any extra permissions, so what if we just
-
-```
-$ cat t.ts
-const command = new Deno.Command("uname", {
-  // my current working directory, can be anything
-  env: { 'PATH': '/tmp/tmp.7ofmKaNW83' },
-});
-const { code, stdout, stderr } = command.outputSync();
-console.log(new TextDecoder().decode(stdout));
-$ cat uname
-#!/bin/sh
-printf lol
-$ deno run --allow-run=uname t.ts
-lol
-```
-
-yeah.
-
-once again, we have a pretty and convenient interface that doesn’t really make sense from the security standpoint.
-it would be *nice* if programs were uniquely identified by their names, but they’re *not*, and pretending they are
-leads to security holes.
-
-funnily enough, I didn’t even think that this issue would be there when I poked at Deno for the first time,
-so I haven’t reported it [until now](https://github.com/denoland/deno/issues/11964#issuecomment-2322993158) (spoiler alert: this is a comment on a GitHub issue
-that I created for the problem I’ll explain below).
-
-so let’s imagine we fixed that. it’s not *that* hard, we can force `PATH` to be whatever it was when the runtime started,
-or always require fully-qualified paths, or prompt with a fully-qualified path before running. are we safe now?
-
-lol no of course we’re not. while `PATH` decides which executable gets run, dynamically-linked executables (so, like, most executables)
-require dynamic loader to actually start. dynamic loader is a program that, well, loads the executable into memory, finds its
-dependencies and does a bunch of other fun stuff we won’t get into. the important part is that dynamic loader is *configurable*
-via environment variables. you can probably see where this is going now.
-
-`LD_PRELOAD` instructs the dynamic loader to load specific dynamic library when loading executables.
-dynamic libraries can execute arbitrary code on load.
-we can just pass `LD_PRELOAD` and we’ve completely escaped the sandbox once again:
-
-```
-$ cat t.c
-#include <stdio.h>
-
-// ask dynamic loader to run this function on load time pretty please
-__attribute__((constructor)) void lol() {
-    puts("lol");
-}
-$ cat t.ts
-const command = new Deno.Command("uname", {
-  // ask dynamic loader to load our evil library
-  env: { 'LD_PRELOAD': '/tmp/tmp.7ofmKaNW83/liblol.so' },
-});
-const { code, stdout, stderr } = command.outputSync();
-console.log(new TextDecoder().decode(stdout));
-$ gcc -fPIC -shared t.c -o liblol.so
-$ # that's the real uname now!
-$ deno run --allow-run=uname t.ts
-lol
-Linux
-```
-
-I [reported this](https://github.com/denoland/deno/issues/11964) some time ago and now they [patched it](https://github.com/denoland/deno/pull/25271) by disallowing to set
-environment variables starting with `LD_`. this, once again, fixes a specific issue while ignoring the larger
-problem: “permission to run a single command” is mostly not a useful concept.
-(you *can* do secure interfaces by allowing to run a single command, like git-over-SSH does,
-but generally both the environment and the command need to be prepared to handle it)
-
-say, for example, our script wants to invoke the `$EDITOR` so user can edit some data (think git commit messages).
-that’s a very natural permission request, and it’s also an unmitigated disaster because most editors are
-configurable enough for running one to be a full sandbox escape. it’s easy for user to absent-mindedly
-grant `--allow-run=vim` (“well, sure, I want to edit this file!”), but then the script can just set
-`VIMINIT='!rm -rf /*'` and oops, all my files are gone. most programs are configurable, often in some
-ways you won’t think about (like `LD_PRELOAD`), and attacker controls the execution enviornment.
-“patch some specific ways to configure programs” is not the solution, the solution is to sandbox all the code,
-not just JS code.
-
-when we discussed all this stuff in GitHub issues, a Deno developer wrote:
-
-> The main thing it protects you against is malicious code that isn't smart enough.
-
-upon reading this, I was enlightened.
-
-## conclusions
-
-deno tries really hard to do what the operating system should be doing. it emulates syscall filtering by
-filtering standard library calls. unfortunately, this breaks down the second you need to run code
-that doesn’t use Deno standard library. it also uses somewhat flawed approach to permission management
-that *looks* good (wow, runtime prompts! omg, I can just `--allow-run=uname`!), but introduces security
-risks. in doing this, it implicitly requires user to understand all the implications of various permissions
-and their combinations, which can be really hard.
-
-Deno process is not actually sandboxed, it only pretends it is. I didn’t mention some more boring issues like
-“Deno doesn’t prevent you from following symlinks that lead outside of the sandbox” because they all just boil
-down to this simple one: the process is not sandboxed.
-
-one can argue that this pseudo-sandboxing is better than nothing: after all, not all the malicious code is smart enough.
-I disagree: Deno permissions give a false sense of security and can lure someone into running untrusted code without proper sandboxing.
-
-it’s possible that you can use Deno sandboxing safely if you:
-
-- never use more dangerous permissions like --allow-run, even with =cmd,
-- that includes --allow-env, even --allow-env=VAR, for setting environment variables is memory unsafe and can affect libc functions,
-- preferrably run with --no-prompt so your terminal can’t be tricked,
-- are careful about symlinks in directories you --allow-{read,write} to,
-- are not concerned with resource exhaustion: there’re zero permissions required to burn CPU or allocate memory.
-
-in particular, you may be safe if you’re running untrusted code with no permissions at all
-in a non-interactive context and use some other mechanism to control resource consumption.
-
-I still don’t think you *should* do it. this path is riddled with footguns because you’re
-executing untrusted code in a fully-privileged process, and the moment you need *some* OS interactions
-you’re no longer running code “with no permissions at all”. you should not try to figure out which
-stdlib APIs can lead to a sandbox escape when combined. you should just use a proper sandbox.
-
-I’m not a fan of Deno’s security model.
-
-## so what do we do?
-
-just `bwrap` untrusted shit.
-
-also, please: don’t harass Deno developers.
-we have a technical disagreement, but no technical disagreement was ever solved by harassment.
-this post is explicitly not an invitation to do it.
-I’ve already explained my point of view to them, they disagreed, and that’s okay.
-you don’t need to reiterate it, it won’t help anybody.
+Under the hood, Meridian is written in Rust and built on GPUI and Servo.
+    Web pages and browser state is managed by Servo. The browser's chrome is
+    drawn by [gpui](https://www.gpui.rs), the UI framework behind
+    the Zed editor. The glue code to interface servo with gpui lives in
+    separate library, [gpui-servo](https://tangled.org/oppi.li/gpui-servo), which exposes
+  Servo as an ordinary gpui component, so anybody can now write a servo-based
+  browser in GPUI!

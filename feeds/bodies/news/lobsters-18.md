@@ -1,167 +1,152 @@
-I recently discovered a handy way to make Go tests more readable and less repetitive.
+**If you run `sshd` on Alpine Linux, update `openssh` now and restart `sshd`.**
+Upgrading the package alone does not replace the running daemon.
 
-Suppose I have a constructor that can fail:
+If you cannot update yet, at least disable password logins: set
+`PasswordAuthentication no` in your sshd configuration and restart `sshd`.
+Either one closes the hole.
 
-```go
-func NewUsername(raw string) (Username, error) { ... }
+## What is the problem?
+
+An attacker who can reach your SSH port can log in without knowing any
+password. It takes one connection, works every time, and needs no retries.
+
+The attacker needs the name of an account whose password field is `*`
+(an account with no password set, which is normal for key-only accounts), and
+needs the machine to have at least one other account with a `$5$` or `$6$`
+password hash. The attacker then sends a very long password (257 to 1024
+bytes). One user with a password is enough: it makes every account without
+one reachable.
+
+Details are in the [OpenSSH 10.6p2 release
+notes](https://www.openssh.com/releasenotes.html). No CVE identifier had been
+assigned at the time of writing.
+
+## Who is affected?
+
+You are affected if all of the following are true:
+
+- You run the Alpine openssh-server package, which is built without PAM, or you run openssh-server-pam with UsePAM no. (openssh-server-pam with UsePAM yes is not affected.)
+- PasswordAuthentication is yes (the OpenSSH default, unless you changed it).
+- The machine has an account whose password field is *. This includes:
+  - root, which ships as root:* in the base image since about Alpine 3.16. OpenSSH’s default PermitRootLogin prohibit-password protects root, so root is only reachable if PermitRootLogin yes is set. That does not help if another account that can log in is able to become root, for example through doas.
+  - Any key-only user created with adduser without a password, or with usermod -p '*'.
+  - Users coming from a directory service through musl-nscd (nslcd, winbind, sssd), since they have no shadow entry.
+  - The alpine user in the official tiny-cloud images (see below).
+- At least one local account has a $5$ or $6$ password hash.
+
+Affected releases: every Alpine release we checked, 3.21 through 3.24 and
+edge, and the older releases that no longer receive regular updates (3.16 to
+3.20).
+
+### Who is not affected?
+
+- Docker and other container users that do not run sshd in the container.
+- Systems with PasswordAuthentication no.
+- Systems using openssh-server-pam with UsePAM yes (with UsePAM no you are affected).
+- Locked accounts: those with ! as the password field in /etc/shadow (a line starting user:!:). They cannot log in with a password or a key.
+- Systems where no account has a $-style password hash.
+- Cloud images configured through cloud-init, which writes PasswordAuthentication no.
+
+## How can I fix it?
+
+### 1. Update
+
+```
+apk upgrade -U -a
 ```
 
-And I have another function that takes a `Username` as an argument:
+Alpine 3.21.10, 3.22.8, 3.23.8 and 3.24.4 contain the fixed package (see the
+[release announcement](https://www.alpinelinux.org/posts/alpine-3.21.10-3.22.8-3.23.8-3.24.4-released/)).
+The fixed package versions are:
 
-```go
-func (ds Datastore) ReadUser(username Username) (User, error) { ... }
+| Branch | Fixed `openssh` version |
+| --- | --- |
+| edge | 10.6_p2-r0 |
+| 3.24 | 10.3_p1-r2 |
+| 3.23 | 10.2_p1-r1 |
+| 3.22 | 10.0_p1-r11 |
+| 3.21 | 9.9_p2-r1 |
+| 3.20 | 9.7_p1-r6 |
+| 3.19 | 9.6_p1-r3 |
+| 3.18 | 9.3_p2-r4 |
+| 3.17 | 9.1_p1-r7 |
+| 3.16 | 9.0_p1-r6 |
+
+**Restart `sshd` after upgrading** (`rc-service sshd restart`). Upgrading the
+package does not restart a running `sshd`, so you must do it after.
+
+### 2. If you cannot update: disable password authentication
+
+Before you start, make sure your SSH key login works, and keep your current
+session open until you have tested a new login.
+
+Run these as root. The first two commands create a drop-in file. Alpine’s
+default `sshd_config` reads that directory from 3.19 onward; older releases
+ignore it. The `sed` command changes `yes` to `no` on every
+`PasswordAuthentication` line in `/etc/ssh/sshd_config`, whatever the spacing,
+including lines inside a `Match` block. It also adds `PasswordAuthentication no` at the top of the file, for the case where there was no such line, and
+saves the original as `/etc/ssh/sshd_config.bak`. The last two commands check
+the configuration, restart the daemon, and show the result:
+
+```
+mkdir -p /etc/ssh/sshd_config.d
+echo 'PasswordAuthentication no' > /etc/ssh/sshd_config.d/00-no-passwords.conf
+sed -i.bak -e '1i PasswordAuthentication no' \
+  -e 's/^\(\s*PasswordAuthentication[^y#]*\)yes/\1no/i' \
+  /etc/ssh/sshd_config
+sshd -t && rc-service sshd restart
+sshd -T | grep -i passwordauthentication
 ```
 
-When I write tests for `ReadUser`, I call `NewUsername` with a value I know is valid, but I still have to include a lot of verbose error-checking code to convince the compiler that everything is okay:
+The last command should print `passwordauthentication no`. To undo, delete
+`/etc/ssh/sshd_config.d/00-no-passwords.conf` and copy
+`/etc/ssh/sshd_config.bak` back over `/etc/ssh/sshd_config`.
 
-```go
-username, err := NewUsername("joe123")
+## Cloud images (tiny-cloud)
 
-// This is silly because *I* know joe123 is a valid username, so this should
-// never happen.
-if err != nil {
-  t.Fatalf("failed to create username: %v", err)
-}
+The official tiny-cloud images (the qcow2, VHD and AMI artifacts) from
+**3.18.11 through 3.24.3** ship an `alpine` user with a `*` password field and
+passwordless `doas`. They are safe on first boot. They become exploitable as
+soon as any `$6$` hash exists on the machine, for example when an admin sets a
+console password, or user-data adds a user with `hashed_passwd`. An attacker
+then gets a shell as `alpine` and can use `doas` to become root.
 
-// Perform the test assertion I actually care about.
-user, err := store.ReadUser(username)
-if got, want := user.Name.String(), "joe123"; got != want {
-  t.Errorf("username=%v, want=%v", got, want)
-}
-```
+Images built from 3.21.10, 3.22.8, 3.23.8, 3.24.4 and later include the fixed
+package. Images from earlier point releases do not, so on every running
+instance, update `openssh` or disable password authentication.
 
-## My old solution: one new helper function per type[🔗︎](https://mtlynch.io/notes/go-must-create-pattern/#my-old-solution-one-new-helper-function-per-type)
+## Releases that are no longer supported (3.21 and older)
 
-Until a few months ago, I avoided the verbose error checking by writing a helper function like `MustCreateUsername` that wraps `NewUsername` with the expectation that it never returns a non-`nil` `error` value:
+These releases have the same bug. 3.21 reached its end of support on
+2026-11-01, but we have published fixed packages for each release all the way
+back to 3.16.
 
-```go
-user, err := store.ReadUser(MustCreateUsername(t, "joe123"))
-if got, want := user.Name.String(), "joe123"; got != want {
-  t.Errorf("username=%v, want=%v", got, want)
-}
-```
+## How do I know if I was attacked?
 
-The implementation of `MustCreateUsername` looks how you’d expect:
+Look in `/var/log/messages` for `sshd` lines reading `Accepted password for`
+an account that has no password (`alpine`, `root`, or any key-only user).
+Review `doas` use and recently created users, files and authorized keys on
+exposed machines. If you cannot rule out a login, treat the machine as
+compromised.
 
-```go
-func MustCreateUsername(t testing.TB, raw string) Username {
-  t.Helper()
-  username, err := NewUsername(raw)
-  if err != nil {
-    t.Fatalf("invalid username: %s", raw)
-  }
-}
-```
+## How could this happen?
 
-The helper function strategy worked fine, but it scales poorly. Eventually, my repos become littered with `MustCreateFoo` and `MustCreateBar` for every type in my app.
+When sshd is built without PAM, it checks a password by hashing the attempt
+with `crypt()` (the C library function that turns a password into its stored
+hash) and comparing the result to the stored password field. For an account
+whose stored field is too short to contain a salt (the random prefix of a
+hash), sshd borrows the salt of another account.
 
-## New solution: A single, generic `MustCreate` helper[🔗︎](https://mtlynch.io/notes/go-must-create-pattern/#new-solution-a-single-generic-mustcreate-helper)
+musl’s `crypt()` returns the string `*` as an error indicator when the key is
+over 256 bytes long. `*` is also exactly what the stored field contains for
+every account with no password, so the “hash” matches and the login succeeds.
 
-In 2022, Go 1.18 [added support for generics](https://go.dev/doc/go1.18#generics). I like the idea of generics, but I rarely encounter problems where generics are the solution.
+OpenSSH 10.6p2 avoids the problem in sshd. The stable-branch packages above
+carry a patch for the same problem.
 
-I recently realized that generics are the better way to solve my sprawling `MustCreateX` problem. Instead of defining a helper `MustCreateX` for every type, I defined a single, generic `MustCreate` test helper, so my test becomes:
+## Credits
 
-```go
-user, err := store.ReadUser(testutil.MustCreate(t, NewUsername, "joe123"))
-if got, want := user.Name.String(), "joe123"; got != want {
-  t.Errorf("username=%v, want=%v", got, want)
-}
-```
-
-The magic is the generic `MustCreate` function:
-
-```go
-func MustCreate[RawInput, CreatedValue any](
-  t testing.TB,
-  create func(RawInput) (CreatedValue, error),
-  rawInput RawInput,
-) CreatedValue {
-  t.Helper()
-  createdValue, err := create(rawInput)
-  if err != nil {
-    t.Fatalf("failed to create test value: %v", err)
-  }
-  return createdValue
-}
-```
-
-I have trouble reasoning about generics, so I’ll walk through the function implementation. I invoke `MustCreate` like this in my tests:
-
-```go
-testutil.MustCreate(t, NewUsername, "joe123")
-```
-
-The above call is equivalent to this more explicit version:
-
-```go
-testutil.MustCreate[string, Username](t, NewUsername, "joe123")
-```
-
-When I call `MustCreate` here, `RawInput` is `string` (the type of the raw username value), and `CreatedValue` is `Username` (the return type). It’s equivalent to an implementation that looks like this:
-
-```go
-func MustCreate(
-  t testing.TB,
-  create func(string) (Username, error),
-  rawInput string,
-) CreatedValue {
-  t.Helper()
-  createdValue, err := create(rawInput)
-  if err != nil {
-    t.Fatalf("failed to create test value: %v", err)
-  }
-  return createdValue
-}
-```
-
-### Extending to multi-param constructors[🔗︎](https://mtlynch.io/notes/go-must-create-pattern/#extending-to-multi-param-constructors)
-
-What about constructors that have more than one parameter?
-
-```go
-func NewRange(start int, end int) (Range, error) { ... }
-```
-
-In those cases, I write an additional helper called `MustCreate2`:
-
-```go
-range := testutil.MustCreate2(t, models.NewRange, 0, 5)
-```
-
-The implementation of `MustCreate2` looks just like `MustCreate` but with an additional type for the second parameter:
-
-```go
-func MustCreate2[RawInput1, RawInput2, CreatedValue any](
-  t testing.TB,
-  create func(RawInput1, RawInput2) (CreatedValue, error),
-  rawInput1 RawInput1,
-  rawInput2 RawInput2,
-) CreatedValue {
-  t.Helper()
-  createdValue, err := create(rawInput1, rawInput2)
-  if err != nil {
-    t.Fatalf("failed to create test value: %v", err)
-  }
-  return createdValue
-}
-```
-
-## Conclusion[🔗︎](https://mtlynch.io/notes/go-must-create-pattern/#conclusion)
-
-The `MustCreate` pattern is nothing revolutionary, but it’s a technique that improved my Go tests and reduced some mindless toil from my dev work.
-
-## Read My Book
-
-I wrote a book about simple techniques to help developers improve their
-writing.
-
-My book will teach you how to:
-
-- Create clear and pleasant software tutorials
-- Attract readers and customers through blogging
-- Write effective emails
-- Minimize pain in writing design documents
-
-### Be the first to know when I post cool stuff
-
-Subscribe to get my latest posts by email.
+Reported by Özgün Kültekin of [Wakefield](https://wakefield.co). Thanks to
+Damien Miller and Darren Tucker of the OpenSSH project for the fix and the
+10.6p2 release, to Timo Teräs for help analyzing the issue, and to Natanael
+Copa, who built and uploaded the updated packages.

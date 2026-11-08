@@ -1,221 +1,150 @@
-`libghostty-vt` 1.0 is here. [libghostty](https://lib.ghostty.org/) is a
-portable, high-performance C library for terminal emulation, extracted
-directly from the core of Ghostty. The 1.0 release means both the library
-itself and the C ABI are now stable.
+Recently I [wrote about an idea](https://noteflakes.com/articles/2026-10-07-unrolled-code) that’s been
+floating around in my mind for a long time - the ability to do metaprogramming
+in Ruby by manipulating Ruby ASTs, similar to the macro capabilities of
+languages such as Lisp or Elixir. The use of `eval` (in its different
+variations) is a common metaprogramming technique in Ruby that consists of
+generating code at runtime from dynamically constructed strings. This is often
+done for performance reasons: ERB compiles templates into optimized code by
+generating pieces of Ruby source code then putting them together and calling
+`eval`; In Rails, the same technique is used for implementing features such as
+associations, or scaffolding. With `eval`, we can avoid paying the performance
+overhead that’s often associated with using DSLs in Ruby.
 
-A little over a year ago, I wrote that
-[libghostty is coming](https://mitchellh.com/writing/libghostty-is-coming). At the time,
-the Zig module had just been merged, the C API didn't exist, and nobody
-but Ghostty was a consumer. Today, the C API is a complete terminal emulator,
-it runs in production for millions of people across hundreds of products,
-both free and commercial, and it has a real, enforced ABI stability policy.
+But using `eval` in a highly-dynamic context may also be error-prone, limited,
+and potentially vulnerable to injection attacks. Having to painstakingly
+construct strings containing Ruby source code can be an arduous task, especially
+if you want to compile a DSL into efficient code, as in the case of ERB, or my
+own [Papercraft](https://github.com/digital-fabric/papercraft).
 
-This post is about how we got here and what 1.0 actually means.<sup>[1](https://mitchellh.com/writing/libghostty-1-0#user-content-fn-5)</sup>
+In Papercraft, HTML is generated using a DSL. Here’s an example:
 
-## Who Is Already Using It
+```
+header {
+  p { strong(repo_name) }
+  p(repo_description)
+  p { code(clone_command) }
+}
+```
 
-Since starting the Ghostty project in 2022, the most common question I've
-been asked is "why?". I already answered this in the
-[libghostty is coming](https://mitchellh.com/writing/libghostty-is-coming)
-post, so feel free to read that if you wish. Today, I'd rather answer this
-by showing the broad industry impact libghostty *has already had*. I believe
-this strongly validates its existence.
+While this kind of code may be used to generate HTML using the [builder
+pattern](https://armandfardeau.github.io/design-patterns-in-ruby/builder.html),
+which is the traditional way of implementing DSLs in Ruby, it introduces a
+significant performance overhead. That is why in Papercraft I chose to implement
+a compiler that takes the code above and compiles it into the optimized form:
 
-A year ago, I used a
-[bug in JediTerm](https://github.com/JetBrains/jediterm/pull/311),
-the terminal emulator in JetBrains IDEs, as an example of why terminal
-emulation is hard to get right. A year later,
-[the terminal in JetBrains IDEs now runs on libghostty](https://blog.jetbrains.com/platform/2026/10/jetbrains-terminal-now-uses-ghostty/).
-Every IntelliJ, PyCharm, GoLand, etc. user now has a libghostty-powered
-terminal. Based on a report by JetBrains, that's over 12.5 million
-active users.
+```
+__buffer__
+  .<<("<header><p><strong>").<<(ERB::Escape.html_escape((repo_name)))
+  .<<("</strong></p><p>").<<(ERB::Escape.html_escape((repo_description)))
+  .<<("</p><p><code>").<<(ERB::Escape.html_escape((clone_command)))
+  .<<("</code></p></header>")
+```
 
-Neovim has an [approved pull request](https://github.com/neovim/neovim/pull/39773)
-replacing libvterm with `libghostty-vt`. Among other things, it closes a
-[10-year-old issue](https://github.com/neovim/neovim/issues/4997)
-about reflowing scrollback on resize. The maintainers are waiting on a
-tagged release before merging so that distributions can package the
-dependency separately, and the release today should enable that.
+This does solve the performance problem (on par with ERB templates), it
+introduces a different problem, that complexity in the Papercraft compiler code
+itself. I’m not particularly proud of the [Papercraft compiler
+code](https://github.com/digital-fabric/papercraft/blob/master/lib/papercraft/compiler.rb),
+which complexity stems from the fact that the kind of optimized code is
+generated dnyamically, and has to be put together from many small pieces. That’s
+why I’ve long been thinking about how to simplify it.
 
-KDE developers are
-[experimenting with a Konsole replacement](https://blogs.kde.org/2026/11/01/introducing-kwi/)
-built on it. Vercel's Turborepo [uses it](https://github.com/vercel/turborepo/pull/13135)
-to render task output in its TUI. [devenv](https://devenv.sh/blog/2026/05/07/devenv-21-nix-with-zsh-fish-and-nushell-via-libghostty/)
-uses it to drive shells. Antithesis
-[used it to fuzz TUI programs](https://wickstrom.tech/2026-04-30-bombadil-terminal-experiment.html)
-and found real bugs in btop and others. [Ghostel](https://github.com/dakra/ghostel)
-brings it to Emacs. [ghostty-web](https://github.com/coder/ghostty-web)
-is the WASM build with an Xterm.js-compatible API. Commercial products
-like [OrbStack](https://orbstack.dev/) embed it. And a whole wave of
-new terminals and "agentic" coding tools, such as
-[herdr](https://github.com/herdrdev/herdr) and
-[cmux](https://github.com/manaflow-ai/cmux), have been built on it
-rather than writing yet another emulator.
+It eventually occurred to me that a tool for generating code using a
+general-purpose macro expansion technique, such as the quote/unquote mechanisms
+in languages such as Lisp or Elixir, might be a perfect fit for solving problems
+such as this. Such a tool may not only be used for generating new code at
+runtime, but can also be used for manipulating and mutating existing code at
+runtime.
 
-There are community bindings for Rust, Go, JavaScript, Swift, Python,
-.NET, Elixir, Dart, Java, and more, and the
-[awesome-libghostty](https://github.com/Uzaaft/awesome-libghostty)
-list tracks well over a hundred projects.
+## A Quote/Unquote Example
 
-More people today use a terminal powered by libghostty than use Ghostty
-the application, by a very large multiple. And libghostty is having
-a much larger impact than being "just" a terminal emulator.<sup>[2](https://mitchellh.com/writing/libghostty-1-0#user-content-fn-1)</sup>
+As a very simple example of how this technique may be used, let’s implement a
+general-purpose validator generator. Its job is to generate a validator lambda
+that validates a given value against one or more conditions, which we’ll do
+using the `===` operator (this is the operator used for matching `case` clauses
+in Ruby). We can just generate a closure and iterate over the conditions:
 
-## ABI Stability
+```
+def create_validator(*conds)
+  ->(v) {
+    conds.each { raise unless it === v }
+    v
+  }
+end
+```
 
-1.0 means `libghostty-vt` follows semantic versioning and has strict
-[ABI compatibility](https://en.wikipedia.org/wiki/Application_binary_interface)
-promises so that packagers across distributions and operating systems
-can be confident packaging `libghostty-vt` and program developers can be
-confident dynamically linking against it.
+That’s pretty nice and simple, but if we wanted to squeeze a bit more
+performance out of it we might want to unroll that `conds.each` loop, which we
+can do by interpolating a string containing the unrolled code, then pass it to
+`eval`:
 
-Beyond providing useful features, I believe the hallmark of a high-quality
-and enduring C library is ABI stability. So from the start, I took inspiration
-from C libraries I enjoyed working with and designed the API to have
-a strong, stable ABI that allows for future additions.
+```
+def create_validator(*conds)
+  code = <<~RUBY
+    ->(v) {
+      #{conds.map { "raise unless (#{it.inspect}) === v;" }.join}
+    }
+  RUBY
+  eval(code)
+end
+```
 
-Every object is an opaque handle. The hundreds of values you might read or
-write go through a small set of enum-keyed getters and setters, so we
-can add new values easily without introducing a new symbol. Programs with
-newer headers linked against an older libghostty get `GHOSTTY_UNSUPPORTED`
-results instead of crashes or undefined behavior. The few non-opaque structs
-we have carry their size so that fields can be appended later, or contain
-reserved padding. Enums are pinned to `int` on every compiler, as much as
-the C standard allows.
+This is perfectly doable, but notice that we have to nest the embedded code
+inside of the string we’re building, which is kind of unwieldy. With a
+quote/unquote tool, which let’s us build Ruby code out of Ruby code, we could do
+the following:
 
-Our CI enforces our ABI policy. Every change is checked with
-[libabigail](https://sourceware.org/libabigail/) against a committed baseline
-on Linux, and against golden type manifests on macOS and WebAssembly.
+```
+def create_validator(*conds)
+  ast = quote {
+    ->(v) {
+      unquote conds.map { |c| quote { unquote(c) === v } }
+      v
+    }
+  }
+  eval(ast.to_source)
+end
+```
 
-On ELF platforms, every exported symbol is also versioned, so the dynamic
-loader refuses to load a mismatched library by name rather than failing in
-some mysterious way later.
+With `#quote` we’re putting code inside quotes (obviously), and with `#unquote`
+we’re temporarily escaping out of the quotes in order to perform some
+computation and inject the result back into the quoted code. In this case, we’re
+converting each of the conditions into a piece of Ruby AST by calling `quote {
+unquote(c) === v }`.
 
-## Packaging
+In my article [Unrolled Code](https://noteflakes.com/articles/2026-10-07-unrolled-code), I’ve explored how
+this technique could be applied to many different problems. Which leads us to
+project Steadfast.
 
-In addition to ABI stability, the 1.0 release brings along the proper
-build tooling, tarballs, dependency licensing manifests, documentation,
-and more to enable every major operating system and distribution to
-package `libghostty-vt` through standard official tooling.
+## Project Steadfast
 
-Libghostty has its own release cycle, separate from Ghostty the
-application. And it has its own tarballs with only the files and dependencies
-libghostty needs, resulting in smaller sizes and simpler licensing
-verification and compatibility.
+I’m excited to announce that I’ve been selected as the recipient of a [Ruby
+Association grant](https://www.ruby.or.jp/en/news/20261102) for working on
+developing a general-purpose macro tool for Ruby using the quote/unquote
+technique, with Matz as my mentor.
 
-Each release publishes a signed source tarball along with a companion
-dependencies tarball containing every Zig package in Zig's own cache
-layout, so a distribution can build the library completely offline. The
-build installs the shared and static libraries with a proper SONAME,
-headers, pkg-config files, and a CMake package config, and it honors
-`--prefix`, `DESTDIR`, and `lib64`. Debug info is kept by default so
-distros can split it out. All of this is documented in
-[PACKAGING-LIBGHOSTTY.md](https://github.com/ghostty-org/ghostty/blob/main/PACKAGING-LIBGHOSTTY.md),
-which ships with the tarball.
+The scope of the project includes the development of the quote/unquote tools, as
+well as additional tools for generating and manipulating Prism ASTs, converting
+ASTs to source code, etc. The project will also explore the use of those tools
+in popular gems such as ERB, ActiveRecord, Roda etc. I’d like to see how far I
+can take those ideas, how can they be integrated into the Ruby runtime, and what
+are the limitations and drawbacks of this technique.
 
-## Dependencies and Licensing
+I’ll do this work in a new repository that I created called
+[Steadfast](https://github.com/digital-fabric/steadfast). If you wish, you can
+look at some [sketches I
+made](https://github.com/digital-fabric/steadfast/blob/main/grant-2026/sketches.md)
+that show possible usages for quote/unquote. Steadfast is a continuation of my
+work on [Sirop](https://github.com/digital-fabric/sirop), a tool I built for
+converting Prism ASTs to source code, and which is currently used by the
+Papercraft compiler.
 
-`libghostty-vt` is MIT licensed. At runtime it needs nothing beyond
-libc, and it can be built fully freestanding if you don't want that
-either.<sup>[3](https://mitchellh.com/writing/libghostty-1-0#user-content-fn-2)</sup>
+Steadfast is dedicated to the courageous people of the land who persevere in the
+face of unimaginable violence, persecution, callousness and indifference.
 
-The library compiles in a small number of permissively licensed
-dependencies: [simdutf](https://github.com/simdutf/simdutf) and
-[Google Highway](https://github.com/google/highway) for SIMD, a compact
-Unicode table for grapheme data, and
-[Wuffs](https://github.com/google/wuffs) for image decoding in the
-Kitty graphics protocol. Both simdutf and Highway are built
-[without libc++](https://mitchellh.com/writing/simdutf-no-libcxx), so there is no C++
-standard library dependency.
+![](https://noteflakes.com/assets/steadfast-logo.png)
 
-There is no copyleft code anywhere in the
-dependency tree. Every dependency is listed in a machine-readable
-manifest with its version, SPDX license, and hash, specifically so
-distros can fill in their bundled-library metadata more easily.
-
-If a distro would rather dynamically link the system simdutf or Highway,
-there's a build flag for that.
-
-## Portability
-
-`libghostty-vt` is highly portable. The table below lists all the platforms
-and architectures that we build and test (full unit tests plus running all
-examples) in CI:
-
-| Platform | Architectures |
-| --- | --- |
-| Linux (glibc, musl) | `x86_64`, `aarch64` |
-| macOS 13+ | `x86_64`, `aarch64` |
-| iOS 13+ | `aarch64` |
-| FreeBSD | `x86_64`, `aarch64` |
-| Windows | `x86_64` |
-| Android | `aarch64`, `x86_64`, `arm` |
-| WebAssembly | `wasm32` (freestanding) |
-
-There is a second set of platforms we build in CI but do not run tests for.
-These systems all have known users; we just haven't set up the machinery
-for automated testing:
-
-| Platform | Architectures |
-| --- | --- |
-| Bare metal | `riscv32`, `thumb` |
-| WebAssembly (WASI) | `wasm32` |
-| Windows | `arm64` |
-| illumos | `x86_64` |
-| 32-bit x86 | `x86` |
-
-Each of the tested platforms gets the artifacts it expects:
-
-- Linux and FreeBSD get a shared library with a proper SONAME and versioned symbols, a static library, headers, pkg-config files, and a CMake package config.
-- macOS and iOS get a dylib with an @rpath install name and compatibility version, plus an XCFramework covering macOS, iOS, and the iOS simulator that drops straight into Xcode or Swift Package Manager.
-- Windows gets a DLL with a .pdb, an import library, and a static library. The library is built with the GNU ABI, but MSVC programs link against it through the import library and CI verifies this.
-- Android gets a shared library built against the NDK with 16 KB page size support, as required by Android 15+.
-- WebAssembly ships in two flavors, one optimized for speed and one for size, and the small one is under a megabyte with every feature enabled. If you only need a read-only viewer, subsystems like input encoding, search, selection, and Kitty graphics can be compiled out with a build flag, which roughly halves the module. Every function stays exported and simply returns GHOSTTY_UNSUPPORTED so your code doesn't have to change.[4](https://mitchellh.com/writing/libghostty-1-0#user-content-fn-3)
-
-Portability isn't just about the ability to build and run. It's also
-about resource usage and being able to work in a wide variety of
-resource environments.
-
-For resource usage, the library creates no threads, allocates only through
-an allocator you can customize, and uses minimal compute and memory.
-I've run 10,000 active terminals, each with a live shell producing output,
-on a Linux server with 4 cores and 8 GB of RAM. In this test, I had to use
-`dash` because `bash` used far more RAM than `libghostty-vt` and wouldn't fit
-into the 8 GB budget.
-
-## What's Next
-
-Libghostty 1.0 is a major milestone.
-
-You can now create a terminal in [~1,500 lines of C](https://github.com/ghostty-org/ghostling)
-that has more features and better performance than just about any terminal
-that existed in 2025, and most today in 2026.<sup>[5](https://mitchellh.com/writing/libghostty-1-0#user-content-fn-4)</sup> And thanks to the rich
-ecosystem of language bindings, you can do this in every major programming
-language. You get this for free. For almost no effort. You can just do it.
-
-`libghostty-vt` is a generalized library, so we will focus on stability
-while implementing as many terminal protocols as exist
-(giving options to enable/disable them, of course) so that embedders
-have the luxury of choice.
-
-Every bug any `libghostty-vt` embedder reports makes everyone else in
-the ecosystem better. Every feature we ship in `libghostty-vt` becomes
-available to everyone quickly and safely. Terminals can move faster with
-less fragmentation.
-
-Thank you to everyone who contributed to the library, wrote bindings,
-filed bugs, and shipped something on top of it while the API was still
-experimental. As with all open source, this was the work of a large
-community.
-
-Docs, examples, and downloads are at [lib.ghostty.org](https://lib.ghostty.org/).
-
-Boo. 👻
-
-## Footnotes
-
-1. As usual, I hate that I have to do this for every post, but I want to note this post was completely hand-written with no AI assistance. [↩](https://mitchellh.com/writing/libghostty-1-0#user-content-fnref-5)
-2. The numbers are rough because most consumers don't report usage, but JetBrains alone reports [12.5 million recurring active users](https://www.jetbrains.com/lp/annualreport-2026/), and that's before counting everything else on the list. [↩](https://mitchellh.com/writing/libghostty-1-0#user-content-fnref-1)
-3. In the original post I wrote "not even libc!" The default build does link libc, because the SIMD paths use it and the default allocator is `malloc`. Turn off SIMD and the library is freestanding, which is how it runs on bare-metal RISC-V and ARM targets. [↩](https://mitchellh.com/writing/libghostty-1-0#user-content-fnref-2)
-4. The feature flags aren't WASM-specific; they work on every target. They're likely useful for things like embedded devices too. [↩](https://mitchellh.com/writing/libghostty-1-0#user-content-fnref-3)
-5. "Features" here means the set of terminal protocols and sequences understood, and "performance" means parsing throughput and memory usage, since those are the parts `libghostty-vt` provides. [↩](https://mitchellh.com/writing/libghostty-1-0#user-content-fnref-4)
+Over the next four months, I’ll be sharing news of my progress on this project,
+which should be completed by late March 2027. I think the new techniques
+introduced in this project can lead to a new way of doing metaprogramming in
+Ruby. Hopefully, other people will find this work useful and will come up with
+new uses for Steadfast.
