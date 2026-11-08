@@ -1,226 +1,382 @@
-this has been bothering me for a while now, so I want to write down my thoughts
-so I can get it out of my head and move on. we’re gonna talk about how Deno approaches
-security, specifically with its permissions system, and why I think this approach
-is fundamentally insecure and misleading.
-
-## wait, what’s Deno?
-
-[Deno](https://deno.com) is a language runtime for JavaScript. it consists of a standard library, a package manager,
-a TypeScript transpiler and a bunch of other stuff that’s not important for our story. it’s not
-a JavaScript *implementation*, so it does not interpret or compile JavaScript, it reuses V8 for that.
-
-one of the flagship features of Deno is its permission system
-(it’s under the “Secure by default” header on their [landing page](https://deno.com)).
-the idea is simple: as JS code running in Deno needs the standard library to access the outside world,
-Deno can choose which accesses it allows or disallows, so when you run
-
-```shell
-deno run --allow-read=/tmp/dir --allow-run=uname code.ts
+1. Sender's MUA
+[Via SMTP on port 465]
+2. Sending MSA 
+3. Sending MTA 
+[Via SMTP on port 25]
+4. Receiving MTA
+5. Receiving LDA and message store
+[Via IMAP]
+7. Receiver's MUA
 ```
 
-the standard library will only allow `code.ts` to read `/tmp/dir` and run `uname`.
+(These aren't all necessarily different machines or even different programs, but it is helpful to give a name for each step.)
 
-additionally, a program can request permissions at runtime, so code like
+The mail user agent (MUA) runs on the user's computer and is what they use to send or read messages.
+Let's say they send something:
+that message will be uploaded to to the submission agent (MSA) which checks the user's password before handing off to the mail transfer agent (MTA).
 
-```typescript
-const r = { name: "read", path: "/tmp/dir" } as const;
-await Deno.permissions.request(r);
-```
+The transfer agent's job is to talk to the other mail servers and get the message to the receiving side's MTA.
+Once received, it's given to the local delivery agent (LDA) to be stored until the recipient checks their email.
+The name "LDA" is non-standard, but I use it to avoid having four different abbreviations differing by a single letter.
 
-will display a nice little prompt in the terminal:
+*The reason for this structure* is that when the system was being designed (around 1980),
+most organizations could only afford a single server.
+Maintenance was a full time job and updates often required multiple days of downtime. 
+A well-connected computer might have dedicated single-digits megabit/second link that worked half the time.
 
-```
-┌ ⚠️  Deno requests read access to "/tmp/dir".
-├ Requested by `Deno.permissions.request()` API.
-├ Run again with --allow-read to bypass this prompt.
-└ Allow? [y/n/A] (y = yes, allow; n = no, deny; A = allow all read permissions) > 
-```
+This forced the MTA and MUA distinction:
+if the recipient's server isn't up when the email is set, the sending MTA will save the message and re-attempt delivery later.
+This way, short outages don't cause bounced mail.
+Since the mail client is an interactive program the user runs, a separate message store is needed to keep the email until it can be read.
 
-and you can grant or refuse it.
+Most MTAs are configured to continue retrying a message for five days, usually with exponential backoff:
+mine will wait 5 minutes after the first failure, and increase the interval to one hour during prolonged outages.
 
-(aside: I really miss this feature in browser extensions. currently, if your extension needs *potential*
-access to *any* website, it needs to request *actual* access to *all* the websites, which is less than ideal)
+The MSA and LDA have always existed in some capacity, but have gotten a lot more complicated
+when people started accessing email from their own computers instead or remotely logging onto the server.
 
-if you like puzzles, this is the point where you can stop and think about what could go wrong with this system.
+*SMTP*
 
-## the prompts problem
+Most communication happens over the Simple Mail Transfer Protocol, including MTA-MTA delivery.
+To narrow it down a bit, I'll pretend do be an MTA sending email to blog@maurycyz.com.
 
-of the two specific issues I want to point out this is the less severe one.
-we’ll discuss it first because this was the first thing I noticed and it kinda immediately irked me when I first read
-about this.
+The first step is to look up the receiving MTA for that domain:
 
-(if you’re only interested in the more juicy part, you can skip to the [next section](https://goldstein.lol/posts/deno-security/#the---allow-run-problem)).
+# dig MX maurycyz.com
+[snip]
+maurycyz.com.           300     IN      MX      1 smallcrow.com.
+[snip]
+# dig A smallcrow.com
+[snip]
+smallcrow.com.          300     IN      A       65.109.172.162
+[snip]
 
-so, this nice little prompt is displayed in the terminal. it’s not, like, a PolKit GUI window or anything,
-it’s just text on stdout waiting for input from stdin. this is a wild thing to do.
+Email is old enough to have it's own dedicated DNS record instead of using subdomain hacks or TXT abuse.
+The number is a priority (smaller is higher), which is used if multiple hosts are specified:
+a big email provider will have multiple servers to ensure timely delivery.
 
-you see, terminal has a somewhat weird API. most of the commands / requests application can send to the terminal
-are sent in-band, by printing them to stdout. terminal can then reply by sending data to stdin.
-as Deno allows programs to print arbitrary data to stdout and read from stdin without requiring any permissions
-or doing any filtering, malicious code can send arbitrary commands to the terminal. it’s usually okay,
-because terminals won’t, like, execute shell commands just because stdout told them to, you’re supposed
-to be able to freely `cat` files without risking arbitrary code execution. it’s markedly less okay if
-you allow malicious code to do whatever with the terminal and then print a prompt on the same exact terminal.
+SMTP is a relatively straightforward text based protocol.
+The one catch is that most mail servers will require a CRLF as a data terminator.
+This can often be sent with ctrl-m, but using a tool that automatically inserts cartridge-return bytes is easier:
 
-you could, like, [hide the prompt by messing with terminal colors](https://github.com/denoland/deno/issues/9666).
-(this one got closed in 2026 because the permission prompt is “partially visible”
-(you can see an emoji) and “AI agents tend to” change terminal colors, so that’s a “valid use-case”)
+# telnet
+telnet> set crlf
+Will send carriage returns as telnet <CR><LF>.
+telnet> open smallcrow.com 25
+Trying 65.109.172.162...
+Connected to smallcrow.com.
+Escape character is '^]'.
+220 smallcrow.com ESMTP Postfix
+HELO nowhere
+250 smallcrow.com
+MAIL FROM:<me@nowhere>
+250 2.1.0 Ok
+RCPT TO:<blog@maurycyz.com>
+250 2.1.5 Ok
+DATA
+354 End data with <CR><LF>.<CR><LF>
+From: <me@nowhere>
+To: <blog@maurycyz.com>
 
-or [trick the terminal into feeding approval into stdin as a response to some request](https://github.com/denoland/deno/issues/9750#issuecomment-796702901).
-(terminal won’t ever send Enter to stdin to avoid executing commands, but “press Enter to continue”
-is common enough to not be suspicious; the user never sees the actual prompt).
-here’s [an asciicast of that](https://asciinema.org/a/9rvK8ANJK0WnQc9nsrFKdC7ir),
-I think it looks quite cool.
+Hello, world. 
 
-the specific issue on the screencast is long patched; the issue with terminal colors is not.
-that doesn’t really matter because the *real* issue is using an attacker-controlled channel for
-security-sensitive information. it’s like executing attacker-controlled JS code on a webpage
-and then asking for password on the same page. you can’t know that the page is in a safe state,
-so you can’t trust any input.
+.
+250 2.0.0 Ok: queued as C870D7CD93
+QUIT
+221 2.0.0 Bye
 
-even if Deno manages to patch every single issue with the “standard” escape codes, you never know
-which non-standard codes even exist out there. many terminals have some, it’s impossible to predict
-how they will interact with your prompt.
+Each line sent is a command, to which the remote server responds with a three digit number followed by human readable text.
+200 responses mean it worked,
+300 is "carry on...",
+400 is temporary errors which tell the sender to try again later,
+500 permanent errors mean the email should be returned as un-deliverable.
 
-(aside: how come sudo can do it then? the difference is that sudo asks for the password first,
-before running any other code. to trick sudo that way you’d need to fuck up terminal state before
-you even type `sudo`, and do it quietly enough that you don’t notice it while you type it.
-if some terminal allows it, I’d consider it a bug in the terminal)
+(If this seems similar to HTTP, that's no coincidence. A lot of the web, including its header syntax was lifted from SMTP)
 
-## the `--allow-run` problem
+The first command is always HELO (or EHLO), followed the sending MTA's hostname.
+This is usually not the same hostname as used in email addresses, but many provider require it to match the sender's IP address.
+Mine doesn't, so if you want to try this, put something random that's not a resolvable domain.
+. 
+The next two, MAIL FROM and RCPT TO specify the address to deliver to, and address to forward any bounce notifications to.
+Bounce messages are usually generated one step up from where the error occurred:
+in most cases the receiving MTA has a problem and sends an error code to the sending MTA, but by that time MSA has already, forcing a un-delivered mail notification.
+Those notification themselves use an empty MAIL FROM to avoid infinite loops.
 
-so, there’s a weird thing with this command I wrote above (I’ll copy it here for reference):
+Once the address has been specified and accepted, a DATA command is sent, followed by the actual email message.
+This at a minimum, contains the "From" and "To" headers along with some text.
+The message is terminated with a lone period to which the server indicates that the message is handed off.
 
-```shell
-deno run --allow-read=/tmp/dir --allow-run=uname code.ts
-```
+*Final hop MTA's* should forward the email to the LDA before sending back a status code.
+This ensures that they never accept a message which they can't deliver which would result in a error notification.
+This "backscatter" message interacts badly with spammers that forge MAIL FROM:
+it turns their obviously bogus message into one that is likely to be delivered and cause annoyance.
 
-what does `--allow-run=uname` even mean? it’s not like programs have canonical names, it’s not `org.gnu.coreutils.uname`,
-it’s not even `/nix/store/8k1dmzr3gwzqdgw45nzj76902ca7g1is-coreutils-full-9.5/bin/uname`. it’s just a shortcut for
-“look at all the directories in `PATH` one-by-one to see if you can find `uname` there”.
+There is no requirement for the addresses inside the email to match the ones in MAIL FROM and RCPT TO (also known as the envelope).
+The most common cause of this is a mail that has been forwarded.
+For example, a mailing list will set the envelope destination to match each member's email, but keep the original "From" header intact so that replies work correctly.
+The envelope from address will usually be changed to point to somewhere the list administrator will check for error notifications.
 
-you can set environment variables for the child process without needing any extra permissions, so what if we just
+Now, it's not that intermediate systems don't modify the headers:
+Most stages will add a "received" header to record where they got the message.
 
-```
-$ cat t.ts
-const command = new Deno.Command("uname", {
-  // my current working directory, can be anything
-  env: { 'PATH': '/tmp/tmp.7ofmKaNW83' },
-});
-const { code, stdout, stderr } = command.outputSync();
-console.log(new TextDecoder().decode(stdout));
-$ cat uname
-#!/bin/sh
-printf lol
-$ deno run --allow-run=uname t.ts
-lol
-```
+*While required for MTA to MTA communication*, SMTP is used throughout the whole system.
+The mail client submits email using a different port, but over the same protocol.
+Communication between internal components (i.e. MTA to LDA) often uses the closely related Local Mail Transfer Protocol:
+the main difference is the assumption that the receiver doesn't have a message queue and will either deliver the mail immediately or return an error. 
 
-yeah.
+Submission usually uses TLS connection to port 465, with the addition of a password (in base64):
 
-once again, we have a pretty and convenient interface that doesn’t really make sense from the security standpoint.
-it would be *nice* if programs were uniquely identified by their names, but they’re *not*, and pretending they are
-leads to security holes.
+AUTH PLAIN
+334
+AGh1bnRlcgBodW50ZXIy
+235 2.7.0 Authentication successful
 
-funnily enough, I didn’t even think that this issue would be there when I poked at Deno for the first time,
-so I haven’t reported it [until now](https://github.com/denoland/deno/issues/11964#issuecomment-2322993158) (spoiler alert: this is a comment on a GitHub issue
-that I created for the problem I’ll explain below).
+The one thing that's significantly different is the MUA's fetch, which operates on a "pull" basis.
+I won't go into the syntax here, but it's not terribly complicated.
 
-so let’s imagine we fixed that. it’s not *that* hard, we can force `PATH` to be whatever it was when the runtime started,
-or always require fully-qualified paths, or prompt with a fully-qualified path before running. are we safe now?
+... but if you actually try sending an email to, say, gmail, based on what I've said so far, it won't work.
+Some of that is due to them enforcing things like the Message-Id header:
+a unique identifier used to de-duplicate mail in cases where the receiving MTA accepts an email but the connection drops before the sender is informed about this.
+This will cause the sender to try again later, which duplicating the message.
 
-lol no of course we’re not. while `PATH` decides which executable gets run, dynamically-linked executables (so, like, most executables)
-require dynamic loader to actually start. dynamic loader is a program that, well, loads the executable into memory, finds its
-dependencies and does a bunch of other fun stuff we won’t get into. the important part is that dynamic loader is *configurable*
-via environment variables. you can probably see where this is going now.
+However, a big part of it is...
 
-`LD_PRELOAD` instructs the dynamic loader to load specific dynamic library when loading executables.
-dynamic libraries can execute arbitrary code on load.
-we can just pass `LD_PRELOAD` and we’ve completely escaped the sandbox once again:
+*Authentication*
 
-```
-$ cat t.c
-#include <stdio.h>
+Base SMTP trusts that every sender is be well behaved:
+anyone can send email as anyone else. 
+In fact, many hosts were configured to accept and relay mail from anyone as a conveyance for when someone's usual server was down.
 
-// ask dynamic loader to run this function on load time pretty please
-__attribute__((constructor)) void lol() {
-    puts("lol");
-}
-$ cat t.ts
-const command = new Deno.Command("uname", {
-  // ask dynamic loader to load our evil library
-  env: { 'LD_PRELOAD': '/tmp/tmp.7ofmKaNW83/liblol.so' },
-});
-const { code, stdout, stderr } = command.outputSync();
-console.log(new TextDecoder().decode(stdout));
-$ gcc -fPIC -shared t.c -o liblol.so
-$ # that's the real uname now!
-$ deno run --allow-run=uname t.ts
-lol
-Linux
-```
+The original solution to bad behavior was to get the culprit kicked off the internet...
+but that fell apart quickly once the network grew and companies began getting involved:
+the first documented case of spam email was sent in 1978 and sold 13 million dollars in computers.
+While authentication doesn't prevent spam, it makes it possible to filter out unwanted senders.
 
-I [reported this](https://github.com/denoland/deno/issues/11964) some time ago and now they [patched it](https://github.com/denoland/deno/pull/25271) by disallowing to set
-environment variables starting with `LD_`. this, once again, fixes a specific issue while ignoring the larger
-problem: “permission to run a single command” is mostly not a useful concept.
-(you *can* do secure interfaces by allowing to run a single command, like git-over-SSH does,
-but generally both the environment and the command need to be prepared to handle it)
+Verifying sender addresses is not possible using the MX record, since there is no guarantee the same host is used for receiving and sending mail.
+The simplest solution is to publish the sending address in a DNS record:
 
-say, for example, our script wants to invoke the `$EDITOR` so user can edit some data (think git commit messages).
-that’s a very natural permission request, and it’s also an unmitigated disaster because most editors are
-configurable enough for running one to be a full sandbox escape. it’s easy for user to absent-mindedly
-grant `--allow-run=vim` (“well, sure, I want to edit this file!”), but then the script can just set
-`VIMINIT='!rm -rf /*'` and oops, all my files are gone. most programs are configurable, often in some
-ways you won’t think about (like `LD_PRELOAD`), and attacker controls the execution enviornment.
-“patch some specific ways to configure programs” is not the solution, the solution is to sandbox all the code,
-not just JS code.
+@ TXT v=spf1 ip4:65.109.172.162 ip6:2a01:4f9:c011:841a:b01d::1 -all
+; Roughly:
+;   allow from 65.109.172.162
+;   allow from 2a01:4f9:c011:841a:b01d::1
+;   deny otherwise
 
-when we discussed all this stuff in GitHub issues, a Deno developer wrote:
+However, that's not quite enough for the email empire.
+Big-tech also wants the email body to be signed with a cryptographic key published via a DKIM DNS record.
+This requires adding a step to sending mails, usually as a plugin for the MTA. 
 
-> The main thing it protects you against is malicious code that isn't smart enough.
+I rag on big-tech a lot, but this is actually a sensible policy:
+SPF can only verify the MAIL FROM, since forwarding the email will chance the source IP address. 
+DKIM signatures are attached to the message and can be used to verify the original sender (the "From" address) of a message.
 
-upon reading this, I was enlightened.
+*However*, both of these don't actually prevent spam, because spammers can just set up a few TXT records.
+Big-tech requires the sender's HELO hostname to be consistent with their IP address, via both forward and reverse DNS.
+This helps prevent compromised devices from spewing out junk:
+a smart TV is unlikely to have a meaningful PTR record, and if it does, that hostname won't resolve back to it's address.
 
-## conclusions
+... unfortunately this policy also makes it impossible to directly send mail from most residential internet connections unless you own the address block.
+Of course, the solution is to pay a big-tech company money to relay your emails.
+If you don't like the, find a mail provider with more permissive rules:
+the only reason big-tech is able to keep the racket running that five or so companies control 99% of communications.
 
-deno tries really hard to do what the operating system should be doing. it emulates syscall filtering by
-filtering standard library calls. unfortunately, this breaks down the second you need to run code
-that doesn’t use Deno standard library. it also uses somewhat flawed approach to permission management
-that *looks* good (wow, runtime prompts! omg, I can just `--allow-run=uname`!), but introduces security
-risks. in doing this, it implicitly requires user to understand all the implications of various permissions
-and their combinations, which can be really hard.
+*The message*
 
-Deno process is not actually sandboxed, it only pretends it is. I didn’t mention some more boring issues like
-“Deno doesn’t prevent you from following symlinks that lead outside of the sandbox” because they all just boil
-down to this simple one: the process is not sandboxed.
+This is where SMTP stops being so simple.
+The message format is a mess of historical baggage, but first,
+let's look at the simplest possible email once it's been delivered:
 
-one can argue that this pseudo-sandboxing is better than nothing: after all, not all the malicious code is smart enough.
-I disagree: Deno permissions give a false sense of security and can lure someone into running untrusted code without proper sandboxing.
+Return-Path: <alex@there>
+Delivered-To: bob@here
+Received: from here
+        by here with LMTP
+        id bs05E10S7Go4VQMAHrglgg
+        (envelope-from <alex@there>)
+        for <bob@here>; Thu, 05 Nov 2026 05:21:33 +0000
+DKIM-Filter: OpenDKIM Filter v2.11.0 here B05E67CD18
+Received-SPF: None (mailfrom) identity=mailfrom; client-ip=313.33.33.337;
+        helo=there; envelope-from=alex@there; receiver=here
+Received: from there (unknown [313.33.333.337])
+        by here (Postfix) with SMTP id B05E67CD18
+        for <bob@here>; Thu, 05 Nov 2026 05:20:42 +0000 (UTC)
+From: alex@there
+To: bob@here
 
-it’s possible that you can use Deno sandboxing safely if you:
+Hello, World!
 
-- never use more dangerous permissions like --allow-run, even with =cmd,
-- that includes --allow-env, even --allow-env=VAR, for setting environment variables is memory unsafe and can affect libc functions,
-- preferrably run with --no-prompt so your terminal can’t be tricked,
-- are careful about symlinks in directories you --allow-{read,write} to,
-- are not concerned with resource exhaustion: there’re zero permissions required to burn CPU or allocate memory.
+The format of the headers is superficially similar to HTTP headers,
+except that no line should exceed 78 bytes. (without the CRLF line terminator)
+Overlong headers are broken up and newly created lines are prefixed with whitespace to indicate that they are a continuation of the last header.
 
-in particular, you may be safe if you’re running untrusted code with no permissions at all
-in a non-interactive context and use some other mechanism to control resource consumption.
+Mail software generally appends headers to the start of a message, so it's helpful to read them backwards.
 
-I still don’t think you *should* do it. this path is riddled with footguns because you’re
-executing untrusted code in a fully-privileged process, and the moment you need *some* OS interactions
-you’re no longer running code “with no permissions at all”. you should not try to figure out which
-stdlib APIs can lead to a sandbox escape when combined. you should just use a proper sandbox.
+"From" and "to" are fairly self explanatory.
+Next, the "received" header contains a note from the receiving MTA:
+it includes the source's HELO name, IP address, RCPT TO and a timestamp.
 
-I’m not a fan of Deno’s security model.
+The MTA then performed SPF and DKIM checks, which came up empty:
+There's no signature and the MAIL FROM hostname is not publically resolvable.
 
-## so what do we do?
+The LDA added another "received" header, although it's not very helpful.
+More importantly, it tacked on the "return-path" with the original MAIL FROM address and recorded the mailbox the message was delivered to.
 
-just `bwrap` untrusted shit.
+*However, the body isn't always plain text.*
+Let's look at an email that includes formatting:
 
-also, please: don’t harass Deno developers.
-we have a technical disagreement, but no technical disagreement was ever solved by harassment.
-this post is explicitly not an invitation to do it.
-I’ve already explained my point of view to them, they disagreed, and that’s okay.
-you don’t need to reiterate it, it won’t help anybody.
+[...]
+MIME-Version: 1.0
+Content-Type: multipart/alternative;
+ boundary=----IX71FHL6PHA0538LS1WKT2W9SF7S8X
+Content-Transfer-Encoding: 7bit
+
+------IX71FHL6PHA0538LS1WKT2W9SF7S8X
+Content-Type: text/plain;
+ charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+Hello, World! I can do bold text!
+
+------IX71FHL6PHA0538LS1WKT2W9SF7S8X
+Content-Type: text/html;
+ charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+<!DOCTYPE html><html><body><div dir=3D"auto">Hello, world! I can do <b>bold<=
+/b> text</div></body></html>
+
+------IX71FHL6PHA0538LS1WKT2W9SF7S8X--
+
+That's right, it's a web page!
+
+However, since not all email clients can understand HTML, the message also includes a plain text version.
+This is done using MIME's "multipart" encoding, in this case, multipart/alternative, which indicates all the
+versions are functionally equivalent.
+
+MIME's version number has been stuck at 1.0 since 1996.
+
+The delimiter is a randomly chosen string, which allows multiple multiparts to be nested inside of each other without escaping.
+Each section of the message has it's own headers, in this case indicating that it's sent in the quoted-printable encoding.
+This allows the email message to contain any bytes without exposing the MTA to scary things like non-seven-bit ASCII:
+remember, the protocol is 45 years old. 
+
+In quoted-printable, Equal signs are used as the escape character: if followed by two hex digits, it decodes to that byte.
+If followed by a newline, both characters should be removed.
+This is used to break long lines that could otherwise cause trouble.
+
+In this email, the "=3D" becomes an equal sign and both lines are joined together.
+If you've ever seen an email with stray equal signs or which is missing one or two characters ~ every 80 bytes, broken quoted-printable decoding is usually the culprit.
+
+The second "content-transfer-encoding" is base64, used for binary files like attached images:
+
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="5ZTNvId/H+rlk7Fr"
+Content-Disposition: inline
+
+--5ZTNvId/H+rlk7Fr
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+
+Check out this file:
+
+--5ZTNvId/H+rlk7Fr
+Content-Type: application/octet-stream
+Content-Disposition: attachment; filename="file.bin"
+Content-Transfer-Encoding: base64
+
+J7mtSdbQItOAi345nwaNkkTXrnDIRPA0DSwhbSAOwm2C/KoHjQIotY9lnJRMBRk9InQaHOxL
+bb7DGd9EN6uRpjvCbox9xblAh3CxH7sl+YAkYcKw1V100RpBwMhgaXfUJBB3oRkLffgRwEyK
+v9qFBLp9zZ+SiRJoRWbA4aZLexPhHZ35vFROVKYtiAeMlD1s15v3kPZvEADam0e45BoSaqmp
+1S3z3b5wBIFHJUxQULD589MKaFx2Z2A+91pl/pbZWmZkzt55D/hZ05kjUUbXUnDnTYAQE2Gk
+WnN+SnrQvfEO+Tz7AdrbLD1q2DgwWW+k0cVJLKjdwRxesGhAkQCZfHVrno6R4iXjTbInIbQv
+hXzQiV840iUiUhk282WADd1ffJ0sot2Waf7XHLIE1lZVFQ3iGofYbw8pZlg3sb35AnIWPZKv
+fbC6Yh95RV23R4K2NHeBX1rpl4bSSiftnD2RbsBzv7cgw/6M/Lj3O40NFGAaUC+J7TpAaXdi
+tvlPsNQhMo8QRf/ub7WK42cPUlz1fKq1k1pzGN96YOsE5azMfF4vLANtbtbVmLIp2WmgBk0P
+9IGMWy/xIAe0cOh+bqzru2+ojJGgx9uX4VSTP9BaTOwkVX5+rQfpp1qJodtHiO8sHw6Pg+Mg
+WcpqQPC7118ccuT44cVpIRkwOSoJzsW++WM=
+
+--5ZTNvId/H+rlk7Fr--
+
+This is why size limits are often disappointing:
+the encoded email will be ~ 35% larger than the original file.
+More efficient encodings (raw binary data) are supported by some MTAs, but may have to be converted to base64 somewhere down the path...
+which would break DKIM signing.
+
+*Generally*:
+
+No encoding ("7-bit") can be used if the message has short lines and fits in low-bit ASCII. However, "7-bit" is mostly seen as a null encoding for already encoded multipart containers.
+Quoted printable if the message is mostly text, but has something that risks breaking ancient software.
+Base64 for binary data.
+
+*About TLS*
+
+The SSL/TLS used by mail clients is effectively the same as for a browser:
+the mail provider must go to a certificate authority, prove their identity, get a certificate and use it.
+Algorithms and ciphers are disabled at the slightest hint they may be insecure.
+
+However, MTAs operates on "trusted" networks...
+although it's less that an attacker can't get access to internet traffic, but that if they could,
+it would be possible for them to pass an ACME challenge and take out a trusted certificate.
+
+As a result, the goal is mostly to protect against passive eavesdropping:
+most sysadmins don't bother dealing with a CA and run a self-signed certificate.
+(it's not like CAs have a good track record: [4](https://en.wikipedia.org/wiki/EMudhra))
+
+Another weird thing about email is that MTAs don't use a separate TLS port.
+All connections start as port 25 plaintext, then the sender issues a STARTTLS command and hands over the connection to a SSL/TLS library.
+It's somewhat janky, but it allows servers to attempt to use encryption and cleanly fall back if it's not supported.
+
+Such an approach isn't great for submissions, since a fall back would result in leaking the password...
+and baddies on shared networks or nosy residential ISPs can strip out the STARTTLS command.
+For this case, it's best to default use the dedicated SSL submission port 465.
+
+(This port actually has a bit of a history, with it being deprecated in favor of STARTTLS
+before being re-endorsed once we realized using optional SSL for passwords was a bad idea.)
+
+*So what??*
+
+Unless you write email related software or run infrastructure, most of this information is profoundly useless.
+However, there are a few things you might want to remember. 
+
+*The underlying protocols allow five days for delivery*, and it can sometimes take longer.
+Since users expect delivery in seconds and most emails are at least somewhat time sensitive,
+some MTAs are configured to send out delay notification if a message is taking a while.
+
+You may want to find out if yours does this before assuming the recipient is ignoring you.
+
+*Emails are digital postcards*.
+
+A message will be stored and forwarded by multiple systems in plaintext.
+Anyone on the network path may be able to read your email:
+SSL/TLS is not universally supported and can trivially be stripped out by active attackers.
+
+This is an inherent part of email: there's no way to tack-on strong encryption without breaking existing clients.
+If you need a guarantee of privacy, you must encrypt the message before sending, and the recipient must decrypt it themselves. 
+Be careful with built-in tools like PGP:
+these generally make it way too easy to accidentally hit reply-all without encrypting, in addition to other flaws like exposing the subject line. 
+
+"Encrypted" email providers are largely snake oil.
+While the message store can encrypt messages and a custom MUA could decrypt them, the MTA must have access to plaintext.
+As a result, it provides minimal to no security against most attack vectors despite the "mIlItArY gRaDe EnCrYpTiOn".
+The only way to fix email would be to get everyone to agree to switch to an end-to-end encrypted protocol...
+but the whole point of email is universal compatability:
+encrypted messaging can exist, but encrypted email is contradictory. 
+
+The best hope is to find a mail provider that can be trusted not to snoop messages.
+That is to say, not an Advertising company (google) or one that's been pushing hard for LLMs (microsoft / apple):
+both of these businesses create strong incentives to read your messages.
+Although you'll still have to hope whoever you are communicating with isn't beign snooped on by their provider.
+
+*Worse, DKIM signatures* act as a lifelong proof that an email came from your provider's servers, even if a message is years old and has no clear chain of custody.
+This makes leaked, hacked, or snooped emails ideal extortion material:
+since the bad actor can trivially prove they haven't been fabricated. 
+
+This property, called non-repudiation, is generally not desirable for messaging systems.
+Avoiding signing not an option if you want to interoperate with big-tech, but it is possible to regularly rotate and publish private keys.
+Before they key is published, the signature can be trusted to verify it is legitimate.
+However, once the key has been published, the signature can been forged by anyone and is rendered retroactively untrustworthy.
+
+Since authentication is checked during delivery by the MTA and LDA, this doesn't affect how the email will be handled.
+However, it will cast doubt on the authenticity of leaked messages since the signature could have been forged with minimal effort.
+
+While key rotation is common practice, most mail providers don't publish their old private keys, 
+so the signature is still trustworthy (modulo the service being hacked).
+I would advise against emailing something you wouldn't be comfortable reading out in public.

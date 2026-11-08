@@ -1,150 +1,167 @@
-*This post is cross-posted at the [Topos Institute blog](https://topos.institute/blog/2025-05-27-e-graphs-1/).*
+*This post is cross-posted at the [Topos Institute blog](https://topos.institute/blog/2026-10-14-e-graphs-3/).*
 
-An [e-graph](https://en.wikipedia.org/wiki/E-graph), short for “equality graph,” is a data structure that maintains a congruence relation on expression trees: an equivalence relation stable under forming new expressions. First devised by Nelson and Oppen in 1980 ([Nelson 1980](https://www.epatters.org/post/e-graphs-1/#ref-nelson1980); [Nelson and Oppen 1980](https://www.epatters.org/post/e-graphs-1/#ref-nelson-oppen1980)), e-graphs received a surge of new attention when Willsey et al demonstrated, via their software package [`egg`](https://github.com/egraphs-good/egg), that e-graphs combined with [equality saturation](https://doi.org/10.1145/1480881.1480915) can be a fast, powerful, and adaptable tool for equational reasoning ([Willsey et al. 2021](https://www.epatters.org/post/e-graphs-1/#ref-willsey2021)). In my own work on [CatColab](https://github.com/ToposInstitute/CatColab), I’ve begun using `egg`’s successor, [`egglog`](https://github.com/egraphs-good/egglog) ([Zhang et al. 2023](https://www.epatters.org/post/e-graphs-1/#ref-zhang2023)), to reason about finitely presented categories.
+The concept of [initial functor](https://ncatlab.org/nlab/show/initial+functor) provides a categorical and [operational](https://en.wikipedia.org/wiki/Operational_semantics) semantics for equational reasoning with diagrams. [So far](https://www.epatters.org/post/e-graphs-1), we have explored this thesis in the simplest possible setting, that of a bare category, or, in logical terms, of an equational theory with unary function symbols. This is rather restrictive. The standard setting for equational reasoning was historically the starting point of both categorical logic ([Lawvere 1963](https://www.epatters.org/post/e-graphs-3/#ref-lawvere1963)) and e-graphs ([Nelson 1980](https://www.epatters.org/post/e-graphs-3/#ref-nelson1980); [Nelson and Oppen 1980](https://www.epatters.org/post/e-graphs-3/#ref-nelson-oppen1980)): a category with finite products, viewed as an algebraic theory.
 
-Standard presentations, beginning with Nelson’s PhD thesis ([Nelson 1980](https://www.epatters.org/post/e-graphs-1/#ref-nelson1980)), emphasize the data structures and algorithms needed to implement e-graphs, such as the [union-find](https://en.wikipedia.org/wiki/Disjoint-set_data_structure) data structure. It’s crucial that work in computer algebra ultimately touch the ground in this way. Still, I can’t help but wonder what, abstracted from the implementation details, is *really* going on with e-graphs. The diagrammatic and visual nature of e-graphs, so apparent in the interactive [`egglog` demo](https://egraphs-good.github.io/egglog), will suggest to any category theorist that categorical ideas may be implicitly at work.
+In this post, we extend the initial functor semantics from bare categories to categories with finite products. Surprisingly, this turns out to be, in a sense, trivial: the definition of initial functor need not be modified beyond asking that it preserve products. We can therefore jump straight into the rules of the formalism and an example calculation. Only in the final section, which is more technical, do we justify why the formalism need not be substantively changed from the unary setting.
 
-Two groups have recently proposed categorical semantics for e-graphs ([Biondo, Castelnovo, and Gadducci 2025](https://www.epatters.org/post/e-graphs-1/#ref-biondo2025); [Tiurin et al. 2025](https://www.epatters.org/post/e-graphs-1/#ref-tiurin2025)). Without going into specifics, both define an “e-hypergraph” to be a labeled hypergraph equipped with extra structure that, directly or indirectly, specifies an equivalence relation. Their starting point is to say what an e-graph *is.* Though I’ll eventually propose my own definition of an “e-diagram,” I will start by considering how e-graphs are *manipulated*, with the ultimate aim being to give a categorical and operational semantics for e-graph computation. The key concept will be that of an [*initial functor*](https://ncatlab.org/nlab/show/initial+functor).
+## Cartesian diagrams and term graphs
 
-In this post, I’ll introduce the main ideas for categories without any additional structure. In comparison with e-graphs, this setting will be quite restrictive—it will correspond to allowing only *unary* function symbols—but it has the advantage of bringing us to the point with a minimum of setup. In future posts, we’ll generalize to categories with finite products and recover the standard setting of e-graphs.
+For our purposes, a category is **cartesian** if it has finite products, and a functor between cartesian categories is **cartesian** if it preserves finite products. A diagram \(D: \mathsf{J} \to \mathsf{C}\) in a cartesian category \(\mathsf{C}\) is **cartesian** if its shape \(\mathsf{J}\) is a cartesian category and the functor \(D\) is itself cartesian.
 
-## Representing equations using diagrams
+Cartesian categories and functors are familiar; cartesian diagrams less so, as limits or colimits are not usually indexed by categories assumed to have products. When taking limits in a cartesian category, there is no harm in taking the diagrams to be cartesian too, since a cone over a cartesian diagram is uniquely determined on its leg at a product of objects by its legs at each factor. This follows from the naturality of the cone with respect to product projections. Not only is there no harm in taking the diagram to be cartesian, it is important for us to do so since the diagram’s shape will encode systems of equations involving multiary operations.
 
-If you’ve encountered any abstract algebra, you’ve likely seen how category theorists represent equations between morphisms by drawing commutative diagrams. For example, saying that a square of morphisms
+The initial functor semantics has the virtue of being *invariant*: it does not depend on a particular way of presenting cartesian categories or cartesian diagrams. Even so, we often restrict to diagrams whose shapes are freely generated by a combinatorial structure. Such diagrams are syntactical in nature and resemble data structures used by computer scientists.
 
-in some category *commutes* means that the equation \(g \circ f = k \circ h\) holds.
+Recall that a **free diagram** is a diagram whose shape is a category freely generated by a graph. We say that a **free cartesian diagram** is a cartesian diagram whose shape is a cartesian category freely generated by a multigraph.[<sup>1</sup>](https://www.epatters.org/post/e-graphs-3/#fn1) There are several ways to explicitly describe the [free cartesian category](https://ncatlab.org/nlab/show/free+cartesian+category) generated by a multigraph (see also [Walters 1989](https://www.epatters.org/post/e-graphs-3/#ref-walters1989)), but we need not settle on one at this stage. The abstract characterization, given by the free-forgetful adjunction between cartesian categories and multigraphs, says that a free cartesian diagram \(D: F(M) \to \mathsf{C}\), indexed by a multigraph \(M\), is the same thing as a homomorphism[<sup>2</sup>](https://www.epatters.org/post/e-graphs-3/#fn2) \(M \to U(\mathsf{C})\) from \(M\) into the underlying multigraph of \(\mathsf{C}\). The latter is combinatorial data.
 
-Let’s recall the formal definitions, which are standard if not without fine distinctions.
+Under the logical perspective—that the objects and morphisms of a cartesian category \(\mathsf{C}\) are the types and operations of an algebraic theory—a free cartesian diagram in \(\mathsf{C}\) becomes a *term graph* over the algebraic theory. As formalized here,[<sup>3</sup>](https://www.epatters.org/post/e-graphs-3/#fn3) a term graph encodes terms as paths in a multigraph and, simultaneously, equations between terms by two or more multiedges incoming to a vertex. We illustrate this encoding through a toy example. Note that we draw term graphs differently than in the source material, in keeping with our different formalization of the concept.
 
-**Definition 1** A **diagram** in a category \(\mathsf{C}\) is a functor \(D: \mathsf{J} \to \mathsf{C}\) whose domain \(\mathsf{J}\), the **indexing category** or **shape** of the diagram, is a small category. Further terminology:
+Note that, despite a superficial resemblance, cartesian diagrams are *not* string diagrams: they have no inputs or outputs, nor a preferred sense of direction.
 
-- the diagram is free if its shape is a free category, i.e., \(\mathsf{J} = \mathrm{Path}(G)\) is freely generated by a (possibly infinite) graph \(G\);
-- the diagram is finitely presented if its shape is a finitely presented category;
-- the diagram commutes, or is commutative, if for every pair of morphisms in \(\mathsf{J}\) with the same domain and codomain, their images in \(\mathsf{C}\) are equal.
+In the operational semantics, morphisms between cartesian diagrams are more important than the diagrams themselves. Recall that a **morphism of diagrams** in a category \(\mathsf{C}\) is a functor between their shapes forming a commutative triangle over \(\mathsf{C}\). In other words, the **category of diagrams** in \(\mathsf{C}\) is the slice \(\mathsf{Cat}/\mathsf{C}\). A **morphism of cartesian diagrams** is a morphism of diagrams that is also cartesian as a functor; so, the **category of cartesian diagrams** in a cartesian category \(\mathsf{C}\) is the slice \(\mathsf{Cart}/\mathsf{C}\).
 
-Note that a diagram may well be both free and commutative: freeness is a property solely of the diagram’s shape, whereas commutativity also crucially concerns the diagram’s image in the target category.
+## Calculating with cartesian initial functors
 
-In practice, we work with diagrams that are free and finitely presented. That means that the diagram’s shape is freely generated by a finite graph, a data structure easily implemented on a computer. When doing computer algebra, the target category will itself be finitely presented by generators and relations. Initially, the only equations that we “know” are the ones explicitly given as relations. Our aim is to derive further equations in the target category by manipulating diagrams in it.
+We show how to derive equations using cartesian initial functors by first establishing the rules—themselves examples of cartesian initial functors—and then carrying out a small calculation. As hinted at the outset, a **cartesian initial functor** is nothing other than a functor that is both cartesian and initial.
 
-But wait: if a diagram in a finitely presented category can be described using only graph-theoretic concepts, familiar to any computer scientist, what is the point of introducing categories and functors? We’ll see that category theory is indispensable to concisely describe the valid *manipulations* of diagrams. These manipulations take the form of *morphisms* between diagrams, which are functors satisfying an extra property.
+### Motifs among cartesian initial functors
 
-## Initial functors
+We record a few important motifs, extending those in the [first post](https://www.epatters.org/post/e-graphs-1/#motifs-among-initial-functors) to the cartesian setting. As in the [second post](https://www.epatters.org/post/e-graphs-2), each motif is intended to be a rule of inference for diagrammatic reasoning.
 
-Reasoning with diagrams, or “diagram chasing,”[<sup>1</sup>](https://www.epatters.org/post/e-graphs-1/#fn1) is the art of transforming a given diagram, say \(D: \mathsf{J} \to \mathsf{C}\), into another diagram \(D': \mathsf{J}' \to \mathsf{C}\), following certain rules of inference. In ordinary mathematical practice, nobody bothers to say what these rules are. We aim to be more systematic.
+Fix a cartesian category \(\mathsf{C}\). To see that the functors below are initial, notice that pulling back along each one preserves limits; in fact, the limit of each diagram below is the product \({X_1 \times \dots \times X_k}\) in \(\mathsf{C}\) (where \(k=4\) in the final example).
 
-Let’s consider the obvious moves we could make. Given a diagram \(D: \mathsf{J} \to
-\mathsf{C}\), we could pull it back along a functor \(R: \mathsf{J}' \to \mathsf{J}\) to obtain another diagram \(D' \mathrel{\vcenter{:}}=D \circ R: \mathsf{J}' \to \mathsf{C}\). Conversely, we could extend the diagram \(D\) by finding a functor \(R: \mathsf{J} \to
-\mathsf{J}'\) along with a diagram \(D': \mathsf{J}' \to \mathsf{C}\) such that \(D = D'
-\circ R\):
+- **Operation introduction**: for any morphism \(f: (X_1, \dots, X_k) \to Y\) in \(\mathsf{C}\), the map of cartesian diagrams ![](https://www.epatters.org/post/e-graphs-3/_svgs/60d7416cf997f5acd0cf70468ee215fa4529c85a.svg) is initial.
+- **Congruence reduction**: for any morphism \(f: (X_1, \dots, X_k) \to Y\) in \(\mathsf{C}\), the map of cartesian diagrams, ![](https://www.epatters.org/post/e-graphs-3/_svgs/f6d4488337f58f7e6943d2b666adc83096293b7a.svg) sending both \(y\) and \(y'\) on the left-hand side to \(y\) on the right-hand side, is initial.
+- **Equation elimination**: for any morphism \(f: (X_1, \dots, X_k) \to Y\) in \(\mathsf{C}\), the map of cartesian diagrams ![](https://www.epatters.org/post/e-graphs-3/_svgs/27405a5a14dedb4f90431f308b5dbd8a28aabc57.svg) is initial.
+- **Factorization**: for any factorization of a morphism in \(\mathsf{C}\), the map of cartesian diagrams from the diagram indexed by a single morphism to the diagram indexed by the shape of the factorization is initial. For example, given morphisms \[ f: (X_1, X_2) \to Y_1,\quad g: (X_3, X_4) \to Y_2, \quad h: (Y_1, Y_2) \to Z \] in \(\mathsf{C}\), the map of cartesian diagrams ![](https://www.epatters.org/post/e-graphs-3/_svgs/30db67a800f555ce2520860aeef0f38b8f954226.svg) is initial.
 
-Without assuming more, neither contemplated rule of inference is valid in the sense (to be made precise) of exactly preserving solutions to the equations presented by diagrams. For that, we need \(R\) to be a special kind of functor, an *initial functor*, characterized by the following definition/theorem.
+[As before](https://www.epatters.org/post/e-graphs-2/#weak-equivalence-of-diagrams), we say that two cartesian diagrams \(D: \mathsf{J} \to \mathsf{C}\) and \(D': \mathsf{J}' \to \mathsf{C}\) are **weakly equivalent**, denoted \(D \sim D'\), if they can be connected by a zig-zag of morphisms, each of which is an initial functor. Weakly equivalent diagrams have the same limit, whenever the limit exists.
 
-### Definition
+We can derive new rules—valid in the sense of preserving weak equivalence—by applying the motifs above in either direction. Particularly important is the **equation introduction** procedure for an equation between composite morphisms in the base category \(\mathsf{C}\): starting with a discrete cartesian diagram, we apply operation introduction in the forward direction to the common composite; then equation elimination in the backward direction; and finally factorization twice in the forward direction, once for each side of the equation in \(\mathsf{C}\). For example, suppose morphisms \[
+f: (X_1, X_2) \to Y, \quad
+g: Y \to Z, \quad
+h: (X_1, X_2) \to Z
+\] in \(\mathsf{C}\) satisfy \(h = g \circ f\). Then there is a weak equivalence of cartesian diagrams:
 
-**Theorem 1 (Initial functors)** A functor \(R: \mathsf{J} \to \mathsf{K}\) is **initial**, here denoted \(R: \mathsf{J}
-\twoheadrightarrow\mathsf{K}\), if any of the following equivalent conditions holds:
+### A property of well-behaved lenses
 
-- Pullback along \(R\) preserves limits: if \(\mathsf{C}\) is a category and \(D: \mathsf{K} \to \mathsf{C}\) is a diagram in \(\mathsf{C}\), then the canonical morphism between limits \[\lim_{\mathsf{K}} D \to \lim_{\mathsf{J}} (D \circ R)\] is an isomorphism, whenever the limits in question exist.
-- Pullback along \(R\) preserves limits of sets: if \(D: \mathsf{K} \to \mathsf{Set}\) is a diagram of sets, then the canonical function between limits \[\lim_{\mathsf{K}} D \to \lim_{\mathsf{J}} (D \circ R)\] is a bijection.
-- Slices relative to \(R\) are connected: for any object \(k \in \mathsf{K}\), the comma category \(R/k\) is non-empty and connected.<sup>2</sup>
+Let \(\mathsf{C}\) be the algebraic theory of a **well-behaved** [lens](https://ncatlab.org/nlab/show/lens+%28in+computer+science%29). Thus, \(\mathsf{C}\) is the algebraic theory with signature comprising
 
-For a proof of (the dual of) this equivalence, see ([Riehl 2014](https://www.epatters.org/post/e-graphs-1/#ref-riehl2014), Lemma 8.3.4).
+- basic types \(S\) (“source”) and \(V\) (“view”)
+- operations \(\mathtt{get}: S \to V\) and \(\mathtt{put}: (S, V) \to S\)
 
-With a good intuition for limits, the limit characterization of initiality is useful because you can often see at a glance whether a given functor is initial just by imagining what will happen to a limit of sets. On the other hand, the slice characterization is useful in being concrete and syntactical. Recall that, given a functor \(R: \mathsf{J} \to \mathsf{K}\) and an object \(k \in \mathsf{K}\), the **comma category** \(R/k\) has
+and two axioms:
 
-- as objects, an object \(j \in \mathsf{J}\) together with a morphism \(f: R(j) \to k\) in \(\mathsf{K}\);
-- as morphisms \((j, f) \to (j', f')\), morphisms \(h: j \to j'\) in \(\mathsf{J}\) making the triangle commute:
+- PutGet: \(s: S,\, v: V \vdash \mathtt{get}(\mathtt{put}(s, v)) = v\).
+- GetPut: \(s: S \vdash \mathtt{put}(s, \mathtt{get}(s)) = s\).
 
-In the typical case that the categories involved are free and finitely generated, proving initiality—checking that each comma category \(R/k\) is non-empty and connected—thus reduces to a combinatorial problem.
+A **very well-behaved** or **lawful** lens satisfies the further property:
 
-### Interpretation
+- PutPut: \(s: S,\, v,v': V \vdash \mathtt{put}(\mathtt{put}(s, v), v') = \mathtt{put}(s, v')\).
 
-Why are initial functors relevant to equational reasoning? In general, a limit of a diagram can be thought of as an object representing all possible solutions to the equations postulated by the diagram. This interpretation is clear in the ur-category \(\mathsf{Set}\), where a general formula gives the limit of a diagram of sets as the subset of all tuples of elements satisfying equations indexed by the shape’s morphisms. Namely, a limit of a diagram \(D: \mathsf{J} \to \mathsf{Set}\) is the set of all tuples \((x_j)_{j \in \mathsf{J}}\), where \(x_j \in D(j)\), such that all of the equations
+The PutPut law is independent of the other two. However, a special case of the PutPut equation, with \(v = v'\), *is* derivable from the first two laws:
 
-\[ D(f)(x_i) = x_j, \qquad \forall f: i \to j\ \text{in}\ \mathsf{J}, \]
+- PutTwice: \(s: S,\, v: V \vdash \mathtt{put}(\mathtt{put}(s, v), v) = \mathtt{put}(s, v)\).
 
-hold ([Leinster 2014](https://www.epatters.org/post/e-graphs-1/#ref-leinster2014), Example 5.1.22). So, as pullback along an initial functor preserves limits, the initial functors are intuitively those that preserve the “solution set” of the system of equations presented by a diagram.
+We are going to prove this by diagrammatic reasoning. In fact, the derivation is fairly trivial, but it is a known and noted fact in the lens literature ([Fischer, Hu, and Pacheco 2015](https://www.epatters.org/post/e-graphs-3/#ref-fischer2015)), and it illustrates the formalism.
 
-However, our interest lies in diagrams \(D: \mathsf{J} \to \mathsf{C}\) whose target is a *finitely presented* category \(\mathsf{C}\). Such categories rarely have many nontrivial products or equalizers. We can circumvent this problem in two ways.
+Begin with the discrete cartesian diagram on \(S\) and \(V\), representing the context \(s: S,\, v: V\). Since the right-hand side of the target equation is \(\mathtt{put}(s, v)\), a natural first step is to introduce the \(\mathtt{put}\) operation:
 
-First, we can always consider set-theoretic *interpretations* of the presentation, namely functors \(F: \mathsf{C} \to \mathsf{Set}\). Then the composite \(F \circ
-D: \mathsf{J} \to \mathsf{Set}\) is a diagram of sets and we are returned to the standard setting where all limits exist. This viewpoint is taken in the e-graph community when they speak of “uninterpreted functions” or “function symbols” (for us, generating morphisms of \(\mathsf{C}\)). Any equation deduced for uninterpreted functions remains true in any interpretation of them by actual functions between sets. Thus, if you have a formal system of proofs that is *complete* for equational reasoning with functions, then there exist proofs in that system for equations deduced using initial functors.[<sup>3</sup>](https://www.epatters.org/post/e-graphs-1/#fn3)
+Recognizing a subterm of the PutGet law, introduce that equation at \(s\) and \(v\) too:
 
-Taking a little extra care, we can go further to deduce equations that hold in an arbitrary category \(\mathsf{C}\). Suppose we start with a *singleton* diagram in \(\mathsf{C}\), indexing a single object \(X \in \mathsf{C}\). The limit of that diagram exists trivially, being \(X\) itself. Thus, any diagram obtained by pulling back or extending the diagram along an initial functor will continue to have \(X\) as its limit. In particular, any two parallel paths in such a diagram *originating* at \(X\) must commute. We will use this technique in the calculations that follow. It will become more powerful when we extend to categories with finite products, since we can then start with any finite discrete diagram, the indexing objects of which act as “free variables.”
+The morphism of diagrams on the right is a congruence reduction of \(\mathtt{put}\) at \(s\) and \(v\). (We could have saved a few steps by immediately introducing the PutGet equation, but we wish to emphasize the mechanizability of such reasoning.) Next, we recognize a subterm of the GetPut law (replacing \(s\) with \(s'\)), so we introduce that equation at \(s'\):
 
-## Examples and calculations
+The final morphism of diagrams is again a congruence reduction, this time of \(\mathtt{get}\) at \(s'\).
 
-The remainder of the post will illustrate the concept of initial functor through commonly occurring examples and explicit calculations. The aim is to suggest how initial functors can be deployed for mechanical reasoning with diagrams, deferring to next time a further theoretical development.
+The resulting cartesian diagram contains the target equation, though it takes a moment to see that. Since the first and the last cartesian diagrams are weakly equivalent, and since the limit of the first diagram is the product \({S \times
+V}\), the limit of the last diagram is the same. Consequently, any two parallel paths in the last diagram starting at \(s\) and \(v\) compose to equal morphisms in \(\mathsf{C}\). Taking the endpoint \(s'\) and following the cycle at \(s'\) (for fixed \(v\)) either zero times or once, we deduce the PutTwice law:
 
-### Motifs among initial functors
+\[ s: S,\, v: V \vdash \mathtt{put}(s, v) = \mathtt{put}(\mathtt{put}(s, v), v). \]
 
-Let’s begin with a few minimal examples of initial functors, acting as motifs or patterns. Each such example will give rise to a rule of inference for diagrammatic reasoning.
+## Comprehensive factorization for cartesian functors
 
-The target category \(\mathsf{C}\) for the diagrams is fixed throughout. That is, any initial functor should also be a morphism in the **category of diagrams** in \(\mathsf{C}\), the slice category \(\mathsf{Cat}/\mathsf{C}\).
+As explained [previously](https://www.epatters.org/post/e-graphs-2/#the-ideal-e-diagram), the foundational theorem about initial functors is the existence of the [*comprehensive factorization system*](https://ncatlab.org/nlab/show/comprehensive+factorization+system) ([Street and Walters 1973](https://www.epatters.org/post/e-graphs-3/#ref-street1973)), an orthogonal factorization system on \(\mathsf{Cat}\) having initial functors and discrete opfibrations as its left and right classes. It turns out that the comprehensive factorization works just as well for cartesian functors as it does for arbitrary functors. This fact, possibly surprising, justifies our claim that the initial functor semantics carries over to the cartesian setting without modification. The precise statement is:
 
-- **Operation introduction**: for any morphism \(f: X \to Y\) in \(\mathsf{C}\), the map of diagrams ![](https://www.epatters.org/post/e-graphs-1/_svgs/3752371d6c6d310b7a4f4c7252d64560eaed3b52.svg) is initial.
-- More generally, for any path \(X_0 \xrightarrow{f_1} X_1 \xrightarrow{f_2} \cdots \xrightarrow{f_n} X_n\) in \(\mathsf{C}\), the map of diagrams ![](https://www.epatters.org/post/e-graphs-1/_svgs/7a27ee92f3d5c8a8eb514817368dd360442bbca9.svg) is initial.
-- **Congruence reduction**: for any morphism \(f: X \to Y\) in \(\mathsf{C}\), the map of diagrams,[<sup>4</sup>](https://www.epatters.org/post/e-graphs-1/#fn4) ![](https://www.epatters.org/post/e-graphs-1/_svgs/e9099a5b028884b812c34a103fc1db9a8488c733.svg) sending both \(y\) and \(y'\) in the domain shape to \(y\) in the codomain shape, is initial.
-- Subsuming both operation introduction and congruence reduction, for any morphism \(f: X \to Y\) in \(\mathsf{C}\) and number \(n \geq 0\), the map of diagrams, ![](https://www.epatters.org/post/e-graphs-1/_svgs/e029e214a238ac1e330839d3f5af298b7bc5dd46.svg) sending all of \(y_1,\dots,y_n\) to \(y\), is initial.
-- **Equation introduction**: suppose that the equation \(g \circ f = k \circ h\) holds in \(\mathsf{C}\), as depicted earlier. Then both maps in the span of free diagrams ![](https://www.epatters.org/post/e-graphs-1/_svgs/797c35e4ce4a245d96f9dd7c32b4488109fa804a.svg) are initial. More generally, this works for any path equation in \(\mathsf{C}\). As another example, we can introduce a nullary path equation, say \(\operatorname{id}_X = g \circ f\), as: ![](https://www.epatters.org/post/e-graphs-1/_svgs/b25c4f48b548f24c93224a9fbfab8c6e5d971eda.svg)
+**Theorem 1 (Comprehensive factorization on \(\mathsf{Cart}\))** The comprehensive factorization system on \(\mathsf{Cat}\) restricts to an orthogonal factorization system on \(\mathsf{Cart}\), the category of small categories with finite products and finite-product-preserving functors.
 
-Later, we will formalize not just the rules but how to *apply* them, using ideas from [category-theoretic rewriting](https://ncatlab.org/nlab/show/span+rewriting). For the moment, we take for granted that when applying the rules in a larger context, the resulting functors are still initial. Or, you can check initiality by inspection in each application.
+We do not know a source for this theorem in the literature, though we presume it known since it follows straightforwardly from other, well-documented facts. In any case, the purpose of this section is to present a self-contained proof.
 
-### Pasting commutative squares
+To prove the theorem, we show that the explicit construction of the comprehensive factorization, when applied to a cartesian functor, is a factorization in which the intermediate category and both functors are cartesian, without further assumptions. The analysis of the right class—discrete opfibrations—is simpler, so we start there.
 
-We’re ready to do our first calculation, proving the pasting law for commutative squares: that two commutative squares with a common edge can be juxtaposed to produce a commutative rectangle. The notation makes this seem obviously true—that’s what makes it good notation!—but it still needs a proof. We’ll present the proof in a highly mechanical style, where each diagram in the sequence is related to the previous one by an initial functor or, when introducing an equation, by a span of initial functors.
+### Elements construction
 
-**Assume**: We are given the two commutative squares
+Discrete opfibrations correspond to copresheaves via the elements construction. A simple result says that the elements construction preserves cartesianness.
 
-By this we mean that the target category \(\mathsf{C}\) is generated by six objects, called \(X,X',Y,Y',Z,Z'\), and seven morphisms, called \(f,f',g,g',h,k,\ell\), subject to those two equations.
+**Lemma 1** Let \(X: \mathsf{C} \to \mathsf{Set}\) be a cartesian set-valued functor on a cartesian category \(\mathsf{C}\). Then its category of elements, \(\mathop{\mathsf{El}}(X)\), is cartesian, and its canonical projection, the discrete opfibration \({\pi_X: \mathop{\mathsf{El}}(X) \to
+\mathsf{C}}\), preserves and reflects finite products.
 
-**Construct**: Start with the singleton diagram on \(X\), whose limit is trivially \(X\). Introduce the left- and right-hand sides of the path equation we want to prove:
+*Proof*. The product of objects \((c_i, x_i)_{i \in I}\) in \(\mathop{\mathsf{El}}(X)\) is given, in its first component, by the product in \(\mathsf{C}\), and, in its second component, by pairing:
 
-Recognize the path \(X \xrightarrow{h} X' \xrightarrow{f'} Y'\) as the left-hand side of the first square, then introduce that equation:
+\[
+\left(
+  \prod_{i \in I} c_i,\
+  \langle x_i \rangle_{i \in I} \in \prod_{i \in I} X(c_i)
+    \cong X\big({\textstyle\prod_{i \in I} c_i}\big)
+\right).
+\]
 
-Apply congruence reduction to the occurrences of \(f\):
+Product projections in \(\mathop{\mathsf{El}}(X)\) are simply the product projections in \(\mathsf{C}\). The canonical projection \(\pi_X: {(c, x) \mapsto c},\, {f \mapsto f}\) clearly preserves finite products, and it also reflects them since a tuple is uniquely determined by its components.
 
-Now recognize the path \(Y \xrightarrow{k} Y' \xrightarrow{g'} Z'\) as the left-hand side of the second square, then introduce that equation:
+### Left Kan extension
 
-We’re already done, but we might as well tidy up by congruence reducing the occurrences of \(g\) and then \(\ell\):
+Constructing the comprehensive factorization of a functor involves taking a left Kan extension, as we will review shortly. For now, the question is how left Kan extensions interact with finite products. The crucial concept in this analysis is [*siftedness*](https://ncatlab.org/nlab/show/sifted+category)—or rather its dual, *cosiftedness*. A textbook reference on sifted colimits is ([Adámek, Rosický, and Vitale 2011, sec. I.2](https://www.epatters.org/post/e-graphs-3/#ref-adamek2011)).
 
-**Conclude**: The outer rectangle commutes, since the limit of the diagram is still \(X\).
+**Definition 1 (Cosiftedness)** A category \(\mathsf{J}\) is **cosifted** if any of the following equivalent conditions holds:
 
-### A monoid presentation
+- in \(\mathsf{Set}\), colimits of shape \(\mathsf{J}^\mathrm{op}\) commute with finite products;
+- \(\mathsf{J}\) is nonempty and the diagonal \(\Delta_{\mathsf{J}}: \mathsf{J} \to \mathsf{J} \times \mathsf{J}\) is an initial functor;
+- \(\mathsf{J}\) is nonempty and for any objects \(j_1, j_2 \in \mathsf{J}\), the category \(\mathsf{Span}_{\mathsf{J}}(j_1, j_2)\) of spans in \(\mathsf{J}\) with feet \(j_1\) and \(j_2\) is nonempty and connected.
 
-Consider a monoid with an element \(f\) satisfying the equations
+A **cosifted colimit** is a colimit whose shape is a cosifted category.
 
-\[ f^3 = \operatorname{id}= f^5. \]
+**Lemma 2** A category with finite products is cosifted.
 
-That is, the target category \(\mathsf{C}\) is generated by a single object, say \(\bullet\), and an endomorphism, \(f: \bullet \to \bullet\), satisfying those two equations.
+*Proof*. Suppose \(\mathsf{J}\) has finite products. Then \(\mathsf{J}\) is nonempty, having a terminal object, and for any objects \(j_1, j_2 \in \mathsf{J}\), the category \(\mathsf{Span}_{\mathsf{J}}(j_1, j_2)\) has a terminal object—the product cone \({j_1
+\leftarrow j_1 \times j_2 \to j_2}\), by the universal property of the product—so is in particular nonempty and connected.
 
-Start with the singleton diagram \(\{\bullet\}\) and introduce both defining equations, noting that since each equation has an identity on one side, they appear as cycles:
+The surprising fact is that the left Kan extension of a cartesian set-valued functor along *any* functor (not necessarily cartesian) is again cartesian. This result first appears in the literature as ([Borceux and Day 1977](https://www.epatters.org/post/e-graphs-3/#ref-borceux1977), Theorem 1.5 and Example 3.1), in the more general setting of enriched categories. We give a direct and elementary proof.
 
-We leave the arrows unlabeled since every arrow lies over the generating morphism \(f\). We’ll now compute the *congruence closure*, iteratively applying congruence reduction until that is no longer possible. Arrows affected by a congruence reduction are colored the same on either side of the reduction, starting with the two blue arrows above. The first reduction is:
+**Theorem 2 (Product-preserving Kan extensions)** Let \(\mathsf{C}\) and \(\mathsf{D}\) be cartesian categories, and let \(X: \mathsf{C} \to
+\mathsf{Set}\) be a cartesian set-valued functor. For any functor \(F: \mathsf{C} \to
+\mathsf{D}\), the left Kan extension \(\operatorname{Lan}_F X: \mathsf{D} \to \mathsf{Set}\) is cartesian.
 
-Next:
+*Proof*. Decomposing \(X\) as a canonical colimit of representables, the left Kan extension of \(X\) has the formula:
 
-Congruence reducing three more times gives the sequence:
+\[ \operatorname{Lan}_F X \cong \mathop{\mathrm{colim}}_{(c,x) \in {\mathop{\mathsf{El}}(X)}^\mathrm{op}} \mathsf{D}(F(c), -). \]
 
-We could stop here, but we might as well reduce twice more, yielding the diagram that is the self-loop over \(f\). We have proved the equation
+Because the representables \(\mathsf{D}(F(c), -): \mathsf{D} \to \mathsf{Set}\) preserve finite products, \(\operatorname{Lan}_F X\) will preserve finite products when \(\mathop{\mathsf{El}}(X)\) is cosifted. But that is the case by [Lemma 1](https://www.epatters.org/post/e-graphs-3/#lem-cartesian-elements-construction) and [Lemma 2](https://www.epatters.org/post/e-graphs-3/#lem-cartesian-category-cosifted).
 
-\[ f = \operatorname{id}, \]
+### Proof of the theorem
 
-since the limit of the diagram is the one we started with, namely the unique object \(\bullet\). In other words, the monoid presented is actually the trivial monoid. You might remember this as a special case of the fact in group theory that if a group element \(g\) satisfies \(g^m = \operatorname{id}= g^n\) for relatively prime numbers \(m\) and \(n\), then \(g = \operatorname{id}\).
+We now have all the ingredients we need to prove [Theorem 1](https://www.epatters.org/post/e-graphs-3/#thm-comprehensive-factorization-cart), that the comprehensive factorization on \(\mathsf{Cat}\) restricts to \(\mathsf{Cart}\), the category of cartesian categories and cartesian functors.
 
-## Discussion
+To do this, we look inside the proof of ([Street and Walters 1973](https://www.epatters.org/post/e-graphs-3/#ref-street1973), Theorem 3) at how the comprehensive factorization of a functor \(F: \mathsf{C} \to \mathsf{D}\) is constructed. Let \(X: \mathsf{C} \to \mathsf{Set},\, c \mapsto 1\) be the terminal copresheaf, and take its left Kan extension along \(F\), yielding a copresheaf \({Y
+\mathrel{\vcenter{:}}=\operatorname{Lan}_F X}\). By the universal property of the category of elements as a comma category, \({\mathop{\mathsf{El}}(Y) = 1/Y}\), there exists a unique functor \({E: \mathsf{C} \to
+\mathop{\mathsf{El}}(Y)}\) factorizing \(F\) as
 
-Category theory is often said to be abstract, even “abstract nonsense,” but it is the interplay between abstract and concrete that gives category theory its power. Initial functors, with their complementary intrinsic and syntactical descriptions, exemplify this interplay.
+and equating the 2-cells:
 
-We’ve begun to explore how initial functors are the basis for an operational semantics for e-graphs. Rather than defining the individual steps and then chaining them together, as in the usual “small-step” operational semantics, we define the valid transformations invariantly via initial functors and then look for useful specializations. Beyond its conceptual content, this flexibility matters because practical systems tend to batch reductions together to improve efficiency. For us, that will often just amount to composing initial functors.
+In this factorization, \(\pi_Y\) is a discrete opfibration, and Street and Walters ([1973](https://www.epatters.org/post/e-graphs-3/#ref-street1973)) show that \(E\) is initial. So \({F = \pi_Y \circ E}\) is the comprehensive factorization of \(F\).
 
-We haven’t yet made a direct connection with e-graphs, though there have been many hints. Another hint is that our final example is lifted directly from Nelson and Oppen’s early work ([Nelson 1980](https://www.epatters.org/post/e-graphs-1/#ref-nelson1980); [Nelson and Oppen 1980](https://www.epatters.org/post/e-graphs-1/#ref-nelson-oppen1980)), where it is a running example. In future posts, we’ll tighten up the connection with e-graphs. We’ll also explain how the formalism generalizes to categories with finite products, the categorical counterpart to algebraic theories.
+Now, if \(\mathsf{C}\) and \(\mathsf{D}\) are cartesian, then so is \(X\), since \(1 \times 1
+\cong 1\); hence, so is \(Y = \operatorname{Lan}_F X\), by [Theorem 2](https://www.epatters.org/post/e-graphs-3/#thm-product-preserving-kan-extensions) on product-preserving Kan extensions; hence, so are \(\mathop{\mathsf{El}}(Y)\) and \(\pi_Y\) by [Lemma 1](https://www.epatters.org/post/e-graphs-3/#lem-cartesian-elements-construction). Moreover, if \(F\) is also cartesian, then so is \(E\), since the composite \({\pi_Y
+\circ E = F}\) preserves finite products and, by [Lemma 1](https://www.epatters.org/post/e-graphs-3/#lem-cartesian-elements-construction), \(\pi_Y\) reflects them. Thus, the factorization \({F = \pi_Y \circ E}\) in \(\mathsf{Cat}\) restricts to \(\mathsf{Cart}\). This completes the proof, using the characterization of a [factorization system](https://ncatlab.org/joyalscatlab/published/Factorisation+systems) in terms of unique factorization up to unique isomorphism.
+
+## Outlook
+
+We’ve seen how the initial functor semantics extends from bare categories to categories with finite products, the classical setting for both categorical logic and e-graphs. The generalization is illustrated by example calculations and justified by the theoretical result that the comprehensive factorization works just as well for product-preserving functors.
+
+A potential benefit of a categorical semantics is suggesting further generalizations of e-graph-style reasoning to new or nonstandard settings. The theoretical analysis here suggests both opportunities and challenges in this regard. On one hand, it seems likely that the cartesian version of the comprehensive factorization will generalize to cartesian equipments or, what are closely related, fibrations of cartesian categories. These categorical structures correspond to an enhanced kind of algebraic theory having first-class functions *and* relations, as found in the recent system [`egglog`](https://github.com/egraphs-good/egglog). On the other hand, the comprehensive factorization system will *not* directly extend from categories with finite products to categories with all finite limits, corresponding to essentially algebraic or generalized algebraic theories (GATs). To make this work, the concept of a [flat functor](https://ncatlab.org/nlab/show/flat+functor) might need to enter the picture. We will consider such extensions in the future.
 
 ## References
 
 ## Footnotes
 
-1. In this series, we work first with bare categories and later generalize to cartesian categories. Diagram chasing in its most traditional form takes place in [additive and abelian categories](https://ncatlab.org/nlab/show/additive+and+abelian+categories), a different direction of generalization. It would be fun to try to extend our methods to the additive setting, beginning with categories enriched in commutative monoids or abelian groups.[↩︎](https://www.epatters.org/post/e-graphs-1/#fnref1)
-2. A category is **connected** if any two of its objects can be connected by a [zig-zag](https://ncatlab.org/nlab/show/zigzag) of morphisms, i.e., there is an *undirected* path between them.[↩︎](https://www.epatters.org/post/e-graphs-1/#fnref2)
-3. That is not to say that exhibiting a proof implied by completeness is easy or convenient. As I understand it, *proof extraction* is a topic of active work in the e-graph community.[↩︎](https://www.epatters.org/post/e-graphs-1/#fnref3)
-4. When drawing a diagram \(D: \mathsf{J} \to \mathsf{C}\), the “type-theoretic” notation \(x: X\) names an object \(x\) in the indexing category \(\mathsf{J}\) that is mapped to the object \(X\) in the target category \(\mathsf{C}\). Thinking of the diagram as a [term graph](https://en.wikipedia.org/wiki/Term_graph), the object \(x\) is indeed a “term of type \(X\).”[↩︎](https://www.epatters.org/post/e-graphs-1/#fnref4)
+1. Be warned that we use the category theorist’s terminology, not the graph theorist’s. So a **graph** is what a graph theorist might call a “directed multigraph (with self-loops).” Meanwhile, a **multigraph** is a combinatorial structure consisting of a set of **vertices** and a set of **multiedges**, where each multiedge is assigned a **source**, a *list* of vertices, as well as a **target**, a single vertex. The **arity** of a multiedge is the length of the list that is its source. With this terminology, graphs are to categories as multigraphs are to [multicategories](https://ncatlab.org/nlab/show/multicategory).[↩︎](https://www.epatters.org/post/e-graphs-3/#fnref1)
+2. A **morphism** of multigraphs consists of a pair of functions between the vertex and multiedge sets, preserving the source and target assignments. In particular, preserving sources includes the requirement that arities are preserved.[↩︎](https://www.epatters.org/post/e-graphs-3/#fnref2)
+3. Though long used in computer science, [term graphs](https://en.wikipedia.org/wiki/Term_graph) have often been formalized with less than perfect clarity. Nelson ([1980, sec. 6](https://www.epatters.org/post/e-graphs-3/#ref-nelson1980)) defines an *equality graph* or *e-graph*, a kind of term graph, to be a graph whose vertices are labeled by variables *or* function symbols and whose edges are a (totally?) ordered set. This global ordering induces a local ordering of the edges incoming to each vertex. A term graph is better defined as a labeled multigraph, i.e., as a multigraph homomorphism into a fixed multigraph.[↩︎](https://www.epatters.org/post/e-graphs-3/#fnref3)

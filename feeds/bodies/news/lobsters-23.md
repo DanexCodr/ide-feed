@@ -1,169 +1,310 @@
-Back in July I wanted to check out the pwn2own targets for 2026. Since the rules hadn’t been released yet, I decided I would check last year’s targets in the hope that it would be similar.
-
-Imagine my surprise when I managed to get arbitrary code execution on the glasses and they weren’t in the wearables category anymore :’).
-
-It’s fine though because I still reported it to meta, and after fighting the payout a few times, we settled (ok there was no settling but I agreed to the new payout).
-
-Before attempting this, I remember telling my friend about it. They said “ooof good luck. These are usually pretty hardened and no-one attempted them last year at p2o.”
-
-My response: Watch me.
-
-![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-3.png?w=3000&ssl=1)
-
-### Acquiring glasses because who’s paying €500 (not me)
-
-First step was acquiring the glasses. I am lucky that my brother-in-law had a pair he didn’t really use, so I could steal them for a few weeks.
-
-### First recon
-
-I installed the Meta AI app, which is the app to control the glasses (connecting them, synchronizing pictures, and so on).
-
-In order to extract the firmware, I obviously wasn’t going to tear the glasses apart and start fiddling with probes n shit. So I went for extracting it using the OTA (over-the-air) update.
-
-When connecting the glasses for the first time, it immediately offered to update the firmware. So naturally, I was intrigued. Using JADX, I reversed the Meta AI app to see how the update is fetched.
-
-`OtaArtifactFetcher` prepares and sends the update request. The response is converted into an `OTAArtifactInfo` object containing metadata such as the device/build information.
-
-```java
-arrayListA0y2.add(new OTAArtifactInfo([...], downloadUri, [...]));
-```
-
-I then notice this assignment in `OTAArtifactInfo`():
-
-```
-this.downloadUri = str3;
-```
-
-I found that I could just hook into `OTAArtifactInfo` and print `str3` which contained the CDN update URL :))) and then I just printed it.
-
-```javascript
-Java.perform(function () {var OTAArtifactInfo = Java.use("com.facebook.wearable.common.ota.models.OTAArtifactInfo");OTAArtifactInfo["$init"].implementation = function (l, j, oTAArtifactType, ..., str3, ...) {   this["$init"](l, j, oTAArtifactType, ..., str3, ...);    console.log("downloadUri:");    console.log(str3);};});
-```
-
-![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-6.png?w=1462&ssl=1)
-
-That URL contained a zip, so that looked like the right candidate. **HOWEVER**, this was around 156 MB and its payload depended on the device’s existing build. It was an incremental update… I wanted the full update.
-
-**Getting the full firmware update**
-
-Decompiling further code revealed a GraphQL input named `device_firmware_full_update_only`. The app normally populated it with false, so I hooked the generic method responsible for adding GraphQL fields and replaced the value with true only when the field name matched exactly. This allowed me to fetch the full firmware update URL.
-
-I was then able to retrieve the zip from the CDN. Unzipping it showed me that this was an Android update, including the **payload.bin**.
-
-![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-4.png?w=1230&ssl=1)
-
-Using [payload-dumper](https://github.com/ssut/payload-dumper-go) on payload.bin, I could dump the images and mount them into a filesystem.
-
-![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-5-edited.png?w=1203&ssl=1)
-
-Firmware was acquired but how do I get a shell on the glasses?
-
-### Device Access Toolkit
-
-There is a developer mode on the Meta AI app that allows devs to write apps that can interact with the glasses. It is called DAT SDK (Device Access Toolkit).
-
-In order to do that, you need to install the DAT APK on the glasses. The MetaAI app basically downloads it in real-time and fetches the DAT application to install it on the device. Do you see where I am going with this?
-
-![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-2.png?w=1668&ssl=1)
-
-### Installing self-signed app on the glasses
-
-Up until and including firmware 126, the firmware did not verify that the DAT APK was signed by Meta. So it was theoretically possible to install any app on the glasses because there was no verification as to if it was a legit app or not.
-
-An easy-not-so-easy swap was possible. I could, using frida, swap out the legit DAT application for a self-signed application of my own. That meant I could run any app on the glasses.
-
-```javascript
-// hook DAT Installerfield(this, "$localFile")  .set(this, replacement);field(this, "$appName")  .set(this, "DAT Probe");packageField.set(this, cachedPackage);// Meta AI sends my apkreturn invokeSuspend.call(this, result);
-```
-
-Now I have my own self-signed DAT apk running on the glasses! bosh!! 😎
-
-### How to run the DAT APK on the glasses
-
-The DAT apk runs only when a DAT session is requested by the developer app to interact with the glasses.
-
-So, in order to run the fake DAT apk, I installed a sample app from Meta called **Camera Access**, which would then create a DAT session with the app on the glasses.
-
-![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-1.png?w=1764&ssl=1)
-
-However, I couldn’t really check that it was running properly. It was difficult to debug.
-
-### Beep is the new printf
-
-There is no screen on this pair of sunglasses. No console, no logs, no “yoo your code is running”. So how could I make sure my code was even executing? The answer is by *listening* to it.
-
-I used **android.media.ToneGenerator** in my DAT APK to signal which part of the code was executing:
-
-- 3 beeps: listener started, looking for a Wi-Fi Direct address
-- 5 beeps: found one (in wifi group 192.168.49.x)
-- 4 beeps: TCP 31337 bound, we’re in business
-- 6 beeps: something went wrong
-
-So using this sequence, I managed to debug a big issue that I hadn’t considered: the Camera Access app was failing because it was expecting the real DAT apk on the glasses. When it couldn’t start DWA,` startDwaReadinessProbe()` would report `START_ERROR_DWA_UNAVAILABLE`.
-
-And every time it failed, it closed my connection.
-
-**The fix**  
-I used frida to hook `startDwaReadinessProbe()` in order to disable the DWA timeout and keep the connection alive.
-
-```javascript
-startDwaReadinessProbe.implementation =function () {// No operation};
-```
-
-### Bind shell
-
-When the Meta AI app wants to sync photos & videos from the glasses, it will create a WiFi Direct group on subnet 192.168.49.x. The glasses will connect to that group and they get an IP address.
-
-In order to get the glasses to connect to the Wi-Fi Direct group, I used Frida to hook into the CameraAccess app and request the “high link lease” from the Meta AI app.
-
-```
-sub = device.createLinkLease(2, 1, cb); highLeaseSubscriptions.push(sub);
-```
-
-My implanted app bound a listener on TCP 31337 on that address, which dropped me into an interactive shell.
-
-So from the phone I could just nc’d into it and sent commands, like `id`, to get shell-level execution in the app’s context.
-
-```
-ServerSocket listener = new ServerSocket(31337, 4, address))
-```
-
-```shell
-nc <glasses-ip> 31337# iduid=10097(u0_a97) gid=10097(u0_a97) groups=3003(inet) ...great power comes great opsec
-```
-
-**great power comes great opsec**
-
-### Great power requires great opsec
-
-I had this uncontrollable power for about 5 days, and while I was searching for a privesc on the glasses, my shell access had disappeared.
-
-Unfortunately, I either had terrible opsec back then (possible) or unluckily they looked into it and patched it.
-
-But fear not !!
-
-### Mobile Config
-
-Firmware 127 started enforcing signature verification of the DAT apk, so self-signing my own DAT apk wasn’t working anymore.
-
-The check was done by `wss_appmanager.signature_verification_enabled` in the MobileConfig file.
-
-The glasses ask the phone for their config, so the phone fetches it from Meta’s servers and forwards it back over Airship. It controls a bunch of feature flags on the glasses without requiring a firmware update.
-
-One of those flags requires the firmware to check that apps are signed by Meta before installing them.
-
-![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image.png?w=1492&ssl=1)
-
-It arrives on the glasses from the paired phone, and the device loads it only after verifying the file is *structurally* correct, not that it hadn’t been tampered with.
-
-That makes every flag in it, including `signature_verification_enabled`, modifiable by the phone and accepted by the glasses.
-
-So by flipping a byte in the `0.mctable` (which is the file that holds the values) from `0x80` to `0x00` (enabled to disabled), I was able to **bypass** the signature verification that they were originally enforcing, and re-install my self-signed APK on the glasses.
-
-We’re soooo back.
-
-### Where to from here
-
-This was all reported to Meta through their bug bounty platform. They have approved my blogpost which makes me assume it is now fixed.
-
-Now that I had shell access, it was a lot easier to start mapping the attack surface. That, my friends, is a story for another time!
+Well here we are again. Linux 7.3 is out and it’s been an eventful few months, so
+let’s get stuck in to another Asahi Linux progress report!
+
+## Upstreaming continues
+
+As always, upstreaming work continues to progress. Aside from the usual patches for
+low-level SoC blocks, two major drivers made it on to the list this cycle: macaudio
+and avd. Getting macaudio ready for submission has been a challenge. The audio subsystem
+on Apple Silicon devices is rather special, and required quite a number of core ALSA
+changes to properly support it. Apple also uses special variants of speaker and headset
+amplifiers that were already supported upstream, and these drivers also needed some
+pretty significant modifications. We have previously discussed a lot of this work at
+length, and we are finally in a position where we can submit the main driver for
+review. The driver and Devicetree changes represent a hefty chunk of our total patchset,
+about 3100 lines.
+
+AVD is a whole different beast. The AVD driver has spent barely 3 months in our downstream
+tree and is already on the list. This is our shortest turnaround time yet for a major
+SoC component and bodes well for a transition to upstream-first development some time
+in the future. This is fantastic news, as the AVD driver and related Devicetree changes
+are around 13000 lines of code.
+
+Also making an appearance on the list this cycle are initial Devicetrees not only for M4 Pro
+and Max devices but also M5 thanks to Yureka’s tireless efforts. As usual these initial
+Devicetrees are barebones and only sufficient to boot the SoC to a TTY, however work
+is progressing on further enablement. Watch this space!
+
+We have also begun shifting to an upstream-first approach where practical. Changes
+to the TI USB-PD and SPMI drivers required for new devices, as well as initial support
+for Thunderbolt, were all developed upstream-first. We are so thrilled to see
+our focus on upstreaming starting to pay off!
+
+## M3 goes GA
+
+Last time, we announced initial support for M3 series machines via the EXPERT flag on
+the Asahi installer. We are pleased to announce that we received almost no issues
+from early adopters, so M3 support is now generally available without the EXPERT flag!
+
+We have also made a number of improvements to M3 support, most notably enabling DCP.
+On top of performance and battery life improvements, this also allows us to enable
+sleep on M3 series devices *and* make the area around the notch useable on the MacBooks!
+Keep an eye out for m1n1 and kernel updates in the coming days.
+
+## Crowded House
+
+Last time, we teased support for virtualising SPTM-enabled versions of macOS in m1n1,
+which enables reverse engineering on M4 series machines. M5 presents a new challenge,
+as the versions of macOS which support it all require the use of Exclaves.
+
+Exclaves are small applications running in an isolated environment controlled by the
+Secure Kernel. On M5 series SoCs and above, macOS uses them for sensitive tasks
+such as drawing the “camera in use” indicator to the screen. XNU communicates with
+the Secure Kernel and its Exclaves via SPTM, using yet another IPC protocol called
+Tightbeam. Much as with SPTM, XNU will panic if it cannot find the running Exclaves.
+This is all starting to look very similar in concept to Arm’s own TrustZone feature.
+
+While some Exclaves can be bypassed by changing some settings on the command line,
+we predict that this will not always be the case. As such, Sven started looking at how we
+could fit all of this in to m1n1. First line of investigation, try putting the
+Secure Kernel and Exclave userspace in another VM next to SPTM and macOS.
+
+[Oh, that worked](https://social.treehouse.systems/@sven/117513645155935201),
+and we’re now up to spawning three VMs in EL1 under m1n1! Maybe we can start
+selling m1n1 to companies fleeing VMWare… With that, we can now virtualise
+and reverse engineer macOS on both M4 and M5 series machines.
+
+## Hello Triangle(s)!
+
+While M3 support is now mostly at feature parity with M1 and M2, the very obvious exception
+to this is the GPU. Apple’s GPU team seems to follow a tick-tock model, and the M3’s
+GPU was a very significant departure from the models found on M1 and M2 SoCs. We mentioned
+quite some time ago that the M3 GPU was being reverse engineered by a new group of
+contributors, however not much has been said since.
+
+At XDC this year, [Alyssa Millburn](https://teh.entar.net/@noopwafel),
+[Anna Maniscalco](https://social.treehouse.systems/@pac85) and [TellowKrinkle](https://social.treehouse.systems/@TellowKrinkle)
+gave a [talk](https://www.youtube.com/live/TPwe53kCJuM?t=2082) on their progress
+reverse engineering the M3 GPU. Work has progressed far enough for m1n1 to successfully
+initialise the GPU and for the team to draw a triangle! Fans of the “Think Different”
+sections of these progress reports will find the talk edifying; Apple have once again
+made a number of… interesting choices which will require significant engineering
+effort to integrate into upstream Mesa. It is well worth a watch if you’re interested
+in more detail.
+
+A huge thanks goes out to everyone who has made this work possible. More progress
+is on the way, so stay tuned.
+
+## Kept you waiting, huh?
+
+All the way back in January of 2024, we made the [mistake](https://asahilinux.org/2024/01/fedora-asahi-new/)
+of promising Thunderbolt support within the year. It’s a mistake we won’t quickly
+repeat. We’ve said almost nothing about Thunderbolt in the two years since, which
+begs the question: where is it?
+
+Thunderbolt was originally developed by Apple and Intel, with Intel handling the
+design and fabrication of the hardware required. Since Intel made these controllers
+available to anyone who wanted them at a (mostly) reasonable price, no one else
+bothered to design their own. It is only very recently — largely coinciding with
+the transfer of the standard to the USB-IF — that companies like AMD have decided
+to roll their own controllers. Apple is of course no exception.
+
+As part of their push for insourcing most silicon IP, Apple made the choice to
+design their own Thunderbolt controller before most others. Surprising no one, the
+controller is of course a Cortex-M3 running RTKit coupled with a bespoke
+Thunderbolt/USB4 router. There is one of these for each Thunderbolt-enabled USB-C port
+on all Apple Silicon Macs.
+
+Since Intel supplies every other extant Thunderbolt controller on the market, the
+Linux kernel’s Thunderbolt subsystem is effectively designed around them. It makes
+a number of assumptions about the hardware topology of the running machine, including
+hardware capabilities and access patterns for certain registers and regions of
+shared memory. Apple’s controller breaks a lot of these assumptions. Great.
+
+The Thunderbolt controller is also oddly coupled to PMGR. The reset line for each
+controller is asserted or deasserted by setting and clearing a set of bits in the
+middle of PMGR’s MMIO range. No other hardware block works quite like this,
+and it took some time to realise that these seemingly random writes to PMGR were
+not just noise.
+
+Luckily for us, Sven was up to the task of dealing with all this nonsense. It just
+took slightly longer than expected! While the patchset to enable Thunderbolt was
+sent upstream first (another massive win for us!), we have also pulled it into
+our downstream kernel and are now shipping it to users!
+
+But there is a catch. Currently, only USB3, XDomain and Thunderbolt Networking are
+supported. You can plug in USB devices or connect two Thunderbolt computers together
+and make them ping each other, but that’s about it. PCIe and DisplayPort tunnelling — required for
+most Thunderbolt docks — are not supported. Yet. Watch this space.
+
+An enormous amount of gratitude is owed to Sven, who has stuck with this thankless
+chore for nearly 5 years in between all of his other incredible work.
+
+## “The Holy Grail, Doctor Jones”
+
+Playing retail PC games on Asahi Linux is a bit of a pain point, to say the least.
+The software stack required to enable this is incredibly complex. We need to translate
+x86/amd64 binaries to arm64, and do so fast enough for low-latency gaming. In most
+cases, we also need to deal with the Windows API. On top of that, almost all games
+bake in an assumed 4 KiB memory page size to enable certain performance optimisation.
+Over the past few years, most of these problems have been solved:
+
+- FEX has improved leaps and bounds. The performance and reliability of binary translation is hardly a consideration in most cases now;
+- WINE is also fantastic now. Support for ARM64EC is mature and reliable, meaning that FEX now only has to translate the game binaries rather than WINE’s entire Windows API implementation; and
+- muvm allows us to spin up a thin VM with DRM Native Context to present a 4 KiB memory page size to x86/amd64 applications.
+
+When muvm was first developed, it was with the assumption that DRM Native Context
+would enable near-native GPU performance from inside the VM. Unfortunately, this
+assumption did not hold. The muvm performance penalty is quite significant for
+a number of reasons, about 20% depending on the workload. Engineering around
+the limitations inherent to using a VM also introduces issues; muvm cannot use
+Wayland, has slow I/O performance, and struggles with certain types of input devices.
+
+This is one area where macOS has us completely licked. While the performance gap
+between FEX and Rosetta has narrowed, XNU allows userspace processes to map themselves
+at any page granularity, so all Rosetta needs to do is tell XNU to map 4 KiB pages
+for its child processes. Linux does not have this flexibility. All pages must be
+mapped at the same granularity as the kernel. While we did [tease](https://asahilinux.org/2025/10/progress-report-6-17)
+Windows games working outside of muvm last year, this relied on ugly hacks inside
+FEX which have since been removed in the interests of maintainability and translation
+correctness. Bummer. Even so, compatibility was hit-and-miss, with a lot of (mostly older)
+software still refusing to work. Double bummer.
+
+Android is currently going through a transition from 4 KiB pages to 16 KiB pages for
+a variety of reasons. Google Play now requires apps to be built for 16 KiB systems,
+and any application updates which do not test successfully on such systems will not
+be approved for publication on the Play Store. What about applications which are
+no longer updated though? What about sideloaded enterprise slop apps?
+
+Google engineers Kalesh Singh and Frederick Mayle gave a very interesting [talk](https://lpc.events/event/20/contributions/2630/)
+at Linux Plumbers Conference this year about exactly this. Their solution is simple:
+just fix Linux so that userspace can map 4 KiB pages!
+
+Their addition to the Android kernel is called P3S, or Per Process Page Size.
+On ARM64 systems, pagetable granularity is controlled by bits set in the Translation Control Registers (TCR).
+P3S works by tracking the granularity of each process’s pagetables, and writing
+the appropriate bits to the TCR whenever a process with a different pagetable size
+is switched to. Because this is a single register write, and because this is
+a no-op for “native” page size processes, the performance penalty is effectively
+zero!
+
+While this effort is primarily targeted at Android, the patchset mostly rebases
+cleanly on top of mainline Linux. What happens if we rebase it on top of our
+Asahi tree (and fix some bugs)? As it turns out:
+
+Okay okay, Battlefront is a very simple Direct3D 9.0 game from 22 years ago.
+Not exactly an impressive demo, right? Well what about:
+
+Wolfenstein: The New Order is an extremely well-optimised OpenGL title, and
+being 64-bit uses WINE’s ARM64EC pathways to massively reduce the amount
+of work FEX has to do. Again, not exactly an impressive demo if we’re
+judging based on technical difficulty.
+
+Let’s find something else. Something… worse. Something 32-bit so that
+FEX and WINE have to work harder. Something that will exercise DXVK too.
+Something that is so comically buggy and poorly optimised that it doesn’t
+even work properly on real Windows machines, and relies on community patches
+and command line switches to start at all on modern computers:
+
+That’s more like it! But we can do *even worse*. We can even run…
+Bethesda games!
+
+Performance is of course still patchy. Both Battlefront and Wolfenstein
+run essentially flawlessly, with the latter hitting 144+ FPS on an M2
+Max Mac Studio. GTA IV on the other hand is… not fantastic. Performance
+is still massively improved over using muvm, and eliminating the use of
+the VM in general should also eliminate a few classes of bugs. Debugging
+the GPU driver should also be much easier with this approach.
+
+As always there is a catch, and unfortunately it’s a big one.
+The current solution is hard-coded for 16 KiB hosts and 4 KiB processes
+on those hosts. This obviously satisfies Google’s commercial requirements, but
+adding pagesize-specific kludges to the kernel’s core memory management code
+is not appropriate upstream. We are unsure if Google intends to generalise
+this approach and upstream it, or if this is going to stay an Android-only patchset.
+As such, we do not want to ship this in our downstream tree and have folks
+become reliant on it when there is this level of uncertainty.
+
+It also requires userspace integration. P3S works by checking the binary
+metadata for its sections’ page alignments. This works for Google’s
+use case, as P3S is intended as a fallback mechanism for applications
+aligned to 4 KiB pages. Modern arm64 binaries are aligned to 64 KiB however,
+as this guarantees compatibility with systems of all native pagesizes. Thus,
+a shim is required to force P3S on. The shim triggers P3S, and any
+child processes will inherit its 4 KiB pagesize. It is not worth spending
+the effort on implementing this until we have some certainty around what
+Google intends to do with this patchset.
+
+We have reached out to Google with some questions, and we hope to have more
+to say soon.
+
+## Mics, but faster
+
+Our custom beamformer for the microphone array found in the MacBooks is written
+in Rust. Rust’s scientific computing ecosystem is not as mature as C++’s, which
+is a bit of a problem as beamforming requires realtime FFT and very heavy matrix
+operations to be done on buffers filled with audio samples. Mature scientific
+computing libraries have hand-optimised code, often using intrinsics tied to the
+target ISA. We were not doing this however, and relied on the compiler autovectorising
+code where it could to achieve our performance targets.
+
+This fell apart when we eliminated the FFT-based analytic transform, replacing it
+with an implementation based on infinite impulse response (IIR) filters. This
+*should* be faster, however the compiler was failing to autovectorise the new
+implementation. [Linkmauve](https://github.com/linkmauve) kindly stepped in and
+added SIMD-optimised code for both arm64 *and* amd64. This, coupled with other
+performance optimisations courtesy of [Frédéric Bour](https://github.com/let-def)
+has resulted in Triforce becoming almost twice as fast, all while using less CPU
+time!
+
+## Keeping up
+
+Fedora Linux 45 was released on 3 November, and we shipped
+[Fedora Asahi Remix](https://fedoramagazine.org/fedora-asahi-remix-45-is-now-available/)
+on the same day. This is the first time we have been able to get a new version of Fedora
+Asahi Remix out on the same day as upstream!
+
+## Learning from history
+
+We take great pride in our work, and have always done *all* of our development in the open.
+We communicate with our users, our followers and our financial sponsors as transparently
+as is humanly possible. Our finances are in the open, our development branches are in the open,
+and we report our progress regularly and candidly in the open. Our IRC channels and Matrix rooms
+are safe spaces, open to anyone with even a passing interest in Asahi Linux or hacking on Apple
+Silicon.
+
+We do all of this because we firmly believe in Free and Open Source Software, not just as a
+means to an end but as the end in and of itself. The modern digital world is only possible
+because of the Free Software movement, and it is more important now than it ever has been
+that we do all we can to protect the Free Software ecosystem and uphold the ideals upon
+which it is built.
+
+It may surprise some to learn that WINE was originally made available under the MIT
+licence. The 90s and 2000s were a very different time in the Free Software ecosystem,
+and permissively licenced projects were viewed by tech companies as free real estate
+to pilfer and exploit. WINE was not immune to this, and many monetised proprietary
+forks of WINE were marketed and sold by various bad actors. The WINE development team
+grew increasingly concerned that these proprietary forks, while well within their rights
+to exist, would eventually cause so much fragmentation in the ecosystem that WINE itself
+would become unviable. In 2002, WINE was relicenced under the LGPL to prevent further
+proprietary forks from being created, and to encourage direct upstream contribution.
+
+When Asahi Linux was first started, it was with the intent that we develop a Free Software
+*ecosystem* for the Apple Silicon platform. To facilitate and encourage the participation
+of our friends at the BSDs and other Free Software operating systems, we endeavoured to
+licence as much of our code as possible under the permissive MIT licence.
+
+Unfortunately, this is no longer viable. The malicious practices of the 90s and 2000s
+have reared their ugly heads once again, this time driven in large part by both the
+insatiable appetite of frontier AI labs for high-quality training data, and militant animosity
+toward the Free Software community.
+
+Some time ago, we were made aware of multiple attempts to exploit our permissive licensing
+to hijack our work, with a direct view to replacing the project and aggressively monetising
+Linux on Apple Silicon. In some extreme cases, in-development feature code was being
+lifted straight out of our personal forks and published without attribution or lazily
+rewritten with LLM assistance to obfuscate its origin. The MIT licence explicitly allows
+this, and has no carveouts to protect against bad faith actors.
+
+As such, we made the difficult decision to begin the process of transitioning all of
+our repositories to the GNU General Public License version 2 or later. Going forward
+all Asahi Linux code will be licenced under strong copyleft licences only. Those who
+do not learn from history are doomed to repeat it.
+
+## Until next time!
+
+As always, we would like to sincerely thank our supporters on [OpenCollective](https://opencollective.com/asahilinux)
+and [GitHub Sponsors](https://github.com/sponsors/AsahiLinux). It is only through
+your generous backing that we are able to dedicate the time and resources to continuing
+our work reverse engineering the platform and bringing to it a world-class, polished,
+and battle-tested Linux desktop experience. You mean the world to us.

@@ -1,0 +1,17 @@
+GitHub and Microsoft are introducing a new way to validate technical skills directly through everyday product usage. Starting with GitHub Copilot, the Verified Proficiency Framework recognizes real-world skills demonstrated in everyday development workflows, awarding a Pro Badge to those who qualify. The new credentialing approach gives developers a way to validate skills without taking a test or completing lab exercises, but instead by monitoring their day-to-day use of specific tools in their normal workflow and measuring their proficiency.  This is intended as a complement to traditional certifications, rather than a complete replacement. Participation is entirely optional and results remain private by default, although it is expected that badge holders will want to share their badges on LinkedIn, and add them to the Microsoft Skills AI Navigator or Credly. The Verified Proficiency Framework is organized around five critical skills:
+
+  * AI Collaboration
+  * Prompting
+  * Code Generation and Validation
+  * Agent Configuration
+  * Tool and Context Integration
+
+GitHub Copilot is the first, and currently only, product covered by this no-test validation with the site explaining:  _Copilot Proficiency is determined from observable signals across GitHub.com, your IDE, the CLI, and mobile from your everyday work._ There are five levels of proficiency, Beginner, Intermediate, Proficient, Advanced, and Expert, but for now only the first three levels have been defined. The Proficient level, the first to be recognized with a badge: _represents a developer who can practically apply GitHub Copilot across typical scenarios, demonstrated through consistent hands-on usage across multiple repositories and extended periods. A Proficient user can use many web and IDE features, select appropriate models, and apply customizations to tailor Copilot for specific project needs. They have experimented with extended features and are aware of extensibility and integration options._ To participate, sign in to your GitHub account navigate to [GitHub Copilot Verified Proficiency](<https://learn.github.com/proficiencies/copilot/>). Once you opt in, by clicking Calculate my Level, your level will continue to be monitored and users demonstrating Advanced and Expert levels of proficiency will earn the corresponding Pro Badge once those levels launch.
+
+#### More Information
+
+[Introducing a credential based on real work](<https://techcommunity.microsoft.com/blog/skills-hub-blog/introducing-a-credential-based-on-real-work%E2%80%94no-test-required/4519039>) [GitHub Copilot Verified Proficiency](<https://learn.github.com/proficiencies/copilot/>)
+
+#### Related Articles
+
+[GitHub Universe Recap - Copilot Dominates](<https://www.i-programmer.info/news/105-artificial-intelligence/19251-github-universe-recap-copilot-dominates.html>) To be informed about new articles on I Programmer, sign up for our [weekly newsletter](<https://www.i-programmer.info/edit-profile.html?layout=form>),[ ](<https://s3.amazonaws.com/com.alexa.toolbar/atbp/hfdfGO/download/index.htm>)subscribe to the [RSS feed](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=3&format=raw>) and follow us on [Facebook](<http://www.facebook.com/pages/iProgrammer/127140977307932#%21/pages/iProgrammer/127140977307932?v=wall>) or [Linkedin](<http://www.linkedin.com/company/i-programmer>). [](<https://amzn.to/4iJFqTH>)

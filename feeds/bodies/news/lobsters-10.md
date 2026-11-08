@@ -1,310 +1,73 @@
-Well here we are again. Linux 7.3 is out and it’s been an eventful few months, so
-let’s get stuck in to another Asahi Linux progress report!
+Something really important just happened with vulnerability disclosure and open source. No, it’s not PHP and that dumpster fire of a week.
 
-## Upstreaming continues
+I speak of something Curl just did that probably won’t make the news anywhere because to most people it won’t really make sense. Curl just announced that all low and medium security reports should go into the public issue tracker instead of being privately reported
 
-As always, upstreaming work continues to progress. Aside from the usual patches for
-low-level SoC blocks, two major drivers made it on to the list this cycle: macaudio
-and avd. Getting macaudio ready for submission has been a challenge. The audio subsystem
-on Apple Silicon devices is rather special, and required quite a number of core ALSA
-changes to properly support it. Apple also uses special variants of speaker and headset
-amplifiers that were already supported upstream, and these drivers also needed some
-pretty significant modifications. We have previously discussed a lot of this work at
-length, and we are finally in a position where we can submit the main driver for
-review. The driver and Devicetree changes represent a hefty chunk of our total patchset,
-about 3100 lines.
+The basic idea is for vulnerabilities rated low and medium severity, they will be treated like regular old bugs instead of a special bug that needs extra attention. I think this is a great idea and a policy we should be encouraging open source projects to adopt something similar. Open source projects are drowning in vulnerability reports, this should help remove some of the pressure.
 
-AVD is a whole different beast. The AVD driver has spent barely 3 months in our downstream
-tree and is already on the list. This is our shortest turnaround time yet for a major
-SoC component and bodes well for a transition to upstream-first development some time
-in the future. This is fantastic news, as the AVD driver and related Devicetree changes
-are around 13000 lines of code.
+## First, what is an embargo?[#](https://opensourcesecurity.io/2026/10-embargo/#first-what-is-an-embargo)
 
-Also making an appearance on the list this cycle are initial Devicetrees not only for M4 Pro
-and Max devices but also M5 thanks to Yureka’s tireless efforts. As usual these initial
-Devicetrees are barebones and only sufficient to boot the SoC to a TTY, however work
-is progressing on further enablement. Watch this space!
+In the world of security vulnerabilities, there’s this idea we call an embargo. If someone finds a security vulnerability in something, open source, closed source, it doesn’t matter what. You report this to the vendor/project in private and give them some time to fix the vulnerability. This makes sense for security bugs, the intention being there is time to get the fix ready before it goes public and the attackers start popping shells.
 
-We have also begun shifting to an upstream-first approach where practical. Changes
-to the TI USB-PD and SPMI drivers required for new devices, as well as initial support
-for Thunderbolt, were all developed upstream-first. We are so thrilled to see
-our focus on upstreaming starting to pay off!
+We do this for pretty much all vulnerabilities. Even the really boring ones. Every project, every vendor, everything. It’s just the way it’s always been done, so we keep doing it. This made sense when there were a few hundred vulnerabilities reported per year. We now have a few hundred CVEs being reported per day. It’s not 2005 anymore, we need to stop pretending it is.
 
-## M3 goes GA
+Your first thought might be “isn’t a private report better?” and this is where things enter the truth is stranger than fiction part of the story.
 
-Last time, we announced initial support for M3 series machines via the EXPERT flag on
-the Asahi installer. We are pleased to announce that we received almost no issues
-from early adopters, so M3 support is now generally available without the EXPERT flag!
+## Why nothing makes sense[#](https://opensourcesecurity.io/2026/10-embargo/#why-nothing-makes-sense)
 
-We have also made a number of improvements to M3 support, most notably enabling DCP.
-On top of performance and battery life improvements, this also allows us to enable
-sleep on M3 series devices *and* make the area around the notch useable on the MacBooks!
-Keep an eye out for m1n1 and kernel updates in the coming days.
+You know how when you go to a presentation and the presenter will ask a question that has 3 answers on the screen and the correct answer is always the most unlikely one? That’s basically what’s happening here.
 
-## Crowded House
+It seems like privately reporting all security bugs is a good thing. It gives projects time to understand the bug, and create a fix, then release the fix all before the bad guys know what’s happening. Everyone wins!
 
-Last time, we teased support for virtualising SPTM-enabled versions of macOS in m1n1,
-which enables reverse engineering on M4 series machines. M5 presents a new challenge,
-as the versions of macOS which support it all require the use of Exclaves.
+Except that’s not what really happens. Dealing with security embargoes in private is really hard to do. You have to be mindful of who you tell, you have to remember who knows what details about which bug as you probably have more than one thing in flight at a time. You can’t use the public git repos because that will leak the fix. That also means no CI testing. You can’t ask for a review from a community reviewer, or community testing because it’s a secret fix. Maybe the emails are encrypted, so you have to remember your PGP password and where you keep the key. You get the idea. The usual process falls apart, it’s mentally exhausting for anyone doing this. There’s a reason big companies have teams dedicated to doing this sort of work and only this (and even then they screw it up all the time).
 
-Exclaves are small applications running in an isolated environment controlled by the
-Secure Kernel. On M5 series SoCs and above, macOS uses them for sensitive tasks
-such as drawing the “camera in use” indicator to the screen. XNU communicates with
-the Secure Kernel and its Exclaves via SPTM, using yet another IPC protocol called
-Tightbeam. Much as with SPTM, XNU will panic if it cannot find the running Exclaves.
-This is all starting to look very similar in concept to Arm’s own TrustZone feature.
+When most embargoes leak it’s not because someone is dumb, it leaks because someone forgot a step in this 300 step process.
 
-While some Exclaves can be bypassed by changing some settings on the command line,
-we predict that this will not always be the case. As such, Sven started looking at how we
-could fit all of this in to m1n1. First line of investigation, try putting the
-Secure Kernel and Exclave userspace in another VM next to SPTM and macOS.
+Now do this for free, and do it 100 times a month. That’s open source today. Every. Single. Project.
 
-[Oh, that worked](https://social.treehouse.systems/@sven/117513645155935201),
-and we’re now up to spawning three VMs in EL1 under m1n1! Maybe we can start
-selling m1n1 to companies fleeing VMWare… With that, we can now virtualise
-and reverse engineer macOS on both M4 and M5 series machines.
+## Open source is getting hammered with security vulnerabilities[#](https://opensourcesecurity.io/2026/10-embargo/#open-source-is-getting-hammered-with-security-vulnerabilities)
 
-## Hello Triangle(s)!
+One other important bit of backstory we need to cover is that every single software manufacturer is getting slammed with vulnerability reports. All of them. Open source developers are seeing large increases in the vulnerability reports they are getting. Closed source vendors are releasing more security fixes in a month now than they used to release in a year.
 
-While M3 support is now mostly at feature parity with M1 and M2, the very obvious exception
-to this is the GPU. Apple’s GPU team seems to follow a tick-tock model, and the M3’s
-GPU was a very significant departure from the models found on M1 and M2 SoCs. We mentioned
-quite some time ago that the M3 GPU was being reverse engineered by a new group of
-contributors, however not much has been said since.
+Also keep in mind that in open source these are volunteers. A lot of them aren’t being paid to work on their projects. They spend nights and weekends working on this stuff. They started out wanting to build a fun simple library to make memes, and now they only handle vulnerability reports.
 
-At XDC this year, [Alyssa Millburn](https://teh.entar.net/@noopwafel),
-[Anna Maniscalco](https://social.treehouse.systems/@pac85) and [TellowKrinkle](https://social.treehouse.systems/@TellowKrinkle)
-gave a [talk](https://www.youtube.com/live/TPwe53kCJuM?t=2082) on their progress
-reverse engineering the M3 GPU. Work has progressed far enough for m1n1 to successfully
-initialise the GPU and for the team to draw a triangle! Fans of the “Think Different”
-sections of these progress reports will find the talk edifying; Apple have once again
-made a number of… interesting choices which will require significant engineering
-effort to integrate into upstream Mesa. It is well worth a watch if you’re interested
-in more detail.
+It used to be really hard to find security vulnerabilities and really hard to fix vulnerabilities, so the scale was balanced. Now it’s really cheap to find vulnerabilities but still really expensive to fix vulnerabilities, so the scales are all messed up. It’s not just popular projects or the big companies. It’s literally everyone experiencing this.
 
-A huge thanks goes out to everyone who has made this work possible. More progress
-is on the way, so stay tuned.
+## Why are public security bugs better?[#](https://opensourcesecurity.io/2026/10-embargo/#why-are-public-security-bugs-better)
 
-## Kept you waiting, huh?
+I don’t want to mislead anyone. Public security vulnerabilities will create some new and different problems especially at first. Everything from this point forward is speculation based on my experiences. We will have to see if this post ages like wine or like milk.
 
-All the way back in January of 2024, we made the [mistake](https://asahilinux.org/2024/01/fedora-asahi-new/)
-of promising Thunderbolt support within the year. It’s a mistake we won’t quickly
-repeat. We’ve said almost nothing about Thunderbolt in the two years since, which
-begs the question: where is it?
+There is currently a view in the world of security that we have to fix all of our vulnerabilities. It’s getting better though. There’s a document from CISA called [BoD 26-04](https://www.cisa.gov/news-events/directives/bod-26-04-prioritizing-security-updates-based-risk). It basically says you should be patching vulnerabilities based on the actual risk instead of the general severity. Doing this helps avoid the patching nightmare that comes along with our current vulnerability tsunami.
 
-Thunderbolt was originally developed by Apple and Intel, with Intel handling the
-design and fabrication of the hardware required. Since Intel made these controllers
-available to anyone who wanted them at a (mostly) reasonable price, no one else
-bothered to design their own. It is only very recently — largely coinciding with
-the transfer of the standard to the USB-IF — that companies like AMD have decided
-to roll their own controllers. Apple is of course no exception.
+However, if you are an open source project and you have public unfixed security vulnerabilities, you’re going to get wailing and gnashing of teeth asking you to think of the poor Fortune 500 company that needs the security fix ASAP so they can pass their audit. Even though BoD 26-04 says not to blindly patch everything, there are still plenty of policies and compliance standards that won’t catchup for many years, maybe ever.
 
-As part of their push for insourcing most silicon IP, Apple made the choice to
-design their own Thunderbolt controller before most others. Surprising no one, the
-controller is of course a Cortex-M3 running RTKit coupled with a bespoke
-Thunderbolt/USB4 router. There is one of these for each Thunderbolt-enabled USB-C port
-on all Apple Silicon Macs.
+Now, it’s very very VERY important to remember what open source promises about security fixes or any fix:
 
-Since Intel supplies every other extant Thunderbolt controller on the market, the
-Linux kernel’s Thunderbolt subsystem is effectively designed around them. It makes
-a number of assumptions about the hardware topology of the running machine, including
-hardware capabilities and access patterns for certain registers and regions of
-shared memory. Apple’s controller breaks a lot of these assumptions. Great.
+**THE SOFTWARE IS PROVIDED “AS IS”**
 
-The Thunderbolt controller is also oddly coupled to PMGR. The reset line for each
-controller is asserted or deasserted by setting and clearing a set of bits in the
-middle of PMGR’s MMIO range. No other hardware block works quite like this,
-and it took some time to realise that these seemingly random writes to PMGR were
-not just noise.
+That’s it. You, as an open source developer, do not owe anyone anything. I know that’s hard to believe sometimes. Every open source developer has an amazing sense of care and duty to their community and they go to great lengths to help anyone they can. But in this instance it’s OK to say no.
 
-Luckily for us, Sven was up to the task of dealing with all this nonsense. It just
-took slightly longer than expected! While the patchset to enable Thunderbolt was
-sent upstream first (another massive win for us!), we have also pulled it into
-our downstream kernel and are now shipping it to users!
+It’s not that you’re never going to fix the bug. You’re saying you don’t want to deal with the mental anguish and technical challenges of embargoes. If someone insists you have to fix something right now because it’s public, tell them you want a job, or a donation, or a monster truck. It’s OK to push back on demands from strangers. You can tap the “AS IS” sign.
 
-But there is a catch. Currently, only USB3, XDomain and Thunderbolt Networking are
-supported. You can plug in USB devices or connect two Thunderbolt computers together
-and make them ping each other, but that’s about it. PCIe and DisplayPort tunnelling — required for
-most Thunderbolt docks — are not supported. Yet. Watch this space.
+## Won’t this help the bad guys?[#](https://opensourcesecurity.io/2026/10-embargo/#wont-this-help-the-bad-guys)
 
-An enormous amount of gratitude is owed to Sven, who has stuck with this thankless
-chore for nearly 5 years in between all of his other incredible work.
+If a critical vulnerability sits in a public bug tracker for months, maybe it will help the bad guys. But I mean, it seems like they’re doing pretty good right now.
 
-## “The Holy Grail, Doctor Jones”
+This is the wrong question though. Will this help the open source developers? That’s a question we almost never ask. Open source is a natural resource that’s straining at the moment.
 
-Playing retail PC games on Asahi Linux is a bit of a pain point, to say the least.
-The software stack required to enable this is incredibly complex. We need to translate
-x86/amd64 binaries to arm64, and do so fast enough for low-latency gaming. In most
-cases, we also need to deal with the Windows API. On top of that, almost all games
-bake in an assumed 4 KiB memory page size to enable certain performance optimisation.
-Over the past few years, most of these problems have been solved:
+We can imagine every open source project is a closed system. There is finite time, finite developers, but seemingly infinite vulnerability reports. We can’t add more time and we generally can’t add more developers (at least not easily). So what can we change? We can change how we handle the infinite vulnerability reports. If we can make them less work for the project, that’s a big win.
 
-- FEX has improved leaps and bounds. The performance and reliability of binary translation is hardly a consideration in most cases now;
-- WINE is also fantastic now. Support for ARM64EC is mature and reliable, meaning that FEX now only has to translate the game binaries rather than WINE’s entire Windows API implementation; and
-- muvm allows us to spin up a thin VM with DRM Native Context to present a 4 KiB memory page size to x86/amd64 applications.
+An abandoned open source project that’s widely used is vastly more dangerous than an open source project filing public security bugs.
 
-When muvm was first developed, it was with the assumption that DRM Native Context
-would enable near-native GPU performance from inside the VM. Unfortunately, this
-assumption did not hold. The muvm performance penalty is quite significant for
-a number of reasons, about 20% depending on the workload. Engineering around
-the limitations inherent to using a VM also introduces issues; muvm cannot use
-Wayland, has slow I/O performance, and struggles with certain types of input devices.
+And let’s face it. Every well funded nefarious organization has armies of humans and AI churning away looking for vulnerabilities. It would not surprise me if they already know about these security bugs long before they get fixed.
 
-This is one area where macOS has us completely licked. While the performance gap
-between FEX and Rosetta has narrowed, XNU allows userspace processes to map themselves
-at any page granularity, so all Rosetta needs to do is tell XNU to map 4 KiB pages
-for its child processes. Linux does not have this flexibility. All pages must be
-mapped at the same granularity as the kernel. While we did [tease](https://asahilinux.org/2025/10/progress-report-6-17)
-Windows games working outside of muvm last year, this relied on ugly hacks inside
-FEX which have since been removed in the interests of maintainability and translation
-correctness. Bummer. Even so, compatibility was hit-and-miss, with a lot of (mostly older)
-software still refusing to work. Double bummer.
+## What happens next?[#](https://opensourcesecurity.io/2026/10-embargo/#what-happens-next)
 
-Android is currently going through a transition from 4 KiB pages to 16 KiB pages for
-a variety of reasons. Google Play now requires apps to be built for 16 KiB systems,
-and any application updates which do not test successfully on such systems will not
-be approved for publication on the Play Store. What about applications which are
-no longer updated though? What about sideloaded enterprise slop apps?
+Curl wrote a very nice policy about all this. Use it. I have no doubt they will be delighted to see other projects use their policy. One of the best parts of open source is we can stand on the shoulders of giants.
 
-Google engineers Kalesh Singh and Frederick Mayle gave a very interesting [talk](https://lpc.events/event/20/contributions/2630/)
-at Linux Plumbers Conference this year about exactly this. Their solution is simple:
-just fix Linux so that userspace can map 4 KiB pages!
+If you use the Curl policy, change it any way you want. Maybe you only want to embargo critical. Or maybe you don’t want to embargo anything. It’s OK, do whatever makes you happy and keeps you sane. We need to try out some new ideas and figure out what the best way forward is. And we can make changes instantly in the world of open source. If you don’t like the way the policy is working, change it.
 
-Their addition to the Android kernel is called P3S, or Per Process Page Size.
-On ARM64 systems, pagetable granularity is controlled by bits set in the Translation Control Registers (TCR).
-P3S works by tracking the granularity of each process’s pagetables, and writing
-the appropriate bits to the TCR whenever a process with a different pagetable size
-is switched to. Because this is a single register write, and because this is
-a no-op for “native” page size processes, the performance penalty is effectively
-zero!
+I have an idea even more bizarre than this, but I won’t pollute this blog post with it, so stay tuned for a future post.
 
-While this effort is primarily targeted at Android, the patchset mostly rebases
-cleanly on top of mainline Linux. What happens if we rebase it on top of our
-Asahi tree (and fix some bugs)? As it turns out:
+The thing to remember in all this is we can’t maintain the status quo. Things are very lopsided and lots of open source folks are burning out. The world is a better place with a healthy open source ecosystem. A healthy open source ecosystem needs healthy developers.
 
-Okay okay, Battlefront is a very simple Direct3D 9.0 game from 22 years ago.
-Not exactly an impressive demo, right? Well what about:
-
-Wolfenstein: The New Order is an extremely well-optimised OpenGL title, and
-being 64-bit uses WINE’s ARM64EC pathways to massively reduce the amount
-of work FEX has to do. Again, not exactly an impressive demo if we’re
-judging based on technical difficulty.
-
-Let’s find something else. Something… worse. Something 32-bit so that
-FEX and WINE have to work harder. Something that will exercise DXVK too.
-Something that is so comically buggy and poorly optimised that it doesn’t
-even work properly on real Windows machines, and relies on community patches
-and command line switches to start at all on modern computers:
-
-That’s more like it! But we can do *even worse*. We can even run…
-Bethesda games!
-
-Performance is of course still patchy. Both Battlefront and Wolfenstein
-run essentially flawlessly, with the latter hitting 144+ FPS on an M2
-Max Mac Studio. GTA IV on the other hand is… not fantastic. Performance
-is still massively improved over using muvm, and eliminating the use of
-the VM in general should also eliminate a few classes of bugs. Debugging
-the GPU driver should also be much easier with this approach.
-
-As always there is a catch, and unfortunately it’s a big one.
-The current solution is hard-coded for 16 KiB hosts and 4 KiB processes
-on those hosts. This obviously satisfies Google’s commercial requirements, but
-adding pagesize-specific kludges to the kernel’s core memory management code
-is not appropriate upstream. We are unsure if Google intends to generalise
-this approach and upstream it, or if this is going to stay an Android-only patchset.
-As such, we do not want to ship this in our downstream tree and have folks
-become reliant on it when there is this level of uncertainty.
-
-It also requires userspace integration. P3S works by checking the binary
-metadata for its sections’ page alignments. This works for Google’s
-use case, as P3S is intended as a fallback mechanism for applications
-aligned to 4 KiB pages. Modern arm64 binaries are aligned to 64 KiB however,
-as this guarantees compatibility with systems of all native pagesizes. Thus,
-a shim is required to force P3S on. The shim triggers P3S, and any
-child processes will inherit its 4 KiB pagesize. It is not worth spending
-the effort on implementing this until we have some certainty around what
-Google intends to do with this patchset.
-
-We have reached out to Google with some questions, and we hope to have more
-to say soon.
-
-## Mics, but faster
-
-Our custom beamformer for the microphone array found in the MacBooks is written
-in Rust. Rust’s scientific computing ecosystem is not as mature as C++’s, which
-is a bit of a problem as beamforming requires realtime FFT and very heavy matrix
-operations to be done on buffers filled with audio samples. Mature scientific
-computing libraries have hand-optimised code, often using intrinsics tied to the
-target ISA. We were not doing this however, and relied on the compiler autovectorising
-code where it could to achieve our performance targets.
-
-This fell apart when we eliminated the FFT-based analytic transform, replacing it
-with an implementation based on infinite impulse response (IIR) filters. This
-*should* be faster, however the compiler was failing to autovectorise the new
-implementation. [Linkmauve](https://github.com/linkmauve) kindly stepped in and
-added SIMD-optimised code for both arm64 *and* amd64. This, coupled with other
-performance optimisations courtesy of [Frédéric Bour](https://github.com/let-def)
-has resulted in Triforce becoming almost twice as fast, all while using less CPU
-time!
-
-## Keeping up
-
-Fedora Linux 45 was released on 3 November, and we shipped
-[Fedora Asahi Remix](https://fedoramagazine.org/fedora-asahi-remix-45-is-now-available/)
-on the same day. This is the first time we have been able to get a new version of Fedora
-Asahi Remix out on the same day as upstream!
-
-## Learning from history
-
-We take great pride in our work, and have always done *all* of our development in the open.
-We communicate with our users, our followers and our financial sponsors as transparently
-as is humanly possible. Our finances are in the open, our development branches are in the open,
-and we report our progress regularly and candidly in the open. Our IRC channels and Matrix rooms
-are safe spaces, open to anyone with even a passing interest in Asahi Linux or hacking on Apple
-Silicon.
-
-We do all of this because we firmly believe in Free and Open Source Software, not just as a
-means to an end but as the end in and of itself. The modern digital world is only possible
-because of the Free Software movement, and it is more important now than it ever has been
-that we do all we can to protect the Free Software ecosystem and uphold the ideals upon
-which it is built.
-
-It may surprise some to learn that WINE was originally made available under the MIT
-licence. The 90s and 2000s were a very different time in the Free Software ecosystem,
-and permissively licenced projects were viewed by tech companies as free real estate
-to pilfer and exploit. WINE was not immune to this, and many monetised proprietary
-forks of WINE were marketed and sold by various bad actors. The WINE development team
-grew increasingly concerned that these proprietary forks, while well within their rights
-to exist, would eventually cause so much fragmentation in the ecosystem that WINE itself
-would become unviable. In 2002, WINE was relicenced under the LGPL to prevent further
-proprietary forks from being created, and to encourage direct upstream contribution.
-
-When Asahi Linux was first started, it was with the intent that we develop a Free Software
-*ecosystem* for the Apple Silicon platform. To facilitate and encourage the participation
-of our friends at the BSDs and other Free Software operating systems, we endeavoured to
-licence as much of our code as possible under the permissive MIT licence.
-
-Unfortunately, this is no longer viable. The malicious practices of the 90s and 2000s
-have reared their ugly heads once again, this time driven in large part by both the
-insatiable appetite of frontier AI labs for high-quality training data, and militant animosity
-toward the Free Software community.
-
-Some time ago, we were made aware of multiple attempts to exploit our permissive licensing
-to hijack our work, with a direct view to replacing the project and aggressively monetising
-Linux on Apple Silicon. In some extreme cases, in-development feature code was being
-lifted straight out of our personal forks and published without attribution or lazily
-rewritten with LLM assistance to obfuscate its origin. The MIT licence explicitly allows
-this, and has no carveouts to protect against bad faith actors.
-
-As such, we made the difficult decision to begin the process of transitioning all of
-our repositories to the GNU General Public License version 2 or later. Going forward
-all Asahi Linux code will be licenced under strong copyleft licences only. Those who
-do not learn from history are doomed to repeat it.
-
-## Until next time!
-
-As always, we would like to sincerely thank our supporters on [OpenCollective](https://opencollective.com/asahilinux)
-and [GitHub Sponsors](https://github.com/sponsors/AsahiLinux). It is only through
-your generous backing that we are able to dedicate the time and resources to continuing
-our work reverse engineering the platform and bringing to it a world-class, polished,
-and battle-tested Linux desktop experience. You mean the world to us.
+If handling fewer embargoes might keep you healthy, for the love of all that is good, do it right now.

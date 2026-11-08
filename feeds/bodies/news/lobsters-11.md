@@ -1,11 +1,232 @@
-The Danger Hiptop, better known as the T-Mobile Sidekick, came out in 2002 with a full QWERTY keyboard, AIM and Yahoo Messenger built in, and push notifications, at a time when most phones could barely handle a text message. All of it ran on DangerOS, Danger's own Java-based operating system.The Sidekick was a cloud device before "the cloud" was even a term most people knew. Everything lived on Danger's servers: contacts, messages, photos, settings. Most users had no idea that their phone was essentially a thin client, completely dependent on a backend they'd never think about. It just worked, and that was enough. Microsoft acquired Danger in 2008, and after a [catastrophic data loss](https://en.wikipedia.org/wiki/2009_Sidekick_data_loss) in 2009 that wiped users' contacts, photos, and personal data, the service shut down for good in 2011. A phone that kept everything on someone else's servers now had no one to talk to.Permission to RunWith Danger long gone, I started digging through whatever survived of it. Eventually I found a copy of the SDK on archive.org,<sup>[1](https://x86.cx/blog/redanger#fn:1)</sup> containing everything needed to develop for the device: documentation, examples, a device simulator, and a set of JAR files. Throwing those JARs into JADX and decompiling them revealed how the device actually worked under the hood.I wanted my own code running on a real Sidekick, and that meant dealing with Danger's security model. DangerOS only runs software signed by Danger or your carrier. Developers got around this with a *developer key*. Flash one onto your phone and it switches into developer mode, which accepts apps over USB and turns on `htconsole`, Danger's debug console.Getting one used to be surprisingly easy. In 2003 Danger hand-picked its first developers and emailed keys out one at a time, and some people waited weeks to hear back.![A 2003 post on Danger's developer wiki asking how to get on-device access after emailing Danger with no response, and Brian Swetland's reply that the poster is on the list for the second round of on-device developers](https://x86.cx/blog/redanger/level2.webp)By the end of the year there was a self-serve web form: enter your T-Mobile account and IMEI, agree to give up carrier phone support, and a signed key showed up in your inbox. That lasted until September 2010, when Danger told developers it would stop accepting new apps<sup>[2](https://x86.cx/blog/redanger#fn:2)</sup> and shut its developer site down weeks later, taking the only place to get a key with it. Nobody is issuing keys anymore, so if I wanted one, I'd have to make it myself.Needing permission from the manufacturer just to run your own code sounds insane next to how open Android is. Then again, maybe not: Google is now [rolling out developer verification](https://developer.android.com/blog/posts/android-developer-verification-rolling-out-to-all-developers-on-play-console-and-android-developer-console), and soon an app from a developer who hasn't registered with Google will only install through `adb` or a buried "advanced flow".Finding the KeyA Sidekick developer key is tiny: one config setting, `lock_to_imei_0`, set to the phone's IMEI, and Danger's signature over it. It comes in two forms. Older Hiptops took it as a small `.sq` file, while the Sidekick 3 takes it as a `.jar`, laid out like a signed Java app, installed from recovery mode. Both are signed the same way, and the only real key I could find was an `.sq`.The setting is easy. The signature means knowing which key the phone checks against, and that key had to be somewhere in the firmware. Back in the day, a college student had gotten full JTAG access to an older Sidekick and dumped its flash,<sup>[3](https://x86.cx/blog/redanger#fn:3)</sup> but that takes hardware I don't have, and their download links are long dead.Luckily, Danger's ServiceProgrammer, a tool for reflashing Sidekick IIs, is preserved on archive.org.<sup>[4](https://x86.cx/blog/redanger#fn:4)</sup> It ships complete factory OS images. I scanned every image for anything shaped like a certificate or public key, and pulled out dozens: per-carrier signing certificates for T-Mobile, Fido, KPN and others, factory roots, and a few public TLS roots. No private keys, of course. Most of them were 1024-bit RSA, but one certificate stood out:`CN=Danger Developer Program, OU=Developer, O=Danger
-[email protected]
-Not Before: Sep 17 2003
-Not After:  Apr 11 2006
-Public Key: RSA (512 bit)
-`A self-signed root for the Developer Program, trusted by the OS on every generation I checked, from the Hiptop 1 to the Sidekick 3. To check that it was really the key behind developer keys, I needed a real key to test against. Danger's old developer site is archived on archive.org as well,<sup>[5](https://x86.cx/blog/redanger#fn:5)</sup> and it still has a copy of `null-device-key.sq`, a key with no IMEI lock that the phone accepts and then deletes, which Danger handed out so people could leave developer mode. Its signature verified against the Developer Program key. That was the one.512 BitsIn 1999, a team of researchers factored [RSA-155](https://en.wikipedia.org/wiki/RSA_numbers#RSA-155), a 512-bit number, meaning they found the two primes that multiply to make it. That's all it takes to break an RSA key: every public key contains a number like that, and its two primes are enough to rebuild the private key. It took them about seven months on hundreds of computers. From then on, 512-bit RSA was no longer considered safe, and Danger issued this certificate four years later. To be fair to Danger, in 2003 factoring a 512-bit key was still a research project, and this one only guarded developer mode. Nobody was going to rent a university's worth of computers to sideload apps onto a Sidekick.In 2026 it's an overnight project, if you have enough cores.The standard tool for this is [CADO-NFS](https://gitlab.inria.fr/cado-nfs/cado-nfs), an open source implementation of the [general number field sieve](https://en.wikipedia.org/wiki/General_number_field_sieve). Most of the work is sieving, which splits into independent work units, so it scales across as many machines as you can throw at it.My workstation alone, a Ryzen 9 9950X3D, would have needed about a day and a half, assuming nothing went wrong. Luckily I had a few servers that weren't doing much. CADO-NFS runs a central server that hands out work units over HTTP, with clients that sieve and upload the results, so I wrote a small script to copy a client bundle to each node, start dozens of clients as low-priority processes, and tunnel everything back to my workstation over SSH. In total, 220 CPU cores (436 threads) across seven machines worked on the problem. I started the run a little after 9pm.Things did go wrong. Every node dropped off at once around 11pm, and later the server choked when 200 clients tried to upload results at the same moment. Both times I patched it up and got it going again. Still, at 6:09am, CADO-NFS printed two 78-digit primes:`p = 104491666572898294264047880744514595625924491114579942567545554396922436316211
-q = 110787645499676419929932206845243986470558771418524609420578927381066743957279
-`Multiply them together and you get `n`, the 155-digit number in Danger's public key:`n = 11576385713948644711688861097066027618113758646736035007798668946285132955940594207257263351308819380417615195922932748143994263878857883771956785119149869
-`StageWorkPolynomial selection~63 core-hoursSieving~578 core-hours, 204.5 million relationsFiltering~2 core-hoursLinear algebra~35 core-hours, 2.5 hours on one machineSquare rootabout a minute**Total****~1,175 core-hours (about 49 core-days), 8.5 hours of wall time**From there, rebuilding the private key is a few lines of Python. To check it, I wrote my own signer and used it to rebuild Danger's `null-device-key.sq`. The output matched Danger's original file exactly. More than twenty years later, I could sign developer keys the way Danger did.For the Sidekick 3, I put the IMEI setting in a `.jar`, signed it, and flashed it from recovery mode. Recovery checks what the signing certificate is allowed to do: a carrier's certificate could replace the whole OS, while the Developer Program certificate can only install the developer setting. That's all I needed. On the next boot, the log printed the two lines I'd been chasing:`Config: Override w/key IMEI found.
-Config: DEVELOPER BUILD
-`Class of '09The first thing I ran on my unlocked Sidekick 3 was a port of [Class of '09](https://en.wikipedia.org/wiki/Class_of_%2709_(franchise)), a visual novel set in 2007 whose main character carries a Sidekick. The port is a small Java engine that plays the game's script, art, voice acting, and movies from a data pack on the memory card, squeezed down from 1080p to a 240×160 screen. Endings arrive as real Sidekick text notifications, using an emulated modem. That one deserves its own post.![Class of '09 running on a real Sidekick 3](https://x86.cx/blog/redanger/sidekick3-classof09.webp)The Simulator in Your BrowserThe Sidekick at the top of this page is the real DangerOS, the same bytecode as the SDK's simulator, running in your browser. Danger's simulator is a desktop Java app, and the usual ways of getting Java onto a web page bring a whole JVM along with them. DangerOS doesn't need much of one, so I wrote a small Java interpreter in JavaScript instead. It loads the OS straight out of the SDK, unmodified, with the standard Java class library underneath. The only parts I rebuilt are the ones that touched the desktop: the screen, the keyboard, files, and sound.Sound was the odd one out. The Sidekick 3 doesn't decode MP3s in software; the phone hands them to its audio hardware. Danger's simulator had no such hardware to hand them to, so it never played MP3s at all. It only knew MIDI, WAV, and a couple of other formats, and the SDK's music player lists your songs and then plays silence. In the browser, MP3s go to the browser's own decoder instead, which stands in for the hardware. That's why the music player works here. There's no network, so it behaves like a phone with no signal: the launcher, the games and the music player work, but nothing online does. Anything you change is saved in your browser for next time.It's the whole phone, so look around. Press the Jump <kbd></kbd> button (or <kbd>F8</kbd>) to get back to the home screen from anywhere. Remember the address on that certificate, `[email protected]`? It belongs to Brian Swetland, who worked on the Hiptop's operating system and went on to lead Android's kernel work. His site has a gallery of photos from Danger's office in 2001, [Dangerous People 2001](https://frotz.net/pics/dangerous-people-2001/), and they're on this Sidekick too: open the Camera app and pick the album. The other photos in there are ones I took on my own Sidekick 3 in Japan. Class of '09 is preloaded under Games, too. Give it a shot!Re:DangerA Sidekick is only half a phone without Danger's servers, so I've also been rebuilding them from the decompiled code, as Re:Danger. It only talks to the simulator for now. Here's the progress so far:**The clock.** The first thing that worked. After the handshake and login, the server told the phone what time it was, and the status bar clock changed. It was the first answer a Sidekick had gotten from a backend since 2011.**Messaging.** The Sidekick never connected to AIM, Yahoo or MSN itself. Danger's servers stayed logged in on your behalf and pushed each message to the phone the moment it arrived, years before the iPhone had push notifications. Those services are all gone, so Re:Danger bridges messages to Discord instead. ![Two Class of '09 characters chatting on AIM in the simulator](https://x86.cx/blog/redanger/aim.png)**The web.** The phone never loaded a page itself: Danger's proxy fetched it, laid it out, and sent the phone a finished page to draw, which meant Danger saw every page you visited. It hardly mattered, since most of the web wasn't encrypted back then anyway. Re:Danger has a small version of that proxy, enough to read Hacker News on a Sidekick. ![Hacker News in the Sidekick's web browser](https://x86.cx/blog/redanger/kimba.png)What's Next**Real hardware.** A real Sidekick has never connected to the Re:Danger server. I tried pointing mine at it with a config override and over USB networking, and the phone refused both. The next step is running my own GSM network: the Sidekick 3 is a GSM/EDGE phone, so a software-defined radio running [Osmocom](https://osmocom.org/) can stand in for T-Mobile's towers, carry its data, and send it to Re:Danger instead of Danger.**Everything else.** Email, connecting to revived AIM servers over OSCAR, the Download Catalog, and photo sync are all still on the list.**If you have a Sidekick 3,** [make a developer key](https://github.com/iridium/redanger#making-a-key) for it and run your own code.**If you have a Hiptop 1 or 2,** I'd like to hear whether Danger's original flashing process still works. I haven't been able to test it.[![Re:Danger on GitHub](https://x86.cx/blog/redanger/logo.svg)](https://github.com/iridium/redanger)Hiptop SDK: [https://archive.org/details/hiptop_sdk](https://archive.org/details/hiptop_sdk) [↩︎](https://x86.cx/blog/redanger#fnref:1)"Danger Closing Developer Program", Hiptop3.com, 2010: [http://www.hiptop3.com/archives/danger-closing-developer-program](http://www.hiptop3.com/archives/danger-closing-developer-program) [↩︎](https://x86.cx/blog/redanger#fnref:2)Sidekick II JTAG and flash dump notes (archived): [https://web.archive.org/web/20160628162439/http://www.cs.umb.edu:80/~bazz/learn/independent/sidekick2/](https://web.archive.org/web/20160628162439/http://www.cs.umb.edu:80/~bazz/learn/independent/sidekick2/) [↩︎](https://x86.cx/blog/redanger#fnref:3)Danger Hiptop2 Firmware: [https://archive.org/details/danger_hiptop2_firmware](https://archive.org/details/danger_hiptop2_firmware) [↩︎](https://x86.cx/blog/redanger#fnref:4)Danger Hiptop developer archive: [https://archive.org/details/danger-hiptop](https://archive.org/details/danger-hiptop) [↩︎](https://x86.cx/blog/redanger#fnref:5)
+References, along with objects, form the backbone of Git's storage mechanism. Simply put, a reference is a named pointer to a particular object within the repository.
+
+So how does Git store references? The `files backend` was the only backend for storing references until Git 2.45. The release saw the introduction of the newer and better `reftable backend`. The `files backend` is still the default reference backend as of Git 2.56.
+
+> Read about the newer reftable backend [here](https://about.gitlab.com/blog/whats-new-in-git-2-45-0/#reftables-a-new-backend-for-storing-references), which will be the default in Git 3.0.
+
+## Files backend
+
+### Loose refs
+
+The files backend creates a file for each new reference. So when you create `refs/heads/shiny-new-branch`, you have:
+
+```
+❯ git init --quiet --ref-format=files repo; cd repo
+
+❯ git commit --allow-empty -m "new commit"
+[main (root-commit) 66b401c] new commit
+
+❯ git branch shiny-new-branch
+
+❯ eza --tree .git/refs/
+.git/refs
+├── heads
+│   ├── main
+│   └── shiny-new-branch
+└── tags
+
+❯ cat .git/refs/heads/shiny-new-branch
+66b401c8c91c975f9f126bc85d9b2eba54828d86
+```
+
+We call these `loose refs`, because each reference is an individual file. While simple enough, *they don't scale well*.
+
+When you have millions of references, you end up cluttering the directory. Who'd have millions of references, you ask? Well, large companies with big monorepos. For instance, GitLab's [gitlab](https://gitlab.com/gitlab-org/gitlab) repository contains over 15M references.
+
+Back to the loose refs. Iterating over millions of references is slow, since we have to open and parse each individual file. There are other problems such as:
+
+- Large inode costs, since a reference maps to an individual file.
+- Large filesystem overheads when updating references, since each update needs a corresponding .lock file.
+- No atomicity when updating multiple references.
+- Tied to restrictions of the filesystem, like case sensitivity.
+- Name conflicts: you cannot have both refs/heads/branch/foo and refs/heads/branch.
+
+### Packed refs
+
+To alleviate some of the issues with the `loose ref` data structure, Git introduced the notion of `packed-refs` back in 2006. [See Linus's commit](https://gitlab.com/git-scm/git/-/commit/e1e22e37f47e3f4d741d28920e1d27e3775c31ad) introducing the packed-refs format.
+
+The packed-refs format is a single 'packed-refs' file which contains sorted mappings of references to object IDs. We can see this in our repository:
+
+```
+❯ for i in $(seq 1 5)
+      git update-ref refs/heads/branch-$i HEAD
+  end
+
+❯ eza --tree .git/refs/
+.git/refs
+├── heads
+│   ├── branch-1
+│   ├── branch-2
+│   ├── branch-3
+│   ├── branch-4
+│   ├── branch-5
+│   ├── main
+│   └── shiny-new-branch
+└── tags
+
+❯ git refs optimize --all
+
+❯ eza --tree .git/refs/
+.git/refs
+├── heads
+└── tags
+
+❯ cat .git/packed-refs
+# pack-refs with: peeled fully-peeled sorted
+ec4aecaa91db6da8a280368110866935080f231c refs/heads/branch-1
+ec4aecaa91db6da8a280368110866935080f231c refs/heads/branch-2
+ec4aecaa91db6da8a280368110866935080f231c refs/heads/branch-3
+ec4aecaa91db6da8a280368110866935080f231c refs/heads/branch-4
+ec4aecaa91db6da8a280368110866935080f231c refs/heads/branch-5
+ec4aecaa91db6da8a280368110866935080f231c refs/heads/main
+66b401c8c91c975f9f126bc85d9b2eba54828d86 refs/heads/shiny-new-branch
+```
+
+Nice. This solves some of the issues we listed with the loose refs format. So Git's reference datastore eventually became a combination of the two. When loose refs accumulate, housekeeping repacks them into a single 'packed-refs' file.
+
+New references are always created as loose refs, since a loose ref shadows the packed one during reads. When updating, if the reference exists as a loose ref, simply update the loose ref. If not, create a new loose ref with the updated value. The issue is with deletion. If the reference exists in the packed refs format, we have to delete it from the 'packed-refs' file. For large repositories, the 'packed-refs' file can easily reach several GBs in size. Every deletion of a packed ref rewrites the 'packed-refs' file. *This is slow.*
+
+```
+❯ set -l oid (git rev-parse HEAD)
+
+❯ begin
+      printf '# pack-refs with: peeled fully-peeled sorted \n'
+      awk -v o=$oid 'BEGIN { for (i = 1; i <= 10000000; i++) printf "%s refs/heads/branch-%010d\n", o, i }'
+  end  > .git/packed-refs
+
+❯ eza -l .git/packed-refs
+.rw-r--r-- 700M karthik  8 Nov 15:16 .git/packed-refs
+
+❯ time git update-ref -d refs/heads/branch-0000499999
+Executed in    2.14 secs    fish           external
+   usr time    1.28 secs    0.00 millis    1.28 secs
+   sys time    0.85 secs    2.06 millis    0.85 secs
+
+❯ eza -l .git/packed-refs
+.rw-r--r-- 700M karthik  8 Nov 15:28 .git/packed-refs
+```
+
+The problem lies in the design of the `files backend`. The obvious solution is to slowly migrate repositories to using the newer `reftable` backend. The `reftable` backend uses binary tables to store references, and deletions are simply tombstone markers.
+
+## Stumbling upon an optimization
+
+The files backend has seen around 20 years of optimizations, meaning newer optimizations are generally harder to find. As our focus at GitLab was to migrate to the newer reftable backend, I wasn't ever thinking about optimizing the deletions in the files backend.
+
+With Git 3.0, Rust will become a mandatory requirement. This means we will slowly see more Rust adoption in the Git project. To brush up on my Rust skills and to understand how Rust can slowly replace C in the Git project, I created a Rust version of the files backend entirely via a prompt to an LLM. To measure the cost of the C <> Rust ABI boundary, I decided to benchmark the two:
+
+```
+❯ ./delete-ref/run --revisions ~/code/git v2.56.0,rust-packed-refs --build-system meson --parameter-list refformat files --parameter-list refcount 100000
+Benchmark 1: update-ref: delete ref (refformat = files, refcount = 100000, revision = v2.56.0) (32 runs)
+                mean     ±       σ          min     …     max
+  Wall Time     37.1 ms  ±     1.6 ms      35.2 ms  …    42.4 ms
+  Memory        11.8 MiB ±     0.1 MiB     11.5 MiB …    12.0 MiB
+
+Benchmark 2: update-ref: delete ref (refformat = files, refcount = 100000, revision = rust-packed-refs) (39 runs)
+                mean     ±       σ          min     …     max
+  Wall Time     30.6 ms  ±     1.7 ms      28.4 ms  …    35.4 ms           -17.7%
+  Memory        11.8 MiB ±     0.1 MiB     11.4 MiB …    12.0 MiB           +0.1%
+```
+
+Wait. So the Rust version is faster? How? This is the Rust code to iterate and apply reference updates:
+
+```
+let (rec_name, rec_start, rec_end) = match existing_rec {
+    Some(r) => r,
+    None => break,
+};
+
+// Check for an update that exactly matches this existing record.
+if ui < updates.len() {
+    let u_name = unsafe { CStr::from_ptr(updates[ui].refname).to_bytes() };
+    if u_name == rec_name {
+        if !updates[ui].oid_hex.is_null() {
+            // Replace.
+            unsafe { write_update_line(&mut out, &updates[ui])? };
+        }
+        // else: delete – skip the existing record.
+        ui += 1;
+        continue;
+    }
+}
+
+// No update touches this record – copy it verbatim.
+out.write_all(&records[rec_start..rec_end])?;
+```
+
+Here's the C code in comparison:
+
+```
+static int write_packed_entry(FILE *fh, const char *refname,
+               const struct object_id *oid,
+               const struct object_id *peeled)
+{
+   if (fprintf(fh, "%s %s\n", oid_to_hex(oid), refname) < 0 ||
+       (peeled && fprintf(fh, "^%s\n", oid_to_hex(peeled)) < 0))
+      return -1;
+   return 0;
+}
+
+// And the caller...
+
+if (cmp < 0) {
+	/* Pass the old reference through. */
+	if (write_packed_entry(out, iter->ref.name,
+			       iter->ref.oid, iter->ref.peeled_oid))
+		goto write_error;
+
+	if ((ok = ref_iterator_advance(iter)) != ITER_OK) {
+		ref_iterator_free(iter);
+		iter = NULL;
+	}
+}
+```
+
+The C version iterates through the references and writes any unmodified reference to the 'packed-refs' file. But unlike the Rust version, which writes it verbatim, it calls `write_packed_entry()`. The function rebuilds the information with `fprintf()` and `oid_to_hex()`. This is simply unnecessary, since there were no modifications made to the reference.
+
+The fix? Track and write the data verbatim using `fwrite()`:
+
+```
+@@ -1530,9 +1534,15 @@ static enum ref_transaction_error write_with_updates(struct packed_ref_store *re
+ 		}
+
+ 		if (cmp < 0) {
+-			/* Pass the old reference through. */
+-			if (write_packed_entry(out, iter->ref.name,
+-					       iter->ref.oid, iter->ref.peeled_oid))
++			const struct packed_ref_iterator *packed_iter =
++				(const struct packed_ref_iterator *)iter;
++			size_t len = packed_iter->pos - packed_iter->record_start;
++
++			/*
++			 * Skip any formatting and directly write to the packed-refs file
++			 * when deleting references and writing the remaining refs verbatim.
++			 */
++			if (fwrite(packed_iter->record_start, len, 1, out) != 1)
+ 				goto write_error;
+
+ 			if ((ok = ref_iterator_advance(iter)) != ITER_OK) {
+```
+
+Now, with the patch applied:
+
+```
+❯ ./delete-ref/run --revisions ~/code/git v2.56.0,fix,rust-packed-refs --build-system meson --parameter-list refformat files --parameter-list refcount 100000
+Benchmark 1: update-ref: delete ref (refformat = files, refcount = 100000, revision = v2.56.0) (19 runs)
+                mean     ±       σ          min     …     max
+  Wall Time     66.5 ms  ±     2.1 ms      63.7 ms  …    70.0 ms
+  Memory        11.7 MiB ±     0.2 MiB     11.2 MiB …    12.0 MiB
+
+Benchmark 2: update-ref: delete ref (refformat = files, refcount = 100000, revision = fix) (23 runs)
+                mean     ±       σ          min     …     max
+  Wall Time     54.9 ms  ±     2.1 ms      52.1 ms  …    61.0 ms           -17.4%
+  Memory        11.8 MiB ±     0.1 MiB     11.5 MiB …    11.9 MiB           +0.1%
+
+Benchmark 3: update-ref: delete ref (refformat = files, refcount = 100000, revision = rust-packed-refs) (23 runs)
+                mean     ±       σ          min     …     max
+  Wall Time     55.2 ms  ±     2.5 ms      52.5 ms  …    62.1 ms           -17.0%
+  Memory        11.8 MiB ±     0.2 MiB     11.4 MiB …    12.0 MiB           +0.4%
+```
+
+Yay!! 🎉 That's an 18% improvement in raw speed while deleting references and comparable performance to the Rust version.
+
+I chalked up a patch and sent it to the [mailing list](https://lore.kernel.org/git/20260930-kn-speedup-packed-refs-v1-1-111cd03d9b0e@gmail.com/). It's now merged into `master`: [fc70f528aa1927012538052014d7ea784b5a38fa](https://gitlab.com/git-scm/git/-/commit/fc70f528aa1927012538052014d7ea784b5a38fa) and will be a part of Git v2.98. Oh yeah, we are jumping to v2.98 after v2.56. This is in preparation of Git 3.0, which will follow 2 releases after.

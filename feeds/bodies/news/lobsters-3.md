@@ -1,150 +1,75 @@
-Recently I [wrote about an idea](https://noteflakes.com/articles/2026-10-07-unrolled-code) that’s been
-floating around in my mind for a long time - the ability to do metaprogramming
-in Ruby by manipulating Ruby ASTs, similar to the macro capabilities of
-languages such as Lisp or Elixir. The use of `eval` (in its different
-variations) is a common metaprogramming technique in Ruby that consists of
-generating code at runtime from dynamically constructed strings. This is often
-done for performance reasons: ERB compiles templates into optimized code by
-generating pieces of Ruby source code then putting them together and calling
-`eval`; In Rails, the same technique is used for implementing features such as
-associations, or scaffolding. With `eval`, we can avoid paying the performance
-overhead that’s often associated with using DSLs in Ruby.
+Do you run a small home server or NAS holding your precious photos and sensitive documents? If so, I suppose the drives are encrypted, right? But then… can you reboot the machine without manually entering a passphrase before being able to access your files again?
 
-But using `eval` in a highly-dynamic context may also be error-prone, limited,
-and potentially vulnerable to injection attacks. Having to painstakingly
-construct strings containing Ruby source code can be an arduous task, especially
-if you want to compile a DSL into efficient code, as in the case of ERB, or my
-own [Papercraft](https://github.com/digital-fabric/papercraft).
+If you answered yes to the questions above—which is common for convenience—that implies the encryption keys live in the machine which… kinda defeats the purpose of disk encryption, doesn’t it? A thief can break into your house, lift the whole box (they are small these days, huh), plug it in elsewhere, and gain free rein over your files.
 
-In Papercraft, HTML is generated using a DSL. Here’s an example:
+So, which one is it? Simplicity and reliability by allowing automatic reboots or data protection by keeping the key in your head? With ZKeys—a little new project I’m launching today—you can have your cake and eat it too.
 
-```
-header {
-  p { strong(repo_name) }
-  p(repo_description)
-  p { code(clone_command) }
-}
-```
+A blog on operating systems, programming languages, testing, build systems, my own software
+projects and even personal productivity. Specifics include FreeBSD, Linux, Rust, Bazel and
+EndBASIC.
 
-While this kind of code may be used to generate HTML using the [builder
-pattern](https://armandfardeau.github.io/design-patterns-in-ruby/builder.html),
-which is the traditional way of implementing DSLs in Ruby, it introduces a
-significant performance overhead. That is why in Papercraft I chose to implement
-a compiler that takes the code above and compiles it into the optimized form:
+[![Follow @jmmv on Mastodon](https://jmmv.dev/images/badges/mastodon-logo.svg)](https://mastodon.online/@jmmv)[![Follow @jmmv on Twitter](https://jmmv.dev/images/badges/Twitter_logo_blue.svg)](https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&screen_name=jmmv)[![RSS feed](https://jmmv.dev/images/badges/feed-icon-28x28.png)](https://jmmv.dev/feed.xml)
 
-```
-__buffer__
-  .<<("<header><p><strong>").<<(ERB::Escape.html_escape((repo_name)))
-  .<<("</strong></p><p>").<<(ERB::Escape.html_escape((repo_description)))
-  .<<("</p><p><code>").<<(ERB::Escape.html_escape((clone_command)))
-  .<<("</code></p></header>")
-```
+# TL;DR
 
-This does solve the performance problem (on par with ERB templates), it
-introduces a different problem, that complexity in the Papercraft compiler code
-itself. I’m not particularly proud of the [Papercraft compiler
-code](https://github.com/digital-fabric/papercraft/blob/master/lib/papercraft/compiler.rb),
-which complexity stems from the fact that the kind of optimized code is
-generated dnyamically, and has to be put together from many small pieces. That’s
-why I’ve long been thinking about how to simplify it.
+ZKeys is a managed service that stores encryption passphrases off-site. Client machines fetch the encryption keys from the service and keep those keys alive (unlocked) via periodic keepalive messages.
 
-It eventually occurred to me that a tool for generating code using a
-general-purpose macro expansion technique, such as the quote/unquote mechanisms
-in languages such as Lisp or Elixir, might be a perfect fit for solving problems
-such as this. Such a tool may not only be used for generating new code at
-runtime, but can also be used for manipulating and mutating existing code at
-runtime.
+If the server stops receiving those messages for a long period of time (e.g. because it has been unplugged as part of theft), access to the key is automatically locked. You get automatic, passwordless reboots while keeping your data protected against real incidents.
 
-## A Quote/Unquote Example
+# Storytime
 
-As a very simple example of how this technique may be used, let’s implement a
-general-purpose validator generator. Its job is to generate a validator lambda
-that validates a given value against one or more conditions, which we’ll do
-using the `===` operator (this is the operator used for matching `case` clauses
-in Ruby). We can just generate a closure and iterate over the conditions:
+About a year ago, I was reinstalling my FreeBSD home server to act as my NAS after a [short stint with a Synology box](https://jmmv.dev/2024/12/synology-ds923-vs-freebsd.html). During that process, I decided to enable encryption for the ZFS data pool. But as I did that, I faced the question: how do I allow the machine to automatically serve my data after a reboot? I could put the key in a local file, which FreeBSD supports via the `keylocation` ZFS option, but that would render disk encryption pretty much useless.
 
-```
-def create_validator(*conds)
-  ->(v) {
-    conds.each { raise unless it === v }
-    v
-  }
-end
-```
+So I had an idea: what if I put the key on a *different* machine away from my house? I could then make the NAS fetch the key to mount the drives. And if someone stole the server, I could wipe the remote key and make the data unreadable *before* they could plug it back in. I did post this to Twitter and there was some interest in the idea:
 
-That’s pretty nice and simple, but if we wanted to squeeze a bit more
-performance out of it we might want to unroll that `conds.each` loop, which we
-can do by interpolating a string containing the unrolled code, then pass it to
-`eval`:
+> Silly or smart? I wrote a startup rc.d script to automatically mount my encrypted ZFS pool by fetching the key from a remote server. What I want to protect against is the "drives stolen from home" case. If that happened, I could quickly remove the key. https://t.co/eZle2nJlXW
 
-```
-def create_validator(*conds)
-  code = <<~RUBY
-    ->(v) {
-      #{conds.map { "raise unless (#{it.inspect}) === v;" }.join}
-    }
-  RUBY
-  eval(code)
-end
-```
+But… did you notice the problem with what I said above? Wiping the key by hand after noticing something is wrong is problematic because the gap between those two events may be large. What if I’m on a long vacation and I have no means of noticing that the machine has been stolen? Game over.
 
-This is perfectly doable, but notice that we have to nest the embedded code
-inside of the string we’re building, which is kind of unwieldy. With a
-quote/unquote tool, which let’s us build Ruby code out of Ruby code, we could do
-the following:
+So I refined the idea: what if I had a *service* that stored the key remotely and required the consuming machine to send it frequent pings to keep the key unlocked? This way, if the machine were stolen, it’d likely be offline for more than a few minutes and the service could automatically determine that something is wrong and lock the key from future accesses. And that’s precisely what ZKeys does.
 
-```
-def create_validator(*conds)
-  ast = quote {
-    ->(v) {
-      unquote conds.map { |c| quote { unquote(c) === v } }
-      v
-    }
-  }
-  eval(ast.to_source)
-end
-```
+# Zero-knowledge protection
 
-With `#quote` we’re putting code inside quotes (obviously), and with `#unquote`
-we’re temporarily escaping out of the quotes in order to perform some
-computation and inject the result back into the quoted code. In this case, we’re
-converting each of the conditions into a piece of Ruby AST by calling `quote {
-unquote(c) === v }`.
+Before getting into details, it’s important to get something out of the way early on: ZKeys is designed so that a compromise of the server is insufficient to retrieve or reconstruct your keys. This is done in two ways:
 
-In my article [Unrolled Code](https://noteflakes.com/articles/2026-10-07-unrolled-code), I’ve explored how
-this technique could be applied to many different problems. Which leads us to
-project Steadfast.
+- **Split keys:** The ZKeys server only stores *half* of the passphrase used to unlock a volume. The other half remains on the client machine. The `zkeys` client program combines both halves to produce the whole passphrase.
+- **Encryption at rest:** The keys are encrypted at rest with a password that the `zkeys` client must supply for retrieval and which is securely transmitted over HTTPS. The password only lives in the server’s memory for a brief period of time.
 
-## Project Steadfast
+The tradeoff is, simply, that you MUST back up the full encryption keys in a third location of your own (a paper in a safe, a password manager, you name it). If ZKeys goes down or you lose your remote key password, there is absolutely nothing I can do to help you. *You have been warned.* The setup instructions later on will instruct you how to back the key up.
 
-I’m excited to announce that I’ve been selected as the recipient of a [Ruby
-Association grant](https://www.ruby.or.jp/en/news/20261102) for working on
-developing a general-purpose macro tool for Ruby using the quote/unquote
-technique, with Matz as my mentor.
+# Installation and setup
 
-The scope of the project includes the development of the quote/unquote tools, as
-well as additional tools for generating and manipulating Prism ASTs, converting
-ASTs to source code, etc. The project will also explore the use of those tools
-in popular gems such as ERB, ActiveRecord, Roda etc. I’d like to see how far I
-can take those ideas, how can they be integrated into the Ruby runtime, and what
-are the limitations and drawbacks of this technique.
+The ZKeys service is available at [https://zkeys.jmmv.dev/](https://zkeys.jmmv.dev/) and the open-source client—along with system integrations for FreeBSD and Fedora—is in my [`jmmv/zkeys`](https://github.com/jmmv/zkeys/) repository.
 
-I’ll do this work in a new repository that I created called
-[Steadfast](https://github.com/digital-fabric/steadfast). If you wish, you can
-look at some [sketches I
-made](https://github.com/digital-fabric/steadfast/blob/main/grant-2026/sketches.md)
-that show possible usages for quote/unquote. Steadfast is a continuation of my
-work on [Sirop](https://github.com/digital-fabric/sirop), a tool I built for
-converting Prism ASTs to source code, and which is currently used by the
-Papercraft compiler.
+> Disclaimer: ZKeys is offered to you for free. I make no promises about its reliability, availability, or anything else. I am giving you access because I expect that supporting a handful of extra users won’t be a big issue. But if support becomes a burden, or if load becomes unmanageable, I’ll have to re-evaluate my choices here. Which means that, for now, you have to use the limited `LAUNCH50` code to get started!
 
-Steadfast is dedicated to the courageous people of the land who persevere in the
-face of unimaginable violence, persecution, callousness and indifference.
+The basic idea to set ZKeys up is the following:
 
-![](https://noteflakes.com/assets/steadfast-logo.png)
+1. Install the zkeys client CLI tool.
+2. Create a service account.
+3. Create a new key (or onboard an existing key).
+4. Configure the keep-alive service on the target machine.
+5. Change or add the filesystem encryption key to be the one stored in ZKeys.
+6. Configure the auto-mount service on the target machine.
+7. Reboot!
 
-Over the next four months, I’ll be sharing news of my progress on this project,
-which should be completed by late March 2027. I think the new techniques
-introduced in this project can lead to a new way of doing metaprogramming in
-Ruby. Hopefully, other people will find this work useful and will come up with
-new uses for Steadfast.
+That’s all it takes, but the steps are quite manual at the moment because no upstream OSes provide packages. The [service documentation](https://zkeys.jmmv.dev/#/docs) covers several scenarios in detail for FreeBSD and Fedora, so I’m not going to repeat them here.
+
+# Behind the scenes
+
+Now for the nerdy details, because that’s what you’re here for:
+
+- The CLI is Rust, of course, but it has to come with a bunch of shell scripts to integrate with FreeBSD’s rc.d system and Fedora’s systemd and dracut. These integration points are the trickiest part of the client package and the hardest to validate automatically, which is why I only provide support for the two systems I use on a daily basis. It should be possible to integrate ZKeys with any other Unix-like OS, though.
+- The CLI package is a frankenmonster made up of Cargo and GNU Automake/Autoconf because of the above. I believe system-level tools should abide by de facto standard tooling even if such standard tooling is deficient, so GNU Autotools it is.
+- I run two non-replicated instances of the service: one in US West and one in EU West, because I have machines in both locations and both rely on encryption. I strongly suggest you use the US instance as I’m seeing frequent power hiccups in my EU deployment.
+- The frontend uses Bootstrap, straight from the 2010s. Does it look ugly? Maybe, but I kinda like it and, most importantly, it’s *functional*. Of course I could have asked AI to produce yet-another-dull-site full of gradients and slop, but I did not want to do that, so I stuck to what I already knew how to do by hand from previous services.
+- The admin page is an SPA, yes. This is an intentional design choice that forces a very clear separation between the backend APIs and the frontend. Whatever the current web frontend can do any other client can do as well. For example: the current `zkeys` CLI tool does not offer administrative operations but it could trivially be made to support them, because the APIs are right there.
+- The backend is built on my own [III-IV framework](https://jmmv.dev/software/iii-iv.html) which I’ve been building up over the last few years while implementing a couple of other services. I’ve had to add a lot more features to it to make this possible though.
+
+# Let’s encrypt!
+
+Oops, I know that’s the name of [a *different* effort](https://letsencrypt.org/), but you really need to encrypt your local drives. With computers becoming smaller and lighter every day, it’s easier than ever to steal them, and unfortunately home break-ins are common in some parts of the world. Block-level encryption is cheap in CPU terms, so do it. ZKeys just makes this process less cumbersome for headless servers.
+
+Once again, head to [https://zkeys.jmmv.dev/](https://zkeys.jmmv.dev/) to get started and use code `LAUNCH50` to create an account!
+
+And if you are interested in helping out, I’d appreciate the creation of packages for FreeBSD and Fedora, and integration scripts for other systems.

@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-08T12:56:11Z",
+  "updated": "2026-11-08T21:49:14Z",
   "items": [
     {
       "id": "devto-4943245",
@@ -110,27 +110,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4982721",
-      "title": "Plan Stamping, for Software",
-      "desc": "By Ken W Alger | 7 min read",
-      "tag": "tutorial",
-      "published": "2026-11-05T14:54:25Z",
-      "order": 10,
-      "url": "https://dev.to/kenwalger/plan-stamping-for-software-4ein",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F2zo9qu20538eija6ia4c.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAgQFAf/EABUBAQEAAAAAAAAAAAAAAAAAAAEC/9oADAMBAAIQAxAAAAEyxWWhHaTT/8QAGhAAAgMBAQAAAAAAAAAAAAAAAQIAAxIxIf/aAAgBAQABBQKz0VkLW3I8bm2yZ//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABoQAAICAwAAAAAAAAAAAAAAAAABETEQICH/2gAIAQEABj8CjglpZF4//8QAGxAAAwACAwAAAAAAAAAAAAAAAAERITEQUWH/2gAIAQEAAT8hV1QiiLmGDPzjctJIySdnpKyuz//aAAwDAQACAAMAAAAQKr//xAAWEQEBAQAAAAAAAAAAAAAAAAAAESH/2gAIAQMBAT8QmI//xAAWEQEBAQAAAAAAAAAAAAAAAAARAAH/2gAIAQIBAT8QTZb/xAAcEAEAAwEAAwEAAAAAAAAAAAABABEhMUFRobH/2gAIAQEAAT8QSOReD+rHo0ZBtrk8KxPyPJtTfSxdb7nYcqGyhSP/2Q==",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4958335",
       "title": "One Markdown File Can Hijack Your AI Coding Agent: The Hidden Cost of Blindly Trusting AGENTS.md",
       "desc": "By 𝗝𝗼𝗵𝗻 | 8 min read",
       "tag": "tutorial",
       "published": "2026-11-05T15:30:00Z",
-      "order": 11,
+      "order": 10,
       "url": "https://dev.to/johnnylemonny/one-markdown-file-can-hijack-your-ai-coding-agent-the-hidden-cost-of-blindly-trusting-agentsmd-167n",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fgp9mzlfxjcl32v27828r.jpg",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAgMABP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHhtFIicf/EABkQAAEFAAAAAAAAAAAAAAAAABAAARESIf/aAAgBAQABBQJVwy5//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFxAAAwEAAAAAAAAAAAAAAAAAEBEgIf/aAAgBAQAGPwIaq//EABsQAQADAQADAAAAAAAAAAAAAAEAESExEHGR/9oACAEBAAE/ITkprPsAFoj3Crh2NVXkDfH/2gAMAwEAAgADAAAAECx//8QAFREBAQAAAAAAAAAAAAAAAAAAAAH/2gAIAQMBAT8QR//EABYRAQEBAAAAAAAAAAAAAAAAAAABYf/aAAgBAgEBPxC4r//EABsQAAMBAQADAAAAAAAAAAAAAAABESExYXGB/9oACAEBAAE/EEXuZ0dTbI8ILJyJyYo6kokon408n//Z",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4982721",
+      "title": "Plan Stamping, for Software",
+      "desc": "By Ken W Alger | 7 min read",
+      "tag": "tutorial",
+      "published": "2026-11-05T14:54:25Z",
+      "order": 11,
+      "url": "https://dev.to/kenwalger/plan-stamping-for-software-4ein",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F2zo9qu20538eija6ia4c.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAgQFAf/EABUBAQEAAAAAAAAAAAAAAAAAAAEC/9oADAMBAAIQAxAAAAEyxWWhHaTT/8QAGhAAAgMBAQAAAAAAAAAAAAAAAQIAAxIxIf/aAAgBAQABBQKz0VkLW3I8bm2yZ//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABoQAAICAwAAAAAAAAAAAAAAAAABETEQICH/2gAIAQEABj8CjglpZF4//8QAGxAAAwACAwAAAAAAAAAAAAAAAAERITEQUWH/2gAIAQEAAT8hV1QiiLmGDPzjctJIySdnpKyuz//aAAwDAQACAAMAAAAQKr//xAAWEQEBAQAAAAAAAAAAAAAAAAAAESH/2gAIAQMBAT8QmI//xAAWEQEBAQAAAAAAAAAAAAAAAAARAAH/2gAIAQIBAT8QTZb/xAAcEAEAAwEAAwEAAAAAAAAAAAABABEhMUFRobH/2gAIAQEAAT8QSOReD+rHo0ZBtrk8KxPyPJtTfSxdb7nYcqGyhSP/2Q==",
       "color": "#3B49DF"
     },
     {

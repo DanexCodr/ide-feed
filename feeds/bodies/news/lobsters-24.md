@@ -1,167 +1,81 @@
-I recently discovered a handy way to make Go tests more readable and less repetitive.
+SFLC.in has been constantly trying to verify the  authenticity of the takedown requests targeting its X account and posts. Despite repeated attempts to seek clarification from the Delhi Police and X, we have  not received any official confirmation regarding the origin, authorisation or legal basis of these requests.
 
-Suppose I have a constructor that can fail:
+**Timeline of Events**
 
-```go
-func NewUsername(raw string) (Username, error) { ... }
-```
+**First Takedown Request **
 
-And I have another function that takes a `Username` as an argument:
+On **1 November 2026,** we received a notification from X stating that the platform had received a request from the “Indian Police” alleging that a post discussing a legal notice violated “Indian law”.
 
-```go
-func (ds Datastore) ReadUser(username Username) (User, error) { ... }
-```
+The request concerned [a post](https://x.com/SFLCin/status/2116135727969005900?a=HTDT4hDp_G8T6UeZwfQ&s=20) by [SFLC.in](http://sflc.in) on its X handle discussing legal notices received by SFLC.in, IFF and @geoblockedindia from an advocate purportedly acting on behalf of the Rashtriya Swayamsevak Sangh (RSS).
 
-When I write tests for `ReadUser`, I call `NewUsername` with a value I know is valid, but I still have to include a lot of verbose error-checking code to convince the compiler that everything is okay:
+**Second and Third Takedown Request**
 
-```go
-username, err := NewUsername("joe123")
+On **3 November 2026**, at 8:48 AM, we received an email from X informing it that the platform had received takedown requests from the Delhi Police concerning five URLs, including SFLC.in’s X account and four of its posts:
 
-// This is silly because *I* know joe123 is a valid username, so this should
-// never happen.
-if err != nil {
-  t.Fatalf("failed to create username: %v", err)
-}
+At 10:03 AM on the same day, we received another email from X concerning a further takedown request identifying 42 URLs, including the five URLs of [SFLC.in](http://sflc.in) listed above, as well as posts by IFF and @geoblockedindia on the same subject matter. They also included URLs to comments and reshared posts by other users who had interacted with these posts, as well as other posts by @geoblockedindia documenting instances of digital censorship.
 
-// Perform the test assertion I actually care about.
-user, err := store.ReadUser(username)
-if got, want := user.Name.String(), "joe123"; got != want {
-  t.Errorf("username=%v, want=%v", got, want)
-}
-```
+The emails included copies of two takedown notices purportedly issued by the Delhi Police:
 
-## My old solution: one new helper function per type[🔗︎](https://mtlynch.io/notes/go-must-create-pattern/#my-old-solution-one-new-helper-function-per-type)
+1. First notice dated 31 October 2026 (Reference No. LD-321926): The Special Commissioner of Police (Crime), Delhi Police, purportedly submitted an Illegal Content Report to X, identifying two posts, including a post published by SFLC.in. The report alleged that the posts were defamatory towards the RSS under Section 356 of the Bharatiya Nyaya Sanhita, 2023, and requested X to remove or withhold the identified content. Notably, the fields concerning the nature and details of any court order were left blank.
+2. Second notice dated 2 November 2026 (Reference No. LD-322956): The Special Commissioner of Police (Crime), Delhi Police, purportedly submitted a second Illegal Content Report to X. The report identified several URLs belonging to SFLC.in other X users. Significantly, it also included the URLs of the entire X handle of SFLC.in and other X users, seeking the removal or withholding of the identified content. The report invoked Section 356(1) of the BNS, Section 79(3)(b) of the Information Technology Act, 2000, and Rule 3(1)(d) of the IT Rules, 2021, claiming that lawful notices required action within three hours. The fields relating to the nature and details of any court order were once again left blank, despite the notice stating that it was issued in enforcement of a court order.
 
-Until a few months ago, I avoided the verbose error checking by writing a helper function like `MustCreateUsername` that wraps `NewUsername` with the expectation that it never returns a non-`nil` `error` value:
+### **Steps taken by SFLC.in **
 
-```go
-user, err := store.ReadUser(MustCreateUsername(t, "joe123"))
-if got, want := user.Name.String(), "joe123"; got != want {
-  t.Errorf("username=%v, want=%v", got, want)
-}
-```
+1. Initial concerns regarding authenticity: Upon receiving the First Takedown Request from X, we raised concerns regarding its authenticity. Ordinarily, X’s takedown notifications identify the law enforcement agency that submitted the request and specify the legal provisions invoked. However, the notification received by SFLC.in merely referred to the requesting authority as the “Indian Police” and the legal basis as “Indian law”, without providing any further details.
+2. Verification of email authenticity: To verify the authenticity of the email, we examined its underlying email header data to identify the originating IP address. A WHOIS lookup was conducted to establish whether the IP address was registered to the relevant organisation. This was followed by a cross-verification against the domain’s Sender Policy Framework (SPF) record. The originating IP address was found to be registered to the organisation and listed as an authorised sender in its publicly available DNS records.
+3. Seeking clarification from X: Following this verification, we wrote to X Corp and published a post on its official X account, tagging @GlobalAffairs, @X and @elonmusk, seeking details of the law enforcement agency that had submitted the request, the statutory provisions invoked, and a copy of the underlying order or request. We also sent an email to the support team of X highlighting our concerns with the First Takedown Notice, and sought clarifications and copies of any relevant orders.
+4. Seeking confirmation from the Delhi Police: Upon receiving the Second and Third Takedown Request, along with copies of the two notices purportedly issued by the Delhi Police, SFLC.in published a post on its official X account at 9:54 PM seeking clarification regarding the notices. SFLC.in also reached out to the official handles of @DelhiPolice and @hgsdhaliwalips to confirm whether the notices had been issued by the Delhi Police.
+5. Official Email to Delhi Police: After receiving the Second and Third Takedown Request along with the Delhi Police Takedown Notice, we sent an email to the Special Commissioner of Police (Crime), Delhi Police on the email address mentioned in the takedown notices (splcp-crime-dl@delhipolice.gov.in), as well as the email addresses of other high-ranking officers (jointcp.cybertech@delhipolice.gov.in, cpdelhi@delhipolice.gov.in, and jtcp.crime@delhipolice.gov.in). We sought confirmation as to whether the notices had, in fact, been submitted by the Delhi Police to X and whether the submissions had been authorised by the officers whose names and designations appeared on the notices.
+6. Undelivered emails: We received automated bounce-back notifications stating that the emails could not be delivered because the users associated with the email addresses splcp-crime-dl@delhipolice.gov.in and jointcp.cybertech@delhipolice.gov.in did not exist. The takedown notice was purportedly sent from the email ID splcp-crime-dl@delhipolice.gov.in.
+7. Verification of X’s takedown submission mechanisms: To further examine the authenticity of the two takedown requests, SFLC.in investigated the mechanisms available for submitting takedown requests to X, namely its Legal Request Portal and Law Enforcement Request (LER) form. SFLC.in found that the LER form did not provide any mechanism to verify the identity of the person submitting a request or authenticate the email address used for submission. This meant that anyone could potentially submit a request using a fictitious or unauthorised email address and impersonate a government or law enforcement official.
+8. Official Email Seeking clarification from X on the submission mechanism: We future wrote to X Corp (twitter-legal@x.com) seeking confirmation as to whether the takedown requests had been submitted through X’s Legal Request Portal (https://legalrequests.twitter.com), the Law Enforcement Request (LER) form available in X’s Help Centre (https://help.x.com/en/forms/law-enforcement/report-illegal-content), or through any other mechanism. We also sought confirmation as to whether the requests had actually been submitted by the Delhi Police and whether the notices had been authorised by the officers whose names and designations appeared therein.
+9. Public disclosure of undelivered communications: We published another post on our official X account at 11:54 AM, highlighting that its emails to splcp-crime-dl@delhipolice.gov.in and jointcp.cybertech@delhipolice.gov.in had bounced back because the email addresses did not exist. The post also included screenshots of the email addresses as displayed on the official Delhi Police website, highlighting the discrepancy. We once again sought confirmation from @DelhiPolice and @hgsdhaliwalips as to whether the notices had been issued by them, particularly since the notice identified splcp-crime-dl@delhipolice.gov.in as the issuing authority’s email address.
+10. Request for clarification on X’s verification process: At 12:11 PM, We published a further post highlighting concerns regarding the authenticity of the takedown notices and tagged @XCorpIndia, @GlobalAffairs, @X and @elonmusk. SFLC.in sought clarification on the following: (i) The channels or mechanisms through which the Delhi Police had submitted the takedown requests to X. (ii) X’s verification process for requests submitted through its Law Enforcement Request (LER) form. (iii) Whether the requests had, in fact, been submitted by @DelhiPolice and @hgsdhaliwalips. (iv) Whether X had received any accompanying court orders, directions or other supporting documents in relation to these requests.
+11. Follow-up verification of X’s Law Enforcement Request form: We subsequently checked the form and found that X had introduced an authentication mechanism requiring a verification code to be sent to the email address used to submit a request.
+12. Verification of the authority of the issuing officer: As per F. No. B/69/2025-Home-II/1246-1254, issued by the Home Department on 2 June 2026, the Special Commissioner of Police (Crime), Delhi Police, who is identified as the issuing authority in the notices received by SFLC.in, is not among the officers authorised to issue takedown notices under Section 79(3)(b) of the Information Technology Act, 2000.
+13. Formal complaint to the IFSO Unit: We also submitted a formal complaint to the Deputy Commissioner of the Intelligence Fusion and Strategic Operations (IFSO) Unit of the Delhi Police (dcp-ifso@delhipolice.gov.in), one of the authorised bodies under Section 79(3)(b) of the Information Technology Act, 2000, seeking clarification on whether the takedown notices had actually been issued by the Delhi Police and requesting verification of their authenticity.
+14. Discrepancy in the Email Address Listed on the Delhi Police Website: We noticed that the email address listed on the official Delhi Police website had been changed from `splcp-crime-dl@delhipolice.gov.in` to `splcp.crime-dl@delhipolice.gov.in`, with a full stop replacing the hyphen after `splcp`. This discrepancy further raises questions about the authenticity of the contact details provided in the notice and the authority from which it originated. The email was forwarded to
 
-The implementation of `MustCreateUsername` looks how you’d expect:
+### **Irregularities in notices received**
 
-```go
-func MustCreateUsername(t testing.TB, raw string) Username {
-  t.Helper()
-  username, err := NewUsername(raw)
-  if err != nil {
-    t.Fatalf("invalid username: %s", raw)
-  }
-}
-```
+**First notice dated 31 October 2026 (Reference No. LD-321926) **received by [SFLC.in](http://sflc.in) from X, pertains to this [post](https://x.com/SFLCin/status/2116135727969005900). The notice states that the content in question is being reported on the grounds of ‘safety/security; defamation; and other’. Furthermore, the notice states that the post is “defamatory towards the Rashtriya Swayamsevak Sangh under the Section 356 of the Bharatiya Nyaya Sanhita, 2023 (BNS).” Criminal defamation under Section 356 of the BNS, 2023, is a non-cognizable offence and therefore, requires a Magistrate’s order for the police to initiate any action. No such order was attached here, nor were any complaint details provided.
 
-The helper function strategy worked fine, but it scales poorly. Eventually, my repos become littered with `MustCreateFoo` and `MustCreateBar` for every type in my app.
+**Second notice dated 2 November 2026 (Reference No. LD-322956) **pertains to a list of 42 posts and accounts. The notice states that the content in question is being reported on the grounds of “Hate speech; safety/security; defamation; enforcement of court order; and other’. The posts published by [SFLC.in](http://sflc.in) did not contain any defamatory statements or allegations against RSS, as it was purely factual reporting based on information relating to the notice received from RSS on 29 October 2026.  Furthermore, criminal defamation is a non-cognizable offence which requires a Magistrate’s order for the police to initiate action. The Delhi Police is not empowered to issue a content takedown order for such offence in the absence of such an order. While the notice mentions enforcement of a court order as one of the grounds, no such court order is cited or made available in the notice. Additionally, the notice does not identify a legal basis or statutory provision for the offences of hate speech or safety/security. The notice also relies on Rule 3(1)(d) of the Information Technology (Intermediary Guidelines and Digital Media Ethics Code) Rules, 2021 read with Section 79(3)(b) of the Information Technology Act, 2000 and states that action must be taken by X within 3 hours.
 
-## New solution: A single, generic `MustCreate` helper[🔗︎](https://mtlynch.io/notes/go-must-create-pattern/#new-solution-a-single-generic-mustcreate-helper)
+### **Lack of Authorisation of the Issuing Officer**
 
-In 2022, Go 1.18 [added support for generics](https://go.dev/doc/go1.18#generics). I like the idea of generics, but I rarely encounter problems where generics are the solution.
+Most importantly, F. No. B/69/2025-Home-II/1246-1254, issued by the Home Department on 2 June 2026, specifies the authorities authorised by the Lieutenant Governor of the National Capital Territory of Delhi to issue takedown notices under Section 79(3)(b) of the Information Technology Act, 2000.
 
-I recently realized that generics are the better way to solve my sprawling `MustCreateX` problem. Instead of defining a helper `MustCreateX` for every type, I defined a single, generic `MustCreate` test helper, so my test becomes:
+The order identifies the following three authorised authorities:
 
-```go
-user, err := store.ReadUser(testutil.MustCreate(t, NewUsername, "joe123"))
-if got, want := user.Name.String(), "joe123"; got != want {
-  t.Errorf("username=%v, want=%v", got, want)
-}
-```
+1. The Additional Chief Secretary (Home)/Principal Secretary (Home)/Secretary (Home), Government of NCT of Delhi.
+2. The Joint Commissioner of Police, IFSO, Special Cell, as the State Nodal Officer (IFSO being the acronym for Intelligence Fusion and Strategic Operations).
+3. Joint Commissioners of Police and Additional Commissioners of Police of the Ranges, IFSO, EOW, Crime, Special Cell, Special Branch, IGIA, Railways, Metro and SPUWAC.
 
-The magic is the generic `MustCreate` function:
+The Special Commissioner of Police (Crime), Delhi Police, who is identified as the issuing authority in the two notices received by SFLC.in, does not fall within any of the categories of officers authorised under this order to issue takedown notices under Section 79(3)(b) of the Information Technology Act, 2000. This raises serious concerns regarding the authority under which the notices were issued and their legal validity.
 
-```go
-func MustCreate[RawInput, CreatedValue any](
-  t testing.TB,
-  create func(RawInput) (CreatedValue, error),
-  rawInput RawInput,
-) CreatedValue {
-  t.Helper()
-  createdValue, err := create(rawInput)
-  if err != nil {
-    t.Fatalf("failed to create test value: %v", err)
-  }
-  return createdValue
-}
-```
+### **Impact on SFLC.in’s Work and Freedom of Expression**
 
-I have trouble reasoning about generics, so I’ll walk through the function implementation. I invoke `MustCreate` like this in my tests:
+We are particularly concerned because the takedown request extends to SFLC.in’s X handle, which is an important public-facing channel through which it disseminates the organisation’s ongoing work to the general public. It is through [SFLC.in](http://sflc.in) social media handles that users who face digital rights violation and online harms reach out to us for pro bono legal services. Through the handle we publish legal and policy analysis, document instances of censorship, raise awareness about digital rights violations, and communicate such information with the public including journalists, researchers, civil society organisations among others. It also serves as a channel for sharing developments concerning internet shutdowns, content restrictions, account takedowns and other violations of digital rights and for providing important assistance, through [RightsLine](https://rightsline.sflc.in/), to citizens facing online harms ranging from gender based violence and harassment  to cyberfraud.
 
-```go
-testutil.MustCreate(t, NewUsername, "joe123")
-```
+The request to restrict SFLC.in’s entire X handle, rather than identifying and seeking the removal of specific allegedly unlawful content does not meet the necessity and proportionality standards. It would have consequences far beyond the posts that have been identified. It would also deprive the public of an established and credible source of information on digital rights and the exercise of fundamental freedoms online.  The right to freedom of expression under Article 19(1)(a) of the Constitution extends to disseminate information, circulate ideas and reach an audience.
 
-The above call is equivalent to this more explicit version:
+### **SFLC.in****’s Position **
 
-```go
-testutil.MustCreate[string, Username](t, NewUsername, "joe123")
-```
+Despite repeated attempts to seek clarification from both the Delhi Police and X, SFLC.in has not received any official response confirming the authenticity of the takedown requests, the authority under which they were issued, or whether the officers named in the notices had authorised their submission. The failure of the concerned authorities to provide even basic clarification, particularly when the requests seek to restrict an entire social media account is deeply concerning and raises serious concerns about transparency, accountability and the potential misuse of legal processes to suppress online expression.
 
-When I call `MustCreate` here, `RawInput` is `string` (the type of the raw username value), and `CreatedValue` is `Username` (the return type). It’s equivalent to an implementation that looks like this:
+**In light of the above, ****SFLC.in**** calls upon Delhi Police to:**
 
-```go
-func MustCreate(
-  t testing.TB,
-  create func(string) (Username, error),
-  rawInput string,
-) CreatedValue {
-  t.Helper()
-  createdValue, err := create(rawInput)
-  if err != nil {
-    t.Fatalf("failed to create test value: %v", err)
-  }
-  return createdValue
-}
-```
+(i) Immediately withdraw the impugned takedown requests, which are unlawful, disproportionate and violative of the fundamental right to freedom of speech and expression guaranteed under Article 19(1)(a) of the Constitution of India.
 
-### Extending to multi-param constructors[🔗︎](https://mtlynch.io/notes/go-must-create-pattern/#extending-to-multi-param-constructors)
+(ii) Verify the authenticity of the takedown notices and issue an official clarification confirming whether they were, in fact, submitted by the Delhi Police. The authorities must also clarify whether the officers identified in the notices authorised their issuance and submission to X.
 
-What about constructors that have more than one parameter?
+(iii) Disclose the legal basis for the takedown requests and furnish copies of any court orders or other legally binding directions relied upon in seeking the removal or withholding of the identified content. Such documents must be made available to all affected organisations and users whose posts or accounts have been identified in the notices.
 
-```go
-func NewRange(start int, end int) (Range, error) { ... }
-```
+**SFLC.in**** calls upon X to: **
 
-In those cases, I write an additional helper called `MustCreate2`:
+(i) Confirm whether the two takedown notices were, in fact, submitted by the Delhi Police and whether X independently verified the identity and authority of the officials who purportedly submitted them.
 
-```go
-range := testutil.MustCreate2(t, models.NewRange, 0, 5)
-```
+(ii) Publicly acknowledge the vulnerability in its Law Enforcement Request (LER) form and confirm the corrective measures undertaken to address the absence of authentication safeguards. X must also clarify the verification mechanisms it now employs to authenticate requests submitted through this channel.
 
-The implementation of `MustCreate2` looks just like `MustCreate` but with an additional type for the second parameter:
-
-```go
-func MustCreate2[RawInput1, RawInput2, CreatedValue any](
-  t testing.TB,
-  create func(RawInput1, RawInput2) (CreatedValue, error),
-  rawInput1 RawInput1,
-  rawInput2 RawInput2,
-) CreatedValue {
-  t.Helper()
-  createdValue, err := create(rawInput1, rawInput2)
-  if err != nil {
-    t.Fatalf("failed to create test value: %v", err)
-  }
-  return createdValue
-}
-```
-
-## Conclusion[🔗︎](https://mtlynch.io/notes/go-must-create-pattern/#conclusion)
-
-The `MustCreate` pattern is nothing revolutionary, but it’s a technique that improved my Go tests and reduced some mindless toil from my dev work.
-
-## Read My Book
-
-I wrote a book about simple techniques to help developers improve their
-writing.
-
-My book will teach you how to:
-
-- Create clear and pleasant software tutorials
-- Attract readers and customers through blogging
-- Write effective emails
-- Minimize pain in writing design documents
-
-### Be the first to know when I post cool stuff
-
-Subscribe to get my latest posts by email.
+SFLC.in will continue to document instances of censorship, scrutinising the exercise of state power and defend the fundamental rights of individuals and organisations in the digital space. We stand in solidarity with everyone affected by these takedown requests and reaffirm our commitment to protecting the right to speak, report, document and question restrictions on online expression.

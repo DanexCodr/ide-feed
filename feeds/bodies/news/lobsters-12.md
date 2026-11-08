@@ -1,303 +1,294 @@
-Ask any program to listen on port 0 and it will hand you a socket on port 47193...or 58037...or whatever the kernel felt like that day. Port 0 is not a port you can have. It is the number you pass when you want the operating system to pick one for you.
+First off, an apology - this post is long overdue. I started writing it back even before the TCXO post, I think some time in December 2025. But then I ended up accidentally finding a silicon bug with security impacts (described later on in this post, and stay tuned for a blog from work on the bug in particular) that I had to keep quiet about until ST had a chance to review and put an advisory out, and there wasn’t a whole lot I could publish about this project until then. Once that finally came out I got busy on other things.
 
-But a TCP header is just bytes. The destination port field is 16 bits wide, and `0x0000` fits in 16 bits as well as anything else does. Nothing on the wire stops a packet from being addressed to port 0. Your tools will refuse it, your browser will block it, and your scanner's default port list skips it, because everyone agrees it isn't a real port.
+Anyway, here we are. My long time readers will know that I like using STM32s and pairing them with FPGAs, and have got some pretty decent performance doing this, e.g. close to a Gbps of Ethernet bandwidth from the MCU to an FPGA-side RGMII MAC. There’s just one problem: the STM32H7 FMC needs a lot of pins - 30+ if you want all the chip selects and address lines. And they’re not nicely located all on one side of the package either, that would be too easy. They’re all over the place.
 
-Which makes it a pretty good place to hide things, whether anyone meant to or not. So we did some TCP cowboy shit & port scanned the entire fucking internet for open ports on port 0, which uncovered some interesting unexpected findings.
+Here’s an example of what the FMC looks like on the TFBGA240 package for the H750.
 
-The standards are thin on this. [RFC 9293](https://www.rfc-editor.org/rfc/rfc9293), the 2022 consolidation of the TCP spec, defines the source and destination port as "16 bits" and leaves it there. It has no rule against zero.
+[![BGA fanout with FMC pins highlighted showing they're all over the array and not logically laid out](https://serd.es/assets/fmc-fanout.png)](https://serd.es/assets/fmc-fanout.png)
 
-IANA lists `0/tcp` and `0/udp` as **Reserved**, pointing at [RFC 6335](https://www.rfc-editor.org/rfc/rfc6335). That RFC splits the port space into System (0–1023), User (1024–49151) and Dynamic (49152–65535) ranges, and explains what "Reserved" means:
+And the TFBGA216 isn’t any better, either.
 
-> Reserved port numbers include values at the edges of each range, e.g., 0, 1023, 1024, etc., which may be used to extend these ranges or the overall port number space in the future.
+[![BGA fanout with FMC pins highlighted showing they're all over the array and not logically laid out](https://serd.es/assets/fmc-fanout2.png)](https://serd.es/assets/fmc-fanout2.png)
 
-So port 0 is not forbidden. It is set aside. The only place zero has a defined protocol meaning is UDP: [RFC 768](https://www.rfc-editor.org/rfc/rfc768) makes the source port optional, and "if not used, a value of zero is inserted." TCP has nothing like that.
+For years, I’ve dreamed of a better way. My ultimate dream MCU, which doesn’t exist because I’m probably the only weirdo who would buy it, would be a 1 GHz Cortex-M7 or M85, probably made on TSMC 28LP, with a megabyte of NOR flash or ReRAM, a megabyte of SRAM, an RGMII MAC, multiple FPGA-style I/O banks with independent VCCIO rails, and an AXI Chip2Chip SERDES block that I could use for directly integrating with FPGA-based peripherals using only two differential pairs.
 
-Port 0's reputation comes from the sockets API, not the wire. When you call `bind()` with `sin_port = 0`, you are not asking for port 0. You are asking for *any* port. The `ip(7)` man page lists every case where Linux hands out an ephemeral port: `bind()` with port 0, `listen()` on an unbound socket, `connect()` on an unbound socket, and `sendto()` on an unbound datagram socket.
+The STM32H735 paired with an external FPGA over FMC got close, but was annoying to use on a low-cost board (e.g. 4 layer batch fab) because the FMC is almost impossible to route on those constraints. Some other STM32H7 parts like the H75x line are available in an 0.8mm package which is doable (painfully) on batch fab design rules, but these have a lower max CPU speed (480 vs 550 MHz) and this is really just kicking the can down the road a bit rather than fully solving the problem. You’re still burning a ton of pins.
 
-The range comes from `net.ipv4.ip_local_port_range`, which defaults to `32768 60999` on Linux, not the 49152–65535 that IANA calls Dynamic. And asking for port 0 needs no privileges. `__inet_bind()` only checks `CAP_NET_BIND_SERVICE` when the requested port is non-zero.
+A fast M7 with PCIe would almost be what I want (PCIe isn’t exactly AXI, but bridging them is totally doable), but nobody makes those either. You can get Cortex-R’s with PCIe, which I seriously considered (and still want to check out) but it would still be a big jump from the familiar STM32 peripheral set. And a lot of these parts either don’t have crypto acceleration or security-by-obscurity lock up the docs to the crypto accelerator, which is an absolute dealbreaker for me.
 
-How the kernel picks is more interesting than I expected. In `net/ipv4/inet_connection_sock.c` (v6.8), `inet_csk_find_open_port()` starts at a random offset and then does this:
+## Enter the STM32MP2
 
-```
-offset = get_random_u32_below(remaining);
-/* __inet_hash_connect() favors ports having @low parity
- * We do the opposite to not pollute connect() users.
- */
-offset |= 1U;
-```
+But then ST came out with the STM32MP2 line. This is a full applications processor SoC with a dual Cortex-A35, some slower auxiliary processors like an M33 and a M0+, a full GPU/NPU I may play with one day, and – most interestingly to me – a 5 Gbps SERDES with PIPE interface that could be configured to operate as either PCIe gen1/2 x1 or USB 3 depending on which internal protocol IP you connect to it (there’s a register bit to mux them). It also kept most of the same familiar STM32 peripherals I already had lots of libraries for and experience working with, so the learning curve getting spun up on it would be short - including the same AES-GCM and TRNG IPs that I already had drivers for, and were reasonably well documented.
 
-It walks the range in steps of two. The function above it says it outright: *"We try to allocate an odd port (and leave even ports for connect())."* Outgoing connections go through `__inet_hash_connect()` in `inet_hashtables.c`, which implements RFC 6056 Algorithm 4 (double-hash port selection) and takes the *even* ports first. The kernel splits the range by parity so servers asking for "any port" and clients making outbound connections don't fight over the same numbers. If `SO_REUSEADDR` is set, `bind()` also tries the lower half of the range before the upper half.
+It’s quite a beast with far more computing power than I needed, but I did want to have a part in my back pocket I could pull out for future designs that needed more oomph. And the PCIe would potentially allow easy memory mapping of an FPGA from firmware via only two differential pairs.
 
-That is easy to test. On a stock Ubuntu box running Linux 6.8:
+There’s just one problem: the STM32MP2 was clearly designed to run Linux, and the vendor BSPs included all kinds of u-boot, TrustZone, etc. stuff that I didn’t care about. I just wanted a big microcontroller that could run a simple RTOS or even a while(1) { doStuff(); } event loop.
 
-| Test | Result |
-| --- | --- |
-| 2,000 × `bind(("127.0.0.1", 0))` | ports 32777–60997, **2,000 / 2,000 odd** |
-| same, with `SO_REUSEADDR` | ports 32773–46835 (lower half only), all odd |
-| `listen()` with no `bind()` | port 58037 |
-| 300 × `connect()` with no `bind()` | source ports 32772–60998, **300 / 300 even** |
+## How hard could it be?
 
-So when your program says "listen on port 0", the kernel hears "give me an odd number between 32768 and 61000." No normal program can listen on port 0.
+So I decided to see if I could convince the MP2 that it was, in fact, just a very fast MCU with some oddball peripherals like PCIe and LPDDR PHYs that garden-variety MCUs don’t have.
 
-You can bypass all of this with raw sockets, but if you just want to cheat, you can simply forward the port to another with iptables/nftables. As a fun proof of concept, I set up my IRC network at `irc.supernets.org` to accept plaintext connections on port **0** and SSL connections on port **1**. JUST TO FLEX. 😎
+The goals of the experiment were:
 
-```
--A PREROUTING -p tcp -m tcp --dport 0 -j REDIRECT --to-ports 6667
--A PREROUTING -p tcp -m tcp --dport 1 -j REDIRECT --to-ports 6697
-```
+- Build entirely with upstream aarch64 / arm g++ and binutils, no vendor SDKs or HALs
+- Get code running on the A35s plus the M33 auxiliary core
+- Don’t use external DDR (this is a massive board complexity adder and I wanted to stay as close to MCU-level BOM/PCB design effort levels as possible); all code and data lives in on-die SRAM
+- Don’t use trustzone, uboot, or any other baggage. Just run a simple event loop in EL3 out of the initial “first stage boot loader” (FSBL) flash image and have that be the entire firmware.
+- Get PCIe working to an FPGA under these constraints
 
-A SYN arrives for port 0, netfilter rewrites the destination to 6667 where the ircd is actually listening, and the reply is rewritten back on the way out. The ircd never knows. Port 1 does the same for TLS on 6697.
+I bought a STM32MP257 development board (STM32MP257F-EV1) and started out the same as I would with any other new STM32 part: added a linker script and header to stm32-cpp with the addresses of the peripherals that used the same register interface as other STM32 parts I already had supported in the library. The only difference was that the image base address was in SRAM rather than flash.
 
-Getting a server onto port 0 was the easy part. Getting a *client* there is where tools give up. I pointed everything I had at our own server on port 0:
+### M33 bringup
 
-| Client | Result |
-| --- | --- |
-| OpenBSD `nc` | `nc: port number too small: 0` |
-| `telnet` (inetutils) | `Port number 0 is out of range.` |
-| Chromium | `net::ERR_UNSAFE_PORT` (port 1 too) |
-| `socat` | connects, works |
-| Python `asyncio` | connects, works |
-| Python `ssl` on a blocking socket | `BlockingIOError` |
+Then I built a simple LED blinky firmware for the Cortex-M33 auxiliary core and loaded it over JTAG just like I would for a regular STM32. There were a few false starts but I got a blinky running fairly quickly. Achievement #1 unlocked: I can talk to the chip and poke registers.
 
-That last one is strange, because the TCP connection underneath it is fine. The problem is that the kernel says it isn't, and it does that on purpose. Here is `inet_getname()` in `net/ipv4/af_inet.c`, which backs `getpeername()`:
+The next milestone was to actually boot the same blinky from flash. It took some digging through example code and wikis to figure out all of the fine points (for example, the internal SRAM is mapped at four different physical addresses with different TrustZone etc settings, but the boot ROM only lets you boot from one of them). Before too long I had [a tool](https://github.com/azonenberg/stm32mp2-baremetal-tools) that took a flat binary RAM image and bolted on the necessary FSBL headers for the STM32MP2 boot ROM to load it from flash and execute. Then I made a little flasher utility that could be loaded into SRAM and would write an image from another SRAM location to flash, bootstrapping the whole process. Achievement #2 unlocked: the chip is booting from nonvolatile memory and doesn’t need to be loaded over JTAG each boot.
 
-```
-if (peer) {
-	if (!inet->inet_dport ||
-	    (((1 << sk->sk_state) & (TCPF_CLOSE | TCPF_SYN_SENT)) &&
-	     peer == 1)) {
-		release_sock(sk);
-		return -ENOTCONN;
-	}
-```
+A few things to keep in mind when preparing the FSBL image:
 
-Linux uses "destination port is 0" as its internal marker for "this socket isn't connected to anything." A socket that really is connected to port 0 trips that check, so `getpeername()` returns `ENOTCONN` on a working connection.
+- Place your FSBL-M code image in RETRAM, specifically within the boot alias at 0x0e08_0000.
+- Your stack and initial globals must live in RETRAM too, but on the D-side bus alias at 0x3008_0000.
+- Your memory map must ensure that the physical memory of these doesn’t overlap, i.e. if you have code at 0x0e08_4141 you cannot also have data at 0x3008_4141. The linker script gymnastics to handle .text, .data, and .bss going to different logical addresses but also not colliding with one another are an adventure but not too bad once you realize how it works.
+- There are two slots for FSBL-M images, primary at flash offset 0x0000_0000 and fallback at 0x0004_0000
 
-Python's `ssl.wrap_socket()` calls `getpeername()` to decide whether the socket is connected, gets `ENOTCONN`, decides it isn't, switches to non-blocking and tries a `recv(1)`, gets `EAGAIN`, and raises `BlockingIOError`. The TCP connection is fine. It just reports that it doesn't exist. Python's `asyncio` does TLS through memory buffers instead of `wrap_socket()`, never asks, and works.
+This firmware booted in “M33-TD” mode, in which the boot ROM immediately transfers control to the M33 after loading the FSBL image, and the M33 has full TrustZone privileges. I chose this over “A35-TD” (in which the A35 boots first) mostly because I wanted to do a staged bring-up of the platform and not have my first time working with the SoC also be my first time bringing up a bare metal Cortex-A.
 
-You can't scan port 0 with `connect()`-based tools for all the reasons above, but masscan doesn't use the kernel's TCP stack. It builds its own SYN packets, so port 0 is just another number.
+I continued along the same way I would with any other new STM32 platform for a bit, bringing up a serial console, enabling caches, configuring the PLLs and clock tree, dumping a bunch of platform information to the console on boot, etc.
 
-**1,173,626** addresses answered with a SYN-ACK.
+[The code](https://github.com/azonenberg/stm32mp2-baremetal-tests) is all on my GitHub but a quick summary of what you need to do for bare metal bringup in M33-TD is as follows. None of the SoC setup code here requires custom assembly, it can all be done in C/C++ except for CPU configuration stuff like enabling/disabling interrupts or the FPU when you’re ready to do that.
 
-That sounds like a lot of people using port 0. It isn't. Grouped by `/24`, the responses are packed into a few thousand dense blocks:
+- Enable the VDDIO monitor for VDDIO1…4. Wait until they report valid, then tell the PWR they’re ready. Without this step, most of your IOs won’t be available.
+- Optional: Enable writing to backup SRAM (by default it’s gated by POR/brownout detection to avoid glitches when the Vcore domain drops out of regulation)
+- Set SYSCFG.VDERAMCR to use the video encoder RAM as processor memory since we’re not using the video block
+- Enable all of the SRAMs (SYSRAM, SRAM1, SRAM2, backup SRAM, VDERAM, LPSRAM1…3) in the RCC. There’s a lot of them.
+- Set the RISAB SECCFGR register settings to enable secure domain code to access SRAM1/2 and VDERAM. By default these aren’t accessible to EL3 secure mode. We’re writing all of our code in EL3 secure so we want everything allocated there.
+- Initialize the clock tree. There’s a LOT of different clocks, you can look at my code to see the details of how I set it up.
+- Enable and invalidate the M33’s I-side and D-side L1 caches
 
-| Hosts answering per /24 | /24s | IPs |
-| --- | --- | --- |
-| 1 | 28,370 | 28,370 |
-| 2 – 10 | 10,253 | 34,654 |
-| 11 – 100 | 1,747 | 53,022 |
-| 101 – 200 | 865 | 138,300 |
-| 201 – 256 | 3,751 | 919,280 |
+### On to the A35
 
-8% of those `/24`s hold 78% of the responding IPs. Whole blocks answer on every address: `172.65.0.0/16` returned 65,534 of 65,536. That isn't 65,534 servers. It's a firewall or router at the edge answering the SYN for everything behind it. **1,116,675** addresses completed the handshake and never sent a single byte.
+Then it came time to get the A35 running, which I had to do before playing with the PCIe because the M33’s memory map did not allow it to talk to the PCIe BAR region – annoying, but something I could live with if the M33 is mostly acting as a management processor and all our application code is on the A35.
 
-56,951 addresses did send something. Almost all of it looked like this:
+I had previously avoided working with Cortex-A’s because the overhead involved in getting them set up was a lot higher.
 
-```
-BIG-IP: [0x31dbae9:14718] {peer} TCP retransmit timeout
-BIG-IP: [0x31dbae9:4992] {peer} TCP RST from remote system
-BIG-IP: [0x2bd2afd:5226] SYN timeout (server not responding)
-```
+First, once you have the A35 image in flash, you need to actually start it. Figuring this out took quite a bit of reading of various third party library code and such, the datasheet didn’t make it obvious. The basic steps are:
 
-F5 BIG-IP load balancers write the reason for a reset into the RST packet, and masscan saved it as a banner. That's **53,741** of the 56,951 (94%), and 46,583 of them are in `132.246.0.0/16` alone. Drop those, plus 305 hosts returning the same fixed `(Ref.Id: ?...?)` token, and **2,905 addresses** are left. That's about 0.25% of everything that answered.
+- Check the DSTATE of the CPU in PWR.CPU1D1SR. It should be in STANDBY.
+- Send a SEV via EXTI1.RPR3 to wake up the CPU
+- Reset the CPU via RCC.C1RSTCSETR
+- Set EXTI1.SWIER3
+- Wait until PWR.CPU1D1SR reports the CPU is in HOLD_BOOT state
+- Release the CPU to boot by setting RCC.CPUBOOTCR to 2
 
-| Service | IPs | Notes |
-| --- | --- | --- |
-| SSH | 748 | 653 OpenSSH (9 of them OpenSSH_for_Windows), 72 dropbear, one `SSH-1.99-OpenSSH_3.9p1` |
-| MySQL / MariaDB | 215 | versions 3.23 through 11.8, mostly 5.x |
-| Telnet | 211 | router logins, power switches, rack PDUs |
-| HTTP | 159 | router admin pages, `micro_httpd`, building controllers |
-| FTP | 105 | FileZilla, Microsoft FTP, ProFTPD, GNU inetutils, vsFTPd, Serv-U, lots of NAS boxes |
-| SMTP | 80 | Postfix, Exchange, Stalwart, spam gateways (masscan called them FTP) |
-| DVR / camera protocols | 44 | binary recorder protocols |
-| sshd refusing | 43 | `Exceeded MaxStartups` instead of a banner |
-| VNC | 39 | RFB 3.3 through 4.1, one with no authentication |
-| OpenVPN | 21 | TCP mode, server hard-reset packets |
-| Phone system call logs | 21 | Avaya IP Office SMDR, more on this below |
+The FSBL-A image in flash (at offset 0x0008_0000 for primary and 0x000c_0000 for fallback) itself then is launched in parallel on both cores in the cluster simultaneously in aarch64 mode (although there is a fuse you can blow to boot in aarch32 mode instead if you wanted to for some reason). The first part of this initialization *does* have to be done in assembly because there’s a bunch of stuff needed that pokes hardware registers and initializes the stack etc.
 
-Nobody is running anything exotic on port 0. It's the same stuff that's on every other port: SSH, databases, telnet, FTP. What stands out is how much of it is embedded gear. dropbear, `micro_httpd`, NAS certificates from QNAP, Synology and Buffalo, DVRs, power switches. Some of it clearly comes from one device model rolled out across an ISP:
+Note also that this image *has* to be in flash: even if you have code executing on the M33 already, there does not appear to be a good way to just have the M33 dump an image into SYSRAM and have the A35 execute it: when the A35 is released to boot the ROM will check strap pins and load the image from the specified location (in my case SPI NOR flash); even though the M33 is already running the A35 is going to re-run the boot ROM.
 
-My guess is that nobody at those ISPs picked port 0 on purpose: a port-forward or NAT rule shipped in a CPE config with the external port left at zero, and the device honored it. Then there are the hosting providers. GigaCloud (Ukraine), VDCBY (Belarus) and SiS Distribution (Thailand) have SSH on port 0 with 18, 13 and 10 different SSH version strings. Different builds means different machines, so these are individual customers, not one firmware image.
+- The image should be loaded to the boot/secure SYSRAM alias (0x0e00_0000)
+- The image begins with a jump to the reset vector, then a bunch of padding so the exception table is aligned at a 2 kB boundary as required by hardware. There’s probably some room to optimize here, right now that space is wasted but it should be possible to fit most of the low level initialization in there too.
+- The exception table is repeated four times for EL0, higher exception levels, and synchronous exceptions from lower levels. You have 128 bytes for each handler in the table itself, they’re not vectored like in M. But you can jump to external code if you need more space. I’m not a huge fan of this, I prefer the Cortex-M NVIC. Maybe this saves a branch instruction and reduces interrupt latency slightly? Anyway, for early testing I just set every exception handler to be an infinite loop.
+- Register values are undefined at startup (whatever the boot ROM left them at), so I clear them all to zero before going any further.
+- Exception status registers also need to be cleared
+- Initialize the floating point unit and NEON/vector units if you plan to use them. My current startup code doesn’t do this yet since I only do integer stuff, but if you plan to ever use floats it needs to happen here.
+- Point VBAR_EL3 to the exception table so if we throw an exception we don’t end up back in the boot ROM’s exception handler
+- Enable cache coherency in CPUECTLR_EL1
 
-GigaCloud also accounts for 16 of the 80 mail servers on port 0, mostly Ukrainian organisations: `mail.dtek-kem.com.ua` (DTEK, the Ukrainian energy company), `smtp01.health24.ua`, `mx.eastenergy.com.ua`, `mail.citrus.com.ua`, and two government servers, `mail.depfin.dn.gov.ua` and `mail.sed-rada.gov.ua`. Why they all share this setup, I don't know. Elsewhere in mail: a Uruguayan government host, `prod-carbonium01.rionegro.gub.uy`, and `mssante.elsan.care` (62.106.147.123), a submission server for MSSanté, the French national secure health messaging system, run by the private hospital group Elsan. When masscan poked it, it replied:
+At this point the lowest levels of the core are set up, but we don’t know which core we’re on yet. So the next step is to read MPIDR_EL1 and figure out which one we’re on, since the subsequent steps vary depending on which core we’re on.
 
-```
-220 mssante.elsan.care MSSPRO LPS AUTH_CLI submission server
-501 2.7.0 Error: I can break rules, too. Goodbye.
-```
+If we’re on core 0:
 
-Weird...
+- Initialize the stack pointer. Now we have a valid environment to start runing C++ code, with one caveat: we cannot call memcpy yet, because until the MMU is enabled everything is considered “device” memory and the newlib aarch64 memcpy implementation will try to ldp from unaligned addresses which isn’t allowed from device memory.
+- Create initial page tables. My mapping has a total of three page tables, one level 1 (512x 1GB pages covering the entire memory map) and then two level 2 (512x 2 MB pages) under it. One of them covers the on chip SRAM and PCIe BAR region, the other covers the peripherals, OCTOSPI, and FMC. In my mapping, everything is set up as cacheable except MMIO ranges and the translation is 1:1 (VA = PA) since I am only using the MMU to control NX and caching attributes (I wish I could get a Cortex-M MPU here). I intentionally left the pages covering the boot ROM region as unmapped since it’s mapped at 0x0000_0000 and I want null pointers to segfault, not read random stuff from the ROM.
+- Once page tables are set up, turn on the MMU.
+- Call BSP hooks to do any other power, clock, etc. initialization required before application code starts. This includes configuring and starting the main PLL for the A35 itself.
+- Call __libc_init_array to run constructors for global objects
+- Set a flag to tell core 1 that we’re done with the system init
 
-The rest of the router logins look the same as they would on port 80. A D-Link DSL-2740B (37.103.36.12 and two others), with "admin" already filled in as the username: two in French at Orange and Nerim in France, one in English at Wind Tre in Italy. A Linksys "Router Access" page in El Salvador (200.31.162.80). A plain "Sign in" form titled "Router Admin" on seven cloud servers: four at Hetzner, two at Online SAS, one at DigitalOcean.
+If we’re on core 1:
 
-One didn't bother with a login at all. A 3G/4G "Wireless Mobile Router" on China Unicom (183.93.33.155) serves its full status page on port 0 to anyone who asks: its WAN IP, LAN, WAN and wireless MAC addresses, SSID, firmware build, uptime, memory usage and whether DHCP is on.
+- Initialize the stack pointer
+- Spin until core 0 finishes setup
+- Set up the MMU pointing at the same page table as core 0. Page tables are 2 kB each and we have limited on chip RAM… we don’t want to burn two page tables worth of memory unless there’s a good reason to have different mappings on each core. (This is one of the reasons I like Cortex-M’s, the MPU has far less baggage than the A’s MMU. But nobody makes M’s with PCIe so here we are.)
 
-Browsers won't open a URL with `:0` in it, so to see the web interfaces I ran a small relay: listen on a local port, connect out to the target on port 0, pipe the bytes through, and point headless Chromium at the local port. 160 addresses speak HTTP on port 0, and 85 rendered a page.
+On either core:
 
-A **Gira HomeServer 4** (46.186.48.86), a KNX home and building automation controller, with its start page, debug page and monitor links sitting on port 0.
+- Invalidate and enable the instruction and data caches
+- Call the CoreMain() function provided by the BSP, passing the core number as the argument, so application code can start running.
 
-A **Trane Tracer Synchrony** login (201.171.202.25), which is HVAC and building control.
+## All cores are set up. What now?
 
-The web pages were the easy part to read. The more interesting devices don't speak HTTP. They send binary the moment you connect, and figuring out what they are meant matching bytes against nmap's probe database, Wireshark dissectors and, in one case, a disassembled vendor client.
+You’ll notice that I haven’t said much about the DDR. That’s because I don’t plan to use it. It’s a Synopsys DDR3L/DDR4/LPDDR4 controller that requires a blob plus annoying PCB layout for all the data lines, uses a bunch of power, and is just all around overkill. The whole point of switching from the STM32H735 to the MP2 was to replace the parallel memory bus with PCIe and using DDR would negate most of those benefits.
 
-**A Beckhoff PLC with its screen open to anyone.** 46.178.29.102, on Proximus in Belgium, sends this on connect:
+Anyway… at this point, you basically have a STM32H7 on steroids:
 
-```
-30 01 00 00 05 6d 6d 6a 56 05 00 00 00 03 00 00 ...  "CBx063" ... "CX5120" ...
-```
+- 808 kB of SRAM in the MP2 vs the 564 kB of my usual H735.
+- No flash though, so you have to fit code + data in the SRAM (or XIP from external SPI flash which is slow - but you do have 2x 32KB L1$ and a unified 512 kB L2$ so if your firmware fits in that it should be pretty fast? I haven’t tried yet)
+- Dual A35s at 1.5 GHz instead of an M7 at 500 MHz. So 6x more clock cycles available, but a less performant core IPC wise (the A35 is 1.7 DMIPS/MHz, vs the M7 is 2.14 DMIPS/MHz) thus probably only ~4x faster on a typical workload
+- No ITCM/DTCM so anything that misses in L1$ won’t be single cycle. This is another thing I dislike about A’s. I use TCMs on the STM32H7 heavily for all of my fast stuff.
+- 400 MHz M33 and 200 MHz M0+ auxiliary cores
 
-The CX5120 is a Beckhoff embedded PC running Windows CE, the kind that runs TwinCAT and drives a machine. The protocol is CERDISP, Windows CE Remote Display, which Beckhoff's own security guideline lists as open on TCP 987 by default. I disassembled Beckhoff's client, `CERHOST.exe` 2.0.4.0. It reads a 0x130-byte info block first, which is the `30 01 00 00` at the start of the banner. Then it checks a magic word: `0x6a6d6d05` means no password, `0x6a6d6d06` means password required. This one sends `05 6d 6d 6a`. Then a 1366×768 resolution (`56 05`, `00 03`) and screen update data. CERHOST also sends mouse and keyboard input. So this is a PLC's screen that anyone can watch and operate, with no password, on port 0.
+The MP2 has the same FMC hard IP as the H735, so if I wanted to be silly I could interface it to the FPGA just like the H7. But then why go through all this trouble to bring up the more complex SoC? We want to do PCIe otherwise there’s no point.
 
-**An Omron PLC that was too busy to talk.** 194.49.59.232 (AireNetworks, Spain) answered with an Omron FINS/TCP frame:
+## Bringing up the PCIe
 
-```
-46 49 4e 53 00 00 00 10 00 00 00 01 00 00 00 20 00 00 00 00 00 00 00 66
-F  I  N  S  length=16   cmd=1       error=0x20               server node 0x66
-```
+The STM32MP257F-EV1 has a mini PCIe slot meant for a wifi card or something, but I found some adapters to convert it to M.2. This allowed me to interface to a random old NVMe SSD for early testing, and to an M.2 FPGA module later on.
 
-Command 1 is the server's Node Address Data Send, and error code `0x20` is "All connections are in use." It is a FINS endpoint, the protocol used to read and write Omron PLC memory, and it turned us away only because its connection slots were full. Five days later it said the same thing. A second host, 14.49.206.64 (KT, Korea), repeats an Omron Host Link frame, `@FFF07F000000018C3D*`, over and over. The XOR of everything before `3D` is `0x3D`, so the checksum is valid, but unit `FF` is outside the normal 00–31 range. The framing is Omron. The device behind it I couldn't pin down.
+The datasheet provides some initial breadcrumbs on configuring things. We need to enable the COMBOPHY and PCIe IPs in the RCC like usual, then poke SYSCFG.COMBOPHYCR1 to specify whether we’re using the external reference clock (typically 100 MHz but the PLL can be configured for other multiplier/divide combinations) or using an internally generated clock from the RCC.
 
-**A Modbus master.** 155.93.146.109 (South Africa) doesn't wait to be polled. It polls you: `10 04 00 00 00 02 72 8a` is slave 16, Read Input Registers 0–1, with a valid CRC-16/MODBUS. Something out there is a SCADA master on port 0 asking whoever connects for two registers. Another host, 85.198.27.114 (Iran), repeats a `7e`-framed 7-byte payload with a valid Modbus CRC, which looks like a serial-to-TCP bridge.
+Once everything is turned on, it’s just a matter of configuring COMBOPHYCR2 to enable PCIe mode, poke COMBOPHYCR3 to calibrate the controlled impedance drivers/terminations, then wait for the other internal housekeeping to complete and the PHY to report everything is ready to go.
 
-**A power quality meter.** 166.169.193.134 on Verizon Wireless answers telnet with `SEL-735 Telnet Server`. The SEL-735 is a Schweitzer Engineering Laboratories revenue and power quality meter, the kind utilities put on substations and feeders. This one is on a cellular modem.
+Finally, poke SYSCFG.PCIECR to specify the initial bus/device ID and enable the LTSSM so we can actually train the link, toggle PERST to the peripheral, and wait for SYSCFG.PCIESR1 to report successful training. Somewhat shockingly, there’s no firmware blob or weird setup flow. It just works and trains the link with only a handful of register pokes.
 
-**Factory telemetry.** 175.202.128.103 (KT, Korea) sends an HTTP POST *at* whoever connects:
+Or at least, I thought it did. After some issues attempting to enumerate the bus I found it was flapping and retraining constantly.
 
-```
-POST /highnet/v1/POST/MachineStatus?StationCode=20209263 HTTP/1.0
-host: 52.83.191.199
-User-Agent: uIP/1.0 (http://www.kq-china.net/)
-Data={"StationCode":"20209263","PickCard":[{"PickCardCode":"21032380","StartTime":"2026-10-7 10:3:41","MachineStatus":"0",...
-```
+## PHY level debug
 
-kq-china.net is Zhejiang Keqiang Intelligent Control, which makes monitoring systems for injection moulding machines. uIP is Adam Dunkels' tiny embedded TCP/IP stack. A collector on a factory floor is pushing per-machine status to whoever connects, and masscan, confused, filed it as Minecraft.
+Luckily I have a fast scope and ngscopeclient can decode PCIe and PCIe link training, so I went to work.
 
-**A Swedish alarm.** 82.183.26.214 (Telenor, Sweden) sends an STX/ETX frame containing `"Kommunikationslarm medelvärde"`, Swedish for "communication alarm, mean value." I don't know the device.
+[![Closeup of differential probes soldered across the mini PCIe connector](https://serd.es/assets/mp2-pcie-probes-800.jpg)](https://serd.es/assets/mp2-pcie-probes.jpg)
 
-**Burglar alarm communicators.** Five hosts, three in Mexico and two in Spain, send a greeting of about 56 bytes, with a 2-byte length prefix up front. That matches the README of DSC-TLink, a reverse-engineered client for DSC's alarm communicators: "opening a TCP connection with the TL280 on port 3062. The TL280 will immediately send a packet of 56 bytes." The TL280 family is the IP/cellular communicator on DSC PowerSeries Neo alarm panels, and this is the DLS path used to program and monitor the panel. Here's 213.181.95.33:
+Looking at the startup process, everything seemed fine. The link trained up into L0 without any problems, then even passed a few TLPs before dropping into Recovery.RcvrLock, recovering for a bit, then dropping again. After that it stayed up for a while, dropped, and stayed down until the end of the waveform.
 
-```
-00 37 01 00 00 7e 00 30 e0 05 05 05 05 00 27 03 2b 54 03 00 02 0a 89 34 04 26 21 05
-05 04 41 9f 03 00 00 50 03 02 01 03 00 00 02 04 05 06 00 03 4f 62 06 0e ea 79 06 6a 7f
-```
+[![ngscopeclient overview of link dropping](https://serd.es/assets/mp2-pcie-bug1-800.png)](https://serd.es/assets/mp2-pcie-bug1.png)
 
-(The `0a` before the ICCID came out of the scan as `20`, because our banner storage squashed whitespace bytes into spaces. I put it back.) The CRC-16 over the 42 bytes starting at `05 05 05 00 27` (polynomial `0xD003`, from DSC-TLink's `DLSProNetHeader.cs`) comes out `0xea79`, which is the `ea 79` that follows. The MAC starts `00:03:4F`, the IEEE OUI for Sur-Gard Security, DSC's receiver brand. And the device ID field on the cellular models is the SIM card's ICCID:
+[![ngscopeclient overview of link dropping](https://serd.es/assets/mp2-pcie-bug2-800.png)](https://serd.es/assets/mp2-pcie-bug2.png)
 
-| IP | ISP | Type | SW | Device ID | MAC |
-| --- | --- | --- | --- | --- | --- |
-| 79.112.115.9 | Digi Spain, ES | `032b` | 52/01 | ICCID 8934075700125305307 | 00:03:4F:0C:1B:D7 |
-| 213.181.95.33 | Fibraworld, ES | `032b` | 54/03 | ICCID 8934042621050504419 | 00:03:4F:62:06:0E |
-| 189.153.252.92 | UNINET, MX | `032b` | 54/01 | ICCID 8952050102551818989 | 00:03:4F:60:7D:38 |
-| 187.212.33.29 | UNINET, MX | `0329` | 54/03 | (MAC, zero-padded) | 00:03:4F:62:D7:05 |
-| 201.124.95.69 | UNINET, MX | `0329` | 50/03 | (MAC, zero-padded) | 00:03:4F:20:24:60 |
+But why was it dropping? The first question was which side of the link was initiating the drop. It was pretty clear after zooming in that the STM32 was dropping (transitioning from idles in L0 to sending training sets) the first time, for no obvious reason while the link partner was still sending valid idles. So the problem was at least being detected, if not caused, on the STM32MP2.
 
-All three ICCIDs pass the Luhn check, and their prefixes say where the SIMs are from: `89 34` is Spain, `89 52` is Mexico. According to DSC-TLink, the AES key for the rest of the session is built from data in this greeting.
+[![ngscopeclient overview of link dropping](https://serd.es/assets/mp2-pcie-bug3-800.png)](https://serd.es/assets/mp2-pcie-bug3.png)
 
-**Alarm communicators that tell you the password.** Three Spanish hosts, 109.167.87.236, 85.87.152.80 and 88.3.213.39, run telnet on an Alwon E20, a Notifier/Honeywell IP/GPRS alarm communicator module:
+I wondered if it might be signal integrity problems. So I fired up a quick eye pattern of both legs of the link. The RX lane (peripheral to STM32) looked fine. A bit overequalized since it was short and I was probing right at the mini-PCIe connector, but wide open with over 200 mV of eye height.
 
-```
-Alwon E20 Telnet Input password (defaul 1234):
-```
+The TX (STM32 to peripheral) eye looked like nothing I had ever seen before. It was clear and wide open *most* of the time, but the entire eye was closed with a pretty uniform 1e-4 BER. I’m used to seeing eyes that are squished horizontally due to jitter, vertically due to noise or reflections, etc but in such a scenario it’s usually consistent, the eye won’t have clear top and bottom bars or rising/falling edges.
 
-Notifier's manual agrees: telnet password, "1234 por defecto." I didn't try it.
+[![Strange looking eye patterns](https://serd.es/assets/mp2-pcie-bug4-800.png)](https://serd.es/assets/mp2-pcie-bug4.png)
 
-**Time clocks.** 187.235.160.47 and one other host at UNINET in Mexico repeat `a5 00 00 00 00 7f 00 00 e0 5c`. That's an Anviz time-and-attendance frame: `a5`, a 4-byte device ID of 0, command `7f`, zero length, and a CRC-16/MCRF4XX of `0x5ce0` sent low byte first. Open-source Anviz SDKs call `0x7f` a ping.
+The only thing I could think of was something intermittent. Maybe the signal is fine most of the time, the link comes up, then *something* happens - a noise burst, maybe - that blanks it out briefly before it comes back.
 
-**Home automation.** Five hosts answer `*#*1##`, the OpenWebNet ACK used by BTicino and Legrand home automation gateways: 190.113.106.159 (Costa Rica), 171.242.179.164 (Vietnam), 187.145.124.63 (Mexico), 105.157.199.125 (Morocco) and 213.7.222.134 (Cyprus). 219.241.160.119 in Korea is a `SiHAS HCM-300 Ver 2.12 >` prompt, a Shina System smart heating thermostat. And 192.119.63.143 (wilhelm.tel, Germany) is a mediola a.i.o. Gateway that sends its encrypted cloud request to whoever connects: `POST /ra/d HTTP/1.1 host: mediola-ws.elasticbeanstalk.com`.
+So I looked at the second, longer drop in the same waveform. This one was weirder: the link was fine then all of a sudden out of nowhere, the STM32MP2 started sending absolute nonsense - bit patterns that decoded as invalid scrambler values or sometimes not even well-formed 8b10b symbols at all! Then 40 μs or so later the link partner noticed and went into re-training.
 
-**A debug menu.** Three hosts on SK Telecom in Korea, 42.42.150.116, 42.42.203.12 and 42.42.201.80, greet you with this:
+[![Burst of invalid 8b10b characters](https://serd.es/assets/mp2-pcie-bug5-800.png)](https://serd.es/assets/mp2-pcie-bug5.png)
 
-```
-##################################
-# DEBUG LOGIN!!
-# F/W Version : EBH0920.0
-# Dev ID : ldg4839
-# IP : 192.168.225.100
-##################################
-###### MENU DISPLAY ######
-l : Log On/Off.  n : NTP Query.  d : DNS Query.  i : SysEnv Informaton.
-t : Time Display.  s : Server Data Send.  h : Menu Display.
-```
+When I zoomed in further looking at just a few symbols on either side of the link drop, the problem immediately jumped out at me. Look at the relative phases of the purple Threshold_5 signal (a simple thresholding of the analog waveform) and the green squarewave below it (a clock recovered from the analog waveform by a DSP PLL).
 
-`192.168.225.x` is the default subnet on Qualcomm LTE modules like the Quectel EC2x, so it's probably a cellular IoT device. Which product, I don't know.
+At left, everything is happy. The recovered clock edges are 90° phased to the data allowing it to be cleanly sampled with plenty of setup and hold margin. But right about the middle of the screen, things start going sideways, literally. By the end of the D15.2 symbol the clock edge is only about 58 ps after the data edge (instead of the ideal 200ps setup/hold window for a 400ps UI at 2.5 GT/s). And by the end of the D11.7 the clock and data are on top of each other leaving no setup/hold window at all and the protocol decode starts seeing bit errors.
 
-**A power strip.** 64.201.180.254 (Gatewest, Canada) runs a `Remote Power Controller v1.41i` that prints its whole outlet table, circuit, name, status and boot delay, before asking for a login. Others ask only for a password but label themselves first: `MGTN CO - Right Rack - Bottom`, `Power Switch`, `151 Front Street`.
+[![Data and clock losing sync](https://serd.es/assets/mp2-pcie-bug6-800.png)](https://serd.es/assets/mp2-pcie-bug6.png)
 
-**SAProuters leaking their build.** Four hosts are SAProuter, the SAP gateway that relays connections into SAP systems. They accepted the connection, waited 5 seconds for a route request that never came, and then sent back an `NI_RTERR` error packet with a lot of detail:
+Both the DSP and real physical CDR PLL have limited bandwidth, so if they’re handed this large a phase shift in <20 UI there’s no way they will be able to keep up (although they will try).
 
-```
-NI_RTERR ... *ERR* connection timed out -5 NI (network interface) 754 40
-D:/depot/bas/754_REL/src/base/ni/nirout.cpp 8213
-RTPENDLIST::timeoutPend: no route received within 5s (CONNECTED)
-Tue Oct 6 10:56:27 2026 ... SAProuter 40.4 on 'ADSJ'
-```
+Plotting TIE (time interval error, essentially the difference between where the CDR PLL expects a UI boundary to be compared to the actual level crossing in the real waveform) for the RX side shows pretty uniform jitter without any weird artifacts. But the TX side shows TIE jumping all over the place, railing at ± 200 ps (half a UI - the max error possible before the edge is considered to be part of the next UI) and the CDR slewing frantically over 30 MHz above and below the nominal data rate trying and failing to stay synced.
 
-| IP | ISP | Kernel | Build path | Hostname |
-| --- | --- | --- | --- | --- |
-| 37.61.221.36 | velia.net, DE | 754 | `D:/depot/bas/754_REL/.../nirout.cpp` | `ADSJ` |
-| 37.61.219.146 | velia.net, DE | 753 | `/bas/753_REL/.../nirout.cpp` | `hsaprouter` |
-| 60.16.63.41 | China Unicom, CN | 745 | `D:/depot/bas/745_REL/.../nirout.cpp` | `rbjsaprouter` |
-| 154.236.187.38 | Etisalat Misr, EG | 753 | `/bas/753_REL/.../nirout.cpp` | `ba-srt` |
+[![Bursts of massive TIE and frequency drift](https://serd.es/assets/mp2-pcie-bug7-800.png)](https://serd.es/assets/mp2-pcie-bug7.png)
 
-Every one gives away the SAProuter version (40.4), the SAP kernel release, the router's hostname, the server's local clock, and whether it's a Windows build (`D:/`) or not.
+Putting all the evidence together, it’s pretty clear that the SERDES PLL in the COMBOPHY is losing lock intermittently. Everything is fine for a while then something happens internally within the SERDES and the PLL VCO starts jumping around for a bit. This causes the transmit data to jump around (causing the link partner to fail to receive it, as seen in the scope captures) but it also will likely have similar effects on the receiver - causing the STM32 to misread incoming, well formed data as well.
 
-**RustDesk.** Four hosts, 93.118.140.111, 78.38.90.162 (Iran), 39.48.42.201 and 103.213.111.82 (Pakistan), open with `HJ`. That isn't a magic string. In RustDesk's `bytes_codec.rs`, the low two bits of the first byte give the header size and the rest gives the length, so `0x48` means an 18-byte message follows. `0x4a` is protobuf field 9, `Hash`, which carries a salt and a challenge:
+There’s only a handful of registers for configuring the COMBOPHY PLL and everything I was writing to them looked fine according to the datasheet, so I was pretty sure it wasn’t a misconfiguration. The dev board was a ST reference design which I assumed had to be fine as well.
 
-```
-48 | 4a 10 | 0a 06 "usjk79" | 12 06 "zrktdr"
-len  Hash   salt             challenge
-```
+So if it’s not hardware and it’s not software, what is it? There was really only one other thing to look at, the reference clock. I had configured the COMBOPHY to be clocked via the RCC (ck_ker_usb3pciephy, set to 25 MHz) with SYSCFG.COMBOPHYCR1 set to 0xc8 to get the 2500 MHz required VCO frequency (no spread spectrum, multiplier 100).
 
-The salt stays the same per host. The challenge is six random characters, new on every connection. That's the password challenge a RustDesk client answers before it gets the desktop. 103.213.111.82 sends a 32-character salt, which is what newer versions use.
+But the STM32MP257F-EV1 also had a dedicated 100 MHz reference clock available. Poking COMBOPHYCR1 to 0x33 to select the external clock and multiply it by 25 gave me the same 2500 MHz VCO frequency, but without the added jitter of the internal PLL (TSMC PLLTS16FFCLAFRAC2 fractional-N PLL) and RCC clock distribution network, plus perhaps the external crystal not having tight enough tolerances for this use case.
 
-**Winflector.** Eight hosts run Winflector, a Polish remote application server. 193.32.180.51 sends `Terminal client version too old - please update to version 4.0.0.1` and then an RSA public key in DER form, with exponent 17, which is Crypto++'s default. The versions are sent byte-reversed: `04 03 00 04` is 4.0.3.4. All six versions I saw are on Winflector's own version list. The hosts are in Cape Verde (156.238.40.243, 156.238.47.54 and one more), Malaysia (202.187.2.203 and one more), Poland (193.32.180.51), Ghana (80.87.66.51) and India (49.204.146.227).
+And… it worked perfectly. The link came up, trained happily to 2.5 GT/s gen1 x1 (I figured I’d save gen2 for later), and everything looked fine.
 
-**VNC with no password.** Of the 39 VNC servers, one doesn't ask for anything. 107.174.67.223 answers with security type none and a desktop name of `resolv.moe, meow meow meow :3 haiiii!!`, and an 850×591 framebuffer. Four more just send `RFB 005.000`.
+[![Happy PCIe link with open eyes](https://serd.es/assets/mp2-pcie-bug8-800.png)](https://serd.es/assets/mp2-pcie-bug8.png)
 
-**Phone switches.** 117.236.74.58 (BSNL, India) is `Asterisk Call Manager/2.10.5`, the Asterisk Manager Interface from Asterisk 13.26–13.34. Once logged in, AMI can originate calls and run console commands. 38.229.159.25 (France) and 41.60.171.20 (Liquid) send `04 00 fb ff LAPK`, the 3CX tunnel protocol.
+## Enumeration
 
-**Cameras and NAS.** exacqVision video surveillance servers on 8 hosts, including two at OneCleveland (204.156.216.130 and 204.156.198.238), send a 56-byte header ending in three values that change on every connection. Six QNAP NAS boxes expose RTRR (Realtime Remote Replication, `ab ca a5 5d ...`), on 202.184.138.61 in Malaysia and five others in Austria, Sri Lanka, Spain and Italy. Two Rifatron DVRs send `RIFA`, 42.200.149.78 in Hong Kong and 14.241.231.170 in Vietnam. One more is a UMS WebViewer DVR stream in Japan (123.242.213.10).
+After this, things get a lot more tricky because the IP isn’t really documented at all, at least publicly (as usual, portions of the datasheet and register map have probably appeared in various corners of the internet). Luckily I was able to find some breadcrumbs in uboot and Linux kernel code that gave me a better idea of how things are set up: the PCIe IP block has a register block on AHB5 with a standard PCIe root complex register set (these registers are mostly documented in the PCIe base spec; there’s a bunch of vendor proprietary ones too but we don’t need them to get things functional), then the actual PCIe devices are mapped into a 256 MB chunk of physical AXI address space from 0x1000_0000 to 0x1fff_ffff.
 
-**The rest of the RPC zoo.** 223.76.20.55 (China Mobile) is ZeroC Ice, `IceP` 1.0 Validate Connection. 191.13.74.178 (Telefonica, Brazil) sends just `ac ed 00 05`, the header of a Java serialization stream, and then nothing else. 119.152.239.20 (Pakistan) sends a bare HTTP/2 SETTINGS frame with the same bytes as a default grpc-go server. 212.80.175.132 (Spain) has things backwards and sends *us* a full TLS 1.2 ClientHello. And 116.75.83.213 (Hathway, India) responds with `RP-Version: 5.0` and `RP-Application-Reason: 80108bff`, which is Sony PlayStation Remote Play, most likely a PS4.
+I had never worked with PCIe enumeration before so it took a bit of time to piece together the required steps. The code for this is in stm32-cpp/src/peripheral/PCIE.* and src/cpu1-a35/bsp/hwinit.cpp if you want to poke around in detail but I’ll summarize it here.
 
-21 addresses don't wait to be asked. Connect to port 0 and they start streaming comma-separated text, about 7.5 KB of it per host in our capture:
+First, I read a bunch of standard registers like link status, speed, hardware IP version, etc and log them. Not strictly necessary, but helps with troubleshooting.
 
-```
-2026/09/23 14:31:49,00:00:11,0,24,O,<number>,<number>,,0,1002639,0,E24,<name>,T9031,Line 31.1,0,0,...
-```
+There’s a bunch of basic configuration within the standard PCIE address space that needs to be done next (after writing a magic unlock value to MISC_CONTROL_1 to remove write protection). Pick a bus number for the root complex, specify the memory limit, etc. But now we need to actually talk to the registers in the link partner. How does that work?
 
-That's SMDR (Station Message Detail Recording) output from an Avaya IP Office phone system. The fields line up with Avaya's documented layout: call start, connected time, ring time, caller, direction, called and dialled number, a call ID that starts at 1,000,000, then the two parties as `E` for extension or `T` for trunk, with names like "Line 31.1". Each host handed over 37 to 62 calls with real phone numbers, staff names, extension numbers and internal addresses. The oldest record is from December 2018. The newest is from a few days before the scan. Several hosts start with records that are years old, which I can't explain: 94.30.72.110 opened with calls from 2018-12-21, 31.10.39.182 with 2023-09-18.
+It turns out, the PCIe IP has an “internal address translation unit” (iATU) that is essentially a sort of IOMMU. It takes incoming and outgoing TLPs and translates addresses within the AXI block to PCIe BAR or configuration addresses and adds the appropriate TLP type.
 
-Nothing was sent to get this. IP Office pushes SMDR records to whatever connects to its SMDR port, and on these 21 hosts that port is reachable on port 0. masscan stops reading at about 7.5 KB, so that's only the first few dozen calls per host.
+So the next step is to set up a chunk of AXI space (I chose 0x1fff_0000 to 1fff_ffff, the last 64 kB of the AXI range) and configure the iATU to map this to configuration accesses to device 01:00.0 (which is the bus and device we’re going to assign to the link partner). I didn’t plan to implement a full featured stack with PCIe bridges and the like, since I’m intending to only ever be wiring the STM32 directly to an FPGA. So a lot of the configuration could be hard coded.
 
-| IP | ISP | Records | Record dates |
-| --- | --- | --- | --- |
-| 109.170.131.14 | Wavenet, GB | 41 | 2026-09-03 → 09-04 |
-| 140.141.189.204 | i3 Broadband, US | 46 | 2025-10-24 → 10-30 |
-| 149.40.120.214 | ITS-TG, GB | 42 | 2026-09-22 |
-| 164.39.146.134 | Gamma, GB | 62 | 2026-09-24 → 09-25 |
-| 164.39.207.103 | Gamma, GB | 54 | 2026-03-27 → 03-31 |
-| 176.35.140.144 | Wavenet, GB | 62 | 2025-09-11 → 2026-07-22 |
-| 176.35.24.241 | Wavenet, GB | 60 | 2026-09-16 → 09-18 |
-| 194.75.212.229 | BT, GB | 42 | 2026-09-23 → 09-24 |
-| 195.21.76.203 | ITS-TG, GB | 60 | 2026-09-17 → 09-21 |
-| 196.40.184.138 | XISASN, ZA | 61 | 2024-03-27 → 03-28 |
-| 212.140.248.34 | BT, GB | 49 | 2024-10-10 |
-| 213.218.204.214 | Gamma, GB | 58 | 2026-09-25 |
-| 31.10.39.182 | ULGRP, GB | 55 | 2023-09-18 → 09-19 |
-| 31.121.1.250 | BT, GB | 41 | 2024-02-08 |
-| 37.235.126.101 | Lightspeed, GB | 44 | 2026-09-16 → 09-17 |
-| 81.130.159.34 | BT, GB | 41 | 2026-10-01 |
-| 81.174.163.44 | Plusnet, GB | 62 | 2026-09-27 → 09-28 |
-| 87.127.54.146 | Entanet, GB | 59 | 2026-06-17 |
-| 87.242.249.105 | TalkTalk, GB | 42 | 2026-09-02 → 09-07 |
-| 87.74.60.78 | CW, GB | 48 | 2026-09-28 |
-| 94.30.72.110 | Wavenet, GB | 37 | 2018-12-21 |
+Then I set up a second range of AXI space (0x1000_0000 to 17ff_ffff, the first 128 MB of the AXI range) and mapped it to PCIe address 0x0000_0000. This is where we’re going to put the BAR of the link partner.
 
-19 of the 21 are in the UK, on BT, Wavenet, Gamma, TalkTalk, Plusnet and a handful of smaller business ISPs. One is in the US and one in South Africa. However these ended up on port 0, anyone who connects can read the company's call history.
+We should now have a standard PCIe configuration address block mapped at 0x1fff_0000 that we can walk and print out. I wrote some code to print out a few registers to sanity check and… got back all zeroes.
 
-Come say hi on the port that doesn't exist. If your client lets you.
+## Why are we getting zeroes?
 
-Sources & References:
+Something was clearly broken in the upper levels of the stack. The link was up, I could see DLLPs flowing and the eye was wide open. The iATU was at least configured close to valid, because I wasn’t seeing any segfaults like I would if I had a completely bogus memory mapping.
 
-Connect to SuperNETs on port 0 (plaintext) or port 1 (TLS) at irc.supernets.org, or reach out at acid.vegas@acid.vegas. We hang out in `#war`.
+I still had my probes on the PCIe signals (this testing somewhat overlapped with the clock jitter / PLL troubleshooting, but I wanted to tell the story in a more linear order to make it make sense) so the next step was to try to protocol decode some test reads and writes.
+
+What I found waas *very* confusing.
+
+I wrote some test firmware that wrote 0xdeadbeef to the start of the configuration space, and the configuration write TLP came out of the STM32 with a valid address and an all-zero payload.
+
+[![PCIe TLP showing a configuration write of 0x00000000](https://serd.es/assets/risaf-01-800.png)](https://serd.es/assets/risaf-01.png)
+
+I tried writing 0xfeedface to a location in the BAR range. It also came out with the correct address and an all-zero payload.
+
+[![PCIe TLP showing a memory write of 0x00000000](https://serd.es/assets/risaf-02-800.png)](https://serd.es/assets/risaf-02.png)
+
+Even more confusing, I tried *reading*… and the device responded! With a valid read completion TLP, and a decidedly nonzero payload. But my firmware saw the read come back as all zeroes.
+
+[![PCIe TLP showing a read completion returning 0x5c 1c 27 13](https://serd.es/assets/risaf-03-800.png)](https://serd.es/assets/risaf-03.png)
+
+So in summary: every write TLP I send to either configuration or data space has all header fields correct, but the payload is all zeroes. Every read TLP goes out normally, the device responds as it should, but my firmware sees all zeroes.
+
+This points to something inside the STM32, either in the PCIe IP or the AXI fabric, zeroing out the data payload only without changing the address. What could possibly do this???
+
+## Enter the RISAF
+
+Looking at the STM32MP2 reference manual, there was an obvious suspect: the Resource Isolation Slave unit for Address space protection, Full (RISAF).
+
+It sits right on the AXI bus between the PCIe and the main AXI interconnect fabric, and passes traffic through unless it sees something it doesn’t like (e.g. TrustZone nonsecure domain accessing secure resource) in which case it blocks the request and fires a fault interrupt that the secure domain can handle as it sees fit.
+
+So I threw together a quick monitor task on the M33 that polled the IASR register on RISAF5 (which is the instance protecting the PCIe AXI interface) and… sure enough, it threw a fault the moment I touched the PCIe BAR region from my firmware (which was running in EL3 secure mode since I never dropped privileges).
+
+Just to confirm, I added a few register pokes in BSP_Init() on the M33 (the only core that is allowed to touch the RISAF configuration in M33-TD mode since it’s considered the system root of trust in that mode) that enable both privileged and unprivileged reads and writes to the entire AXI address range from the A35 in secure mode.
+
+And everything worked perfectly. My write TLPs had the correct values as seen by the scope, and reads returned normal data to my firmware. I wrote up a basic single-device-only bus enumeration code path that dumped a bunch of information and everything worked great.
+
+[![PCIe TLP showing a proper 0xdeadbeef write](https://serd.es/assets/risaf-04-800.png)](https://serd.es/assets/risaf-04.png)
+
+## Well shit.
+
+At this point, there was little doubt in my mind that I was sitting on a silicon errata that was a potential TrustZone bypass. So I poked our disclosure team at work and got the ball rolling to send an advisory out to STMicro’s PSIRT (while I found this bug in my off time, I figured it was better to have a company name and lawyers in the disclosure path in case anybody got cranky).
+
+What I had confirmed at this point was:
+
+- An attacker who should be blocked by the RISAF can issue 32-bit read transactions to the PCIe configuration and BAR address spaces. These transactions will be sent as well-formed TLPs just like if the RISAF was open, and trigger any side effects in the peripheral that would be expected, but the attacker will see an all-zero readback instead of the actual value returned by the peripheral.
+- Non 32 bit transactions showed weird behavior that I did not fully investigate, but may be useful in some way to an attacker.
+- An attacker can issue 32-bit write transactions to the PCIe range. Regardless of the requested write data, the TLP will be sent as all zeroes, overwriting whatever MMIO register was targeted.
+- The RISAF error detection mechanism works, and the TrustZone secure monitor will be alerted to the problem, but only after the write has been dispatched.
+- This is a silicon bug in the RISAF itself.
+
+I wrote up an advisory and sent it off to ST, then mostly shelved things until they published something so I could talk about things in detail.
+
+After quite some time, they published [an advisory](https://www.st.com/resource/en/security_bulletin/sb0070-risaf-limitation-about-pcie-region-protection-on-stm32mp25xx-stmicroelectronics.pdf) and errata, now documented as errata 2.3.33.
+
+A few questions are still open.
+
+First: what real world deployments or use cases, if any, are potentially vulnerable? What combination of PCIe peripherals and TrustZone monitor would either not notice the issue or not react fast enough, and be possible to exploit by read side effects and/or all-zero writes, to gain privileges or escalate in some way?
+
+Second, more interesting: is RISAF5 the only affected instance? The ST advisory and errata talks about RISAF5 but this may just be because RISAF5 is the only one that I have a working PoC for. I don’t know if ST tested the others and confirmed they’re not vulnerable to the same bug, or if nobody looked.
+
+RISAF1 controls the backup SRAM, RISAF2 the OCTOSPI, and RISAF4 the DDR controller. There does not appear to be a RISAF3 (if it exists, it’s not mentioned in the datasheet). Writing a zero value to the right location in backup SRAM, OCTOSPI PSRAM, or external DDR is likely a much easier privilege escalation (perhaps by replacing some bytes of code or data used by the RISAF security violation exception handler itself, if this is in a cold cache line, with 0x00). If anybody is able to PoC a working exploit by this approach, and/or confirm the other RISAFs are vulnerable, I would love to see.
+
+## Performance calculations
+
+With PIO from the CPU, the maximum performance I was able to achieve with a software memcpy was about 1.77 Gbps (out of a theoretical peak 4 Gbps). Each strp instruction generates a TLP with 16 bytes of payload, and adding in the 20 bytes of headers + CRC we get 36 bytes of total packet size - only 44% of which is carrying useful data.
+
+[![Sequence of 16-byte TLPs](https://serd.es/assets/mp2-strp-800.png)](https://serd.es/assets/mp2-strp.png)
+
+But this is already a huge boost over the FMC (which maxes out at 977 Mbps for 137.5 MHz clock and 9 bus cycles for a 64-bit APB write), to say nothing of the simplified PCB routing.
+
+We can definitely do much better with DMA. The STM32MP2’s PCIe IP maxes out at 256 bytes per TLP (not the 4 kB max that the spec allows), which gives a 276 byte TLP and 92.75% efficiency, or ~3.71 Gbps theoretical peak. I haven’t actually hit this in a benchmark but will probably try to test it at some point.
+
+If I can get close to this, I’ll be at ~2x the throughput of PCIe PIO and ~3.8x the throughput of the FMC. Which is pretty decent.
+
+## Final thoughts
+
+There’s still a lot more work to be done. Since shelving the original testing during the disclosure window around the RISAF bug I did preliminary testing of my own home grown bare-bones PCIe stack on an Artix-7 FPGA with the STM32MP2.
+
+I also bought an Efinix Ti375 FPGA dev board and want to try pairing its hard PCIe IP with the STM32MP2 as well. This will hopefully happen in the next few weeks and maybe turn into a blog post of its own once it’s a bit more well developed and I’ve demonstrated e.g. poking APB registers in FPGA-based peripherals from PIO code on the STM32.
+
+Maybe if I have time I’ll try to see if I can poke the backup SRAM to 0x00 through the RISAF gate. More to come soon!
