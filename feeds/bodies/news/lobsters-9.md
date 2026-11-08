@@ -1,281 +1,303 @@
-*Bitdefender Labs researchers found that installing a specially crafted app can leave an Android phone stuck in a crash loop, even if you never open it or grant it a single permission. The app contains no code and never needs to run.  *
+Ask any program to listen on port 0 and it will hand you a socket on port 47193...or 58037...or whatever the kernel felt like that day. Port 0 is not a port you can have. It is the number you pass when you want the operating system to pick one for you.
 
-After installation, a core system process crashes, restarts, and crashes again, leaving the phone stuck in a boot loop. Restarting doesn't help, and neither does safe mode.
+But a TCP header is just bytes. The destination port field is 16 bits wide, and `0x0000` fits in 16 bits as well as anything else does. Nothing on the wire stops a packet from being addressed to port 0. Your tools will refuse it, your browser will block it, and your scanner's default port list skips it, because everyone agrees it isn't a real port.
 
-To get the phone working again, you need a factory reset, which erases the user's data. If, by chance, USB debugging had already been enabled, you could use a computer with ADB (Android Debug Bridge) to delete the file before the phone reboots.
+Which makes it a pretty good place to hide things, whether anyone meant to or not. So we did some TCP cowboy shit & port scanned the entire fucking internet for open ports on port 0, which uncovered some interesting unexpected findings.
 
-We began investigating on Aug. 12, 2026, when an APK collected from the wild crashed emulators in our analysis infrastructure. The sample was a banking dropper that never ran and crashed during installation.
+The standards are thin on this. [RFC 9293](https://www.rfc-editor.org/rfc/rfc9293), the 2022 consolidation of the TCP spec, defines the source and destination port as "16 bits" and leaves it there. It has no rule against zero.
 
-When we looked closer to find out why, we found the problem wasn't the malware—it was the Android itself. The operating system mishandles two fields inside a ZIP entry, the compression method and the declared uncompressed length. Reading such an entry causes a SIGBUS (a signal sent by the CPU to stop a process that accesses an invalid memory space) in whichever process touches the file.
+IANA lists `0/tcp` and `0/udp` as **Reserved**, pointing at [RFC 6335](https://www.rfc-editor.org/rfc/rfc6335). That RFC splits the port space into System (0–1023), User (1024–49151) and Dynamic (49152–65535) ranges, and explains what "Reserved" means:
 
-We call it **GhostMap**: the malformed entry causes Android to map the file across memory that was never allocated, and the crash occurs when a process reads from that empty space.
+> Reserved port numbers include values at the edges of each range, e.g., 0, 1023, 1024, etc., which may be used to extend these ranges or the overall port number space in the future.
 
-Based on our testing, we consider the risk posed by this bug to be significant. In theory, an attacker could hide this technique in a fake app to disable a victim’s phone, or use the threat of a factory reset and data loss as leverage for extortion. Malformed APKs could also disrupt tools that inspect Android applications. We have not observed any of these scenarios in the wild.
+So port 0 is not forbidden. It is set aside. The only place zero has a defined protocol meaning is UDP: [RFC 768](https://www.rfc-editor.org/rfc/rfc768) makes the source port optional, and "if not used, a value of zero is inserted." TCP has nothing like that.
 
-The banking dropper was wrapped by a packer. This is a tool that rewrites an APK's internal structure so reverse-engineering tools can't read it. It’s very common in modern Android malware.
+Port 0's reputation comes from the sockets API, not the wire. When you call `bind()` with `sin_port = 0`, you are not asking for port 0. You are asking for *any* port. The `ip(7)` man page lists every case where Linux hands out an ephemeral port: `bind()` with port 0, `listen()` on an unbound socket, `connect()` on an unbound socket, and `sendto()` on an unbound datagram socket.
 
-In this case, the same rewrite also broke the Android component that parses an app during installation. That’s why the installation crashed in the first place and why our emulators failed on it. The good news is that nothing in the sample suggests the author knew the file would crash anything.
+The range comes from `net.ipv4.ip_local_port_range`, which defaults to `32768 60999` on Linux, not the 49152–65535 that IANA calls Dynamic. And asking for port 0 needs no privileges. `__inet_bind()` only checks `CAP_NET_BIND_SERVICE` when the requested port is non-zero.
 
-The sample did no more than that—a failed install. The underlying flaw runs deeper. We found that the same mistake can be aimed at a core system service instead of the installer, and there it produces the repeating crash loop described above, with no way back except a factory reset. That escalation is our own work; we have not seen it used against anyone.
+How the kernel picks is more interesting than I expected. In `net/ipv4/inet_connection_sock.c` (v6.8), `inet_csk_find_open_port()` starts at a random offset and then does this:
 
-The underlying problem concerns how Android trusts size and compression information in APK files, and it’s not limited to malformed ZIP files.
-
-We reported the issue to Google twice through the Android & Devices Vulnerability Reward Program, expanding the second submission after further testing confirmed a persistent system crash loop.
-
-**August 12, 2026 — Initial discovery.** An APK collected from the wild crashed emulators in our analysis infrastructure during installation. Our investigation traced the failure to Android’s handling of ZIP entry compression methods and declared uncompressed length.
-
-We also found that applications using Android’s native APIs to parse APKs could crash when reading them.
-
-We reproduced the bug and made more discoveries. Every attempt to install that APK crashed the OS and caused a reboot:
-
-**Aug. 20, 2026 — First report to Google.** We submitted these findings, documenting installation-triggered crashes and failures in applications parsing the malformed APK. Google closed the report shortly afterwards with the status *Won’t Fix (Not Reproducible)*. Its accompanying response described the submission as outside the program’s scope.
-
-**Further investigation — Persistent denial of service.** We continued testing and found an APK that installed successfully but caused a system service to crash when it automatically read an application resource. The resulting crash loop prevented access to the interface and continued in safe mode. Recovery could require a factory reset.
-
-We started investigating further after that. We found that we could also malform other files that are not parsed at install time, and that some Android system services try to parse them automatically. This meant the loop followed the regular path: crash, reboot, parse again, and then get stuck in a boot loop once more.
-
-The boot loop we caused would also disable safe-mode access, and the only recovery methods we identified were a factory reset or, in limited conditions, ADB-based scripts racing with the system-server crashes.
-
-Interestingly, Google has already patched a weaker version of this defect. From the November 2016 bulletin, **CVE-2016-6724**:
-
-> *A denial of service vulnerability in the Input Manager Service could enable a local malicious application to cause the device to continually reboot. This issue is rated as Moderate because it is a temporary denial of service that requires a factory reset to fix.*
-
-Rated Moderate, fixed across Android 4.4.4 to 7.0. In 2016 Google described a condition requiring a factory reset as temporary; in our reading, Google’s current published severity guidelines describe such a condition as persistent and rate it High.
-
-**Aug. 25, 2026 — Second report to Google.** We submitted the expanded findings, including a working proof of concept and reproduction instructions. The report explained that the application requires no permissions, contains no executable code, and never needs to launch.
-
-Google responded shortly afterwards, stating that it considered the issue outside the scope of a security update fix. Google also stated that it had forwarded the finding to the relevant team for review and possible inclusion in a future version update.
-
-This type of bug, also known as a parser differential vulnerability, is something that Android has struggled with for more than a decade.
-
-In 2014, security researchers published a paper titled [Leaving our ZIP undone: How to abuse zip to deliver malware apps](https://virusbulletin.com/uploads/pdf/conference/vb2014/VB2014-Panakkal.pdf), which explores, among other things, malformations that can be applied to APK files to bypass typical AV engine unarchiving. So, it’s not unknown in the Android ecosystem.
-
-An APK is really a ZIP file, and a ZIP file stores the same information, such as sizes, offsets, and compression flags, in multiple places without checking that the copies agree.
-
-Android reads an APK many times over: to verify its signature, to install it, to load its resources, to run its code, and every time a security tool scans it. These are separate pieces of code, and nothing forces them to read the file the same way.
-
-When two of them reach different conclusions about the same bytes, you get a security bug, like these ones.
-
-[**Master Key**](https://nvd.nist.gov/vuln/detail/CVE-2013-4787)** (2013, CVE-2013-4787).** An APK contained two files with the same name. Android checked the signature on the first and installed the second, so malicious code got in under a valid signature.
-
-[**Janus**](https://nvd.nist.gov/vuln/detail/CVE-2017-13156)** (2017, CVE-2017-13156).** A single file could be a valid APK and a valid DEX at the same time. The signature check looked only at the ZIP entries and ignored extra bytes added to the front of the file, and the system then ran those bytes. The checker and the loader disagreed about where the file even started.
-
-**BadPack (2024).** Malware authors deliberately corrupt the ZIP headers so that analysis tools fail to open the file while phones install it without complaint. Rather than exploit differences between two parsers on the same Android device, this class targets differences between what Android uses to install an APK and what other parsers analysts and security solutions use to screen an APK.
-
-Palo Alto's [Unit 42](https://unit42.paloaltonetworks.com/apk-badpack-malware-tampered-headers/) found about 9,200 such samples in a single year, used by banking trojans including Anatsa, Cerberus and BianLian. This is the kind of packing our sample used.
-
-The bug we describe comes from a similar disagreement, but it’s not used to sneak anything through. Instead, the disagreement results in a crash for the process trying to read the file.
-
-Every entry inside a ZIP file records how it’s stored and how big it is. Android stores entries in two ways: *stored*, where the bytes are kept as they are, and *deflated*, where they are compressed and have to be expanded when read.
-
-Each entry has two sizes: the compressed size, which is how many bytes are actually stored in the file, and the uncompressed size, which is how many bytes you get after expanding it. For a stored entry, the two are equal; for a deflated one, the uncompressed size is larger.
-
-When Android opens an APK, a library called libziparchive reads these records and sanity-checks them. One of those checks ensures that an entry's uncompressed size doesn't claim to be larger than the space the file actually has. But that check only runs for stored entries:
-
-```bash
-// system/libziparchive/zip_archive.cc 
-
-if (data->method == kCompressStored && 
-
-    data->uncompressed_length > cd_offset - data_offset) { 
-
-  return kInvalidOffset;   // reject 
-
-} 
+```
+offset = get_random_u32_below(remaining);
+/* __inet_hash_connect() favors ports having @low parity
+ * We do the opposite to not pollute connect() users.
+ */
+offset |= 1U;
 ```
 
-For any other storage method, this check is skipped. It’s fine for deflated entries because there the uncompressed size only determines how large a temporary buffer to allocate, while the data read from the file is bounded by the compressed size instead.
+It walks the range in steps of two. The function above it says it outright: *"We try to allocate an odd port (and leave even ports for connect())."* Outgoing connections go through `__inet_hash_connect()` in `inet_hashtables.c`, which implements RFC 6056 Algorithm 4 (double-hash port selection) and takes the *even* ports first. The kernel splits the range by parity so servers asking for "any port" and clients making outbound connections don't fight over the same numbers. If `SO_REUSEADDR` is set, `bind()` also tries the lower half of the range before the upper half.
 
-The problem is that *stored* and *deflated* are not the only values the method field can hold. It’s a 16-bit number, so it can be anything; Android supports two of those values, and the ZIP format allows the rest.
+That is easy to test. On a stock Ubuntu box running Linux 6.8:
 
-And when a second library, libandroidfw, reads the entry to load it as a resource, it asks a different question. It doesn't check for *stored* — it checks for *deflated*, and treats everything else as stored:
+| Test | Result |
+| --- | --- |
+| 2,000 × `bind(("127.0.0.1", 0))` | ports 32777–60997, **2,000 / 2,000 odd** |
+| same, with `SO_REUSEADDR` | ports 32773–46835 (lower half only), all odd |
+| `listen()` with no `bind()` | port 58037 |
+| 300 × `connect()` with no `bind()` | source ports 32772–60998, **300 / 300 even** |
 
-```bash
-// frameworks/base/libs/androidfw/AssetsProvider.cpp 
+So when your program says "listen on port 0", the kernel hears "give me an odd number between 32768 and 61000." No normal program can listen on port 0.
 
-if (entry.method == kCompressDeflated) { 
+You can bypass all of this with raw sockets, but if you just want to cheat, you can simply forward the port to another with iptables/nftables. As a fun proof of concept, I set up my IRC network at `irc.supernets.org` to accept plaintext connections on port **0** and SSL connections on port **1**. JUST TO FLEX. 😎
 
-  // map compressed_length, then decompress 
-
-} else { 
-
-  // map entry.uncompressed_length directly  <-- never bounds-checked 
-
-} 
+```
+-A PREROUTING -p tcp -m tcp --dport 0 -j REDIRECT --to-ports 6667
+-A PREROUTING -p tcp -m tcp --dport 1 -j REDIRECT --to-ports 6697
 ```
 
-The two libraries classify entries differently. libziparchive checks only the uncompressed size when an entry is marked *stored*. libandroidfw maps the file at the uncompressed size whenever an entry is *not* marked *deflated*. An entry marked with some other method — neither stored nor deflated — falls into the gap between those two rules: libandroidfw maps it at its uncompressed size because it isn't deflated, and libziparchive never checks that size because it wasn't stored.
+A SYN arrives for port 0, netfilter rewrites the destination to 6667 where the ircd is actually listening, and the reply is rewritten back on the way out. The ircd never knows. Port 1 does the same for TLS on 6697.
 
-That last step is a memory map. Android doesn't copy the entry into memory; it maps the file, asking the kernel to make part of the file appear as memory. You can ask for a mapping larger than the file, and the kernel allows it because the extra space just has nothing behind it.
+Getting a server onto port 0 was the easy part. Getting a *client* there is where tools give up. I pointed everything I had at our own server on port 0:
 
-Nothing goes wrong until something reads from that space. The first time Android reads past the real end of the file, the processor faults. Because nothing in this path is prepared to handle that fault, the kernel kills the process with a SIGBUS.
+| Client | Result |
+| --- | --- |
+| OpenBSD `nc` | `nc: port number too small: 0` |
+| `telnet` (inetutils) | `Port number 0 is out of range.` |
+| Chromium | `net::ERR_UNSAFE_PORT` (port 1 too) |
+| `socat` | connects, works |
+| Python `asyncio` | connects, works |
+| Python `ssl` on a blocking socket | `BlockingIOError` |
 
-On our Pixel 10 the crash record (the tombstone Android writes when a process dies) points straight at that mapped read:
+That last one is strange, because the TCP connection underneath it is fine. The problem is that the kernel says it isn't, and it does that on purpose. Here is `inet_getname()` in `net/ipv4/af_inet.c`, which backs `getpeername()`:
 
-```bash
-#00  __memcpy_aarch64_simd                 libc.so 
-
-#01  android::_FileAsset::read             libandroidfw.so 
-
-#02  android::NativeAssetReadChar          libandroid_runtime.so 
-
-#03  art_jni_trampoline                    boot-framework.oat 
-
-#04  AssetManager$AssetInputStream.read    (framework) 
+```
+if (peer) {
+	if (!inet->inet_dport ||
+	    (((1 << sk->sk_state) & (TCPF_CLOSE | TCPF_SYN_SENT)) &&
+	     peer == 1)) {
+		release_sock(sk);
+		return -ENOTCONN;
+	}
 ```
 
-The same record shows why: an APK of a few kilobytes was mapped across sixteen megabytes of memory, and the fault address lands well past the end of the file, in the empty region the declared size invented. The read walked off the file, and the kernel stopped it.
+Linux uses "destination port is 0" as its internal marker for "this socket isn't connected to anything." A socket that really is connected to port 0 trips that check, so `getpeername()` returns `ENOTCONN` on a working connection.
 
-There are two different ways that an oversized mapping can cause a crash, depending on how the code reads it.
+Python's `ssl.wrap_socket()` calls `getpeername()` to decide whether the socket is connected, gets `ENOTCONN`, decides it isn't, switches to non-blocking and tries a `recv(1)`, gets `EAGAIN`, and raises `BlockingIOError`. The TCP connection is fine. It just reports that it doesn't exist. Python's `asyncio` does TLS through memory buffers instead of `wrap_socket()`, never asks, and works.
 
-The first is the one in the tombstone above: a process reads the entry a piece at a time. Each read is bounded only by the declared size, so the reads keep going past the real end of the file until one of them touches the empty space and faults.
+You can't scan port 0 with `connect()`-based tools for all the reasons above, but masscan doesn't use the kernel's TCP stack. It builds its own SYN packets, so port 0 is just another number.
 
-The second occurs when a process asks for the whole entry at once, as a single block of memory, which is what Android does when it loads an XML resource or an app's icon. Before handing the block over, it checks whether the mapped bytes are aligned the way the processor needs them.
+**1,173,626** addresses answered with a SYN-ACK.
 
-If they are, it passes them through. If they are not, it makes an aligned copy and it allocates a buffer the size of the declared length and copies that many bytes into it:
+That sounds like a lot of people using port 0. It isn't. Grouped by `/24`, the responses are packed into a few thousand dense blocks:
 
-```bash
-// frameworks/base/libs/androidfw/Asset.cpp  (_FileAsset::ensureAlignment) 
+| Hosts answering per /24 | /24s | IPs |
+| --- | --- | --- |
+| 1 | 28,370 | 28,370 |
+| 2 – 10 | 10,253 | 34,654 |
+| 11 – 100 | 1,747 | 53,022 |
+| 101 – 200 | 865 | 138,300 |
+| 201 – 256 | 3,751 | 919,280 |
 
-unsigned char* buf = new unsigned char[mLength];   // mLength = the declared size 
+8% of those `/24`s hold 78% of the responding IPs. Whole blocks answer on every address: `172.65.0.0/16` returned 65,534 of 65,536. That isn't 65,534 servers. It's a firewall or router at the edge answering the SYN for everything behind it. **1,116,675** addresses completed the handshake and never sent a single byte.
 
-memcpy(buf, data.unsafe_ptr(), mLength);           // copy runs past the end of the file 
+56,951 addresses did send something. Almost all of it looked like this:
+
+```
+BIG-IP: [0x31dbae9:14718] {peer} TCP retransmit timeout
+BIG-IP: [0x31dbae9:4992] {peer} TCP RST from remote system
+BIG-IP: [0x2bd2afd:5226] SYN timeout (server not responding)
 ```
 
-The declared length is the invented one, so the copy runs off the end of the file and faults, and this time while filling the buffer, not while reading from it.
+F5 BIG-IP load balancers write the reason for a reset into the RST packet, and masscan saved it as a banner. That's **53,741** of the 56,951 (94%), and 46,583 of them are in `132.246.0.0/16` alone. Drop those, plus 305 hosts returning the same fixed `(Ref.Id: ?...?)` token, and **2,905 addresses** are left. That's about 0.25% of everything that answered.
 
-The two paths fail in different functions but for the same reason, and between them they cover the two ways Android reads an entry: streaming it, a piece at a time, or loading it whole. Loading an entry whole is the path a resource or an icon takes — which is what makes the next step possible.
+| Service | IPs | Notes |
+| --- | --- | --- |
+| SSH | 748 | 653 OpenSSH (9 of them OpenSSH_for_Windows), 72 dropbear, one `SSH-1.99-OpenSSH_3.9p1` |
+| MySQL / MariaDB | 215 | versions 3.23 through 11.8, mostly 5.x |
+| Telnet | 211 | router logins, power switches, rack PDUs |
+| HTTP | 159 | router admin pages, `micro_httpd`, building controllers |
+| FTP | 105 | FileZilla, Microsoft FTP, ProFTPD, GNU inetutils, vsFTPd, Serv-U, lots of NAS boxes |
+| SMTP | 80 | Postfix, Exchange, Stalwart, spam gateways (masscan called them FTP) |
+| DVR / camera protocols | 44 | binary recorder protocols |
+| sshd refusing | 43 | `Exceeded MaxStartups` instead of a banner |
+| VNC | 39 | RFB 3.3 through 4.1, one with no authentication |
+| OpenVPN | 21 | TCP mode, server hard-reset packets |
+| Phone system call logs | 21 | Avaya IP Office SMDR, more on this below |
 
-None of this is a problem Android failed to solve, as it gets the same decision right in two other places. libziparchive validates the uncompressed size correctly, but only for stored entries, as a few lines of code skip the check for everything else.
+Nobody is running anything exotic on port 0. It's the same stuff that's on every other port: SSH, databases, telnet, FTP. What stands out is how much of it is embedded gear. dropbear, `micro_httpd`, NAS certificates from QNAP, Synology and Buffalo, DVRs, power switches. Some of it clearly comes from one device model rolled out across an ISP:
 
-And a third library that maps ZIP entries, ZipFileRO, makes the safe choice: it uses the uncompressed size only for stored entries, and the compressed size for the rest. libandroidfw is the outlier: it splits on whether an entry is *deflated* instead of whether it is *stored*, so it maps the uncompressed size for entries that libziparchive never checked. But the best possible solution at all is to allow only stored and deflate methods and reject others as invalid.
+My guess is that nobody at those ISPs picked port 0 on purpose: a port-forward or NAT rule shipped in a CPE config with the external port left at zero, and the device honored it. Then there are the hosting providers. GigaCloud (Ukraine), VDCBY (Belarus) and SiS Distribution (Thailand) have SSH on port 0 with 18, 13 and 10 different SSH version strings. Different builds means different machines, so these are individual customers, not one firmware image.
 
-The code that faults isn't tied to a single process. Many parts of Android read an app's resources: when it installs, while the system runs, and when another app inspects it. Any of them can be the one that reads the malformed entry. Which process crashes depends on which file inside the app is malformed and who reads it. That’s what turns a single bug into something an attacker can target.
+GigaCloud also accounts for 16 of the 80 mail servers on port 0, mostly Ukrainian organisations: `mail.dtek-kem.com.ua` (DTEK, the Ukrainian energy company), `smtp01.health24.ua`, `mx.eastenergy.com.ua`, `mail.citrus.com.ua`, and two government servers, `mail.depfin.dn.gov.ua` and `mail.sed-rada.gov.ua`. Why they all share this setup, I don't know. Elsewhere in mail: a Uruguayan government host, `prod-carbonium01.rionegro.gub.uy`, and `mssante.elsan.care` (62.106.147.123), a submission server for MSSanté, the French national secure health messaging system, run by the private hospital group Elsan. When masscan poked it, it replied:
 
-**The installer.** The manifest is the first file Android reads when installing an app, so a malformed manifest crashes the installer and the install fails; the app never lands on the phone. This is all the sample that started our investigation did—a failed install, with nothing left behind.
-
-**A core system service.** An app also includes files that Android reads after it is installed, not during. These are small resources the core system services parse when they go through the list of installed apps. Malform one of those, and the service that reads it is running inside system_server, the process that hosts most of Android.
-
-It crashes, Android restarts it, and on restart the service goes through the installed apps again, reads the same file again, and crashes again. The phone never finishes starting. This is the crash loop: system_server dies and restarts every few seconds, with no app ever opened and nothing on screen to say which app is responsible.
-
-Rebooting doesn't fix it—it closes the one way out. While the phone is still looping, a computer connected over ADB can sometimes delete the file between crashes, but Developer Mode has to be turned on beforehand. Also, after the first full kernel reboot, even that stops working because the crash happens very early in the boot order. Safe mode doesn't help either, because the service reads the file before safe mode takes effect.
-
-**The calling process.** It need not be the installer or a system service at all. The same code runs in any process that reads an APK. Whichever process reads the one with the malformed entry is the process that crashes.
-
-That original sample only ever crashed the installer. We reproduced and measured the persistent version (the crash loop) on current hardware; we haven’t seen it used against anyone.
-
-**Disable the phone.** Malform a resource that a system service reads, and the crash lands in system_server — the crash loop from the previous section. The phone never starts in any usable form, and only a factory reset clears it; the reset erases everything on the phone.
-
-In theory, an app built this way could make a phone unusable, forcing the owner to choose between a factory reset and a dead phone. Such a capability could be misused as leverage for extortion.
-
-**Make a malicious app impossible to remove.** This one doesn't brick the phone. A working malicious app malforms its own icon. The phone keeps running, but the launcher, the app list in Settings, and the app's own info screen all crash when they try to draw that icon, and those are the screens the user would open to uninstall it. Every route to removing the app crashes before it can, so the app stays installed and the malware keeps running.
-
-**Blind the security tools.** A malicious app can carry the malformation so that anything inspecting it crashes. Security apps scanning a new APK, an analysis sandbox or an automated pipeline—they all hand the file to the same Android parsing code and get the same crash.
-
-Because it’s a native fault and not an ordinary error, the scanner cannot catch it and continue; it dies, the app is never flagged, and it stays on the device.
-
-**Delivery through updates.** In theory, the malformed file would not need to be present at initial review and could be introduced later through an app update, which could affect many devices at once. We do not provide further details on this scenario.
-
-The bug crashes processes; it doesn’t execute code, read data, or gain permissions it wasn’t given. It’s a denial-of-service issue, and these are uses the bug enables, not attacks we’ve seen in the wild.
-
-This is a flaw in Android itself and, as of publication, no fix is available, so users have limited options on the device to prevent it. The most practical defense is to recognize the file before the bug is triggered.
-
-That's possible because the malformation is visible in the file's structure, without installing or running the app. A scanner can distinguish a crafted file from a normal one by inspecting it, not by executing it.
-
-In our testing, Bitdefender Mobile Security detects apps with this malformation when they reach the device, whether as a downloaded file or an already installed app, and warns the user. However, Android's security model **doesn't let a third-party app block an installation or remove another app** on its own, so acting on the warning still rests on the user. Other security solutions may offer similar protection.
-
-We detect this threat as **Android.Riskware.Ghostmap.rA.**
-
-The value is that the warning arrives before the crafted file is read: a flagged download can be deleted before it's installed, and a flagged app can be removed while the device is still usable. But it’s a race between the keen-eyed user and the Android device's parsing speed. Since the app doesn’t need to run, the user has little time to act.
-
-Reproduced on a Pixel 10 running Android 17, August 5, 2026 security patch — build google/frankel/frankel:17/CP2A.260805.005/15828068:user/release-keys. We also tested this vulnerability on older releases and managed to reproduce it on versions starting with Android 10 and above.
-
-**The crash.** The tombstone Android wrote when system_server died:
-
-```bash
-signal 7 (SIGBUS), code 2 (BUS_ADRERR), fault addr 0x…  (read) 
-
-#00  __memcpy_aarch64_simd                 libc.so 
-
-#01  android::_FileAsset::read             libandroidfw.so 
-
-#02  android::NativeAssetReadChar          libandroid_runtime.so 
-
-#03  art_jni_trampoline                    boot-framework.oat 
-
-#04  AssetManager$AssetInputStream.read    (framework) 
+```
+220 mssante.elsan.care MSSPRO LPS AUTH_CLI submission server
+501 2.7.0 Error: I can break rules, too. Goodbye.
 ```
 
-The record marks the fault as a read. The faulting mapping shows the over-map directly — the APK on disk was a few kilobytes, but the entry was mapped across the size the file claimed, and the fault landed far past the file's real end:
+Weird...
 
-```bash
-file on disk:          8,408 bytes 
+The rest of the router logins look the same as they would on port 80. A D-Link DSL-2740B (37.103.36.12 and two others), with "admin" already filled in as the username: two in French at Orange and Nerim in France, one in English at Wind Tre in Italy. A Linksys "Router Access" page in El Salvador (200.31.162.80). A plain "Sign in" form titled "Router Admin" on seven cloud servers: four at Hetzner, two at Online SAS, one at DigitalOcean.
 
-mapped region:    ~16,781,312 bytes   (≈ 16 MB, the size the entry declared) 
+One didn't bother with a login at all. A 3G/4G "Wireless Mobile Router" on China Unicom (183.93.33.155) serves its full status page on port 0 to anyone who asks: its WAN IP, LAN, WAN and wireless MAC addresses, SSID, firmware build, uptime, memory usage and whether DHCP is on.
 
-fault address:     ~197,000 bytes past the end of the file 
+Browsers won't open a URL with `:0` in it, so to see the web interfaces I ran a small relay: listen on a local port, connect out to the target on port 0, pipe the bytes through, and point headless Chromium at the local port. 160 addresses speak HTTP on port 0, and 85 rendered a page.
+
+A **Gira HomeServer 4** (46.186.48.86), a KNX home and building automation controller, with its start page, debug page and monitor links sitting on port 0.
+
+A **Trane Tracer Synchrony** login (201.171.202.25), which is HVAC and building control.
+
+The web pages were the easy part to read. The more interesting devices don't speak HTTP. They send binary the moment you connect, and figuring out what they are meant matching bytes against nmap's probe database, Wireshark dissectors and, in one case, a disassembled vendor client.
+
+**A Beckhoff PLC with its screen open to anyone.** 46.178.29.102, on Proximus in Belgium, sends this on connect:
+
+```
+30 01 00 00 05 6d 6d 6a 56 05 00 00 00 03 00 00 ...  "CBx063" ... "CX5120" ...
 ```
 
-Memory the file never provided, read with no matching write past any buffer — an over-read, not memory corruption.
+The CX5120 is a Beckhoff embedded PC running Windows CE, the kind that runs TwinCAT and drives a machine. The protocol is CERDISP, Windows CE Remote Display, which Beckhoff's own security guideline lists as open on TCP 987 by default. I disassembled Beckhoff's client, `CERHOST.exe` 2.0.4.0. It reads a 0x130-byte info block first, which is the `30 01 00 00` at the start of the banner. Then it checks a magic word: `0x6a6d6d05` means no password, `0x6a6d6d06` means password required. This one sends `05 6d 6d 6a`. Then a 1366×768 resolution (`56 05`, `00 03`) and screen update data. CERHOST also sends mouse and keyboard input. So this is a PLC's screen that anyone can watch and operate, with no password, on port 0.
 
-**A third-party app, the same fault.** The crash isn't limited to system_server. An ordinary installed app with no permissions, calling the standard getPackageArchiveInfo() to read the file — the call a scanner makes — dies inside the call:
+**An Omron PLC that was too busy to talk.** 194.49.59.232 (AireNetworks, Spain) answered with an Omron FINS/TCP frame:
 
-```bash
-signal 7 (SIGBUS), code 2 (BUS_ADRERR)  (read) 
-
-#00  __memcpy_aarch64_simd                       libc.so 
-
-#01  android::_FileAsset::getIncFsBuffer(bool)    libandroidfw.so 
-
-#02  android::NativeOpenXml                       libandroid_runtime.so 
-
-#04  android.content.res.ApkAssets.openXml        (framework) 
-
-#05  ApkLiteParseUtils.parseApkLiteInner          (framework) 
-
-#14  PackageManager.getPackageArchiveInfo         (framework) 
+```
+46 49 4e 53 00 00 00 10 00 00 00 01 00 00 00 20 00 00 00 00 00 00 00 66
+F  I  N  S  length=16   cmd=1       error=0x20               server node 0x66
 ```
 
-The app wrapped the call in catch (Throwable). It never ran — a native SIGBUS isn't a Java exception — so the process simply died. Frame #01 is the second fault site described earlier (the aligned-copy path; getIncFsBuffer is ensureAlignment inlined), so both crash paths are confirmed in practice, not just reasoned about.
+Command 1 is the server's Node Address Data Send, and error code `0x20` is "All connections are in use." It is a FINS endpoint, the protocol used to read and write Omron PLC memory, and it turned us away only because its connection slots were full. Five days later it said the same thing. A second host, 14.49.206.64 (KT, Korea), repeats an Omron Host Link frame, `@FFF07F000000018C3D*`, over and over. The XOR of everything before `3D` is `0x3D`, so the checksum is valid, but unit `FF` is outside the normal 00–31 range. The framing is Omron. The device behind it I couldn't pin down.
 
-**The loop.** Each crash is followed by a restart and another crash, a few seconds apart, with a new system_server process every time:
+**A Modbus master.** 155.93.146.109 (South Africa) doesn't wait to be polled. It polls you: `10 04 00 00 00 02 72 8a` is slave 16, Read Input Registers 0–1, with a valid CRC-16/MODBUS. Something out there is a SCADA master on port 0 asking whoever connects for two registers. Another host, 85.198.27.114 (Iran), repeats a `7e`-framed 7-byte payload with a valid Modbus CRC, which looks like a serial-to-TCP bridge.
 
-```bash
-08:24:32  Fatal signal 7 (SIGBUS) in system_server (pid 14536) 
+**A power quality meter.** 166.169.193.134 on Verizon Wireless answers telnet with `SEL-735 Telnet Server`. The SEL-735 is a Schweitzer Engineering Laboratories revenue and power quality meter, the kind utilities put on substations and feeders. This one is on a cellular modem.
 
-08:24:33  Zygote: system server (pid 14536) has terminated 
+**Factory telemetry.** 175.202.128.103 (KT, Korea) sends an HTTP POST *at* whoever connects:
 
-08:24:38  Fatal signal 7 (SIGBUS) in system_server (pid 15070) 
-
-08:24:39  Zygote: system server (pid 15070) has terminated 
-
-08:24:42  Fatal signal 7 (SIGBUS) in system_server (pid 15586) 
-
-08:24:43  Zygote: system server (pid 15586) has terminated 
+```
+POST /highnet/v1/POST/MachineStatus?StationCode=20209263 HTTP/1.0
+host: 52.83.191.199
+User-Agent: uIP/1.0 (http://www.kq-china.net/)
+Data={"StationCode":"20209263","PickCard":[{"PickCardCode":"21032380","StartTime":"2026-10-7 10:3:41","MachineStatus":"0",...
 ```
 
-**Safe mode.** Entering safe mode doesn't help. The crash happens on the same cycle, after the safe-mode flag is set but before it takes effect:
+kq-china.net is Zhejiang Keqiang Intelligent Control, which makes monitoring systems for injection moulding machines. uIP is Adam Dunkels' tiny embedded TCP/IP stack. A collector on a factory floor is pushing per-machine status to whoever connects, and masscan, confused, filed it as Minecraft.
 
-```bash
-WindowManager: SAFE MODE ENABLED 
+**A Swedish alarm.** 82.183.26.214 (Telenor, Sweden) sends an STX/ETX frame containing `"Kommunikationslarm medelvärde"`, Swedish for "communication alarm, mean value." I don't know the device.
 
-libc: Fatal signal 7 (SIGBUS), code 2 (BUS_ADRERR) in system_server (pid 23886) 
+**Burglar alarm communicators.** Five hosts, three in Mexico and two in Spain, send a greeting of about 56 bytes, with a 2-byte length prefix up front. That matches the README of DSC-TLink, a reverse-engineered client for DSC's alarm communicators: "opening a TCP connection with the TL280 on port 3062. The TL280 will immediately send a packet of 56 bytes." The TL280 family is the IP/cellular communicator on DSC PowerSeries Neo alarm panels, and this is the DLS path used to program and monitor the panel. Here's 213.181.95.33:
+
+```
+00 37 01 00 00 7e 00 30 e0 05 05 05 05 00 27 03 2b 54 03 00 02 0a 89 34 04 26 21 05
+05 04 41 9f 03 00 00 50 03 02 01 03 00 00 02 04 05 06 00 03 4f 62 06 0e ea 79 06 6a 7f
 ```
 
-The same sequence repeated on 72 crash cycles in that safe-mode run.
+(The `0a` before the ICCID came out of the scan as `20`, because our banner storage squashed whitespace bytes into spaces. I put it back.) The CRC-16 over the 42 bytes starting at `05 05 05 00 27` (polynomial `0xD003`, from DSC-TLink's `DLSProNetHeader.cs`) comes out `0xea79`, which is the `ea 79` that follows. The MAC starts `00:03:4F`, the IEEE OUI for Sur-Gard Security, DSC's receiver brand. And the device ID field on the cellular models is the SIM card's ICCID:
 
-**The persistence.** From installing the app to the first crash was about a second. In one capture, the cycle then repeated 110 times. The screen stayed on the boot animation the whole time.
+| IP | ISP | Type | SW | Device ID | MAC |
+| --- | --- | --- | --- | --- | --- |
+| 79.112.115.9 | Digi Spain, ES | `032b` | 52/01 | ICCID 8934075700125305307 | 00:03:4F:0C:1B:D7 |
+| 213.181.95.33 | Fibraworld, ES | `032b` | 54/03 | ICCID 8934042621050504419 | 00:03:4F:62:06:0E |
+| 189.153.252.92 | UNINET, MX | `032b` | 54/01 | ICCID 8952050102551818989 | 00:03:4F:60:7D:38 |
+| 187.212.33.29 | UNINET, MX | `0329` | 54/03 | (MAC, zero-padded) | 00:03:4F:62:D7:05 |
+| 201.124.95.69 | UNINET, MX | `0329` | 50/03 | (MAC, zero-padded) | 00:03:4F:20:24:60 |
 
-*This article is published by Bitdefender for information and research purposes only, to help users, researchers and security professionals understand and defend against the issue described. The information reflects our findings and assessment as of the date of publication and may change, including if Google releases a fix or provides further information. It is provided “as is”, without warranty of any kind, and does not constitute legal, technical or professional advice. *
+All three ICCIDs pass the Luhn check, and their prefixes say where the SIMs are from: `89 34` is Spain, `89 52` is Mexico. According to DSC-TLink, the AES key for the rest of the session is built from data in this greeting.
 
-*The attack scenarios described are hypothetical and are presented solely to illustrate the potential impact of the issue; Any use of this information to access, disrupt or damage devices or systems without authorization is prohibited and may be unlawful. Bitdefender is not liable for any misuse of the information in this article, to the extent permitted by applicable law. *
+**Alarm communicators that tell you the password.** Three Spanish hosts, 109.167.87.236, 85.87.152.80 and 88.3.213.39, run telnet on an Alwon E20, a Notifier/Honeywell IP/GPRS alarm communicator module:
 
-*Statements regarding Google's assessment and responses reflect our understanding of the communications received through the Android & Devices Vulnerability Reward Program and are not intended to characterize Google's internal processes. Detection results for Bitdefender Mobile Security are based on our internal testing at the time of publication; results may vary depending on device, configuration and version. *
+```
+Alwon E20 Telnet Input password (defaul 1234):
+```
 
-*Android, Google and Pixel are trademarks of Google LLC. All other trademarks are the property of their respective owners and are used for identification purposes only; their use does not imply endorsement or affiliation. Code excerpts from the Android Open Source Project are © The Android Open Source Project and are reproduced for commentary under the Apache License 2.0. *
+Notifier's manual agrees: telnet password, "1234 por defecto." I didn't try it.
 
-tags
+**Time clocks.** 187.235.160.47 and one other host at UNINET in Mexico repeat `a5 00 00 00 00 7f 00 00 e0 5c`. That's an Anviz time-and-attendance frame: `a5`, a 4-byte device ID of 0, command `7f`, zero length, and a CRC-16/MCRF4XX of `0x5ce0` sent low byte first. Open-source Anviz SDKs call `0x7f` a ping.
 
-### Author
+**Home automation.** Five hosts answer `*#*1##`, the OpenWebNet ACK used by BTicino and Legrand home automation gateways: 190.113.106.159 (Costa Rica), 171.242.179.164 (Vietnam), 187.145.124.63 (Mexico), 105.157.199.125 (Morocco) and 213.7.222.134 (Cyprus). 219.241.160.119 in Korea is a `SiHAS HCM-300 Ver 2.12 >` prompt, a Shina System smart heating thermostat. And 192.119.63.143 (wilhelm.tel, Germany) is a mediola a.i.o. Gateway that sends its encrypted cloud request to whoever connects: `POST /ra/d HTTP/1.1 host: mediola-ws.elasticbeanstalk.com`.
 
-Working as Team Lead in the Mobile Security & Forensics Unit, I am always ready to deal with the latest threats in the Android Ecosystem. I like to play the saxophone in my spare time and go fishing.
+**A debug menu.** Three hosts on SK Telecom in Korea, 42.42.150.116, 42.42.203.12 and 42.42.201.80, greet you with this:
+
+```
+##################################
+# DEBUG LOGIN!!
+# F/W Version : EBH0920.0
+# Dev ID : ldg4839
+# IP : 192.168.225.100
+##################################
+###### MENU DISPLAY ######
+l : Log On/Off.  n : NTP Query.  d : DNS Query.  i : SysEnv Informaton.
+t : Time Display.  s : Server Data Send.  h : Menu Display.
+```
+
+`192.168.225.x` is the default subnet on Qualcomm LTE modules like the Quectel EC2x, so it's probably a cellular IoT device. Which product, I don't know.
+
+**A power strip.** 64.201.180.254 (Gatewest, Canada) runs a `Remote Power Controller v1.41i` that prints its whole outlet table, circuit, name, status and boot delay, before asking for a login. Others ask only for a password but label themselves first: `MGTN CO - Right Rack - Bottom`, `Power Switch`, `151 Front Street`.
+
+**SAProuters leaking their build.** Four hosts are SAProuter, the SAP gateway that relays connections into SAP systems. They accepted the connection, waited 5 seconds for a route request that never came, and then sent back an `NI_RTERR` error packet with a lot of detail:
+
+```
+NI_RTERR ... *ERR* connection timed out -5 NI (network interface) 754 40
+D:/depot/bas/754_REL/src/base/ni/nirout.cpp 8213
+RTPENDLIST::timeoutPend: no route received within 5s (CONNECTED)
+Tue Oct 6 10:56:27 2026 ... SAProuter 40.4 on 'ADSJ'
+```
+
+| IP | ISP | Kernel | Build path | Hostname |
+| --- | --- | --- | --- | --- |
+| 37.61.221.36 | velia.net, DE | 754 | `D:/depot/bas/754_REL/.../nirout.cpp` | `ADSJ` |
+| 37.61.219.146 | velia.net, DE | 753 | `/bas/753_REL/.../nirout.cpp` | `hsaprouter` |
+| 60.16.63.41 | China Unicom, CN | 745 | `D:/depot/bas/745_REL/.../nirout.cpp` | `rbjsaprouter` |
+| 154.236.187.38 | Etisalat Misr, EG | 753 | `/bas/753_REL/.../nirout.cpp` | `ba-srt` |
+
+Every one gives away the SAProuter version (40.4), the SAP kernel release, the router's hostname, the server's local clock, and whether it's a Windows build (`D:/`) or not.
+
+**RustDesk.** Four hosts, 93.118.140.111, 78.38.90.162 (Iran), 39.48.42.201 and 103.213.111.82 (Pakistan), open with `HJ`. That isn't a magic string. In RustDesk's `bytes_codec.rs`, the low two bits of the first byte give the header size and the rest gives the length, so `0x48` means an 18-byte message follows. `0x4a` is protobuf field 9, `Hash`, which carries a salt and a challenge:
+
+```
+48 | 4a 10 | 0a 06 "usjk79" | 12 06 "zrktdr"
+len  Hash   salt             challenge
+```
+
+The salt stays the same per host. The challenge is six random characters, new on every connection. That's the password challenge a RustDesk client answers before it gets the desktop. 103.213.111.82 sends a 32-character salt, which is what newer versions use.
+
+**Winflector.** Eight hosts run Winflector, a Polish remote application server. 193.32.180.51 sends `Terminal client version too old - please update to version 4.0.0.1` and then an RSA public key in DER form, with exponent 17, which is Crypto++'s default. The versions are sent byte-reversed: `04 03 00 04` is 4.0.3.4. All six versions I saw are on Winflector's own version list. The hosts are in Cape Verde (156.238.40.243, 156.238.47.54 and one more), Malaysia (202.187.2.203 and one more), Poland (193.32.180.51), Ghana (80.87.66.51) and India (49.204.146.227).
+
+**VNC with no password.** Of the 39 VNC servers, one doesn't ask for anything. 107.174.67.223 answers with security type none and a desktop name of `resolv.moe, meow meow meow :3 haiiii!!`, and an 850×591 framebuffer. Four more just send `RFB 005.000`.
+
+**Phone switches.** 117.236.74.58 (BSNL, India) is `Asterisk Call Manager/2.10.5`, the Asterisk Manager Interface from Asterisk 13.26–13.34. Once logged in, AMI can originate calls and run console commands. 38.229.159.25 (France) and 41.60.171.20 (Liquid) send `04 00 fb ff LAPK`, the 3CX tunnel protocol.
+
+**Cameras and NAS.** exacqVision video surveillance servers on 8 hosts, including two at OneCleveland (204.156.216.130 and 204.156.198.238), send a 56-byte header ending in three values that change on every connection. Six QNAP NAS boxes expose RTRR (Realtime Remote Replication, `ab ca a5 5d ...`), on 202.184.138.61 in Malaysia and five others in Austria, Sri Lanka, Spain and Italy. Two Rifatron DVRs send `RIFA`, 42.200.149.78 in Hong Kong and 14.241.231.170 in Vietnam. One more is a UMS WebViewer DVR stream in Japan (123.242.213.10).
+
+**The rest of the RPC zoo.** 223.76.20.55 (China Mobile) is ZeroC Ice, `IceP` 1.0 Validate Connection. 191.13.74.178 (Telefonica, Brazil) sends just `ac ed 00 05`, the header of a Java serialization stream, and then nothing else. 119.152.239.20 (Pakistan) sends a bare HTTP/2 SETTINGS frame with the same bytes as a default grpc-go server. 212.80.175.132 (Spain) has things backwards and sends *us* a full TLS 1.2 ClientHello. And 116.75.83.213 (Hathway, India) responds with `RP-Version: 5.0` and `RP-Application-Reason: 80108bff`, which is Sony PlayStation Remote Play, most likely a PS4.
+
+21 addresses don't wait to be asked. Connect to port 0 and they start streaming comma-separated text, about 7.5 KB of it per host in our capture:
+
+```
+2026/09/23 14:31:49,00:00:11,0,24,O,<number>,<number>,,0,1002639,0,E24,<name>,T9031,Line 31.1,0,0,...
+```
+
+That's SMDR (Station Message Detail Recording) output from an Avaya IP Office phone system. The fields line up with Avaya's documented layout: call start, connected time, ring time, caller, direction, called and dialled number, a call ID that starts at 1,000,000, then the two parties as `E` for extension or `T` for trunk, with names like "Line 31.1". Each host handed over 37 to 62 calls with real phone numbers, staff names, extension numbers and internal addresses. The oldest record is from December 2018. The newest is from a few days before the scan. Several hosts start with records that are years old, which I can't explain: 94.30.72.110 opened with calls from 2018-12-21, 31.10.39.182 with 2023-09-18.
+
+Nothing was sent to get this. IP Office pushes SMDR records to whatever connects to its SMDR port, and on these 21 hosts that port is reachable on port 0. masscan stops reading at about 7.5 KB, so that's only the first few dozen calls per host.
+
+| IP | ISP | Records | Record dates |
+| --- | --- | --- | --- |
+| 109.170.131.14 | Wavenet, GB | 41 | 2026-09-03 → 09-04 |
+| 140.141.189.204 | i3 Broadband, US | 46 | 2025-10-24 → 10-30 |
+| 149.40.120.214 | ITS-TG, GB | 42 | 2026-09-22 |
+| 164.39.146.134 | Gamma, GB | 62 | 2026-09-24 → 09-25 |
+| 164.39.207.103 | Gamma, GB | 54 | 2026-03-27 → 03-31 |
+| 176.35.140.144 | Wavenet, GB | 62 | 2025-09-11 → 2026-07-22 |
+| 176.35.24.241 | Wavenet, GB | 60 | 2026-09-16 → 09-18 |
+| 194.75.212.229 | BT, GB | 42 | 2026-09-23 → 09-24 |
+| 195.21.76.203 | ITS-TG, GB | 60 | 2026-09-17 → 09-21 |
+| 196.40.184.138 | XISASN, ZA | 61 | 2024-03-27 → 03-28 |
+| 212.140.248.34 | BT, GB | 49 | 2024-10-10 |
+| 213.218.204.214 | Gamma, GB | 58 | 2026-09-25 |
+| 31.10.39.182 | ULGRP, GB | 55 | 2023-09-18 → 09-19 |
+| 31.121.1.250 | BT, GB | 41 | 2024-02-08 |
+| 37.235.126.101 | Lightspeed, GB | 44 | 2026-09-16 → 09-17 |
+| 81.130.159.34 | BT, GB | 41 | 2026-10-01 |
+| 81.174.163.44 | Plusnet, GB | 62 | 2026-09-27 → 09-28 |
+| 87.127.54.146 | Entanet, GB | 59 | 2026-06-17 |
+| 87.242.249.105 | TalkTalk, GB | 42 | 2026-09-02 → 09-07 |
+| 87.74.60.78 | CW, GB | 48 | 2026-09-28 |
+| 94.30.72.110 | Wavenet, GB | 37 | 2018-12-21 |
+
+19 of the 21 are in the UK, on BT, Wavenet, Gamma, TalkTalk, Plusnet and a handful of smaller business ISPs. One is in the US and one in South Africa. However these ended up on port 0, anyone who connects can read the company's call history.
+
+Come say hi on the port that doesn't exist. If your client lets you.
+
+Sources & References:
+
+Connect to SuperNETs on port 0 (plaintext) or port 1 (TLS) at irc.supernets.org, or reach out at acid.vegas@acid.vegas. We hang out in `#war`.

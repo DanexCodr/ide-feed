@@ -1,69 +1,169 @@
-So I think [Janet](https://janet-lang.org/) is a pretty sweet little programming language. I've always found Lisp and Scheme interesting, but I could never get into them. Janet is small enough to try out and has enough convenient things to keep me from bouncing off it so far.
+Back in July I wanted to check out the pwn2own targets for 2026. Since the rules hadn’t been released yet, I decided I would check last year’s targets in the hope that it would be similar.
 
-It comes with a pretty good standard library and data structures. It also has the "spork" library as basically the standard extension library. That one has a module called `httpf` which claims to be a minimal web framework. It has no docs or tutorial that I could find, so let's make a little server with it and see what it's all about.
+Imagine my surprise when I managed to get arbitrary code execution on the glasses and they weren’t in the wearables category anymore :’).
 
-```
-(import "spork/httpf")
+It’s fine though because I still reported it to meta, and after fighting the payout a few times, we settled (ok there was no settling but I agreed to the new payout).
 
-(def my-server (httpf/server)) # Create a server object
+Before attempting this, I remember telling my friend about it. They said “ooof good luck. These are usually pretty hardened and no-one attempted them last year at p2o.”
 
-(defn my-index-route
-  {:path "/"
-   :render-mime "text/html"
-   :doc "root of the server"} # this is "tagging" the function
-  [request post-data] # our function arguments
-  (def body [:html [:body [:h1 "Welcome to httpf"]
-                    [:p "I am glad you are here!"]]])
-  (setdyn :response-code 201) # setdyn is used to specify the HTTP Response code
-  body)
+My response: Watch me.
 
-# find all functions tagged with a :path and add them to router
-(httpf/add-bindings-as-routes my-server) 
+![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-3.png?w=3000&ssl=1)
 
-(httpf/listen my-server "localhost" "8000") # start the server on the host & port
-```
+### Acquiring glasses because who’s paying €500 (not me)
 
-Let's hit the server:
+First step was acquiring the glasses. I am lucky that my brother-in-law had a pair he didn’t really use, so I could steal them for a few weeks.
 
-```
-$ curl -i http://localhost:8000/
-HTTP/1.1 201 Created
-content-type: text/html
-server: spork/httpf
-Content-Length: 81
+### First recon
 
-<html><body><h1>Welcome to httpf</h1><p>I am glad you are here!</p></body></html>
+I installed the Meta AI app, which is the app to control the glasses (connecting them, synchronizing pictures, and so on).
+
+In order to extract the firmware, I obviously wasn’t going to tear the glasses apart and start fiddling with probes n shit. So I went for extracting it using the OTA (over-the-air) update.
+
+When connecting the glasses for the first time, it immediately offered to update the firmware. So naturally, I was intrigued. Using JADX, I reversed the Meta AI app to see how the update is fetched.
+
+`OtaArtifactFetcher` prepares and sends the update request. The response is converted into an `OTAArtifactInfo` object containing metadata such as the device/build information.
+
+```java
+arrayListA0y2.add(new OTAArtifactInfo([...], downloadUri, [...]));
 ```
 
-Okay seems nice. I've got comments in the code so you can follow along what's going on. We make a server object, define some functions that are tagged with `:path` that the server later finds. Then we can start the server on our host and port.
+I then notice this assignment in `OTAArtifactInfo`():
 
-Janet doesn't have function annotations like Python or Java does. Instead we can put metadata on a function. In the Janet docs, I only ever saw it referenced to mark a function as deprecated. But you can put any key/value pair you want on a function. The HTTPF system then searches the functions in scope for those that have the `:path` metadata when we call the `add-bindgins-as-routes` function. It's a nice demo of that feature, and I wish official Janet docs made that more clear.
+```
+this.downloadUri = str3;
+```
 
-Overall, it has the basics, but you'll notice some odd choices. We use tags to define our returning Content-Type, it's not something we can decide in the function. Also, choosing "text/html" means we need to return a hiccup-style data structure that will get processed by [spork/htmlgen](https://janet-lang.org/spork/api/htmlgen.html), we don't get to build the HTML ourselves or use a different template system. Also, setting the HTTP Response Code is done via the `setdyn` call which makes it feel like setting a global variable. So one of my first impressions is that the way we build a HTTP response feels inelegant in this framework.
+I found that I could just hook into `OTAArtifactInfo` and print `str3` which contained the CDN update URL :))) and then I just printed it.
 
-Our route functions take two parameters, `request` and `post-data`. The first is a general HTTP Request object. It's a Janet struct with these fields:
+```javascript
+Java.perform(function () {var OTAArtifactInfo = Java.use("com.facebook.wearable.common.ota.models.OTAArtifactInfo");OTAArtifactInfo["$init"].implementation = function (l, j, oTAArtifactType, ..., str3, ...) {   this["$init"](l, j, oTAArtifactType, ..., str3, ...);    console.log("downloadUri:");    console.log(str3);};});
+```
 
-- :cookies
-- :headers
-- :path, the full path with query params
-- :route, just the path, no query params
-- :body, raw request body, without parsing
-- :query, parsed query params into a table
-- :response-headers
-- :buffer
-- :connection
-- :data, the same as post-data
-- :head-size
-- :method
+![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-6.png?w=1462&ssl=1)
 
-The other function parameter, `post-data`, is `nil` unless the user sent a POST request. If the user sent a POST request, we get that decoded into a Janet table. So a user that executes `curl -d 'one=two' <url>` will come to your post-data as `@{"one" "two"}`
+That URL contained a zip, so that looked like the right candidate. **HOWEVER**, this was around 156 MB and its payload depended on the device’s existing build. It was an incremental update… I wanted the full update.
 
-The `:render-mime` can be set to `application/json` to easily transform any basic Janet data structures we return to json, so that is pretty nice.
+**Getting the full firmware update**
 
-While it hits the common parts of a web framework, HTTPF is super basic and it has some significant limitations. The big ones that stand out to me are:
+Decompiling further code revealed a GraphQL input named `device_firmware_full_update_only`. The app normally populated it with false, so I hooked the generic method responsible for adding GraphQL fields and replaced the value with true only when the field name matched exactly. This allowed me to fetch the full firmware update URL.
 
-At first glance, it's nifty that you get a web framework with what's basically the standard library of Janet. However, beyond very basic usage, it's not really something you can reach for.
+I was then able to retrieve the zip from the CDN. Unzipping it showed me that this was an Android update, including the **payload.bin**.
 
-What else is out there in the Janet ecosystem? There are two other ones that I see when searching around.  [Circlet](https://github.com/janet-lang/circlet) which, like Spork, is in the official Janet github repo. This is a library you can import, but it's on the GNU GPL license, which is an odd choice for a library, since it means you can only build GPL apps with it. I think that's a big issue for a lot of users. The other option is [Joy](https://joy.swlkr.com/) which is very nice, but has some bugs around setting cookies that I hit when playing with it. Joy is the more full featured system and it's what I used to make a little personal webapp to serve weather data.
+![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-4.png?w=1230&ssl=1)
 
-So that's my little writeup of the HTTPF system. It might be the only tutorial out there right now. It's frustring that it doesn't do more, but Janet is a language that can continue to grow so hopefully this little framework will grow with it.
+Using [payload-dumper](https://github.com/ssut/payload-dumper-go) on payload.bin, I could dump the images and mount them into a filesystem.
+
+![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-5-edited.png?w=1203&ssl=1)
+
+Firmware was acquired but how do I get a shell on the glasses?
+
+### Device Access Toolkit
+
+There is a developer mode on the Meta AI app that allows devs to write apps that can interact with the glasses. It is called DAT SDK (Device Access Toolkit).
+
+In order to do that, you need to install the DAT APK on the glasses. The MetaAI app basically downloads it in real-time and fetches the DAT application to install it on the device. Do you see where I am going with this?
+
+![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-2.png?w=1668&ssl=1)
+
+### Installing self-signed app on the glasses
+
+Up until and including firmware 126, the firmware did not verify that the DAT APK was signed by Meta. So it was theoretically possible to install any app on the glasses because there was no verification as to if it was a legit app or not.
+
+An easy-not-so-easy swap was possible. I could, using frida, swap out the legit DAT application for a self-signed application of my own. That meant I could run any app on the glasses.
+
+```javascript
+// hook DAT Installerfield(this, "$localFile")  .set(this, replacement);field(this, "$appName")  .set(this, "DAT Probe");packageField.set(this, cachedPackage);// Meta AI sends my apkreturn invokeSuspend.call(this, result);
+```
+
+Now I have my own self-signed DAT apk running on the glasses! bosh!! 😎
+
+### How to run the DAT APK on the glasses
+
+The DAT apk runs only when a DAT session is requested by the developer app to interact with the glasses.
+
+So, in order to run the fake DAT apk, I installed a sample app from Meta called **Camera Access**, which would then create a DAT session with the app on the glasses.
+
+![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image-1.png?w=1764&ssl=1)
+
+However, I couldn’t really check that it was running properly. It was difficult to debug.
+
+### Beep is the new printf
+
+There is no screen on this pair of sunglasses. No console, no logs, no “yoo your code is running”. So how could I make sure my code was even executing? The answer is by *listening* to it.
+
+I used **android.media.ToneGenerator** in my DAT APK to signal which part of the code was executing:
+
+- 3 beeps: listener started, looking for a Wi-Fi Direct address
+- 5 beeps: found one (in wifi group 192.168.49.x)
+- 4 beeps: TCP 31337 bound, we’re in business
+- 6 beeps: something went wrong
+
+So using this sequence, I managed to debug a big issue that I hadn’t considered: the Camera Access app was failing because it was expecting the real DAT apk on the glasses. When it couldn’t start DWA,` startDwaReadinessProbe()` would report `START_ERROR_DWA_UNAVAILABLE`.
+
+And every time it failed, it closed my connection.
+
+**The fix**  
+I used frida to hook `startDwaReadinessProbe()` in order to disable the DWA timeout and keep the connection alive.
+
+```javascript
+startDwaReadinessProbe.implementation =function () {// No operation};
+```
+
+### Bind shell
+
+When the Meta AI app wants to sync photos & videos from the glasses, it will create a WiFi Direct group on subnet 192.168.49.x. The glasses will connect to that group and they get an IP address.
+
+In order to get the glasses to connect to the Wi-Fi Direct group, I used Frida to hook into the CameraAccess app and request the “high link lease” from the Meta AI app.
+
+```
+sub = device.createLinkLease(2, 1, cb); highLeaseSubscriptions.push(sub);
+```
+
+My implanted app bound a listener on TCP 31337 on that address, which dropped me into an interactive shell.
+
+So from the phone I could just nc’d into it and sent commands, like `id`, to get shell-level execution in the app’s context.
+
+```
+ServerSocket listener = new ServerSocket(31337, 4, address))
+```
+
+```shell
+nc <glasses-ip> 31337# iduid=10097(u0_a97) gid=10097(u0_a97) groups=3003(inet) ...great power comes great opsec
+```
+
+**great power comes great opsec**
+
+### Great power requires great opsec
+
+I had this uncontrollable power for about 5 days, and while I was searching for a privesc on the glasses, my shell access had disappeared.
+
+Unfortunately, I either had terrible opsec back then (possible) or unluckily they looked into it and patched it.
+
+But fear not !!
+
+### Mobile Config
+
+Firmware 127 started enforcing signature verification of the DAT apk, so self-signing my own DAT apk wasn’t working anymore.
+
+The check was done by `wss_appmanager.signature_verification_enabled` in the MobileConfig file.
+
+The glasses ask the phone for their config, so the phone fetches it from Meta’s servers and forwards it back over Airship. It controls a bunch of feature flags on the glasses without requiring a firmware update.
+
+One of those flags requires the firmware to check that apps are signed by Meta before installing them.
+
+![](https://i0.wp.com/p0pcycle.com/wp-content/uploads/2026/11/image.png?w=1492&ssl=1)
+
+It arrives on the glasses from the paired phone, and the device loads it only after verifying the file is *structurally* correct, not that it hadn’t been tampered with.
+
+That makes every flag in it, including `signature_verification_enabled`, modifiable by the phone and accepted by the glasses.
+
+So by flipping a byte in the `0.mctable` (which is the file that holds the values) from `0x80` to `0x00` (enabled to disabled), I was able to **bypass** the signature verification that they were originally enforcing, and re-install my self-signed APK on the glasses.
+
+We’re soooo back.
+
+### Where to from here
+
+This was all reported to Meta through their bug bounty platform. They have approved my blogpost which makes me assume it is now fixed.
+
+Now that I had shell access, it was a lot easier to start mapping the attack surface. That, my friends, is a story for another time!

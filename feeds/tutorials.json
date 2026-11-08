@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-07T21:34:27Z",
+  "updated": "2026-11-08T04:59:44Z",
   "items": [
     {
       "id": "devto-4943245",
@@ -206,24 +206,12 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4796922",
-      "title": "Three Times My Test Failed and the LLM Was Right",
-      "desc": "By Debashish Ghosal | 6 min read",
-      "tag": "tutorial",
-      "published": "2026-10-25T01:03:43Z",
-      "order": 18,
-      "url": "https://dev.to/debashish_ghosal/three-times-my-test-failed-and-the-llm-was-right-43l2",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F4o2covnae1ry3vu9zaln.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAQIE/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAH/2gAMAwEAAhADEAAAAcVS1QJ//8QAGRAAAwEBAQAAAAAAAAAAAAAAAAECITFB/9oACAEBAAEFAiRiPJx1r4f/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAWEAADAAAAAAAAAAAAAAAAAAAQESD/2gAIAQEABj8CpD//xAAaEAEBAQADAQAAAAAAAAAAAAABABEhMUGB/9oACAEBAAE/IU9u2kfX7CDYnDZPIjhf/9oADAMBAAIAAwAAABDOv//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QP//EABoQAAIDAQEAAAAAAAAAAAAAAAERACFBMRD/2gAIAQEAAT8QYEsNOMAS3WxhJgdSvBhagqNE+QsKqB5DI9c//9k=",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4857833",
       "title": "The Fibonacci Spiral Is Secretly a Straight Line",
       "desc": "By Thea | 9 min read",
       "tag": "tutorial",
       "published": "2026-11-05T10:00:00Z",
-      "order": 19,
+      "order": 18,
       "url": "https://dev.to/highflyer910/the-fibonacci-spiral-is-secretly-a-straight-line-4b4p",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F5h6e2zjw2h4amsmub53k.gif",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwIF/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEAMQAAAB0AcyWND/xAAZEAACAwEAAAAAAAAAAAAAAAABAgAREhD/2gAIAQEAAQUCjtRRrPCmiEyZ/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFxEAAwEAAAAAAAAAAAAAAAAAAAERQf/aAAgBAgEBPwFTRzD/xAAXEAEAAwAAAAAAAAAAAAAAAAARABAg/9oACAEBAAY/AsrGv//EABgQAAMBAQAAAAAAAAAAAAAAAAABERAh/9oACAEBAAE/ISSjjSauhhcDef/aAAwDAQACAAMAAAAQ62//xAAYEQADAQEAAAAAAAAAAAAAAAAAAREhQf/aAAgBAwEBPxB2YK9P/8QAFxEAAwEAAAAAAAAAAAAAAAAAAAFRIf/aAAgBAgEBPxDaBEcn/8QAGRABAQEBAQEAAAAAAAAAAAAAAREAECEx/9oACAEBAAE/ENGBUB8Zq9vF+3TjwBSQmvCZI8//2Q==",
@@ -235,10 +223,22 @@
       "desc": "By Randal L. Schwartz | 29 min read",
       "tag": "tutorial",
       "published": "2026-11-06T23:51:03Z",
-      "order": 20,
+      "order": 19,
       "url": "https://dev.to/gde/being-doing-having-why-50-years-of-senior-craft-lives-in-context-not-code-29dl",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fmc7bd0mpw7k0aq4vsqj4.jpg",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwIE/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAH/2gAMAwEAAhADEAAAAcbBdrSMH//EABkQAAMAAwAAAAAAAAAAAAAAAAABEQIQIv/aAAgBAQABBQIUIjLlao3T/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFhAAAwAAAAAAAAAAAAAAAAAAECAh/9oACAEBAAY/AhG//8QAGxAAAwEBAAMAAAAAAAAAAAAAAAERITFBUYH/2gAIAQEAAT8h8X0W79LPWCqgjiKuDm0//9oADAMBAAIAAwAAABCn3//EABcRAAMBAAAAAAAAAAAAAAAAAAABETH/2gAIAQMBAT8QKph//8QAFxEBAAMAAAAAAAAAAAAAAAAAABEhMf/aAAgBAgEBPxBc6//EABsQAQACAwEBAAAAAAAAAAAAAAEAESExQVFh/9oACAEBAAE/EBblTxxnaqmBMst2XoiuD6x4Styq66dgVsJlDWif/9k=",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4993971",
+      "title": "Ubuntu Core Desktop Is Coming in 27.04 - And It Kills sudo apt (But Maybe That Is the Point?)",
+      "desc": "By Taqui | 5 min read",
+      "tag": "tutorial",
+      "published": "2026-11-07T15:18:14Z",
+      "order": 20,
+      "url": "https://dev.to/taqui/ubuntu-core-desktop-is-coming-in-2704-and-it-kills-sudo-apt-but-maybe-that-is-the-point-3dp1",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Feu769mdbtq0xlo2cdc7i.jpg",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAAECA//EABUBAQEAAAAAAAAAAAAAAAAAAAEC/9oADAMBAAIQAxAAAAHCkFulI//EABoQAAIDAQEAAAAAAAAAAAAAAAABERIhAjH/2gAIAQEAAQUC40WjIb4XlqkyWz//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAVEQEBAAAAAAAAAAAAAAAAAAAAIf/aAAgBAgEBPwFX/8QAGhAAAQUBAAAAAAAAAAAAAAAAEAARITFBcf/aAAgBAQAGPwLFQeB0/wD/xAAdEAACAgIDAQAAAAAAAAAAAAAAAREhQWExUYGR/9oACAEBAAE/IZVw0ezNFFEL4OoIo6K+SxOBDDkTPRH/2gAMAwEAAgADAAAAECDv/8QAFhEBAQEAAAAAAAAAAAAAAAAAAQBB/9oACAEDAQE/EANkC//EABcRAAMBAAAAAAAAAAAAAAAAAAABESH/2gAIAQIBAT8Qd2CpH//EABsQAQEBAQADAQAAAAAAAAAAAAERIQAxQVGR/9oACAEBAAE/EGDiE9a9AZAyhPzt2NyxnICxjApwIhHV5kSzXffKQyad5eeAgHz53//Z",
       "color": "#3B49DF"
     },
     {
@@ -314,24 +314,12 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4912485",
-      "title": "My Passion for Coding Isn't 404. It's 503.",
-      "desc": "By Tombri Bowei | 6 min read",
-      "tag": "tutorial",
-      "published": "2026-10-24T21:51:05Z",
-      "order": 27,
-      "url": "https://dev.to/_boweii/my-passion-for-coding-isnt-404-its-503-446h",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fa320n0vxtnspy5sqt7ms.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAQIDBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHhvKokSv/EABkQAAIDAQAAAAAAAAAAAAAAAAARARASAv/aAAgBAQABBQLmGZVxKNDr/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAGRAAAwADAAAAAAAAAAAAAAAAAAEREEFR/9oACAEBAAE/IaIN0szoFFdY3T//2gAMAwEAAgADAAAAEA/v/8QAFREBAQAAAAAAAAAAAAAAAAAAECH/2gAIAQMBAT8Qh//EABcRAAMBAAAAAAAAAAAAAAAAAAEQESH/2gAIAQIBAT8QNuL/xAAcEAEAAgMAAwAAAAAAAAAAAAABADERIVFhkfH/2gAIAQEAAT8QUjjfY5Q0DfYm6jURZseYuYy+2fUiW2z/2Q==",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4944141",
       "title": "How I Made Yet Another Project During a Global Teen Hackathon with Prizes",
       "desc": "By Tyler N | 9 min read",
       "tag": "tutorial",
       "published": "2026-10-30T21:07:45Z",
-      "order": 28,
+      "order": 27,
       "url": "https://dev.to/tyleruploads/how-i-made-yet-another-project-during-a-global-teen-hackathon-with-prizes-38hc",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fm9vivpavqjce812u6hn2.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAAECAwX/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAHQGFckH//EABcQAQADAAAAAAAAAAAAAAAAAAABICH/2gAIAQEAAQUCai3/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAUEAEAAAAAAAAAAAAAAAAAAAAw/9oACAEBAAY/Ag//xAAaEAACAwEBAAAAAAAAAAAAAAABEQAQIUGR/9oACAEBAAE/IdoRWA+QN9ojJyBOf//aAAwDAQACAAMAAAAQEU//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/ED//xAAbEAADAQEAAwAAAAAAAAAAAAAAASERcUFh0f/aAAgBAQABPxBTEhw/ohFXoO+HnqEtZVfAnHCTFen/2Q==",
@@ -343,7 +331,7 @@
       "desc": "By Alex Georgiev | 8 min read",
       "tag": "tutorial",
       "published": "2026-10-26T11:00:00Z",
-      "order": 29,
+      "order": 28,
       "url": "https://dev.to/alexgeorgiev17/python-314s-concurrentinterpreters-module-turns-a-36-second-gil-bottleneck-into-09-seconds-219",
       "image": "https://media2.dev.to/dynamic/image/width=1200,height=627,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fuedye7tw0if5gejxoawi.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAARACADASIAAhEBAxEB/8QAGAABAQEBAQAAAAAAAAAAAAAAAAECAwT/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAH2TYzdw6AQP//EABsQAAMAAgMAAAAAAAAAAAAAAAABAhESIDJC/9oACAEBAAEFAnKMSYgUwPtqao9cP//EABQRAQAAAAAAAAAAAAAAAAAAACD/2gAIAQMBAT8BH//EABQRAQAAAAAAAAAAAAAAAAAAACD/2gAIAQIBAT8BH//EAB0QAAICAQUAAAAAAAAAAAAAAAAyAZEQIDGBoeH/2gAIAQEABj8CWKEihOhIrHhsLzp//8QAHhAAAgICAgMAAAAAAAAAAAAAAAERITFhIEGRwfH/2gAIAQEAAT8hRdHusOoWPYEnB4zCL/BpeCElS6TTj//aAAwDAQACAAMAAAAQQ4Ac/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAwEBPxAf/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAgEBPxAf/8QAIRAAAgEDAwUAAAAAAAAAAAAAAREAITFhIEFRcZGx0fH/2gAIAQEAAT8QWUVn4gvCOBXAT1oRSMhEfC0F0O5gZVDrD4aBMuwBDGn/2Q==",

@@ -1,227 +1,150 @@
-[We recently announced Amutable Foundations](https://amutable.com/blog/introducing-amutable-foundations). It’s now time to provide a technical overview of how Amutable Foundations is put together. In this post, we’ll discuss two of the most fundamental components:
+*This post is cross-posted at the [Topos Institute blog](https://topos.institute/blog/2025-05-27-e-graphs-1/).*
 
-- **Amutable OS** (“*AOS*”, or “*⊼OS*”), a modern image-based Linux OS. It builds on the foundation of established Linux distributions, but moves them from a package-based world into an image-based, integrity-protected world. It removes drift, and adds robustness, integrity, and reproducibility. On one hand this provides great conceptual compatibility with the status quo ante of enterprise distributions, and on the other hand it’s built from the ground up with image-based OS designs in mind.
-- **Amutable Control Plane** (“*ACP*”, or “*⊼CP*”), a management system that tracks, controls, updates and verifies a fleet of AOS installations.
+An [e-graph](https://en.wikipedia.org/wiki/E-graph), short for “equality graph,” is a data structure that maintains a congruence relation on expression trees: an equivalence relation stable under forming new expressions. First devised by Nelson and Oppen in 1980 ([Nelson 1980](https://www.epatters.org/post/e-graphs-1/#ref-nelson1980); [Nelson and Oppen 1980](https://www.epatters.org/post/e-graphs-1/#ref-nelson-oppen1980)), e-graphs received a surge of new attention when Willsey et al demonstrated, via their software package [`egg`](https://github.com/egraphs-good/egg), that e-graphs combined with [equality saturation](https://doi.org/10.1145/1480881.1480915) can be a fast, powerful, and adaptable tool for equational reasoning ([Willsey et al. 2021](https://www.epatters.org/post/e-graphs-1/#ref-willsey2021)). In my own work on [CatColab](https://github.com/ToposInstitute/CatColab), I’ve begun using `egg`’s successor, [`egglog`](https://github.com/egraphs-good/egglog) ([Zhang et al. 2023](https://www.epatters.org/post/e-graphs-1/#ref-zhang2023)), to reason about finitely presented categories.
 
-## AOS – Amutable Operating System
+Standard presentations, beginning with Nelson’s PhD thesis ([Nelson 1980](https://www.epatters.org/post/e-graphs-1/#ref-nelson1980)), emphasize the data structures and algorithms needed to implement e-graphs, such as the [union-find](https://en.wikipedia.org/wiki/Disjoint-set_data_structure) data structure. It’s crucial that work in computer algebra ultimately touch the ground in this way. Still, I can’t help but wonder what, abstracted from the implementation details, is *really* going on with e-graphs. The diagrammatic and visual nature of e-graphs, so apparent in the interactive [`egglog` demo](https://egraphs-good.github.io/egglog), will suggest to any category theorist that categorical ideas may be implicitly at work.
 
-Amutable OS is built on classic Linux distributions, initially from [Fedora](https://fedoraproject.org/) packages. Distributions do valuable integration and unification work on the basic components of the OS – work we want to leverage. However, AOS uses distribution packages to pre-assemble immutable disk images at build-time while distributions, traditionally, compose a Linux system by installing packages on the final, deployed system. Let’s take a closer look at what this means.
+Two groups have recently proposed categorical semantics for e-graphs ([Biondo, Castelnovo, and Gadducci 2025](https://www.epatters.org/post/e-graphs-1/#ref-biondo2025); [Tiurin et al. 2025](https://www.epatters.org/post/e-graphs-1/#ref-tiurin2025)). Without going into specifics, both define an “e-hypergraph” to be a labeled hypergraph equipped with extra structure that, directly or indirectly, specifies an equivalence relation. Their starting point is to say what an e-graph *is.* Though I’ll eventually propose my own definition of an “e-diagram,” I will start by considering how e-graphs are *manipulated*, with the ultimate aim being to give a categorical and operational semantics for e-graph computation. The key concept will be that of an [*initial functor*](https://ncatlab.org/nlab/show/initial+functor).
 
-- **Package-based OSes** generally provide the user with a large number of regularly updated software packages (many thousands) with complex dependencies, which are composed into a working OS on the final machine it is deployed on. Installations in this style tend to vary greatly from system to system. Even with an identical selection of packages for the target system, the installation/update order, the stateful update logic and the file system data structures generally mean that the bytes that hit the disk on each machine are always different. This is called *drift*. Systems put together this way are hence not reproducible, not predictable, and hard to compare and analyze which is essential for tracking down security issues. They are also hard to test as the flexibility of selecting packages and assembling them in any order results in a prohibitive combinatorial explosion of systems to test.
-- **Image-based OSes** instead provide pre-built file system images that contain all code and other resources the OS needs. These images are bit-by-bit identical on every deployed system, so that the installations differ only in local state acquired during runtime, but not in the OS code and resources themselves (which stay 100% identical). To improve modularity, AOS extends this concept to allow a small number of coarse images to be merged together. Rather than thousands of packages, each system only combines a small number (typically < 5) of images, so that the system stays reproducible.
+In this post, I’ll introduce the main ideas for categories without any additional structure. In comparison with e-graphs, this setting will be quite restrictive—it will correspond to allowing only *unary* function symbols—but it has the advantage of bringing us to the point with a minimum of setup. In future posts, we’ll generalize to categories with finite products and recover the standard setting of e-graphs.
 
-Building from existing distribution packages allows us to guarantee far reaching semantic compatibility with existing systems, while maintaining our image-based focus. In particular, it allows us to potentially prepare – with little effort – individualized disk images that fit perfectly for the customer’s projects.
+## Representing equations using diagrams
 
-### Modularization
+If you’ve encountered any abstract algebra, you’ve likely seen how category theorists represent equations between morphisms by drawing commutative diagrams. For example, saying that a square of morphisms
 
-Classic distribution packages are a concept of *modularization*, and useful in that. With our image-based OS approach, we cut down on the modularization at deployment time, but we do allow some. This reflects the fact that while we likely will be able to cover a lot of disparate systems with a single, generic, minimal OS image, some of the components certain systems might require are so large, or specific, that it makes sense to split them out. For example, graphics/AI drivers and cloud-specific agent services tend to be large these days.
+in some category *commutes* means that the equation \(g \circ f = k \circ h\) holds.
 
-#### System Extensions
+Let’s recall the formal definitions, which are standard if not without fine distinctions.
 
-In order to not require their installation on every deployment host we split some components out into [**system extensions**](https://www.freedesktop.org/software/systemd/man/latest/systemd-sysext.html) (or short: “*sysexts*”) that contain additional files which can be overlaid on top of the OS resources in `/usr/` and augment the system with additional resources. Making these components optional reduces footprint and attack surface.
+**Definition 1** A **diagram** in a category \(\mathsf{C}\) is a functor \(D: \mathsf{J} \to \mathsf{C}\) whose domain \(\mathsf{J}\), the **indexing category** or **shape** of the diagram, is a small category. Further terminology:
 
-Note that in many cases the selection of sysexts to activate on a given host is purely a function of the host’s circumstances and equipment. More specifically, the graphics drivers and subsystem should be installed automatically when the matching hardware is detected. Similarly, the cloud-specific agent services should be picked up automatically when the system is detected to run inside a relevant cloud vendor’s environment.
+- the diagram is free if its shape is a free category, i.e., \(\mathsf{J} = \mathrm{Path}(G)\) is freely generated by a (possibly infinite) graph \(G\);
+- the diagram is finitely presented if its shape is a finitely presented category;
+- the diagram commutes, or is commutative, if for every pair of morphisms in \(\mathsf{J}\) with the same domain and codomain, their images in \(\mathsf{C}\) are equal.
 
-In AOS the selection of additional images to install is hence somewhat automated. The local AOS system carries a “[hwdb](https://www.freedesktop.org/software/systemd/man/latest/hwdb.html)” database that dictates which additional images to auto-install on the individual node if certain hardware is enumerated or the VMM indicates certain identification or functionality.
+Note that a diagram may well be both free and commutative: freeness is a property solely of the diagram’s shape, whereas commutativity also crucially concerns the diagram’s image in the target category.
 
-#### Configuration Extensions
+In practice, we work with diagrams that are free and finitely presented. That means that the diagram’s shape is freely generated by a finite graph, a data structure easily implemented on a computer. When doing computer algebra, the target category will itself be finitely presented by generators and relations. Initially, the only equations that we “know” are the ones explicitly given as relations. Our aim is to derive further equations in the target category by manipulating diagrams in it.
 
-A core functionality of AOS is support for [**configuration extensions**](https://www.freedesktop.org/software/systemd/man/latest/systemd-confext.html) (“confexts”). These are very similar to sysexts, but overlay `/etc/` instead of `/usr/`. They are designed to be the primary configuration management concept on AOS: configuration is pre-built and shipped in an atomically applied image to the AOS nodes, where it appears in full or not at all, but never halfway. Or in other words, not just AOS code but also AOS configuration is free from drift and strictly reproducible.
+But wait: if a diagram in a finitely presented category can be described using only graph-theoretic concepts, familiar to any computer scientist, what is the point of introducing categories and functors? We’ll see that category theory is indispensable to concisely describe the valid *manipulations* of diagrams. These manipulations take the form of *morphisms* between diagrams, which are functors satisfying an extra property.
 
-#### Discoverable Disk Images
+## Initial functors
 
-The OS image itself, as well as sysext and confext images are implemented as [**UAPI.3 DDIs**](https://uapi-group.org/specifications/specs/discoverable_disk_image/): [EROFS](https://en.wikipedia.org/wiki/EROFS) file system images, combined with [Verity](https://docs.kernel.org/admin-guide/device-mapper/verity.html) protection data, and a cryptographic signature, all wrapped in a GPT partition table as envelope. In the case of confexts, these DDIs are additionally encrypted ([LUKS](https://en.wikipedia.org/wiki/Linux_Unified_Key_Setup)). This means strong integrity is enforced on all these components not just at download time, but continuously during runtime. For configuration, confidentiality is also guaranteed during runtime. Moreover, we not only protect the contents of the images but the file system data structures themselves. Since each image can be cryptographically referenced via their Verity root hash, we also have a useful handle to *measure* before activating each image (see below for what this means).
+Reasoning with diagrams, or “diagram chasing,”[<sup>1</sup>](https://www.epatters.org/post/e-graphs-1/#fn1) is the art of transforming a given diagram, say \(D: \mathsf{J} \to \mathsf{C}\), into another diagram \(D': \mathsf{J}' \to \mathsf{C}\), following certain rules of inference. In ordinary mathematical practice, nobody bothers to say what these rules are. We aim to be more systematic.
 
-The Linux kernel is shipped as a [**UAPI.5 UKI**](https://uapi-group.org/specifications/specs/unified_kernel_image/). This means it comprehensively protects the kernel itself and its initrd via UEFI SecureBoot, and via [TPM](https://en.wikipedia.org/wiki/Trusted_Platform_Module) measurements and policies.
+Let’s consider the obvious moves we could make. Given a diagram \(D: \mathsf{J} \to
+\mathsf{C}\), we could pull it back along a functor \(R: \mathsf{J}' \to \mathsf{J}\) to obtain another diagram \(D' \mathrel{\vcenter{:}}=D \circ R: \mathsf{J}' \to \mathsf{C}\). Conversely, we could extend the diagram \(D\) by finding a functor \(R: \mathsf{J} \to
+\mathsf{J}'\) along with a diagram \(D': \mathsf{J}' \to \mathsf{C}\) such that \(D = D'
+\circ R\):
 
-![AOS node composition: workload images (containers, VMs, portable services) on top of the operating system, built from confext DDIs, sysext DDIs, the OS DDI and the UKI](https://amutable.com/images/aos-node-composition.svg)
+Without assuming more, neither contemplated rule of inference is valid in the sense (to be made precise) of exactly preserving solutions to the equations presented by diagrams. For that, we need \(R\) to be a special kind of functor, an *initial functor*, characterized by the following definition/theorem.
 
-## ACP – Amutable Control Plane
+### Definition
 
-Amutable Control Plane (ACP) manages and supervises a fleet of AOS nodes. It primarily encompasses the following functionality:
+**Theorem 1 (Initial functors)** A functor \(R: \mathsf{J} \to \mathsf{K}\) is **initial**, here denoted \(R: \mathsf{J}
+\twoheadrightarrow\mathsf{K}\), if any of the following equivalent conditions holds:
 
-- An enrollment system that allows administrators to enroll AOS nodes using hardware-backed trust.
-- A report receiver, validator, and ledger which is one side of an operational loop which we will look at below.
-- A configuration extension generator, which encrypts confext images for each node.
-- An identity service for issuing short-lived credentials used to authenticate nodes.
-- An image repository based on TUF which we’ve covered in an earlier blog post.
-- A CVE scanner and analysis tool that leverages the verified SBOMs associated with the images that machines are using.
-- A web UI to manage the above-listed functionality.
+- Pullback along \(R\) preserves limits: if \(\mathsf{C}\) is a category and \(D: \mathsf{K} \to \mathsf{C}\) is a diagram in \(\mathsf{C}\), then the canonical morphism between limits \[\lim_{\mathsf{K}} D \to \lim_{\mathsf{J}} (D \circ R)\] is an isomorphism, whenever the limits in question exist.
+- Pullback along \(R\) preserves limits of sets: if \(D: \mathsf{K} \to \mathsf{Set}\) is a diagram of sets, then the canonical function between limits \[\lim_{\mathsf{K}} D \to \lim_{\mathsf{J}} (D \circ R)\] is a bijection.
+- Slices relative to \(R\) are connected: for any object \(k \in \mathsf{K}\), the comma category \(R/k\) is non-empty and connected.<sup>2</sup>
 
-ACP is multi-tenant: each tenant has its own signing keys, storage and roles.
+For a proof of (the dual of) this equivalence, see ([Riehl 2014](https://www.epatters.org/post/e-graphs-1/#ref-riehl2014), Lemma 8.3.4).
 
-The interplay between the incoming reports and the outgoing confext and sysext images creates a loop that we leverage for security and operational robustness. Let’s take a look at that now.
+With a good intuition for limits, the limit characterization of initiality is useful because you can often see at a glance whether a given functor is initial just by imagining what will happen to a limit of sets. On the other hand, the slice characterization is useful in being concrete and syntactical. Recall that, given a functor \(R: \mathsf{J} \to \mathsf{K}\) and an object \(k \in \mathsf{K}\), the **comma category** \(R/k\) has
 
-![Amutable Control Plane components: report reception and verification, ledger, confext builder, web UI, identity provider, enrollment, image repository and CVE analysis](https://amutable.com/images/acp-components.svg)
+- as objects, an object \(j \in \mathsf{J}\) together with a morphism \(f: R(j) \to k\) in \(\mathsf{K}\);
+- as morphisms \((j, f) \to (j', f')\), morphisms \(h: j \to j'\) in \(\mathsf{J}\) making the triangle commute:
 
-## CLL – Cryptographic Locked Loop
+In the typical case that the categories involved are free and finitely generated, proving initiality—checking that each comma category \(R/k\) is non-empty and connected—thus reduces to a combinatorial problem.
 
-ACP keeps track of the enrolled nodes; ensures they are updated, in good health and that their integrity is verified. It also needs to be able to provide new configuration to nodes so they can receive configuration changes or new workloads. This forms a bi-directional relationship:
+### Interpretation
 
-- Each node sends “**reports**” (generated by the [systemd-report](https://amutable.com/blog/it-starts-upstream-systemd-report) tool) to the ACP instance it is enrolled in, at regular intervals. These reports describe both the runtime/resource state of the system, as well as cryptographic information about the composition of the system.On systems where a TPM is available, this carries a TPM “quote” that cryptographically indicates which UKI and DDIs the system is composed of. On systems where [Confidential Computing](https://en.wikipedia.org/wiki/Confidential_computing) (CoCo) is available, this carries a CPU quote instead that indicates what the initial composition of the node was. Moreover, a pure software signature scheme is available as well.These reports are collected by the ACP instance, verified both superficially (i.e. validating the signature checks out and mapping the signing keys to the source system) and in detail (i.e. checking if the UKI and all DDIs the system is composed of are recognized), in a [**remote attestation**](https://en.wikipedia.org/wiki/Trusted_Computing#Remote_attestation) scheme.This information is then enriched (e.g. SBOM, CVE, … information for the UKIs/DDIs) and everything written to a centralized “**ledger**” database. This ledger tracks the state of the entire fleet, both the image-level composition of it and the runtime state, including resource usage. Reports are the “*way up*” from the AOS nodes to the ACP instance.
-- In the opposite direction, ACP sends **confext DDIs** to the nodes. As mentioned above, these are Verity-protected, signed and encrypted with a key specific to the node. If the node hardware supports cryptographic sealing (as TPMs do), the confext DDI is sealed to the hardware keys of the node. The sealing uses a hardware-enforced access policy that mirrors the most recently seen report of the node (plus various other parameters).This provides very strong security guarantees: configuration and resources for a specific node may only be unlocked by the node if it still is in the state last reported. Or in other words, there’s also **local attestation** in play here: after ACP verifies via remote attestation that the node is in a good state, it provides updates and additional resources that can only be used after the local hardware validates that the machine is still in the expected state.This reduces the vulnerability window between ACP’s determination that the node is in a good state and the actual update for the node, as the state is re-verified at that point. Also note that this mechanism is very compatible with nodes that lack continuous connectivity as they can boot up fine even without being able to contact the ACP instance as the local TPM can reasonably attest the system’s state via the local attestation mechanism. Confext DDIs are the “*way down*” from the ACP instance to the AOS nodes.
+Why are initial functors relevant to equational reasoning? In general, a limit of a diagram can be thought of as an object representing all possible solutions to the equations postulated by the diagram. This interpretation is clear in the ur-category \(\mathsf{Set}\), where a general formula gives the limit of a diagram of sets as the subset of all tuples of elements satisfying equations indexed by the shape’s morphisms. Namely, a limit of a diagram \(D: \mathsf{J} \to \mathsf{Set}\) is the set of all tuples \((x_j)_{j \in \mathsf{J}}\), where \(x_j \in D(j)\), such that all of the equations
 
-The way up (of the reports) and the way down (of the confext DDIs) together make up what we call the *Cryptographic Locked Loop* (“CLL”). A continuous cycle of reports and confexts tracks and controls the fleet. The ledger always carries a precise, frequently updated description of the fleet’s state.
+\[ D(f)(x_i) = x_j, \qquad \forall f: i \to j\ \text{in}\ \mathsf{J}, \]
 
-![The cryptographic locked loop: AOS nodes send reports to ACP, which verifies, inspects, enriches and records them in the ledger, then sends back confext DDIs locked to the latest report](https://amutable.com/images/aos-acp-locked-loop.svg)
+hold ([Leinster 2014](https://www.epatters.org/post/e-graphs-1/#ref-leinster2014), Example 5.1.22). So, as pullback along an initial functor preserves limits, the initial functors are intuitively those that preserve the “solution set” of the system of equations presented by a diagram.
 
-Note that our CLL implementation is opportunistic. TPMs and CoCo are not available everywhere. AOS and ACP will make use of this hardware if available (specifically most reasonably modern TPM 2.0 implementations in chip, firmware or virtualized should work, as should [AMD SEV](https://www.amd.com/en/developer/sev.html) and [Intel TDX](https://www.intel.com/content/www/us/en/developer/tools/trust-domain-extensions/overview.html)). The system also uses a pure software scheme.
+However, our interest lies in diagrams \(D: \mathsf{J} \to \mathsf{C}\) whose target is a *finitely presented* category \(\mathsf{C}\). Such categories rarely have many nontrivial products or equalizers. We can circumvent this problem in two ways.
 
-Of course, the different technologies provide different security guarantees, and ACP’s UI will surface the used technologies clearly. Note that TPM, AMD SEV, Intel TDX, and software signatures are used opportunistically and in parallel if available. This is to say that in situations where a confidential VM with a vTPM is used, it might happen that reports are signed thrice (one TPM quote, one CoCo quote, and one plain software signature). It’s the job of ACP’s verifier to validate all three signatures and focus on the strongest technology of them all for the right purpose.
+First, we can always consider set-theoretic *interpretations* of the presentation, namely functors \(F: \mathsf{C} \to \mathsf{Set}\). Then the composite \(F \circ
+D: \mathsf{J} \to \mathsf{Set}\) is a diagram of sets and we are returned to the standard setting where all limits exist. This viewpoint is taken in the e-graph community when they speak of “uninterpreted functions” or “function symbols” (for us, generating morphisms of \(\mathsf{C}\)). Any equation deduced for uninterpreted functions remains true in any interpretation of them by actual functions between sets. Thus, if you have a formal system of proofs that is *complete* for equational reasoning with functions, then there exist proofs in that system for equations deduced using initial functors.[<sup>3</sup>](https://www.epatters.org/post/e-graphs-1/#fn3)
 
-## The Varlink Communication Channel
+Taking a little extra care, we can go further to deduce equations that hold in an arbitrary category \(\mathsf{C}\). Suppose we start with a *singleton* diagram in \(\mathsf{C}\), indexing a single object \(X \in \mathsf{C}\). The limit of that diagram exists trivially, being \(X\) itself. Thus, any diagram obtained by pulling back or extending the diagram along an initial functor will continue to have \(X\) as its limit. In particular, any two parallel paths in such a diagram *originating* at \(X\) must commute. We will use this technique in the calculations that follow. It will become more powerful when we extend to categories with finite products, since we can then start with any finite discrete diagram, the indexing objects of which act as “free variables.”
 
-Communication between ACP and AOS nodes primarily takes place via reports in one direction and confext DDIs in the other as explained earlier in this post. Both mechanisms are very asynchronous in nature: reports are generated, queued, transferred, and processed asynchronously.
+## Examples and calculations
 
-Confext DDIs are generated for the nodes, made available for download via a separate TUF repo, eventually downloaded by the node, and finally applied. This asynchronous behavior is fantastic for many scenarios and operations since it’s very robust and resilient towards spotty connectivity, unstable power sources and other disruptions. However, it is not nice for operations where interactivity is key, e.g. debugging, certain administrative operations and similar.
+The remainder of the post will illustrate the concept of initial functor through commonly occurring examples and explicit calculations. The aim is to suggest how initial functors can be deployed for mechanical reasoning with diagrams, deferring to next time a further theoretical development.
 
-To address this, AOS nodes have the possibility to be put into remote [Varlink](https://varlink.org/) mode that is facilitated via ACP and use the authentication options that the [varlink-http-bridge](https://github.com/systemd/varlink-http-bridge) provides (like mTLS or sshauth). This is built using the zero-trust pattern: ACP is content blind and has no special access.
+### Motifs among initial functors
 
-When remote Varlink mode is enabled, a node exposes its full Varlink IPC API over HTTPS. That covers everything systemd and the other system services on the node offer via Varlink. For example: `io.systemd.Hostname` for hostname and machine metadata, `io.systemd.Unit` to list units and change their properties, `io.systemd.JournalAccess` to fetch journal entries, `io.systemd.SysUpdate` to check for and apply updates, and `io.systemd.Manager` to reload or reboot the system.
+Let’s begin with a few minimal examples of initial functors, acting as motifs or patterns. Each such example will give rise to a rule of inference for diagrammatic reasoning.
 
-The result is API-driven management with strong typing and a fully self-describing set of rich APIs that any language that speaks JSON and HTTPS can drive. A service that registers a Varlink interface on the node becomes reachable remotely without further changes.
+The target category \(\mathsf{C}\) for the diagrams is fixed throughout. That is, any initial functor should also be a morphism in the **category of diagrams** in \(\mathsf{C}\), the slice category \(\mathsf{Cat}/\mathsf{C}\).
 
-The API is self-describing, so a client can discover what a node offers. For each API interface the node also serves an [OpenAPI 3.1](https://spec.openapis.org/oas/v3.1.0) description, so you can generate typed client wrappers for Python, Go, TypeScript and other languages with standard tooling.
+- **Operation introduction**: for any morphism \(f: X \to Y\) in \(\mathsf{C}\), the map of diagrams ![](https://www.epatters.org/post/e-graphs-1/_svgs/3752371d6c6d310b7a4f4c7252d64560eaed3b52.svg) is initial.
+- More generally, for any path \(X_0 \xrightarrow{f_1} X_1 \xrightarrow{f_2} \cdots \xrightarrow{f_n} X_n\) in \(\mathsf{C}\), the map of diagrams ![](https://www.epatters.org/post/e-graphs-1/_svgs/7a27ee92f3d5c8a8eb514817368dd360442bbca9.svg) is initial.
+- **Congruence reduction**: for any morphism \(f: X \to Y\) in \(\mathsf{C}\), the map of diagrams,[<sup>4</sup>](https://www.epatters.org/post/e-graphs-1/#fn4) ![](https://www.epatters.org/post/e-graphs-1/_svgs/e9099a5b028884b812c34a103fc1db9a8488c733.svg) sending both \(y\) and \(y'\) in the domain shape to \(y\) in the codomain shape, is initial.
+- Subsuming both operation introduction and congruence reduction, for any morphism \(f: X \to Y\) in \(\mathsf{C}\) and number \(n \geq 0\), the map of diagrams, ![](https://www.epatters.org/post/e-graphs-1/_svgs/e029e214a238ac1e330839d3f5af298b7bc5dd46.svg) sending all of \(y_1,\dots,y_n\) to \(y\), is initial.
+- **Equation introduction**: suppose that the equation \(g \circ f = k \circ h\) holds in \(\mathsf{C}\), as depicted earlier. Then both maps in the span of free diagrams ![](https://www.epatters.org/post/e-graphs-1/_svgs/797c35e4ce4a245d96f9dd7c32b4488109fa804a.svg) are initial. More generally, this works for any path equation in \(\mathsf{C}\). As another example, we can introduce a nullary path equation, say \(\operatorname{id}_X = g \circ f\), as: ![](https://www.epatters.org/post/e-graphs-1/_svgs/b25c4f48b548f24c93224a9fbfab8c6e5d971eda.svg)
 
-## Cohesive Security Design
+Later, we will formalize not just the rules but how to *apply* them, using ideas from [category-theoretic rewriting](https://ncatlab.org/nlab/show/span+rewriting). For the moment, we take for granted that when applying the rules in a larger context, the resulting functors are still initial. Or, you can check initiality by inspection in each application.
 
-The image-based OS approach enables us to enforce some very strict but powerful security properties, which elevate the security posture of the system substantially above traditional Linux systems. Specifically, let’s highlight seven major essential security properties of AOS here:
+### Pasting commutative squares
 
-1. **No Shell + No SSH + No Language Interpreters**. By default AOS does not install a UNIX shell, nor makes remote access via SSH available on the nodes. Moreover, we do not install any of the usual language interpreters (Python, Perl, …) by default. For most nodes a shell or interpreted language support is not required and it removes a whole class of attacks.
-2. **Signed Images Only**. On AOS only images that come with Verity data signed by a signing key listed in the [Verity keyring](https://amutable.com/blog/it-starts-upstream-kernel) may be activated.
-3. **W^X**. We’ve posted about W^X policies before in greater detail. The core idea is that code cannot live on writable file systems and instead must originate from Verity protected sources. This makes injecting code into AOS much harder and hardens it against remote-code-execution vulnerabilities such as the [recent PHP attacks](https://amutable.com/blog/recent-php-cves-retrospective) which we also covered on our blog.
-4. **Everything Is Measured**. We believe that for a secure system it is absolutely essential to maintain a tamper-evident log of all images containing code or configuration. This kind of tamper-evident log is based on *measurements* utilizing hardware features that make it impossible to forge.
-5. **No SUID/SGID or File Capabilities**. The SUID and SGID file access bits are a fundamental privilege escalation mechanism in classic UNIX and have led to a very large number of exploits. On AOS the SUID and SGID bits are therefore disabled completely. Privilege elevation happens securely via IPC such that a suitably privileged process performs operations on behalf of less privileged code.
-6. **Integrity Is Mandatory**. A modern operating system must provide integrity guarantees well beyond traditional systems. It is a conditio sine qua non given the advent of LLM agents. On AOS everything is measured, attested, and comes with fundamental protection mechanisms. For example, all file system images we ship come with block-level Verity and encryption securing complex file system data structures.
-7. **Factory Reset Is Built In**. Any operating system must consider the possibility that it will be hacked. For this reason, a secure OS must come with a “[factory reset](https://www.freedesktop.org/software/systemd/man/latest/systemd-factory-reset.html)” mechanism. AOS makes a lot of exploits *visible* in its Ledger. With factory reset it gains the ability to *act* and put the system back into a good state.
+We’re ready to do our first calculation, proving the pasting law for commutative squares: that two commutative squares with a common edge can be juxtaposed to produce a commutative rectangle. The notation makes this seem obviously true—that’s what makes it good notation!—but it still needs a proof. We’ll present the proof in a highly mechanical style, where each diagram in the sequence is related to the previous one by an initial functor or, when introducing an equation, by a span of initial functors.
 
-## Summary
+**Assume**: We are given the two commutative squares
 
-**TL;DR**: Putting this all together, Amutable Foundations’ AOS and ACP provide:
+By this we mean that the target category \(\mathsf{C}\) is generated by six objects, called \(X,X',Y,Y',Z,Z'\), and seven morphisms, called \(f,f',g,g',h,k,\ell\), subject to those two equations.
 
-- A modern image-based OS, with far-reaching compatibility with classic Linux distributions
-- AOS is fundamentally designed with security in mind, removing a large portion of the attack surface of classic Linux systems
-- Composition, lifetime and resources of nodes are centrally tracked in the ledger, with tamper-evident properties, via measurements
-- The system covers both OS updates and configuration management via the same (or similar) mechanisms
-- Each node comes with a robust, powerful API to execute operations on it
-- Opportunistic support for modern security hardware (TPM 2.0, CoCo), with graceful degradation to all-software signatures where unavailable
-- Integrity checks every step of the way, via both local and remote attestation
-- Custom configuration and resources are only available to the machine if it is in the expected state
+**Construct**: Start with the singleton diagram on \(X\), whose limit is trivially \(X\). Introduce the left- and right-hand sides of the path equation we want to prove:
 
-## Sign Up for Our Private Preview Now!
+Recognize the path \(X \xrightarrow{h} X' \xrightarrow{f'} Y'\) as the left-hand side of the first square, then introduce that equation:
 
-If you are interested in the experience we described above, please [sign up for the Amutable Foundations Private Preview](https://amutable.com/preview) to get a chance to try AOS and ACP first-hand yourself.
+Apply congruence reduction to the occurrences of \(f\):
 
-[We recently announced Amutable Foundations](https://amutable.com/blog/introducing-amutable-foundations). It’s now time to provide a technical overview of how Amutable Foundations is put together. In this post, we’ll discuss two of the most fundamental components:
+Now recognize the path \(Y \xrightarrow{k} Y' \xrightarrow{g'} Z'\) as the left-hand side of the second square, then introduce that equation:
 
-- **Amutable OS** (“*AOS*”, or “*⊼OS*”), a modern image-based Linux OS. It builds on the foundation of established Linux distributions, but moves them from a package-based world into an image-based, integrity-protected world. It removes drift, and adds robustness, integrity, and reproducibility. On one hand this provides great conceptual compatibility with the status quo ante of enterprise distributions, and on the other hand it’s built from the ground up with image-based OS designs in mind.
-- **Amutable Control Plane** (“*ACP*”, or “*⊼CP*”), a management system that tracks, controls, updates and verifies a fleet of AOS installations.
+We’re already done, but we might as well tidy up by congruence reducing the occurrences of \(g\) and then \(\ell\):
 
-## AOS – Amutable Operating System
+**Conclude**: The outer rectangle commutes, since the limit of the diagram is still \(X\).
 
-Amutable OS is built on classic Linux distributions, initially from [Fedora](https://fedoraproject.org/) packages. Distributions do valuable integration and unification work on the basic components of the OS – work we want to leverage. However, AOS uses distribution packages to pre-assemble immutable disk images at build-time while distributions, traditionally, compose a Linux system by installing packages on the final, deployed system. Let’s take a closer look at what this means.
+### A monoid presentation
 
-- **Package-based OSes** generally provide the user with a large number of regularly updated software packages (many thousands) with complex dependencies, which are composed into a working OS on the final machine it is deployed on. Installations in this style tend to vary greatly from system to system. Even with an identical selection of packages for the target system, the installation/update order, the stateful update logic and the file system data structures generally mean that the bytes that hit the disk on each machine are always different. This is called *drift*. Systems put together this way are hence not reproducible, not predictable, and hard to compare and analyze which is essential for tracking down security issues. They are also hard to test as the flexibility of selecting packages and assembling them in any order results in a prohibitive combinatorial explosion of systems to test.
-- **Image-based OSes** instead provide pre-built file system images that contain all code and other resources the OS needs. These images are bit-by-bit identical on every deployed system, so that the installations differ only in local state acquired during runtime, but not in the OS code and resources themselves (which stay 100% identical). To improve modularity, AOS extends this concept to allow a small number of coarse images to be merged together. Rather than thousands of packages, each system only combines a small number (typically < 5) of images, so that the system stays reproducible.
+Consider a monoid with an element \(f\) satisfying the equations
 
-Building from existing distribution packages allows us to guarantee far reaching semantic compatibility with existing systems, while maintaining our image-based focus. In particular, it allows us to potentially prepare – with little effort – individualized disk images that fit perfectly for the customer’s projects.
+\[ f^3 = \operatorname{id}= f^5. \]
 
-### Modularization
+That is, the target category \(\mathsf{C}\) is generated by a single object, say \(\bullet\), and an endomorphism, \(f: \bullet \to \bullet\), satisfying those two equations.
 
-Classic distribution packages are a concept of *modularization*, and useful in that. With our image-based OS approach, we cut down on the modularization at deployment time, but we do allow some. This reflects the fact that while we likely will be able to cover a lot of disparate systems with a single, generic, minimal OS image, some of the components certain systems might require are so large, or specific, that it makes sense to split them out. For example, graphics/AI drivers and cloud-specific agent services tend to be large these days.
+Start with the singleton diagram \(\{\bullet\}\) and introduce both defining equations, noting that since each equation has an identity on one side, they appear as cycles:
 
-#### System Extensions
+We leave the arrows unlabeled since every arrow lies over the generating morphism \(f\). We’ll now compute the *congruence closure*, iteratively applying congruence reduction until that is no longer possible. Arrows affected by a congruence reduction are colored the same on either side of the reduction, starting with the two blue arrows above. The first reduction is:
 
-In order to not require their installation on every deployment host we split some components out into [**system extensions**](https://www.freedesktop.org/software/systemd/man/latest/systemd-sysext.html) (or short: “*sysexts*”) that contain additional files which can be overlaid on top of the OS resources in `/usr/` and augment the system with additional resources. Making these components optional reduces footprint and attack surface.
+Next:
 
-Note that in many cases the selection of sysexts to activate on a given host is purely a function of the host’s circumstances and equipment. More specifically, the graphics drivers and subsystem should be installed automatically when the matching hardware is detected. Similarly, the cloud-specific agent services should be picked up automatically when the system is detected to run inside a relevant cloud vendor’s environment.
+Congruence reducing three more times gives the sequence:
 
-In AOS the selection of additional images to install is hence somewhat automated. The local AOS system carries a “[hwdb](https://www.freedesktop.org/software/systemd/man/latest/hwdb.html)” database that dictates which additional images to auto-install on the individual node if certain hardware is enumerated or the VMM indicates certain identification or functionality.
+We could stop here, but we might as well reduce twice more, yielding the diagram that is the self-loop over \(f\). We have proved the equation
 
-#### Configuration Extensions
+\[ f = \operatorname{id}, \]
 
-A core functionality of AOS is support for [**configuration extensions**](https://www.freedesktop.org/software/systemd/man/latest/systemd-confext.html) (“confexts”). These are very similar to sysexts, but overlay `/etc/` instead of `/usr/`. They are designed to be the primary configuration management concept on AOS: configuration is pre-built and shipped in an atomically applied image to the AOS nodes, where it appears in full or not at all, but never halfway. Or in other words, not just AOS code but also AOS configuration is free from drift and strictly reproducible.
+since the limit of the diagram is the one we started with, namely the unique object \(\bullet\). In other words, the monoid presented is actually the trivial monoid. You might remember this as a special case of the fact in group theory that if a group element \(g\) satisfies \(g^m = \operatorname{id}= g^n\) for relatively prime numbers \(m\) and \(n\), then \(g = \operatorname{id}\).
 
-#### Discoverable Disk Images
+## Discussion
 
-The OS image itself, as well as sysext and confext images are implemented as [**UAPI.3 DDIs**](https://uapi-group.org/specifications/specs/discoverable_disk_image/): [EROFS](https://en.wikipedia.org/wiki/EROFS) file system images, combined with [Verity](https://docs.kernel.org/admin-guide/device-mapper/verity.html) protection data, and a cryptographic signature, all wrapped in a GPT partition table as envelope. In the case of confexts, these DDIs are additionally encrypted ([LUKS](https://en.wikipedia.org/wiki/Linux_Unified_Key_Setup)). This means strong integrity is enforced on all these components not just at download time, but continuously during runtime. For configuration, confidentiality is also guaranteed during runtime. Moreover, we not only protect the contents of the images but the file system data structures themselves. Since each image can be cryptographically referenced via their Verity root hash, we also have a useful handle to *measure* before activating each image (see below for what this means).
+Category theory is often said to be abstract, even “abstract nonsense,” but it is the interplay between abstract and concrete that gives category theory its power. Initial functors, with their complementary intrinsic and syntactical descriptions, exemplify this interplay.
 
-The Linux kernel is shipped as a [**UAPI.5 UKI**](https://uapi-group.org/specifications/specs/unified_kernel_image/). This means it comprehensively protects the kernel itself and its initrd via UEFI SecureBoot, and via [TPM](https://en.wikipedia.org/wiki/Trusted_Platform_Module) measurements and policies.
+We’ve begun to explore how initial functors are the basis for an operational semantics for e-graphs. Rather than defining the individual steps and then chaining them together, as in the usual “small-step” operational semantics, we define the valid transformations invariantly via initial functors and then look for useful specializations. Beyond its conceptual content, this flexibility matters because practical systems tend to batch reductions together to improve efficiency. For us, that will often just amount to composing initial functors.
 
-![AOS node composition: workload images (containers, VMs, portable services) on top of the operating system, built from confext DDIs, sysext DDIs, the OS DDI and the UKI](https://amutable.com/images/aos-node-composition.svg)
+We haven’t yet made a direct connection with e-graphs, though there have been many hints. Another hint is that our final example is lifted directly from Nelson and Oppen’s early work ([Nelson 1980](https://www.epatters.org/post/e-graphs-1/#ref-nelson1980); [Nelson and Oppen 1980](https://www.epatters.org/post/e-graphs-1/#ref-nelson-oppen1980)), where it is a running example. In future posts, we’ll tighten up the connection with e-graphs. We’ll also explain how the formalism generalizes to categories with finite products, the categorical counterpart to algebraic theories.
 
-## ACP – Amutable Control Plane
+## References
 
-Amutable Control Plane (ACP) manages and supervises a fleet of AOS nodes. It primarily encompasses the following functionality:
+## Footnotes
 
-- An enrollment system that allows administrators to enroll AOS nodes using hardware-backed trust.
-- A report receiver, validator, and ledger which is one side of an operational loop which we will look at below.
-- A configuration extension generator, which encrypts confext images for each node.
-- An identity service for issuing short-lived credentials used to authenticate nodes.
-- An image repository based on TUF which we’ve covered in an earlier blog post.
-- A CVE scanner and analysis tool that leverages the verified SBOMs associated with the images that machines are using.
-- A web UI to manage the above-listed functionality.
-
-ACP is multi-tenant: each tenant has its own signing keys, storage and roles.
-
-The interplay between the incoming reports and the outgoing confext and sysext images creates a loop that we leverage for security and operational robustness. Let’s take a look at that now.
-
-![Amutable Control Plane components: report reception and verification, ledger, confext builder, web UI, identity provider, enrollment, image repository and CVE analysis](https://amutable.com/images/acp-components.svg)
-
-## CLL – Cryptographic Locked Loop
-
-ACP keeps track of the enrolled nodes; ensures they are updated, in good health and that their integrity is verified. It also needs to be able to provide new configuration to nodes so they can receive configuration changes or new workloads. This forms a bi-directional relationship:
-
-- Each node sends “**reports**” (generated by the [systemd-report](https://amutable.com/blog/it-starts-upstream-systemd-report) tool) to the ACP instance it is enrolled in, at regular intervals. These reports describe both the runtime/resource state of the system, as well as cryptographic information about the composition of the system.On systems where a TPM is available, this carries a TPM “quote” that cryptographically indicates which UKI and DDIs the system is composed of. On systems where [Confidential Computing](https://en.wikipedia.org/wiki/Confidential_computing) (CoCo) is available, this carries a CPU quote instead that indicates what the initial composition of the node was. Moreover, a pure software signature scheme is available as well.These reports are collected by the ACP instance, verified both superficially (i.e. validating the signature checks out and mapping the signing keys to the source system) and in detail (i.e. checking if the UKI and all DDIs the system is composed of are recognized), in a [**remote attestation**](https://en.wikipedia.org/wiki/Trusted_Computing#Remote_attestation) scheme.This information is then enriched (e.g. SBOM, CVE, … information for the UKIs/DDIs) and everything written to a centralized “**ledger**” database. This ledger tracks the state of the entire fleet, both the image-level composition of it and the runtime state, including resource usage. Reports are the “*way up*” from the AOS nodes to the ACP instance.
-- In the opposite direction, ACP sends **confext DDIs** to the nodes. As mentioned above, these are Verity-protected, signed and encrypted with a key specific to the node. If the node hardware supports cryptographic sealing (as TPMs do), the confext DDI is sealed to the hardware keys of the node. The sealing uses a hardware-enforced access policy that mirrors the most recently seen report of the node (plus various other parameters).This provides very strong security guarantees: configuration and resources for a specific node may only be unlocked by the node if it still is in the state last reported. Or in other words, there’s also **local attestation** in play here: after ACP verifies via remote attestation that the node is in a good state, it provides updates and additional resources that can only be used after the local hardware validates that the machine is still in the expected state.This reduces the vulnerability window between ACP’s determination that the node is in a good state and the actual update for the node, as the state is re-verified at that point. Also note that this mechanism is very compatible with nodes that lack continuous connectivity as they can boot up fine even without being able to contact the ACP instance as the local TPM can reasonably attest the system’s state via the local attestation mechanism. Confext DDIs are the “*way down*” from the ACP instance to the AOS nodes.
-
-The way up (of the reports) and the way down (of the confext DDIs) together make up what we call the *Cryptographic Locked Loop* (“CLL”). A continuous cycle of reports and confexts tracks and controls the fleet. The ledger always carries a precise, frequently updated description of the fleet’s state.
-
-![The cryptographic locked loop: AOS nodes send reports to ACP, which verifies, inspects, enriches and records them in the ledger, then sends back confext DDIs locked to the latest report](https://amutable.com/images/aos-acp-locked-loop.svg)
-
-Note that our CLL implementation is opportunistic. TPMs and CoCo are not available everywhere. AOS and ACP will make use of this hardware if available (specifically most reasonably modern TPM 2.0 implementations in chip, firmware or virtualized should work, as should [AMD SEV](https://www.amd.com/en/developer/sev.html) and [Intel TDX](https://www.intel.com/content/www/us/en/developer/tools/trust-domain-extensions/overview.html)). The system also uses a pure software scheme.
-
-Of course, the different technologies provide different security guarantees, and ACP’s UI will surface the used technologies clearly. Note that TPM, AMD SEV, Intel TDX, and software signatures are used opportunistically and in parallel if available. This is to say that in situations where a confidential VM with a vTPM is used, it might happen that reports are signed thrice (one TPM quote, one CoCo quote, and one plain software signature). It’s the job of ACP’s verifier to validate all three signatures and focus on the strongest technology of them all for the right purpose.
-
-## The Varlink Communication Channel
-
-Communication between ACP and AOS nodes primarily takes place via reports in one direction and confext DDIs in the other as explained earlier in this post. Both mechanisms are very asynchronous in nature: reports are generated, queued, transferred, and processed asynchronously.
-
-Confext DDIs are generated for the nodes, made available for download via a separate TUF repo, eventually downloaded by the node, and finally applied. This asynchronous behavior is fantastic for many scenarios and operations since it’s very robust and resilient towards spotty connectivity, unstable power sources and other disruptions. However, it is not nice for operations where interactivity is key, e.g. debugging, certain administrative operations and similar.
-
-To address this, AOS nodes have the possibility to be put into remote [Varlink](https://varlink.org/) mode that is facilitated via ACP and use the authentication options that the [varlink-http-bridge](https://github.com/systemd/varlink-http-bridge) provides (like mTLS or sshauth). This is built using the zero-trust pattern: ACP is content blind and has no special access.
-
-When remote Varlink mode is enabled, a node exposes its full Varlink IPC API over HTTPS. That covers everything systemd and the other system services on the node offer via Varlink. For example: `io.systemd.Hostname` for hostname and machine metadata, `io.systemd.Unit` to list units and change their properties, `io.systemd.JournalAccess` to fetch journal entries, `io.systemd.SysUpdate` to check for and apply updates, and `io.systemd.Manager` to reload or reboot the system.
-
-The result is API-driven management with strong typing and a fully self-describing set of rich APIs that any language that speaks JSON and HTTPS can drive. A service that registers a Varlink interface on the node becomes reachable remotely without further changes.
-
-The API is self-describing, so a client can discover what a node offers. For each API interface the node also serves an [OpenAPI 3.1](https://spec.openapis.org/oas/v3.1.0) description, so you can generate typed client wrappers for Python, Go, TypeScript and other languages with standard tooling.
-
-## Cohesive Security Design
-
-The image-based OS approach enables us to enforce some very strict but powerful security properties, which elevate the security posture of the system substantially above traditional Linux systems. Specifically, let’s highlight seven major essential security properties of AOS here:
-
-1. **No Shell + No SSH + No Language Interpreters**. By default AOS does not install a UNIX shell, nor makes remote access via SSH available on the nodes. Moreover, we do not install any of the usual language interpreters (Python, Perl, …) by default. For most nodes a shell or interpreted language support is not required and it removes a whole class of attacks.
-2. **Signed Images Only**. On AOS only images that come with Verity data signed by a signing key listed in the [Verity keyring](https://amutable.com/blog/it-starts-upstream-kernel) may be activated.
-3. **W^X**. We’ve posted about W^X policies before in greater detail. The core idea is that code cannot live on writable file systems and instead must originate from Verity protected sources. This makes injecting code into AOS much harder and hardens it against remote-code-execution vulnerabilities such as the [recent PHP attacks](https://amutable.com/blog/recent-php-cves-retrospective) which we also covered on our blog.
-4. **Everything Is Measured**. We believe that for a secure system it is absolutely essential to maintain a tamper-evident log of all images containing code or configuration. This kind of tamper-evident log is based on *measurements* utilizing hardware features that make it impossible to forge.
-5. **No SUID/SGID or File Capabilities**. The SUID and SGID file access bits are a fundamental privilege escalation mechanism in classic UNIX and have led to a very large number of exploits. On AOS the SUID and SGID bits are therefore disabled completely. Privilege elevation happens securely via IPC such that a suitably privileged process performs operations on behalf of less privileged code.
-6. **Integrity Is Mandatory**. A modern operating system must provide integrity guarantees well beyond traditional systems. It is a conditio sine qua non given the advent of LLM agents. On AOS everything is measured, attested, and comes with fundamental protection mechanisms. For example, all file system images we ship come with block-level Verity and encryption securing complex file system data structures.
-7. **Factory Reset Is Built In**. Any operating system must consider the possibility that it will be hacked. For this reason, a secure OS must come with a “[factory reset](https://www.freedesktop.org/software/systemd/man/latest/systemd-factory-reset.html)” mechanism. AOS makes a lot of exploits *visible* in its Ledger. With factory reset it gains the ability to *act* and put the system back into a good state.
-
-## Summary
-
-**TL;DR**: Putting this all together, Amutable Foundations’ AOS and ACP provide:
-
-- A modern image-based OS, with far-reaching compatibility with classic Linux distributions
-- AOS is fundamentally designed with security in mind, removing a large portion of the attack surface of classic Linux systems
-- Composition, lifetime and resources of nodes are centrally tracked in the ledger, with tamper-evident properties, via measurements
-- The system covers both OS updates and configuration management via the same (or similar) mechanisms
-- Each node comes with a robust, powerful API to execute operations on it
-- Opportunistic support for modern security hardware (TPM 2.0, CoCo), with graceful degradation to all-software signatures where unavailable
-- Integrity checks every step of the way, via both local and remote attestation
-- Custom configuration and resources are only available to the machine if it is in the expected state
-
-## Sign Up for Our Private Preview Now!
-
-If you are interested in the experience we described above, please [sign up for the Amutable Foundations Private Preview](https://amutable.com/preview) to get a chance to try AOS and ACP first-hand yourself.
+1. In this series, we work first with bare categories and later generalize to cartesian categories. Diagram chasing in its most traditional form takes place in [additive and abelian categories](https://ncatlab.org/nlab/show/additive+and+abelian+categories), a different direction of generalization. It would be fun to try to extend our methods to the additive setting, beginning with categories enriched in commutative monoids or abelian groups.[↩︎](https://www.epatters.org/post/e-graphs-1/#fnref1)
+2. A category is **connected** if any two of its objects can be connected by a [zig-zag](https://ncatlab.org/nlab/show/zigzag) of morphisms, i.e., there is an *undirected* path between them.[↩︎](https://www.epatters.org/post/e-graphs-1/#fnref2)
+3. That is not to say that exhibiting a proof implied by completeness is easy or convenient. As I understand it, *proof extraction* is a topic of active work in the e-graph community.[↩︎](https://www.epatters.org/post/e-graphs-1/#fnref3)
+4. When drawing a diagram \(D: \mathsf{J} \to \mathsf{C}\), the “type-theoretic” notation \(x: X\) names an object \(x\) in the indexing category \(\mathsf{J}\) that is mapped to the object \(X\) in the target category \(\mathsf{C}\). Thinking of the diagram as a [term graph](https://en.wikipedia.org/wiki/Term_graph), the object \(x\) is indeed a “term of type \(X\).”[↩︎](https://www.epatters.org/post/e-graphs-1/#fnref4)

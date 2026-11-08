@@ -1,36 +1,75 @@
-Yet another day, [yet another vulnerability](https://sshhole.com/) in core C code. This one happened due to two different conditions using the same sentinel value:
+This summer I participated in [the r/roguelikedev summer event
+where we write a Roguelike game](https://old.reddit.com/r/roguelikedev/wiki/python_tutorial_series)<sup>[1]</sup>, following one of the Roguelike
+coding tutorials. I’m not trying to learn coding, so I use this
+event to try learning something else. This year, one of the things
+I wanted to tackle was two-dimensional version control.
 
-- On Unix, a password hash of "*" has meant a locked account since the very early days.
-- Since 2012, musl libc’s crypt function has returned the string "*" for a password that’s too long for it to hash.
+The tutorial we’re following has 14 chapters. I wanted to use
+version control while writing my code. But I *also* wanted to use
+version control to match the tutorial’s chapters:
 
-The two points combined, along with sshd hashing login attempts for locked accounts to avoid timing leaks, mean that on musl systems without PAM (like, oh, *the official Alpine AWS image*), an unauthenticated user now gets a (possibly root!) shell on your computer. See [this Alpine advisory](https://www.alpinelinux.org/posts/2026-11-05-openssh-password-authentication-bypass/) for more details.
+At the end of the project, I want a history of changes I made
+while writing the tutorial (horizontal axis) and *also* a history of
+changes the reader should make while following the tutorial
+(vertical axis).
 
-This is not a memory safety vulnerability; rather, it is one of those issues that, people often say, languages with better type systems won’t save you from. This is true! You can very well write a Rust function that returns `"*"` if the password is too long. But the big difference between C and Rust in this regard is that *the norms of the Rust community do not allow that*.
+I can get the structure I want by setting up one Git branch per chapter,
+pointing to the previous chapter as the parent. Then when I update
+chapter 1’s code, I can push that forwards into chapter 2, 3, etc.
 
-The POSIX spec tries to account for error cases. It [says](https://pubs.opengroup.org/onlinepubs/9799919799/functions/crypt.html):
+However, the [Jujutsu version control system](https://docs.jj-vcs.dev/latest/git-comparison/)<sup>[2]</sup> can do this
+*automatically*. Instead of managing all the branches and merges, I
+can focus on the “writeup” column of the diagram, where I can edit
+any of the chapters at any time. Jujutsu will roll forward the
+changes from one chapter to the others. I decided to try it for
+this project. Other people have blogged about Jujutsu’s features;
+I’m going to focus on the two dimensional output I want.
 
-> Upon successful completion, crypt() shall return a pointer to the hashed password; […] Otherwise, it shall return a null pointer and set errno to indicate the error.
+**Example**: While working on the dungeon generation chapter, I
+realized I could’ve made the tile data structure better. It was
+easy to make those changes happen *before* the dungeon code. In this
+diagram, the horizontal axis is time and the vertical axis is
+chapter. I went back and forth between dungeon generation and the
+tile map structure. Once I was happy with both of those, I moved
+on to a better data structure:
 
-But the C type system can’t force developers to check that the return value is NULL. The musl libc developers saw that some binaries weren’t checking for it, and as a result [deviated](https://git.musl-libc.org/cgit/musl/commit/?id=b3c4cc121f70faea45389fe7ddc1127ed5cbd8bb) from the spec, returning the sentinel `"*"` value instead.
+![](https://www.redblobgames.com/blog/2026-09-27-jujutsu-experience/images/part-3.png?2026-09-27-13-31-40)
 
-As I’ve [written about before](https://sunshowers.io/posts/types/), type systems have a strong effect on engineering culture. Because C doesn’t have algebraic data types or result types, the engineering norms that form around C communities lead to this kind of in-band signaling. Meanwhile, in Rust, a password that’s too long would be returned as an error variant, and the caller would be compelled to handle it. What if there isn’t an error variant today? Then a breaking change would add an error variant, *and* a [RustSec advisory](https://rustsec.org/) would probably be published as well.
+*Mostly forward, occasionally backward*
 
-As an aside, it remains surprising to me when Linux distro maintainers complain about projects introducing Rust dependencies. Rather than adapting to the new world where the engineering norms are likely to serve users better, these maintainers insist on the world adapting to them. Yes, compile times and portability to niche architectures are real costs, but are you here to serve your own interests or the bulk of your users’? There’s a real [principal-agent problem](https://en.wikipedia.org/wiki/Principal%E2%80%93agent_problem) going on here.
+Ignore the colors; they were from a visualization tool.
 
-## Agents won’t save you[#](https://sunshowers.io/posts/sshole/#agents-wont-save-you)
+**Example**: While working on the field of view chapter, I found
+plenty of things I could’ve improved in earlier chapters. I had
+become comfortable enough with Jujutsu that my brain stopped
+thinking of commits as “set in stone” but instead as “I can fix
+that!” And I did.
 
-Speaking of agents! There’s a recent strain of argument that goes roughly like this:
+**Example**: Most of the changes are to the most recent chapters (bottom of this diagram). But occasionally I went back to earlier chapters (top of this diagram). The red shows that I had merge conflicts that I had to resolve before I went back to working on the recent chapters.
 
-- Rust is admittedly useful for humans to write correct software today.
-- LLMs can now, or in the near future will be able to, reason about memory safety and other error cases directly.
-- So in an agent-heavy development lifecycle there’s no difference in software rigor between Rust and C (or even assembly).
-- But C has certain advantages over Rust in terms of build speed, portability, etc.
-- So we might as well write software in C (or even assembly).
+**Example**: As I became even more comfortable with making changes across commits, I came up with better names to use throughout the project. I wanted to make these changes from the beginning, so I used a combination of regular <kbd>jj edit</kbd>, which propagates changes forwards to later chapters, and the <kbd>jj absorb</kbd> command, which propagates changes *backwards* to earlier chapters.
 
-There is plenty that’s wrong about the argument, including the dubious decision to trust a fuzzy process when we have already shown that a far more deterministic approach works. But the big missing piece is the norms of the respective communities! When you (or your agent) write Rust software, you’re probably going to use Rust libraries, and your agent is probably going to pattern-match on existing Rust code in its training set. As a result, *even if you aren’t already a skilled Rust developer*, there will likely be more invariants encoded in the type system<sup>[1](https://sunshowers.io/posts/sshole/#fn:1)</sup>.
+This required a lot of cleanup. The changes didn’t have merge conflicts, but the resulting code didn’t always compile. If I changed `apple` to `zebra` in chapter 1, and I had used `apple` in chapter 2, Jujutsu wouldn’t know to change *that* name too. So I had to make those changes and test every chapter.
 
-The engineering norms of C developers allow for `"*"` to be an acceptable sentinel value indicating an error; the engineering norms of Rust developers simply do not. These norms are the result of the accumulated contributions of a community, and part of the responsibility of a software professional is to think about the kinds of communities one’s work is a part of. But some people have [decided](https://bsky.app/profile/sunshowers.io/post/3mzkaurqkrk2v) that none of this really matters in this shiny new world, and that the contributions of other people can mostly be ignored. Their hubris will be their downfall.
+**Example**: I *loved* that I can improve the version control change descriptions retroactively. Here’s me going back through all the change descriptions to format them consistently:
 
-*Discuss on [Hacker News](https://news.ycombinator.com/item?id=50399400).*
+![](https://www.redblobgames.com/blog/2026-09-27-jujutsu-experience/images/jujutsu-rebase.png?2026-09-27-13-32-00)
 
-1. If you’re a skilled Rust developer, you’ll likely find the first-pass invariants the agent encodes to be woefully inadequate, and you’ll probably go through a long review cycle where those kinds of issues are fixed. [↩︎](https://sunshowers.io/posts/sshole/#fnref:1)
+*Editing everything*
+
+**Thoughts**: It’s hard to learn by just reading about something. For this project I wanted to try doing lots of things to see what worked well and what didn’t. This project is a bit unusual in that I’m trying to not only produce a final version of the game, but also produce 50 intermediate versions that all run, *and* have clean code that I can present in a tutorial series.
+
+![](https://www.redblobgames.com/blog/2026-09-27-jujutsu-experience/images/jujutsu-types-all.png?2026-09-27-13-31-51)
+
+*complete project history*
+
+I think Jujutsu was a reasonable tool for this project. I can use it for developing, and also export to Git so that other people don’t have to use Jujutsu. [The GitHub repository](https://github.com/redblobgames/2634-roguelikedev)<sup>[3]</sup> has 54 git commits, not the ~5000 internal Jujutsu commits.
+
+The main downside for me so far is that a lot of things happen
+automatically and I couldn’t keep track of them all. I need
+to get better at understanding what it’s doing behind the scenes
+so that I can use it with more confidence while avoiding some of
+the pitfalls.
+
+The resulting game is [playable on the web](https://www.redblobgames.com/x/2634-roguelike-dev/). I wrote
+notes but didn’t write a tutorial this time.

@@ -1,219 +1,227 @@
-At work, I was recently testing and deploying a new HTTPS reverse proxy service. I ran into some weirdness in how [Envoy](https://www.envoyproxy.io/) handles the `X-Forwarded-For` headers when it's configured *not* to trust the incoming values. I ended up configuring Envoy to just drop all incoming `X-Forwarded-*` and `Forwarded` headers, just to be safe.
+[We recently announced Amutable Foundations](https://amutable.com/blog/introducing-amutable-foundations). It’s now time to provide a technical overview of how Amutable Foundations is put together. In this post, we’ll discuss two of the most fundamental components:
 
-But this got me thinking: would Envoy even do *anything* regarding the `Forwarded` header, if it's designed to mainly use the `X-Forwarded-*` family of headers? Are there web frameworks that would support *both* `X-Forwarded-*` and `Forwarded` and could this behaviour be abused?
+- **Amutable OS** (“*AOS*”, or “*⊼OS*”), a modern image-based Linux OS. It builds on the foundation of established Linux distributions, but moves them from a package-based world into an image-based, integrity-protected world. It removes drift, and adds robustness, integrity, and reproducibility. On one hand this provides great conceptual compatibility with the status quo ante of enterprise distributions, and on the other hand it’s built from the ground up with image-based OS designs in mind.
+- **Amutable Control Plane** (“*ACP*”, or “*⊼CP*”), a management system that tracks, controls, updates and verifies a fleet of AOS installations.
+
+## AOS – Amutable Operating System
+
+Amutable OS is built on classic Linux distributions, initially from [Fedora](https://fedoraproject.org/) packages. Distributions do valuable integration and unification work on the basic components of the OS – work we want to leverage. However, AOS uses distribution packages to pre-assemble immutable disk images at build-time while distributions, traditionally, compose a Linux system by installing packages on the final, deployed system. Let’s take a closer look at what this means.
+
+- **Package-based OSes** generally provide the user with a large number of regularly updated software packages (many thousands) with complex dependencies, which are composed into a working OS on the final machine it is deployed on. Installations in this style tend to vary greatly from system to system. Even with an identical selection of packages for the target system, the installation/update order, the stateful update logic and the file system data structures generally mean that the bytes that hit the disk on each machine are always different. This is called *drift*. Systems put together this way are hence not reproducible, not predictable, and hard to compare and analyze which is essential for tracking down security issues. They are also hard to test as the flexibility of selecting packages and assembling them in any order results in a prohibitive combinatorial explosion of systems to test.
+- **Image-based OSes** instead provide pre-built file system images that contain all code and other resources the OS needs. These images are bit-by-bit identical on every deployed system, so that the installations differ only in local state acquired during runtime, but not in the OS code and resources themselves (which stay 100% identical). To improve modularity, AOS extends this concept to allow a small number of coarse images to be merged together. Rather than thousands of packages, each system only combines a small number (typically < 5) of images, so that the system stays reproducible.
+
+Building from existing distribution packages allows us to guarantee far reaching semantic compatibility with existing systems, while maintaining our image-based focus. In particular, it allows us to potentially prepare – with little effort – individualized disk images that fit perfectly for the customer’s projects.
+
+### Modularization
+
+Classic distribution packages are a concept of *modularization*, and useful in that. With our image-based OS approach, we cut down on the modularization at deployment time, but we do allow some. This reflects the fact that while we likely will be able to cover a lot of disparate systems with a single, generic, minimal OS image, some of the components certain systems might require are so large, or specific, that it makes sense to split them out. For example, graphics/AI drivers and cloud-specific agent services tend to be large these days.
+
+#### System Extensions
+
+In order to not require their installation on every deployment host we split some components out into [**system extensions**](https://www.freedesktop.org/software/systemd/man/latest/systemd-sysext.html) (or short: “*sysexts*”) that contain additional files which can be overlaid on top of the OS resources in `/usr/` and augment the system with additional resources. Making these components optional reduces footprint and attack surface.
+
+Note that in many cases the selection of sysexts to activate on a given host is purely a function of the host’s circumstances and equipment. More specifically, the graphics drivers and subsystem should be installed automatically when the matching hardware is detected. Similarly, the cloud-specific agent services should be picked up automatically when the system is detected to run inside a relevant cloud vendor’s environment.
+
+In AOS the selection of additional images to install is hence somewhat automated. The local AOS system carries a “[hwdb](https://www.freedesktop.org/software/systemd/man/latest/hwdb.html)” database that dictates which additional images to auto-install on the individual node if certain hardware is enumerated or the VMM indicates certain identification or functionality.
+
+#### Configuration Extensions
+
+A core functionality of AOS is support for [**configuration extensions**](https://www.freedesktop.org/software/systemd/man/latest/systemd-confext.html) (“confexts”). These are very similar to sysexts, but overlay `/etc/` instead of `/usr/`. They are designed to be the primary configuration management concept on AOS: configuration is pre-built and shipped in an atomically applied image to the AOS nodes, where it appears in full or not at all, but never halfway. Or in other words, not just AOS code but also AOS configuration is free from drift and strictly reproducible.
+
+#### Discoverable Disk Images
+
+The OS image itself, as well as sysext and confext images are implemented as [**UAPI.3 DDIs**](https://uapi-group.org/specifications/specs/discoverable_disk_image/): [EROFS](https://en.wikipedia.org/wiki/EROFS) file system images, combined with [Verity](https://docs.kernel.org/admin-guide/device-mapper/verity.html) protection data, and a cryptographic signature, all wrapped in a GPT partition table as envelope. In the case of confexts, these DDIs are additionally encrypted ([LUKS](https://en.wikipedia.org/wiki/Linux_Unified_Key_Setup)). This means strong integrity is enforced on all these components not just at download time, but continuously during runtime. For configuration, confidentiality is also guaranteed during runtime. Moreover, we not only protect the contents of the images but the file system data structures themselves. Since each image can be cryptographically referenced via their Verity root hash, we also have a useful handle to *measure* before activating each image (see below for what this means).
+
+The Linux kernel is shipped as a [**UAPI.5 UKI**](https://uapi-group.org/specifications/specs/unified_kernel_image/). This means it comprehensively protects the kernel itself and its initrd via UEFI SecureBoot, and via [TPM](https://en.wikipedia.org/wiki/Trusted_Platform_Module) measurements and policies.
+
+![AOS node composition: workload images (containers, VMs, portable services) on top of the operating system, built from confext DDIs, sysext DDIs, the OS DDI and the UKI](https://amutable.com/images/aos-node-composition.svg)
+
+## ACP – Amutable Control Plane
+
+Amutable Control Plane (ACP) manages and supervises a fleet of AOS nodes. It primarily encompasses the following functionality:
+
+- An enrollment system that allows administrators to enroll AOS nodes using hardware-backed trust.
+- A report receiver, validator, and ledger which is one side of an operational loop which we will look at below.
+- A configuration extension generator, which encrypts confext images for each node.
+- An identity service for issuing short-lived credentials used to authenticate nodes.
+- An image repository based on TUF which we’ve covered in an earlier blog post.
+- A CVE scanner and analysis tool that leverages the verified SBOMs associated with the images that machines are using.
+- A web UI to manage the above-listed functionality.
+
+ACP is multi-tenant: each tenant has its own signing keys, storage and roles.
+
+The interplay between the incoming reports and the outgoing confext and sysext images creates a loop that we leverage for security and operational robustness. Let’s take a look at that now.
+
+![Amutable Control Plane components: report reception and verification, ledger, confext builder, web UI, identity provider, enrollment, image repository and CVE analysis](https://amutable.com/images/acp-components.svg)
+
+## CLL – Cryptographic Locked Loop
+
+ACP keeps track of the enrolled nodes; ensures they are updated, in good health and that their integrity is verified. It also needs to be able to provide new configuration to nodes so they can receive configuration changes or new workloads. This forms a bi-directional relationship:
+
+- Each node sends “**reports**” (generated by the [systemd-report](https://amutable.com/blog/it-starts-upstream-systemd-report) tool) to the ACP instance it is enrolled in, at regular intervals. These reports describe both the runtime/resource state of the system, as well as cryptographic information about the composition of the system.On systems where a TPM is available, this carries a TPM “quote” that cryptographically indicates which UKI and DDIs the system is composed of. On systems where [Confidential Computing](https://en.wikipedia.org/wiki/Confidential_computing) (CoCo) is available, this carries a CPU quote instead that indicates what the initial composition of the node was. Moreover, a pure software signature scheme is available as well.These reports are collected by the ACP instance, verified both superficially (i.e. validating the signature checks out and mapping the signing keys to the source system) and in detail (i.e. checking if the UKI and all DDIs the system is composed of are recognized), in a [**remote attestation**](https://en.wikipedia.org/wiki/Trusted_Computing#Remote_attestation) scheme.This information is then enriched (e.g. SBOM, CVE, … information for the UKIs/DDIs) and everything written to a centralized “**ledger**” database. This ledger tracks the state of the entire fleet, both the image-level composition of it and the runtime state, including resource usage. Reports are the “*way up*” from the AOS nodes to the ACP instance.
+- In the opposite direction, ACP sends **confext DDIs** to the nodes. As mentioned above, these are Verity-protected, signed and encrypted with a key specific to the node. If the node hardware supports cryptographic sealing (as TPMs do), the confext DDI is sealed to the hardware keys of the node. The sealing uses a hardware-enforced access policy that mirrors the most recently seen report of the node (plus various other parameters).This provides very strong security guarantees: configuration and resources for a specific node may only be unlocked by the node if it still is in the state last reported. Or in other words, there’s also **local attestation** in play here: after ACP verifies via remote attestation that the node is in a good state, it provides updates and additional resources that can only be used after the local hardware validates that the machine is still in the expected state.This reduces the vulnerability window between ACP’s determination that the node is in a good state and the actual update for the node, as the state is re-verified at that point. Also note that this mechanism is very compatible with nodes that lack continuous connectivity as they can boot up fine even without being able to contact the ACP instance as the local TPM can reasonably attest the system’s state via the local attestation mechanism. Confext DDIs are the “*way down*” from the ACP instance to the AOS nodes.
+
+The way up (of the reports) and the way down (of the confext DDIs) together make up what we call the *Cryptographic Locked Loop* (“CLL”). A continuous cycle of reports and confexts tracks and controls the fleet. The ledger always carries a precise, frequently updated description of the fleet’s state.
+
+![The cryptographic locked loop: AOS nodes send reports to ACP, which verifies, inspects, enriches and records them in the ledger, then sends back confext DDIs locked to the latest report](https://amutable.com/images/aos-acp-locked-loop.svg)
+
+Note that our CLL implementation is opportunistic. TPMs and CoCo are not available everywhere. AOS and ACP will make use of this hardware if available (specifically most reasonably modern TPM 2.0 implementations in chip, firmware or virtualized should work, as should [AMD SEV](https://www.amd.com/en/developer/sev.html) and [Intel TDX](https://www.intel.com/content/www/us/en/developer/tools/trust-domain-extensions/overview.html)). The system also uses a pure software scheme.
+
+Of course, the different technologies provide different security guarantees, and ACP’s UI will surface the used technologies clearly. Note that TPM, AMD SEV, Intel TDX, and software signatures are used opportunistically and in parallel if available. This is to say that in situations where a confidential VM with a vTPM is used, it might happen that reports are signed thrice (one TPM quote, one CoCo quote, and one plain software signature). It’s the job of ACP’s verifier to validate all three signatures and focus on the strongest technology of them all for the right purpose.
+
+## The Varlink Communication Channel
+
+Communication between ACP and AOS nodes primarily takes place via reports in one direction and confext DDIs in the other as explained earlier in this post. Both mechanisms are very asynchronous in nature: reports are generated, queued, transferred, and processed asynchronously.
+
+Confext DDIs are generated for the nodes, made available for download via a separate TUF repo, eventually downloaded by the node, and finally applied. This asynchronous behavior is fantastic for many scenarios and operations since it’s very robust and resilient towards spotty connectivity, unstable power sources and other disruptions. However, it is not nice for operations where interactivity is key, e.g. debugging, certain administrative operations and similar.
+
+To address this, AOS nodes have the possibility to be put into remote [Varlink](https://varlink.org/) mode that is facilitated via ACP and use the authentication options that the [varlink-http-bridge](https://github.com/systemd/varlink-http-bridge) provides (like mTLS or sshauth). This is built using the zero-trust pattern: ACP is content blind and has no special access.
+
+When remote Varlink mode is enabled, a node exposes its full Varlink IPC API over HTTPS. That covers everything systemd and the other system services on the node offer via Varlink. For example: `io.systemd.Hostname` for hostname and machine metadata, `io.systemd.Unit` to list units and change their properties, `io.systemd.JournalAccess` to fetch journal entries, `io.systemd.SysUpdate` to check for and apply updates, and `io.systemd.Manager` to reload or reboot the system.
+
+The result is API-driven management with strong typing and a fully self-describing set of rich APIs that any language that speaks JSON and HTTPS can drive. A service that registers a Varlink interface on the node becomes reachable remotely without further changes.
+
+The API is self-describing, so a client can discover what a node offers. For each API interface the node also serves an [OpenAPI 3.1](https://spec.openapis.org/oas/v3.1.0) description, so you can generate typed client wrappers for Python, Go, TypeScript and other languages with standard tooling.
+
+## Cohesive Security Design
+
+The image-based OS approach enables us to enforce some very strict but powerful security properties, which elevate the security posture of the system substantially above traditional Linux systems. Specifically, let’s highlight seven major essential security properties of AOS here:
+
+1. **No Shell + No SSH + No Language Interpreters**. By default AOS does not install a UNIX shell, nor makes remote access via SSH available on the nodes. Moreover, we do not install any of the usual language interpreters (Python, Perl, …) by default. For most nodes a shell or interpreted language support is not required and it removes a whole class of attacks.
+2. **Signed Images Only**. On AOS only images that come with Verity data signed by a signing key listed in the [Verity keyring](https://amutable.com/blog/it-starts-upstream-kernel) may be activated.
+3. **W^X**. We’ve posted about W^X policies before in greater detail. The core idea is that code cannot live on writable file systems and instead must originate from Verity protected sources. This makes injecting code into AOS much harder and hardens it against remote-code-execution vulnerabilities such as the [recent PHP attacks](https://amutable.com/blog/recent-php-cves-retrospective) which we also covered on our blog.
+4. **Everything Is Measured**. We believe that for a secure system it is absolutely essential to maintain a tamper-evident log of all images containing code or configuration. This kind of tamper-evident log is based on *measurements* utilizing hardware features that make it impossible to forge.
+5. **No SUID/SGID or File Capabilities**. The SUID and SGID file access bits are a fundamental privilege escalation mechanism in classic UNIX and have led to a very large number of exploits. On AOS the SUID and SGID bits are therefore disabled completely. Privilege elevation happens securely via IPC such that a suitably privileged process performs operations on behalf of less privileged code.
+6. **Integrity Is Mandatory**. A modern operating system must provide integrity guarantees well beyond traditional systems. It is a conditio sine qua non given the advent of LLM agents. On AOS everything is measured, attested, and comes with fundamental protection mechanisms. For example, all file system images we ship come with block-level Verity and encryption securing complex file system data structures.
+7. **Factory Reset Is Built In**. Any operating system must consider the possibility that it will be hacked. For this reason, a secure OS must come with a “[factory reset](https://www.freedesktop.org/software/systemd/man/latest/systemd-factory-reset.html)” mechanism. AOS makes a lot of exploits *visible* in its Ledger. With factory reset it gains the ability to *act* and put the system back into a good state.
 
 ## Summary
 
-Some web frameworks and servers, including Rails, Spring and Jetty, read values from the `Forwarded` request header in their default configuration. Most reverse proxies, CDNs and middleware servers do not touch the `Forwarded` header in requests. As a result, `Forwarded` headers set in untrusted requests will get passed on through proxies to the web applications, which may then consider the header trusted and use the values. This means that applications are often vulnerable to client IP and request host name spoofing via the `Forwarded` header.
+**TL;DR**: Putting this all together, Amutable Foundations’ AOS and ACP provide:
 
-To remove the spoofing vector, developers and administrators should make sure their proxies and applications agree on the headers that are trusted, and configure proxies to drop any untrusted proxy headers in requests.
+- A modern image-based OS, with far-reaching compatibility with classic Linux distributions
+- AOS is fundamentally designed with security in mind, removing a large portion of the attack surface of classic Linux systems
+- Composition, lifetime and resources of nodes are centrally tracked in the ledger, with tamper-evident properties, via measurements
+- The system covers both OS updates and configuration management via the same (or similar) mechanisms
+- Each node comes with a robust, powerful API to execute operations on it
+- Opportunistic support for modern security hardware (TPM 2.0, CoCo), with graceful degradation to all-software signatures where unavailable
+- Integrity checks every step of the way, via both local and remote attestation
+- Custom configuration and resources are only available to the machine if it is in the expected state
 
-## Recap: the Forwarded header
+## Sign Up for Our Private Preview Now!
 
-The `Forwarded` header is specified in [RFC 7239](https://datatracker.ietf.org/doc/html/rfc7239). It's meant to replace the non-standard, but *very* widely supported `X-Forwarded-*` (`X-F` from now on) headers. Basically it just combines the different `X-F` headers into one standardised header. Reverse proxies, CDNs and other middleware layers set request information (client IP address, original host name, request protocol) in these headers, where the backend web service can read them from.
+If you are interested in the experience we described above, please [sign up for the Amutable Foundations Private Preview](https://amutable.com/preview) to get a chance to try AOS and ACP first-hand yourself.
 
-There are four different fields that the RFC specifies and that have various levels of support in frameworks:
+[We recently announced Amutable Foundations](https://amutable.com/blog/introducing-amutable-foundations). It’s now time to provide a technical overview of how Amutable Foundations is put together. In this post, we’ll discuss two of the most fundamental components:
 
-- for=: the client IP address and the addresses of proxy servers on the way. Replaces X-Forwarded-For.
-- host=: the original host name. Replaces X-Forwarded-Host
-- proto=: the original protocol or scheme, generally either https or http. Replaces X-Forwarded-Proto.
-- by=: as specified in the RFC, "identifies the user-agent facing interface of the proxy". This is used a little inconsistently in web frameworks, but practically this is the IP address where the proxy received the request.
+- **Amutable OS** (“*AOS*”, or “*⊼OS*”), a modern image-based Linux OS. It builds on the foundation of established Linux distributions, but moves them from a package-based world into an image-based, integrity-protected world. It removes drift, and adds robustness, integrity, and reproducibility. On one hand this provides great conceptual compatibility with the status quo ante of enterprise distributions, and on the other hand it’s built from the ground up with image-based OS designs in mind.
+- **Amutable Control Plane** (“*ACP*”, or “*⊼CP*”), a management system that tracks, controls, updates and verifies a fleet of AOS installations.
 
-Here's an example diagram showing how the header is designed to be used. A client makes a request to `example.com`, where a proxy server receives the request, sets the appropriate `Forwarded` header values and passes the request to the backend application. The application then parses values from the `Forwarded` header.
+## AOS – Amutable Operating System
 
-![Normal Forwarded header usage, with nothing nefarious. Proxy adds the Forwarded header.](https://www.lkoskela.fi/blog/2026-11-05-forwarded-without-question/normal_forwarded.svg)
+Amutable OS is built on classic Linux distributions, initially from [Fedora](https://fedoraproject.org/) packages. Distributions do valuable integration and unification work on the basic components of the OS – work we want to leverage. However, AOS uses distribution packages to pre-assemble immutable disk images at build-time while distributions, traditionally, compose a Linux system by installing packages on the final, deployed system. Let’s take a closer look at what this means.
 
-*Normal Forwarded header usage.*
+- **Package-based OSes** generally provide the user with a large number of regularly updated software packages (many thousands) with complex dependencies, which are composed into a working OS on the final machine it is deployed on. Installations in this style tend to vary greatly from system to system. Even with an identical selection of packages for the target system, the installation/update order, the stateful update logic and the file system data structures generally mean that the bytes that hit the disk on each machine are always different. This is called *drift*. Systems put together this way are hence not reproducible, not predictable, and hard to compare and analyze which is essential for tracking down security issues. They are also hard to test as the flexibility of selecting packages and assembling them in any order results in a prohibitive combinatorial explosion of systems to test.
+- **Image-based OSes** instead provide pre-built file system images that contain all code and other resources the OS needs. These images are bit-by-bit identical on every deployed system, so that the installations differ only in local state acquired during runtime, but not in the OS code and resources themselves (which stay 100% identical). To improve modularity, AOS extends this concept to allow a small number of coarse images to be merged together. Rather than thousands of packages, each system only combines a small number (typically < 5) of images, so that the system stays reproducible.
 
-The new header hasn't really been widely adopted yet. Only a few web frameworks seem to support it. This slow adoption is not at all surprising. `Forwarded` will need to be supported by *both* the web framework and the middleware servers for it to be usable. And as `Forwarded` has basically no real benefits over the `X-F` headers, there's just no real motivation to push `Forwarded` forward.
+Building from existing distribution packages allows us to guarantee far reaching semantic compatibility with existing systems, while maintaining our image-based focus. In particular, it allows us to potentially prepare – with little effort – individualized disk images that fit perfectly for the customer’s projects.
 
-## Proxy header risks
+### Modularization
 
-Risks with `Forwarded` and its `X-F` counterparts are well known. If a web app and the proxy servers in front of it are configured insecurely, an attacker may be able to spoof the client IP address, the request host name and the request protocol. This then often leads to real vulnerabilities when the spoofed values get used inside the web app. Typical examples include bypassing IP address restrictions or rate limits, and password reset email deception via host name overrides.
+Classic distribution packages are a concept of *modularization*, and useful in that. With our image-based OS approach, we cut down on the modularization at deployment time, but we do allow some. This reflects the fact that while we likely will be able to cover a lot of disparate systems with a single, generic, minimal OS image, some of the components certain systems might require are so large, or specific, that it makes sense to split them out. For example, graphics/AI drivers and cloud-specific agent services tend to be large these days.
 
-This diagram shows what spoofing could look like. The proxy only handles the `X-F` headers, but has no special handling for `Forwarded`. In that scenario, the backend app will receive both `X-F` and `Forwarded` headers with conflicting information. **If the backend app prioritises `Forwarded` over `X-F`, spoofing is possible**. For conciseness, only `X-Forwarded-For` and `Forwarded: for` are shown here, but the same problem applies to the `host` and `proto` fields, too. In the diagram, the backend app sets `remote_ip` to the spoofed value `127.0.0.1` from the `Forwarded` header, even though the proxy server reports the correct remote address `1.2.3.4` in `X-Forwarded-For`.
+#### System Extensions
 
-Because of the known spoofing risks, many web frameworks have a concept of "trusted proxies": they only read and parse the `Forwarded` or `X-F` headers when the request comes in from an IP address that's on a configured list of trusted proxy servers. This pattern protects against situations where requests can be sent to the backend app directly, bypassing the proxy. Without the trusted proxy check in place, those requests could just pass anything in the `Forwarded` header and spoof values in the request. Unfortunately, as I will later show, this system is not effective in the situation depicted above where the proxy itself passes sensitive headers through to the backend.
+In order to not require their installation on every deployment host we split some components out into [**system extensions**](https://www.freedesktop.org/software/systemd/man/latest/systemd-sysext.html) (or short: “*sysexts*”) that contain additional files which can be overlaid on top of the OS resources in `/usr/` and augment the system with additional resources. Making these components optional reduces footprint and attack surface.
 
-## Web framework & server support
+Note that in many cases the selection of sysexts to activate on a given host is purely a function of the host’s circumstances and equipment. More specifically, the graphics drivers and subsystem should be installed automatically when the matching hardware is detected. Similarly, the cloud-specific agent services should be picked up automatically when the system is detected to run inside a relevant cloud vendor’s environment.
 
-I was interested to know how `Forwarded` is supported in various web frameworks and servers **in their default-ish configuration**. Individual applications may of course have all kinds of different custom header parsing middleware, but the framework-level support reveals some patterns that may be more broadly applicable.
+In AOS the selection of additional images to install is hence somewhat automated. The local AOS system carries a “[hwdb](https://www.freedesktop.org/software/systemd/man/latest/hwdb.html)” database that dictates which additional images to auto-install on the individual node if certain hardware is enumerated or the VMM indicates certain identification or functionality.
 
-I read the framework docs and relevant source code, and built a local test app for the ones that seemed to have some support for `Forwarded`. The test apps are just echo servers that print the client IP address, hostname, and protocol values that are parsed by the frameworks. I can then make various requests to the apps and evaluate how they parse different header combinations.
+#### Configuration Extensions
 
-I evaluated the frameworks configured with the minimum number of changes required to enable some kind of forwarded header support. Because of the known risks with `X-F` and `Forwarded`, especially if the apps are exposed directly to the Internet, many frameworks require enabling forwarded header or "trusted proxy" support explicitly. Developers are supposed to do that only if they know the app is really hosted behind a proxy server that sets these headers. I followed the framework documentation and made the minimal changes to enable header handling.
+A core functionality of AOS is support for [**configuration extensions**](https://www.freedesktop.org/software/systemd/man/latest/systemd-confext.html) (“confexts”). These are very similar to sysexts, but overlay `/etc/` instead of `/usr/`. They are designed to be the primary configuration management concept on AOS: configuration is pre-built and shipped in an atomically applied image to the AOS nodes, where it appears in full or not at all, but never halfway. Or in other words, not just AOS code but also AOS configuration is free from drift and strictly reproducible.
 
-The list of frameworks checked here is somewhat arbitrary; basically I just checked frameworks I'm somewhat familiar with, and some widely used frameworks I know about. This list is by no means exhaustive. I investigated the latest versions of the frameworks at the time of testing (beginning of 2026). New versions have been released since, and some frameworks have issued patches to the vulnerable behaviour I found.
+#### Discoverable Disk Images
 
-The table below shows my findings. The following sections go more into detail about some of the more interesting subjects.
+The OS image itself, as well as sysext and confext images are implemented as [**UAPI.3 DDIs**](https://uapi-group.org/specifications/specs/discoverable_disk_image/): [EROFS](https://en.wikipedia.org/wiki/EROFS) file system images, combined with [Verity](https://docs.kernel.org/admin-guide/device-mapper/verity.html) protection data, and a cryptographic signature, all wrapped in a GPT partition table as envelope. In the case of confexts, these DDIs are additionally encrypted ([LUKS](https://en.wikipedia.org/wiki/Linux_Unified_Key_Setup)). This means strong integrity is enforced on all these components not just at download time, but continuously during runtime. For configuration, confidentiality is also guaranteed during runtime. Moreover, we not only protect the contents of the images but the file system data structures themselves. Since each image can be cryptographically referenced via their Verity root hash, we also have a useful handle to *measure* before activating each image (see below for what this means).
 
-| Framework | `Forwarded` support | `X-Forwarded-*` support | Prioritisation | Notes |
-| --- | --- | --- | --- | --- |
-| Ruby on Rails 8.1.3 | `for` supported. | Yes | `Forwarded: for` [prioritised over](https://github.com/rack/rack/blob/96beb2195901f91c89234d6bc7c464d32ea383c4/lib/rack/request.rb#L42) `X-Forwarded-For` | Behaviour changed in Rails 8.1. A security fix shipped in 8.1.4.1. |
-| Jetty 12.1.7 | `for`, `host`, `proto`, `by` supported. | Yes | `Forwarded` [prioritised over](https://github.com/jetty/jetty.project/blob/03995110b0a69ca5b03e3485c81b1c9b5b789e50/jetty-core/jetty-server/src/main/java/org/eclipse/jetty/server/ForwardedRequestCustomizer.java#L810) `X-F` |  |
-| Spring Boot 4.0.5 + `FRAMEWORK` strategy | `for`, `host`, `proto`, `by` supported. | Yes | `Forwarded` prioritised over `X-F` ([1](https://github.com/spring-projects/spring-framework/blob/5e6e223686d13b90c9a770fd55c7b8535e3666f4/spring-web/src/main/java/org/springframework/web/util/ForwardedHeaderUtils.java#L60), [2](https://github.com/spring-projects/spring-framework/blob/5e6e223686d13b90c9a770fd55c7b8535e3666f4/spring-web/src/main/java/org/springframework/web/util/ForwardedHeaderUtils.java#L141)) | Spring Boot 4.2 defaults to parsing only `X-Forwarded-*` headers. |
-| Spring Boot 4.0.5 + Jetty 12.1.7 + `NATIVE` strategy | `for`, `host`, `proto`, `by` supported. | Yes | `Forwarded` [prioritised over](https://github.com/jetty/jetty.project/blob/03995110b0a69ca5b03e3485c81b1c9b5b789e50/jetty-core/jetty-server/src/main/java/org/eclipse/jetty/server/ForwardedRequestCustomizer.java#L810) `X-F` | Header handling is done inside Jetty. Spring Boot 4.2 configures Jetty to parse only `X-Forwarded-*` headers by default. |
-| Spring Boot 4.0.5 + Reactor Netty 1.3.4 + `NATIVE` strategy | `for`, `host`, `proto` supported. | Yes | `Forwarded` prioritised over `X-F` headers. | Header handling is done inside Reactor Netty. Spring Boot 4.2 defaults to parsing only `X-Forwarded-*` headers. Without Boot, Reactor Netty 1.4 requires an explicit choice of header family. |
-| Spring Boot 4.0.5 + Tomcat 11.0.20 + `NATIVE` strategy | No | Yes |  |  |
-| Symfony 8.0.8 | `for`, `host`, `proto` supported | Yes | Support for each header must be explicitly enabled. Conflicting information in incoming headers causes errors. |  |
-| Gorilla ProxyHeaders handler 1.5.2 | `for` and `proto` supported | Yes | `X-Forwarded-For`, `X-Real-IP`, `Forwarded` ([source](https://github.com/gorilla/handlers/blob/9c61bd81e701cf500437e1b516b675cdd3b73ca7/proxy_headers.go#L65)) | `ProxyHeaders` handler. For hostnames, only `X-Forwarded-Host` is supported |
-| Gin 1.12.0 | No | Only `X-Forwarded-For` |  |  |
-| ASP.NET Core 10 | No | Yes |  |  |
-| Werkzeug 3.1.8 | No | Yes |  |  |
-| Django 6.0.4 | No | Only `X-Forwarded-Host`, `-Port`, `-Proto` |  |  |
-| Express 5.2.1 | No | Yes |  | `X-Forwarded-For` implementation in packages forwarded 0.2.0 and proxy-addr 2.0.7 |
+The Linux kernel is shipped as a [**UAPI.5 UKI**](https://uapi-group.org/specifications/specs/unified_kernel_image/). This means it comprehensively protects the kernel itself and its initrd via UEFI SecureBoot, and via [TPM](https://en.wikipedia.org/wiki/Trusted_Platform_Module) measurements and policies.
 
-`X-Forwarded-*` headers are widely supported across frameworks. Conversely, `Forwarded` support is more spotty. The frameworks that support it often don't have safe handling for a situation where *both* `X-F` and `Forwarded` are present in a request. This behaviour might lead to vulnerabilities.
+![AOS node composition: workload images (containers, VMs, portable services) on top of the operating system, built from confext DDIs, sysext DDIs, the OS DDI and the UKI](https://amutable.com/images/aos-node-composition.svg)
 
-### Ruby on Rails
+## ACP – Amutable Control Plane
 
-I happened to investigate this behaviour at an interesting time: the latest version of Rails at the time, 8.1, seemingly [changed the Forwarded handling behaviour](https://github.com/rails/rails/commit/2d084af8444a7b6b868c7cbb256172007871e78d#diff-157bb01c07c2b70a00bd69af753e5047f66d1bc9c3768ca52c4e7cd3e717e1daR133) somewhat accidentally by changing how the "forwarded for" information is read.
+Amutable Control Plane (ACP) manages and supervises a fleet of AOS nodes. It primarily encompasses the following functionality:
 
-The Rack libraries that Rails uses for HTTP request handling do read the `Forwarded` header, but before Rails 8.1, that information was not used anywhere. Since Rails 8.1, Rails uses Rack to determine the client IP in the `RemoteIp` middleware. Effectively, **`Forwarded: for` is now supported**.
+- An enrollment system that allows administrators to enroll AOS nodes using hardware-backed trust.
+- A report receiver, validator, and ledger which is one side of an operational loop which we will look at below.
+- A configuration extension generator, which encrypts confext images for each node.
+- An identity service for issuing short-lived credentials used to authenticate nodes.
+- An image repository based on TUF which we’ve covered in an earlier blog post.
+- A CVE scanner and analysis tool that leverages the verified SBOMs associated with the images that machines are using.
+- A web UI to manage the above-listed functionality.
 
-If both `Client-IP` and `X-Forwarded-For` or `Forwarded: for` are specified in an incoming request, [`RemoteIp` throws an `IpSpoofAttackError`](https://github.com/rails/rails/blob/b4dd3fa04273b78ef09fa4f93f6f5dfa5357d970/actionpack/lib/action_dispatch/middleware/remote_ip.rb#L153). The point is to clearly detect and avoid situations where multiple headers are specified and a wrong IP could be accidentally chosen. Unfortunately, in Rails versions before 8.1.4.1, this check won't trigger if both `X-Forwarded-For` and `Forwarded: for` are specified, because the spoofing detection logic in those versions does not check all three headers.
+ACP is multi-tenant: each tenant has its own signing keys, storage and roles.
 
-The conflicting header check is actually a pretty good way to fingerprint Rails backends. If a web app returns a 500 error response when both `Client-IP` and `Forwarded: for` (or `X-Forwarded-For`) are included in the request, there's a good chance the backend is built on Rails.
+The interplay between the incoming reports and the outgoing confext and sysext images creates a loop that we leverage for security and operational robustness. Let’s take a look at that now.
 
-Rails still does not really use `host` from the `Forwarded` header. So the impact of `Forwarded` getting passed to a Rails app is limited to source IP address spoofing.
+![Amutable Control Plane components: report reception and verification, ledger, confext builder, web UI, identity provider, enrollment, image repository and CVE analysis](https://amutable.com/images/acp-components.svg)
 
-After I reported this issue to the Rails project, they issued [a fix](https://github.com/rails/rails/security/advisories/GHSA-2gff-2mmg-m73p) where the spoofing check was expanded to cover all three headers (`Client-IP`, `X-Forwarded-For`, `Forwarded`). The fix was released in [Rails 8.1.4.1](https://rubyonrails.org/2026/11/4/Rails-8.0.5.2-and-8.1.4.1-have-been-released).
+## CLL – Cryptographic Locked Loop
 
-### Jetty
+ACP keeps track of the enrolled nodes; ensures they are updated, in good health and that their integrity is verified. It also needs to be able to provide new configuration to nodes so they can receive configuration changes or new workloads. This forms a bi-directional relationship:
 
-Jetty has supported RFC 7239 `Forwarded` for a long time, at least [since 2016](https://github.com/jetty/jetty.project/commit/b45af1a3c99fea756539f81f085a33667e7f64c1). `Forwarded` support has always been enabled by default, along with `X-F`, and the priority order between them got formalised [in 2020](https://github.com/jetty/jetty.project/issues/5247). `Forwarded` is explicitly prioritised over `X-F` when both are present in an incoming request. This means that if proxy servers don't drop incoming `Forwarded` headers, the request IP address, host name and scheme **can be spoofed**.
+- Each node sends “**reports**” (generated by the [systemd-report](https://amutable.com/blog/it-starts-upstream-systemd-report) tool) to the ACP instance it is enrolled in, at regular intervals. These reports describe both the runtime/resource state of the system, as well as cryptographic information about the composition of the system.On systems where a TPM is available, this carries a TPM “quote” that cryptographically indicates which UKI and DDIs the system is composed of. On systems where [Confidential Computing](https://en.wikipedia.org/wiki/Confidential_computing) (CoCo) is available, this carries a CPU quote instead that indicates what the initial composition of the node was. Moreover, a pure software signature scheme is available as well.These reports are collected by the ACP instance, verified both superficially (i.e. validating the signature checks out and mapping the signing keys to the source system) and in detail (i.e. checking if the UKI and all DDIs the system is composed of are recognized), in a [**remote attestation**](https://en.wikipedia.org/wiki/Trusted_Computing#Remote_attestation) scheme.This information is then enriched (e.g. SBOM, CVE, … information for the UKIs/DDIs) and everything written to a centralized “**ledger**” database. This ledger tracks the state of the entire fleet, both the image-level composition of it and the runtime state, including resource usage. Reports are the “*way up*” from the AOS nodes to the ACP instance.
+- In the opposite direction, ACP sends **confext DDIs** to the nodes. As mentioned above, these are Verity-protected, signed and encrypted with a key specific to the node. If the node hardware supports cryptographic sealing (as TPMs do), the confext DDI is sealed to the hardware keys of the node. The sealing uses a hardware-enforced access policy that mirrors the most recently seen report of the node (plus various other parameters).This provides very strong security guarantees: configuration and resources for a specific node may only be unlocked by the node if it still is in the state last reported. Or in other words, there’s also **local attestation** in play here: after ACP verifies via remote attestation that the node is in a good state, it provides updates and additional resources that can only be used after the local hardware validates that the machine is still in the expected state.This reduces the vulnerability window between ACP’s determination that the node is in a good state and the actual update for the node, as the state is re-verified at that point. Also note that this mechanism is very compatible with nodes that lack continuous connectivity as they can boot up fine even without being able to contact the ACP instance as the local TPM can reasonably attest the system’s state via the local attestation mechanism. Confext DDIs are the “*way down*” from the ACP instance to the AOS nodes.
 
-Jetty servers vulnerable to this kind of spoofing are easy to look for: specifying an invalid port number in the `host` field will cause an error (for example, `Forwarded: host=example.com:invalidport`). Parsing the port number throws an exception and produces a `400 Bad Request` response, and the response body often includes a stack trace or a Jetty-specific error message.
+The way up (of the reports) and the way down (of the confext DDIs) together make up what we call the *Cryptographic Locked Loop* (“CLL”). A continuous cycle of reports and confexts tracks and controls the fleet. The ledger always carries a precise, frequently updated description of the fleet’s state.
 
-After I reported this issue to the Jetty project, they made [some changes](https://github.com/jetty/jetty.project/pull/15462) to make configuring the `Forwarded` handling behaviour easier, but did not change the default behaviour. That is somewhat fair, as the behaviour has been clearly documented, and the problem can be seen as a proxy configuration issue. However, as we'll see later, the defaults of most proxies really don't work well with the defaults of Jetty, and therefore the defaults still leave many servers open to spoofing.
+![The cryptographic locked loop: AOS nodes send reports to ACP, which verifies, inspects, enriches and records them in the ledger, then sends back confext DDIs locked to the latest report](https://amutable.com/images/aos-acp-locked-loop.svg)
 
-If you are running Jetty servers, make sure to verify that your proxy only passes through the appropriate headers, and preferably also configure Jetty to accept only the headers your proxy actually handles.
+Note that our CLL implementation is opportunistic. TPMs and CoCo are not available everywhere. AOS and ACP will make use of this hardware if available (specifically most reasonably modern TPM 2.0 implementations in chip, firmware or virtualized should work, as should [AMD SEV](https://www.amd.com/en/developer/sev.html) and [Intel TDX](https://www.intel.com/content/www/us/en/developer/tools/trust-domain-extensions/overview.html)). The system also uses a pure software scheme.
 
-### Spring Boot & Reactor Netty
+Of course, the different technologies provide different security guarantees, and ACP’s UI will surface the used technologies clearly. Note that TPM, AMD SEV, Intel TDX, and software signatures are used opportunistically and in parallel if available. This is to say that in situations where a confidential VM with a vTPM is used, it might happen that reports are signed thrice (one TPM quote, one CoCo quote, and one plain software signature). It’s the job of ACP’s verifier to validate all three signatures and focus on the strongest technology of them all for the right purpose.
 
-With these Java-based stacks, the Forwarded header handling behaviour [depends on configuration](https://docs.spring.io/spring-boot/how-to/webserver.html#howto.webserver.use-behind-a-proxy-server) and which application server is used. Spring Boot can leverage the server's implementation (the `NATIVE` option, the recommended default) or use Spring's headers support (`server.forward-headers-strategy=FRAMEWORK`).
+## The Varlink Communication Channel
 
-The interesting ones here are Spring's Jetty support, Reactor Netty, and Spring Framework's own implementation: **in Spring Boot versions before 4.2, all three accept both `Forwarded` and `X-F` headers by default when forwarded header handling is enabled**. The three most important `Forwarded` fields (`for`, `host` and `proto`) are supported, and they are prioritised over the corresponding `X-F` headers. This means that if proxy servers don't drop incoming `Forwarded` headers, the request IP address, host name and scheme **can be spoofed**.
+Communication between ACP and AOS nodes primarily takes place via reports in one direction and confext DDIs in the other as explained earlier in this post. Both mechanisms are very asynchronous in nature: reports are generated, queued, transferred, and processed asynchronously.
 
-Tomcat does not display the same vulnerable behaviour. It only supports one header kind at a time, `X-F` by default ([docs](https://tomcat.apache.org/tomcat-11.0-doc/config/valve.html#Remote_IP_Valve)). In a typical setup, Tomcat applications would be configured to read only the headers set by the proxies in front of them.
+Confext DDIs are generated for the nodes, made available for download via a separate TUF repo, eventually downloaded by the node, and finally applied. This asynchronous behavior is fantastic for many scenarios and operations since it’s very robust and resilient towards spotty connectivity, unstable power sources and other disruptions. However, it is not nice for operations where interactivity is key, e.g. debugging, certain administrative operations and similar.
 
-The identification method I described for Jetty above works for Spring servers, too. Of course, many of them run Jetty behind the scenes, so that's natural, but Reactor Netty's and Spring's own header parsing also return `400 Bad Request` for invalid port numbers, albeit without a stack trace. Other frameworks (see Symfony below) have this same behaviour, but the actual framework can often be deduced from the response contents.
+To address this, AOS nodes have the possibility to be put into remote [Varlink](https://varlink.org/) mode that is facilitated via ACP and use the authentication options that the [varlink-http-bridge](https://github.com/systemd/varlink-http-bridge) provides (like mTLS or sshauth). This is built using the zero-trust pattern: ACP is content blind and has no special access.
 
-After I reported this issue to the projects, Spring and Reactor Netty changed how the Forwarded header handling is configured in the frameworks ([Spring 7.1](https://github.com/spring-projects/spring-framework/wiki/Spring-Framework-7.1-Release-Notes), [Spring Boot 4.2](https://github.com/spring-projects/spring-boot/wiki/Spring-Boot-4.2.0-M1-Release-Notes#forward-http-headers-behavior-change), [Reactor Netty](https://github.com/reactor/reactor-netty/pull/4312)). Spring Boot 4.2 now defaults to parsing only `X-Forwarded-*` headers, protecting applications from this spoofing behaviour by default. Applications using Spring Framework 7.1 or Reactor Netty 1.4 directly, without Boot, must explicitly choose which header family to parse. Older release branches got the same new configuration capabilities, but as a non-breaking change, which means that users can choose to opt into selecting which headers to use. [Documentation was also updated](https://docs.spring.io/spring-framework/reference/7.1-SNAPSHOT/web/webmvc/filters.html#filters-forwarded-headers) to try to make users aware of the potential security risks.
+When remote Varlink mode is enabled, a node exposes its full Varlink IPC API over HTTPS. That covers everything systemd and the other system services on the node offer via Varlink. For example: `io.systemd.Hostname` for hostname and machine metadata, `io.systemd.Unit` to list units and change their properties, `io.systemd.JournalAccess` to fetch journal entries, `io.systemd.SysUpdate` to check for and apply updates, and `io.systemd.Manager` to reload or reboot the system.
 
-### Symfony
+The result is API-driven management with strong typing and a fully self-describing set of rich APIs that any language that speaks JSON and HTTPS can drive. A service that registers a Varlink interface on the node becomes reachable remotely without further changes.
 
-Symfony is notable because it implements `Forwarded` support a bit more safely. First of all, `Forwarded` needs to be [explicitly enabled in configuration](https://symfony.com/doc/current/deployment/proxies.html#solution-settrustedproxies) for Symfony to read it. And if both `X-F` and `Forwarded` are enabled, but their values in an incoming request do not match, Symfony returns a 400 Bad Request response. This makes it impossible to spoof IP addresses in the typical situation where a reverse proxy sets `X-Forwarded-For` and lets `Forwarded` through unchanged.
+The API is self-describing, so a client can discover what a node offers. For each API interface the node also serves an [OpenAPI 3.1](https://spec.openapis.org/oas/v3.1.0) description, so you can generate typed client wrappers for Python, Go, TypeScript and other languages with standard tooling.
 
-If `Forwarded` support *is* enabled, it is still often possible to spoof the request host name though. This is because there's often no need for proxies to add `X-Forwarded-Host` to backend requests; they can just keep the original request hostname in the `Host` header. Client requests that specify `Forwarded` with *only* the host field set will not cause any conflicts: `X-Forwarded-Host` is not set at all in the backend request, and likewise the `Forwarded` header doesn't contain `for` or `proto` that could conflict with `X-Forwarded-For` or `X-Forwarded-Proto`. Symfony will then happily read the host name from the client-specified header.
+## Cohesive Security Design
 
-The same detection trick I mentioned for the Java frameworks works on Symfony, too. Sending `Forwarded: host=example.com:invalidport` will make Symfony return a 400 Bad Request response immediately.
+The image-based OS approach enables us to enforce some very strict but powerful security properties, which elevate the security posture of the system substantially above traditional Linux systems. Specifically, let’s highlight seven major essential security properties of AOS here:
 
-## Reverse Proxies, CDNs, and Caches
+1. **No Shell + No SSH + No Language Interpreters**. By default AOS does not install a UNIX shell, nor makes remote access via SSH available on the nodes. Moreover, we do not install any of the usual language interpreters (Python, Perl, …) by default. For most nodes a shell or interpreted language support is not required and it removes a whole class of attacks.
+2. **Signed Images Only**. On AOS only images that come with Verity data signed by a signing key listed in the [Verity keyring](https://amutable.com/blog/it-starts-upstream-kernel) may be activated.
+3. **W^X**. We’ve posted about W^X policies before in greater detail. The core idea is that code cannot live on writable file systems and instead must originate from Verity protected sources. This makes injecting code into AOS much harder and hardens it against remote-code-execution vulnerabilities such as the [recent PHP attacks](https://amutable.com/blog/recent-php-cves-retrospective) which we also covered on our blog.
+4. **Everything Is Measured**. We believe that for a secure system it is absolutely essential to maintain a tamper-evident log of all images containing code or configuration. This kind of tamper-evident log is based on *measurements* utilizing hardware features that make it impossible to forge.
+5. **No SUID/SGID or File Capabilities**. The SUID and SGID file access bits are a fundamental privilege escalation mechanism in classic UNIX and have led to a very large number of exploits. On AOS the SUID and SGID bits are therefore disabled completely. Privilege elevation happens securely via IPC such that a suitably privileged process performs operations on behalf of less privileged code.
+6. **Integrity Is Mandatory**. A modern operating system must provide integrity guarantees well beyond traditional systems. It is a conditio sine qua non given the advent of LLM agents. On AOS everything is measured, attested, and comes with fundamental protection mechanisms. For example, all file system images we ship come with block-level Verity and encryption securing complex file system data structures.
+7. **Factory Reset Is Built In**. Any operating system must consider the possibility that it will be hacked. For this reason, a secure OS must come with a “[factory reset](https://www.freedesktop.org/software/systemd/man/latest/systemd-factory-reset.html)” mechanism. AOS makes a lot of exploits *visible* in its Ledger. With factory reset it gains the ability to *act* and put the system back into a good state.
 
-Reverse proxies and other middleware services are the other layer that reads and sets `Forwarded` and `X-F` headers on the path to the upstream service. It is therefore important to investigate their behaviour, too.
+## Summary
 
-I focused on reverse proxies, mainly because that's just what I'm more familiar with. I also did a lightweight documentation review of some CDNs and public cloud HTTPS load balancers to see how they handle the `Forwarded` header.
+**TL;DR**: Putting this all together, Amutable Foundations’ AOS and ACP provide:
 
-### Reverse proxies
+- A modern image-based OS, with far-reaching compatibility with classic Linux distributions
+- AOS is fundamentally designed with security in mind, removing a large portion of the attack surface of classic Linux systems
+- Composition, lifetime and resources of nodes are centrally tracked in the ledger, with tamper-evident properties, via measurements
+- The system covers both OS updates and configuration management via the same (or similar) mechanisms
+- Each node comes with a robust, powerful API to execute operations on it
+- Opportunistic support for modern security hardware (TPM 2.0, CoCo), with graceful degradation to all-software signatures where unavailable
+- Integrity checks every step of the way, via both local and remote attestation
+- Custom configuration and resources are only available to the machine if it is in the expected state
 
-The overarching result is that **`Forwarded` is almost entirely unsupported on proxy servers**. As with the web frameworks, `X-F` headers are the universal way that proxies pass information about forwarded requests to the backend. Most proxies do not handle `Forwarded` specially, and instead pass it along just like any other header.
+## Sign Up for Our Private Preview Now!
 
-Like the web frameworks earlier, many reverse proxies are extremely configurable. I evaluated the proxies without plugins or other more complicated configurations. For some (like Envoy and Nginx), instead of just checking the "raw" server I opted to test with opinionated services, such as Kubernetes Ingress controllers, that configure these proxies in a suitable way.
-
-Here's what the values in the table mean:
-
-- handled: the proxy server overwrites the header before sending the request to the backend
-- passed through: the proxy server does not have any handling for the header, and passes it through unaltered to the backend
-
-| Proxy | Forwarded | X-Forwarded-For | X-Forwarded-Host |
-| --- | --- | --- | --- |
-| HAProxy 3.2.5 | Handled, when configured | Handled | Passed through |
-| Envoy (Envoy Gateway 1.7.0) | Passed through | Handled | Passed through |
-| Nginx (ingress-nginx 1.14.2) | Passed through | Handled | Handled |
-| Traefik 3.6.7 | Passed through | Handled | Handled |
-| Apache 2.4.65 | Passed through | Handled | Handled |
-| Caddy 2.11.1 | Passed through | Handled | Handled |
-| Kong (Kong Ingress Controller 3.5.4) | Passed through | Handled | Handled |
-
-Of the proxies I tested, HAProxy is the only one that has some kind of support for `Forwarded`, but it still needs to be explicitly enabled. As far as I can tell, the others don't support it at all without extra plugins.
-
-### Cloud HTTPS Load Balancers
-
-The same story continues with Cloud Load Balancers. **I did not test them, so this analysis is based only on their documentation**. AWS Application Load Balancer, Google Cloud Application Load Balancer, and Azure Application Gateway all use `X-Forwarded-For` for passing the client IP address. The docs don't mention `Forwarded` at all, so I would assume they pass `Forwarded` through.
-
-AWS API Gateway is a surprising exception here. It actually [transforms any `X-F` headers to `Forwarded`](https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-known-issues.html#api-gateway-known-issues-http-apis). This was the only cloud service I found that supports `Forwarded` in any capacity.
-
-### CDNs
-
-No surprises here: `Forwarded` support is pretty much nowhere to be found. Naturally, CDNs might allow altering headers via custom rules, but the default configuration is what I'm interested in here.
-
-I did not test the services; the information here is based purely on documentation.
-
-- Cloudflare: Does not strip or handle Forwarded headers.
-  - `Forwarded` *is* included in the default cache key though, along with X-F headers. This prevents some web cache poisoning vulnerabilities (more about these below).
-- Amazon CloudFront: Does not strip or handle Forwarded headers. Adds the client IP to X-Forwarded-For and sends that to the backend.
-- Akamai: No mention of Forwarded in docs. I assume it's just passed through as any other header.
-
-## Impact of trusting `Forwarded`
-
-It looks like the situation is this: some of the most popular web frameworks trust *and prioritise* values from the `Forwarded` header, even though support for it in proxy servers is mostly nonexistent. It's therefore possible, and even common, to be able to **spoof the client IP address (`for=`), request host name (`host=`) and protocol (`proto=`)** in requests.
-
-To test my hypothesis, I went through hundreds of bug bounty programs, making requests to in-scope servers with various `Forwarded` values. I focused on using the web framework detection techniques I mentioned earlier. During this research, I did not dive too deep into the programs, but instead focused on lightweight recon.
-
-Based on the error responses and behaviour I saw, it's really common for servers to read and use values from the `Forwarded` header in the request. Fortunately, this alone is rarely a vulnerability. Usually, some other behaviour like cache poisoning or IP address based access control needs to be combined with the `Forwarded` header tricks to achieve some kind of security impact. I'll go through some of the possible attack vectors next.
-
-### Client IP address spoofing
-
-This is one of the potential vulnerabilities that could be caused *only* by the server trusting `Forwarded: for` or similar headers. If the web application uses the client IP address in some business logic or access control system, being able to spoof the IP naturally allows doing all kinds of things. This includes:
-
-- Bypassing IP address based access controls. For instance, an administration page on a website could check that the request comes in from the office network of the company, and deny requests otherwise.
-- Bypassing IP address based rate limits
-- Spoofing IP addresses in logs
-
-While testing bug bounty program targets, I was able to find one vulnerability where my spoofed IP address was stored in an access log visible to administrators. The report ended up getting closed as a duplicate. These bugs may be rare to find in bug bounty programs because the problem is well known and often already fixed. Apps also rarely expose the client IP addresses, making spoofing difficult to observe. Still, this might be a useful thing to test with, especially when targeting a single bug bounty program instead of broad lightweight testing.
-
-### Hostname spoofing vulnerabilities
-
-Web apps don't generally need to read the host name in the incoming request. One of the well-known situations where this is done is generating password reset links or other absolute URLs. If the host name can be spoofed, the web app could be tricked into generating password reset links with an attacker-controlled host name. If a user clicks this link in a password reset email they receive, the attacker will get the user's password reset token. The attacker can then proceed to reset the user's password and take over the account.
-
-### Web cache poisoning
-
-Both `Forwarded: host` and `Forwarded: proto` can lead to web cache poisoning vulnerabilities in certain setups. Naturally, the web app must be behind a cache that stores some interesting responses and does *not* include the `Forwarded` header in the cache key. [Cloudflare's default cache key *does* include `Forwarded`](https://developers.cloudflare.com/cache/how-to/cache-keys/), and that directly prevents many cache poisoning exploits.
-
-These cache poisoning vulnerabilities have a wide range of possible effects. One simple case is using `Forwarded: host` to override host names in absolute links. If the HTML with these links gets cached and served to users, they will get forwarded to attacker-controlled websites when clicking them. I found one of these cases in a bug bounty program, but unfortunately it was a duplicate.
-
-Another common behaviour I found is sites responding with redirects when the `Forwarded` header includes `proto=http`. This happens when the web app or a proxy server on the way aims to force HTTPS connections by redirecting the user to the same page but using HTTPS. Often, the redirect targets are built with the host name read from `Forwarded` too, causing the redirect to target the attacker's website. This behaviour is not that useful by itself, but can be leveraged if the redirect gets cached. Then it could be possible, for instance, to poison the cache for a JavaScript file to redirect to an attacker-controlled domain which serves malicious JS, leading to XSS.
-
-One fun special case is when the HTTP-to-HTTPS redirect does *not* change the host name, but still gets cached. This may lead to an infinite redirect loop, as the redirect target is always just the same URL. This is a denial-of-service situation, and those are unfortunately mostly out of scope in bug bounty programs. I did find at least a couple of these in the wild.
-
-## How to secure your apps
-
-The short answer: **just disable support for the `Forwarded` header in your web app**. Proxy servers in front of your app most likely don't support the header anyway. Parsing and trusting incoming `Forwarded` headers is probably going to be just a vulnerability with no benefits.
-
-The *proper* solution is, of course, to go through all the web apps and proxy servers in front of them, and verify that they all agree on the headers used. Currently, `X-F` headers are still the best option: they are most widely supported across proxies, web frameworks, CDNs, and other services. All the other headers, like `Forwarded`, `X-Real-IP`, etc. should then be disabled across the stack:
-
-- Web apps should be configured not to read or trust headers that the proxies do not handle. I.e. if frontend proxies do not set or handle the Forwarded header, the backend web app should not read anything from it.
-- Proxies should be configured to drop or overwrite the various proxy headers in requests, so that clients can never supply them. I.e. if X-Forwarded-* headers are used across the stack, the first reverse proxy should already drop incoming Forwarded headers in client requests.
-
-Many frameworks allow configuring a list of **allowed host names**. That's an effective mitigation for host name spoofing attacks: even if a spoofed host name header got through, the app would reject the request if the name wasn't found in the list of allowed names. At least [Symfony](https://symfony.com/doc/current/reference/configuration/framework.html#trusted-hosts), [ASP.NET](https://learn.microsoft.com/en-us/dotnet/api/microsoft.aspnetcore.builder.forwardedheadersoptions.allowedhosts?view=aspnetcore-10.0#microsoft-aspnetcore-builder-forwardedheadersoptions-allowedhosts) and [Django](https://docs.djangoproject.com/en/6.0/ref/settings/#allowed-hosts) have these kinds of settings available.
-
-### Trusted proxy configs
-
-It's worth mentioning that the various "trusted proxy" options that many web frameworks expose do *not* really guard against these problems. Many frameworks will only parse and trust incoming `X-F` and `Forwarded` headers if the request comes via a "trusted proxy". The idea of course is that those proxies will set the headers correctly and therefore they can be trusted.
-
-The problem is that **if a trusted proxy passes some request headers through unaltered, those headers will appear trusted in the backend**. The proxy effectively acts as a kind of confused deputy in the situation. For a proxy to be truly trusted, it should actually remove or rewrite *all* possible headers that the "trusted proxy" setting controls in the backend. [Express docs](https://expressjs.com/en/guide/behind-proxies.html) explain this well:
-
-> When setting to `true`, it is important to ensure that the last reverse proxy trusted is removing/overwriting all of the following HTTP headers: `X-Forwarded-For`, `X-Forwarded-Host`, and `X-Forwarded-Proto`, otherwise it may be possible for the client to provide any value.
-
-Unfortunately, as seen above, almost none of the commonly used proxy servers actually drop `Forwarded` by default. If the backend application or framework actually trusts `Forwarded`, the trusted proxy setting is pretty much meaningless as the proxy will happily forward spoofed headers to the backend.
-
-## Conclusion
-
-It looks like `Forwarded` adoption is in a difficult state right now: the support for it in proxies is almost nonexistent, and that opens up spoofing vulnerabilities in web apps. At the same time, the web framework support is not too broad either, and therefore there's no notable interest to implement `Forwarded` in the proxies. `X-Forwarded-*` works just fine, so why bother?
-
-I really don't know how widespread the issue is. Odds are that many servers are vulnerable in the wild, because the default configurations of many popular frameworks are susceptible to spoofing. Lightly scanning bug bounty programs does not give a good picture of this: I'm sure both `X-F` and `Forwarded` are very common things to test with when trying to find vulnerabilities, and most of the easy-to-find bugs have already been found.
-
-Furthermore, it can be very difficult to even know if an app is vulnerable or not. For instance, spoofing the client IP address may work, but it could only be visible if the app has some kind of functionality that relies on the IP address. If there are no such features, the spoofing may still be visible in server access logs, for example, but an outside bug hunter has no visibility into that.
-
-In my opinion, web frameworks and libraries should never enable support for many different proxy headers by default. Developers or admins should be forced to make the decision based on the actual proxy setup in front of the app. Many servers already require configuring the "trusted proxies" manually, so why not include the list of trusted headers in the configuration, too?
+If you are interested in the experience we described above, please [sign up for the Amutable Foundations Private Preview](https://amutable.com/preview) to get a chance to try AOS and ACP first-hand yourself.
