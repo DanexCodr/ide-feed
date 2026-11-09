@@ -1,150 +1,29 @@
-Recently I [wrote about an idea](https://noteflakes.com/articles/2026-10-07-unrolled-code) that’s been
-floating around in my mind for a long time - the ability to do metaprogramming
-in Ruby by manipulating Ruby ASTs, similar to the macro capabilities of
-languages such as Lisp or Elixir. The use of `eval` (in its different
-variations) is a common metaprogramming technique in Ruby that consists of
-generating code at runtime from dynamically constructed strings. This is often
-done for performance reasons: ERB compiles templates into optimized code by
-generating pieces of Ruby source code then putting them together and calling
-`eval`; In Rails, the same technique is used for implementing features such as
-associations, or scaffolding. With `eval`, we can avoid paying the performance
-overhead that’s often associated with using DSLs in Ruby.
+Sem86 is an x86 full-system emulator without hardcoded semantics. Instead, it loads instruction semantics at runtime from an input file. This makes it very easy to switch between different semantics, in order to accurately emulate undefined behavior and undocumented instructions.
 
-But using `eval` in a highly-dynamic context may also be error-prone, limited,
-and potentially vulnerable to injection attacks. Having to painstakingly
-construct strings containing Ruby source code can be an arduous task, especially
-if you want to compile a DSL into efficient code, as in the case of ERB, or my
-own [Papercraft](https://github.com/digital-fabric/papercraft).
+Despite not having hardcoded semantics that a compiler can optimize at compile-time, and using LLVM instead of a bespoke performance-optimized JIT, Sem86 is not slow: it is 1.9× as fast as Bochs, and achieves ~42% of QEMU's performance.
 
-In Papercraft, HTML is generated using a DSL. Here’s an example:
+Sem86 was presented at [QRS'26](https://qrs26.techconf.org/).
 
-```
-header {
-  p { strong(repo_name) }
-  p(repo_description)
-  p { code(clone_command) }
-}
-```
+## Integration with libLISA
 
-While this kind of code may be used to generate HTML using the [builder
-pattern](https://armandfardeau.github.io/design-patterns-in-ruby/builder.html),
-which is the traditional way of implementing DSLs in Ruby, it introduces a
-significant performance overhead. That is why in Papercraft I chose to implement
-a compiler that takes the code above and compiles it into the optimized form:
+Our long-term goal for Sem86 is to use automatically inferred semantics from libLISA. This would enable "CPU cloning": analyzing a CPU, extracting its semantics, and then starting an emulator that emulates that exact CPU accurately.
 
-```
-__buffer__
-  .<<("<header><p><strong>").<<(ERB::Escape.html_escape((repo_name)))
-  .<<("</strong></p><p>").<<(ERB::Escape.html_escape((repo_description)))
-  .<<("</p><p><code>").<<(ERB::Escape.html_escape((clone_command)))
-  .<<("</code></p></header>")
-```
+Currently, Sem86 uses handwritten instruction semantics. This is because libLISA currently does not have CPU observers for 16-bit and 32-bit x86, and therefore does not have inferred semantics available. However, the semantics format that we use is very similar to libLISA's, and switching to automatically inferred semantics would not require big changes.
 
-This does solve the performance problem (on par with ERB templates), it
-introduces a different problem, that complexity in the Papercraft compiler code
-itself. I’m not particularly proud of the [Papercraft compiler
-code](https://github.com/digital-fabric/papercraft/blob/master/lib/papercraft/compiler.rb),
-which complexity stems from the fact that the kind of optimized code is
-generated dnyamically, and has to be put together from many small pieces. That’s
-why I’ve long been thinking about how to simplify it.
+## Malware Analysis
 
-It eventually occurred to me that a tool for generating code using a
-general-purpose macro expansion technique, such as the quote/unquote mechanisms
-in languages such as Lisp or Elixir, might be a perfect fit for solving problems
-such as this. Such a tool may not only be used for generating new code at
-runtime, but can also be used for manipulating and mutating existing code at
-runtime.
+Emulation can be used to analyze malware in a sandboxed environment. There is, however, not a single instruction semantics to be followed, as x86 allows undefined behavior. Malware can abuse differences in implementations of undefined behavior to detect whether it is running in a sandboxed environment. Sem86 makes it easy to emulate specific undefined behavior and switch between different behavior.
 
-## A Quote/Unquote Example
+Sem86 can switch semantics mid-execution. This makes it possible to *bisect* instruction execution to determine at which point different semantics would diverge. We demonstrated this ability by constructing a toy malware example that exploits undefined instruction behavior to detect whether it is running in an emulator. Sem86 can bisect the execution of this malware, and identify the exact instruction that is used.
 
-As a very simple example of how this technique may be used, let’s implement a
-general-purpose validator generator. Its job is to generate a validator lambda
-that validates a given value against one or more conditions, which we’ll do
-using the `===` operator (this is the operator used for matching `case` clauses
-in Ruby). We can just generate a closure and iterate over the conditions:
+## Hardware Support & Operating Systems
 
-```
-def create_validator(*conds)
-  ->(v) {
-    conds.each { raise unless it === v }
-    v
-  }
-end
-```
+Sem86 implements all hardware necessary to boot Windows and Linux operating systems that support Pentium 5 era hardware. It runs Windows 3.1, Windows 98, Windows XP, Windows 7 and Debian 8. Additionally, several optional hardware components are implemented: an ES1370 card for audio, high-resolution video output via VBE and an NE2k network card for internet access.
 
-That’s pretty nice and simple, but if we wanted to squeeze a bit more
-performance out of it we might want to unroll that `conds.each` loop, which we
-can do by interpolating a string containing the unrolled code, then pass it to
-`eval`:
+Windows 7 runs, but the NE2k networking card has no Windows 7 driver. A newer networking card would need to be implemented to make this work. Additionally, as no GPU is implemented, Aero effects and transparency is not supported.
 
-```
-def create_validator(*conds)
-  code = <<~RUBY
-    ->(v) {
-      #{conds.map { "raise unless (#{it.inspect}) === v;" }.join}
-    }
-  RUBY
-  eval(code)
-end
-```
+Sem86 also runs on Android phones. Here, Windows 7 is shown. However, the LLVM JIT backend may use a lot of memory during compilation. This can cause the emulator to crash on phones with only 8 GiB RAM. Older operating systems, such as Windows 98 and XP, tend to run better.
 
-This is perfectly doable, but notice that we have to nest the embedded code
-inside of the string we’re building, which is kind of unwieldy. With a
-quote/unquote tool, which let’s us build Ruby code out of Ruby code, we could do
-the following:
+Windows 98 runs well on Sem86, as Sem86 is able to match the performance of early-2000s CPUs. Games that run on Windows 98 and do not require a dedicated GPU, such as Rollercoaster Tycoon, also tend to run well. Additionally, Internet Explorer can be used to browse the internet. Unfortunately, many modern websites do not work as they require unsupported HTTPS encryption methods.
 
-```
-def create_validator(*conds)
-  ast = quote {
-    ->(v) {
-      unquote conds.map { |c| quote { unquote(c) === v } }
-      v
-    }
-  }
-  eval(ast.to_source)
-end
-```
-
-With `#quote` we’re putting code inside quotes (obviously), and with `#unquote`
-we’re temporarily escaping out of the quotes in order to perform some
-computation and inject the result back into the quoted code. In this case, we’re
-converting each of the conditions into a piece of Ruby AST by calling `quote {
-unquote(c) === v }`.
-
-In my article [Unrolled Code](https://noteflakes.com/articles/2026-10-07-unrolled-code), I’ve explored how
-this technique could be applied to many different problems. Which leads us to
-project Steadfast.
-
-## Project Steadfast
-
-I’m excited to announce that I’ve been selected as the recipient of a [Ruby
-Association grant](https://www.ruby.or.jp/en/news/20261102) for working on
-developing a general-purpose macro tool for Ruby using the quote/unquote
-technique, with Matz as my mentor.
-
-The scope of the project includes the development of the quote/unquote tools, as
-well as additional tools for generating and manipulating Prism ASTs, converting
-ASTs to source code, etc. The project will also explore the use of those tools
-in popular gems such as ERB, ActiveRecord, Roda etc. I’d like to see how far I
-can take those ideas, how can they be integrated into the Ruby runtime, and what
-are the limitations and drawbacks of this technique.
-
-I’ll do this work in a new repository that I created called
-[Steadfast](https://github.com/digital-fabric/steadfast). If you wish, you can
-look at some [sketches I
-made](https://github.com/digital-fabric/steadfast/blob/main/grant-2026/sketches.md)
-that show possible usages for quote/unquote. Steadfast is a continuation of my
-work on [Sirop](https://github.com/digital-fabric/sirop), a tool I built for
-converting Prism ASTs to source code, and which is currently used by the
-Papercraft compiler.
-
-Steadfast is dedicated to the courageous people of the land who persevere in the
-face of unimaginable violence, persecution, callousness and indifference.
-
-![](https://noteflakes.com/assets/steadfast-logo.png)
-
-Over the next four months, I’ll be sharing news of my progress on this project,
-which should be completed by late March 2027. I think the new techniques
-introduced in this project can lead to a new way of doing metaprogramming in
-Ruby. Hopefully, other people will find this work useful and will come up with
-new uses for Steadfast.
+On Windows XP, the last supported version of Firefox runs and can open websites, including HTTPS websites. Unfortunately, in practice many modern sites tend to be too heavy for early-2000s CPUs.

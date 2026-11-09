@@ -350,5 +350,3 @@ the component a function that runs once.
 - The 60-panel results are gpui-fast’s retained_bench with my additions, in test mode, so no GPU work is included. Retention off there is still gpui-fast.
 - Figures from Zed’s plan are its authors’, from experimental branches.
 - Rust examples were type-checked against the vendored frameworks. Vizia’s and Freya’s come from their own sources, shortened.
-
-[Discuss on Hacker News](https://news.ycombinator.com/item?id=50420857)

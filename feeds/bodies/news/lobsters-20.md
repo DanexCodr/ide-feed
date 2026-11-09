@@ -1,36 +1,232 @@
-Yet another day, [yet another vulnerability](https://sshhole.com/) in core C code. This one happened due to two different conditions using the same sentinel value:
+References, along with objects, form the backbone of Git's storage mechanism. Simply put, a reference is a named pointer to a particular object within the repository.
 
-- On Unix, a password hash of "*" has meant a locked account since the very early days.
-- Since 2012, musl libc’s crypt function has returned the string "*" for a password that’s too long for it to hash.
+So how does Git store references? The `files backend` was the only backend for storing references until Git 2.45. The release saw the introduction of the newer and better `reftable backend`. The `files backend` is still the default reference backend as of Git 2.56.
 
-The two points combined, along with sshd hashing login attempts for locked accounts to avoid timing leaks, mean that on musl systems without PAM (like, oh, *the official Alpine AWS image*), an unauthenticated user now gets a (possibly root!) shell on your computer. See [this Alpine advisory](https://www.alpinelinux.org/posts/2026-11-05-openssh-password-authentication-bypass/) for more details.
+> Read about the newer reftable backend [here](https://about.gitlab.com/blog/whats-new-in-git-2-45-0/#reftables-a-new-backend-for-storing-references), which will be the default in Git 3.0.
 
-This is not a memory safety vulnerability; rather, it is one of those issues that, people often say, languages with better type systems won’t save you from. This is true! You can very well write a Rust function that returns `"*"` if the password is too long. But the big difference between C and Rust in this regard is that *the norms of the Rust community do not allow that*.
+## Files backend
 
-The POSIX spec tries to account for error cases. It [says](https://pubs.opengroup.org/onlinepubs/9799919799/functions/crypt.html):
+### Loose refs
 
-> Upon successful completion, crypt() shall return a pointer to the hashed password; […] Otherwise, it shall return a null pointer and set errno to indicate the error.
+The files backend creates a file for each new reference. So when you create `refs/heads/shiny-new-branch`, you have:
 
-But the C type system can’t force developers to check that the return value is NULL. The musl libc developers saw that some binaries weren’t checking for it, and as a result [deviated](https://git.musl-libc.org/cgit/musl/commit/?id=b3c4cc121f70faea45389fe7ddc1127ed5cbd8bb) from the spec, returning the sentinel `"*"` value instead.
+```
+❯ git init --quiet --ref-format=files repo; cd repo
 
-As I’ve [written about before](https://sunshowers.io/posts/types/), type systems have a strong effect on engineering culture. Because C doesn’t have algebraic data types or result types, the engineering norms that form around C communities lead to this kind of in-band signaling. Meanwhile, in Rust, a password that’s too long would be returned as an error variant, and the caller would be compelled to handle it. What if there isn’t an error variant today? Then a breaking change would add an error variant, *and* a [RustSec advisory](https://rustsec.org/) would probably be published as well.
+❯ git commit --allow-empty -m "new commit"
+[main (root-commit) 66b401c] new commit
 
-As an aside, it remains surprising to me when Linux distro maintainers complain about projects introducing Rust dependencies. Rather than adapting to the new world where the engineering norms are likely to serve users better, these maintainers insist on the world adapting to them. Yes, compile times and portability to niche architectures are real costs, but are you here to serve your own interests or the bulk of your users’? There’s a real [principal-agent problem](https://en.wikipedia.org/wiki/Principal%E2%80%93agent_problem) going on here.
+❯ git branch shiny-new-branch
 
-## Agents won’t save you[#](https://sunshowers.io/posts/sshole/#agents-wont-save-you)
+❯ eza --tree .git/refs/
+.git/refs
+├── heads
+│   ├── main
+│   └── shiny-new-branch
+└── tags
 
-Speaking of agents! There’s a recent strain of argument that goes roughly like this:
+❯ cat .git/refs/heads/shiny-new-branch
+66b401c8c91c975f9f126bc85d9b2eba54828d86
+```
 
-- Rust is admittedly useful for humans to write correct software today.
-- LLMs can now, or in the near future will be able to, reason about memory safety and other error cases directly.
-- So in an agent-heavy development lifecycle there’s no difference in software rigor between Rust and C (or even assembly).
-- But C has certain advantages over Rust in terms of build speed, portability, etc.
-- So we might as well write software in C (or even assembly).
+We call these `loose refs`, because each reference is an individual file. While simple enough, *they don't scale well*.
 
-There is plenty that’s wrong about the argument, including the dubious decision to trust a fuzzy process when we have already shown that a far more deterministic approach works. But the big missing piece is the norms of the respective communities! When you (or your agent) write Rust software, you’re probably going to use Rust libraries, and your agent is probably going to pattern-match on existing Rust code in its training set. As a result, *even if you aren’t already a skilled Rust developer*, there will likely be more invariants encoded in the type system<sup>[1](https://sunshowers.io/posts/sshole/#fn:1)</sup>.
+When you have millions of references, you end up cluttering the directory. Who'd have millions of references, you ask? Well, large companies with big monorepos. For instance, GitLab's [gitlab](https://gitlab.com/gitlab-org/gitlab) repository contains over 15M references.
 
-The engineering norms of C developers allow for `"*"` to be an acceptable sentinel value indicating an error; the engineering norms of Rust developers simply do not. These norms are the result of the accumulated contributions of a community, and part of the responsibility of a software professional is to think about the kinds of communities one’s work is a part of. But some people have [decided](https://bsky.app/profile/sunshowers.io/post/3mzkaurqkrk2v) that none of this really matters in this shiny new world, and that the contributions of other people can mostly be ignored. Their hubris will be their downfall.
+Back to the loose refs. Iterating over millions of references is slow, since we have to open and parse each individual file. There are other problems such as:
 
-*Discuss on [Hacker News](https://news.ycombinator.com/item?id=50399400).*
+- Large inode costs, since a reference maps to an individual file.
+- Large filesystem overheads when updating references, since each update needs a corresponding .lock file.
+- No atomicity when updating multiple references.
+- Tied to restrictions of the filesystem, like case sensitivity.
+- Name conflicts: you cannot have both refs/heads/branch/foo and refs/heads/branch.
 
-1. If you’re a skilled Rust developer, you’ll likely find the first-pass invariants the agent encodes to be woefully inadequate, and you’ll probably go through a long review cycle where those kinds of issues are fixed. [↩︎](https://sunshowers.io/posts/sshole/#fnref:1)
+### Packed refs
+
+To alleviate some of the issues with the `loose ref` data structure, Git introduced the notion of `packed-refs` back in 2006. [See Linus's commit](https://gitlab.com/git-scm/git/-/commit/e1e22e37f47e3f4d741d28920e1d27e3775c31ad) introducing the packed-refs format.
+
+The packed-refs format is a single 'packed-refs' file which contains sorted mappings of references to object IDs. We can see this in our repository:
+
+```
+❯ for i in $(seq 1 5)
+      git update-ref refs/heads/branch-$i HEAD
+  end
+
+❯ eza --tree .git/refs/
+.git/refs
+├── heads
+│   ├── branch-1
+│   ├── branch-2
+│   ├── branch-3
+│   ├── branch-4
+│   ├── branch-5
+│   ├── main
+│   └── shiny-new-branch
+└── tags
+
+❯ git refs optimize --all
+
+❯ eza --tree .git/refs/
+.git/refs
+├── heads
+└── tags
+
+❯ cat .git/packed-refs
+# pack-refs with: peeled fully-peeled sorted
+ec4aecaa91db6da8a280368110866935080f231c refs/heads/branch-1
+ec4aecaa91db6da8a280368110866935080f231c refs/heads/branch-2
+ec4aecaa91db6da8a280368110866935080f231c refs/heads/branch-3
+ec4aecaa91db6da8a280368110866935080f231c refs/heads/branch-4
+ec4aecaa91db6da8a280368110866935080f231c refs/heads/branch-5
+ec4aecaa91db6da8a280368110866935080f231c refs/heads/main
+66b401c8c91c975f9f126bc85d9b2eba54828d86 refs/heads/shiny-new-branch
+```
+
+Nice. This solves some of the issues we listed with the loose refs format. So Git's reference datastore eventually became a combination of the two. When loose refs accumulate, housekeeping repacks them into a single 'packed-refs' file.
+
+New references are always created as loose refs, since a loose ref shadows the packed one during reads. When updating, if the reference exists as a loose ref, simply update the loose ref. If not, create a new loose ref with the updated value. The issue is with deletion. If the reference exists in the packed refs format, we have to delete it from the 'packed-refs' file. For large repositories, the 'packed-refs' file can easily reach several GBs in size. Every deletion of a packed ref rewrites the 'packed-refs' file. *This is slow.*
+
+```
+❯ set -l oid (git rev-parse HEAD)
+
+❯ begin
+      printf '# pack-refs with: peeled fully-peeled sorted \n'
+      awk -v o=$oid 'BEGIN { for (i = 1; i <= 10000000; i++) printf "%s refs/heads/branch-%010d\n", o, i }'
+  end  > .git/packed-refs
+
+❯ eza -l .git/packed-refs
+.rw-r--r-- 700M karthik  8 Nov 15:16 .git/packed-refs
+
+❯ time git update-ref -d refs/heads/branch-0000499999
+Executed in    2.14 secs    fish           external
+   usr time    1.28 secs    0.00 millis    1.28 secs
+   sys time    0.85 secs    2.06 millis    0.85 secs
+
+❯ eza -l .git/packed-refs
+.rw-r--r-- 700M karthik  8 Nov 15:28 .git/packed-refs
+```
+
+The problem lies in the design of the `files backend`. The obvious solution is to slowly migrate repositories to using the newer `reftable` backend. The `reftable` backend uses binary tables to store references, and deletions are simply tombstone markers.
+
+## Stumbling upon an optimization
+
+The files backend has seen around 20 years of optimizations, meaning newer optimizations are generally harder to find. As our focus at GitLab was to migrate to the newer reftable backend, I wasn't ever thinking about optimizing the deletions in the files backend.
+
+With Git 3.0, Rust will become a mandatory requirement. This means we will slowly see more Rust adoption in the Git project. To brush up on my Rust skills and to understand how Rust can slowly replace C in the Git project, I created a Rust version of the files backend entirely via a prompt to an LLM. To measure the cost of the C <> Rust ABI boundary, I decided to benchmark the two:
+
+```
+❯ ./delete-ref/run --revisions ~/code/git v2.56.0,rust-packed-refs --build-system meson --parameter-list refformat files --parameter-list refcount 100000
+Benchmark 1: update-ref: delete ref (refformat = files, refcount = 100000, revision = v2.56.0) (32 runs)
+                mean     ±       σ          min     …     max
+  Wall Time     37.1 ms  ±     1.6 ms      35.2 ms  …    42.4 ms
+  Memory        11.8 MiB ±     0.1 MiB     11.5 MiB …    12.0 MiB
+
+Benchmark 2: update-ref: delete ref (refformat = files, refcount = 100000, revision = rust-packed-refs) (39 runs)
+                mean     ±       σ          min     …     max
+  Wall Time     30.6 ms  ±     1.7 ms      28.4 ms  …    35.4 ms           -17.7%
+  Memory        11.8 MiB ±     0.1 MiB     11.4 MiB …    12.0 MiB           +0.1%
+```
+
+Wait. So the Rust version is faster? How? This is the Rust code to iterate and apply reference updates:
+
+```
+let (rec_name, rec_start, rec_end) = match existing_rec {
+    Some(r) => r,
+    None => break,
+};
+
+// Check for an update that exactly matches this existing record.
+if ui < updates.len() {
+    let u_name = unsafe { CStr::from_ptr(updates[ui].refname).to_bytes() };
+    if u_name == rec_name {
+        if !updates[ui].oid_hex.is_null() {
+            // Replace.
+            unsafe { write_update_line(&mut out, &updates[ui])? };
+        }
+        // else: delete – skip the existing record.
+        ui += 1;
+        continue;
+    }
+}
+
+// No update touches this record – copy it verbatim.
+out.write_all(&records[rec_start..rec_end])?;
+```
+
+Here's the C code in comparison:
+
+```
+static int write_packed_entry(FILE *fh, const char *refname,
+               const struct object_id *oid,
+               const struct object_id *peeled)
+{
+   if (fprintf(fh, "%s %s\n", oid_to_hex(oid), refname) < 0 ||
+       (peeled && fprintf(fh, "^%s\n", oid_to_hex(peeled)) < 0))
+      return -1;
+   return 0;
+}
+
+// And the caller...
+
+if (cmp < 0) {
+	/* Pass the old reference through. */
+	if (write_packed_entry(out, iter->ref.name,
+			       iter->ref.oid, iter->ref.peeled_oid))
+		goto write_error;
+
+	if ((ok = ref_iterator_advance(iter)) != ITER_OK) {
+		ref_iterator_free(iter);
+		iter = NULL;
+	}
+}
+```
+
+The C version iterates through the references and writes any unmodified reference to the 'packed-refs' file. But unlike the Rust version, which writes it verbatim, it calls `write_packed_entry()`. The function rebuilds the information with `fprintf()` and `oid_to_hex()`. This is simply unnecessary, since there were no modifications made to the reference.
+
+The fix? Track and write the data verbatim using `fwrite()`:
+
+```
+@@ -1530,9 +1534,15 @@ static enum ref_transaction_error write_with_updates(struct packed_ref_store *re
+ 		}
+
+ 		if (cmp < 0) {
+-			/* Pass the old reference through. */
+-			if (write_packed_entry(out, iter->ref.name,
+-					       iter->ref.oid, iter->ref.peeled_oid))
++			const struct packed_ref_iterator *packed_iter =
++				(const struct packed_ref_iterator *)iter;
++			size_t len = packed_iter->pos - packed_iter->record_start;
++
++			/*
++			 * Skip any formatting and directly write to the packed-refs file
++			 * when deleting references and writing the remaining refs verbatim.
++			 */
++			if (fwrite(packed_iter->record_start, len, 1, out) != 1)
+ 				goto write_error;
+
+ 			if ((ok = ref_iterator_advance(iter)) != ITER_OK) {
+```
+
+Now, with the patch applied:
+
+```
+❯ ./delete-ref/run --revisions ~/code/git v2.56.0,fix,rust-packed-refs --build-system meson --parameter-list refformat files --parameter-list refcount 100000
+Benchmark 1: update-ref: delete ref (refformat = files, refcount = 100000, revision = v2.56.0) (19 runs)
+                mean     ±       σ          min     …     max
+  Wall Time     66.5 ms  ±     2.1 ms      63.7 ms  …    70.0 ms
+  Memory        11.7 MiB ±     0.2 MiB     11.2 MiB …    12.0 MiB
+
+Benchmark 2: update-ref: delete ref (refformat = files, refcount = 100000, revision = fix) (23 runs)
+                mean     ±       σ          min     …     max
+  Wall Time     54.9 ms  ±     2.1 ms      52.1 ms  …    61.0 ms           -17.4%
+  Memory        11.8 MiB ±     0.1 MiB     11.5 MiB …    11.9 MiB           +0.1%
+
+Benchmark 3: update-ref: delete ref (refformat = files, refcount = 100000, revision = rust-packed-refs) (23 runs)
+                mean     ±       σ          min     …     max
+  Wall Time     55.2 ms  ±     2.5 ms      52.5 ms  …    62.1 ms           -17.0%
+  Memory        11.8 MiB ±     0.2 MiB     11.4 MiB …    12.0 MiB           +0.4%
+```
+
+Yay!! 🎉 That's an 18% improvement in raw speed while deleting references and comparable performance to the Rust version.
+
+I chalked up a patch and sent it to the [mailing list](https://lore.kernel.org/git/20260930-kn-speedup-packed-refs-v1-1-111cd03d9b0e@gmail.com/). It's now merged into `master`: [fc70f528aa1927012538052014d7ea784b5a38fa](https://gitlab.com/git-scm/git/-/commit/fc70f528aa1927012538052014d7ea784b5a38fa) and will be a part of Git v2.98. Oh yeah, we are jumping to v2.98 after v2.56. This is in preparation of Git 3.0, which will follow 2 releases after.

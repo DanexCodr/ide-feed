@@ -1,75 +1,149 @@
-Do you run a small home server or NAS holding your precious photos and sensitive documents? If so, I suppose the drives are encrypted, right? But then… can you reboot the machine without manually entering a passphrase before being able to access your files again?
+So, I've always been somewhat annoyed at SSL/TLS.
+It requires everyone to go through a complex "ACME" dance just to put up a public website.
+Worse, certificates expire every few months, so it's not a one and done thing:
+even with automation, maintaining a certificate requires care to ensure the ACME client always has access to DNS records or the web server.
 
-If you answered yes to the questions above—which is common for convenience—that implies the encryption keys live in the machine which… kinda defeats the purpose of disk encryption, doesn’t it? A thief can break into your house, lift the whole box (they are small these days, huh), plug it in elsewhere, and gain free rein over your files.
+... and the whole system doesn't even work because certificates are issued over plaintext connections,
+and trusted certificate aurthorities use very secure keys like ["4"](https://en.wikipedia.org/wiki/EMudhra)
+ snip
 
-So, which one is it? Simplicity and reliability by allowing automatic reboots or data protection by keeping the key in your head? With ZKeys—a little new project I’m launching today—you can have your cake and eat it too.
+*There is prior art* of protest SSL [implementations](https://tom7.org/httpv/httpv.pdf),
+but I do actually want to encrypt web traffic.
+Passive eavesdropping is a real risk... but preventing it doesn't require the whole certificate thing:
+therefore, the best choice is a protest certificate.
 
-A blog on operating systems, programming languages, testing, build systems, my own software
-projects and even personal productivity. Specifics include FreeBSD, Linux, Rust, Bazel and
-EndBASIC.
+The only part of the certificate I directly control is the public key.
+Therefore, the simplest way to obtain a bad certificate is use a vanity private key such as 313333333337 (one of the most eleet primes).
+However, while the resulting public key would be week, no one would know unless they actually try to break it.
 
-[![Follow @jmmv on Mastodon](https://jmmv.dev/images/badges/mastodon-logo.svg)](https://mastodon.online/@jmmv)[![Follow @jmmv on Twitter](https://jmmv.dev/images/badges/Twitter_logo_blue.svg)](https://twitter.com/intent/follow?original_referer=https%3A%2F%2Fjmmv.dev%2F&screen_name=jmmv)[![RSS feed](https://jmmv.dev/images/badges/feed-icon-28x28.png)](https://jmmv.dev/feed.xml)
+A good protest should be obvious:
 
-# TL;DR
+# openssl s_client -connect maurycyz.com:443 < /dev/null 2> /dev/null \
+    | sed -n /BEGIN/,/END/p | grep -zE '////.?*////' --color=yes
 
-ZKeys is a managed service that stores encryption passphrases off-site. Client machines fetch the encryption keys from the service and keep those keys alive (unlocked) via periodic keepalive messages.
+-----BEGIN CERTIFICATE-----
+MIIFADCCA+igAwIBAgISBjst/cQvgUTu+O7siJYo8bAFMA0GCSqGSIb3DQEBCwUA
+MDMxCzAJBgNVBAYTAlVTMRYwFAYDVQQKEw1MZXQncyBFbmNyeXB0MQwwCgYDVQQD
+EwNZUjIwHhcNMjYxMTA4MjE0NzM5WhcNMjcwMjA2MjE0NzM4WjAXMRUwEwYDVQQD
+EwxtYXVyeWN5ei5jb20wggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQCz
+lkaPgD2IZPPtC6fB////You+dont+actually+have+to+pick+random+privat
+e+keys//No+one+checks+these+things//A+certificate+aurthority+got
++away+with+the+number+4+for+a+year////8HzhFiAzSv/zKHf7l4u6d6d3w6
+nOg7N/C2ra5QvNpFnZVzrS5IcZmvRdi0dcptavcB8s4ThHNZLhY414Mvdo5t0kr0
+n8WFrydnc6NEMKDPiZxehnF5D3n7z1piI5YCsNcS0NVFb45+8QvBZrv0O2BSIKNE
+7M9hcE00KsaSzZ3eDBsRAgMBAAGjggIoMIICJDAOBgNVHQ8BAf8EBAMCBaAwEwYD
+VR0lBAwwCgYIKwYBBQUHAwEwDAYDVR0TAQH/BAIwADAdBgNVHQ4EFgQUZoonXxel
+KC563vN2kbvwXTLBQgMwHwYDVR0jBBgwFoAUQBUtJnntMiCe35pyHdYyH4EMgQww
+MwYIKwYBBQUHAQEEJzAlMCMGCCsGAQUFBzAChhdodHRwOi8veXIyLmkubGVuY3Iu
+b3JnLzAnBgNVHREEIDAegg4qLm1hdXJ5Y3l6LmNvbYIMbWF1cnljeXouY29tMBMG
+A1UdIAQMMAowCAYGZ4EMAQIBMC0GA1UdHwQmMCQwIqAgoB6GHGh0dHA6Ly95cjIu
+Yy5sZW5jci5vcmcvNi5jcmwwggELBgorBgEEAdZ5AgQCBIH8BIH5APcAdgAAGl0a
+HC2TdbZIVXj4L3Ghrm7vOX0pfIrjFXvK3uGgHgAAAaG9Vy0ZAAAEAwBHMEUCIEof
+iI14E0jzfOz9woGKiiYR4pUAm/Dv9FmFWEr5ma8uAiEAyl2EMpURJ65Oe+FIFE6v
+Uj4QomzFJ98qVqhQozQxcC4AfQAai51rjdeR0c0FSe22A1XWBrZPrTDbcf54jw/H
+yPvEsQAAAaG9Vy2AAAgAAAUAFVVRHQQDAEYwRAIgTBocYGR/XcTqNx58xJh/pAme
+q+w6fDl+NktKUuPBqZcCIFJU6/GE71s9OkORDBC4+XHiQWWxrHk8uuD6nTQzCtHS
+MA0GCSqGSIb3DQEBCwUAA4IBAQAUIK5MyB3bhSFc6NOkC1UYYi2BQZN4zDfZMTD1
+gGtnK7FCCNKvsanv9FIeGgr7e3A50TJhqIWH42uz9mQt8rnofwKVu7fJ77l/HZIf
+oAqNol06AbtwM2I4vOEAZyfD3zAfL/3G70rGw4omDFpzX852Yi3Ou40wpHbdboYY
+Bn58bZDvBVaUrKVdTdN+S5Ea2usWKgUjqfouz/VjnlEgLfcxqPwF2IPfPCOPKJH2
+uIo3tnjx267OWY3O8nyxuOAxrBuP5fc8g2bEcKI5RewRWh7CCVZB23Ov5dyFQVcb
+ICN41m494GUBgwqYpAjLgdIubvyoJzBpACGuIl2QlJza1p/y
+-----END CERTIFICATE-----
 
-If the server stops receiving those messages for a long period of time (e.g. because it has been unplugged as part of theft), access to the key is automatically locked. You get automatic, passwordless reboots while keeping your data protected against real incidents.
+*First, let's look at mathematical framework* of RSA.
+To generate a key, pick two large prime numbers (p and q) and multiply them to yeild the modulus (n).
+Pick a small number, e as public exponent.
 
-# Storytime
+The RSA public key is composed of the modulus (n) and the public exponent:
 
-About a year ago, I was reinstalling my FreeBSD home server to act as my NAS after a [short stint with a Synology box](https://jmmv.dev/2024/12/synology-ds923-vs-freebsd.html). During that process, I decided to enable encryption for the ZFS data pool. But as I did that, I faced the question: how do I allow the machine to automatically serve my data after a reboot? I could put the key in a local file, which FreeBSD supports via the `keylocation` ZFS option, but that would render disk encryption pretty much useless.
+# Encryption requires knowing e (public)
+cyphertext = plaintext^e mod n
 
-So I had an idea: what if I put the key on a *different* machine away from my house? I could then make the NAS fetch the key to mount the drives. And if someone stole the server, I could wipe the remote key and make the data unreadable *before* they could plug it back in. I did post this to Twitter and there was some interest in the idea:
+The private key contains the modulus and the private exponent (d) which is chosen to be the multiplicate inverse of e modulo n.
+Exactly how d is found is not relevent, but the process requires knowing p and q.
 
-> Silly or smart? I wrote a startup rc.d script to automatically mount my encrypted ZFS pool by fetching the key from a remote server. What I want to protect against is the "drives stolen from home" case. If that happened, I could quickly remove the key. https://t.co/eZle2nJlXW
+# Decryption requires knowing d (pivate)
+= cyphertext^d mod n
 
-But… did you notice the problem with what I said above? Wiping the key by hand after noticing something is wrong is problematic because the gap between those two events may be large. What if I’m on a long vacation and I have no means of noticing that the machine has been stolen? Game over.
+= plaintext^e^d mod n
+= plaintext^(e*d) mod n
+= plaintext^1 mod n
+= plaintext
 
-So I refined the idea: what if I had a *service* that stored the key remotely and required the consuming machine to send it frequent pings to keep the key unlocked? This way, if the machine were stolen, it’d likely be offline for more than a few minutes and the service could automatically determine that something is wrong and lock the key from future accesses. And that’s precisely what ZKeys does.
+This process can also be used for signing: simply call the thing with the private key "encrypting" and the public key "decrypting".
+Sending a message that anyone can decrypt but only the key holder can encrypt is usefull for authenticating where it came from.
+</p><p>
 
-# Zero-knowledge protection
+*Ok, back to vanity keys.*
+The standard value for e is 65537 (0x10001),
+because the small number of set bits makes encryption faster.
+In fact, the CA I used will refuse to sign keys with a non-standard public exponent, so I can't do anything funny there.
 
-Before getting into details, it’s important to get something out of the way early on: ZKeys is designed so that a compromise of the server is insufficient to retrieve or reconstruct your keys. This is done in two ways:
+The modulus, n, is either 2,048 or 4,096 "user controlled" bits, so it's the ideal place to hide a message.
+However, to use the certificate, I'll need to find two large primes that multiply out to the vanity modulus.
 
-- **Split keys:** The ZKeys server only stores *half* of the passphrase used to unlock a volume. The other half remains on the client machine. The `zkeys` client program combines both halves to produce the whole passphrase.
-- **Encryption at rest:** The keys are encrypted at rest with a password that the `zkeys` client must supply for retrieval and which is securely transmitted over HTTPS. The password only lives in the server’s memory for a brief period of time.
+My method starts by picking two random primes and calculating the resulting n value.
+Then, the bytes of n are modified to introduce message into the base64 encoding.
+Of course, the modified n is not the product of p and q, but this is fixable by setting q to n/p.
 
-The tradeoff is, simply, that you MUST back up the full encryption keys in a third location of your own (a paper in a safe, a password manager, you name it). If ZKeys goes down or you lose your remote key password, there is absolutely nothing I can do to help you. *You have been warned.* The setup instructions later on will instruct you how to back the key up.
+The resulting q value is very unlikely to be a prime (or integer), so I round it and find the next prime after the ideal q:
+which usually only requires changing the value of q by a few hundred.
+Since p and q are similar in size, a small change q only affects the least-sigifiant half of the product:
 
-# Installation and setup
+58174124 * 918491824 = 53432457262362176
+(incrementing until the next prime...)
+58174124 * 918491843 = 53432458367670532
 
-The ZKeys service is available at [https://zkeys.jmmv.dev/](https://zkeys.jmmv.dev/) and the open-source client—along with system integrations for FreeBSD and Fedora—is in my [`jmmv/zkeys`](https://github.com/jmmv/zkeys/) repository.
+As long as the message is embedded into the upper half of n, it's likely to survive undamaged.
+The original p and newly selected q can now be used to construct a functional RSA private key in the usual manner.
 
-> Disclaimer: ZKeys is offered to you for free. I make no promises about its reliability, availability, or anything else. I am giving you access because I expect that supporting a handful of extra users won’t be a big issue. But if support becomes a burden, or if load becomes unmanageable, I’ll have to re-evaluate my choices here. Which means that, for now, you have to use the limited `LAUNCH50` code to get started!
+From here, it's really just a matter of getting a certificate aurthority to sign the key:
 
-The basic idea to set ZKeys up is the following:
+# Single domain
+openssl req -new -key priv.pem -subj '/C=US/CN=example.com' > cert_request
+certbot certonly --manual --csr cert_request
 
-1. Install the zkeys client CLI tool.
-2. Create a service account.
-3. Create a new key (or onboard an existing key).
-4. Configure the keep-alive service on the target machine.
-5. Change or add the filesystem encryption key to be the one stored in ZKeys.
-6. Configure the auto-mount service on the target machine.
-7. Reboot!
+# Wildcard
+cat > config<<EOF
+[ req ]
+req_extensions = req_ext
 
-That’s all it takes, but the steps are quite manual at the moment because no upstream OSes provide packages. The [service documentation](https://zkeys.jmmv.dev/#/docs) covers several scenarios in detail for FreeBSD and Fedora, so I’m not going to repeat them here.
+[ req_ext ]
+subjectAltName = @alt_names
 
-# Behind the scenes
+[ alt_names ]
+DNS.1 = *.example.com
+DNS.2 = example.com
+EOF
+openssl req -new -key priv.pem -config config -subj '/C=US/CN=example.com' > cert_request
+certbot certonly --manual --csr cert_request
 
-Now for the nerdy details, because that’s what you’re here for:
+... although since base64 operates on groups of three byte,
+it is possible for the message to be misaligned and not readable.
+However, since the layout of the certificate is static, it is possible to adjust the message's placement until it works:
+this should take less than four attempts.
 
-- The CLI is Rust, of course, but it has to come with a bunch of shell scripts to integrate with FreeBSD’s rc.d system and Fedora’s systemd and dracut. These integration points are the trickiest part of the client package and the hardest to validate automatically, which is why I only provide support for the two systems I use on a daily basis. It should be possible to integrate ZKeys with any other Unix-like OS, though.
-- The CLI package is a frankenmonster made up of Cargo and GNU Automake/Autoconf because of the above. I believe system-level tools should abide by de facto standard tooling even if such standard tooling is deficient, so GNU Autotools it is.
-- I run two non-replicated instances of the service: one in US West and one in EU West, because I have machines in both locations and both rely on encryption. I strongly suggest you use the US instance as I’m seeing frequent power hiccups in my EU deployment.
-- The frontend uses Bootstrap, straight from the 2010s. Does it look ugly? Maybe, but I kinda like it and, most importantly, it’s *functional*. Of course I could have asked AI to produce yet-another-dull-site full of gradients and slop, but I did not want to do that, so I stuck to what I already knew how to do by hand from previous services.
-- The admin page is an SPA, yes. This is an intentional design choice that forces a very clear separation between the backend APIs and the frontend. Whatever the current web frontend can do any other client can do as well. For example: the current `zkeys` CLI tool does not offer administrative operations but it could trivially be made to support them, because the APIs are right there.
-- The backend is built on my own [III-IV framework](https://jmmv.dev/software/iii-iv.html) which I’ve been building up over the last few years while implementing a couple of other services. I’ve had to add a lot more features to it to make this possible though.
+The result is a functional, trusted certificate with a longish message hidden in the public key.
+Renewal is done by resumbitting the CSR and repeating the ACME chalange, which can be automated.
 
-# Let’s encrypt!
+Base64 is missing most punctuation, but it provides the full ASCII alphabet,
+and the ~150 (RSA-2048) or ~320 (RSA-4096) avalable charaters provides plenty of space for jokes.
+Another option would be to target the base16 displayed in most browser's certificate viewer:
+this would provide a lot more space (2 chars/byte instea of 0.75), but requires careful word choice.
 
-Oops, I know that’s the name of [a *different* effort](https://letsencrypt.org/), but you really need to encrypt your local drives. With computers becoming smaller and lighter every day, it’s easier than ever to steal them, and unfortunately home break-ins are common in some parts of the world. Block-level encryption is cheap in CPU terms, so do it. ZKeys just makes this process less cumbersome for headless servers.
+*As for security*, this trick obviously reduces the entropy in the private key.
+I'm not aware of any factoring algorithms that could exploit key selection method, but I can't garantee they don't exist.
+The method may also produce a p and q that are close together, which makes it possible to easly factor n and recover the private key.
+A very small d value can also allow factorisation.
 
-Once again, head to [https://zkeys.jmmv.dev/](https://zkeys.jmmv.dev/) to get started and use code `LAUNCH50` to create an account!
+While I wouldn't trust these keys for anything important,
+they should be perfectly fine for serving a public website:
+modern TLS provides forward secrecy, so eavesdropping requires man-in-the-middle even if the private key is compromised.
 
-And if you are interested in helping out, I’d appreciate the creation of packages for FreeBSD and Fedora, and integration scripts for other systems.
+# *Related*:
+
+- https://tom7.org/httpv/httpv.pdf: [⭐ World's worst TLS server ]
+- /projects/badcert/gen.py: script to generate a vanity key
+- https://rya.nc/cert-tricks.html: More vanity certs
+- https://web.archive.org/web/20230305190629/https://ondergetekende.nl/vanity-rsa-public-key.html: SSH keys.

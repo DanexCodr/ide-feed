@@ -1,39 +1,1304 @@
-2.0.0 gave the machines that mount docker’s socket a read-only Docker API, enough for Traefik or Dozzle to find them. 3.0.0 serves the API with its changes, on the host too. In between:
+*blqsort* is a very fast quicksort algorithm. I am not aware of any other general-purpose comparison-based sorting algorithm that is faster on random data. Only specialized SIMD-based algorithms are generally faster when dealing with small primitive data types.
 
-- 2.1.0: published ports answer over IPv6 too, and -p takes IPv6 addresses.2.2.0: fixes for what came up moving a whole server of compose projects to nspawn. compose got anonymous volumes, networks made again when their definition changes, `down SERVICE` and a `start` that brings up what a service depends on.2.3.0: every layer is applied inside the tree it is extracted into and checked against the digest its image names for it.2.3.1: packages on [apt.nspawn.org](https://apt.nspawn.org) (Debian 13+, Ubuntu 24.04+) and [rpm.nspawn.org](https://rpm.nspawn.org) (Fedora 44+).2.4.0: `-p PORT` takes a free port of the host, and a pull of an image index picks the entry for the host’s platform.
+### blqsort
 
-The host’s socket is `/run/nspawn/api.sock`, opened by `nspawn-api.socket`. Its main purpose is compatibility: tools that manage containers through the Docker API, like GitLab Runner’s docker executor, can use nspawn’s machines instead. `nspawn` is still the command line for managing them, but the `docker` command works against the socket too.
+The main ideas are branchless partitioning, sorting networks for small partitions and robust pivot selection.
 
-The packages ship the socket turned off. Once it listens, `nspawn-api.service` starts on the first connection:
+The implementation is available on GitHub under the MIT license. There is also a C version of it, including multithreaded versions, each as a single header file.
 
-With `DOCKER_HOST` pointing at it, the `docker` command talks to nspawn:
+The following **benchmarks** show the execution times for sorting 50 million random `doubles` using different sorting implementations. The measurements were taken on an *Apple M1* system using *Clang* and on an *Intel i5-9300H Linux* system using *GCC*, both compiled with the `-O3` option.
 
-The API server is a client of the bus service, as the command line is. Everything it does is a method of `org.nspawn`, under the same polkit actions: reads and waits need `org.nspawn.inspect`, logs and changes need `org.nspawn.manage`. Every user can connect, but polkit is never asked to prompt, since nothing on a socket can answer an authentication agent. Root can do everything, and any other user needs a polkit rule, like `nspawn-wheel.rules`, which the packages ship as an example. As with the `docker` group, a user with `org.nspawn.manage` is root on the host: a machine runs commands as root and can mount any host path.
+| Implementation | Apple M1 | Intel i5-9300H |
+| --- | --- | --- |
+| std::sort | 1.33s | 4.97s |
+| ipnsort ClickHouse C++ port | 0.99s | 2.31s |
+| blqsort | 0.67s | 1.33s |
 
-What one socket’s clients hold at once (connections, log and event streams, waits, attaches, execs) is bounded, and a user other than root gets a share of each, so no user can keep the others or root out.
+For a fair comparison, the single-threaded version of `blqs` was used here. On the *M1*, the multithreaded versions are roughly another factor of 3 faster. In terms of runtime, the *C* versions differ only very little from the *C++* version.
 
-Clients that only look at `/run/docker.sock` find it with a drop-in, on a host where nothing else has that path:
+Execution times for sorting 50 million of these `structs` with random id values.
 
-It answers in the shapes of API 1.51, and of the versions down to 1.24 that clients ask for.
+`struct entry {
+    int id;
+    int value;
+    bool operator<(const entry& other) const { return id < other.id; }
+};
+struct entry data[SIZE];
+blqs::sort(data, data + SIZE);
+`
 
-- Containers: create, start, stop, restart, kill, pause, unpause, wait, update, remove and prune, with AutoRemove. A create’s settings become the machine’s options: what nspawn has no use for comes back in Warnings, and what would change what the container does is refused with 400.**attach:** with the input too. The program gets the client’s input, and its output comes back byte for byte, which is what `docker run -i`, `docker run -it` and `docker start -ai` use.**exec:** with a terminal or with stdout and stderr apart, input, variables, working directory and user. A command that is not found exits 127, one that can’t run 126.**archive:** `HEAD`, `GET` and `PUT` on `/containers/ID/archive`, so `docker cp` works both ways, on running and stopped containers, keeping owners and modes.**Images:** pull, with the engine’s progress messages and its “Image is up to date” and “Downloaded newer image”, remove and prune. An image’s ID is its config’s digest.**Volumes and networks:** create, inspect, list, remove and prune, and `connect` and `disconnect` with aliases and fixed addresses, running or not. `bridge`, `host` and `none` are the predefined networks.
+| Implementation | Apple M1 | Intel i5 |
+| --- | --- | --- |
+| std::sort | 3.45s | 4.10s |
+| ipnsort ClickHouse C++ port | 0.98s | 2.63s |
+| blqsort | 0.75s | 1.40s |
 
-## GitLab Runner[**](https://blog.nspawn.org/posts/nspawn-3-0-a-docker-compatible-engine-api-for-systemd-nspawn-containers/#gitlab-runner)
+Already sorted and reverse-sorted inputs are detected and handled efficiently. Inputs with many duplicate keys are optimized as well.
 
-GitLab Runner’s docker executor runs its jobs on nspawn’s machines through the API. Its `host` setting points at the socket:
+The execution times, unless otherwise specified, apply to an *Apple M1* system.
 
-A variable’s value can now hold line breaks (`-e`, compose’s `environment`, the API’s `Env`). GitLab’s `CI_COMMIT_MESSAGE` for a commit with a body is one.
+A small, elegant, recursive quicksort:
 
-- **A machine’s API socket takes changes.** In 2.0.0 the socket inside a machine was read-only. Now a machine that mounts `/var/run/docker.sock`, `/run/docker.sock` or `/run/nspawn/api.sock` read-write can create, start, exec in and remove containers, pull and remove images, and create volumes and networks. With `:ro` the socket reads, follows logs and kills, and refuses everything else with 403. Only root inside the machine can connect, and it sees every machine and their `-e` variables (`--secret` values never show). A proxy or a dashboard that only reads should mount it `:ro`, the Traefik example in the 2.0 post included: `/var/run/docker.sock:/var/run/docker.sock:ro`.**A record pulled or built that never ran is an image, not a container.** The API’s container list, inspect and prune leave it out, and `GET /images/json` lists it.**The bus says what failed.** A failed method or job carries an error name under `org.nspawn.Error`: `NotAuthorized`, `NoSuchMachine`, `NoSuchImage`, `NoSuchNetwork`, `NoSuchVolume`, `NoSuchPath`, `Exists`, `InUse`, `NotRunning`, `AlreadyRunning`, `Paused`, `NotPaused`, `Invalid`, and `Failed` for the rest.
+`#include <cstdio>
+#include <cstdlib>
+#include <chrono>
 
-- `nspawn info`: the service’s version, its machines by state, images, directories, default backend, log driver, registry and the host. -f json or -f TEMPLATE, and it exits 1 when the service doesn’t answer. The API’s GET /info answers from it.**`nspawn images inspect`:** the records of images as JSON or through `-f TEMPLATE`. `nspawn image` is now the same group as `nspawn images`.**`-P`/`--publish-all`:** publishes every port the image exposes that no `-p` publishes, on a free port of the host.**Volumes:** `volume create --label`, `volume ls --filter label=`, and `system prune --volumes` removes the unnamed volumes, which only the API creates.**`--timezone auto`**, the default, gives a writable root without the host’s zone a copy of `/etc/localtime`, which tzdata can replace, instead of systemd-nspawn’s read-only bind.**A bare `-e VAR` that isn’t set is left out** instead of refused, so `-e DEBUG` passes it on only where it’s set.**No line of a machine’s output is lost to journald’s rate limit.** The unit’s `LogRateLimitIntervalSec=0` never reached journald, which kept its default of 10000 lines in 30 seconds. The hooks drop-in now sets an interval of one microsecond with a burst of a million.**A build of a tag replaces the image of that reference** while nothing ran from it, mkosi builds too. If a machine or an image of another reference has the name, the build goes beside it under a free name (`app-2`) and says so.
+constexpr int SIZE = 50000000;
+double data[SIZE];
 
-The full list is in the [release notes](https://github.com/nspawn/nspawn/blob/3.0.0/docs/releases/3.0.0.md).
+double time() {
+    static auto time0 = std::chrono::high_resolution_clock::now();
+    auto t = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> diff = t - time0;
+    return diff.count();
+}
 
-- Image builds, loads, imports, tags, pushes and commits, container renames and exports, swarm and plugins answer 501 “not supported”. docker build against the socket doesn’t work, nspawn build does.A stopped container’s volumes are mounted only while it runs, so copies to or from them are refused until it starts.`nspawn run -i` reads the output through the journal, which drops empty lines. The API’s attach doesn’t.`nspawn generate` doesn’t keep the name the API gave a network, and compose refuses network names with a `.`.mstack is still experimental and untested, and doesn’t serve the API.
+void sortq(double ar[], int len) {
+    if (len < 2) return;
+    double piv = ar[0];
+    int mid = 0;
+    for (int i = 1; i < len; i++) {
+        if (ar[i] < piv) {
+            mid += 1;
+            std::swap(ar[mid], ar[i]);
+        }
+    }
+    std::swap(ar[mid], ar[0]);
 
-Both are out already:
+    sortq(ar + mid + 1, len - mid - 1);
+    sortq(ar, mid);
+}
 
-- 3.1.0 adds --device-cgroup-rule, for devices that come and go while the machine runs, like a USB device being flashed: -v /dev/bus/usb:/dev/bus/usb --device-cgroup-rule 'c 189:* rwm'. An app given devices of the host now runs without a user namespace, and a machine that ran in one keeps its files’ owners shifted, so make it again with nspawn rm and run or create.3.2.0 reads the name of a machine or an image the same way in every command: an image goes by its local name or its reference, so `images rm somos/app:1` and `run somos-app-1` both work. `run` never consumes or replaces an image: the machine goes beside it.
+int main() {
+    double t0;
 
-The requirements are the same as for 2.0.0. Packages for Fedora, Debian/Ubuntu and Arch are attached to the [release](https://github.com/nspawn/nspawn/releases/tag/3.2.0), and apt.nspawn.org and rpm.nspawn.org have the first two. If a client of the Docker API fails against nspawn where it works with docker, open an issue with what it sent.
+    printf("Sorting %d million doubles\n", SIZE / 1000000);
+    for (int i = 0; i < SIZE; i++) data[i] = rand() / 1024.0;
+
+    t0 = time();
+    sortq(data, SIZE);
+    printf("sortq: %.2fs\n", time() - t0);
+}
+`
+`c++ -O1 main.cpp && ./a.out
+`
+`Sorting 50 million doubles
+sortq: 4.61s
+`
+If you sort the sorted data again, all elements in the partition are greater than or equal to the pivot element. The second partition becomes only one element smaller each time, and the function is called recursively millions of times, which leads to a stack overflow after a few hours.
+
+You can prevent this with *tail call elimination*. That is, the first recursive call remains, while the second is replaced by a loop iteration. You now need to ensure that the smaller partition is called recursively. So swap them if necessary.
+
+`void sortq(double* ar, int len) {
+    while (len >= 2) {
+        double piv = ar[0];
+        int mid = 0;
+        for (int i = 1; i < len; i++) {
+            if (ar[i] < piv) {
+                mid += 1;
+                std::swap(ar[mid], ar[i]);
+            }
+        }
+        std::swap(ar[mid], ar[0]);
+        double* ar2 = ar + mid + 1;
+        int len2 = len - mid - 1;
+        len = mid;
+        if (len2 > len) {
+            std::swap(len, len2);
+            std::swap(ar, ar2);
+        }
+        sortq(ar2, len2);
+    }
+}
+`
+Now the program no longer crashes, but it will take a few days to finish. Because of this unfavorable partitioning, the worst-case scenario of *O(N²)* has become a reality. However, insertion sort would not make it any faster either.
+
+Let’s just use the middle element as the pivot - then the problem of sorting already sorted data will be gone.
+
+This implementation is sufficient for many purposes and is also reasonably fast. By the way, “Lomuto” partitioning is used here. “Hoare” partitioning performs fewer comparisons and swaps, but on modern CPUs its cache behavior can be less favorable.
+
+But why write your own implementation when *std::sort* exists?
+
+`.
+#include <algorithm>
+.
+    .
+    t0 = time();
+    std::sort(data, data + SIZE);
+    printf("std::sort: %.2fs\n", time() - t0);
+    .
+`
+`std::sort: 1.31s
+`
+That’s on ARM Mac - on a x86 system, `std::sort` is only about 10% faster.
+
+How can you make a quicksort run faster than std::sort?
+
+### Sorting networks
+
+For partitions with up to about 20 elements, insertion sort is faster than quicksort. But there is something even faster for small partitions: *sorting networks*. Each partition size is handled in its own program branch. For a partition size of two, the two elements are simply compared and swapped if necessary. However, as the number of elements increases, the logic becomes increasingly complex.
+
+`inline void sort2(double& a, double& b) {
+    if (a < b) std::swap(a, b);
+}
+inline void sort3(double& a, double& b, double& c) {
+    sort2(a, b); sort2(b, c); sort2(a, b);
+}
+inline void sort4(double& a, double& b, double& c, double& d) {
+    sort2(a, b); sort2(c, d); sort2(a, c);
+    sort2(b, d); sort2(b, c);
+}
+inline void sort5(double& a, double& b, double& c, double& d, double& e) {
+    sort2(b, c); sort2(d, e); sort2(b, d);
+    sort2(a, c); sort2(a, d); sort2(c, e);
+    sort2(a, b); sort2(c, d); sort2(b, c);
+}
+
+    .
+    while (len >= 6) {
+        .
+        .
+    }
+    if (len == 5) sort5(ar[0], ar[1], ar[2], ar[3], ar[4]);
+    else if (len == 4) sort4(ar[0], ar[1], ar[2], ar[3]);
+    else if (len == 3) sort3(ar[0], ar[1], ar[2]);
+    else if (len == 2) sort2(ar[0], ar[1]);
+}
+
+`
+
+Let’s consider a simple task: Iterate through an array and copy all numbers less than 500 into a new array. A straightforward implementation in *C* looks like this:
+
+`smlen = 0;
+for (int i = 0; i < 1000; i++) {
+    if (numbers[i] < 500) {
+        small_numbers[smlen] = numbers[i];
+        smlen += 1;
+    }
+}
+`
+If the numbers are randomly distributed, the result of the `if` condition  becomes unpredictable for the branch predictor. This results in a high misprediction rate, which severely impacts performance because the processor must constantly flush its pipeline and restart execution.
+
+We can avoid this problem by using a branchless approach:
+
+*Branchless* does not mean that there are no jumps at all. The term refers only to the comparison, which is difficult to predict. Obviously, the loop jump remains, but that is not a problem because it is easily predictable - it is skipped only once.
+
+**Performance Comparison**
+
+To get meaningful results, we run both routines for 1000 iterations using 100,000 random numbers.
+
+`#include <stdio.h>
+#include <stdlib.h>
+#include <sys/time.h>
+
+#define SIZE 100000
+int numbers[SIZE];
+int small_numbers[SIZE];
+int smlen;
+
+double ts(void) {
+    static double t0;
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    double h = t0;
+    t0 = tv.tv_sec + tv.tv_usec / 1000000.0;
+    return t0 - h;
+}
+void init(void) {
+    srand(1);
+    for (int i = 0; i < SIZE; i++) numbers[i] = rand() % 1000;
+    ts();
+}
+void small_if(void) {
+    smlen = 0;
+    for (int i = 0; i < SIZE; i++) {
+        if (numbers[i] < 500) {
+            small_numbers[smlen] = numbers[i];
+            smlen += 1;
+        }
+    }
+}
+void small_bl(void) {
+    smlen = 0;
+    for (int i = 0; i < SIZE; i++) {
+        small_numbers[smlen] = numbers[i];
+        smlen += (numbers[i] < 500);
+    }
+}
+int main(void) {
+    init();
+    for (int i = 0; i < 1000; i++) small_if();
+    printf("Time if: %.3f\n", ts());
+    init();
+    for (int i = 0; i < 1000; i++) small_bl();
+    printf("Time bl: %.3f\n", ts());
+}
+`
+Benchmark results were obtained on an *Apple M1* with `-O1` optimization. On this benchmark, `-O3` did not yield additional speedup, only larger generated code.
+
+`Time if: 0.345
+Time bl: 0.036
+`
+**Assembly Analysis**
+
+Using `objdump -d`, we can see the difference in how the CPU processes these loops.
+
+With the `if` version, the compiler generates a conditional branch `b.gt`.
+
+`ldr     w13, [x10], #0x4           ; load numbers[i]
+cmp     w13, #0x1f3                ; compare with 499 (0x1f3)
+b.gt    0x100000678                ; branch if greater (The bottleneck)
+str     w13, [x12, w8, sxtw #2]    ; store value in small_numbers[j]
+add     w8, w8, #0x1               ; j += 1
+`
+With the branchless version the compiler uses the `cinc` (conditional increment) instruction.
+
+`ldr     w13, [x10], #0x4           ; load numbers[i]
+str     w13, [x12, w8, uxtw #2]    ; unconditional store to small_numbers[j]
+cmp     w13, #0x1f4                ; compare with 500
+cinc    w8, w8, lt                 ; conditional increment (No branch)
+`
+In this version, there is no jump based on the data. The control flow is perfectly linear, allowing the CPU to use its full pipeline width.
+
+**Why doesn’t the compiler optimize the `if` case automatically?**
+
+The compiler doesn’t know the nature of your data. If only a small fraction of numbers were less than 500, the branch version might actually be faster because the predictor would almost always be right.
+
+The branchless version performs a write operation (`str`) every single time. The compiler cannot safely assume that it is permitted to write to memory if a write operation in the original source code was intended to occur only under a specific condition - for example, to avoid writing past the end of an allocated buffer.
+
+Since quicksort essentially works by dividing the data into large and small numbers, it should be possible to speed it up using this technique.
+
+So, as described above, we can make the partitioning step branchless. (`comp` is the comparison function):
+
+`int h = comp(*left, piv);
+*lwr = *rwr = *left++;
+lwr += h; rwr -= !h;
+`
+We can also make `sort2` - the basic operation for the sorting network - branchless:
+
+`inline static void sort2(double& a, double& b) {
+    double x = a; double y = b;
+    bool m = x < y;
+    a = m ? x : y; b = m ? y : x;
+}
+`
+Here’s how it works (in short) :
+
+First, about 250 elements are copied from one page into an auxiliary buffer to make room for subsequent operations. We then alternately copy a block to the left and to the right, without using any branches.
+
+The pivot element is also carefully selected. Several medians are determined from various elements of the partition, and the final median is then calculated from these medians. This results in a much more even distribution of the data. Some randomness is added to the pivot selection process to prevent inputs from consistently triggering worst-case behavior.
+
+If the distribution is still very uneven, however, the algorithm switches to heap sort for these partitions as a precaution. Uneven distribution often occurs when there are many identical elements; in this case, they are identified and grouped together.
+
+In addition, the code includes the sorting networks, which are used for partition sizes up to 16.
+
+And with a `for (int i = 16; i--;) { ... }` loop, the compiler unrolls the loop, generating 16 copies of the loop body.
+
+This version consists of a single *C++* header file that can be easily included. It can sort any data type, and the comparison function can be supplied by the user, just like with `std::sort`.
+
+> blqs.h
+
+`#ifndef BLQS_H
+#define BLQS_H
+
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <functional>
+#include <utility>
+
+#ifndef BLQS_RAND
+#define BLQS_RAND
+
+#include <random>
+static thread_local uint64_t blqs_seed;
+
+static inline unsigned blqs_rand(void) {
+    if (!blqs_seed) {
+        std::random_device rd;
+        blqs_seed =
+            ((uintptr_t)&blqs_seed) ^
+            (((uint64_t)rd() << 32) | (uint64_t)rd());
+        if (!blqs_seed) blqs_seed = 1;
+    }
+
+    uint64_t x = blqs_seed;
+    x ^= x << 13;
+    x ^= x >> 7;
+    x ^= x << 17;
+    blqs_seed = x;
+    return (unsigned)x;
+}
+#endif
+
+namespace blqs {
+
+constexpr int SMALLPART = 1024;
+constexpr int SWSZ = 512;
+constexpr int UNROLL = 16;
+
+template<typename T, typename Compare>
+static inline void sort2(T& a, T& b, Compare comp) {
+    T x = a; T y = b;
+    bool m = comp(x, y);
+    a = m ? x : y; b = m ? y : x;
+}
+
+template<typename T, typename Compare>
+static inline void sort3(T& a, T& b, T& c, Compare comp) {
+    sort2(a, b, comp); sort2(b, c, comp); sort2(a, b, comp);
+}
+
+template<typename T, typename Compare>
+static inline void sort4(T& a, T& b, T& c, T& d, Compare comp) {
+    sort2(a, b, comp); sort2(c, d, comp); sort2(a, c, comp);
+    sort2(b, d, comp); sort2(b, c, comp);
+}
+
+template<typename T, typename Compare>
+static inline void sort5(T& a, T& b, T& c, T& d, T& e, Compare comp) {
+    sort2(b, c, comp); sort2(d, e, comp); sort2(b, d, comp);
+    sort2(a, c, comp); sort2(a, d, comp); sort2(c, e, comp);
+    sort2(a, b, comp); sort2(c, d, comp); sort2(b, c, comp);
+}
+
+template<typename T, typename Compare>
+static inline void sort6(T& a, T& b, T& c, T& d, T& e, T& f, Compare comp) {
+    sort2(a, b, comp); sort2(c, d, comp); sort2(e, f, comp);
+    sort2(a, c, comp); sort2(b, d, comp); sort2(e, f, comp);
+    sort2(a, e, comp); sort2(b, f, comp); sort2(c, e, comp);
+    sort2(d, f, comp); sort2(b, c, comp); sort2(d, e, comp);
+    sort2(c, d, comp);
+}
+
+template<typename T, typename Compare>
+static inline void sort7(T& a, T& b, T& c, T& d, T& e, T& f, T& g, Compare comp) {
+    sort2(a, g, comp); sort2(c, d, comp); sort2(e, f, comp);
+    sort2(a, c, comp); sort2(b, e, comp); sort2(d, g, comp);
+    sort2(a, b, comp); sort2(c, f, comp); sort2(d, e, comp);
+    sort2(b, c, comp); sort2(e, g, comp);
+    sort2(c, d, comp); sort2(e, f, comp);
+    sort2(b, c, comp); sort2(d, e, comp); sort2(f, g, comp);
+}
+
+template<typename T, typename Compare>
+static inline void sort8(T& a, T& b, T& c, T& d, T& e, T& f, T& g, T& h, Compare comp) {
+    sort2(a,b,comp); sort2(c,d,comp); sort2(e,f,comp); sort2(g,h,comp);
+    sort2(a,c,comp); sort2(b,d,comp); sort2(e,g,comp); sort2(f,h,comp);
+    sort2(b,c,comp); sort2(f,g,comp);
+    sort2(a,e,comp); sort2(b,f,comp); sort2(c,g,comp); sort2(d,h,comp);
+    sort2(c,e,comp); sort2(d,f,comp);
+    sort2(b,c,comp); sort2(d,e,comp); sort2(f,g,comp);
+}
+
+template<typename T, typename Compare>
+static inline void sort9(T& a, T& b, T& c, T& d, T& e, T& f, T& g, T& h, T& i, Compare comp) {
+    sort2(a,d,comp); sort2(b,h,comp); sort2(c,f,comp); sort2(e,i,comp);
+    sort2(a,h,comp); sort2(c,e,comp); sort2(d,i,comp); sort2(f,g,comp);
+    sort2(a,c,comp); sort2(b,d,comp); sort2(e,f,comp); sort2(h,i,comp);
+    sort2(b,e,comp); sort2(d,g,comp); sort2(f,h,comp);
+    sort2(a,b,comp); sort2(c,e,comp); sort2(d,f,comp); sort2(g,i,comp);
+    sort2(c,d,comp); sort2(e,f,comp); sort2(g,h,comp);
+    sort2(b,c,comp); sort2(d,e,comp); sort2(f,g,comp);
+}
+
+template<typename T, typename Compare>
+static inline void sort10(T& a, T& b, T& c, T& d, T& e, T& f, T& g, T& h, T& i, T& j, Compare comp) {
+    sort2(a,b,comp); sort2(c,f,comp); sort2(d,g,comp); sort2(e,h,comp); sort2(i,j,comp);
+    sort2(a,g,comp); sort2(b,i,comp); sort2(c,e,comp); sort2(d,j,comp); sort2(f,h,comp);
+    sort2(a,c,comp); sort2(b,d,comp); sort2(e,f,comp); sort2(g,i,comp); sort2(h,j,comp);
+    sort2(a,b,comp); sort2(c,h,comp); sort2(d,f,comp); sort2(e,g,comp); sort2(i,j,comp);
+    sort2(b,c,comp); sort2(d,e,comp); sort2(f,g,comp); sort2(h,i,comp);
+    sort2(b,d,comp); sort2(c,e,comp); sort2(f,h,comp); sort2(g,i,comp);
+    sort2(c,d,comp); sort2(e,f,comp); sort2(g,h,comp);
+}
+
+template<typename T, typename Compare>
+static inline void sort11(T& a, T& b, T& c, T& d, T& e, T& f, T& g, T& h, T& i, T& j, T& k, Compare comp) {
+    sort2(a,j,comp); sort2(b,g,comp); sort2(c,e,comp); sort2(d,h,comp); sort2(f,i,comp);
+    sort2(a,b,comp); sort2(d,f,comp); sort2(e,k,comp); sort2(g,j,comp); sort2(h,i,comp);
+    sort2(b,d,comp); sort2(c,f,comp); sort2(e,h,comp); sort2(i,k,comp);
+    sort2(a,e,comp); sort2(b,c,comp); sort2(d,h,comp); sort2(f,j,comp); sort2(g,i,comp);
+    sort2(a,b,comp); sort2(c,g,comp); sort2(e,f,comp); sort2(h,i,comp);
+    sort2(j,k,comp);
+    sort2(c,e,comp); sort2(d,g,comp); sort2(f,h,comp); sort2(i,j,comp);
+    sort2(b,c,comp); sort2(d,e,comp); sort2(f,g,comp); sort2(h,i,comp);
+    sort2(c,d,comp); sort2(e,f,comp); sort2(g,h,comp);
+}
+
+template<typename T, typename Compare>
+static inline void sort12(T& a, T& b, T& c, T& d, T& e, T& f, T& g, T& h, T& i, T& j, T& k, T& l, Compare comp) {
+    sort2(a,i,comp); sort2(b,h,comp); sort2(c,g,comp); sort2(d,l,comp); sort2(e,k,comp); sort2(f,j,comp);
+    sort2(a,c,comp); sort2(b,e,comp); sort2(d,f,comp); sort2(g,i,comp); sort2(h,k,comp); sort2(j,l,comp);
+    sort2(a,b,comp); sort2(c,j,comp); sort2(e,h,comp); sort2(f,g,comp); sort2(k,l,comp);
+    sort2(b,d,comp); sort2(c,h,comp); sort2(e,j,comp); sort2(i,k,comp);
+    sort2(a,b,comp); sort2(c,d,comp); sort2(e,f,comp); sort2(g,h,comp); sort2(i,j,comp); sort2(k,l,comp);
+    sort2(b,c,comp); sort2(d,f,comp); sort2(g,i,comp); sort2(j,k,comp);
+    sort2(c,e,comp); sort2(d,g,comp); sort2(f,i,comp); sort2(h,j,comp);
+    sort2(b,c,comp); sort2(d,e,comp); sort2(f,g,comp); sort2(h,i,comp); sort2(j,k,comp);
+}
+template<typename T, typename Compare>
+static inline void sort13(T& a, T& b, T& c, T& d, T& e, T& f, T& g, T& h, T& i, T& j, T& k, T& l, T& m,
+                          Compare comp) {
+    sort2(a,m,comp); sort2(b,k,comp); sort2(c,j,comp); sort2(d,h,comp); sort2(f,l,comp); sort2(g,i,comp);
+    sort2(b,g,comp); sort2(c,d,comp); sort2(e,l,comp); sort2(h,j,comp); sort2(i,k,comp);
+    sort2(a,e,comp); sort2(b,c,comp); sort2(d,g,comp); sort2(h,i,comp); sort2(j,k,comp); sort2(l,m,comp);
+    sort2(e,g,comp); sort2(f,j,comp); sort2(i,l,comp); sort2(k,m,comp);
+    sort2(a,f,comp); sort2(d,i,comp); sort2(e,h,comp); sort2(g,l,comp); sort2(j,k,comp);
+    sort2(a,b,comp); sort2(c,f,comp); sort2(g,j,comp); sort2(h,i,comp); sort2(k,l,comp);
+    sort2(b,d,comp); sort2(c,e,comp); sort2(f,g,comp); sort2(j,k,comp);
+    sort2(b,c,comp); sort2(d,e,comp); sort2(f,h,comp); sort2(g,i,comp);
+    sort2(c,d,comp); sort2(e,f,comp); sort2(g,h,comp); sort2(i,j,comp);
+    sort2(d,e,comp); sort2(f,g,comp);
+}
+template<typename T, typename Compare>
+static inline void sort14(T& a, T& b, T& c, T& d, T& e, T& f, T& g, T& h, T& i, T& j, T& k, T& l,
+                        T& m, T& n, Compare comp) {
+    sort2(a,b,comp); sort2(c,d,comp); sort2(e,f,comp); sort2(g,h,comp); sort2(i,j,comp); sort2(k,l,comp); sort2(m,n,comp);
+    sort2(a,c,comp); sort2(b,d,comp); sort2(e,i,comp); sort2(f,j,comp); sort2(k,m,comp); sort2(l,n,comp);
+    sort2(a,e,comp); sort2(b,c,comp); sort2(d,h,comp); sort2(f,i,comp); sort2(g,k,comp); sort2(j,n,comp); sort2(l,m,comp);
+    sort2(a,g,comp); sort2(b,f,comp); sort2(d,j,comp); sort2(e,k,comp); sort2(h,n,comp); sort2(i,m,comp);
+    sort2(c,k,comp); sort2(d,l,comp); sort2(e,g,comp); sort2(h,j,comp);
+    sort2(b,d,comp); sort2(c,i,comp); sort2(f,l,comp); sort2(g,h,comp); sort2(k,m,comp);
+    sort2(b,e,comp); sort2(c,g,comp); sort2(d,f,comp); sort2(h,l,comp); sort2(i,k,comp); sort2(j,m,comp);
+    sort2(c,e,comp); sort2(d,g,comp); sort2(f,i,comp); sort2(h,k,comp); sort2(j,l,comp);
+    sort2(d,e,comp); sort2(f,g,comp); sort2(h,i,comp); sort2(j,k,comp);
+    sort2(g,h,comp);
+}
+template<typename T, typename Compare>
+static inline void sort15(T& a, T& b, T& c, T& d, T& e, T& f, T& g, T& h, T& i, T& j, T& k, T& l,
+                        T& m, T& n, T& o, Compare comp) {
+    sort2(b,c,comp); sort2(d,k,comp); sort2(e,o,comp); sort2(f,i,comp); sort2(g,n,comp); sort2(h,m,comp); sort2(j,l,comp);
+    sort2(a,o,comp); sort2(b,f,comp); sort2(c,i,comp); sort2(d,h,comp); sort2(g,j,comp); sort2(k,m,comp); sort2(l,n,comp);
+    sort2(a,h,comp); sort2(b,g,comp); sort2(c,j,comp); sort2(e,k,comp); sort2(f,l,comp); sort2(i,n,comp); sort2(m,o,comp);
+    sort2(a,g,comp); sort2(c,e,comp); sort2(d,f,comp); sort2(h,l,comp); sort2(i,k,comp); sort2(j,m,comp); sort2(n,o,comp);
+    sort2(a,d,comp); sort2(b,c,comp); sort2(e,h,comp); sort2(f,j,comp); sort2(g,i,comp); sort2(k,l,comp); sort2(m,n,comp);
+    sort2(a,b,comp); sort2(c,d,comp); sort2(e,g,comp); sort2(h,j,comp); sort2(k,m,comp); sort2(l,n,comp);
+    sort2(b,c,comp); sort2(d,f,comp); sort2(i,k,comp); sort2(l,m,comp);
+    sort2(d,e,comp); sort2(f,g,comp); sort2(h,i,comp); sort2(j,k,comp);
+    sort2(c,d,comp); sort2(e,f,comp); sort2(g,h,comp); sort2(i,j,comp); sort2(k,l,comp);
+    sort2(f,g,comp); sort2(h,i,comp);
+}
+template<typename T, typename Compare>
+static inline void sort16(T& a, T& b, T& c, T& d, T& e, T& f, T& g, T& h, T& i, T& j, T& k,
+                            T& l, T& m, T& n, T& o, T& p, Compare comp) {
+    sort2(a,n,comp); sort2(b,m,comp); sort2(c,p,comp); sort2(d,o,comp); sort2(e,i,comp);
+    sort2(f,g,comp); sort2(h,l,comp); sort2(j,k,comp);
+    sort2(a,f,comp); sort2(b,h,comp); sort2(c,j,comp); sort2(d,e,comp); sort2(g,n,comp);
+    sort2(i,o,comp); sort2(k,p,comp); sort2(l,m,comp);
+    sort2(a,b,comp); sort2(c,d,comp); sort2(e,f,comp); sort2(g,i,comp); sort2(h,j,comp);
+    sort2(k,l,comp); sort2(m,n,comp); sort2(o,p,comp);
+    sort2(a,c,comp); sort2(b,d,comp); sort2(e,k,comp); sort2(f,l,comp); sort2(g,h,comp);
+    sort2(i,j,comp); sort2(m,o,comp); sort2(n,p,comp);
+    sort2(b,c,comp); sort2(d,m,comp); sort2(e,g,comp); sort2(f,h,comp); sort2(i,k,comp);
+    sort2(j,l,comp); sort2(n,o,comp);
+    sort2(b,e,comp); sort2(c,g,comp); sort2(f,i,comp); sort2(h,k,comp); sort2(j,n,comp);
+    sort2(l,o,comp);
+    sort2(c,e,comp); sort2(d,g,comp); sort2(j,m,comp); sort2(l,n,comp);
+    sort2(d,f,comp); sort2(g,i,comp); sort2(h,j,comp); sort2(k,m,comp);
+    sort2(d,e,comp); sort2(f,g,comp); sort2(h,i,comp); sort2(j,k,comp); sort2(l,m,comp);
+    sort2(g,h,comp); sort2(i,j,comp);
+}
+
+template<typename T, typename Compare>
+static inline void sorting_network(T* l, int partsz_min1, Compare comp) {
+    switch (partsz_min1) {
+    case 0: break;
+    case 1:  sort2(l[0], l[1], comp); break;
+    case 2:  sort3(l[0], l[1], l[2], comp); break;
+    case 3:  sort4(l[0], l[1], l[2], l[3], comp); break;
+    case 4:  sort5(l[0], l[1], l[2], l[3], l[4], comp); break;
+    case 5:  sort6(l[0], l[1], l[2], l[3], l[4], l[5], comp); break;
+    case 6:  sort7(l[0], l[1], l[2], l[3], l[4], l[5], l[6], comp); break;
+    case 7:  sort8(l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7], comp); break;
+    case 8:  sort9(l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7],
+        l[8], comp); break;
+    case 9:  sort10(l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7],
+         l[8], l[9], comp); break;
+    case 10: sort11(l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7],
+        l[8], l[9], l[10], comp); break;
+    case 11: sort12(l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7],
+        l[8], l[9], l[10], l[11], comp); break;
+    case 12: sort13(l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7],
+        l[8], l[9], l[10], l[11], l[12], comp); break;
+    case 13: sort14(l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7],
+        l[8], l[9], l[10], l[11], l[12], l[13], comp); break;
+    case 14: sort15(l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7],
+        l[8], l[9], l[10], l[11], l[12], l[13], l[14], comp); break;
+    case 15: sort16(l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7],
+        l[8], l[9], l[10], l[11], l[12], l[13], l[14], l[15], comp); break;
+    default: break;
+    }
+}
+
+template<typename T, typename Compare>
+inline void heap_sift_down(T* left, ptrdiff_t n, ptrdiff_t j, T& k, Compare& comp) {
+    while (j * 2 + 1 < n) {
+        ptrdiff_t child = j * 2 + 1;
+        if (child + 1 < n && comp(left[child], left[child + 1])) child++;
+        if (!comp(k, left[child])) break;
+        left[j] = std::move(left[child]);
+        j = child;
+    }
+    left[j] = std::move(k);
+}
+
+template<typename T, typename Compare>
+void heap_sort(T* left, T* right, Compare comp) {
+    ptrdiff_t n = right - left + 1;
+    if (n < 2) return;
+
+    for (ptrdiff_t i = n / 2; ; ) {
+        if (i > 0) {
+            i--;
+            T k = std::move(left[i]);
+            heap_sift_down(left, n, i, k, comp);
+        }
+        else {
+            n--;
+            if (n == 0) return;
+            T k = std::move(left[n]);
+            left[n] = std::move(left[0]);
+            heap_sift_down(left, n, 0, k, comp);
+        }
+    }
+}
+template<typename T, typename Compare>
+static inline void med5(T& a, T& b, T& c, T& d, T& e, Compare comp) {
+    sort2(a, b, comp); sort2(c, d, comp);
+    sort2(a, c, comp); sort2(b, d, comp);
+    sort2(b, c, comp); sort2(c, e, comp);
+    sort2(b, c, comp);
+}
+
+template<typename T, typename Compare>
+static inline void med7(T& a, T& b, T& c, T& d, T& e, T& f, T& g, Compare comp) {
+    sort2(a, b, comp); sort2(c, d, comp); sort2(a, c, comp);
+    sort2(b, d, comp); sort2(b, c, comp); sort2(e, f, comp);
+    sort2(e, g, comp); sort2(a, e, comp);
+    sort2(b, f, comp); sort2(c, g, comp); sort2(b, e, comp);
+    sort2(c, e, comp);
+    sort2(d, f, comp); sort2(d, e, comp);
+}
+
+template<typename T, typename Compare>
+static T* partition_small(T* left, T* right, Compare comp) {
+
+    T* outerleft = left;
+    T* pivp = left + 8;
+
+    T piv = *pivp;
+    T l1 = left[1], l2 = left[2], l3 = left[3];
+    T r2 = right[-2], r1 = right[-1], r0 = *right;
+    med7(l1, l2, l3, piv, r2, r1, r0, comp);
+    left[1] = l1; left[2] = l2; left[3] = l3;
+    right[-2] = r2; right[-1] = r1; *right = r0;
+    left += 4;
+    right -= 3;
+
+    *pivp = *outerleft;
+    T swbuf[SMALLPART];
+    T *sw = swbuf, *lwr = left;
+
+    while (right - left >= UNROLL) for (int i = UNROLL; i--;) {
+        int h = comp(*left, piv);
+        *lwr = *sw = *left++;
+        lwr += h; sw += !h;
+    }
+    while (left <= right) {
+        int h = comp(*left, piv);
+        *lwr = *sw = *left++;
+        lwr += h; sw += !h;
+    }
+    std::memcpy(lwr, swbuf, (sw - swbuf) * sizeof(T));
+    lwr -= 1;
+    *outerleft = *lwr;
+    *lwr = piv;
+    return lwr;
+}
+
+template<typename T, typename Compare>
+static T* partition_large(T* left, T* right, Compare comp) {
+
+    T* outerleft = left;
+    T* pivp = left + (right - left) / 2;
+    T piv = *pivp;
+
+    int j = blqs_rand() & 7;
+    med5(left[1 + j], left[2 + j], left[3 + j], left[4 + j], left[5 + j], comp);
+    med5(left[11 + j], left[12 + j], left[13 + j], left[14 + j], left[15 + j], comp);
+    med5(left[21 + j], left[22 + j], left[23 + j], left[24 + j], left[25 + j], comp);
+    med5(pivp[-2], pivp[-1], piv, pivp[1], pivp[2], comp);
+    med5(right[-24 - j], right[-23 - j], right[-22 - j], right[-21 - j], right[-20 - j], comp);
+    med5(right[-14 - j], right[-13 - j], right[-12 - j], right[-11 - j], right[-10 - j], comp);
+    med5(right[-4 - j], right[-3 - j], right[-2 - j], right[-1 - j], right[ 0 - j], comp);
+
+    med7(left[3 + j], left[13 + j], left[23 + j], piv,  right[-22 - j], right[-12 - j],
+        right[-2 - j] , comp);
+
+    left += 1;
+    *pivp = *outerleft;
+
+    T swbuf[SWSZ];
+    T *lwr = left, *rwr = right, *sw = swbuf;
+
+    while (UNROLL < SWSZ - (sw - swbuf) && left < right - UNROLL) {
+        ptrdiff_t avail = std::min(right - left, SWSZ - (sw - swbuf));
+        T* endp = right - avail;
+        while (right > endp + UNROLL) {
+            for (int i = UNROLL; i--;) {
+                int h = comp(*right, piv);
+                *rwr = *sw = *right--;
+                rwr -= !h; sw += h;
+            }
+        }
+    }
+
+    while (right - left >= UNROLL &&
+            (rwr - right > UNROLL || left - lwr > UNROLL)) {
+
+        while (rwr - right > UNROLL && right - left >= UNROLL) {
+            for (int i = UNROLL; i--;) {
+                int h = comp(*left, piv);
+                *lwr = *rwr = *left++;
+                lwr += h; rwr -= !h;
+            }
+        }
+        while (left - lwr > UNROLL && right - left >= UNROLL) {
+            for (int i = UNROLL; i--;) {
+                int h = comp(*right, piv);
+                *rwr = *lwr = *right--;
+                rwr -= !h; lwr += h;
+            }
+        }
+    }
+    while ((lwr < left||rwr > right) && left <= right) {
+        while (rwr > right && left <= right) {
+            T x = *left++;
+            if (comp(x, piv)) *lwr++ = x;
+            else *rwr-- = x;
+        }
+        while (lwr < left && left <= right) {
+            T x = *right--;
+            if (comp(x, piv)) *lwr++ = x;
+            else *rwr-- = x;
+        }
+    }
+    while (left <= right && !comp(*right, piv)) {
+        right--;
+        rwr--;
+    }
+    std::memcpy(lwr, swbuf, (sw - swbuf) * sizeof(T));
+    *outerleft = *rwr;
+    *rwr = piv;
+    return rwr;
+}
+
+template<typename T, typename Compare>
+void smallsort(T* left, T* right, Compare comp) {
+    while (right - left > 15) {
+        T* mid = partition_small(left, right, comp);
+        smallsort(left, mid - 1, comp);
+        left = mid + 1;
+    }
+    sorting_network(left, right - left, comp);
+}
+
+template<typename T, typename Compare>
+void blqsort(T* left, T* right, Compare comp) {
+    while (1) {
+        ptrdiff_t partszm1 = right - left;
+        if (partszm1 <= SMALLPART) break;
+
+        T* mid = partition_large(left, right, comp);
+
+        if (mid - left < partszm1 / 16) {
+            if (mid > left) blqsort(left, mid - 1, comp);
+            T piv = *mid;
+            mid += 1;
+            // collect duplicates
+            for (T* p = mid; p <= right; p++) {
+                if (!comp(piv, *p)) {
+                    std::swap(*mid, *p);
+                    mid++;
+                }
+            }
+            left = mid;
+            if (right - left < SMALLPART) break;
+            // second chance before fallback to heapsort
+            mid = partition_large(left, right, comp);
+            if (mid - left < partszm1 / 16) {
+                if (mid > left) heap_sort(left, mid - 1, comp);
+                if (mid < right) heap_sort(mid + 1, right, comp);
+                return;
+            }
+        }
+        if (mid - left < right - mid) {
+            blqsort(left, mid - 1, comp);
+            left = mid + 1;
+        }
+        else {
+            blqsort(mid + 1, right, comp);
+            right = mid - 1;
+        }
+    }
+    smallsort(left, right, comp);
+}
+
+template <typename T, typename Compare = std::less<T>>
+void sort(T* first, T* last, Compare comp = Compare()) {
+
+    if (last - first < 2) return;
+    blqsort(first, last - 1, comp);
+}
+}
+#endif
+`
+
+> test.cpp
+
+`#include <cstdio>
+#include <cstdlib>
+#include <chrono>
+
+#include "blqs.h"
+
+constexpr int SIZE = 50000000;
+double data[SIZE];
+
+double time() {
+    static auto time0 = std::chrono::high_resolution_clock::now();
+    auto t = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> diff = t - time0;
+    return diff.count();
+}
+
+int main() {
+    double t0;
+    printf("Sorting %d million doubles\n", SIZE / 1000000);
+    for (int i = 0; i < SIZE; i++) data[i] = rand() / 1024.0;
+    t0 = time();
+    blqs::sort(data, data + SIZE);
+    printf("blqs::sort: %.2fs\n", time() - t0);
+}
+`
+`c++ -O3 test.cpp && ./a.out
+`
+`Sorting 50 million doubles
+blqs::sort: 0.95s
+`
+*std::sort* took 1.33. And on *x86* systems, it’s now three times as fast as *std::sort*
+
+Interestingly, this idiomatic *C* notation is compiled into very efficient, branchless code on ARM-based Macs using the `csel` command:
+`if (comp(x, piv)) *lwr++ = x;
+else *rwr-- = x;
+`
+Surprisingly, this doesn’t work with the more explicit version:
+
+This code is generated (on ARM Macs) - but only in the compact `if` version:
+
+`; x9 = current element pointer ; x0 = left destination (grows forwards)
+; x20 = right destination (grows backwards); d8  = pivot
+; x8  = 8  (positive increment) ; x10 = -8 (negative increment)
+loop:
+    ldr d0, [x9], #8
+    fcmp  d0, d8            ; compare value against pivot
+    csel x11, x0, x20, mi   ; target is left (x0) or right (x20)
+    str d0, [x11]           ; store value to the selected destination
+    csel  x12, x8, xzr, mi  ; left_step is 8 or 0
+    csel  x13, xzr, x10, mi ; right_step is 0 or -8
+    add   x0, x0, x12       ; left += left_step
+    add   x20, x20, x13     ; right += right_step
+    b.ls  loop
+`
+So, branchless without that *double store*.
+
+On *x86*, it works similarly with *Clang*. But not with *GCC*, and not with the longer `if` version either. It is also slower than the explicit, branchless version.
+
+> blqs.h
+
+`#ifndef BLQS_H
+#define BLQS_H
+
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <functional>
+#include <utility>
+
+#ifndef BLQS_RAND
+#define BLQS_RAND
+
+#include <random>
+static thread_local uint64_t blqs_seed;
+
+static inline unsigned blqs_rand(void) {
+    if (!blqs_seed) {
+        std::random_device rd;
+        blqs_seed =
+            ((uintptr_t)&blqs_seed) ^
+            (((uint64_t)rd() << 32) | (uint64_t)rd());
+        if (!blqs_seed) blqs_seed = 1;
+    }
+
+    uint64_t x = blqs_seed;
+    x ^= x << 13;
+    x ^= x >> 7;
+    x ^= x << 17;
+    blqs_seed = x;
+    return (unsigned)x;
+}
+#endif
+
+namespace blqs {
+
+constexpr int SMALLPART = 1024;
+constexpr int SWSZ = 512;
+constexpr int UNROLL = 16;
+
+template<typename T, typename Compare>
+static inline void sort2(T& a, T& b, Compare comp) {
+    T x = a; T y = b;
+    bool m = comp(x, y);
+    a = m ? x : y; b = m ? y : x;
+}
+
+template<typename T, typename Compare>
+static inline void sort3(T& a, T& b, T& c, Compare comp) {
+    sort2(a, b, comp); sort2(b, c, comp); sort2(a, b, comp);
+}
+
+template<typename T, typename Compare>
+static inline void sort4(T& a, T& b, T& c, T& d, Compare comp) {
+    sort2(a, b, comp); sort2(c, d, comp); sort2(a, c, comp);
+    sort2(b, d, comp); sort2(b, c, comp);
+}
+
+template<typename T, typename Compare>
+static inline void sort5(T& a, T& b, T& c, T& d, T& e, Compare comp) {
+    sort2(b, c, comp); sort2(d, e, comp); sort2(b, d, comp);
+    sort2(a, c, comp); sort2(a, d, comp); sort2(c, e, comp);
+    sort2(a, b, comp); sort2(c, d, comp); sort2(b, c, comp);
+}
+
+template<typename T, typename Compare>
+static inline void sort6(T& a, T& b, T& c, T& d, T& e, T& f, Compare comp) {
+    sort2(a, b, comp); sort2(c, d, comp); sort2(e, f, comp);
+    sort2(a, c, comp); sort2(b, d, comp); sort2(e, f, comp);
+    sort2(a, e, comp); sort2(b, f, comp); sort2(c, e, comp);
+    sort2(d, f, comp); sort2(b, c, comp); sort2(d, e, comp);
+    sort2(c, d, comp);
+}
+
+template<typename T, typename Compare>
+static inline void sort7(T& a, T& b, T& c, T& d, T& e, T& f, T& g, Compare comp) {
+    sort2(a, g, comp); sort2(c, d, comp); sort2(e, f, comp);
+    sort2(a, c, comp); sort2(b, e, comp); sort2(d, g, comp);
+    sort2(a, b, comp); sort2(c, f, comp); sort2(d, e, comp);
+    sort2(b, c, comp); sort2(e, g, comp);
+    sort2(c, d, comp); sort2(e, f, comp);
+    sort2(b, c, comp); sort2(d, e, comp); sort2(f, g, comp);
+}
+
+template<typename T, typename Compare>
+static inline void sort8(T& a, T& b, T& c, T& d, T& e, T& f, T& g, T& h, Compare comp) {
+    sort2(a,b,comp); sort2(c,d,comp); sort2(e,f,comp); sort2(g,h,comp);
+    sort2(a,c,comp); sort2(b,d,comp); sort2(e,g,comp); sort2(f,h,comp);
+    sort2(b,c,comp); sort2(f,g,comp);
+    sort2(a,e,comp); sort2(b,f,comp); sort2(c,g,comp); sort2(d,h,comp);
+    sort2(c,e,comp); sort2(d,f,comp);
+    sort2(b,c,comp); sort2(d,e,comp); sort2(f,g,comp);
+}
+
+template<typename T, typename Compare>
+static inline void sort9(T& a, T& b, T& c, T& d, T& e, T& f, T& g, T& h, T& i, Compare comp) {
+    sort2(a,d,comp); sort2(b,h,comp); sort2(c,f,comp); sort2(e,i,comp);
+    sort2(a,h,comp); sort2(c,e,comp); sort2(d,i,comp); sort2(f,g,comp);
+    sort2(a,c,comp); sort2(b,d,comp); sort2(e,f,comp); sort2(h,i,comp);
+    sort2(b,e,comp); sort2(d,g,comp); sort2(f,h,comp);
+    sort2(a,b,comp); sort2(c,e,comp); sort2(d,f,comp); sort2(g,i,comp);
+    sort2(c,d,comp); sort2(e,f,comp); sort2(g,h,comp);
+    sort2(b,c,comp); sort2(d,e,comp); sort2(f,g,comp);
+}
+
+template<typename T, typename Compare>
+static inline void sort10(T& a, T& b, T& c, T& d, T& e, T& f, T& g, T& h, T& i, T& j, Compare comp) {
+    sort2(a,b,comp); sort2(c,f,comp); sort2(d,g,comp); sort2(e,h,comp); sort2(i,j,comp);
+    sort2(a,g,comp); sort2(b,i,comp); sort2(c,e,comp); sort2(d,j,comp); sort2(f,h,comp);
+    sort2(a,c,comp); sort2(b,d,comp); sort2(e,f,comp); sort2(g,i,comp); sort2(h,j,comp);
+    sort2(a,b,comp); sort2(c,h,comp); sort2(d,f,comp); sort2(e,g,comp); sort2(i,j,comp);
+    sort2(b,c,comp); sort2(d,e,comp); sort2(f,g,comp); sort2(h,i,comp);
+    sort2(b,d,comp); sort2(c,e,comp); sort2(f,h,comp); sort2(g,i,comp);
+    sort2(c,d,comp); sort2(e,f,comp); sort2(g,h,comp);
+}
+
+template<typename T, typename Compare>
+static inline void sort11(T& a, T& b, T& c, T& d, T& e, T& f, T& g, T& h, T& i, T& j, T& k, Compare comp) {
+    sort2(a,j,comp); sort2(b,g,comp); sort2(c,e,comp); sort2(d,h,comp); sort2(f,i,comp);
+    sort2(a,b,comp); sort2(d,f,comp); sort2(e,k,comp); sort2(g,j,comp); sort2(h,i,comp);
+    sort2(b,d,comp); sort2(c,f,comp); sort2(e,h,comp); sort2(i,k,comp);
+    sort2(a,e,comp); sort2(b,c,comp); sort2(d,h,comp); sort2(f,j,comp); sort2(g,i,comp);
+    sort2(a,b,comp); sort2(c,g,comp); sort2(e,f,comp); sort2(h,i,comp);
+    sort2(j,k,comp);
+    sort2(c,e,comp); sort2(d,g,comp); sort2(f,h,comp); sort2(i,j,comp);
+    sort2(b,c,comp); sort2(d,e,comp); sort2(f,g,comp); sort2(h,i,comp);
+    sort2(c,d,comp); sort2(e,f,comp); sort2(g,h,comp);
+}
+
+template<typename T, typename Compare>
+static inline void sort12(T& a, T& b, T& c, T& d, T& e, T& f, T& g, T& h, T& i, T& j, T& k, T& l, Compare comp) {
+    sort2(a,i,comp); sort2(b,h,comp); sort2(c,g,comp); sort2(d,l,comp); sort2(e,k,comp); sort2(f,j,comp);
+    sort2(a,c,comp); sort2(b,e,comp); sort2(d,f,comp); sort2(g,i,comp); sort2(h,k,comp); sort2(j,l,comp);
+    sort2(a,b,comp); sort2(c,j,comp); sort2(e,h,comp); sort2(f,g,comp); sort2(k,l,comp);
+    sort2(b,d,comp); sort2(c,h,comp); sort2(e,j,comp); sort2(i,k,comp);
+    sort2(a,b,comp); sort2(c,d,comp); sort2(e,f,comp); sort2(g,h,comp); sort2(i,j,comp); sort2(k,l,comp);
+    sort2(b,c,comp); sort2(d,f,comp); sort2(g,i,comp); sort2(j,k,comp);
+    sort2(c,e,comp); sort2(d,g,comp); sort2(f,i,comp); sort2(h,j,comp);
+    sort2(b,c,comp); sort2(d,e,comp); sort2(f,g,comp); sort2(h,i,comp); sort2(j,k,comp);
+}
+template<typename T, typename Compare>
+static inline void sort13(T& a, T& b, T& c, T& d, T& e, T& f, T& g, T& h, T& i, T& j, T& k, T& l, T& m,
+                          Compare comp) {
+    sort2(a,m,comp); sort2(b,k,comp); sort2(c,j,comp); sort2(d,h,comp); sort2(f,l,comp); sort2(g,i,comp);
+    sort2(b,g,comp); sort2(c,d,comp); sort2(e,l,comp); sort2(h,j,comp); sort2(i,k,comp);
+    sort2(a,e,comp); sort2(b,c,comp); sort2(d,g,comp); sort2(h,i,comp); sort2(j,k,comp); sort2(l,m,comp);
+    sort2(e,g,comp); sort2(f,j,comp); sort2(i,l,comp); sort2(k,m,comp);
+    sort2(a,f,comp); sort2(d,i,comp); sort2(e,h,comp); sort2(g,l,comp); sort2(j,k,comp);
+    sort2(a,b,comp); sort2(c,f,comp); sort2(g,j,comp); sort2(h,i,comp); sort2(k,l,comp);
+    sort2(b,d,comp); sort2(c,e,comp); sort2(f,g,comp); sort2(j,k,comp);
+    sort2(b,c,comp); sort2(d,e,comp); sort2(f,h,comp); sort2(g,i,comp);
+    sort2(c,d,comp); sort2(e,f,comp); sort2(g,h,comp); sort2(i,j,comp);
+    sort2(d,e,comp); sort2(f,g,comp);
+}
+template<typename T, typename Compare>
+static inline void sort14(T& a, T& b, T& c, T& d, T& e, T& f, T& g, T& h, T& i, T& j, T& k, T& l,
+                        T& m, T& n, Compare comp) {
+    sort2(a,b,comp); sort2(c,d,comp); sort2(e,f,comp); sort2(g,h,comp); sort2(i,j,comp); sort2(k,l,comp); sort2(m,n,comp);
+    sort2(a,c,comp); sort2(b,d,comp); sort2(e,i,comp); sort2(f,j,comp); sort2(k,m,comp); sort2(l,n,comp);
+    sort2(a,e,comp); sort2(b,c,comp); sort2(d,h,comp); sort2(f,i,comp); sort2(g,k,comp); sort2(j,n,comp); sort2(l,m,comp);
+    sort2(a,g,comp); sort2(b,f,comp); sort2(d,j,comp); sort2(e,k,comp); sort2(h,n,comp); sort2(i,m,comp);
+    sort2(c,k,comp); sort2(d,l,comp); sort2(e,g,comp); sort2(h,j,comp);
+    sort2(b,d,comp); sort2(c,i,comp); sort2(f,l,comp); sort2(g,h,comp); sort2(k,m,comp);
+    sort2(b,e,comp); sort2(c,g,comp); sort2(d,f,comp); sort2(h,l,comp); sort2(i,k,comp); sort2(j,m,comp);
+    sort2(c,e,comp); sort2(d,g,comp); sort2(f,i,comp); sort2(h,k,comp); sort2(j,l,comp);
+    sort2(d,e,comp); sort2(f,g,comp); sort2(h,i,comp); sort2(j,k,comp);
+    sort2(g,h,comp);
+}
+template<typename T, typename Compare>
+static inline void sort15(T& a, T& b, T& c, T& d, T& e, T& f, T& g, T& h, T& i, T& j, T& k, T& l,
+                        T& m, T& n, T& o, Compare comp) {
+    sort2(b,c,comp); sort2(d,k,comp); sort2(e,o,comp); sort2(f,i,comp); sort2(g,n,comp); sort2(h,m,comp); sort2(j,l,comp);
+    sort2(a,o,comp); sort2(b,f,comp); sort2(c,i,comp); sort2(d,h,comp); sort2(g,j,comp); sort2(k,m,comp); sort2(l,n,comp);
+    sort2(a,h,comp); sort2(b,g,comp); sort2(c,j,comp); sort2(e,k,comp); sort2(f,l,comp); sort2(i,n,comp); sort2(m,o,comp);
+    sort2(a,g,comp); sort2(c,e,comp); sort2(d,f,comp); sort2(h,l,comp); sort2(i,k,comp); sort2(j,m,comp); sort2(n,o,comp);
+    sort2(a,d,comp); sort2(b,c,comp); sort2(e,h,comp); sort2(f,j,comp); sort2(g,i,comp); sort2(k,l,comp); sort2(m,n,comp);
+    sort2(a,b,comp); sort2(c,d,comp); sort2(e,g,comp); sort2(h,j,comp); sort2(k,m,comp); sort2(l,n,comp);
+    sort2(b,c,comp); sort2(d,f,comp); sort2(i,k,comp); sort2(l,m,comp);
+    sort2(d,e,comp); sort2(f,g,comp); sort2(h,i,comp); sort2(j,k,comp);
+    sort2(c,d,comp); sort2(e,f,comp); sort2(g,h,comp); sort2(i,j,comp); sort2(k,l,comp);
+    sort2(f,g,comp); sort2(h,i,comp);
+}
+template<typename T, typename Compare>
+static inline void sort16(T& a, T& b, T& c, T& d, T& e, T& f, T& g, T& h, T& i, T& j, T& k,
+                            T& l, T& m, T& n, T& o, T& p, Compare comp) {
+    sort2(a,n,comp); sort2(b,m,comp); sort2(c,p,comp); sort2(d,o,comp); sort2(e,i,comp);
+    sort2(f,g,comp); sort2(h,l,comp); sort2(j,k,comp);
+    sort2(a,f,comp); sort2(b,h,comp); sort2(c,j,comp); sort2(d,e,comp); sort2(g,n,comp);
+    sort2(i,o,comp); sort2(k,p,comp); sort2(l,m,comp);
+    sort2(a,b,comp); sort2(c,d,comp); sort2(e,f,comp); sort2(g,i,comp); sort2(h,j,comp);
+    sort2(k,l,comp); sort2(m,n,comp); sort2(o,p,comp);
+    sort2(a,c,comp); sort2(b,d,comp); sort2(e,k,comp); sort2(f,l,comp); sort2(g,h,comp);
+    sort2(i,j,comp); sort2(m,o,comp); sort2(n,p,comp);
+    sort2(b,c,comp); sort2(d,m,comp); sort2(e,g,comp); sort2(f,h,comp); sort2(i,k,comp);
+    sort2(j,l,comp); sort2(n,o,comp);
+    sort2(b,e,comp); sort2(c,g,comp); sort2(f,i,comp); sort2(h,k,comp); sort2(j,n,comp);
+    sort2(l,o,comp);
+    sort2(c,e,comp); sort2(d,g,comp); sort2(j,m,comp); sort2(l,n,comp);
+    sort2(d,f,comp); sort2(g,i,comp); sort2(h,j,comp); sort2(k,m,comp);
+    sort2(d,e,comp); sort2(f,g,comp); sort2(h,i,comp); sort2(j,k,comp); sort2(l,m,comp);
+    sort2(g,h,comp); sort2(i,j,comp);
+}
+
+template<typename T, typename Compare>
+static inline void sorting_network(T* l, int partsz_min1, Compare comp) {
+    switch (partsz_min1) {
+    case 0: break;
+    case 1:  sort2(l[0], l[1], comp); break;
+    case 2:  sort3(l[0], l[1], l[2], comp); break;
+    case 3:  sort4(l[0], l[1], l[2], l[3], comp); break;
+    case 4:  sort5(l[0], l[1], l[2], l[3], l[4], comp); break;
+    case 5:  sort6(l[0], l[1], l[2], l[3], l[4], l[5], comp); break;
+    case 6:  sort7(l[0], l[1], l[2], l[3], l[4], l[5], l[6], comp); break;
+    case 7:  sort8(l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7], comp); break;
+    case 8:  sort9(l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7],
+        l[8], comp); break;
+    case 9:  sort10(l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7],
+         l[8], l[9], comp); break;
+    case 10: sort11(l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7],
+        l[8], l[9], l[10], comp); break;
+    case 11: sort12(l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7],
+        l[8], l[9], l[10], l[11], comp); break;
+    case 12: sort13(l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7],
+        l[8], l[9], l[10], l[11], l[12], comp); break;
+    case 13: sort14(l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7],
+        l[8], l[9], l[10], l[11], l[12], l[13], comp); break;
+    case 14: sort15(l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7],
+        l[8], l[9], l[10], l[11], l[12], l[13], l[14], comp); break;
+    case 15: sort16(l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7],
+        l[8], l[9], l[10], l[11], l[12], l[13], l[14], l[15], comp); break;
+    default: break;
+    }
+}
+
+template<typename T, typename Compare>
+static inline void heap_sift_down(T* left, ptrdiff_t n, ptrdiff_t j, T& k, Compare& comp) {
+    while (j * 2 + 1 < n) {
+        ptrdiff_t child = j * 2 + 1;
+        if (child + 1 < n && comp(left[child], left[child + 1])) child++;
+        if (!comp(k, left[child])) break;
+        left[j] = std::move(left[child]);
+        j = child;
+    }
+    left[j] = std::move(k);
+}
+
+template<typename T, typename Compare>
+static void heap_sort(T* left, T* right, Compare comp) {
+    ptrdiff_t n = right - left + 1;
+    if (n < 2) return;
+
+    for (ptrdiff_t i = n / 2; ; ) {
+        if (i > 0) {
+            i--;
+            T k = std::move(left[i]);
+            heap_sift_down(left, n, i, k, comp);
+        }
+        else {
+            n--;
+            if (n == 0) return;
+            T k = std::move(left[n]);
+            left[n] = std::move(left[0]);
+            heap_sift_down(left, n, 0, k, comp);
+        }
+    }
+}
+template<typename T, typename Compare>
+static inline void med5(T& a, T& b, T& c, T& d, T& e, Compare comp) {
+    sort2(a, b, comp); sort2(c, d, comp);
+    sort2(a, c, comp); sort2(b, d, comp);
+    sort2(b, c, comp); sort2(c, e, comp);
+    sort2(b, c, comp);
+}
+
+template<typename T, typename Compare>
+static inline void med7(T& a, T& b, T& c, T& d, T& e, T& f, T& g, Compare comp) {
+    sort2(a, b, comp); sort2(c, d, comp); sort2(a, c, comp);
+    sort2(b, d, comp); sort2(b, c, comp); sort2(e, f, comp);
+    sort2(e, g, comp); sort2(a, e, comp);
+    sort2(b, f, comp); sort2(c, g, comp); sort2(b, e, comp);
+    sort2(c, e, comp);
+    sort2(d, f, comp); sort2(d, e, comp);
+}
+
+template<typename T, typename Compare>
+static inline  T* partition_small(T* left, T* right, Compare comp) {
+
+    T* outerleft = left;
+    T* pivp = left + 8;
+
+    T piv = *pivp;
+    T l1 = left[1], l2 = left[2], l3 = left[3];
+    T r2 = right[-2], r1 = right[-1], r0 = *right;
+    med7(l1, l2, l3, piv, r2, r1, r0, comp);
+    left[1] = l1; left[2] = l2; left[3] = l3;
+    right[-2] = r2; right[-1] = r1; *right = r0;
+    left += 4;
+    right -= 3;
+
+    *pivp = *outerleft;
+    T swbuf[SMALLPART];
+    T *sw = swbuf, *lwr = left;
+
+    while (right - left >= UNROLL) for (int i = UNROLL; i--;) {
+        T x = *left++;
+        if (comp(x, piv)) *lwr++ = x;
+        else *sw++ = x;
+    }
+    while (left <= right) {
+        T x = *left++;
+        if (comp(x, piv)) *lwr++ = x;
+        else *sw++ = x;
+    }
+    std::memcpy(lwr, swbuf, (sw - swbuf) * sizeof(T));
+    lwr -= 1;
+    *outerleft = *lwr;
+    *lwr = piv;
+    return lwr;
+}
+
+template<typename T, typename Compare>
+static inline T* partition_large(T* left, T* right, Compare comp) {
+
+    T* outerleft = left;
+    T* pivp = left + (right - left) / 2;
+    T piv = *pivp;
+
+    int j = blqs_rand() & 7;
+    med5(left[1 + j], left[2 + j], left[3 + j], left[4 + j], left[5 + j], comp);
+    med5(left[11 + j], left[12 + j], left[13 + j], left[14 + j], left[15 + j], comp);
+    med5(left[21 + j], left[22 + j], left[23 + j], left[24 + j], left[25 + j], comp);
+    med5(pivp[-2], pivp[-1], piv, pivp[1], pivp[2], comp);
+    med5(right[-24 - j], right[-23 - j], right[-22 - j], right[-21 - j], right[-20 - j], comp);
+    med5(right[-14 - j], right[-13 - j], right[-12 - j], right[-11 - j], right[-10 - j], comp);
+    med5(right[-4 - j], right[-3 - j], right[-2 - j], right[-1 - j], right[ 0 - j], comp);
+
+    med7(left[3 + j], left[13 + j], left[23 + j], piv,  right[-22 - j], right[-12 - j],
+        right[-2 - j] , comp);
+
+    left += 1;
+    *pivp = *outerleft;
+
+    T swbuf[SWSZ];
+    T *lwr = left, *rwr = right, *sw = swbuf;
+
+    while (UNROLL < SWSZ - (sw - swbuf) && left < right - UNROLL) {
+        ptrdiff_t avail = std::min(right - left, SWSZ - (sw - swbuf));
+        T* endp = right - avail;
+        while (right > endp + UNROLL) {
+            for (int i = UNROLL; i--;) {
+                T x = *right--;
+                if (comp(x, piv)) *sw++ = x;
+                else *rwr-- = x;
+            }
+        }
+    }
+
+    while (right - left >= UNROLL &&
+            (rwr - right > UNROLL || left - lwr > UNROLL)) {
+
+        while (rwr - right > UNROLL && right - left >= UNROLL) {
+            for (int i = UNROLL; i--;) {
+                T x = *left++;
+                if (comp(x, piv)) *lwr++ = x;
+                else *rwr-- = x;
+            }
+        }
+        while (left - lwr > UNROLL && right - left >= UNROLL) {
+            for (int i = UNROLL; i--;) {
+                T x = *right--;
+                if (comp(x, piv)) *lwr++ = x;
+                else *rwr-- = x;
+            }
+        }
+    }
+    while ((lwr < left||rwr > right) && left <= right) {
+        while (rwr > right && left <= right) {
+            T x = *left++;
+            if (comp(x, piv)) *lwr++ = x;
+            else *rwr-- = x;
+        }
+        while (lwr < left && left <= right) {
+            T x = *right--;
+            if (comp(x, piv)) *lwr++ = x;
+            else *rwr-- = x;
+        }
+    }
+    while (left <= right && !comp(*right, piv)) {
+        right--;
+        rwr--;
+    }
+    std::memcpy(lwr, swbuf, (sw - swbuf) * sizeof(T));
+    *outerleft = *rwr;
+    *rwr = piv;
+    return rwr;
+}
+
+template<typename T, typename Compare>
+static void smallsort(T* left, T* right, Compare comp) {
+    while (right - left > 15) {
+        T* mid = partition_small(left, right, comp);
+        smallsort(left, mid - 1, comp);
+        left = mid + 1;
+    }
+    sorting_network(left, right - left, comp);
+}
+
+template<typename T, typename Compare>
+static void blqsort(T* left, T* right, Compare comp) {
+    while (1) {
+        ptrdiff_t partszm1 = right - left;
+        if (partszm1 <= SMALLPART) break;
+
+        T* mid = partition_large(left, right, comp);
+
+        if (mid - left < partszm1 / 16) {
+            if (mid > left) blqsort(left, mid - 1, comp);
+            T piv = *mid;
+            mid += 1;
+            // collect duplicates
+            for (T* p = mid; p <= right; p++) {
+                if (!comp(piv, *p)) {
+                    std::swap(*mid, *p);
+                    mid++;
+                }
+            }
+            left = mid;
+            if (right - left < SMALLPART) break;
+            // second chance before fallback to heapsort
+            mid = partition_large(left, right, comp);
+            if (mid - left < partszm1 / 16) {
+                if (mid > left) heap_sort(left, mid - 1, comp);
+                if (mid < right) heap_sort(mid + 1, right, comp);
+                return;
+            }
+        }
+        if (mid - left < right - mid) {
+            blqsort(left, mid - 1, comp);
+            left = mid + 1;
+        }
+        else {
+            blqsort(mid + 1, right, comp);
+            right = mid - 1;
+        }
+    }
+    smallsort(left, right, comp);
+}
+
+template <typename T, typename Compare = std::less<T>>
+void sort(T* first, T* last, Compare comp = Compare()) {
+
+    if (last - first < 2) return;
+    blqsort(first, last - 1, comp);
+}
+}
+#endif
+`
+The 50 million doubles are now sorted on the ARM Mac almost twice as fast as with *std::sort*.
+
+`Sorting 50 million doubles
+blqs::sort: 0.67s
+`
+
+You only need to include `blqs.h`, and it can be used just as easily as *std::sort*.
+
+For the *C++* multithreaded variant, which uses *C++* threads, include `blqs_thr.h` instead of `blqs.h`. The function call remains the same.
+
+In practice, we often need to sort custom data structures. This is where *SIMD* libraries like *Google Highway* - while very fast for simple numbers - become difficult to use.
+
+Using *std::sort* or *blqsort* gives you much more flexibility.
+
+`#include "blqs.h"
+
+struct entry {
+    int id;
+    int value;
+    bool operator<(const entry& other) const { return id < other.id; }
+};
+
+struct entry data[SIZE];
+
+blqs::sort(data, data + SIZE);
+`
+Depending on the compiler and platform, either the `if` version or the explicit branchless version is used.
+
+For types with higher copy costs that are not `is_trivially_copyable` (such as strings), the buffer-based branchless approach becomes less efficient. In such cases, a *BlockQuicksort* (*Edelkamp* and *Weiß*) variant is used instead. This processes only the element indices in a branchless manner. This requires C++17 or later.
