@@ -1,57 +1,55 @@
-A new set of modular components allows users to create reconfigurable smart devices with electrical connections that keep working no matter which shape the structure forms.
+It all started with some exasperated emails. Back in 2009, a group of researchers began venting their frustration with the programming languages designed to help scientists and other researchers perform complex mathematical operations and statistical simulations without learning how to code. These programming languages were rigid and slow. If scientists built something that really worked, they’d need to rewrite the entire program in another language just to run it more quickly.
 
-This electrical modularity can enable engineers to design interactive devices that can sense which shape they have taken, without the need for external wires. For instance, the modular components, which the researchers call “bifur-circuits,” could be used to rapidly design and prototype adaptable smart devices, like assistive furniture that helps individuals change body positions while recovering from injuries or reconfigurable robotic grippers that remain electrically connected when they change shapes for different applications.
+The emails turned into a research project at MIT with the mission of building an easy-to-use, high-performance programming language called Julia, which is designed for scientific research, data analysis, and modeling complex systems such as jet engines, drugs, financial markets, and robots, to name a few examples.
 
-Developed by MIT researchers, these 3D-printed building blocks, which are a type of structure known as a mechanical metamaterial, can be combined to form many more possible configurations than traditional metamaterial structures.
+That research project turned into a lab at MIT, and the lab turned into the company [JuliaHub](https://juliahub.com/). Along the way, Julia gained a loyal following among scientists, engineers, mathematicians, and others. Today, the free and open-source language counts more than 1 million users, including people working in thousands of companies and universities around the world.
 
-In a study presenting the new system, the researchers demonstrated several interactive objects, including a chair that converts to a table with storage and can also flatten for stowing. The structure senses its configuration and sends corresponding messages to an electronic display.
+It is only a slight exaggeration to say Julia has been used to model everything under the sun, from the behavior of tiny atoms to [semiconductors](https://juliahub.com/videos/software-at-asml-the-force-behind-making-microchips), neural networks, [race cars](https://juliahub.com/case-studies/williams-racing-unlocks), and airplanes. It has also been used to study much beyond the sun, with astronomers [using Julia for imaging black holes](https://www.youtube.com/watch?v=xk-SIRH3sbE).
 
-These new metamaterials could also be used to design antennas for communications and sensing that form new shapes to adjust their frequencies in changing environmental conditions, without bulky mechanical parts.
+Julia’s secret sauce is in the way it compiles code depending on the type of data being used. Such “just-in-time compilation” makes Julia faster and more flexible than other numerical programming languages.
 
-“Metamaterials can make complex mechanical assemblies easy to manufacture just by using repeating units. Our work expands on this design space. If we think of mechanical metamaterials as building blocks, then our work is one way to take advantage of their geometry to embed intrinsic intelligence into hardware, which could open many possibilities,” says Marwa AlAlawi, a mechanical engineering graduate student and lead author of a [paper](https://hcie.csail.mit.edu/research/Bifur-circuit/bifur-circuits.html) on the devices.
+“Scientists and engineers are not programmers. Building scientific applications with multidisciplinary teams of scientists, engineers, and programmers is challenging,” JuliaHub co-founder and CEO Viral Shah says. “We asked: What if you could equip the scientists and engineers with a programming language that allowed them to express their ideas at a high level and also get great software performance?”
 
-AlAlawi is joined on the paper by co-senior authors Ticha Sethapakdi, an electrical engineering and computer science (EECS) graduate student at MIT; and Stefanie Mueller, an associate professor in MIT’s departments of EECS and Mechanical Engineering and leader of the Human-Computer Interaction Group at the Computer Science and Artificial Intelligence Lab (CSAIL). Their co-authors include others at MIT, the University of Tokyo, and the University of Michigan. The research will be presented at the ACM Symposium on User Interface Software and Technology.
+Making programming easy for non-programmers has been a north star for JuliaHub’s founders, who include Julia co-creators Shah, MIT professor of mathematics Alan Edelman, Jeff Bezanson SM ’12, PhD ’15, and former MIT research scientist Stefan Karpinski.
 
-**Shape-changing interactive structures**
+In April, JuliaHub’s team took another big step in that direction with the [launch of Dyad 3.0](https://juliahub.com/blog/juliahub-announces-dyad3.0-general-availability), the latest version of its AI platform to help engineering teams accelerate the development of complex physical systems like rockets, heat pumps, and satellites. Engineers are already using Dyad to direct autonomous AI agents as they work through physics simulations, safety analyses, quality controls, and more.
 
-Mechanical metamaterials are programmable, three-dimensional structures of repeating units that can form complex shapes due to their geometries. When squeezed, pushed, or pulled, metamaterials can bend or twist in precise ways.
+“With [Dyad](https://juliahub.com/products/dyad) 3.0, [you can upload data and design documents and the system will design an entire aircraft](https://juliahub.com/videos/automating-aerospace-systems-engineering-pdf-to-simulation-with-the-dyad-agent) for you,” Shah says. “Working with customers like Boeing, we are building agentic hardware design capabilities for engineers. Simplistically, you want to say, ‘Okay computer, build me a plane’; upload the design documents; and have the system account for all the physics, compile all the code, verify everything, and build the entire design agentically.”
 
-For instance, “auxetic” metamaterials get wider when stretched, instead of narrowing.
+**Humble beginnings**
 
-In prior work, the MIT researchers used auxetic metamaterials to build [reconfigurable antennas](https://news.mit.edu/2025/shape-changing-antenna-more-versatile-sensing-and-communication-0818) that formed three shapes depending on how the structure was stretched. This allowed the antenna to dynamically adjust its frequency range without complex, moving parts.
+After discussing the need for better programming languages for scientists and other researchers, Julia’s co-creators started the Julia Lab around 2009. The Julia Lab remains active in MIT’s Computer Science and Artificial Intelligence Laboratory.
 
-Next, the team wanted to expand the number of antenna configurations but were limited because the auxetic metamaterials could only form three fixed states.
+The core idea was to create a high-performance platform that would excel at engineering, scientific, and mathematics applications. Shah says before Julia, scientists and engineers would either have to hire someone to build software for them or accept the slow performance of the few programming languages designed for them.
 
-In this work they created “bifur-circuits,” which are auxetic metamaterials that can form many more shapes based on how the modular units are connected and rotated.
+“We wanted to create something as easy to use as Python or MATLAB but as fast as the C programming language,” Shah says. “We built Julia for ourselves.”
 
-The units are also designed to be electrically modular. Due to the way conductive material is integrated into the bifur-circuits, electrical connections throughout the structure are maintained no matter how the object is rotated, pressed, or twisted to form new shapes.
+Edelman says at first, the researchers didn’t think anyone would want their creation.
 
-To create interactive objects with many possible configurations, bifur-circuits leverage a property known as mechanical bifurcation.
+“We figured it would take 10 years before anyone was interested, but we said, ‘Patience is a virtue, so let’s do it,’” Edelman recalls.
 
-Mechanical bifurcation is a sudden change in how a mechanism behaves when a force exerted on it passes a tipping point. For instance, when you gently bend the ends of a plastic ruler, once that force reaches a critical threshold, the ruler buckles.
+The MIT researchers announced Julia with a blog post in 2012. They quickly realized many other researchers shared their frustration.
 
-In bifur-circuits, this bifurcation occurs when connected blocks are rotated in certain ways around a pivot point. The property allows connected blocks to form more stable configurations than one block could on its own.
+“When we first started, we were targeting interactive research workflows, but increasingly people are using it for everything,” Bezanson says. “Now we’re moving the whole stack of the language onto smaller, embedded devices as we evolve with our users.”
 
-Adding more bifur-circuits to a structure exponentially increases the number of potential configurations.
+Since those early days, Edelman has taught a class on Julia with students from nearly every department at MIT. Today, he often learns students are already using Julia when they enroll in the class for applications as wide ranging as robotics, astronomy, physics simulations, and finance.
 
-“Bifurcation allow us to significantly expand on this reconfigurability space. Just adding one extra unit gives us so many more combinations out of the same structure,” says AlAlawi.
+“Researchers come up to me and say, ‘I tell my supervisor I’m using Julia because it’s fast, but don’t tell them I’m using Julia because it’s really fun,’” Edelman says. “The key thing is Julia’s abstractions. A lot of times a coding language forces you to solve the one problem you’re thinking about. Julia’s language makes it so you’re solving not only the problem you’re thinking about, but other people’s problems around the world too. It encourages you to solve problems more generally.”
 
-Connecting and rotating components activates a unique circuit between adjacent units. This interactivity allows the units to communicate with one another, enabling the structure to sense its configuration.
+As Julia gained popularity, researchers around the world started asking the Julia team for support. By 2015, the demand became strong enough that they decided to start JuliaHub and help users through the company full-time. They received support from the MIT Deshpande Center for Technological Innovation and others at MIT to get the company off the ground.
 
-One of the biggest challenges the researchers faced was incorporating a conductive material that was flexible enough to bend, but still offered enough efficiency in the flow of electricity.
+JuliaHub’s work has evolved from simply helping users to advancing the language more generally. That’s powered an impressive list of creations from Julia’s loyal users. Julia has been used to simulate computer circuits, detect health disparities, model global climates and oceans, analyze brain activity, and more.
 
-“The conductive material was a constraint we had to work around in the design process, and it dictated how the sensing between blocks would happen,” AlAlawi says.
+After someone built a pharmaceutical modeling platform in Julia, it was used to accelerate development of Moderna’s Covid-19 vaccine. In another case, researchers used Julia to create a [program for avoiding aircraft collisions](https://juliahub.com/case-studies/lincoln-labs). They found it ran about 50 times faster than an earlier version built on Python. Engineers at Meta used Julia to develop a better audio codec for WhatsApp’s 4 billion users.
 
-Once they perfected the design, the researchers tested the durability of reconfigurable structures by compressing them more than 10,000 times. The structures showed no degradation in electrical connectivity.
+“Over the years we’ve seen industrial, government, and academic users doing all kinds of interesting things with the Julia language,” Edelman says. “It’s honestly surprised us in many ways, the wide-ranging things people are using it for.”
 
-The researchers also developed a user-friendly construction and simulation tool to simplify the bifur-circuit design process. The software generates instructions for a multimaterial 3D printer, which can fabricate the reconfigurable objects in one pass.
+**Autonomous design**
 
-They demonstrated the versatility of bifur-circuits by fabricating a chair that can sense its geometry when its shape is changed to a tea table, as well as a shape-shifting controller that will launch one of several video games based on its configuration.
+JuliaHub launched Dyad 1.0 in June of 2025 as a research agent to accelerate programming and Dyad 2.0 in December. The founders believe Dyad 3.0 represents a new level of ability and autonomy for designing complex systems.
 
-Bifur-circuits could someday be used in applications like interactive rehabilitation tools, shape-changing grippers for modular soft robots, or reconfigurable shelters that could respond to changing environmental conditions after a natural disaster.
+“One important thing about Dyad is that it is a physics compiler and hence [enforces physical laws](https://help.juliahub.com/dyad/stable/tutorials/getting-started.html),” Shah explains. “General AI systems often solve physical problems in ways that violate physical laws. When using the Dyad agent, it will detect such violations and guide the agent in the direction of the physically correct solution. We expect it will decrease design times in product engineering by orders of magnitude, leading to months of work being accomplished in hours.”
 
-In the future, the researchers want to explore more applications for bifur-circuits. They also want to add more interactivity into the structures and investigate additional metamaterial shapes.
+One way Edelman sees the impact of Julia is through his class. One student recently used Dyad to model how robots move around in space. Another used it to build a rocket engine.
 
-“Bifur-circuits are one step toward developing mechanical building blocks with integrated intelligence. It would be interesting to build on this work and come up with building blocks that allow us to create a structure with any form or shape we want, and which are structurally stable and can be actuated,” AlAlawi says.
-
-This work was funded, in part, by Japan’s Science and Technology Agency and the Bahrain Crown Prince International Scholarship Program.
+“At the end he said, ‘I couldn’t believe how easy that was — I just got a rocket engine!’” Edelman recalls.

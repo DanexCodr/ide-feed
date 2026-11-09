@@ -1,79 +1,65 @@
-At the recent [AI and Society Forum at MIT](https://www.youtube.com/playlist?list=PL4Qj3FSR6sl9GxKbs8Knr9yqINYfYWlrS), experts from across the Institute discussed the potential benefits and dangers of technological innovation on labor, the nature of work, civil discourse, election administration, and other topics.
+Over the past 80 years, America’s bold, sustained investment in scientific research, and the** **discoveries, ideas and innovations that flowed from it made America a world leader. The nation’s scientific leadership has been essential to our shared prosperity and national security, and delivered real benefits for all Americans.
 
-The event featured individual research presentations and panel discussions, as well as [a musical performance](https://youtu.be/R614h5sNL1g?si=HUhgTp0VEqd4o_XL) exploring the use of generative artificial intelligence in the arts.
+On June 16, *Scientific American* released a special section, “[The Young American Scientists](https://www.scientificamerican.com/report/young-american-scientists-2026/),” which celebrates early-career professionals actively engaged in scientific research, and features commentary from MIT faculty on why they continue to be so devoted to curiosity-driven science, demonstrating how their hard work and dedication make Americans safer, healthier, and more prosperous. Among the section’s profiles are many MIT faculty, students, and alumni, who share their advice for young scientists and their reasons for optimism in uncertain times.
 
-The forum was co-organized by the [School of Humanities, Arts, and Social Sciences](https://shass.mit.edu/) (SHASS) and the [Social and Ethical Responsibilities of Computing](https://computing.mit.edu/cross-cutting/social-and-ethical-responsibilities-of-computing/) (SERC). It was presented in collaboration with two of MIT’s strategic initiatives: the [MIT Generative AI Impact Consortium](https://genai.mit.edu/) (MGAIC) and the [MIT Human Insight Collaborative](https://mithic.mit.edu/) (MITHIC).
+[President Sally Kornbluth emphasizes](https://www.scientificamerican.com/article/sally-kornbluth/) the importance of curiosity-driven research, noting that discovery “is part of our American DNA and has yielded vast returns to the citizens of this country and the world.” She adds, “what’s needed is a rededication to public investment in American science. Even if I were not the leader of a premier scientific institution, this is what I’d say. Investing in American science is not a gamble; if you look back in time, there is no question about the benefits.”
 
-[Agustín Rayo](https://shass.mit.edu/people/agustin-rayo/), the Kenan Sahin Dean of SHASS, and [Dan Huttenlocher](https://web.mit.edu/hutt/www/), dean of the MIT Schwarzman College of Computing, provided opening remarks.
+Adds [Institute Prof. Robert Langer](https://www.scientificamerican.com/article/robert-langer/): “What American science has done over the past 50, 100 years has been remarkable.”
 
-Rayo said bringing scholars from across MIT together was intentional because understanding AI’s impact requires expertise from disciplines throughout the Institute.
+*Scientific American* notes that at MIT, that commitment to discovery is reflected in initiatives such as [Curiosity on a Mission](https://curiositymission.org/) and the [Generative AI Impact Consortium](https://news.mit.edu/2025/introducing-mit-generative-ai-impact-consortium-0203), which are aimed at finding “solutions to real-world problems in a way that is beneficial to society.” “On one hand, we’re at a time, technologically, where things could not be more exciting [and] our science [could not be] more cutting-edge. At the same time, we’ve never seen a situation where people felt so uncertain about the continuity of science funding, particularly when it comes to the basic discovery science that fuels the economy and will fuel societal impact a decade or two from now,” says Kornbluth.
 
-“Paying attention to the societal consequences of AI is not a departure from MIT’s mission; it’s a way of ensuring that our technical leadership has maximum impact,” Rayo said.
+**The first sparks**
 
-Huttenlocher added that computing and AI’s rapid growth makes it critical to support interdisciplinary conversations and research.
+Witnessing invention can spark a lifelong fascination with science. After the launch of Sputnik, the world’s first artificial satellite, Prof. Alan Lightman “became entranced with the idea of building a rocket” of his own. In his essay “[My childhood in science](https://www.scientificamerican.com/article/alan-lightman-on-his-childhood-in-science/),” Lightman describes how these early scientific memories and experiments have shaped him to be a well-rounded writer and physicist.
 
-“Understanding where AI excels and where it falls short is essential not only to unlocking its benefits, but also to avoiding critical errors, overreliance, and unintended consequences,” Huttenlocher said.
+“Now more than ever, when much of the world, including the U.S., has lost its moral compass, leading to a dog-eat-dog mentality, we need science combined with literature, philosophy, history and art. We need to discover not only the physical world but also our own humanity,” writes Lightman.
 
-**Jobs and AI **
+Likewise, [Prof. John Urschel](https://www.scientificamerican.com/article/john-urschel/), a former NFL player, emphasizes the importance of collaboration and having a wide range of interests.
 
-Held in the Tull Concert Hall in MIT’s Linde Music Building, the May 12 forum opened with a keynote presentation from economist [David Autor](https://economics.mit.edu/people/faculty/david-h-autor), the Daniel (1972) and Gail Rubinfeld Professor in the MIT Department of Economics. Autor challenged the common narrative that AI will simply eliminate jobs by proposing instead that technology's impact depends on how it affects the scarcity and value of human expertise.
+“A lot of good research happens when people can draw on tools, techniques and insights from different areas, disciplines and even fields. I hope we can encourage promising young scientists to establish strong, broad backgrounds and to communicate frequently with those outside their particular areas,” says Urschel.
 
-“When I think about how technology interacts with the value of labor, I think about it in terms of how it changes the scarcity of expertise, whether it makes it more valuable or whether it makes it more of a commodity,” he said.
+**Invention and discovery**
 
-Autor said that what matters is whether automation removes routine supporting tasks or removes expert tasks. He argued that AI will likely create new specialized work, requiring proactive policies around worker training, wage insurance, and broader capital ownership.
+*Scientific American *highlights students and alumni looking to better the world by doing everything from investigating neurological disease to securing our energy future.
 
-A panel discussion followed, moderated by Rob Loughlin, a partner at McKinsey & Company, featuring experts from MIT discussing how work is changing and what it means for society.
+At MIT, [Visiting Scientist Alice Stanton](https://www.scientificamerican.com/article/alice-stanton/) developed miBrain, a 3D tissue model of the human brain, to help scientists develop personalized treatments for Alzheimer’s and Parkinson’s. Stanton has developed a miniature version of miBrain, a brain-on-a-chip, to better test therapeutics.
 
-[Daniela Rus](https://www.eecs.mit.edu/people/daniela-rus/), the MIT Panasonic Professor of Computer Science and director of the Computer Science and Artificial Intelligence Laboratory (CSAIL), described excitement around ways AI could enhance the workplace.
+Stanton notes “the road to effective treatments is long and bumpy,” compounded by cuts to federal funding. “When we have a loved one who gets sick, we want a treatment—we want something to cure them. It doesn’t come out of thin air,” she explains.
 
-“I’d like to imagine the robot as your friend and assistant, as someone who watches you and figures out how to help you as someone you can task at a high level,” she said.
+[Bob Mumgaard](https://www.scientificamerican.com/article/bob-mumgaard/) PhD ‘08, CEO of Commonwealth Fusion Systems is working to commercialize fusion power. “Whether in areas such as fusion—or in drugs by design for diseases such as Alzheimer’s and Parkinson’s or in [the creation of] materials we never thought possible—our ability to use new tools to tackle some of these big, meaty problems is super exciting,” Mumgaard emphasizes.
 
-Still, Rus said, human judgment remains critical in decision-making.
+[Graduate student Alex Zhang](https://www.scientificamerican.com/article/alex-l-zhang/) tackles context rot: the phenomenon when AI language models degrade as they produce more information. To solve this issue, Zhang develops recursive language models (RLMs) that enable the model to work with itself to reevaluate reasoning.
 
-“We could really think about co-work with the AI tools, but the role of the human as the decider, as the person with good judgment, as the person deciding the next step, whatever that is, remains super important,” she said.
+“The types of research that I want to work on are things that I think should be shared for the benefit of people in general,” says Zhang.
 
-[David Mindell](https://sts-program.mit.edu/people/sts-faculty/david-a-mindell/), professor of [Aeronautics and Astronautics](https://aeroastro.mit.edu/) and the Dibner Professor of the History of Engineering and Manufacturing in the Program in Science, Technology, and Society, says the nature of work has constantly changed over the years, but “what matters is the new work.”
+**The benefits of scientific collaboration **
 
-“We need to be supporting individuals, the economy, professions, to constantly be creating the new work,” he said. “It’s absolutely imperative that we give the tools to the young people and let them do what they find creative and show us what the new work is going to be.”
+What happens when scientific disciplines join forces at MIT?
 
-Panelists also talked about the need to maintain safety standards, while also exploring ways to find efficiencies. Mindell used an example of cargo flights that require six pilots due to the length of the flight.
+[Prof. Emery Brown](https://www.scientificamerican.com/article/emery-brown/) highlighted the MIT [Health and Life Sciences Collaborative](https://heals.mit.edu/) (HEALS), noting that the effort brings together scientists and engineers from a variety of backgrounds to tackle the most pressing health challenges of our times.
 
-“We don’t know how to take that six number down to five yet, much less two, one, or zero. There's a lot of money behind solving that problem, but there's also a very rich system that has evolved to make those systems safe,” he said.
+Brown explains that with President Kornbluth’s support, HEALS encourages “faculty to look more deeply into solving health care problems. The enthusiasm for HEALS has been contagious across the campus.”
 
-[Sendhil Mullainathan](https://economics.mit.edu/people/faculty/sendhil-mullainathan), the Peter de Florez Professor with dual appointments in the MIT departments of Economics and Electrical Engineering and Computer Science (EECS), described a vision of AI’s utility and growth that offers productivity improvements, but also cautioned, “I think it's very much worth differentiating productivity gains from things that actually drive long-term growth.”
+[MIT alumna Lucy Jones PhD ‘81](https://www.scientificamerican.com/article/lucy-jones/), who is known for her work advancing public safety during earthquakes and for developing the first American earthquake drill called the Great ShakeOut, shared the necessity of collaboration in developing scientific solutions for pressing real-world problems.
 
-Either way, Mullainathan said, it’s clear we’re entering a time of high variance with regard to AI’s impact on the workforce.
+“Solutions have to be done in collaboration, which means spending time with policymakers,” says Jones.
 
-“If you said, ‘exactly how will organizations restructure?’ I don’t know. But is there going to be a lot of restructuring? It’s hard to believe there isn’t going to be a lot of restructuring. And in some sense, if we know that what we’re entering is a period of high variance, that itself is incredibly informative,” he said.
+Jones also shares how scientific advances in computing have helped make Americans around the country safer when the ground starts to shake.
 
-**Democracy and AI**
+“My first year in grad school, I was reading paper seismograms. Now everything is computerized. We used to do field deployments; now we have permanent networks. We’re starting to use fiber‑optic cables as seismometers,” says Jones. “Computers have changed everything, including science.”
 
-The day’s second session focused on AI technology and its impact on democracy.
+**The state of American science **
 
-[Chara Podimata](https://mitsloan.mit.edu/faculty/directory/chara-podimata), the Class of 1942 Career Development Assistant Professor and assistant professor of operations research and statistics in the MIT Sloan School of Management, presented her research on auditing large language models for bias in election information.
+Within the profiles, interviewees were asked what needs to change in American science right now. Many expressed concerns with federal funding.
 
-“Algorithms decide a lot of things about our lives right now,” she said. “With regard to chatbots and election information, if I take two people and they interact with the same chatbot … how will the chatbot respond? How will it personalize the information it gives to these people?”
+“I’m fortunate to work with extraordinary students and postdocs, but the infrastructure that lets them do their best work is under real stress: funding instability at the National Institutes of Health and the National Science Foundation, immigration uncertainty for international scientists and an erosion of public trust in expertise,” says [Prof. Feng Zhang](https://www.scientificamerican.com/article/feng-zhang/).
 
-A longitudinal study of 12 major models during the 2024 U.S. presidential election season found responses varied dramatically based on stated demographics and political leanings. Her research team is now working on a new audit of the 2026 U.S. midterm elections, using a redesigned survey with input from political science experts.
+Zhang developed CRISPR-based genome editing tools, which could increase our understanding human diseases and lead to new treatments. “We can lose the lead rapidly if we do not protect our innovation ecosystem,” he says.
 
-During a panel discussion moderated by Songyee Yoon, founder and managing partner at Principal Venture Partners and member of the MIT Corporation, experts raised concern about the potential for AI to erode democratic norms and processes, but also explored potential positive outcomes.
+Positive developments include the progress [Prof. Alan Guth](https://www.scientificamerican.com/article/alan-guth/) has witnessed in cosmology.
 
-[Bailey Flanigan](https://polisci.mit.edu/people/bailey-flanigan), the Theodore T. Miller (1922) Career Development Professor in the Department of Political Science, who holds an MIT Schwarzman College of Computing shared position with EECS, said she’s skeptical of how some are applying AI as a tool that can get people to reach decisions or consensus more quickly.
+“With new techniques, we’re able to unravel, to make sense out of, what we’re observing,” says Guth. “A lot of progress has been made on those lines, so in terms of the physics of the field, I think things are going great. But to me, the real problem is the prospects for future funding.”
 
-“And there is a reason to think that this is nice because it is more efficient. It's easier. But it loses a lot of these procedural elements of democracy that are the rituals of how we come together and make decisions,” she said. “And I think it’s a mistake to forget about that when we start thinking about automation.”
+[Langer](https://www.scientificamerican.com/article/robert-langer/) shares his faith in the durability and strength of America’s science and innovation ecosystem.
 
-[Charles Stewart III](https://polisci.mit.edu/people/charles-stewart-iii), the Kenan Sahin (1963) Distinguished Professor of Political Science and founding director of the [MIT Election Data and Science Lab](https://electionlab.mit.edu/), said one challenge is that governmental structures do not evolve at the same rate as technology.
-
-Stewart said his biggest concern is the potential for AI to lead to chaos during and after elections.
-
-“If and when things go wrong, they can go really bad, and really wrong. If an election is called into question, that can lead to violence,” Stewart said.
-
-“We’ve already seen in the low-tech eras election results being manipulated. What worries me is what I’m going to observe this coming Election Day, and the Wednesday after, and if AI has helped to create irreversible disruptions to the election system,” he added.
-
-[Lily Tsai](https://polisci.mit.edu/people/lily-l-tsai), the Ford Professor of Political Science and director and founder of the [MIT Governance Lab](https://mitgovlab.org/) (MIT GOV/LAB), said in many ways, AI runs against the democratic norms and commitments necessary for a healthy democracy.
-
-“It is really important not just in terms of design principles, but the commitments of designers to be familiar with the values and principles that characterize what democracy is based on: agency, political equality, mutual respect, inclusion, and autonomy,” Tsai said.
-
-Tsai also noted her research has shown some people are more comfortable interacting with machines. She described a “Socratic dialogue chatbot” her team designed that asks people to articulate the thinking behind their beliefs and positions.
-
-“And that actually, interestingly, seems to moderate their policy position in the process,” Tsai said. “So there are absolutely examples of ways in which AI can have positive impacts on democracy. But it really is about designing with the right principles and evaluating them rigorously.”
+“I look at the history of American innovation and education over the past 250 years, and it’s been spectacular,” says Langer. “Plenty of times there’ve been setbacks. We’ve had world wars, you know, we’ve had depressions, and people keep persisting and keep learning. They keep discovering and they keep inventing. So that gives me a lot of cause for hope. This is not the worst time by any means.”

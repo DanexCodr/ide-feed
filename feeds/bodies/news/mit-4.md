@@ -1,83 +1,31 @@
-The global building boom of power-hungry data centers is straining electrical grids, causing greater reliance on energy from polluting fossil fuels.
+As a child, you likely saw a few Disney movies depicting inanimate objects, such as clocks, cups, and toys, as interactive companions to humans — an act of pure magic, seemingly. But scientists at MIT’s Computer Science and Artificial Intelligence Laboratory (CSAIL) are now doing something similar: transforming stationary items into self-aware tools that perceive and respond to human motion to complete a task.  
 
-Christina Delimitrou, a newly tenured associate professor at MIT, is fighting this environmental threat by rethinking how the computer servers and networking equipment inside those data centers operate.
+Engineers have 3D-printed these dynamic items with built-in sensing, using conductive materials for sensors and traces (sort of like wires) inside. The issue: both components were typically fabricated using the same material, so they’d emit similar signals. It’s sort of like hearing two radio stations at the same time, a mixup that’s hard to interpret. This confuses, say, a glove that relays instructions to a robotic hand about how to handle a specific object. The device couldn’t filter out the noise or verify the angle of a user’s motions, leading a humanoid student to make errors.  
 
-She and her group apply machine learning to make large-scale data centers more efficient, secure, and reliable. They redesign outdated cloud computing systems, develop methods to manage shared hardware resources, and create streamlined server architectures.
+Researchers at CSAIL and Tianjin University (TJU) in China may have found a way to 3D print more precise interactive items. With their “X-Hinges” software, users can customize a design, and the tool will automatically embed two different materials: a filament for the sensors designed to send the strongest signal possible, and another for the wire-like elements that don’t interfere. Interactions won’t get lost in translation, meaning users can fabricate objects that respond in real-time, such as small robots, household decor, object-detection systems, and toys.  
 
-These advances allow data center operators to coax more computational power out of existing hardware.
+With X-Hinges, users can put together an item by selecting and connecting different shapes, then choosing how certain parts move. The item won’t be limited to moving in just one way like previous approaches; instead, users can select up to three “axes:” compressing, up and down, or to the sides. Building a robotic hand, for example, you’d likely want its fingertips to move vertically and laterally. The new tool would then embed sensors where the object bends (in this case, its joints) to capture motion data from both angles. That way, the device can understand and respond to your interactions more dynamically once it’s 3D-printed.  
 
-“If data centers are not utilized to the best of their capabilities, then they will burn much more power than they need to meet growing user demand,” says Delimitrou, the KDD Career Development Associate Professor in Communications and Technology in the Department of Electrical Engineering and Computer Science (EECS) and a member of the Computer Science and Artificial Intelligence Laboratory (CSAIL). “There is a lot of bloating, especially on the software side of these systems. If we can remove that bloating in a way that doesn’t compromise performance, then we won’t need to build as many new data centers.”
+“It’s kind of like adding a conscious element to everyday objects,” says Jiaji Li, MIT electrical engineering and computer science (EECS) postdoc and CSAIL researcher, who is a senior author on a [paper](http://arxiv.org/abs/2609.11077) introducing the work. “What you get is objects that better understand how they’re being used and have more ways to respond. In the same way an AI agent is programmed to make certain decisions based on our instructions, these creations have built-in sensing to adaptively react to human touch.”
 
-She also harnesses AI to help programmers find and fix problems in cloud-based applications, like music-streaming services or video conferencing systems. This eliminates application downtime that hampers performance and drains computational resources.
+Jiaji Li and lead author Xiang Chang, a TJU PhD student and visiting researcher at CSAIL, used X-Hinges to create many clever devices. For example, they made a glove that can teach a robot how to grasp blocks. It adjusts to the size of a user’s hands, then records how the joints in their fingers bend via sensors before rapidly relaying that information to a humanoid hand to mimic it. The glove could be useful in factories or homes, where a robot often needs to learn new interactions quickly.
 
-“By managing resources more effectively in the cloud, the end user gets more predictable performance from the application running on their smartphone,” she adds.
+The researchers also produced a small, origami-style lamp using X-Hinges. It senses when a human pinches it closed and adjusts its brightness accordingly. When you turn on this adaptive, portable light source (sort of like a reading light), it looks like a piece of folded-up paper that sprouts into a lamp.
 
-**Mathematical beginnings**
+X-Hinges can even assemble devices that identify which objects have been placed on it. You could put a banana on top, for instance, and it’ll recognize the fruit almost immediately based on the tactile data it’s recorded using its sensors. This advanced physical awareness could be integrated into detection systems in places such as airports and grocery stores.
 
-Delimitrou grew up in a midsized town within the vast plains of northern Greece. Her early interest in math and science was sparked, in part, by the ancient history of her homeland, where Euclid and Pythagoras studied mathematical problems more than 2,000 years ago.
+Behind each of the scientists’ creations is an easy-to-use interface that helps you design interactive objects from scratch. Users can choose how each part of their design looks and moves, just as the researchers did when making a video game controller that resembles a cartoon shark.
 
-“In Greece, there is a long tradition of geometry,” she says.
+X-Hinges gives you four shapes to choose from: a custom option, cylinder, rectangle, and thin outline. To recreate the unique look of a shark’s tail, the researchers designed their own shape. They then chose how the toy bent, opting for its tail to move up and down, sort of like a joystick. Finally, the program embedded the sensors, and the scientists 3D-printed their device.
 
-She also drew scientific inspiration from her parents. Her mother worked as a chemical engineer and her father as a pharmacist — and both encouraged their daughter’s innate curiosity.
+The researchers say that X-Hinges’ diverse motions are a novel feature compared to past attempts to 3D-print responsive everyday objects. “Most methods only allow for one axis of motion, often due to signal interference. X-Hinges enables your 3D-printed item to move from three angles,” says Chang. “Ultimately, you get a design with the intended movement you want. It also records motion data in each of those areas at the same time, making the device responsive to different kinds of interactions.”
 
-Her early affinity for math led Delimitrou to study computer engineering at the National Technical University of Athens, even though she didn’t know much about the field. She quickly gravitated toward courses that focused on the applied science of engineering.
+The tool could help realize the untapped potential of the seemingly mundane. Objects we use every day for a specific purpose, like a water bottle for drinking or a lamp for lighting, could become interactive gadgets. Much like how a chatbot uses a sort of digital intelligence to answer your prompts, an object could leverage a kind of physical intelligence to execute a physical task when users interact with it.
 
-For her diploma thesis — a project all students complete during their fifth and final year of study — she studied resource management in a computer when multiple applications are running at once.
+For now, though, X-Hinges faces a calibration bottleneck. Each time an item is 3D-printed, its layout of electrical elements varies slightly, so two devices that appear identical from the outside may not make the same sensor readings. This is crucial if you’re building a deformable fitness glove, for instance, for two separate users. To fix this, Chang and Li built a computer vision system that can recalibrate outputs to align, ensuring data is accurate across two of the same items, although they hope to develop a built-in signal recalibration mechanism in the future.
 
-“A lot of the challenges I was looking at then would get much harder if, instead of a single system, you had 100,000 of these systems. That was a problem that piqued my interest,” she says.
+That ambition traces back to the throughline in Jiaji Li’s own research: letting actuation and sensing “grow” directly inside a 3D-printed object, instead of adding them on afterward. He previously built printed [tendon-driven mechanisms](https://news.mit.edu/2025/xstrings-3d-printing-strings-together-dynamic-objects-0318) that gave objects the ability to move; X-Hinges is how he’s now building on the ability to sense. The next step, he says, is combining the two in a single print — it’s actuation and sensing born together in the same fabrication process, opening the door to new physical platforms for embodied intelligence and AI agents.
 
-Seeking to make a bigger impact as a researcher, Delimitrou pursued a graduate degree at Stanford University. She began tackling inefficiencies in cloud computing systems and large-scale data centers, which was a rapidly growing area of research.
+Chang and Li wrote the paper with MIT associate professor of EECS and CSAIL principal investigator Stefanie Mueller and recent TJU graduate Haiyang Yan. Their work was supported, in part, by a postdoctoral research fellowship from Zhejiang University and the MIT-GIST Program.
 
-Through that work, Delimitrou and her research mentor, Christos Kozyrakis, the Leonard Bosack and Sandy K. Lerner Professor of Engineering, realized many large computing systems were underutilized.
-
-“You would expect, with all the demand for these systems, that they should be running close to 100 percent capacity. But we found that most were running at only about 15 percent capacity,” she says. “This is not a resource-efficient or sustainable way of scaling these systems.”
-
-**Applying AI**
-
-To push that utilization closer to 100 percent, she began investigating machine-learning solutions to streamline cumbersome computational processes. Machine learning could automate resource management operations in the cloud, identifying solutions that developers might miss on their own.
-
-“Applying machine learning to solve a large-scale system problem was a novel approach at the time. It was a bit risky because people had not yet shown that these techniques would work,” Delimitrou says. “But empirical approaches require a lot of expertise, and the scale of the system is so large that it is difficult for users to manage. This is why machine learning is often the best solution.”
-
-After earning her PhD, Delimitrou continued this line of work as an assistant professor at Cornell University.
-
-One tool her group developed, Seer, uses deep learning to anticipate and prevent problems in web applications before they happen. This averts widespread slowdowns that may occur if a developer tries to fix a problem manually.
-
-As she delved deeper into cloud computing, Delimitrou observed that cloud applications were changing. Developers were now splitting applications into smaller pieces to spread across multiple servers, which increases the speed of deployment.
-
-“But the servers were not built for this new style of application design. So, I rethought some of my earlier work to build machine-learning systems for this new class of applications,” she says.
-
-To tackle these new challenges, she found herself collaborating more often with faculty members who had different software and hardware expertise. Those collaborations opened exciting new research areas.
-
-A few years later, she decided to join MIT because of the opportunity to collaborate with researchers at the top of their fields in hardware and software engineering. She became an assistant professor in EECS in 2022.
-
-**Creative approaches**
-
-At MIT, Delimitrou also enjoys the teaching aspect of her role. One of her favorite courses to teach is 6.191 (Computation Structure), a popular undergraduate class with about 350 students each semester.
-
-While it’s challenging to keep the course material fresh when the field constantly evolves, she strives to inspire creativity in her students.
-
-“I want the students to learn how to think and learn on their own. Part of that involves shifting away from formulaic assignments and making classes more open-ended. I’d rather give the students something to make them think more deeply,” she says.
-
-In the lab, a creative mindset helps Delimitrou and her team identify novel solutions to problems in cloud computing that others might overlook.
-
-For instance, she extended prior work on debugging problems in cloud applications to encompass not just errors in the code, but also security issues that can make user data vulnerable to hackers.
-
-She also uses AI to redesign software systems so they better fit the capabilities of existing hardware.
-
-“One of the challenges when it comes to applying AI to these systems is that the AI is not interpretable,” she says. “A lot of the work we are doing now involves adding explainability into these AI tools so people can get useful feedback from the system.”
-
-That not only helps developers ensure AI is giving the right answer, but also provides insights into how to design systems better in the future.
-
-She finds that studying these large-scale cloud computing systems is becoming more challenging because tech companies that operate data centers use proprietary hardware, unlike the commodity equipment of early cloud computing days, as well as software systems that can’t be accessed by academic teams. A solution that works in the lab might not work in the real world.
-
-To that end, Delimitrou and her group create clones of proprietary systems and applications. One tool they developed, called Ditto, mimics an application’s structure and performance characteristics, enabling a wide range of studies.
-
-She expects her work to continue shifting as machine-learning models become more advanced, opening new possibilities to boost application performance and hardware efficiency.
-
-“But you still have to use AI carefully. While it can greatly accelerate the application development side, we still need to audit it and be especially careful about how these models are applied so we don’t lose the ability to gain insights out of the solutions AI is giving,” she says.
-
-Outside the lab, Delimitrou enjoys spending time with her husband and 1-year-old daughter.
-
-While she doesn’t have as much time for hobbies these days, she also enjoys gardening and building an electrical toy train track for her daughter, as well as playing classical piano and painting nature scenes. She became interested in painting at Cornell, where she would often paint the many waterfalls near the campus.
-
-Whether she is working in the garden or painting, Delimitrou says she finds spending time outdoors to be a relaxing escape from the technical nature of her work, but also an important reminder of the role her research plays in sustainability.
+The researchers will present their work at the ACM Symposium on User Interface Software and Technology in early November.

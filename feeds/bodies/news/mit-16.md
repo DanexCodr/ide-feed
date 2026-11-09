@@ -1,35 +1,57 @@
-Artificial intelligence models are jacks of many trades, including writing, generating images, and creating 3D models. But they aren’t as helpful when it comes to testing robots or designs for vehicles in diverse environments, since they don’t understand physics as well as they do pixels or text.
+A new set of modular components allows users to create reconfigurable smart devices with electrical connections that keep working no matter which shape the structure forms.
 
-To build an AI system that can reliably simulate a variety of physical scenarios, engineers need a range of physics data at a scale that isn’t yet feasible. That’s because it’s very time-consuming to get neural networks just a few data points they can understand. They rely on algorithms called “numerical solvers” to calculate physical properties at different points of a 3D shape. It’s a thorough process, but it takes so long that it limits how much data you’ll have to, say, test if your plane designs are safe and aerodynamic.  
+This electrical modularity can enable engineers to design interactive devices that can sense which shape they have taken, without the need for external wires. For instance, the modular components, which the researchers call “bifur-circuits,” could be used to rapidly design and prototype adaptable smart devices, like assistive furniture that helps individuals change body positions while recovering from injuries or reconfigurable robotic grippers that remain electrically connected when they change shapes for different applications.
 
-A new pre-training approach known as “GeoPT,” developed by researchers at MIT’s Computer Science and Artificial Intelligence Laboratory (CSAIL) and Tsinghua University, gives simulation models a chance to learn physics in a broader, more efficient way. It virtually reenacts everyday mechanical interactions in 3D, showing how particles stop when reaching some part of an object. These simulations give the models a sense of how physics works, helping them model the real world more accurately, reach peak performance twice as fast, and train on up to 60 percent less data compared to leading models.
+Developed by MIT researchers, these 3D-printed building blocks, which are a type of structure known as a mechanical metamaterial, can be combined to form many more possible configurations than traditional metamaterial structures.
 
-Soon, the project could help engineers predict how vehicles (like cars and planes), everyday items (including chairs and containers), and robots respond to various physical elements, such as wind, water, and collisions. The researchers believe their work could also be a step toward a physics foundation model, a backbone system trained on lots of data that can help AI tools generalize to different tasks.
+In a study presenting the new system, the researchers demonstrated several interactive objects, including a chair that converts to a table with storage and can also flatten for stowing. The structure senses its configuration and sends corresponding messages to an electronic display.
 
-“We believe physics is the third modality for AI models, after text and pixels,” says MIT PhD student and CSAIL researcher Minghao Guo, a co-lead author on a [paper](https://arxiv.org/abs/2602.20399) introducing GeoPT. “Our general-purpose model has the versatility to help build a world model for physics. Many models, such as those that generate robotics data and videos, are already well-versed in textual and visual data, but with physical accuracy, they’ll get more-realistic results.”
+These new metamaterials could also be used to design antennas for communications and sensing that form new shapes to adjust their frequencies in changing environmental conditions, without bulky mechanical parts.
 
-**Easy to use**
+“Metamaterials can make complex mechanical assemblies easy to manufacture just by using repeating units. Our work expands on this design space. If we think of mechanical metamaterials as building blocks, then our work is one way to take advantage of their geometry to embed intrinsic intelligence into hardware, which could open many possibilities,” says Marwa AlAlawi, a mechanical engineering graduate student and lead author of a [paper](https://hcie.csail.mit.edu/research/Bifur-circuit/bifur-circuits.html) on the devices.
 
-To use GeoPT, users simply upload 3D models of objects like battleships, passenger airplanes, and trucks, and specify the direction and speed of the force they want to simulate. The result is a kind of heat map showing how the object will be affected in different places. If you know the speed and direction (velocity) of the force you’re looking to simulate, you can capture it in GeoPT. This comes in handy when you want to simulate things like how a car would look after crashing into a wall, the ways light bounces around objects, and whether a boat stays afloat over turbulent waves.
+AlAlawi is joined on the paper by co-senior authors Ticha Sethapakdi, an electrical engineering and computer science (EECS) graduate student at MIT; and Stefanie Mueller, an associate professor in MIT’s departments of EECS and Mechanical Engineering and leader of the Human-Computer Interaction Group at the Computer Science and Artificial Intelligence Lab (CSAIL). Their co-authors include others at MIT, the University of Tokyo, and the University of Michigan. The research will be presented at the ACM Symposium on User Interface Software and Technology.
 
-But how does GeoPT “get” physics so well? Its knowledge comes from “synthetic dynamics,” a series of interactions between small particles and complex 3D shapes. GeoPT studied 1.3 million samples of synthetic dynamics, in which tiny spheres moved at various speeds and angles until stopping at a certain point on the object.
+**Shape-changing interactive structures**
 
-These particles basically “stick” to an object once they make contact, instead of moving through or bouncing off. Picture learning about physical interactions using marbles and action figures — similarly, simulation models can use synthetic dynamics to gain a feel for physics before they train on labeled data.
+Mechanical metamaterials are programmable, three-dimensional structures of repeating units that can form complex shapes due to their geometries. When squeezed, pushed, or pulled, metamaterials can bend or twist in precise ways.
 
-**Industry success**
+For instance, “auxetic” metamaterials get wider when stretched, instead of narrowing.
 
-The researchers found that GeoPT was particularly skilled at simulating industrial scenarios, as it outperformed state-of-the-art simulation models across benchmarks. The common thread: It reached peak performance faster than other tools, while needing significantly fewer labeled data.  
+In prior work, the MIT researchers used auxetic metamaterials to build [reconfigurable antennas](https://news.mit.edu/2025/shape-changing-antenna-more-versatile-sensing-and-communication-0818) that formed three shapes depending on how the structure was stretched. This allowed the antenna to dynamically adjust its frequency range without complex, moving parts.
 
-On a dataset of complex 3D shapes and their responses to wind currents and surface pressure, for example, GeoPT surpassed state-of-the-art models in speed, accuracy, and efficiency. It had similar triumphs in speed and accuracy in capturing how fighter jets responded to wind. When GeoPT tested how the hull of a boat handled both air and waves, it required 60 percent fewer labeled data to capture both physical forces and reached peak accuracy four times faster than top baselines.
+Next, the team wanted to expand the number of antenna configurations but were limited because the auxetic metamaterials could only form three fixed states.
 
-The system even succeeded at simulating how different types of cars look after colliding with another object. It correctly predicted how 3D vehicles would deform while using less data than state-of-the-art baselines. Likewise, its simulations of how light would pass through what was essentially a toy rabbit were accurate, despite never training on that 3D model or light physics beforehand.  
+In this work they created “bifur-circuits,” which are auxetic metamaterials that can form many more shapes based on how the modular units are connected and rotated.
 
-“If your model performs well on industrial benchmarks, that means it can solve the hardest physics tasks,” says co-lead author Haixu Wu, an MIT postdoc and CSAIL researcher. “GeoPT was making high-fidelity simulations with over 100 million mesh points in seconds. This could make the tool extremely helpful for engineers hoping to test out blueprints for vehicles without needing to run so many physical experiments.”
+The units are also designed to be electrically modular. Due to the way conductive material is integrated into the bifur-circuits, electrical connections throughout the structure are maintained no matter how the object is rotated, pressed, or twisted to form new shapes.
 
-The researchers add that their system is only a preview of the kind of physics world model they’ve been working toward. The team hopes to scale up their system, training on even more shapes and simulating more complex physical phenomena. For example, a more in-depth approach could help model weather patterns, test out different materials, and generate realistic videos.
+To create interactive objects with many possible configurations, bifur-circuits leverage a property known as mechanical bifurcation.
 
-“Using synthetic dynamics data is an exciting paradigm for imbuing physics into foundation models,” says Fei Sha, AI research scientist at Meta, who wasn’t involved in the research. “It challenges the traditional wisdom that physics and geometry are necessarily entangled in computation, and one must acquire costly and specialized data. The demonstrated success in a wide range of application domains leads us to this important juncture: We are ready to build physics foundation models, now and fast."  
+Mechanical bifurcation is a sudden change in how a mechanism behaves when a force exerted on it passes a tipping point. For instance, when you gently bend the ends of a plastic ruler, once that force reaches a critical threshold, the ruler buckles.
 
-Wu and Guo wrote the paper with MIT CSAIL colleagues including Zongyi Li, a postdoc in the lab; Zhiyang (Frank) Dou, a CSAIL affiliate and MIT PhD student in electrical engineering and computer science (EECS); Kaiming He, a principal investigator in the lab, associate professor of EECS, and a distinguished scientist at Google DeepMind; and senior author Wojciech Matusik, the Joan and Irwin M. (1957) Jacobs Professor of EECS and a CSAIL principal investigator. Tsinghua University Associate Professor Mingsheng Long was also a co-author. The team presented the paper at the International Conference on Machine Learning in July.  
+In bifur-circuits, this bifurcation occurs when connected blocks are rotated in certain ways around a pivot point. The property allows connected blocks to form more stable configurations than one block could on its own.
 
-The researchers’ work was supported, in part, by Neural Modular Physics Twin for Robotics.
+Adding more bifur-circuits to a structure exponentially increases the number of potential configurations.
+
+“Bifurcation allow us to significantly expand on this reconfigurability space. Just adding one extra unit gives us so many more combinations out of the same structure,” says AlAlawi.
+
+Connecting and rotating components activates a unique circuit between adjacent units. This interactivity allows the units to communicate with one another, enabling the structure to sense its configuration.
+
+One of the biggest challenges the researchers faced was incorporating a conductive material that was flexible enough to bend, but still offered enough efficiency in the flow of electricity.
+
+“The conductive material was a constraint we had to work around in the design process, and it dictated how the sensing between blocks would happen,” AlAlawi says.
+
+Once they perfected the design, the researchers tested the durability of reconfigurable structures by compressing them more than 10,000 times. The structures showed no degradation in electrical connectivity.
+
+The researchers also developed a user-friendly construction and simulation tool to simplify the bifur-circuit design process. The software generates instructions for a multimaterial 3D printer, which can fabricate the reconfigurable objects in one pass.
+
+They demonstrated the versatility of bifur-circuits by fabricating a chair that can sense its geometry when its shape is changed to a tea table, as well as a shape-shifting controller that will launch one of several video games based on its configuration.
+
+Bifur-circuits could someday be used in applications like interactive rehabilitation tools, shape-changing grippers for modular soft robots, or reconfigurable shelters that could respond to changing environmental conditions after a natural disaster.
+
+In the future, the researchers want to explore more applications for bifur-circuits. They also want to add more interactivity into the structures and investigate additional metamaterial shapes.
+
+“Bifur-circuits are one step toward developing mechanical building blocks with integrated intelligence. It would be interesting to build on this work and come up with building blocks that allow us to create a structure with any form or shape we want, and which are structurally stable and can be actuated,” AlAlawi says.
+
+This work was funded, in part, by Japan’s Science and Technology Agency and the Bahrain Crown Prince International Scholarship Program.

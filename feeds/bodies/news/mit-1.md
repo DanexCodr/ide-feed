@@ -1,63 +1,45 @@
-A user who is frustrated with changes a social media company made to their favorite messaging platform, like the introduction of an annoying AI chatbot, can’t do much to address the situation, short of leaving the platform.
+Humans are intuitive by nature. We can sense meaning beyond the literal words that we encounter. Now, a new artificial intelligence-assisted learning platform developed by MIT engineers is enabling robots to read larger meaning into a human’s natural language commands.
 
-Now, MIT researchers are offering an alternative path.
+In a study to be presented at the annual Conference on Robot Learning this month, researchers from MIT and New York University introduce [FLEX](https://arxiv.org/pdf/2610.28893), a flexible feature-editing pipeline for robot motion-planning.
 
-They’ve created [Social.Wiki](https://social.wiki), a system that allows users to easily edit any social application made within Social.Wiki, and choose which of the edits made by others they want to see.
+With FLEX, humans can interact with a robot by giving it instructions in natural, conversational language. The robot can not only follow the instructions literally but also read into the words to draw larger generalizations that help to improve its motion-planning task.
 
-For example, a user could change a messaging site on Social.Wiki to remove an AI chatbot and instead add a restaurant voting feature so their group chat can finally decide where they are going out for dinner.
+The team demonstrated FLEX in several simulated scenarios, including one in which a robot serves a cup of coffee. In these virtual scenarios, a person interacts with a robotic arm by typing commands in natural language. As the robot moves the coffee cup over a cluttered table, the person might type “Don’t spill on the laptop!” In response, the robot will reason about why it should avoid the laptop. For this, FLEX incorporates a large language model (LLM) — a type of AI system that is trained on enormous libraries of text, including social media posts, video transcriptions, and web content, which the LLM uses to identify larger trends, patterns, and generalizations.
 
-“The infrastructure that we are all dependent on online is very rigid. It is based on these one-size-fits-all applications that we don’t have a lot of power to change. This project is about trying to imagine what a different web would look like where anyone can participate,” says Theia Henderson, an electrical engineering and computer science (EECS) graduate student, and lead author of a new [paper on Social.Wiki](https://arxiv.org/pdf/2608.19433).
+“LLMs have seen so many texts from the internet,” says study author Nathan Dennler, a postdoc in MIT’s Computer Science and Artificial Intelligence Laboratory (CSAIL). “People might have written about, ‘Oh, my phone dropped in the water and now it doesn’t work,’ or ‘I spilled coffee on my computer and now it doesn’t work.’ So LLMs pick up on the idea that liquids plus devices leads to things not working.”
 
-The researchers envision a world in which, if a user is unhappy with their social app, they can edit it to change it however they like — without getting cut off from their social connections.
+Through the LLM, the robot reasons that it should also avoid bumping into all electronics. In its updated path, the robot adjusts to avoid both the laptop and a nearby phone, without the person having to explicitly spell this out.
 
-The platform enables users with no coding expertise to create a range of websites, including social sites like photo sharing networks, discussion forums, and dating apps. It handles all back-end work, eliminating the need for creators to set up servers or arrange databases.
+“The idea is that there is some higher-level intention behind the words that you say,” Dennler says. “People naturally get this. But you have to carefully explain that to a robot, which takes time and effort. FLEX gives you an interface of communication with a robot to say, ‘When people say this, they mean that.’”
 
-Social.Wiki employs a decentralized infrastructure that allows users to retain ownership of their data as they create, edit, and navigate social websites within the platform. It also includes a “data guard” that protects user data from malicious or buggy applications.
+The study was led by Andreea Bobu, assistant professor of aeronautics and astronautics at MIT. Co-authors are Audrey Lee SM ’26 and Ilia Sucholutsky of New York University.
 
-Through case studies and user tests, the researchers demonstrated the breadth of applications people can create with Social.Wiki, including a rideshare app where riders propose the prices they are willing to pay and a collaborative canvas for creating art together.
+**Beyond what we say**
 
-While Social.Wiki is still in its early days, the researchers plan to continue refining the platform as they deploy it to a wider audience.
+At MIT, Bobu heads up the Collaborative Learning and Autonomy Research (CLEAR) Lab, where her group develops autonomous agents that learn to work for, with, and around people. She is focused on developing assistive and household robots that can carry out physical tasks, and reason and adapt in real-time, in response to a person’s natural, conversational commands.
 
-“We want to empower the creation of far more social applications that meet the needs of unusual small groups. Each group is unusual, but everyone is in unusual groups. Everybody has their own needs for social applications that we want to be able to address,” says David Karger, professor of EECS, a member of the Computer Science and Artificial Intelligence Laboratory (CSAIL), and senior author of the paper.
+“Robots use math to do their trajectory planning. But we can’t expect a consumer to learn to do this math in order to tell a robot what to do,” says Dennler, who is a member of the CLEAR Lab. “Instead of having to get people to learn how to use a robot in a specific way, the goal is to interact with the robot through natural language.”
 
-Henderson and Karger are joined on the paper by EECS graduate students Carmel Schare and Ana Dodik; Clemens Klokmose, a professor of computer science at Aarhus University in Denmark; Ziv Epstein, a postdoc in the MIT Media Lab; and David D. Clark, an MIT research scientist. The paper will be presented at the ACM Symposium on User Interface Software and Technology in November.
+There is a large effort in the robotics community to incorporate natural language into robotic learning pipelines. Various strategies include using language to clarify a task’s goal, redirect a robot’s trajectory, and update its understanding of what is a safe path to take. These existing methods use natural language to tell the robot how to physically perform a task. But a robot could potentially learn much more from what we tell it.
 
-**Letting users choose**
+Bobu and her colleagues are expanding what robots can learn from natural language commands. In their new study, they focused on enabling a robot to interpret a person’s underlying, unspecified preference from limited natural language commands.
 
-[Social.Wiki](https://social.wiki/#/v?/Social.Wiki) is a Wikipedia-like system in which users can navigate to different web applications or create their own web application within the Social.Wiki ecosystem. Each website has an “edit” button that allows any user to change the content of the site, from the text color on a message board to the pricing algorithm in a ride-sharing app.
+**Absorbing common sense**
 
-Clicking the “edit” button in Social.Wiki opens a page that lets users view and edit the source code manually or prompt an AI assistant to make changes to the site.
+The team’s new robot learning platform, FLEX, is a three-step process that helps a robot read more into a natural language command, beyond what it is explicitly told to do.
 
-This platform builds on the researchers’ prior work on [Graffiti](https://news.mit.edu/2025/system-lets-people-personalize-online-social-spaces-while-staying-connected-1001), a web framework with a decentralized infrastructure that makes building personalized applications easier.
+The first step, “Add,” instructs a robot to add a feature to its list of things in its environment that matter for the task at hand, based on a user’s natural language command. For instance, as a robot is moving a bowling ball from one location to another, a person might interject with “Don’t drop it on my mug!” The robot would then add the mug to a list of things to avoid in its path. This first step is how previous methods have worked. Every time a person makes a correction, the robot adds to its features list, and updates its trajectory to avoid those features.
 
-With Social.Wiki, the researchers sought a collaboratively editable system that would allow anyone to revise web applications to be ideally suited for their needs and the needs of groups they belong to.
+“The problem happens when your feature list becomes super long, and some features are no longer relevant because your environment may have changed,” says Dennler, who notes that this approach can grow tiresome if a person has to specify every specific feature to avoid.
 
-To enable this structure, Social.Wiki relies on a strategy the researchers call “plural governance.” Instead of a central moderator deciding which content users will see, each Social.Wiki user can choose the rules that determine which edits they will see on Social.Wiki webpages.
+The second step, “Generalize,” is the new solution that FLEX provides. This step incorporates an LLM — in this case, GPT-4o — that considers the mug, along with any other features that the person has so far specified to avoid. The LLM automatically searches through its vast cache of data for patterns and connections among these features, to ultimately make a generalization that it should avoid objects that are fragile, even when the person has not explicitly said so.
 
-Users can also identify “trusted editors,” so they will see edits from individuals or organizations they consider reliable.
+“LLMs have seen so many texts from the internet, from all sorts of people and places,” Dennler says. “Because they’ve trained so much on those things, some of that common sense gets absorbed into the LLM.”
 
-For instance, a user could customize their rules, or “governance policy,” so they only see edits to a site that have been endorsed by at least two of their friends. When the Social.Wiki browser loads a site for a user, it applies the governance policy that user selected to decide which version of the site to present.
+In the third step, “Mask,” the robot’s standard computer vision system assesses its environment to determine what objects are no longer present, and then deletes those objects from its features list. This entire three-step process takes about five seconds.
 
-For example, based on each user’s choices and edits, the system might show one user a ride-sharing app with a uniform pricing algorithm while another user might see the same app with a dynamic pricing algorithm.
+The team tested FLEX in simulations of a robot arm carrying out three different tasks: serving a cup of coffee, moving a candle, and carrying a bowling ball. In all three scenarios, volunteers interacted with the virtual robot by typing natural language commands, such as “Don’t spill on my laptop,” “Stay away from the stack of paper,” and “Don’t drop on the mug.” With FLEX, the robot followed all three commands literally and also reasoned at a higher level to not spill on electronics, stay away from flammable objects, and not drop its cargo on fragile things.
 
-“No website is tied to a particular machine. This means we have no centralized ownership over the websites or the underlying infrastructure,” Henderson explains.
+“Everyone’s homes are different, and everyone cares about different things, so no robot comes out of the box knowing what matters to you,” Bobu says. “What excites me about FLEX is that it can pick that up from a sentence or two instead of asking you to spell out every rule — and that’s the difference between a robot people put up with and one they actually want in their home.”** **
 
-**Security and creativity**
-
-In this decentralized infrastructure, user data are stored separately from the websites that access it, which helps keep data secure.
-
-Social.Wiki also employs a data guard, which prompts a user to review each request from a website that is attempting to access their data.
-
-“In Social.Wiki, these websites are held in common and anybody can edit them, but the data guard makes sure that each user stays in control of what happens to their data,” Karger adds.
-
-The researchers evaluated Social.Wiki through several case studies. For one, they developed a messaging platform that allows participants to modify the chat’s styling and interface without affecting the experience of others. In another, they built a collaborative ride-sharing app that enables riders to adjust the fare they want to pay using a transparent “living wage” calculator.
-
-They also sponsored a hackathon in which users built Social.Wiki applications.
-
-Participants developed a range of creative sites, including a [housing co-op communication tool](https://social.wiki/#/v?/coop?/f2-living) that organizes chats on a map of the co-op, as well as a [garden-themed microblogging site](https://social.wiki/#/v?/social-garden) where posts are “planted” as flowers.
-
-“Even the little bit that has been done so far with Social.Wiki demonstrates that there is so much more that could be done with social apps if users could specialize them to meet a particular group’s needs,” Karger says.
-
-Moving forward, the researchers are working to deploy Social.Wiki to a broader audience and gather feedback from more diverse user groups. They also want to make technical upgrades to enable end-to-end encryption on private message data and provide better developer tools.
-
-This work was funded, in part, by Schmidt Sciences and the National Science Foundation (NSF).
+This work was partly supported by the MIT Generative AI Impact Consortium and the MIT Schwarzman College of Computing’s Social and Ethical Responsibilities of Computing program.

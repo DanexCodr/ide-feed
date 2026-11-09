@@ -1,31 +1,63 @@
-Despite millions of years of evolution, the development of the human fetus remains a complex process that is vulnerable to genetic, environmental, and metabolic disruptions. These disruptions could result in developmental abnormalities, starting with one of the first organs to begin developing in the fetus that continues to develop after birth: the brain.
+A user who is frustrated with changes a social media company made to their favorite messaging platform, like the introduction of an annoying AI chatbot, can’t do much to address the situation, short of leaving the platform.
 
-In a routine prenatal ultrasound, the sonographer will flag possible brain abnormalities for additional magnetic resonance imaging (MRI). But imperfect imaging can result in missed or incorrect diagnoses.
+Now, MIT researchers are offering an alternative path.
 
-To assist with the early detection and treatment of these abnormalities, researchers at MIT, Boston Children’s Hospital, and Inria have developed and trained a deep learning model called E(3)-Pose that helps image the fetus’s head while it’s in motion to capture a high-resolution image that the radiologist can examine. A paper about the work was presented at the [2026 European Conference on Computer Vision](https://eccv.ecva.net/).
+They’ve created [Social.Wiki](https://social.wiki), a system that allows users to easily edit any social application made within Social.Wiki, and choose which of the edits made by others they want to see.
 
-“One of the problems with having the baby move is that the slices are all over the place,” says first author Ramya Muthukrishnan. Muthukrishnan is an MIT PhD student in the lab of Sunlin (1966) and Priscilla Chou Professor of Electrical Engineering and Computer Science Polina Golland, who is a principal investigator at the [MIT Abdul Latif Jameel Clinic for Machine Learning in Health](https://jclinic.mit.edu/) (Jameel Clinic) and the MIT Computer Science and Artificial Intelligence Laboratory (CSAIL).
+For example, a user could change a messaging site on Social.Wiki to remove an AI chatbot and instead add a restaurant voting feature so their group chat can finally decide where they are going out for dinner.
 
-By slices, Muthukrishnan is referring to a series of 2D images taken during a fetal MRI scan. These 2D planes stacked together effectively make up one high-resolution, 3D image of the fetus’s head. But if the head shifts during imaging, each 2D image “slice” could end up being taken from a different angle, resulting in gaps in the final scan and unusual slice orientation. These problems may cause the physician reviewing the MRI to miss or incorrectly diagnose a pathology in the fetal brain.
+“The infrastructure that we are all dependent on online is very rigid. It is based on these one-size-fits-all applications that we don’t have a lot of power to change. This project is about trying to imagine what a different web would look like where anyone can participate,” says Theia Henderson, an electrical engineering and computer science (EECS) graduate student, and lead author of a new [paper on Social.Wiki](https://arxiv.org/pdf/2608.19433).
 
-“There are very fine details that you need a very good volumetric picture of the brain to see,” explains Muthukrishnan. “If you have coverage gaps, you can’t see critical regions, and you need to be able to see well to detect abnormal development.”
+The researchers envision a world in which, if a user is unhappy with their social app, they can edit it to change it however they like — without getting cut off from their social connections.
 
-What makes E(3)-Pose particularly good at tracking fetal motion is its focus on physics. Rather than simply training the model to learn physics from the data, the very principles of physics are baked into the neural network: left-right symmetry of the fetal head is embedded in the model architecture, making it easier for the model to accurately identify the brain’s orientation.
+The platform enables users with no coding expertise to create a range of websites, including social sites like photo sharing networks, discussion forums, and dating apps. It handles all back-end work, eliminating the need for creators to set up servers or arrange databases.
 
-When Muthukrishnan began working on the project at the start of her PhD, she had no background in physics, let alone MRI physics. Most of her experience was in computer science. “I was surprised when I had to go and implement this on the scanner,” she recalls. “I was not prepared for how many times I would crash the scanner because putting things on hardware and getting it to work on hardware is a different beast than training a model to run on data on a GPU.”
+Social.Wiki employs a decentralized infrastructure that allows users to retain ownership of their data as they create, edit, and navigate social websites within the platform. It also includes a “data guard” that protects user data from malicious or buggy applications.
 
-Despite the challenges, Muthukrishnan persisted. She remembers shadowing a radiologist who performed fetal MRI scans at Boston Children’s Hospital at the start of her PhD and observing the shared frustration of the patient and radiologist: the pregnant mother felt uncomfortable after spending an hour in an MRI, only to quit the scan halfway; the radiologist was unable to procure a full, high-quality MRI to monitor the development of the fetus.
+Through case studies and user tests, the researchers demonstrated the breadth of applications people can create with Social.Wiki, including a rideshare app where riders propose the prices they are willing to pay and a collaborative canvas for creating art together.
 
-“Seeing frustration about it helped me decide what I wanted to do with my PhD, because it felt like this was a pain point,” Muthukrishnan says.
+While Social.Wiki is still in its early days, the researchers plan to continue refining the platform as they deploy it to a wider audience.
 
-Fortunately, she had help: Co-author Borjan Gagoski, an assistant professor of radiology at Harvard Medical School and a researcher at Boston Children's Hospital, developed a sequence that acquires additional MRI scans to assist with training E(3)-Pose and worked with Muthukrishnan to help troubleshoot the scanner whenever it crashed. Co-author and Boston Children’s Research Assistant Aryn Lee recruited the pregnant volunteers and assisted with acquiring each of the MRI scans. Senior authors who helped guide the project include Elfar Adalsteinsson, MIT professor of electrical engineering and computer science; Ellen Grant, the Käthe Beutler Professor of Pediatrics and professor of radiology at Harvard Medical School; and Golland. Benjamin Billot, a researcher at Inria and a former postdoc in Golland’s group, helped Muthukrishnan get started with the initial method he developed.
+“We want to empower the creation of far more social applications that meet the needs of unusual small groups. Each group is unusual, but everyone is in unusual groups. Everybody has their own needs for social applications that we want to be able to address,” says David Karger, professor of EECS, a member of the Computer Science and Artificial Intelligence Laboratory (CSAIL), and senior author of the paper.
 
-“Ramya’s work elegantly combines geometric concepts like equivariance and symmetry with the power of deep learning to change how MRI scanners acquire the images, and to ultimately help the physicians detect and treat problems early in development. It’s an impressive research project that is deep and fundamental in how it models image acquisition, with clear clinical impact,” says Golland.
+Henderson and Karger are joined on the paper by EECS graduate students Carmel Schare and Ana Dodik; Clemens Klokmose, a professor of computer science at Aarhus University in Denmark; Ziv Epstein, a postdoc in the MIT Media Lab; and David D. Clark, an MIT research scientist. The paper will be presented at the ACM Symposium on User Interface Software and Technology in November.
 
-Grant, who directs the Fetal Neonatal Neuroimaging and Developmental Science Center (FNNDSC) at Boston Children’s, adds that Muthukrishnan’s work “will automate fetal brain MRI, replacing today's slow, manual process with faster and more comfortable scans for mothers, while also providing higher-quality images for radiologists to interpret.”
+**Letting users choose**
 
-E(3)-Pose’s applications could extend beyond motion tracking for fetal MRIs. It could assist with imaging other hard-to-image anatomy, and even autonomous driving applications, where limited sensors need to capture noisy, 3D data in order to track 3D objects.
+[Social.Wiki](https://social.wiki/#/v?/Social.Wiki) is a Wikipedia-like system in which users can navigate to different web applications or create their own web application within the Social.Wiki ecosystem. Each website has an “edit” button that allows any user to change the content of the site, from the text color on a message board to the pricing algorithm in a ride-sharing app.
 
-For now, Muthukrishnan hopes to improve E(3)-Pose so that it can help with imaging second-trimester or younger fetuses, as the model is primarily trained on third trimester fetuses. Second-trimester fetuses are “so small, they move around a lot more because there’s more space in the uterus,” Muthukrishnan says. “They’re more important to focus on because the earlier you detect brain abnormalities, the easier it is to intervene.”
+Clicking the “edit” button in Social.Wiki opens a page that lets users view and edit the source code manually or prompt an AI assistant to make changes to the site.
 
-This work is supported by the MIT Jameel Clinic, the MIT Takeda Program, the Chou Family Transformative Research Fund, the National Institute of Biomedical Imaging and Bioengineering, and the Eunice Kennedy Shriver National Institute of Child Health and Human Development.
+This platform builds on the researchers’ prior work on [Graffiti](https://news.mit.edu/2025/system-lets-people-personalize-online-social-spaces-while-staying-connected-1001), a web framework with a decentralized infrastructure that makes building personalized applications easier.
+
+With Social.Wiki, the researchers sought a collaboratively editable system that would allow anyone to revise web applications to be ideally suited for their needs and the needs of groups they belong to.
+
+To enable this structure, Social.Wiki relies on a strategy the researchers call “plural governance.” Instead of a central moderator deciding which content users will see, each Social.Wiki user can choose the rules that determine which edits they will see on Social.Wiki webpages.
+
+Users can also identify “trusted editors,” so they will see edits from individuals or organizations they consider reliable.
+
+For instance, a user could customize their rules, or “governance policy,” so they only see edits to a site that have been endorsed by at least two of their friends. When the Social.Wiki browser loads a site for a user, it applies the governance policy that user selected to decide which version of the site to present.
+
+For example, based on each user’s choices and edits, the system might show one user a ride-sharing app with a uniform pricing algorithm while another user might see the same app with a dynamic pricing algorithm.
+
+“No website is tied to a particular machine. This means we have no centralized ownership over the websites or the underlying infrastructure,” Henderson explains.
+
+**Security and creativity**
+
+In this decentralized infrastructure, user data are stored separately from the websites that access it, which helps keep data secure.
+
+Social.Wiki also employs a data guard, which prompts a user to review each request from a website that is attempting to access their data.
+
+“In Social.Wiki, these websites are held in common and anybody can edit them, but the data guard makes sure that each user stays in control of what happens to their data,” Karger adds.
+
+The researchers evaluated Social.Wiki through several case studies. For one, they developed a messaging platform that allows participants to modify the chat’s styling and interface without affecting the experience of others. In another, they built a collaborative ride-sharing app that enables riders to adjust the fare they want to pay using a transparent “living wage” calculator.
+
+They also sponsored a hackathon in which users built Social.Wiki applications.
+
+Participants developed a range of creative sites, including a [housing co-op communication tool](https://social.wiki/#/v?/coop?/f2-living) that organizes chats on a map of the co-op, as well as a [garden-themed microblogging site](https://social.wiki/#/v?/social-garden) where posts are “planted” as flowers.
+
+“Even the little bit that has been done so far with Social.Wiki demonstrates that there is so much more that could be done with social apps if users could specialize them to meet a particular group’s needs,” Karger says.
+
+Moving forward, the researchers are working to deploy Social.Wiki to a broader audience and gather feedback from more diverse user groups. They also want to make technical upgrades to enable end-to-end encryption on private message data and provide better developer tools.
+
+This work was funded, in part, by Schmidt Sciences and the National Science Foundation (NSF).

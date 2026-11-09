@@ -1,310 +1,221 @@
-Well here we are again. Linux 7.3 is out and it’s been an eventful few months, so
-let’s get stuck in to another Asahi Linux progress report!
+`libghostty-vt` 1.0 is here. [libghostty](https://lib.ghostty.org/) is a
+portable, high-performance C library for terminal emulation, extracted
+directly from the core of Ghostty. The 1.0 release means both the library
+itself and the C ABI are now stable.
 
-## Upstreaming continues
+A little over a year ago, I wrote that
+[libghostty is coming](https://mitchellh.com/writing/libghostty-is-coming). At the time,
+the Zig module had just been merged, the C API didn't exist, and nobody
+but Ghostty was a consumer. Today, the C API is a complete terminal emulator,
+it runs in production for millions of people across hundreds of products,
+both free and commercial, and it has a real, enforced ABI stability policy.
 
-As always, upstreaming work continues to progress. Aside from the usual patches for
-low-level SoC blocks, two major drivers made it on to the list this cycle: macaudio
-and avd. Getting macaudio ready for submission has been a challenge. The audio subsystem
-on Apple Silicon devices is rather special, and required quite a number of core ALSA
-changes to properly support it. Apple also uses special variants of speaker and headset
-amplifiers that were already supported upstream, and these drivers also needed some
-pretty significant modifications. We have previously discussed a lot of this work at
-length, and we are finally in a position where we can submit the main driver for
-review. The driver and Devicetree changes represent a hefty chunk of our total patchset,
-about 3100 lines.
+This post is about how we got here and what 1.0 actually means.<sup>[1](https://mitchellh.com/writing/libghostty-1-0#user-content-fn-5)</sup>
 
-AVD is a whole different beast. The AVD driver has spent barely 3 months in our downstream
-tree and is already on the list. This is our shortest turnaround time yet for a major
-SoC component and bodes well for a transition to upstream-first development some time
-in the future. This is fantastic news, as the AVD driver and related Devicetree changes
-are around 13000 lines of code.
+## Who Is Already Using It
 
-Also making an appearance on the list this cycle are initial Devicetrees not only for M4 Pro
-and Max devices but also M5 thanks to Yureka’s tireless efforts. As usual these initial
-Devicetrees are barebones and only sufficient to boot the SoC to a TTY, however work
-is progressing on further enablement. Watch this space!
+Since starting the Ghostty project in 2022, the most common question I've
+been asked is "why?". I already answered this in the
+[libghostty is coming](https://mitchellh.com/writing/libghostty-is-coming)
+post, so feel free to read that if you wish. Today, I'd rather answer this
+by showing the broad industry impact libghostty *has already had*. I believe
+this strongly validates its existence.
 
-We have also begun shifting to an upstream-first approach where practical. Changes
-to the TI USB-PD and SPMI drivers required for new devices, as well as initial support
-for Thunderbolt, were all developed upstream-first. We are so thrilled to see
-our focus on upstreaming starting to pay off!
+A year ago, I used a
+[bug in JediTerm](https://github.com/JetBrains/jediterm/pull/311),
+the terminal emulator in JetBrains IDEs, as an example of why terminal
+emulation is hard to get right. A year later,
+[the terminal in JetBrains IDEs now runs on libghostty](https://blog.jetbrains.com/platform/2026/10/jetbrains-terminal-now-uses-ghostty/).
+Every IntelliJ, PyCharm, GoLand, etc. user now has a libghostty-powered
+terminal. Based on a report by JetBrains, that's over 12.5 million
+active users.
 
-## M3 goes GA
+Neovim has an [approved pull request](https://github.com/neovim/neovim/pull/39773)
+replacing libvterm with `libghostty-vt`. Among other things, it closes a
+[10-year-old issue](https://github.com/neovim/neovim/issues/4997)
+about reflowing scrollback on resize. The maintainers are waiting on a
+tagged release before merging so that distributions can package the
+dependency separately, and the release today should enable that.
 
-Last time, we announced initial support for M3 series machines via the EXPERT flag on
-the Asahi installer. We are pleased to announce that we received almost no issues
-from early adopters, so M3 support is now generally available without the EXPERT flag!
+KDE developers are
+[experimenting with a Konsole replacement](https://blogs.kde.org/2026/11/01/introducing-kwi/)
+built on it. Vercel's Turborepo [uses it](https://github.com/vercel/turborepo/pull/13135)
+to render task output in its TUI. [devenv](https://devenv.sh/blog/2026/05/07/devenv-21-nix-with-zsh-fish-and-nushell-via-libghostty/)
+uses it to drive shells. Antithesis
+[used it to fuzz TUI programs](https://wickstrom.tech/2026-04-30-bombadil-terminal-experiment.html)
+and found real bugs in btop and others. [Ghostel](https://github.com/dakra/ghostel)
+brings it to Emacs. [ghostty-web](https://github.com/coder/ghostty-web)
+is the WASM build with an Xterm.js-compatible API. Commercial products
+like [OrbStack](https://orbstack.dev/) embed it. And a whole wave of
+new terminals and "agentic" coding tools, such as
+[herdr](https://github.com/herdrdev/herdr) and
+[cmux](https://github.com/manaflow-ai/cmux), have been built on it
+rather than writing yet another emulator.
 
-We have also made a number of improvements to M3 support, most notably enabling DCP.
-On top of performance and battery life improvements, this also allows us to enable
-sleep on M3 series devices *and* make the area around the notch useable on the MacBooks!
-Keep an eye out for m1n1 and kernel updates in the coming days.
+There are community bindings for Rust, Go, JavaScript, Swift, Python,
+.NET, Elixir, Dart, Java, and more, and the
+[awesome-libghostty](https://github.com/Uzaaft/awesome-libghostty)
+list tracks well over a hundred projects.
 
-## Crowded House
+More people today use a terminal powered by libghostty than use Ghostty
+the application, by a very large multiple. And libghostty is having
+a much larger impact than being "just" a terminal emulator.<sup>[2](https://mitchellh.com/writing/libghostty-1-0#user-content-fn-1)</sup>
 
-Last time, we teased support for virtualising SPTM-enabled versions of macOS in m1n1,
-which enables reverse engineering on M4 series machines. M5 presents a new challenge,
-as the versions of macOS which support it all require the use of Exclaves.
+## ABI Stability
 
-Exclaves are small applications running in an isolated environment controlled by the
-Secure Kernel. On M5 series SoCs and above, macOS uses them for sensitive tasks
-such as drawing the “camera in use” indicator to the screen. XNU communicates with
-the Secure Kernel and its Exclaves via SPTM, using yet another IPC protocol called
-Tightbeam. Much as with SPTM, XNU will panic if it cannot find the running Exclaves.
-This is all starting to look very similar in concept to Arm’s own TrustZone feature.
+1.0 means `libghostty-vt` follows semantic versioning and has strict
+[ABI compatibility](https://en.wikipedia.org/wiki/Application_binary_interface)
+promises so that packagers across distributions and operating systems
+can be confident packaging `libghostty-vt` and program developers can be
+confident dynamically linking against it.
 
-While some Exclaves can be bypassed by changing some settings on the command line,
-we predict that this will not always be the case. As such, Sven started looking at how we
-could fit all of this in to m1n1. First line of investigation, try putting the
-Secure Kernel and Exclave userspace in another VM next to SPTM and macOS.
+Beyond providing useful features, I believe the hallmark of a high-quality
+and enduring C library is ABI stability. So from the start, I took inspiration
+from C libraries I enjoyed working with and designed the API to have
+a strong, stable ABI that allows for future additions.
 
-[Oh, that worked](https://social.treehouse.systems/@sven/117513645155935201),
-and we’re now up to spawning three VMs in EL1 under m1n1! Maybe we can start
-selling m1n1 to companies fleeing VMWare… With that, we can now virtualise
-and reverse engineer macOS on both M4 and M5 series machines.
+Every object is an opaque handle. The hundreds of values you might read or
+write go through a small set of enum-keyed getters and setters, so we
+can add new values easily without introducing a new symbol. Programs with
+newer headers linked against an older libghostty get `GHOSTTY_UNSUPPORTED`
+results instead of crashes or undefined behavior. The few non-opaque structs
+we have carry their size so that fields can be appended later, or contain
+reserved padding. Enums are pinned to `int` on every compiler, as much as
+the C standard allows.
 
-## Hello Triangle(s)!
+Our CI enforces our ABI policy. Every change is checked with
+[libabigail](https://sourceware.org/libabigail/) against a committed baseline
+on Linux, and against golden type manifests on macOS and WebAssembly.
 
-While M3 support is now mostly at feature parity with M1 and M2, the very obvious exception
-to this is the GPU. Apple’s GPU team seems to follow a tick-tock model, and the M3’s
-GPU was a very significant departure from the models found on M1 and M2 SoCs. We mentioned
-quite some time ago that the M3 GPU was being reverse engineered by a new group of
-contributors, however not much has been said since.
+On ELF platforms, every exported symbol is also versioned, so the dynamic
+loader refuses to load a mismatched library by name rather than failing in
+some mysterious way later.
 
-At XDC this year, [Alyssa Millburn](https://teh.entar.net/@noopwafel),
-[Anna Maniscalco](https://social.treehouse.systems/@pac85) and [TellowKrinkle](https://social.treehouse.systems/@TellowKrinkle)
-gave a [talk](https://www.youtube.com/live/TPwe53kCJuM?t=2082) on their progress
-reverse engineering the M3 GPU. Work has progressed far enough for m1n1 to successfully
-initialise the GPU and for the team to draw a triangle! Fans of the “Think Different”
-sections of these progress reports will find the talk edifying; Apple have once again
-made a number of… interesting choices which will require significant engineering
-effort to integrate into upstream Mesa. It is well worth a watch if you’re interested
-in more detail.
+## Packaging
 
-A huge thanks goes out to everyone who has made this work possible. More progress
-is on the way, so stay tuned.
+In addition to ABI stability, the 1.0 release brings along the proper
+build tooling, tarballs, dependency licensing manifests, documentation,
+and more to enable every major operating system and distribution to
+package `libghostty-vt` through standard official tooling.
 
-## Kept you waiting, huh?
+Libghostty has its own release cycle, separate from Ghostty the
+application. And it has its own tarballs with only the files and dependencies
+libghostty needs, resulting in smaller sizes and simpler licensing
+verification and compatibility.
 
-All the way back in January of 2024, we made the [mistake](https://asahilinux.org/2024/01/fedora-asahi-new/)
-of promising Thunderbolt support within the year. It’s a mistake we won’t quickly
-repeat. We’ve said almost nothing about Thunderbolt in the two years since, which
-begs the question: where is it?
+Each release publishes a signed source tarball along with a companion
+dependencies tarball containing every Zig package in Zig's own cache
+layout, so a distribution can build the library completely offline. The
+build installs the shared and static libraries with a proper SONAME,
+headers, pkg-config files, and a CMake package config, and it honors
+`--prefix`, `DESTDIR`, and `lib64`. Debug info is kept by default so
+distros can split it out. All of this is documented in
+[PACKAGING-LIBGHOSTTY.md](https://github.com/ghostty-org/ghostty/blob/main/PACKAGING-LIBGHOSTTY.md),
+which ships with the tarball.
 
-Thunderbolt was originally developed by Apple and Intel, with Intel handling the
-design and fabrication of the hardware required. Since Intel made these controllers
-available to anyone who wanted them at a (mostly) reasonable price, no one else
-bothered to design their own. It is only very recently — largely coinciding with
-the transfer of the standard to the USB-IF — that companies like AMD have decided
-to roll their own controllers. Apple is of course no exception.
+## Dependencies and Licensing
 
-As part of their push for insourcing most silicon IP, Apple made the choice to
-design their own Thunderbolt controller before most others. Surprising no one, the
-controller is of course a Cortex-M3 running RTKit coupled with a bespoke
-Thunderbolt/USB4 router. There is one of these for each Thunderbolt-enabled USB-C port
-on all Apple Silicon Macs.
+`libghostty-vt` is MIT licensed. At runtime it needs nothing beyond
+libc, and it can be built fully freestanding if you don't want that
+either.<sup>[3](https://mitchellh.com/writing/libghostty-1-0#user-content-fn-2)</sup>
 
-Since Intel supplies every other extant Thunderbolt controller on the market, the
-Linux kernel’s Thunderbolt subsystem is effectively designed around them. It makes
-a number of assumptions about the hardware topology of the running machine, including
-hardware capabilities and access patterns for certain registers and regions of
-shared memory. Apple’s controller breaks a lot of these assumptions. Great.
+The library compiles in a small number of permissively licensed
+dependencies: [simdutf](https://github.com/simdutf/simdutf) and
+[Google Highway](https://github.com/google/highway) for SIMD, a compact
+Unicode table for grapheme data, and
+[Wuffs](https://github.com/google/wuffs) for image decoding in the
+Kitty graphics protocol. Both simdutf and Highway are built
+[without libc++](https://mitchellh.com/writing/simdutf-no-libcxx), so there is no C++
+standard library dependency.
 
-The Thunderbolt controller is also oddly coupled to PMGR. The reset line for each
-controller is asserted or deasserted by setting and clearing a set of bits in the
-middle of PMGR’s MMIO range. No other hardware block works quite like this,
-and it took some time to realise that these seemingly random writes to PMGR were
-not just noise.
+There is no copyleft code anywhere in the
+dependency tree. Every dependency is listed in a machine-readable
+manifest with its version, SPDX license, and hash, specifically so
+distros can fill in their bundled-library metadata more easily.
 
-Luckily for us, Sven was up to the task of dealing with all this nonsense. It just
-took slightly longer than expected! While the patchset to enable Thunderbolt was
-sent upstream first (another massive win for us!), we have also pulled it into
-our downstream kernel and are now shipping it to users!
+If a distro would rather dynamically link the system simdutf or Highway,
+there's a build flag for that.
 
-But there is a catch. Currently, only USB3, XDomain and Thunderbolt Networking are
-supported. You can plug in USB devices or connect two Thunderbolt computers together
-and make them ping each other, but that’s about it. PCIe and DisplayPort tunnelling — required for
-most Thunderbolt docks — are not supported. Yet. Watch this space.
+## Portability
 
-An enormous amount of gratitude is owed to Sven, who has stuck with this thankless
-chore for nearly 5 years in between all of his other incredible work.
+`libghostty-vt` is highly portable. The table below lists all the platforms
+and architectures that we build and test (full unit tests plus running all
+examples) in CI:
 
-## “The Holy Grail, Doctor Jones”
+| Platform | Architectures |
+| --- | --- |
+| Linux (glibc, musl) | `x86_64`, `aarch64` |
+| macOS 13+ | `x86_64`, `aarch64` |
+| iOS 13+ | `aarch64` |
+| FreeBSD | `x86_64`, `aarch64` |
+| Windows | `x86_64` |
+| Android | `aarch64`, `x86_64`, `arm` |
+| WebAssembly | `wasm32` (freestanding) |
 
-Playing retail PC games on Asahi Linux is a bit of a pain point, to say the least.
-The software stack required to enable this is incredibly complex. We need to translate
-x86/amd64 binaries to arm64, and do so fast enough for low-latency gaming. In most
-cases, we also need to deal with the Windows API. On top of that, almost all games
-bake in an assumed 4 KiB memory page size to enable certain performance optimisation.
-Over the past few years, most of these problems have been solved:
+There is a second set of platforms we build in CI but do not run tests for.
+These systems all have known users; we just haven't set up the machinery
+for automated testing:
 
-- FEX has improved leaps and bounds. The performance and reliability of binary translation is hardly a consideration in most cases now;
-- WINE is also fantastic now. Support for ARM64EC is mature and reliable, meaning that FEX now only has to translate the game binaries rather than WINE’s entire Windows API implementation; and
-- muvm allows us to spin up a thin VM with DRM Native Context to present a 4 KiB memory page size to x86/amd64 applications.
+| Platform | Architectures |
+| --- | --- |
+| Bare metal | `riscv32`, `thumb` |
+| WebAssembly (WASI) | `wasm32` |
+| Windows | `arm64` |
+| illumos | `x86_64` |
+| 32-bit x86 | `x86` |
 
-When muvm was first developed, it was with the assumption that DRM Native Context
-would enable near-native GPU performance from inside the VM. Unfortunately, this
-assumption did not hold. The muvm performance penalty is quite significant for
-a number of reasons, about 20% depending on the workload. Engineering around
-the limitations inherent to using a VM also introduces issues; muvm cannot use
-Wayland, has slow I/O performance, and struggles with certain types of input devices.
+Each of the tested platforms gets the artifacts it expects:
 
-This is one area where macOS has us completely licked. While the performance gap
-between FEX and Rosetta has narrowed, XNU allows userspace processes to map themselves
-at any page granularity, so all Rosetta needs to do is tell XNU to map 4 KiB pages
-for its child processes. Linux does not have this flexibility. All pages must be
-mapped at the same granularity as the kernel. While we did [tease](https://asahilinux.org/2025/10/progress-report-6-17)
-Windows games working outside of muvm last year, this relied on ugly hacks inside
-FEX which have since been removed in the interests of maintainability and translation
-correctness. Bummer. Even so, compatibility was hit-and-miss, with a lot of (mostly older)
-software still refusing to work. Double bummer.
+- Linux and FreeBSD get a shared library with a proper SONAME and versioned symbols, a static library, headers, pkg-config files, and a CMake package config.
+- macOS and iOS get a dylib with an @rpath install name and compatibility version, plus an XCFramework covering macOS, iOS, and the iOS simulator that drops straight into Xcode or Swift Package Manager.
+- Windows gets a DLL with a .pdb, an import library, and a static library. The library is built with the GNU ABI, but MSVC programs link against it through the import library and CI verifies this.
+- Android gets a shared library built against the NDK with 16 KB page size support, as required by Android 15+.
+- WebAssembly ships in two flavors, one optimized for speed and one for size, and the small one is under a megabyte with every feature enabled. If you only need a read-only viewer, subsystems like input encoding, search, selection, and Kitty graphics can be compiled out with a build flag, which roughly halves the module. Every function stays exported and simply returns GHOSTTY_UNSUPPORTED so your code doesn't have to change.[4](https://mitchellh.com/writing/libghostty-1-0#user-content-fn-3)
 
-Android is currently going through a transition from 4 KiB pages to 16 KiB pages for
-a variety of reasons. Google Play now requires apps to be built for 16 KiB systems,
-and any application updates which do not test successfully on such systems will not
-be approved for publication on the Play Store. What about applications which are
-no longer updated though? What about sideloaded enterprise slop apps?
+Portability isn't just about the ability to build and run. It's also
+about resource usage and being able to work in a wide variety of
+resource environments.
 
-Google engineers Kalesh Singh and Frederick Mayle gave a very interesting [talk](https://lpc.events/event/20/contributions/2630/)
-at Linux Plumbers Conference this year about exactly this. Their solution is simple:
-just fix Linux so that userspace can map 4 KiB pages!
+For resource usage, the library creates no threads, allocates only through
+an allocator you can customize, and uses minimal compute and memory.
+I've run 10,000 active terminals, each with a live shell producing output,
+on a Linux server with 4 cores and 8 GB of RAM. In this test, I had to use
+`dash` because `bash` used far more RAM than `libghostty-vt` and wouldn't fit
+into the 8 GB budget.
 
-Their addition to the Android kernel is called P3S, or Per Process Page Size.
-On ARM64 systems, pagetable granularity is controlled by bits set in the Translation Control Registers (TCR).
-P3S works by tracking the granularity of each process’s pagetables, and writing
-the appropriate bits to the TCR whenever a process with a different pagetable size
-is switched to. Because this is a single register write, and because this is
-a no-op for “native” page size processes, the performance penalty is effectively
-zero!
+## What's Next
 
-While this effort is primarily targeted at Android, the patchset mostly rebases
-cleanly on top of mainline Linux. What happens if we rebase it on top of our
-Asahi tree (and fix some bugs)? As it turns out:
+Libghostty 1.0 is a major milestone.
 
-Okay okay, Battlefront is a very simple Direct3D 9.0 game from 22 years ago.
-Not exactly an impressive demo, right? Well what about:
+You can now create a terminal in [~1,500 lines of C](https://github.com/ghostty-org/ghostling)
+that has more features and better performance than just about any terminal
+that existed in 2025, and most today in 2026.<sup>[5](https://mitchellh.com/writing/libghostty-1-0#user-content-fn-4)</sup> And thanks to the rich
+ecosystem of language bindings, you can do this in every major programming
+language. You get this for free. For almost no effort. You can just do it.
 
-Wolfenstein: The New Order is an extremely well-optimised OpenGL title, and
-being 64-bit uses WINE’s ARM64EC pathways to massively reduce the amount
-of work FEX has to do. Again, not exactly an impressive demo if we’re
-judging based on technical difficulty.
+`libghostty-vt` is a generalized library, so we will focus on stability
+while implementing as many terminal protocols as exist
+(giving options to enable/disable them, of course) so that embedders
+have the luxury of choice.
 
-Let’s find something else. Something… worse. Something 32-bit so that
-FEX and WINE have to work harder. Something that will exercise DXVK too.
-Something that is so comically buggy and poorly optimised that it doesn’t
-even work properly on real Windows machines, and relies on community patches
-and command line switches to start at all on modern computers:
+Every bug any `libghostty-vt` embedder reports makes everyone else in
+the ecosystem better. Every feature we ship in `libghostty-vt` becomes
+available to everyone quickly and safely. Terminals can move faster with
+less fragmentation.
 
-That’s more like it! But we can do *even worse*. We can even run…
-Bethesda games!
+Thank you to everyone who contributed to the library, wrote bindings,
+filed bugs, and shipped something on top of it while the API was still
+experimental. As with all open source, this was the work of a large
+community.
 
-Performance is of course still patchy. Both Battlefront and Wolfenstein
-run essentially flawlessly, with the latter hitting 144+ FPS on an M2
-Max Mac Studio. GTA IV on the other hand is… not fantastic. Performance
-is still massively improved over using muvm, and eliminating the use of
-the VM in general should also eliminate a few classes of bugs. Debugging
-the GPU driver should also be much easier with this approach.
+Docs, examples, and downloads are at [lib.ghostty.org](https://lib.ghostty.org/).
 
-As always there is a catch, and unfortunately it’s a big one.
-The current solution is hard-coded for 16 KiB hosts and 4 KiB processes
-on those hosts. This obviously satisfies Google’s commercial requirements, but
-adding pagesize-specific kludges to the kernel’s core memory management code
-is not appropriate upstream. We are unsure if Google intends to generalise
-this approach and upstream it, or if this is going to stay an Android-only patchset.
-As such, we do not want to ship this in our downstream tree and have folks
-become reliant on it when there is this level of uncertainty.
+Boo. 👻
 
-It also requires userspace integration. P3S works by checking the binary
-metadata for its sections’ page alignments. This works for Google’s
-use case, as P3S is intended as a fallback mechanism for applications
-aligned to 4 KiB pages. Modern arm64 binaries are aligned to 64 KiB however,
-as this guarantees compatibility with systems of all native pagesizes. Thus,
-a shim is required to force P3S on. The shim triggers P3S, and any
-child processes will inherit its 4 KiB pagesize. It is not worth spending
-the effort on implementing this until we have some certainty around what
-Google intends to do with this patchset.
+## Footnotes
 
-We have reached out to Google with some questions, and we hope to have more
-to say soon.
-
-## Mics, but faster
-
-Our custom beamformer for the microphone array found in the MacBooks is written
-in Rust. Rust’s scientific computing ecosystem is not as mature as C++’s, which
-is a bit of a problem as beamforming requires realtime FFT and very heavy matrix
-operations to be done on buffers filled with audio samples. Mature scientific
-computing libraries have hand-optimised code, often using intrinsics tied to the
-target ISA. We were not doing this however, and relied on the compiler autovectorising
-code where it could to achieve our performance targets.
-
-This fell apart when we eliminated the FFT-based analytic transform, replacing it
-with an implementation based on infinite impulse response (IIR) filters. This
-*should* be faster, however the compiler was failing to autovectorise the new
-implementation. [Linkmauve](https://github.com/linkmauve) kindly stepped in and
-added SIMD-optimised code for both arm64 *and* amd64. This, coupled with other
-performance optimisations courtesy of [Frédéric Bour](https://github.com/let-def)
-has resulted in Triforce becoming almost twice as fast, all while using less CPU
-time!
-
-## Keeping up
-
-Fedora Linux 45 was released on 3 November, and we shipped
-[Fedora Asahi Remix](https://fedoramagazine.org/fedora-asahi-remix-45-is-now-available/)
-on the same day. This is the first time we have been able to get a new version of Fedora
-Asahi Remix out on the same day as upstream!
-
-## Learning from history
-
-We take great pride in our work, and have always done *all* of our development in the open.
-We communicate with our users, our followers and our financial sponsors as transparently
-as is humanly possible. Our finances are in the open, our development branches are in the open,
-and we report our progress regularly and candidly in the open. Our IRC channels and Matrix rooms
-are safe spaces, open to anyone with even a passing interest in Asahi Linux or hacking on Apple
-Silicon.
-
-We do all of this because we firmly believe in Free and Open Source Software, not just as a
-means to an end but as the end in and of itself. The modern digital world is only possible
-because of the Free Software movement, and it is more important now than it ever has been
-that we do all we can to protect the Free Software ecosystem and uphold the ideals upon
-which it is built.
-
-It may surprise some to learn that WINE was originally made available under the MIT
-licence. The 90s and 2000s were a very different time in the Free Software ecosystem,
-and permissively licenced projects were viewed by tech companies as free real estate
-to pilfer and exploit. WINE was not immune to this, and many monetised proprietary
-forks of WINE were marketed and sold by various bad actors. The WINE development team
-grew increasingly concerned that these proprietary forks, while well within their rights
-to exist, would eventually cause so much fragmentation in the ecosystem that WINE itself
-would become unviable. In 2002, WINE was relicenced under the LGPL to prevent further
-proprietary forks from being created, and to encourage direct upstream contribution.
-
-When Asahi Linux was first started, it was with the intent that we develop a Free Software
-*ecosystem* for the Apple Silicon platform. To facilitate and encourage the participation
-of our friends at the BSDs and other Free Software operating systems, we endeavoured to
-licence as much of our code as possible under the permissive MIT licence.
-
-Unfortunately, this is no longer viable. The malicious practices of the 90s and 2000s
-have reared their ugly heads once again, this time driven in large part by both the
-insatiable appetite of frontier AI labs for high-quality training data, and militant animosity
-toward the Free Software community.
-
-Some time ago, we were made aware of multiple attempts to exploit our permissive licensing
-to hijack our work, with a direct view to replacing the project and aggressively monetising
-Linux on Apple Silicon. In some extreme cases, in-development feature code was being
-lifted straight out of our personal forks and published without attribution or lazily
-rewritten with LLM assistance to obfuscate its origin. The MIT licence explicitly allows
-this, and has no carveouts to protect against bad faith actors.
-
-As such, we made the difficult decision to begin the process of transitioning all of
-our repositories to the GNU General Public License version 2 or later. Going forward
-all Asahi Linux code will be licenced under strong copyleft licences only. Those who
-do not learn from history are doomed to repeat it.
-
-## Until next time!
-
-As always, we would like to sincerely thank our supporters on [OpenCollective](https://opencollective.com/asahilinux)
-and [GitHub Sponsors](https://github.com/sponsors/AsahiLinux). It is only through
-your generous backing that we are able to dedicate the time and resources to continuing
-our work reverse engineering the platform and bringing to it a world-class, polished,
-and battle-tested Linux desktop experience. You mean the world to us.
+1. As usual, I hate that I have to do this for every post, but I want to note this post was completely hand-written with no AI assistance. [↩](https://mitchellh.com/writing/libghostty-1-0#user-content-fnref-5)
+2. The numbers are rough because most consumers don't report usage, but JetBrains alone reports [12.5 million recurring active users](https://www.jetbrains.com/lp/annualreport-2026/), and that's before counting everything else on the list. [↩](https://mitchellh.com/writing/libghostty-1-0#user-content-fnref-1)
+3. In the original post I wrote "not even libc!" The default build does link libc, because the SIMD paths use it and the default allocator is `malloc`. Turn off SIMD and the library is freestanding, which is how it runs on bare-metal RISC-V and ARM targets. [↩](https://mitchellh.com/writing/libghostty-1-0#user-content-fnref-2)
+4. The feature flags aren't WASM-specific; they work on every target. They're likely useful for things like embedded devices too. [↩](https://mitchellh.com/writing/libghostty-1-0#user-content-fnref-3)
+5. "Features" here means the set of terminal protocols and sequences understood, and "performance" means parsing throughput and memory usage, since those are the parts `libghostty-vt` provides. [↩](https://mitchellh.com/writing/libghostty-1-0#user-content-fnref-4)

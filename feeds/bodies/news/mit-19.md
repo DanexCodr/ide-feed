@@ -1,43 +1,57 @@
-Robots walking down the street, surrounded by astounded onlookers, is an increasingly common sight. But these machines aren’t yet the do-it-all assistants you’d want working in a kitchen or factory, and a major bottleneck is data. Much like humans, robots learn best by experience. The challenge is that it’s labor-intensive and time-consuming to physically teach these machines so many actions across different settings.   
+Imagine a bottle of hazardous chemicals sitting on a laboratory shelf that changes its appearance to alert scientists that its lid is not properly secured, potentially preventing a dangerous spill.
 
-“One natural idea is to use simulation as a training ground. While there has been significant progress over the last few years in the physics engines that power robotics simulators, one of the remaining challenges has been creating sufficiently rich and diverse simulation content to capture the complexity of the real world,” says Russ Tedrake, the Toyota Professor of Electrical Engineering and Computer Science (EECS), Aeronautics and Astronautics, and Mechanical Engineering at MIT, and a principal investigator at MIT’s Computer Science and Artificial Intelligence Laboratory (CSAIL).
+A new 3D-printing system created by MIT researchers enables users to produce interactive objects like this chemical bottle, which change their appearance when they are pressed, slid, or turned, without the use of any internal electronics.
 
-It turns out that AI agents, or semi-autonomous programs that “think” and complete well-defined tasks, could help produce the lifelike virtual settings that robots need. The new “[SceneSmith](https://scenesmith.github.io/)” system developed by researchers at MIT CSAIL and Toyota Research Institute uses three agents to piece together the objects, walls, and overall look of a 3D scene. Its recreations of indoor spaces such as restaurants, bedrooms, and hotels are more realistic and detailed than prior systems, helping robots practice skills and try out different ways of doing tasks before they’re powered on. In turn, engineers save time on real-world testing.  
+Their system simplifies the process of designing and fabricating 3D objects with mechanically switchable surface appearances, enabling individuals without technical expertise to quickly generate dynamic everyday objects.
 
-The agents have a sense of how everyday places are supposed to look because they each call on a multi-modal system called a vision-language model (VLM), specifically the state-of-the-art VLM [GPT-5.2.](https://openai.com/index/introducing-gpt-5-2/) It’s trained on lots of text and images from the internet to handle more visual prompts. This advanced model gives each agent a sort of spatial knowledge: First, a “designer” agent generates the elements of a scene, then a “critic” advises whether it looks realistic, and finally, an “orchestrator” manages their back-and-forth, deciding when the design is done. Once the three VLMs wrap up their creative collaboration, the scene is ready to load directly into physics simulation software.
+The design and fabrication system combines specially arranged optical layers with built-in mechanical parts so a single object can display different images or patterns. The resulting objects change appearance based on user interactions like screwing on a lid or flipping a switch, and they can be manufactured in one pass on a multimaterial 3D printer.
 
-“We’ve found that the system can construct 3D scenes the way a human designer would,” says MIT EECS PhD student Nicholas Pfaff, a CSAIL researcher and a lead author on a [paper](https://arxiv.org/abs/2602.09153) with Tedrake presenting the work. “We made over 1,300 scenes using a leading VLM that has internet-scale priors, and it made insanely creative and diverse arrangements. I hadn’t taught the system to do that in the prompts; it just improvised.”
+The system can be used to fabricate a range of interactive objects that don’t require fragile electronic circuits, such as adaptable warning signs that could withstand foul weather or dynamic packaging that alerts users if fasteners came loose during shipping.
 
-**Talk to my agent**
+The end-to-end system could also streamline rapid prototyping of adaptable objects for artistic, architectural, and engineering applications.
 
-Thanks to VLM agents, you can ask SceneSmith to do things like “generate a garage with a car, a workbench, tires stacked in the corner, and a ladder against the wall,” and get a virtual playground rich with objects a robot can tinker with. These rooms are decorated with up to six times more items per scene than prior methods, making them great for helping robots learn skills such as putting a cup in the sink, placing fruit on plates, and moving a soda can from a shelf to a table.
+“With our system, an object can tell you whether you are using it properly, without the need for sensors or any complicated electronics. The interactive display is mechanical, so you can create a self-contained, multistate, interactive device that a user can control very intuitively,” says Yunyi Zhu, a graduate student in the MIT Department of Electrical Engineering and Computer Science (EECS) and lead author of a paper on this platform.
 
-With so many rich virtual environments handy, you can evaluate whether your robot is ready for deployment without so much trial and error in the physical world. The researchers tested out different action plans (also called “policies”) in SceneSmith’s digital worlds, generating 100 unique spaces in the process. A VLM agent evaluated each attempt, and it found the robot’s plans were faulty, with the machine often failing at its chores. Humans agreed with the model’s verdicts over 99 percent of the time, which could help roboticists weed out flawed approaches in simulation before a robot moves in the real world.
+Her co-authors include Dingning Cao, an MIT undergraduate; Jeremy Mrzyglocki, a graduate student at the Technical University of Munich; Stefanie Mueller, an associate professor in EECS and the Department of Mechanical Engineering at MIT and a member of the Computer Science and Artificial Intelligence Laboratory (CSAIL); and Narjes Pourjafarian, a postdoc at Northeastern University. The research will be presented at the ACM Symposium on User Interface Software and Technology.
 
-But how realistic are these virtual worlds, really? It can be difficult to prove outright, so the researchers approached the question from several angles. The most telling test: they dropped a pretrained robot policy — an AI controller trained largely on real-world data, which had never seen a SceneSmith scene — into the generated environments. In one test, users told the system to “take the apple from the bowl and place it onto the cutting board,” and the simulated robot did exactly that. If the scenes didn’t closely resemble the real settings the policy had learned from, it simply wouldn’t have worked.
+**Mechanically switchable surfaces**
 
-The team also teleoperated robots through the virtual spaces, guiding them to open cabinets, put away bottles, and navigate between rooms. Their experiments revealed that the environments hold up under sustained physical interaction, expanding beyond visual inspection.  
+Many interactive products rely on screens and electronics to change their appearance. But if these dynamic objects are exposed to water or harsh chemicals, or are squished, twisted, or pressed with great force, the fragile electronics could be damaged.
 
-**Behind the scenes**  
+On the other hand, conventional methods that use surface optics to change an object’s appearance without electronics typically utilize static labels like stickers or curved lenses to create different visual effects based on where the user is looking, limiting interactivity.
 
-The agents that SceneSmith uses each have a well-defined role in the generative process, fleshing out scenes in stages. They essentially create a floor plan and bring it to life.   
+To simplify the process of making dynamic, interactive objects that don’t require electronics, the MIT researchers developed a system that automatically converts a user’s design into a 3D printer-ready model of an object with a mechanically switchable surface appearance.
 
-Let’s say you wanted to create a scene similar to the first floor of a house. The “designer” VLM would start with a general layout, which the “critic” reviews, and then the “orchestrator” signs off. The agents repeat this approach for each step: adding furniture, placing objects on walls and then ceilings, and finally, dropping in objects that robots can manipulate. For example, the VLMs can add cabinets that the robots can open and close — an articulated item, which prior baselines didn’t often have.  
+Their design, [ShiftLens](https://hcie.csail.mit.edu/research/shiftlens/shiftlens.html), creates switchable appearances by combining two optical layers on an object’s surface. It places a layer of special lenses over an underlying, patterned backplane.
 
-At each stage, the second VLM ensures the scene is practical, advising that a bathtub is removed from a living room, for example. The third VLM ensures a high-quality scene is generated, even taking the design process a few turns back if the visuals aren’t up to par. Once the three VLMs wrap up their creative collaboration, the mechanics of the physical world are added via simulation software.
+The object displays different visual states based on the motion between the two layers.
 
-With a sound understanding of how rooms should look, where objects should be placed, and real-world physics, SceneSmith has a noticeable edge over prior methods. Compared to scene-generation baselines such as “[HSM](https://arxiv.org/abs/2503.16848)” and “[Holodeck](https://arxiv.org/abs/2312.09067),” SceneSmith made environments with more objects, including a private office, a pottery store, and even a Minecraft-themed gaming room.
+The lens layer contains an array of tiny lenticular lenses, curved lenses which steer light differently depending on the viewing angle of the user. The pattern layer contains strips of images that correspond to multiple appearances of the object surface.
 
-SceneSmith was also a favorite among over 200 users. They found the system’s visuals to be more realistic over 90 percent of the time. They also observed that, generally speaking, it followed prompts more closely than other approaches did. In other words, it was the best at generating the virtual playgrounds users actually wanted to see.  
+When the user shifts the lens layer, different parts of the backplane come into view. The lenses magnify these parts of the backplane image, changing the surface appearance.  
 
-**A system of many talents**  
+“The biggest challenge in this project was to make sure all moving parts align. We need to make sure that the optical effect, mechanical linkages, and computational graphics align with one another,” Zhu says.
 
-Realism, diversity, and richness are all strong suits for SceneSmith, even when it comes to generating individual 3D objects. You can prompt it to create a rolling serving cart, and it’ll make a 2D image that it then turns into a detailed model with physical properties like mass, friction, and inertia.  
+**A straightforward system**
 
-Such a detailed process does come with a speed trade-off, though. It can take multiple hours to produce a single scene because the agents are creating and closely scrutinizing each object. With more computing power, the system could see dramatic increases in efficiency. CSAIL engineers are also hoping to expand to deformable objects (like sponges), should extensive 3D libraries become available.
+To simplify the design process, the researchers created a user-friendly tool that does all this work behind the scenes.
 
-“SceneSmith represents a significant advance in this regard by providing an agentic framework for generating simulation-ready indoor environments just from a simple text prompt,” says Jeremy Binagia, an applied scientist at Amazon Robotics who wasn’t involved in the research. “It advances the state of the art in several ways, including pushing the limits of the density of objects in the simulated environment, ensuring that all of the objects are physically accurate (versus just being visually realistic), and creating assets that are not constrained to a fixed library, since they can be generated via text-to-3D.”  
+It automatically generates a ShiftLens structure based on a few inputs, including images of the visual states the user wants to achieve and the desired shape and curves of the object.
 
-Pfaff and Tedrake wrote the paper with Thomas Cohn SM ’24, an MIT PhD student and CSAIL researcher; and Toyota Research Institute roboticists Sergey Zakharov and Rick Cory SM ’08, PhD ’10. Their work was supported, in part, by Amazon, the U.S. Office of Naval Research, the Toyota Research Institute, and the U.S. National Science Foundation.  
+“Another challenge is to communicate to users who are not familiar with optics or mechanical structures and let them specify and achieve what they have in mind,” she says.
 
-The team presented their findings as a spotlight at last week’s International Conference on Machine Learning.
+The researchers thought carefully about how to communicate the limitations of the ShiftLens design tool to the user. For instance, ShiftLens is not compatible with all objects, since it requires a shifting motion to enable interaction between the two layers.
+
+Users can either incorporate a ShiftLens into the design of an object that has this type of interaction built-in, like the rotation of a lipstick tube, or integrate an actuation mechanism like a switch, knob, or roller.
+
+“With ShiftLens, users can control what an object looks like while they are using it,” she says.
+
+The researchers showcased how someone might use ShiftLens by fabricating a range of interactive objects.
+
+In one experiment, they created a chemical bottle that turns green and displays a check mark when the cap is securely tightened, but turns red and displays an exclamation mark when it is loose. For another demonstration, they fabricated a tic-tac-toe game with squares that can display a red X, a blue O, or no letter, depending on which direction a user turns a knob.
+
+While the ShiftLens tool is designed to simplify the fabrication process for makers, the techniques could be scaled up for commercial and industrial applications, Zhu says. For instance, it could be used to design piping that can change its appearance to identify a damaged connection that is causing a leak.
+
+“The leaking sink in my apartment would be a lot easier to fix if it could tell me where the leak was coming from,” Zhu adds.
+
+The researchers want to explore additional applications in future work. They also plan to develop an algorithm that can generate a ShiftLens structure with fewer user inputs, simplifying the design process. In addition, they plan to enhance the design tool so users can incorporate a wider variety of actuation mechanisms.

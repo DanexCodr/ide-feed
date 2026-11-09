@@ -1,25 +1,67 @@
-In 2026, MIT granted tenure to 10 faculty members across the School of Engineering. This year’s tenured engineers hold appointments in the departments of Aeronautics and Astronautics, Civil and Environmental Engineering, Electrical Engineering and Computer Science (EECS) — which reports jointly to the School of Engineering and MIT Schwarzman College of Computing — and Mechanical Engineering, as well as within the Institute for Medical Engineering and Sciences (IMES).
+Agentic workflows are artificial intelligence-powered software systems that chain together multiple models and external tools to tackle complicated tasks, like analyzing a video and answering questions about it.
 
-“I’m delighted to congratulate the 10 newest tenured faculty members in the School of Engineering. This major career milestone reflects not only their impact and excellence in research, but their deep commitment to education and mentoring the next generation of engineers. I am so excited to see what new developments, innovations, and technologies will come next from this incredibly accomplished group,” says Paula T. Hammond ’84, PhD ’93, dean of engineering, Institute Professor, and professor of chemical engineering*.*
+But the way these highly fragmented systems are designed and deployed often causes inefficiencies that can lead to wasted computation, energy, and cost.
 
-This year’s newly tenured engineering faculty include the following:
+To improve efficiency, researchers from MIT and Microsoft developed an intelligent system that streamlines the process of designing agentic workflows and automatically optimizes how those workflows are implemented.
 
-[Jacob Andreas](https://www.eecs.mit.edu/people/jacob-andreas/) is an associate professor in EECS and is affiliated with the [Computer Science and Artificial Intelligence Laboratory](https://www.csail.mit.edu/) (CSAIL). His work is in natural language processing, and more broadly in AI. He aims to understand the computational foundations of language learning, and to build intelligent systems that can learn from human guidance.
+With this new method, a developer can describe what they want the agentic workflow to do in plain language, without needing to specify all the details of their application in advance.
 
-[Zachary Cordero](https://aeroastro.mit.edu/people/zachary-cordero/) is the Esther and Harold E. Edgerton Associate Professor in the Department of Aeronautics and Astronautics and the associate director of the MIT Gas Turbine Laboratory. His research seeks to enable frontier aviation and space platforms through advanced materials, manufacturing, and structures, with a particular focus on high-temperature systems.
+The system automatically figures out the best models and tools to use, as well as the ideal hardware configuration and computational resource allocation when the workflow is executed by a cloud provider.
 
-[Christina Delimitrou](https://www.eecs.mit.edu/people/christina-delimitrou/) is the KDD Career Development Professor in Communications and Technology and an associate professor in EECS. She is also affiliated with CSAIL. Her research sits at the intersection of computer architecture and computer systems; specifically, she is one of the first systems researchers to apply machine learning techniques to design and management problems in the cloud.
+It adjusts those configurations on the fly based on each user’s priorities, such as minimizing costs or maximizing speed.
 
-[Sili Deng](https://meche.mit.edu/people/faculty/silideng@mit.edu) is the Doherty Career Development Professor in Ocean Utilization and an associate professor in the Department of Mechanical Engineering. Her group develops scientific machine learning and experimental approaches to understand, predict, and engineer chemically reacting systems for sustainable energy, advanced materials manufacturing, and climate-resilient technologies.
+When tested on several agentic workloads, this new system reduced the number of computational units needed for deployment, significantly cutting energy requirements and costs compared to traditional approaches without hampering performance.
 
-[David Des Marais](https://cee.mit.edu/people_individual/david-l-des-marais/) is the Amgen Career Development Professor in the Department of Civil and Environmental Engineering. He leads the Des Marais Lab, whose primary focus of research is to understand the mechanisms of plant-environment interaction, using tools from molecular, quantitative, and population genetics to identify the physiological basis of plant response to environmental cues.
+“Agentic workflows are getting very complicated and quickly becoming the backbone of what cloud providers are doing. Energy usage is a huge concern, so we need to be very careful about how efficient these workflows are. It is very easy to over-allocate resources, wasting energy and money. Enabling a cloud provider to intelligently make these workflows more resource-optimal is a win for everyone involved,” says Gohar Chaudhry, an electrical engineering and computer science (EECS) graduate student and lead author of a [paper on this system](https://goharirfan.me/publications/murakkab_osdi_2026_paper.pdf).
 
-[Carmen Guerra-Garcia](https://aeroastro.mit.edu/people/carmen-guerra-garcia/) is the Esther and Harold E. Edgerton Associate Professor in the Department of Aeronautics and Astronautics and the director of the [Aerospace Plasma Group](https://aeroastro.mit.edu/apg/). Her work lies at the intersection of aerospace engineering, low-temperature plasma technologies, and gas discharge physics. It addresses two aviation challenges — reducing emissions, and ensuring safety of next-generation aircraft — through three interconnected thrusts: advancing the fundamental science of electrical discharges in flowing gases and nonuniform media, applying that science to plasma-assisted combustion and chemical conversion, and developing physics-based approaches to lightning protection.
+He is joined on the paper by Adam Belay, an associate professor of EECS and a member of the MIT Computer Science and Artificial Intelligence Laboratory; senior author Ricardo Bianchini, technical fellow and corporate vice president at Microsoft Azure; and others at Microsoft Azure. The paper will be presented at the USENIX Symposium on Operating Systems Design and Implementation.
 
-[Laura Lewis](https://www.eecs.mit.edu/people/laura-lewis/) is the Athinoula A. Martinos Associate Professor in EECS and IMES. Her research aims to develop methods to analyze and interpret multi-modal neuroimaging data in order to enable measurement of previously undetectable aspects of brain function. She has a particular interest in fast fMRI, EEG, and PET, and is applying those methods to study sleep.
+**A configuration conundrum**
 
-[Tami Lieberman](https://cee.mit.edu/people_individual/tami-lieberman/) is the Hermann L. F. von Helmholtz Career Development Professor in the Department of Civil and Environmental Engineering and IMES. She leads the Lieberman Lab, which seeks to understand how ecology and evolution shape the personalized communities of the human microbiome, and the role of this personalization on human health.
+An agentic workflow is a system composed of several autonomous AI agents that collaboratively use various models and tools, like databases or Python programs, to dynamically complete a multi-step task, such data processing or code generation.
 
-[Kevin O’Brien](https://www.eecs.mit.edu/people/kevin-p-obrien/) is an associate professor in EECS and a member of the [Research Laboratory of Electronics](https://www.rle.mit.edu/).  He leads the [Quantum Coherent Electronics Group](https://qce.mit.edu). His research efforts focus on developing tools, techniques, and devices to enhance the measurement of quantum systems, most notably superconducting quantum computers.
+These workflows can serve as behind-the-scenes processes that power user-facing applications.
 
-[Wim van Rees](https://meche.mit.edu/people/faculty/wvanrees@mit.edu) is an associate professor in the Department of Mechanical Engineering and the Leonardo Career Development Professor in Engineering. His research advances high-order, high-fidelity numerical methods for efficiently simulating interactions between fluid flows and moving or deforming bodies, with methodologies spanning applications from wake vortex dynamics to bio-inspired propulsion and morphing structures.
+Typically, developers must hard-code all technical choices upfront. They need to define which AI agents, models, and tools to use, and the order in which to use them. They also must specify the hardware that runs the workflow and how to balance tradeoffs like speed versus cost.
+
+This is especially challenging because agentic workflows bring together multiple black-box models and diverse tools, each with their own configuration options, which may be offered by different companies.
+
+If a new AI model is released that would improve the application’s accuracy or efficiency, the developer would need to start from scratch to implement it.
+
+“Even if you wanted to do all this manually, it is unlikely that you’ll be able to configure the workflow optimally because the space of possible configurations is so large,” Chaudhry says.
+
+In addition, the cloud data center that deploys the application for customers can’t see inside the workflow to allocate its hardware resources in the most efficient manner at the time of the user’s request.
+
+With this new system, called Murakkab (an Urdu word that means a composition of things), the researchers sought to optimize the entire agentic workflow process.
+
+**Dynamic decision-making**
+
+First, Murakkab enables developers to create an agentic workflow by describing their intent for the application in high-level terms, rather than detailing how* *the many components of that workflow should be combined.
+
+For instance, a developer might describe a video Q&A application that extracts key frames, generates a transcript, and then answers user queries about the video.
+
+“There are many ways to do this, and all these different models and tools have implications on how fast the application can finish the task,” he says.
+
+Murakkab takes the developer’s straightforward specifications and automatically identifies the best existing models and tools to put together into the workflow.
+
+It also determines which components need to run sequentially and which can be run in parallel to boost performance.
+
+“The platform makes configuration decisions dynamically over time, so if a new model or GPU accelerator comes out tomorrow, the developer doesn’t need to worry about that,” he says.
+
+When the cloud provider deploys that application for a customer, Murakkab optimizes the workflow by configuring its components to meet the user’s constraints, such as prioritizing accuracy while meeting a latency requirement.
+
+It adaptively identifies ideal hardware allocations and deployment schedules to maximize efficiency in real time, then generates a workflow that is ready for the cloud provider to execute.
+
+“Our system also gives cloud providers visibility into multiple workloads, so the provider can share computational resources in the most efficient manner while satisfying the constraints of users,” he says.
+
+When tested on diverse agentic workflows for video Q&A and code generation, Murakkab met user requirements while using only about 35 percent of the computation required by other methods. It consumed only about 27 percent as much energy for less than 25 percent of the cost.
+
+The dynamic nature of Murakkab also enables users to balance tradeoffs. In one instance, the system lowered energy consumption of an agentic workflow by more than an order of magnitude with only about a 2 percent drop in accuracy for the customer.
+
+The system was also able to identify an unexpectedly ideal configuration for a model that selects video frames, optimizing performance for a video Q&A task. This type of optimization would be nearly impossible for a developer to do manually, Chaudhry says.
+
+Next, the researchers plan to expand their system to more complex workflows and larger computing clusters while exploring opportunities to optimize new agentic applications.
+
+“There is a lot of potential to make these workflows more resource-optimal so they consume far less energy, but we need to be thinking about this at the scale of major cloud platforms,” says Chaudhry.
+
+This research was supported, in part, by the Semiconductor Research Corporation and the U.S. Defense Advanced Research Projects Agency.

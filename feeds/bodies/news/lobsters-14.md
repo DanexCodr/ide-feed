@@ -1,11 +1,294 @@
-The Danger Hiptop, better known as the T-Mobile Sidekick, came out in 2002 with a full QWERTY keyboard, AIM and Yahoo Messenger built in, and push notifications, at a time when most phones could barely handle a text message. All of it ran on DangerOS, Danger's own Java-based operating system.The Sidekick was a cloud device before "the cloud" was even a term most people knew. Everything lived on Danger's servers: contacts, messages, photos, settings. Most users had no idea that their phone was essentially a thin client, completely dependent on a backend they'd never think about. It just worked, and that was enough. Microsoft acquired Danger in 2008, and after a [catastrophic data loss](https://en.wikipedia.org/wiki/2009_Sidekick_data_loss) in 2009 that wiped users' contacts, photos, and personal data, the service shut down for good in 2011. A phone that kept everything on someone else's servers now had no one to talk to.Permission to RunWith Danger long gone, I started digging through whatever survived of it. Eventually I found a copy of the SDK on archive.org,<sup>[1](https://x86.cx/blog/redanger#fn:1)</sup> containing everything needed to develop for the device: documentation, examples, a device simulator, and a set of JAR files. Throwing those JARs into JADX and decompiling them revealed how the device actually worked under the hood.I wanted my own code running on a real Sidekick, and that meant dealing with Danger's security model. DangerOS only runs software signed by Danger or your carrier. Developers got around this with a *developer key*. Flash one onto your phone and it switches into developer mode, which accepts apps over USB and turns on `htconsole`, Danger's debug console.Getting one used to be surprisingly easy. In 2003 Danger hand-picked its first developers and emailed keys out one at a time, and some people waited weeks to hear back.![A 2003 post on Danger's developer wiki asking how to get on-device access after emailing Danger with no response, and Brian Swetland's reply that the poster is on the list for the second round of on-device developers](https://x86.cx/blog/redanger/level2.webp)By the end of the year there was a self-serve web form: enter your T-Mobile account and IMEI, agree to give up carrier phone support, and a signed key showed up in your inbox. That lasted until September 2010, when Danger told developers it would stop accepting new apps<sup>[2](https://x86.cx/blog/redanger#fn:2)</sup> and shut its developer site down weeks later, taking the only place to get a key with it. Nobody is issuing keys anymore, so if I wanted one, I'd have to make it myself.Needing permission from the manufacturer just to run your own code sounds insane next to how open Android is. Then again, maybe not: Google is now [rolling out developer verification](https://developer.android.com/blog/posts/android-developer-verification-rolling-out-to-all-developers-on-play-console-and-android-developer-console), and soon an app from a developer who hasn't registered with Google will only install through `adb` or a buried "advanced flow".Finding the KeyA Sidekick developer key is tiny: one config setting, `lock_to_imei_0`, set to the phone's IMEI, and Danger's signature over it. It comes in two forms. Older Hiptops took it as a small `.sq` file, while the Sidekick 3 takes it as a `.jar`, laid out like a signed Java app, installed from recovery mode. Both are signed the same way, and the only real key I could find was an `.sq`.The setting is easy. The signature means knowing which key the phone checks against, and that key had to be somewhere in the firmware. Back in the day, a college student had gotten full JTAG access to an older Sidekick and dumped its flash,<sup>[3](https://x86.cx/blog/redanger#fn:3)</sup> but that takes hardware I don't have, and their download links are long dead.Luckily, Danger's ServiceProgrammer, a tool for reflashing Sidekick IIs, is preserved on archive.org.<sup>[4](https://x86.cx/blog/redanger#fn:4)</sup> It ships complete factory OS images. I scanned every image for anything shaped like a certificate or public key, and pulled out dozens: per-carrier signing certificates for T-Mobile, Fido, KPN and others, factory roots, and a few public TLS roots. No private keys, of course. Most of them were 1024-bit RSA, but one certificate stood out:`CN=Danger Developer Program, OU=Developer, O=Danger
-[email protected]
-Not Before: Sep 17 2003
-Not After:  Apr 11 2006
-Public Key: RSA (512 bit)
-`A self-signed root for the Developer Program, trusted by the OS on every generation I checked, from the Hiptop 1 to the Sidekick 3. To check that it was really the key behind developer keys, I needed a real key to test against. Danger's old developer site is archived on archive.org as well,<sup>[5](https://x86.cx/blog/redanger#fn:5)</sup> and it still has a copy of `null-device-key.sq`, a key with no IMEI lock that the phone accepts and then deletes, which Danger handed out so people could leave developer mode. Its signature verified against the Developer Program key. That was the one.512 BitsIn 1999, a team of researchers factored [RSA-155](https://en.wikipedia.org/wiki/RSA_numbers#RSA-155), a 512-bit number, meaning they found the two primes that multiply to make it. That's all it takes to break an RSA key: every public key contains a number like that, and its two primes are enough to rebuild the private key. It took them about seven months on hundreds of computers. From then on, 512-bit RSA was no longer considered safe, and Danger issued this certificate four years later. To be fair to Danger, in 2003 factoring a 512-bit key was still a research project, and this one only guarded developer mode. Nobody was going to rent a university's worth of computers to sideload apps onto a Sidekick.In 2026 it's an overnight project, if you have enough cores.The standard tool for this is [CADO-NFS](https://gitlab.inria.fr/cado-nfs/cado-nfs), an open source implementation of the [general number field sieve](https://en.wikipedia.org/wiki/General_number_field_sieve). Most of the work is sieving, which splits into independent work units, so it scales across as many machines as you can throw at it.My workstation alone, a Ryzen 9 9950X3D, would have needed about a day and a half, assuming nothing went wrong. Luckily I had a few servers that weren't doing much. CADO-NFS runs a central server that hands out work units over HTTP, with clients that sieve and upload the results, so I wrote a small script to copy a client bundle to each node, start dozens of clients as low-priority processes, and tunnel everything back to my workstation over SSH. In total, 220 CPU cores (436 threads) across seven machines worked on the problem. I started the run a little after 9pm.Things did go wrong. Every node dropped off at once around 11pm, and later the server choked when 200 clients tried to upload results at the same moment. Both times I patched it up and got it going again. Still, at 6:09am, CADO-NFS printed two 78-digit primes:`p = 104491666572898294264047880744514595625924491114579942567545554396922436316211
-q = 110787645499676419929932206845243986470558771418524609420578927381066743957279
-`Multiply them together and you get `n`, the 155-digit number in Danger's public key:`n = 11576385713948644711688861097066027618113758646736035007798668946285132955940594207257263351308819380417615195922932748143994263878857883771956785119149869
-`StageWorkPolynomial selection~63 core-hoursSieving~578 core-hours, 204.5 million relationsFiltering~2 core-hoursLinear algebra~35 core-hours, 2.5 hours on one machineSquare rootabout a minute**Total****~1,175 core-hours (about 49 core-days), 8.5 hours of wall time**From there, rebuilding the private key is a few lines of Python. To check it, I wrote my own signer and used it to rebuild Danger's `null-device-key.sq`. The output matched Danger's original file exactly. More than twenty years later, I could sign developer keys the way Danger did.For the Sidekick 3, I put the IMEI setting in a `.jar`, signed it, and flashed it from recovery mode. Recovery checks what the signing certificate is allowed to do: a carrier's certificate could replace the whole OS, while the Developer Program certificate can only install the developer setting. That's all I needed. On the next boot, the log printed the two lines I'd been chasing:`Config: Override w/key IMEI found.
-Config: DEVELOPER BUILD
-`Class of '09The first thing I ran on my unlocked Sidekick 3 was a port of [Class of '09](https://en.wikipedia.org/wiki/Class_of_%2709_(franchise)), a visual novel set in 2007 whose main character carries a Sidekick. The port is a small Java engine that plays the game's script, art, voice acting, and movies from a data pack on the memory card, squeezed down from 1080p to a 240×160 screen. Endings arrive as real Sidekick text notifications, using an emulated modem. That one deserves its own post.![Class of '09 running on a real Sidekick 3](https://x86.cx/blog/redanger/sidekick3-classof09.webp)The Simulator in Your BrowserThe Sidekick at the top of this page is the real DangerOS, the same bytecode as the SDK's simulator, running in your browser. Danger's simulator is a desktop Java app, and the usual ways of getting Java onto a web page bring a whole JVM along with them. DangerOS doesn't need much of one, so I wrote a small Java interpreter in JavaScript instead. It loads the OS straight out of the SDK, unmodified, with the standard Java class library underneath. The only parts I rebuilt are the ones that touched the desktop: the screen, the keyboard, files, and sound.Sound was the odd one out. The Sidekick 3 doesn't decode MP3s in software; the phone hands them to its audio hardware. Danger's simulator had no such hardware to hand them to, so it never played MP3s at all. It only knew MIDI, WAV, and a couple of other formats, and the SDK's music player lists your songs and then plays silence. In the browser, MP3s go to the browser's own decoder instead, which stands in for the hardware. That's why the music player works here. There's no network, so it behaves like a phone with no signal: the launcher, the games and the music player work, but nothing online does. Anything you change is saved in your browser for next time.It's the whole phone, so look around. Press the Jump <kbd></kbd> button (or <kbd>F8</kbd>) to get back to the home screen from anywhere. Remember the address on that certificate, `[email protected]`? It belongs to Brian Swetland, who worked on the Hiptop's operating system and went on to lead Android's kernel work. His site has a gallery of photos from Danger's office in 2001, [Dangerous People 2001](https://frotz.net/pics/dangerous-people-2001/), and they're on this Sidekick too: open the Camera app and pick the album. The other photos in there are ones I took on my own Sidekick 3 in Japan. Class of '09 is preloaded under Games, too. Give it a shot!Re:DangerA Sidekick is only half a phone without Danger's servers, so I've also been rebuilding them from the decompiled code, as Re:Danger. It only talks to the simulator for now. Here's the progress so far:**The clock.** The first thing that worked. After the handshake and login, the server told the phone what time it was, and the status bar clock changed. It was the first answer a Sidekick had gotten from a backend since 2011.**Messaging.** The Sidekick never connected to AIM, Yahoo or MSN itself. Danger's servers stayed logged in on your behalf and pushed each message to the phone the moment it arrived, years before the iPhone had push notifications. Those services are all gone, so Re:Danger bridges messages to Discord instead. ![Two Class of '09 characters chatting on AIM in the simulator](https://x86.cx/blog/redanger/aim.png)**The web.** The phone never loaded a page itself: Danger's proxy fetched it, laid it out, and sent the phone a finished page to draw, which meant Danger saw every page you visited. It hardly mattered, since most of the web wasn't encrypted back then anyway. Re:Danger has a small version of that proxy, enough to read Hacker News on a Sidekick. ![Hacker News in the Sidekick's web browser](https://x86.cx/blog/redanger/kimba.png)What's Next**Real hardware.** A real Sidekick has never connected to the Re:Danger server. I tried pointing mine at it with a config override and over USB networking, and the phone refused both. The next step is running my own GSM network: the Sidekick 3 is a GSM/EDGE phone, so a software-defined radio running [Osmocom](https://osmocom.org/) can stand in for T-Mobile's towers, carry its data, and send it to Re:Danger instead of Danger.**Everything else.** Email, connecting to revived AIM servers over OSCAR, the Download Catalog, and photo sync are all still on the list.**If you have a Sidekick 3,** [make a developer key](https://github.com/iridium/redanger#making-a-key) for it and run your own code.**If you have a Hiptop 1 or 2,** I'd like to hear whether Danger's original flashing process still works. I haven't been able to test it.[![Re:Danger on GitHub](https://x86.cx/blog/redanger/logo.svg)](https://github.com/iridium/redanger)Hiptop SDK: [https://archive.org/details/hiptop_sdk](https://archive.org/details/hiptop_sdk) [↩︎](https://x86.cx/blog/redanger#fnref:1)"Danger Closing Developer Program", Hiptop3.com, 2010: [http://www.hiptop3.com/archives/danger-closing-developer-program](http://www.hiptop3.com/archives/danger-closing-developer-program) [↩︎](https://x86.cx/blog/redanger#fnref:2)Sidekick II JTAG and flash dump notes (archived): [https://web.archive.org/web/20160628162439/http://www.cs.umb.edu:80/~bazz/learn/independent/sidekick2/](https://web.archive.org/web/20160628162439/http://www.cs.umb.edu:80/~bazz/learn/independent/sidekick2/) [↩︎](https://x86.cx/blog/redanger#fnref:3)Danger Hiptop2 Firmware: [https://archive.org/details/danger_hiptop2_firmware](https://archive.org/details/danger_hiptop2_firmware) [↩︎](https://x86.cx/blog/redanger#fnref:4)Danger Hiptop developer archive: [https://archive.org/details/danger-hiptop](https://archive.org/details/danger-hiptop) [↩︎](https://x86.cx/blog/redanger#fnref:5)
+First off, an apology - this post is long overdue. I started writing it back even before the TCXO post, I think some time in December 2025. But then I ended up accidentally finding a silicon bug with security impacts (described later on in this post, and stay tuned for a blog from work on the bug in particular) that I had to keep quiet about until ST had a chance to review and put an advisory out, and there wasn’t a whole lot I could publish about this project until then. Once that finally came out I got busy on other things.
+
+Anyway, here we are. My long time readers will know that I like using STM32s and pairing them with FPGAs, and have got some pretty decent performance doing this, e.g. close to a Gbps of Ethernet bandwidth from the MCU to an FPGA-side RGMII MAC. There’s just one problem: the STM32H7 FMC needs a lot of pins - 30+ if you want all the chip selects and address lines. And they’re not nicely located all on one side of the package either, that would be too easy. They’re all over the place.
+
+Here’s an example of what the FMC looks like on the TFBGA240 package for the H750.
+
+[![BGA fanout with FMC pins highlighted showing they're all over the array and not logically laid out](https://serd.es/assets/fmc-fanout.png)](https://serd.es/assets/fmc-fanout.png)
+
+And the TFBGA216 isn’t any better, either.
+
+[![BGA fanout with FMC pins highlighted showing they're all over the array and not logically laid out](https://serd.es/assets/fmc-fanout2.png)](https://serd.es/assets/fmc-fanout2.png)
+
+For years, I’ve dreamed of a better way. My ultimate dream MCU, which doesn’t exist because I’m probably the only weirdo who would buy it, would be a 1 GHz Cortex-M7 or M85, probably made on TSMC 28LP, with a megabyte of NOR flash or ReRAM, a megabyte of SRAM, an RGMII MAC, multiple FPGA-style I/O banks with independent VCCIO rails, and an AXI Chip2Chip SERDES block that I could use for directly integrating with FPGA-based peripherals using only two differential pairs.
+
+The STM32H735 paired with an external FPGA over FMC got close, but was annoying to use on a low-cost board (e.g. 4 layer batch fab) because the FMC is almost impossible to route on those constraints. Some other STM32H7 parts like the H75x line are available in an 0.8mm package which is doable (painfully) on batch fab design rules, but these have a lower max CPU speed (480 vs 550 MHz) and this is really just kicking the can down the road a bit rather than fully solving the problem. You’re still burning a ton of pins.
+
+A fast M7 with PCIe would almost be what I want (PCIe isn’t exactly AXI, but bridging them is totally doable), but nobody makes those either. You can get Cortex-R’s with PCIe, which I seriously considered (and still want to check out) but it would still be a big jump from the familiar STM32 peripheral set. And a lot of these parts either don’t have crypto acceleration or security-by-obscurity lock up the docs to the crypto accelerator, which is an absolute dealbreaker for me.
+
+## Enter the STM32MP2
+
+But then ST came out with the STM32MP2 line. This is a full applications processor SoC with a dual Cortex-A35, some slower auxiliary processors like an M33 and a M0+, a full GPU/NPU I may play with one day, and – most interestingly to me – a 5 Gbps SERDES with PIPE interface that could be configured to operate as either PCIe gen1/2 x1 or USB 3 depending on which internal protocol IP you connect to it (there’s a register bit to mux them). It also kept most of the same familiar STM32 peripherals I already had lots of libraries for and experience working with, so the learning curve getting spun up on it would be short - including the same AES-GCM and TRNG IPs that I already had drivers for, and were reasonably well documented.
+
+It’s quite a beast with far more computing power than I needed, but I did want to have a part in my back pocket I could pull out for future designs that needed more oomph. And the PCIe would potentially allow easy memory mapping of an FPGA from firmware via only two differential pairs.
+
+There’s just one problem: the STM32MP2 was clearly designed to run Linux, and the vendor BSPs included all kinds of u-boot, TrustZone, etc. stuff that I didn’t care about. I just wanted a big microcontroller that could run a simple RTOS or even a while(1) { doStuff(); } event loop.
+
+## How hard could it be?
+
+So I decided to see if I could convince the MP2 that it was, in fact, just a very fast MCU with some oddball peripherals like PCIe and LPDDR PHYs that garden-variety MCUs don’t have.
+
+The goals of the experiment were:
+
+- Build entirely with upstream aarch64 / arm g++ and binutils, no vendor SDKs or HALs
+- Get code running on the A35s plus the M33 auxiliary core
+- Don’t use external DDR (this is a massive board complexity adder and I wanted to stay as close to MCU-level BOM/PCB design effort levels as possible); all code and data lives in on-die SRAM
+- Don’t use trustzone, uboot, or any other baggage. Just run a simple event loop in EL3 out of the initial “first stage boot loader” (FSBL) flash image and have that be the entire firmware.
+- Get PCIe working to an FPGA under these constraints
+
+I bought a STM32MP257 development board (STM32MP257F-EV1) and started out the same as I would with any other new STM32 part: added a linker script and header to stm32-cpp with the addresses of the peripherals that used the same register interface as other STM32 parts I already had supported in the library. The only difference was that the image base address was in SRAM rather than flash.
+
+### M33 bringup
+
+Then I built a simple LED blinky firmware for the Cortex-M33 auxiliary core and loaded it over JTAG just like I would for a regular STM32. There were a few false starts but I got a blinky running fairly quickly. Achievement #1 unlocked: I can talk to the chip and poke registers.
+
+The next milestone was to actually boot the same blinky from flash. It took some digging through example code and wikis to figure out all of the fine points (for example, the internal SRAM is mapped at four different physical addresses with different TrustZone etc settings, but the boot ROM only lets you boot from one of them). Before too long I had [a tool](https://github.com/azonenberg/stm32mp2-baremetal-tools) that took a flat binary RAM image and bolted on the necessary FSBL headers for the STM32MP2 boot ROM to load it from flash and execute. Then I made a little flasher utility that could be loaded into SRAM and would write an image from another SRAM location to flash, bootstrapping the whole process. Achievement #2 unlocked: the chip is booting from nonvolatile memory and doesn’t need to be loaded over JTAG each boot.
+
+A few things to keep in mind when preparing the FSBL image:
+
+- Place your FSBL-M code image in RETRAM, specifically within the boot alias at 0x0e08_0000.
+- Your stack and initial globals must live in RETRAM too, but on the D-side bus alias at 0x3008_0000.
+- Your memory map must ensure that the physical memory of these doesn’t overlap, i.e. if you have code at 0x0e08_4141 you cannot also have data at 0x3008_4141. The linker script gymnastics to handle .text, .data, and .bss going to different logical addresses but also not colliding with one another are an adventure but not too bad once you realize how it works.
+- There are two slots for FSBL-M images, primary at flash offset 0x0000_0000 and fallback at 0x0004_0000
+
+This firmware booted in “M33-TD” mode, in which the boot ROM immediately transfers control to the M33 after loading the FSBL image, and the M33 has full TrustZone privileges. I chose this over “A35-TD” (in which the A35 boots first) mostly because I wanted to do a staged bring-up of the platform and not have my first time working with the SoC also be my first time bringing up a bare metal Cortex-A.
+
+I continued along the same way I would with any other new STM32 platform for a bit, bringing up a serial console, enabling caches, configuring the PLLs and clock tree, dumping a bunch of platform information to the console on boot, etc.
+
+[The code](https://github.com/azonenberg/stm32mp2-baremetal-tests) is all on my GitHub but a quick summary of what you need to do for bare metal bringup in M33-TD is as follows. None of the SoC setup code here requires custom assembly, it can all be done in C/C++ except for CPU configuration stuff like enabling/disabling interrupts or the FPU when you’re ready to do that.
+
+- Enable the VDDIO monitor for VDDIO1…4. Wait until they report valid, then tell the PWR they’re ready. Without this step, most of your IOs won’t be available.
+- Optional: Enable writing to backup SRAM (by default it’s gated by POR/brownout detection to avoid glitches when the Vcore domain drops out of regulation)
+- Set SYSCFG.VDERAMCR to use the video encoder RAM as processor memory since we’re not using the video block
+- Enable all of the SRAMs (SYSRAM, SRAM1, SRAM2, backup SRAM, VDERAM, LPSRAM1…3) in the RCC. There’s a lot of them.
+- Set the RISAB SECCFGR register settings to enable secure domain code to access SRAM1/2 and VDERAM. By default these aren’t accessible to EL3 secure mode. We’re writing all of our code in EL3 secure so we want everything allocated there.
+- Initialize the clock tree. There’s a LOT of different clocks, you can look at my code to see the details of how I set it up.
+- Enable and invalidate the M33’s I-side and D-side L1 caches
+
+### On to the A35
+
+Then it came time to get the A35 running, which I had to do before playing with the PCIe because the M33’s memory map did not allow it to talk to the PCIe BAR region – annoying, but something I could live with if the M33 is mostly acting as a management processor and all our application code is on the A35.
+
+I had previously avoided working with Cortex-A’s because the overhead involved in getting them set up was a lot higher.
+
+First, once you have the A35 image in flash, you need to actually start it. Figuring this out took quite a bit of reading of various third party library code and such, the datasheet didn’t make it obvious. The basic steps are:
+
+- Check the DSTATE of the CPU in PWR.CPU1D1SR. It should be in STANDBY.
+- Send a SEV via EXTI1.RPR3 to wake up the CPU
+- Reset the CPU via RCC.C1RSTCSETR
+- Set EXTI1.SWIER3
+- Wait until PWR.CPU1D1SR reports the CPU is in HOLD_BOOT state
+- Release the CPU to boot by setting RCC.CPUBOOTCR to 2
+
+The FSBL-A image in flash (at offset 0x0008_0000 for primary and 0x000c_0000 for fallback) itself then is launched in parallel on both cores in the cluster simultaneously in aarch64 mode (although there is a fuse you can blow to boot in aarch32 mode instead if you wanted to for some reason). The first part of this initialization *does* have to be done in assembly because there’s a bunch of stuff needed that pokes hardware registers and initializes the stack etc.
+
+Note also that this image *has* to be in flash: even if you have code executing on the M33 already, there does not appear to be a good way to just have the M33 dump an image into SYSRAM and have the A35 execute it: when the A35 is released to boot the ROM will check strap pins and load the image from the specified location (in my case SPI NOR flash); even though the M33 is already running the A35 is going to re-run the boot ROM.
+
+- The image should be loaded to the boot/secure SYSRAM alias (0x0e00_0000)
+- The image begins with a jump to the reset vector, then a bunch of padding so the exception table is aligned at a 2 kB boundary as required by hardware. There’s probably some room to optimize here, right now that space is wasted but it should be possible to fit most of the low level initialization in there too.
+- The exception table is repeated four times for EL0, higher exception levels, and synchronous exceptions from lower levels. You have 128 bytes for each handler in the table itself, they’re not vectored like in M. But you can jump to external code if you need more space. I’m not a huge fan of this, I prefer the Cortex-M NVIC. Maybe this saves a branch instruction and reduces interrupt latency slightly? Anyway, for early testing I just set every exception handler to be an infinite loop.
+- Register values are undefined at startup (whatever the boot ROM left them at), so I clear them all to zero before going any further.
+- Exception status registers also need to be cleared
+- Initialize the floating point unit and NEON/vector units if you plan to use them. My current startup code doesn’t do this yet since I only do integer stuff, but if you plan to ever use floats it needs to happen here.
+- Point VBAR_EL3 to the exception table so if we throw an exception we don’t end up back in the boot ROM’s exception handler
+- Enable cache coherency in CPUECTLR_EL1
+
+At this point the lowest levels of the core are set up, but we don’t know which core we’re on yet. So the next step is to read MPIDR_EL1 and figure out which one we’re on, since the subsequent steps vary depending on which core we’re on.
+
+If we’re on core 0:
+
+- Initialize the stack pointer. Now we have a valid environment to start runing C++ code, with one caveat: we cannot call memcpy yet, because until the MMU is enabled everything is considered “device” memory and the newlib aarch64 memcpy implementation will try to ldp from unaligned addresses which isn’t allowed from device memory.
+- Create initial page tables. My mapping has a total of three page tables, one level 1 (512x 1GB pages covering the entire memory map) and then two level 2 (512x 2 MB pages) under it. One of them covers the on chip SRAM and PCIe BAR region, the other covers the peripherals, OCTOSPI, and FMC. In my mapping, everything is set up as cacheable except MMIO ranges and the translation is 1:1 (VA = PA) since I am only using the MMU to control NX and caching attributes (I wish I could get a Cortex-M MPU here). I intentionally left the pages covering the boot ROM region as unmapped since it’s mapped at 0x0000_0000 and I want null pointers to segfault, not read random stuff from the ROM.
+- Once page tables are set up, turn on the MMU.
+- Call BSP hooks to do any other power, clock, etc. initialization required before application code starts. This includes configuring and starting the main PLL for the A35 itself.
+- Call __libc_init_array to run constructors for global objects
+- Set a flag to tell core 1 that we’re done with the system init
+
+If we’re on core 1:
+
+- Initialize the stack pointer
+- Spin until core 0 finishes setup
+- Set up the MMU pointing at the same page table as core 0. Page tables are 2 kB each and we have limited on chip RAM… we don’t want to burn two page tables worth of memory unless there’s a good reason to have different mappings on each core. (This is one of the reasons I like Cortex-M’s, the MPU has far less baggage than the A’s MMU. But nobody makes M’s with PCIe so here we are.)
+
+On either core:
+
+- Invalidate and enable the instruction and data caches
+- Call the CoreMain() function provided by the BSP, passing the core number as the argument, so application code can start running.
+
+## All cores are set up. What now?
+
+You’ll notice that I haven’t said much about the DDR. That’s because I don’t plan to use it. It’s a Synopsys DDR3L/DDR4/LPDDR4 controller that requires a blob plus annoying PCB layout for all the data lines, uses a bunch of power, and is just all around overkill. The whole point of switching from the STM32H735 to the MP2 was to replace the parallel memory bus with PCIe and using DDR would negate most of those benefits.
+
+Anyway… at this point, you basically have a STM32H7 on steroids:
+
+- 808 kB of SRAM in the MP2 vs the 564 kB of my usual H735.
+- No flash though, so you have to fit code + data in the SRAM (or XIP from external SPI flash which is slow - but you do have 2x 32KB L1$ and a unified 512 kB L2$ so if your firmware fits in that it should be pretty fast? I haven’t tried yet)
+- Dual A35s at 1.5 GHz instead of an M7 at 500 MHz. So 6x more clock cycles available, but a less performant core IPC wise (the A35 is 1.7 DMIPS/MHz, vs the M7 is 2.14 DMIPS/MHz) thus probably only ~4x faster on a typical workload
+- No ITCM/DTCM so anything that misses in L1$ won’t be single cycle. This is another thing I dislike about A’s. I use TCMs on the STM32H7 heavily for all of my fast stuff.
+- 400 MHz M33 and 200 MHz M0+ auxiliary cores
+
+The MP2 has the same FMC hard IP as the H735, so if I wanted to be silly I could interface it to the FPGA just like the H7. But then why go through all this trouble to bring up the more complex SoC? We want to do PCIe otherwise there’s no point.
+
+## Bringing up the PCIe
+
+The STM32MP257F-EV1 has a mini PCIe slot meant for a wifi card or something, but I found some adapters to convert it to M.2. This allowed me to interface to a random old NVMe SSD for early testing, and to an M.2 FPGA module later on.
+
+The datasheet provides some initial breadcrumbs on configuring things. We need to enable the COMBOPHY and PCIe IPs in the RCC like usual, then poke SYSCFG.COMBOPHYCR1 to specify whether we’re using the external reference clock (typically 100 MHz but the PLL can be configured for other multiplier/divide combinations) or using an internally generated clock from the RCC.
+
+Once everything is turned on, it’s just a matter of configuring COMBOPHYCR2 to enable PCIe mode, poke COMBOPHYCR3 to calibrate the controlled impedance drivers/terminations, then wait for the other internal housekeeping to complete and the PHY to report everything is ready to go.
+
+Finally, poke SYSCFG.PCIECR to specify the initial bus/device ID and enable the LTSSM so we can actually train the link, toggle PERST to the peripheral, and wait for SYSCFG.PCIESR1 to report successful training. Somewhat shockingly, there’s no firmware blob or weird setup flow. It just works and trains the link with only a handful of register pokes.
+
+Or at least, I thought it did. After some issues attempting to enumerate the bus I found it was flapping and retraining constantly.
+
+## PHY level debug
+
+Luckily I have a fast scope and ngscopeclient can decode PCIe and PCIe link training, so I went to work.
+
+[![Closeup of differential probes soldered across the mini PCIe connector](https://serd.es/assets/mp2-pcie-probes-800.jpg)](https://serd.es/assets/mp2-pcie-probes.jpg)
+
+Looking at the startup process, everything seemed fine. The link trained up into L0 without any problems, then even passed a few TLPs before dropping into Recovery.RcvrLock, recovering for a bit, then dropping again. After that it stayed up for a while, dropped, and stayed down until the end of the waveform.
+
+[![ngscopeclient overview of link dropping](https://serd.es/assets/mp2-pcie-bug1-800.png)](https://serd.es/assets/mp2-pcie-bug1.png)
+
+[![ngscopeclient overview of link dropping](https://serd.es/assets/mp2-pcie-bug2-800.png)](https://serd.es/assets/mp2-pcie-bug2.png)
+
+But why was it dropping? The first question was which side of the link was initiating the drop. It was pretty clear after zooming in that the STM32 was dropping (transitioning from idles in L0 to sending training sets) the first time, for no obvious reason while the link partner was still sending valid idles. So the problem was at least being detected, if not caused, on the STM32MP2.
+
+[![ngscopeclient overview of link dropping](https://serd.es/assets/mp2-pcie-bug3-800.png)](https://serd.es/assets/mp2-pcie-bug3.png)
+
+I wondered if it might be signal integrity problems. So I fired up a quick eye pattern of both legs of the link. The RX lane (peripheral to STM32) looked fine. A bit overequalized since it was short and I was probing right at the mini-PCIe connector, but wide open with over 200 mV of eye height.
+
+The TX (STM32 to peripheral) eye looked like nothing I had ever seen before. It was clear and wide open *most* of the time, but the entire eye was closed with a pretty uniform 1e-4 BER. I’m used to seeing eyes that are squished horizontally due to jitter, vertically due to noise or reflections, etc but in such a scenario it’s usually consistent, the eye won’t have clear top and bottom bars or rising/falling edges.
+
+[![Strange looking eye patterns](https://serd.es/assets/mp2-pcie-bug4-800.png)](https://serd.es/assets/mp2-pcie-bug4.png)
+
+The only thing I could think of was something intermittent. Maybe the signal is fine most of the time, the link comes up, then *something* happens - a noise burst, maybe - that blanks it out briefly before it comes back.
+
+So I looked at the second, longer drop in the same waveform. This one was weirder: the link was fine then all of a sudden out of nowhere, the STM32MP2 started sending absolute nonsense - bit patterns that decoded as invalid scrambler values or sometimes not even well-formed 8b10b symbols at all! Then 40 μs or so later the link partner noticed and went into re-training.
+
+[![Burst of invalid 8b10b characters](https://serd.es/assets/mp2-pcie-bug5-800.png)](https://serd.es/assets/mp2-pcie-bug5.png)
+
+When I zoomed in further looking at just a few symbols on either side of the link drop, the problem immediately jumped out at me. Look at the relative phases of the purple Threshold_5 signal (a simple thresholding of the analog waveform) and the green squarewave below it (a clock recovered from the analog waveform by a DSP PLL).
+
+At left, everything is happy. The recovered clock edges are 90° phased to the data allowing it to be cleanly sampled with plenty of setup and hold margin. But right about the middle of the screen, things start going sideways, literally. By the end of the D15.2 symbol the clock edge is only about 58 ps after the data edge (instead of the ideal 200ps setup/hold window for a 400ps UI at 2.5 GT/s). And by the end of the D11.7 the clock and data are on top of each other leaving no setup/hold window at all and the protocol decode starts seeing bit errors.
+
+[![Data and clock losing sync](https://serd.es/assets/mp2-pcie-bug6-800.png)](https://serd.es/assets/mp2-pcie-bug6.png)
+
+Both the DSP and real physical CDR PLL have limited bandwidth, so if they’re handed this large a phase shift in <20 UI there’s no way they will be able to keep up (although they will try).
+
+Plotting TIE (time interval error, essentially the difference between where the CDR PLL expects a UI boundary to be compared to the actual level crossing in the real waveform) for the RX side shows pretty uniform jitter without any weird artifacts. But the TX side shows TIE jumping all over the place, railing at ± 200 ps (half a UI - the max error possible before the edge is considered to be part of the next UI) and the CDR slewing frantically over 30 MHz above and below the nominal data rate trying and failing to stay synced.
+
+[![Bursts of massive TIE and frequency drift](https://serd.es/assets/mp2-pcie-bug7-800.png)](https://serd.es/assets/mp2-pcie-bug7.png)
+
+Putting all the evidence together, it’s pretty clear that the SERDES PLL in the COMBOPHY is losing lock intermittently. Everything is fine for a while then something happens internally within the SERDES and the PLL VCO starts jumping around for a bit. This causes the transmit data to jump around (causing the link partner to fail to receive it, as seen in the scope captures) but it also will likely have similar effects on the receiver - causing the STM32 to misread incoming, well formed data as well.
+
+There’s only a handful of registers for configuring the COMBOPHY PLL and everything I was writing to them looked fine according to the datasheet, so I was pretty sure it wasn’t a misconfiguration. The dev board was a ST reference design which I assumed had to be fine as well.
+
+So if it’s not hardware and it’s not software, what is it? There was really only one other thing to look at, the reference clock. I had configured the COMBOPHY to be clocked via the RCC (ck_ker_usb3pciephy, set to 25 MHz) with SYSCFG.COMBOPHYCR1 set to 0xc8 to get the 2500 MHz required VCO frequency (no spread spectrum, multiplier 100).
+
+But the STM32MP257F-EV1 also had a dedicated 100 MHz reference clock available. Poking COMBOPHYCR1 to 0x33 to select the external clock and multiply it by 25 gave me the same 2500 MHz VCO frequency, but without the added jitter of the internal PLL (TSMC PLLTS16FFCLAFRAC2 fractional-N PLL) and RCC clock distribution network, plus perhaps the external crystal not having tight enough tolerances for this use case.
+
+And… it worked perfectly. The link came up, trained happily to 2.5 GT/s gen1 x1 (I figured I’d save gen2 for later), and everything looked fine.
+
+[![Happy PCIe link with open eyes](https://serd.es/assets/mp2-pcie-bug8-800.png)](https://serd.es/assets/mp2-pcie-bug8.png)
+
+## Enumeration
+
+After this, things get a lot more tricky because the IP isn’t really documented at all, at least publicly (as usual, portions of the datasheet and register map have probably appeared in various corners of the internet). Luckily I was able to find some breadcrumbs in uboot and Linux kernel code that gave me a better idea of how things are set up: the PCIe IP block has a register block on AHB5 with a standard PCIe root complex register set (these registers are mostly documented in the PCIe base spec; there’s a bunch of vendor proprietary ones too but we don’t need them to get things functional), then the actual PCIe devices are mapped into a 256 MB chunk of physical AXI address space from 0x1000_0000 to 0x1fff_ffff.
+
+I had never worked with PCIe enumeration before so it took a bit of time to piece together the required steps. The code for this is in stm32-cpp/src/peripheral/PCIE.* and src/cpu1-a35/bsp/hwinit.cpp if you want to poke around in detail but I’ll summarize it here.
+
+First, I read a bunch of standard registers like link status, speed, hardware IP version, etc and log them. Not strictly necessary, but helps with troubleshooting.
+
+There’s a bunch of basic configuration within the standard PCIE address space that needs to be done next (after writing a magic unlock value to MISC_CONTROL_1 to remove write protection). Pick a bus number for the root complex, specify the memory limit, etc. But now we need to actually talk to the registers in the link partner. How does that work?
+
+It turns out, the PCIe IP has an “internal address translation unit” (iATU) that is essentially a sort of IOMMU. It takes incoming and outgoing TLPs and translates addresses within the AXI block to PCIe BAR or configuration addresses and adds the appropriate TLP type.
+
+So the next step is to set up a chunk of AXI space (I chose 0x1fff_0000 to 1fff_ffff, the last 64 kB of the AXI range) and configure the iATU to map this to configuration accesses to device 01:00.0 (which is the bus and device we’re going to assign to the link partner). I didn’t plan to implement a full featured stack with PCIe bridges and the like, since I’m intending to only ever be wiring the STM32 directly to an FPGA. So a lot of the configuration could be hard coded.
+
+Then I set up a second range of AXI space (0x1000_0000 to 17ff_ffff, the first 128 MB of the AXI range) and mapped it to PCIe address 0x0000_0000. This is where we’re going to put the BAR of the link partner.
+
+We should now have a standard PCIe configuration address block mapped at 0x1fff_0000 that we can walk and print out. I wrote some code to print out a few registers to sanity check and… got back all zeroes.
+
+## Why are we getting zeroes?
+
+Something was clearly broken in the upper levels of the stack. The link was up, I could see DLLPs flowing and the eye was wide open. The iATU was at least configured close to valid, because I wasn’t seeing any segfaults like I would if I had a completely bogus memory mapping.
+
+I still had my probes on the PCIe signals (this testing somewhat overlapped with the clock jitter / PLL troubleshooting, but I wanted to tell the story in a more linear order to make it make sense) so the next step was to try to protocol decode some test reads and writes.
+
+What I found waas *very* confusing.
+
+I wrote some test firmware that wrote 0xdeadbeef to the start of the configuration space, and the configuration write TLP came out of the STM32 with a valid address and an all-zero payload.
+
+[![PCIe TLP showing a configuration write of 0x00000000](https://serd.es/assets/risaf-01-800.png)](https://serd.es/assets/risaf-01.png)
+
+I tried writing 0xfeedface to a location in the BAR range. It also came out with the correct address and an all-zero payload.
+
+[![PCIe TLP showing a memory write of 0x00000000](https://serd.es/assets/risaf-02-800.png)](https://serd.es/assets/risaf-02.png)
+
+Even more confusing, I tried *reading*… and the device responded! With a valid read completion TLP, and a decidedly nonzero payload. But my firmware saw the read come back as all zeroes.
+
+[![PCIe TLP showing a read completion returning 0x5c 1c 27 13](https://serd.es/assets/risaf-03-800.png)](https://serd.es/assets/risaf-03.png)
+
+So in summary: every write TLP I send to either configuration or data space has all header fields correct, but the payload is all zeroes. Every read TLP goes out normally, the device responds as it should, but my firmware sees all zeroes.
+
+This points to something inside the STM32, either in the PCIe IP or the AXI fabric, zeroing out the data payload only without changing the address. What could possibly do this???
+
+## Enter the RISAF
+
+Looking at the STM32MP2 reference manual, there was an obvious suspect: the Resource Isolation Slave unit for Address space protection, Full (RISAF).
+
+It sits right on the AXI bus between the PCIe and the main AXI interconnect fabric, and passes traffic through unless it sees something it doesn’t like (e.g. TrustZone nonsecure domain accessing secure resource) in which case it blocks the request and fires a fault interrupt that the secure domain can handle as it sees fit.
+
+So I threw together a quick monitor task on the M33 that polled the IASR register on RISAF5 (which is the instance protecting the PCIe AXI interface) and… sure enough, it threw a fault the moment I touched the PCIe BAR region from my firmware (which was running in EL3 secure mode since I never dropped privileges).
+
+Just to confirm, I added a few register pokes in BSP_Init() on the M33 (the only core that is allowed to touch the RISAF configuration in M33-TD mode since it’s considered the system root of trust in that mode) that enable both privileged and unprivileged reads and writes to the entire AXI address range from the A35 in secure mode.
+
+And everything worked perfectly. My write TLPs had the correct values as seen by the scope, and reads returned normal data to my firmware. I wrote up a basic single-device-only bus enumeration code path that dumped a bunch of information and everything worked great.
+
+[![PCIe TLP showing a proper 0xdeadbeef write](https://serd.es/assets/risaf-04-800.png)](https://serd.es/assets/risaf-04.png)
+
+## Well shit.
+
+At this point, there was little doubt in my mind that I was sitting on a silicon errata that was a potential TrustZone bypass. So I poked our disclosure team at work and got the ball rolling to send an advisory out to STMicro’s PSIRT (while I found this bug in my off time, I figured it was better to have a company name and lawyers in the disclosure path in case anybody got cranky).
+
+What I had confirmed at this point was:
+
+- An attacker who should be blocked by the RISAF can issue 32-bit read transactions to the PCIe configuration and BAR address spaces. These transactions will be sent as well-formed TLPs just like if the RISAF was open, and trigger any side effects in the peripheral that would be expected, but the attacker will see an all-zero readback instead of the actual value returned by the peripheral.
+- Non 32 bit transactions showed weird behavior that I did not fully investigate, but may be useful in some way to an attacker.
+- An attacker can issue 32-bit write transactions to the PCIe range. Regardless of the requested write data, the TLP will be sent as all zeroes, overwriting whatever MMIO register was targeted.
+- The RISAF error detection mechanism works, and the TrustZone secure monitor will be alerted to the problem, but only after the write has been dispatched.
+- This is a silicon bug in the RISAF itself.
+
+I wrote up an advisory and sent it off to ST, then mostly shelved things until they published something so I could talk about things in detail.
+
+After quite some time, they published [an advisory](https://www.st.com/resource/en/security_bulletin/sb0070-risaf-limitation-about-pcie-region-protection-on-stm32mp25xx-stmicroelectronics.pdf) and errata, now documented as errata 2.3.33.
+
+A few questions are still open.
+
+First: what real world deployments or use cases, if any, are potentially vulnerable? What combination of PCIe peripherals and TrustZone monitor would either not notice the issue or not react fast enough, and be possible to exploit by read side effects and/or all-zero writes, to gain privileges or escalate in some way?
+
+Second, more interesting: is RISAF5 the only affected instance? The ST advisory and errata talks about RISAF5 but this may just be because RISAF5 is the only one that I have a working PoC for. I don’t know if ST tested the others and confirmed they’re not vulnerable to the same bug, or if nobody looked.
+
+RISAF1 controls the backup SRAM, RISAF2 the OCTOSPI, and RISAF4 the DDR controller. There does not appear to be a RISAF3 (if it exists, it’s not mentioned in the datasheet). Writing a zero value to the right location in backup SRAM, OCTOSPI PSRAM, or external DDR is likely a much easier privilege escalation (perhaps by replacing some bytes of code or data used by the RISAF security violation exception handler itself, if this is in a cold cache line, with 0x00). If anybody is able to PoC a working exploit by this approach, and/or confirm the other RISAFs are vulnerable, I would love to see.
+
+## Performance calculations
+
+With PIO from the CPU, the maximum performance I was able to achieve with a software memcpy was about 1.77 Gbps (out of a theoretical peak 4 Gbps). Each strp instruction generates a TLP with 16 bytes of payload, and adding in the 20 bytes of headers + CRC we get 36 bytes of total packet size - only 44% of which is carrying useful data.
+
+[![Sequence of 16-byte TLPs](https://serd.es/assets/mp2-strp-800.png)](https://serd.es/assets/mp2-strp.png)
+
+But this is already a huge boost over the FMC (which maxes out at 977 Mbps for 137.5 MHz clock and 9 bus cycles for a 64-bit APB write), to say nothing of the simplified PCB routing.
+
+We can definitely do much better with DMA. The STM32MP2’s PCIe IP maxes out at 256 bytes per TLP (not the 4 kB max that the spec allows), which gives a 276 byte TLP and 92.75% efficiency, or ~3.71 Gbps theoretical peak. I haven’t actually hit this in a benchmark but will probably try to test it at some point.
+
+If I can get close to this, I’ll be at ~2x the throughput of PCIe PIO and ~3.8x the throughput of the FMC. Which is pretty decent.
+
+## Final thoughts
+
+There’s still a lot more work to be done. Since shelving the original testing during the disclosure window around the RISAF bug I did preliminary testing of my own home grown bare-bones PCIe stack on an Artix-7 FPGA with the STM32MP2.
+
+I also bought an Efinix Ti375 FPGA dev board and want to try pairing its hard PCIe IP with the STM32MP2 as well. This will hopefully happen in the next few weeks and maybe turn into a blog post of its own once it’s a bit more well developed and I’ve demonstrated e.g. poking APB registers in FPGA-based peripherals from PIO code on the STM32.
+
+Maybe if I have time I’ll try to see if I can poke the backup SRAM to 0x00 through the RISAF gate. More to come soon!
