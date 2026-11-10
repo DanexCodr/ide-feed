@@ -1,77 +1,36 @@
-Terminal2Shell is a design-level vulnerability in terminal emulators. When a terminal is launched, it immediately spawns a **shell process** and connects it directly to the user's keyboard. From there, the attacker can issue arbitrary commands with the full privileges of the logged-in user.
+When I set up the infrastructure for [Casuarina Linux](https://casuarina.org/) I repurposed an AMD AM4 system with
+Ryzen 9 5950X 16-Core CPU (105W TDP) and 32Gb of DDR4 RAM as the build server. I set it up
+in our laundry, connected it via a smart plug, and reset its counters. Over the course of the
+project I would regularly pull package updates from [Chimera Linux](https://chimera-linux.org/), build and install them locally,
+and then push them to the repo, which would trigger Buildbot to build and publish them.
 
-Researchers have confirmed that the shell will execute *any* command typed into it, including commands that delete files, install software, and modify system configuration. In some cases, the shell has been observed executing commands **the user typed themselves**.
+The project ran from 30 March 2026 to 8 November 2026 (a bit over 7 months) the total
+energy used was 98.4 kWh. My electricity plan is a 100% renewable plan (meaning they offset the
+non-renewable parts) and costs AU$0.33
+ kWh. Ignoring the daily service fee the cost of that
+electricity is AU$32.47
+.
 
-## Proof of concept
+Since it turned out I was the only one doing package updates I kept the builder off when idle. When
+there were packages to build I’d hit the power button (on the machine, not the smart plug) and some
+time later when it was done I’d press it again to shut it down. This was pretty beneficial as the
+idle draw was about 55W.
 
-We are releasing a working proof of concept below. It is fully weaponized. Click inside and start typing. Try `help`.
+The number of package builds was around 5000. `SELECT COUNT(name) FROM logs WHERE name LIKE 'pkg:%';` from the Buildbot `state.sqlite` yields 5201, however that’s probably slightly inflated
+due to rebuilds/packages that failed to build on the first try.
 
-The page you are reading now has a shell in it. Close the tab if you are concerned.
+The actual usage is likely more than double the 98kWh figure as all packages were built on my
+desktop machine first, before pushing to the repository for the builder to pick up. That machine is
+an AM5 system with AMD Ryzen 9 9950X3D 16-Core CPU (170W TDP), 64Gb DDR5 RAM. Additionally our house
+has rooftop solar, and where possible I would kick off builds during the day so there was a better
+chance of using the solar. That would have reduced the actual cost, but I have no way to measure the
+specific amount.
 
-## Exploitation steps
+The slowest package by far to build was Chromium, taking just shy of 4 hours to complete. For
+comparison Firefox takes about 50 minutes. Power draw measured by the smart plug when the builder
+was fully loaded is about 193W. So 4 hours at 193W is 0.77kWh, which means a Chromium build costs
+about 25 cents.
 
-1. Open a terminal.
-2. There is no step 2.
-
-Exploitation requires local access, a working keyboard, and the ability to locate the Terminal application. Threat intelligence indicates all three are widely available to attackers.
-
-## Affected systems
-
-| Product | Vector | Status |
-| --- | --- | --- |
-| macOS (all versions) | Terminal.app, iTerm2, Ghostty, Warp | VULNERABLE |
-| Linux (all distributions) | gnome-terminal, Konsole, xterm, Ctrl+Alt+F2 | VULNERABLE |
-| Windows | cmd.exe, PowerShell, Windows Terminal, WSL | VULNERABLE |
-| FreeBSD / OpenBSD | Literally the default experience | VULNERABLE |
-| DEC VT100 (1978) | Physical serial cable | VULNERABLE |
-| Your router | SSH, telnet, the little console port on the back | VULNERABLE |
-| VS Code | Ctrl+` (one keystroke!) | VULNERABLE |
-| Microsoft Paint | None known | Not affected |
-
-## Indicators of compromise
-
-If you see any of the following characters followed by a blinking cursor, your system is actively compromised:
-
-A `#` prompt indicates the attacker has obtained **root**. Disconnect from the network, then from society.
-
-## Mitigations
-
-No vendor patch is available. Until one is released, we recommend the following compensating controls:
-
-### Do not open terminals
-
-This is the most effective mitigation. Note that many developers report opening terminals "for work," which security teams should treat as a red flag.
-
-### Close terminals immediately after opening them
-
-Partial mitigation only. Reopening the terminal reintroduces the vulnerability.
-
-### Type slower
-
-Reduces commands per minute and therefore attack throughput.
-
-### Remove the keyboard
-
-Effective, but the on-screen keyboard is a known bypass.
-
-### Set `SHELL=/bin/false`
-
-Fully remediates the issue. Also fully remediates your ability to use the computer.
-
-## Disclosure timeline
-
-## FAQ
-
-If you own a computer, yes. If you own a phone, you are affected but have not found the terminal yet.
-
-Yes. Telemetry shows millions of developers exploiting Terminal2Shell every day, often dozens of times per hour. Some have set it to open automatically on login.
-
-Only if they know the user's password. Unfortunately, in the most common attack scenario, the attacker is the user.
-
-Every serious vulnerability needs a logo, a domain, and a name ending in a number followed by a noun. This one has all three, so it must be serious.
-
-Directly. We reviewed the public proof-of-concept for every *2Shell vulnerability we could find, and nearly all of them begin the same way: the researcher opens a terminal and types a command. Every one of those exploits depends on Terminal2Shell. It is the vulnerability underneath the vulnerabilities, and the only one that comes with a free shell before the attack even starts.
-
-Fixing Terminal2Shell would neutralize most of the *2Shell family overnight. It would also stop the researchers from writing their next blog post, which is why no vendor will touch it.
-
-Yes. Panicking is the recommended response to any vulnerability with a website. Please share this page with your CISO, your mother, and at least three news outlets.
+Overall it cost a bit under AU$5
+ a month (ignoring solar, and my workstation) to
+build all the packages for a Linux distribution. That’s not too bad I think.

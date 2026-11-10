@@ -1,89 +1,298 @@
-In July, we [announced a series of planned updates](https://blog.pypi.org/posts/2026-07-22-ui-updates/) to the PyPI user interface. Shaped by [user research with members of the Python community](https://github.com/pypi/warehouse/issues/20111), the updates aim to improve how we surface security signals and display package details.
+It’s sort of surprising, but we’re still figuring out how to secure simple, record-like information for domain names in an application-accessible way.
 
-We're pleased to share that this work is now complete and live on [PyPI](https://pypi.org/).
+Think about it. How would you bind the following to a domain name?
 
-## Context[¶](https://blog.pypi.org/posts/2026-11-06-ui-updates-complete/#context)
+```
+example.com
+    Key-1: Value-1
+    Key-2: Value-2
+```
 
-With the rapid growth of the Python ecosystem, PyPI has become an increasingly attractive target for malicious actors. In response, the PyPI team has [delivered many security features](https://docs.pypi.org/about/security-and-internals/#pypi-security-features) while taking a more active role in helping PyPI users assess and understand package security.
+Importantly, how would you secure it?
 
-[Digital attestations](https://blog.pypi.org/posts/2024-11-14-pypi-now-supports-digital-attestations/), introduced in 2024, are an example of this effort, providing a verifiable record of a release file's *provenance* (where it came from). However, provenance and attestations are still unfamiliar concepts for many PyPI users, and PyPI's interface did little to communicate their meaning, importance, or limitations.
+## DNS and DNSSEC
 
-To address this, PyPI partnered with [Kabu Creative](https://kabucreative.com/) to bring clearer security signals to the PyPI UI, implementing the recommendations developed in the [OpenSSF Attestations Style Guide](https://repos.openssf.org/attestations-style-guide).
+Since we’re talking about domain names, lets start with DNS. The classic solution adds configuration as TXT records:
 
-Here's a look at what's changed, what it means for you, and what actions you can take.
+```
+_PROTOCOL.EXAMPLE.COM.  IN  TXT   "v=PROTOCOLv1; Key-1=Value-1; Key-2=Value-2"
+```
 
-## The New Security Tab[¶](https://blog.pypi.org/posts/2026-11-06-ui-updates-complete/#the-new-security-tab)
+Notice that we use an underscored subdomain label to make it clear we aren’t talking about a hostname. The protocol name is then repeated to make it abundantly clear this record is related to the protocol.
 
-The new **security tab** communicates release provenance states and displays per-file attestations, giving you a dedicated place to verify where the release files came from.
+As is, we can’t claim this solution is secure. DNS-based network interference is trivial and widespread. The best practice for securing DNS records is DNSSEC, which uses cryptographic signing.
 
-### Provenance States[¶](https://blog.pypi.org/posts/2026-11-06-ui-updates-complete/#provenance-states)
+I’m not going to debate the security properties of DNSSEC in this post. There are strong opinions on both sides and the most helpful answer likely depends on the context in which you work. For the sake of this blog post I’ll wave my hands and call this “secure enough” to side-step the issue. In any case, the rest of the post doesn’t depend on a favorable or unfavorable assessment of the security properties of DNSSEC.
 
-PyPI calculates each release's provenance state by checking whether each release file has an attestation. Typically, a release will be in one of two states:
+## DNSSEC is uncommon
 
-#### Full Provenance[¶](https://blog.pypi.org/posts/2026-11-06-ui-updates-complete/#full-provenance)
+Even the strongest supporters of DNSSEC need to face the reality that DNSSEC isn’t widely adopted.
 
-This means that 100% of the release files have attestations, carrying either or both of the supported attestation types:
+There’s no single answer that quantifies DNSSEC adoption.
+At Fox Loop Software I collect adoption metrics for various Internet protocols; [we just released the first dashboard](https://buttondown.com/foxloopsoftware/archive/email-ecosystem-dashboard/).
+Our approach highlights that adoption rates vary widely depending on which cohort you measure.
+For example, here are the adoption rates of DNSSEC signed MX records among second-level domain names that accept email:
 
-**[PyPI Publish](https://docs.pypi.org/attestations/publish/v1/) attestations** confirm the file was published by a [PyPI Trusted Publisher](https://docs.pypi.org/trusted-publishers/):
+| Cohort | Adoption rate |
+| --- | --- |
+| Tranco top 1,000 | 12.3% |
+| Tranco top 1,000,000 | 7.5% |
+| .COM | 1.4% |
+| .GOV | 10.4% |
+| .SE | 62.8% |
 
-**[SLSA Build Provenance](https://slsa.dev/spec/v1.2/build-provenance) attestations** link the file back to its exact source commit, build platform, and instructions:
+From the perspective of an application developer, it is not reasonable to expect that a customer domain name will support DNSSEC. Until this changes, application developers must use alternate solutions if they need security.
 
-You can review attestation metadata directly in the UI, or click on the transparency log link for more information.
+## The web approach
 
-#### No Provenance[¶](https://blog.pypi.org/posts/2026-11-06-ui-updates-complete/#no-provenance)
+If my application is web-based then there’s a pretty obvious solution as I already have an HTTPS secured endpoint.
+I can use the HTTPS .well-known approach ([RFC 8615](https://www.rfc-editor.org/info/rfc8615/)).
 
-"No provenance" simply means that no file in the release has an attestation. This is typical for older releases or projects that have not yet configured Trusted Publishing. **No provenance does not necessarily indicate that a release or release file is malicious; it instead means that the *file origin cannot be cryptographically verified***.
+```
+GET https://example.com/.well-known/protocol.txt
+---
+Version: PROTOCOLv1
+Key-1: Value-1
+Key-2: Value-2
+```
 
-When there is no provenance, you should rely on surrounding trust signals to assess security, such as maintainer history, release patterns, and repository activity. If you maintain the package, consider using [Trusted Publishing](https://docs.pypi.org/trusted-publishers/) with a [publisher that generates attestations](https://docs.pypi.org/attestations/producing-attestations/) for your next release.
+These records are secured by HTTPS.
+The developer experience is excellent: adding a record could be as easy as dropping a file in a web server directory.
+Fetching records is a simple HTTP GET request.
 
-### Provenance Warnings[¶](https://blog.pypi.org/posts/2026-11-06-ui-updates-complete/#provenance-warnings)
+But not everything is a web-based application. Can we extend this solution to other protocols?
 
-Provenance warnings are designed to help you identify when a file may not have come from the project's maintainers, for example, if an attacker has taken over an account or a publishing workflow.
+## Case study: Email
 
-When provenance metadata looks unusual or conflicts with a project's history, PyPI surfaces a prominent warning. Many warnings have legitimate explanations, but each one is worth checking before you install.
+Email is a very old protocol, predating not only TLS but the entire Internet as well.
+Over time all sorts of additions have been bolted on to modernize and maintain the protocol.
+Many of these additions added new DNS TXT records, such as SPF, DKIM, and DMARC.
+These records can be secured by DNSSEC but do not require it, so tampering of these records is unmitigated or otherwise tolerated.
 
-This means that some files carry attestations while others do not (e.g., wheels were published via Trusted Publishing, but the source tarball was uploaded using an API token).
+Let’s look past these examples to a problem that clearly requires a secure record.
 
-Exercise caution if you see this warning. Check release notes for build issues or ask in the project's issue tracker before installing.
+### The hostname mis-match problem
 
-This warning indicates that files within the same release originate from different build systems or source repositories.
+Email has an awkward problem, which is how hostnames are managed.
+When a message transfer agent (MTA) relays an email it needs to discover the destination MTA.
+This is solved using an MX record, which specifies the target MTA’s domain name.
+I’ve measured that around 80% of domains host their email on a different domain name, often using providers like Google or Microsoft.
 
-Check the attestation metadata to confirm whether all files came from sources controlled by the maintainers.
+When sending an email, the MTA will discover a chain from the user’s email address to the receiving MTA’s TLS certificate, like this:
 
-This warning tells you that the release files originated from a different repository or workflow than a previous release. While often legitimate (such as an organization name change or repository migration), it can also indicate a compromised pipeline or account takeover.
+The sending MTA now needs to decide if it trusts the connection.
+Unfortunately, smtp.provider.com, as seen in the TLS certificate, does not match example.com, as provided in the email address.
+The only link between the two domain names is an MX record, which typically unsigned and therefor insecure.
+Without trustworthy information, certificate validation cannot succeed and the sending MTA must skip validation.
 
-If you see this warning, check the project release notes or official channels to confirm that an infrastructure migration was planned.
+Lack of certificate validation means that receiving MTAs can use a self-signed, expired, or even a certificate with the wrong name; the sending MTA does not care.
+This approach is known as “opportunistic encryption” and it provides strong protection against passive eavesdropping.
+But without a way to validate the receiving MTA’s TLS certificate, active attacks remained unmitigated.
 
-This means that a project that previously published with attestations has changed to uploading release files without them.
+Email cannot enforce authenticated MTA-to-MTA transit encryption until this hostname mis-match problem is solved in a secure way.
 
-Check whether the maintainers intentionally changed their publishing process, for example by switching back to API tokens, or by changing their publishing configuration so that it no longer generates attestations. If this is unexpected, treat the release with skepticism until verified.
+### A problem end-to-end encryption cannot solve
 
-To learn more about provenance and attestations, including provenance warnings, see our [user documentation](https://docs.pypi.org/using-pypi/package-security/provenance/).
+Many email security conversations focus on end-to-end encryption.
+It is a great solution to many of the security problems facing email, but it doesn’t fully address the problem being discussed here.
 
-## Redesigned Project Detail Page[¶](https://blog.pypi.org/posts/2026-11-06-ui-updates-complete/#redesigned-project-detail-page)
+Message relaying requires the MTA to know the recipient’s email address.
+This is known as “envelope information” and it cannot be end-to-end encrypted.
+Methods like PGP encryption can not and do not protect this information, as they only encrypt the message body.
 
-To support these changes, the project detail page has also been updated:
+The only way to protect this information from network-level attackers is to ensure the message is delivered to the correct MTA, which requires authenticated transit encryption.
 
-- Provenance warnings now appear at the top of the page, alongside status banners for yanked releases, archived projects, and pre-releases. If a project or release is quarantined, only the quarantine banner is shown, as it takes precedence over all other warnings and banners.
-- When a release has full provenance or provenance warnings, its provenance state is displayed in the sidebar, linking through to the security tab for more information.
-- Metadata is now ordered by utility and labeled as "PyPI data" or "Data verified by PyPI", replacing the old design where data was grouped and ordered by verification status.
+### Non-analogous to the web
 
-## Release Files and Release History[¶](https://blog.pypi.org/posts/2026-11-06-ui-updates-complete/#release-files-and-release-history)
+When I first encountered this issue I was surprised as there is no analogous problem on the web.
+The issue relates to the semantic difference between a CNAME and an MX record.
+A CNAME record pointing at a web hosting provider’s server is a matter of identity and that server can get a TLS certificate to prove it.
+An MX record does not permit the target email server to get a corresponding TLS certificate.
 
-The redesigned **release files tab** helps you find the right file by searching and filtering long lists. You can also view the provenance state of each file within the table, and quickly identify late files, which are marked with an orange warning icon.
+A web browser is able to compare the name in the TLS certificate with the name shown in the address bar and can expect these to strictly match.
+An MTA doesn’t compare the name in the TLS certificate with the domain name in the “to” address as a mismatch is typically expected.
 
-Late file warnings are shown when one or more files were uploaded more than 14 days after the initial release timestamp. These warnings only appear on releases prior to July 2026, when a policy was introduced to [reject new files after 14 days](https://blog.pypi.org/posts/2026-07-22-releases-now-reject-new-files-after-14-days/).
+Further, email is sent asynchronously so there are no humans involved in MTA-to-MTA communications.
+While web browsers can show a certificate warning message to allow users to make their own security decisions, an MTA is all on its own.
+Email providers often tout support for transit encryption but the lack of certificate validation makes email traveling between MTAs about as secure as a user browsing the web while *always* clicking through invalid certificate warnings.
 
-The **release history tab** now also provides more details about each release, exposing file count, provenance state, and release status (i.e., quarantined, yanked, archived, or pre-release).
+Interestingly, email has adopted two solutions to this problem: a DNSSEC-based approach and an HTTPS .well-known approach.
+This give us a unique opportunity to compare these approaches head-to-head as they attempt to solve the same problem.
 
-## Getting Help[¶](https://blog.pypi.org/posts/2026-11-06-ui-updates-complete/#getting-help)
+### SMTP DANE
 
-Alongside the interface updates, [PyPI's user documentation](https://docs.pypi.org/) has been extended to help you better navigate package security. Read our [package security guide](https://docs.pypi.org/using-pypi/package-security/introduction/) to learn about:
+The DNSSEC approach is SMTP DNS-based Authentication of Named Entities (DANE) ([RFC 7672](https://www.rfc-editor.org/info/rfc7672/)),
+which was standardized in 2015.
+DANE requires DNSSEC signing in both the customer and email provider’s DNS zones for the protection to have full effect.
 
-## Looking Ahead & Acknowledgments[¶](https://blog.pypi.org/posts/2026-11-06-ui-updates-complete/#looking-ahead-acknowledgments)
+DANE adds the TLSA DNS record.
+Here’s an example:
 
-The new security tab gives PyPI a dedicated home for future attestation types and security notices. To help the wider open source ecosystem benefit from this work, we've also [published a case study in the OpenSSF Attestations Style Guide](https://repos.openssf.org/attestations-style-guide/pypi-case-study) detailing the design patterns and warnings developed during this project.
+```
+_25._tcp.mail.provider.com.  1200  IN  TLSA  3 1 1 6111A5698D23C89E09C36FF833C1487EDC1B0C841F87C49DAE8F7A09 E11E979E
+```
 
-This initiative was funded by the [Open Source Security Foundation](https://openssf.org/) and implemented by [Kabu Creative](https://kabucreative.com/). We would like to thank [Dustin Ingram](https://github.com/di), [Zach Steindler](https://github.com/steiza), and the members of the [OpenSSF Securing Software Repositories Working Group](https://repos.openssf.org/) for championing this effort. Special thanks to [Mike Fiedler](https://github.com/miketheman), [Jacob Coffee](https://github.com/JacobCoffee), and members of the PyPI team for their thoughtful design feedback and code reviews, [@cofiem](https://github.com/cofiem) for their contributions to the new release files tab, and our [user interview participants](https://github.com/pypi/warehouse/issues/20111) and community testers for helping shape the final design.
+This record indicates that the MTA-to-MTA connection can use authenticated encryption.
+Specifically, this record indicates that the receiving MTA should provide a TLS certificate with a public key digest of “6111A…”.
+Validating this pinned certificate does not depend on the certificate authority (CA) system.
 
-Finally, we would like to thank the OpenSSF for its funding and continued partnership in securing the Python packaging ecosystem.
+SMTP DANE signals that it should be possible to cryptographically validate the chain from the domain name in the email address to the domain name on the receiving MTA’s TLS certificate.
+
+One key benefit of DNSSEC, which we’ll revisit, is that blocking of a signed record can be distinguished from a non-existent policy.
+When the TLSA record does not exist, the authoritative DNS server should provide a signed proof of non-existence (NSEC).
+This acts as a fail safe: if DNSSEC is enabled and the sender cannot determine the DANE policy, then the sender can conclude that it is not safe to send the message as network interference may be present.
+
+### MTA-STS
+
+Email providers realized that slow adoption of DNSSEC was delaying authenticated transit encryption between MTAs.
+They looked at what other tools were available and found inspiration from the HTTPS .well-known approach.
+Standardized in 2018, SMTP MTA Strict Transport Security (MTA-STS) ([RFC 8461](https://www.rfc-editor.org/info/rfc8461/)) provides an HTTPS-based solution.
+
+Here’s what it looks like:
+
+```
+GET https://mta-sts.example.com/.well-known/mta-sts.txt
+---
+version: STSv1
+mode: enforce
+mx: smtp.provider.com
+max_age: 604800
+```
+
+Notice that the mta-sts subdomain is used instead of the bare domain.
+This best practice stems from the need to isolate security policies from whatever website lives at the bare domain; often a marketing website which may not have a security posture suitable for cross-protocol policies like MTA-STS.
+To distinguish any pre-existing use of the mta-sts subdomain the “_mta-sts” TXT record must also be set.
+
+```
+_mta-sts.example.com. 3600     IN      TXT     "v=STSv1; id=190906205100Z;"
+```
+
+Finally, policy caching was added as a partial mitigation of intermittent network interference.
+
+Like DANE, MTA-STS signals that the sender should strictly authenticate TLS.
+The MX record is duplicated in the MTA-STS policy, relying on HTTPS to secure the link.
+MTA-STS requires the receiving MTA to have a TLS certificate issued by a well-trusted CA.
+
+An MTA-STS policy document is fairly unchanging, making it well-suited for inexpensive, widely available, and highly scalable static web hosting.
+Many domain owners implement MTA-STS by adding the subdomain to an existing web server, as a virtual host, although it turns out this isn’t always a good idea.
+
+### MTA-STS challenges
+
+The TLS certificate renewal process is an obvious point of failure for MTA-STS.
+When a user-facing website goes down users complain, support tickets are filed, and the certificates are quickly renewed.
+The MTA-STS policy server fails open when it’s certificate expires.
+Senders will fall back to using opportunistic encryption and users won’t notice any disruption.
+As such an expired TLS certificate on an MTA-STS policy server can go unnoticed.
+To address this lack of visibility, TLS Reporting ([RFC 8460](https://www.rfc-editor.org/info/rfc8460/)) was created, which allows email servers to share deliverability reports with each other.
+
+Another problem, which I think is an even larger issue, are web servers that block email servers from accessing their MTA-STS policy.
+You’ve probably noticed a sharp rise in bots, scrapers, and other unwanted automated traffic impacting the web.
+In the rush to protect web servers from these ills many sites inadvertently blocked access to their MTA-STS policy.
+An email server fetching an MTA-STS policy can look a lot like unwanted traffic: it’s automated and its coming from data center IP ranges.
+Misapplying security policies intended to protect user-facing websites from unwanted bot traffic degrades API-like interfaces.
+
+### Comparing MTA-STS and DANE
+
+One unique benefit of SMTP DANE is that the policy cannot be blocked without the sender noticing.
+An MTA-STS policy server can be blocked just like any other web server and this blocking cannot easily be distinguish from a non-existent policy.
+
+While MTA-STS caching can protect against intermittent network-level blocking of the policy server, the first email sent to a domain is always vulnerable due to an empty cache.
+The effectiveness of MTA-STS in preventing an on-path attacker from intercepting email is questionable if the same on-path attacker can block the sender from discovering the MTA-STS policy.
+
+By these measures, DANE seems like the stronger option.
+
+DANE’s reliance on DNSSEC signing is its major weakness.
+[Measurements show that 0.9-1.2%](https://buttondown.com/foxloopsoftware/archive/email-ecosystem-dashboard/) of domain names that receive email have DANE support, which doesn’t provide much practical protection yet.
+Worse, large providers like gmail.com lack DNSSEC support, so the per-user impact may be larger.
+Unless DNSSEC adoption can grow among large email providers, DANE can only be a partial solution.
+In contrast, HTTPS is very widely adopted making MTA-STS familiar to practitioners, even with these challenges.
+
+### Improving MTA-STS
+
+The web has blazed a path that MTA-STS can likely follow.
+HTTP Strict Transport Security (HSTS) ([RFC 6769](https://www.rfc-editor.org/info/rfc6797/)) is essentially MTA-STS for the web (or visa-versa).
+HSTS is similarly vulnerable when the cache is empty.
+Web browsers mitigate this issue using a preload list, which ships in the browser.
+Out-of-the-box, the web browser knows that popular websites, like wikipedia.com, strictly use HTTPS.
+While there are challenges with HSTS, [like the size of the list](https://alexsci.com/blog/hsts-adoption/), this may have marginal impact for a server-side technology like email.
+
+I think MTA-STS can copy this solution.
+There are unknowns, like who would build an MTA-STS preload list, why we trust them to do so, and the exact semantics needed for a domain to be added.
+In any case, I think we should wait on increased MTA-STS adoption before we take those next steps.
+
+## The race is on
+
+The adoption rates of MTA-STS and SMTP DANE tell an important story about how application protocols can secure domain information in practice.
+The fact that email has both a DNSSEC and an HTTPS approach gives us a way to spectate.
+
+Current measurements show that MTA-STS has overtaken DANE among the top-ranked domain names.
+
+| Tranco Rank | DANE adoption | MTA-STS adoption |
+| --- | --- | --- |
+| Top 1K | 1.0% | **2.6%** |
+| Top 10K | 1.2% | **1.9%** |
+| Top 100K | 1.1% | **1.3%** |
+| Top 1M | **1.0%** | 0.7% |
+
+Given the importance of protecting messages, including envelope information which cannot be end-to-end encrypted, these results are disappointing.
+
+[Prior work shows that TLS downgrade attacks on email are widespread](https://dl.acm.org/doi/pdf/10.1145/2815675.2815695).
+With the slow adoption of email security protocols since that study, the situation is unlikely to have improved.
+We can and should do better.
+
+These SMTP DANE and MTA-STS measurements will be published quarterly.
+[Subscribe to the newsletter](https://buttondown.com/foxloopsoftware/archive/email-ecosystem-dashboard/) to follow the trends.
+
+## Similar approaches
+
+MTA-STS isn’t the only protocol that works this way.
+
+OpenPGP Web Key Directory (WKD) ([draft-koch-openpgp-webkey-service-22](https://datatracker.ietf.org/doc/html/draft-koch-openpgp-webkey-service-22))
+uses an HTTPS .well-known approach to secure PGP key distribution, facilitating end-to-end encryption of message bodies.
+
+```
+GET https://openpgpkey.example.org/.well-known/openpgpkey/example.org/hu/iy9q119eutrkn8s1mk4r39qejnbu3n5q?l=Joe.Doe
+```
+
+The WKD “advanced method”, seen above, follows the best practice of using a protocol-specific subdomain.
+
+The analogous DNSSEC-based approach is OPENPGPKEY ([RFC 7929](https://www.rfc-editor.org/info/rfc7929/)).
+
+```
+<SHA-256 hash based on email address>._openpgpkey.example.com. IN OPENPGPKEY <public key base64>
+```
+
+Unfortunately, the SHA-256 hash does not provide meaningful privacy.
+Use of this protocol can leak the email addresses of your correspondents to passive network-level eavesdroppers.
+This highlights the importance of encryption, not just signing.
+
+Other protocols like Mail AutoConfig ([draft-ietf-mailmaint-autoconfig-07](https://datatracker.ietf.org/doc/draft-ietf-mailmaint-autoconfig/)) simplify the process of setting up an email client and similar applications.
+
+```
+GET https://autoconfig.example.com/.well-known/client-autoconfig.xml?emailaddress=fred@example.com
+```
+
+Again we see this protocol follow the security best practice of using a protocol-specific subdomain.
+
+There are [over 100 registered .well-known URIs](https://www.iana.org/assignments/well-known-uris), showing the popularity of this approach.
+Many of these tolerate lower security properties and use the bare domain name instead of a protocol-specific subdomain.
+
+## Complementary solutions
+
+While I’ve thus far framed the discussion as a competition, DNSSEC and HTTPS .well-known are actually complementary.
+We don’t need one approach to defeat the other: we’ll see ecosystem improvements as both solutions are adopted, side-by-side.
+HTTPS .well-known can offload large policy documents and allow rapid experimentation, avoiding the size limits of UDP packets and the slow process of adding new DNS record types.
+DNSSEC can sign the CAA record, providing improved security during TLS certificate issuance.
+
+DANE could even replace the CAs entirely, a topic of renewed interest after the recent [eMudhra mishap](https://bugzilla.mozilla.org/show_bug.cgi?id=2083449).
+After all, [we wouldn’t need the CAs if we had a secure DNS](https://youtu.be/vBPF71iYmVY?t=358).
+
+I see complementary nature of DNSSEC and HTTPS .well-known emphasized in another draft,
+Domain Authority (DA): A DNS-Designated Service Endpoint for Domain Information
+([draft-swaminathan-da-00](https://datatracker.ietf.org/doc/html/draft-swaminathan-da-00)),
+which seeks to standardize the use of HTTPS to add capabilities to domain names beyond what DNS can natively support.
+While I think the current draft is too ambitious in scope, it provides a great summary of the benefits an HTTPS-based policy retrieval layer can provide beyond DNS.
+
+Unfortunately, we still have an insecure DNS.
+But progress in the domain name ecosystem is not blocked by DNS.
+MTA-STS shows that an HTTPS approach is immediately usable.

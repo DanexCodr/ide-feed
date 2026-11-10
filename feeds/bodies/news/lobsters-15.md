@@ -1,298 +1,1304 @@
-It’s sort of surprising, but we’re still figuring out how to secure simple, record-like information for domain names in an application-accessible way.
+*blqsort* is a very fast quicksort algorithm. I am not aware of any other general-purpose comparison-based sorting algorithm that is faster on random data. Only specialized SIMD-based algorithms are generally faster when dealing with small primitive data types.
 
-Think about it. How would you bind the following to a domain name?
+### blqsort
 
-```
-example.com
-    Key-1: Value-1
-    Key-2: Value-2
-```
+The main ideas are branchless partitioning, sorting networks for small partitions and robust pivot selection.
 
-Importantly, how would you secure it?
+The implementation is available on GitHub under the MIT license. There is also a C version of it, including multithreaded versions, each as a single header file.
 
-## DNS and DNSSEC
+The following **benchmarks** show the execution times for sorting 50 million random `doubles` using different sorting implementations. The measurements were taken on an *Apple M1* system using *Clang* and on an *Intel i5-9300H Linux* system using *GCC*, both compiled with the `-O3` option.
 
-Since we’re talking about domain names, lets start with DNS. The classic solution adds configuration as TXT records:
-
-```
-_PROTOCOL.EXAMPLE.COM.  IN  TXT   "v=PROTOCOLv1; Key-1=Value-1; Key-2=Value-2"
-```
-
-Notice that we use an underscored subdomain label to make it clear we aren’t talking about a hostname. The protocol name is then repeated to make it abundantly clear this record is related to the protocol.
-
-As is, we can’t claim this solution is secure. DNS-based network interference is trivial and widespread. The best practice for securing DNS records is DNSSEC, which uses cryptographic signing.
-
-I’m not going to debate the security properties of DNSSEC in this post. There are strong opinions on both sides and the most helpful answer likely depends on the context in which you work. For the sake of this blog post I’ll wave my hands and call this “secure enough” to side-step the issue. In any case, the rest of the post doesn’t depend on a favorable or unfavorable assessment of the security properties of DNSSEC.
-
-## DNSSEC is uncommon
-
-Even the strongest supporters of DNSSEC need to face the reality that DNSSEC isn’t widely adopted.
-
-There’s no single answer that quantifies DNSSEC adoption.
-At Fox Loop Software I collect adoption metrics for various Internet protocols; [we just released the first dashboard](https://buttondown.com/foxloopsoftware/archive/email-ecosystem-dashboard/).
-Our approach highlights that adoption rates vary widely depending on which cohort you measure.
-For example, here are the adoption rates of DNSSEC signed MX records among second-level domain names that accept email:
-
-| Cohort | Adoption rate |
-| --- | --- |
-| Tranco top 1,000 | 12.3% |
-| Tranco top 1,000,000 | 7.5% |
-| .COM | 1.4% |
-| .GOV | 10.4% |
-| .SE | 62.8% |
-
-From the perspective of an application developer, it is not reasonable to expect that a customer domain name will support DNSSEC. Until this changes, application developers must use alternate solutions if they need security.
-
-## The web approach
-
-If my application is web-based then there’s a pretty obvious solution as I already have an HTTPS secured endpoint.
-I can use the HTTPS .well-known approach ([RFC 8615](https://www.rfc-editor.org/info/rfc8615/)).
-
-```
-GET https://example.com/.well-known/protocol.txt
----
-Version: PROTOCOLv1
-Key-1: Value-1
-Key-2: Value-2
-```
-
-These records are secured by HTTPS.
-The developer experience is excellent: adding a record could be as easy as dropping a file in a web server directory.
-Fetching records is a simple HTTP GET request.
-
-But not everything is a web-based application. Can we extend this solution to other protocols?
-
-## Case study: Email
-
-Email is a very old protocol, predating not only TLS but the entire Internet as well.
-Over time all sorts of additions have been bolted on to modernize and maintain the protocol.
-Many of these additions added new DNS TXT records, such as SPF, DKIM, and DMARC.
-These records can be secured by DNSSEC but do not require it, so tampering of these records is unmitigated or otherwise tolerated.
-
-Let’s look past these examples to a problem that clearly requires a secure record.
-
-### The hostname mis-match problem
-
-Email has an awkward problem, which is how hostnames are managed.
-When a message transfer agent (MTA) relays an email it needs to discover the destination MTA.
-This is solved using an MX record, which specifies the target MTA’s domain name.
-I’ve measured that around 80% of domains host their email on a different domain name, often using providers like Google or Microsoft.
-
-When sending an email, the MTA will discover a chain from the user’s email address to the receiving MTA’s TLS certificate, like this:
-
-The sending MTA now needs to decide if it trusts the connection.
-Unfortunately, smtp.provider.com, as seen in the TLS certificate, does not match example.com, as provided in the email address.
-The only link between the two domain names is an MX record, which typically unsigned and therefor insecure.
-Without trustworthy information, certificate validation cannot succeed and the sending MTA must skip validation.
-
-Lack of certificate validation means that receiving MTAs can use a self-signed, expired, or even a certificate with the wrong name; the sending MTA does not care.
-This approach is known as “opportunistic encryption” and it provides strong protection against passive eavesdropping.
-But without a way to validate the receiving MTA’s TLS certificate, active attacks remained unmitigated.
-
-Email cannot enforce authenticated MTA-to-MTA transit encryption until this hostname mis-match problem is solved in a secure way.
-
-### A problem end-to-end encryption cannot solve
-
-Many email security conversations focus on end-to-end encryption.
-It is a great solution to many of the security problems facing email, but it doesn’t fully address the problem being discussed here.
-
-Message relaying requires the MTA to know the recipient’s email address.
-This is known as “envelope information” and it cannot be end-to-end encrypted.
-Methods like PGP encryption can not and do not protect this information, as they only encrypt the message body.
-
-The only way to protect this information from network-level attackers is to ensure the message is delivered to the correct MTA, which requires authenticated transit encryption.
-
-### Non-analogous to the web
-
-When I first encountered this issue I was surprised as there is no analogous problem on the web.
-The issue relates to the semantic difference between a CNAME and an MX record.
-A CNAME record pointing at a web hosting provider’s server is a matter of identity and that server can get a TLS certificate to prove it.
-An MX record does not permit the target email server to get a corresponding TLS certificate.
-
-A web browser is able to compare the name in the TLS certificate with the name shown in the address bar and can expect these to strictly match.
-An MTA doesn’t compare the name in the TLS certificate with the domain name in the “to” address as a mismatch is typically expected.
-
-Further, email is sent asynchronously so there are no humans involved in MTA-to-MTA communications.
-While web browsers can show a certificate warning message to allow users to make their own security decisions, an MTA is all on its own.
-Email providers often tout support for transit encryption but the lack of certificate validation makes email traveling between MTAs about as secure as a user browsing the web while *always* clicking through invalid certificate warnings.
-
-Interestingly, email has adopted two solutions to this problem: a DNSSEC-based approach and an HTTPS .well-known approach.
-This give us a unique opportunity to compare these approaches head-to-head as they attempt to solve the same problem.
-
-### SMTP DANE
-
-The DNSSEC approach is SMTP DNS-based Authentication of Named Entities (DANE) ([RFC 7672](https://www.rfc-editor.org/info/rfc7672/)),
-which was standardized in 2015.
-DANE requires DNSSEC signing in both the customer and email provider’s DNS zones for the protection to have full effect.
-
-DANE adds the TLSA DNS record.
-Here’s an example:
-
-```
-_25._tcp.mail.provider.com.  1200  IN  TLSA  3 1 1 6111A5698D23C89E09C36FF833C1487EDC1B0C841F87C49DAE8F7A09 E11E979E
-```
-
-This record indicates that the MTA-to-MTA connection can use authenticated encryption.
-Specifically, this record indicates that the receiving MTA should provide a TLS certificate with a public key digest of “6111A…”.
-Validating this pinned certificate does not depend on the certificate authority (CA) system.
-
-SMTP DANE signals that it should be possible to cryptographically validate the chain from the domain name in the email address to the domain name on the receiving MTA’s TLS certificate.
-
-One key benefit of DNSSEC, which we’ll revisit, is that blocking of a signed record can be distinguished from a non-existent policy.
-When the TLSA record does not exist, the authoritative DNS server should provide a signed proof of non-existence (NSEC).
-This acts as a fail safe: if DNSSEC is enabled and the sender cannot determine the DANE policy, then the sender can conclude that it is not safe to send the message as network interference may be present.
-
-### MTA-STS
-
-Email providers realized that slow adoption of DNSSEC was delaying authenticated transit encryption between MTAs.
-They looked at what other tools were available and found inspiration from the HTTPS .well-known approach.
-Standardized in 2018, SMTP MTA Strict Transport Security (MTA-STS) ([RFC 8461](https://www.rfc-editor.org/info/rfc8461/)) provides an HTTPS-based solution.
-
-Here’s what it looks like:
-
-```
-GET https://mta-sts.example.com/.well-known/mta-sts.txt
----
-version: STSv1
-mode: enforce
-mx: smtp.provider.com
-max_age: 604800
-```
-
-Notice that the mta-sts subdomain is used instead of the bare domain.
-This best practice stems from the need to isolate security policies from whatever website lives at the bare domain; often a marketing website which may not have a security posture suitable for cross-protocol policies like MTA-STS.
-To distinguish any pre-existing use of the mta-sts subdomain the “_mta-sts” TXT record must also be set.
-
-```
-_mta-sts.example.com. 3600     IN      TXT     "v=STSv1; id=190906205100Z;"
-```
-
-Finally, policy caching was added as a partial mitigation of intermittent network interference.
-
-Like DANE, MTA-STS signals that the sender should strictly authenticate TLS.
-The MX record is duplicated in the MTA-STS policy, relying on HTTPS to secure the link.
-MTA-STS requires the receiving MTA to have a TLS certificate issued by a well-trusted CA.
-
-An MTA-STS policy document is fairly unchanging, making it well-suited for inexpensive, widely available, and highly scalable static web hosting.
-Many domain owners implement MTA-STS by adding the subdomain to an existing web server, as a virtual host, although it turns out this isn’t always a good idea.
-
-### MTA-STS challenges
-
-The TLS certificate renewal process is an obvious point of failure for MTA-STS.
-When a user-facing website goes down users complain, support tickets are filed, and the certificates are quickly renewed.
-The MTA-STS policy server fails open when it’s certificate expires.
-Senders will fall back to using opportunistic encryption and users won’t notice any disruption.
-As such an expired TLS certificate on an MTA-STS policy server can go unnoticed.
-To address this lack of visibility, TLS Reporting ([RFC 8460](https://www.rfc-editor.org/info/rfc8460/)) was created, which allows email servers to share deliverability reports with each other.
-
-Another problem, which I think is an even larger issue, are web servers that block email servers from accessing their MTA-STS policy.
-You’ve probably noticed a sharp rise in bots, scrapers, and other unwanted automated traffic impacting the web.
-In the rush to protect web servers from these ills many sites inadvertently blocked access to their MTA-STS policy.
-An email server fetching an MTA-STS policy can look a lot like unwanted traffic: it’s automated and its coming from data center IP ranges.
-Misapplying security policies intended to protect user-facing websites from unwanted bot traffic degrades API-like interfaces.
-
-### Comparing MTA-STS and DANE
-
-One unique benefit of SMTP DANE is that the policy cannot be blocked without the sender noticing.
-An MTA-STS policy server can be blocked just like any other web server and this blocking cannot easily be distinguish from a non-existent policy.
-
-While MTA-STS caching can protect against intermittent network-level blocking of the policy server, the first email sent to a domain is always vulnerable due to an empty cache.
-The effectiveness of MTA-STS in preventing an on-path attacker from intercepting email is questionable if the same on-path attacker can block the sender from discovering the MTA-STS policy.
-
-By these measures, DANE seems like the stronger option.
-
-DANE’s reliance on DNSSEC signing is its major weakness.
-[Measurements show that 0.9-1.2%](https://buttondown.com/foxloopsoftware/archive/email-ecosystem-dashboard/) of domain names that receive email have DANE support, which doesn’t provide much practical protection yet.
-Worse, large providers like gmail.com lack DNSSEC support, so the per-user impact may be larger.
-Unless DNSSEC adoption can grow among large email providers, DANE can only be a partial solution.
-In contrast, HTTPS is very widely adopted making MTA-STS familiar to practitioners, even with these challenges.
-
-### Improving MTA-STS
-
-The web has blazed a path that MTA-STS can likely follow.
-HTTP Strict Transport Security (HSTS) ([RFC 6769](https://www.rfc-editor.org/info/rfc6797/)) is essentially MTA-STS for the web (or visa-versa).
-HSTS is similarly vulnerable when the cache is empty.
-Web browsers mitigate this issue using a preload list, which ships in the browser.
-Out-of-the-box, the web browser knows that popular websites, like wikipedia.com, strictly use HTTPS.
-While there are challenges with HSTS, [like the size of the list](https://alexsci.com/blog/hsts-adoption/), this may have marginal impact for a server-side technology like email.
-
-I think MTA-STS can copy this solution.
-There are unknowns, like who would build an MTA-STS preload list, why we trust them to do so, and the exact semantics needed for a domain to be added.
-In any case, I think we should wait on increased MTA-STS adoption before we take those next steps.
-
-## The race is on
-
-The adoption rates of MTA-STS and SMTP DANE tell an important story about how application protocols can secure domain information in practice.
-The fact that email has both a DNSSEC and an HTTPS approach gives us a way to spectate.
-
-Current measurements show that MTA-STS has overtaken DANE among the top-ranked domain names.
-
-| Tranco Rank | DANE adoption | MTA-STS adoption |
+| Implementation | Apple M1 | Intel i5-9300H |
 | --- | --- | --- |
-| Top 1K | 1.0% | **2.6%** |
-| Top 10K | 1.2% | **1.9%** |
-| Top 100K | 1.1% | **1.3%** |
-| Top 1M | **1.0%** | 0.7% |
+| std::sort | 1.33s | 4.97s |
+| ipnsort ClickHouse C++ port | 0.99s | 2.31s |
+| blqsort | 0.67s | 1.33s |
 
-Given the importance of protecting messages, including envelope information which cannot be end-to-end encrypted, these results are disappointing.
+For a fair comparison, the single-threaded version of `blqs` was used here. On the *M1*, the multithreaded versions are roughly another factor of 3 faster. In terms of runtime, the *C* versions differ only very little from the *C++* version.
 
-[Prior work shows that TLS downgrade attacks on email are widespread](https://dl.acm.org/doi/pdf/10.1145/2815675.2815695).
-With the slow adoption of email security protocols since that study, the situation is unlikely to have improved.
-We can and should do better.
+Execution times for sorting 50 million of these `structs` with random id values.
 
-These SMTP DANE and MTA-STS measurements will be published quarterly.
-[Subscribe to the newsletter](https://buttondown.com/foxloopsoftware/archive/email-ecosystem-dashboard/) to follow the trends.
+`struct entry {
+    int id;
+    int value;
+    bool operator<(const entry& other) const { return id < other.id; }
+};
+struct entry data[SIZE];
+blqs::sort(data, data + SIZE);
+`
 
-## Similar approaches
+| Implementation | Apple M1 | Intel i5 |
+| --- | --- | --- |
+| std::sort | 3.45s | 4.10s |
+| ipnsort ClickHouse C++ port | 0.98s | 2.63s |
+| blqsort | 0.75s | 1.40s |
 
-MTA-STS isn’t the only protocol that works this way.
+Already sorted and reverse-sorted inputs are detected and handled efficiently. Inputs with many duplicate keys are optimized as well.
 
-OpenPGP Web Key Directory (WKD) ([draft-koch-openpgp-webkey-service-22](https://datatracker.ietf.org/doc/html/draft-koch-openpgp-webkey-service-22))
-uses an HTTPS .well-known approach to secure PGP key distribution, facilitating end-to-end encryption of message bodies.
+The execution times, unless otherwise specified, apply to an *Apple M1* system.
 
-```
-GET https://openpgpkey.example.org/.well-known/openpgpkey/example.org/hu/iy9q119eutrkn8s1mk4r39qejnbu3n5q?l=Joe.Doe
-```
+A small, elegant, recursive quicksort:
 
-The WKD “advanced method”, seen above, follows the best practice of using a protocol-specific subdomain.
+`#include <cstdio>
+#include <cstdlib>
+#include <chrono>
 
-The analogous DNSSEC-based approach is OPENPGPKEY ([RFC 7929](https://www.rfc-editor.org/info/rfc7929/)).
+constexpr int SIZE = 50000000;
+double data[SIZE];
 
-```
-<SHA-256 hash based on email address>._openpgpkey.example.com. IN OPENPGPKEY <public key base64>
-```
+double time() {
+    static auto time0 = std::chrono::high_resolution_clock::now();
+    auto t = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> diff = t - time0;
+    return diff.count();
+}
 
-Unfortunately, the SHA-256 hash does not provide meaningful privacy.
-Use of this protocol can leak the email addresses of your correspondents to passive network-level eavesdroppers.
-This highlights the importance of encryption, not just signing.
+void sortq(double ar[], int len) {
+    if (len < 2) return;
+    double piv = ar[0];
+    int mid = 0;
+    for (int i = 1; i < len; i++) {
+        if (ar[i] < piv) {
+            mid += 1;
+            std::swap(ar[mid], ar[i]);
+        }
+    }
+    std::swap(ar[mid], ar[0]);
 
-Other protocols like Mail AutoConfig ([draft-ietf-mailmaint-autoconfig-07](https://datatracker.ietf.org/doc/draft-ietf-mailmaint-autoconfig/)) simplify the process of setting up an email client and similar applications.
+    sortq(ar + mid + 1, len - mid - 1);
+    sortq(ar, mid);
+}
 
-```
-GET https://autoconfig.example.com/.well-known/client-autoconfig.xml?emailaddress=fred@example.com
-```
+int main() {
+    double t0;
 
-Again we see this protocol follow the security best practice of using a protocol-specific subdomain.
+    printf("Sorting %d million doubles\n", SIZE / 1000000);
+    for (int i = 0; i < SIZE; i++) data[i] = rand() / 1024.0;
 
-There are [over 100 registered .well-known URIs](https://www.iana.org/assignments/well-known-uris), showing the popularity of this approach.
-Many of these tolerate lower security properties and use the bare domain name instead of a protocol-specific subdomain.
+    t0 = time();
+    sortq(data, SIZE);
+    printf("sortq: %.2fs\n", time() - t0);
+}
+`
+`c++ -O1 main.cpp && ./a.out
+`
+`Sorting 50 million doubles
+sortq: 4.61s
+`
+If you sort the sorted data again, all elements in the partition are greater than or equal to the pivot element. The second partition becomes only one element smaller each time, and the function is called recursively millions of times, which leads to a stack overflow after a few hours.
 
-## Complementary solutions
+You can prevent this with *tail call elimination*. That is, the first recursive call remains, while the second is replaced by a loop iteration. You now need to ensure that the smaller partition is called recursively. So swap them if necessary.
 
-While I’ve thus far framed the discussion as a competition, DNSSEC and HTTPS .well-known are actually complementary.
-We don’t need one approach to defeat the other: we’ll see ecosystem improvements as both solutions are adopted, side-by-side.
-HTTPS .well-known can offload large policy documents and allow rapid experimentation, avoiding the size limits of UDP packets and the slow process of adding new DNS record types.
-DNSSEC can sign the CAA record, providing improved security during TLS certificate issuance.
+`void sortq(double* ar, int len) {
+    while (len >= 2) {
+        double piv = ar[0];
+        int mid = 0;
+        for (int i = 1; i < len; i++) {
+            if (ar[i] < piv) {
+                mid += 1;
+                std::swap(ar[mid], ar[i]);
+            }
+        }
+        std::swap(ar[mid], ar[0]);
+        double* ar2 = ar + mid + 1;
+        int len2 = len - mid - 1;
+        len = mid;
+        if (len2 > len) {
+            std::swap(len, len2);
+            std::swap(ar, ar2);
+        }
+        sortq(ar2, len2);
+    }
+}
+`
+Now the program no longer crashes, but it will take a few days to finish. Because of this unfavorable partitioning, the worst-case scenario of *O(N²)* has become a reality. However, insertion sort would not make it any faster either.
 
-DANE could even replace the CAs entirely, a topic of renewed interest after the recent [eMudhra mishap](https://bugzilla.mozilla.org/show_bug.cgi?id=2083449).
-After all, [we wouldn’t need the CAs if we had a secure DNS](https://youtu.be/vBPF71iYmVY?t=358).
+Let’s just use the middle element as the pivot - then the problem of sorting already sorted data will be gone.
 
-I see complementary nature of DNSSEC and HTTPS .well-known emphasized in another draft,
-Domain Authority (DA): A DNS-Designated Service Endpoint for Domain Information
-([draft-swaminathan-da-00](https://datatracker.ietf.org/doc/html/draft-swaminathan-da-00)),
-which seeks to standardize the use of HTTPS to add capabilities to domain names beyond what DNS can natively support.
-While I think the current draft is too ambitious in scope, it provides a great summary of the benefits an HTTPS-based policy retrieval layer can provide beyond DNS.
+This implementation is sufficient for many purposes and is also reasonably fast. By the way, “Lomuto” partitioning is used here. “Hoare” partitioning performs fewer comparisons and swaps, but on modern CPUs its cache behavior can be less favorable.
 
-Unfortunately, we still have an insecure DNS.
-But progress in the domain name ecosystem is not blocked by DNS.
-MTA-STS shows that an HTTPS approach is immediately usable.
+But why write your own implementation when *std::sort* exists?
+
+`.
+#include <algorithm>
+.
+    .
+    t0 = time();
+    std::sort(data, data + SIZE);
+    printf("std::sort: %.2fs\n", time() - t0);
+    .
+`
+`std::sort: 1.31s
+`
+That’s on ARM Mac - on a x86 system, `std::sort` is only about 10% faster.
+
+How can you make a quicksort run faster than std::sort?
+
+### Sorting networks
+
+For partitions with up to about 20 elements, insertion sort is faster than quicksort. But there is something even faster for small partitions: *sorting networks*. Each partition size is handled in its own program branch. For a partition size of two, the two elements are simply compared and swapped if necessary. However, as the number of elements increases, the logic becomes increasingly complex.
+
+`inline void sort2(double& a, double& b) {
+    if (a < b) std::swap(a, b);
+}
+inline void sort3(double& a, double& b, double& c) {
+    sort2(a, b); sort2(b, c); sort2(a, b);
+}
+inline void sort4(double& a, double& b, double& c, double& d) {
+    sort2(a, b); sort2(c, d); sort2(a, c);
+    sort2(b, d); sort2(b, c);
+}
+inline void sort5(double& a, double& b, double& c, double& d, double& e) {
+    sort2(b, c); sort2(d, e); sort2(b, d);
+    sort2(a, c); sort2(a, d); sort2(c, e);
+    sort2(a, b); sort2(c, d); sort2(b, c);
+}
+
+    .
+    while (len >= 6) {
+        .
+        .
+    }
+    if (len == 5) sort5(ar[0], ar[1], ar[2], ar[3], ar[4]);
+    else if (len == 4) sort4(ar[0], ar[1], ar[2], ar[3]);
+    else if (len == 3) sort3(ar[0], ar[1], ar[2]);
+    else if (len == 2) sort2(ar[0], ar[1]);
+}
+
+`
+
+Let’s consider a simple task: Iterate through an array and copy all numbers less than 500 into a new array. A straightforward implementation in *C* looks like this:
+
+`smlen = 0;
+for (int i = 0; i < 1000; i++) {
+    if (numbers[i] < 500) {
+        small_numbers[smlen] = numbers[i];
+        smlen += 1;
+    }
+}
+`
+If the numbers are randomly distributed, the result of the `if` condition  becomes unpredictable for the branch predictor. This results in a high misprediction rate, which severely impacts performance because the processor must constantly flush its pipeline and restart execution.
+
+We can avoid this problem by using a branchless approach:
+
+*Branchless* does not mean that there are no jumps at all. The term refers only to the comparison, which is difficult to predict. Obviously, the loop jump remains, but that is not a problem because it is easily predictable - it is skipped only once.
+
+**Performance Comparison**
+
+To get meaningful results, we run both routines for 1000 iterations using 100,000 random numbers.
+
+`#include <stdio.h>
+#include <stdlib.h>
+#include <sys/time.h>
+
+#define SIZE 100000
+int numbers[SIZE];
+int small_numbers[SIZE];
+int smlen;
+
+double ts(void) {
+    static double t0;
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    double h = t0;
+    t0 = tv.tv_sec + tv.tv_usec / 1000000.0;
+    return t0 - h;
+}
+void init(void) {
+    srand(1);
+    for (int i = 0; i < SIZE; i++) numbers[i] = rand() % 1000;
+    ts();
+}
+void small_if(void) {
+    smlen = 0;
+    for (int i = 0; i < SIZE; i++) {
+        if (numbers[i] < 500) {
+            small_numbers[smlen] = numbers[i];
+            smlen += 1;
+        }
+    }
+}
+void small_bl(void) {
+    smlen = 0;
+    for (int i = 0; i < SIZE; i++) {
+        small_numbers[smlen] = numbers[i];
+        smlen += (numbers[i] < 500);
+    }
+}
+int main(void) {
+    init();
+    for (int i = 0; i < 1000; i++) small_if();
+    printf("Time if: %.3f\n", ts());
+    init();
+    for (int i = 0; i < 1000; i++) small_bl();
+    printf("Time bl: %.3f\n", ts());
+}
+`
+Benchmark results were obtained on an *Apple M1* with `-O1` optimization. On this benchmark, `-O3` did not yield additional speedup, only larger generated code.
+
+`Time if: 0.345
+Time bl: 0.036
+`
+**Assembly Analysis**
+
+Using `objdump -d`, we can see the difference in how the CPU processes these loops.
+
+With the `if` version, the compiler generates a conditional branch `b.gt`.
+
+`ldr     w13, [x10], #0x4           ; load numbers[i]
+cmp     w13, #0x1f3                ; compare with 499 (0x1f3)
+b.gt    0x100000678                ; branch if greater (The bottleneck)
+str     w13, [x12, w8, sxtw #2]    ; store value in small_numbers[j]
+add     w8, w8, #0x1               ; j += 1
+`
+With the branchless version the compiler uses the `cinc` (conditional increment) instruction.
+
+`ldr     w13, [x10], #0x4           ; load numbers[i]
+str     w13, [x12, w8, uxtw #2]    ; unconditional store to small_numbers[j]
+cmp     w13, #0x1f4                ; compare with 500
+cinc    w8, w8, lt                 ; conditional increment (No branch)
+`
+In this version, there is no jump based on the data. The control flow is perfectly linear, allowing the CPU to use its full pipeline width.
+
+**Why doesn’t the compiler optimize the `if` case automatically?**
+
+The compiler doesn’t know the nature of your data. If only a small fraction of numbers were less than 500, the branch version might actually be faster because the predictor would almost always be right.
+
+The branchless version performs a write operation (`str`) every single time. The compiler cannot safely assume that it is permitted to write to memory if a write operation in the original source code was intended to occur only under a specific condition - for example, to avoid writing past the end of an allocated buffer.
+
+Since quicksort essentially works by dividing the data into large and small numbers, it should be possible to speed it up using this technique.
+
+So, as described above, we can make the partitioning step branchless. (`comp` is the comparison function):
+
+`int h = comp(*left, piv);
+*lwr = *rwr = *left++;
+lwr += h; rwr -= !h;
+`
+We can also make `sort2` - the basic operation for the sorting network - branchless:
+
+`inline static void sort2(double& a, double& b) {
+    double x = a; double y = b;
+    bool m = x < y;
+    a = m ? x : y; b = m ? y : x;
+}
+`
+Here’s how it works (in short) :
+
+First, about 250 elements are copied from one page into an auxiliary buffer to make room for subsequent operations. We then alternately copy a block to the left and to the right, without using any branches.
+
+The pivot element is also carefully selected. Several medians are determined from various elements of the partition, and the final median is then calculated from these medians. This results in a much more even distribution of the data. Some randomness is added to the pivot selection process to prevent inputs from consistently triggering worst-case behavior.
+
+If the distribution is still very uneven, however, the algorithm switches to heap sort for these partitions as a precaution. Uneven distribution often occurs when there are many identical elements; in this case, they are identified and grouped together.
+
+In addition, the code includes the sorting networks, which are used for partition sizes up to 16.
+
+And with a `for (int i = 16; i--;) { ... }` loop, the compiler unrolls the loop, generating 16 copies of the loop body.
+
+This version consists of a single *C++* header file that can be easily included. It can sort any data type, and the comparison function can be supplied by the user, just like with `std::sort`.
+
+> blqs.h
+
+`#ifndef BLQS_H
+#define BLQS_H
+
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <functional>
+#include <utility>
+
+#ifndef BLQS_RAND
+#define BLQS_RAND
+
+#include <random>
+static thread_local uint64_t blqs_seed;
+
+static inline unsigned blqs_rand(void) {
+    if (!blqs_seed) {
+        std::random_device rd;
+        blqs_seed =
+            ((uintptr_t)&blqs_seed) ^
+            (((uint64_t)rd() << 32) | (uint64_t)rd());
+        if (!blqs_seed) blqs_seed = 1;
+    }
+
+    uint64_t x = blqs_seed;
+    x ^= x << 13;
+    x ^= x >> 7;
+    x ^= x << 17;
+    blqs_seed = x;
+    return (unsigned)x;
+}
+#endif
+
+namespace blqs {
+
+constexpr int SMALLPART = 1024;
+constexpr int SWSZ = 512;
+constexpr int UNROLL = 16;
+
+template<typename T, typename Compare>
+static inline void sort2(T& a, T& b, Compare comp) {
+    T x = a; T y = b;
+    bool m = comp(x, y);
+    a = m ? x : y; b = m ? y : x;
+}
+
+template<typename T, typename Compare>
+static inline void sort3(T& a, T& b, T& c, Compare comp) {
+    sort2(a, b, comp); sort2(b, c, comp); sort2(a, b, comp);
+}
+
+template<typename T, typename Compare>
+static inline void sort4(T& a, T& b, T& c, T& d, Compare comp) {
+    sort2(a, b, comp); sort2(c, d, comp); sort2(a, c, comp);
+    sort2(b, d, comp); sort2(b, c, comp);
+}
+
+template<typename T, typename Compare>
+static inline void sort5(T& a, T& b, T& c, T& d, T& e, Compare comp) {
+    sort2(b, c, comp); sort2(d, e, comp); sort2(b, d, comp);
+    sort2(a, c, comp); sort2(a, d, comp); sort2(c, e, comp);
+    sort2(a, b, comp); sort2(c, d, comp); sort2(b, c, comp);
+}
+
+template<typename T, typename Compare>
+static inline void sort6(T& a, T& b, T& c, T& d, T& e, T& f, Compare comp) {
+    sort2(a, b, comp); sort2(c, d, comp); sort2(e, f, comp);
+    sort2(a, c, comp); sort2(b, d, comp); sort2(e, f, comp);
+    sort2(a, e, comp); sort2(b, f, comp); sort2(c, e, comp);
+    sort2(d, f, comp); sort2(b, c, comp); sort2(d, e, comp);
+    sort2(c, d, comp);
+}
+
+template<typename T, typename Compare>
+static inline void sort7(T& a, T& b, T& c, T& d, T& e, T& f, T& g, Compare comp) {
+    sort2(a, g, comp); sort2(c, d, comp); sort2(e, f, comp);
+    sort2(a, c, comp); sort2(b, e, comp); sort2(d, g, comp);
+    sort2(a, b, comp); sort2(c, f, comp); sort2(d, e, comp);
+    sort2(b, c, comp); sort2(e, g, comp);
+    sort2(c, d, comp); sort2(e, f, comp);
+    sort2(b, c, comp); sort2(d, e, comp); sort2(f, g, comp);
+}
+
+template<typename T, typename Compare>
+static inline void sort8(T& a, T& b, T& c, T& d, T& e, T& f, T& g, T& h, Compare comp) {
+    sort2(a,b,comp); sort2(c,d,comp); sort2(e,f,comp); sort2(g,h,comp);
+    sort2(a,c,comp); sort2(b,d,comp); sort2(e,g,comp); sort2(f,h,comp);
+    sort2(b,c,comp); sort2(f,g,comp);
+    sort2(a,e,comp); sort2(b,f,comp); sort2(c,g,comp); sort2(d,h,comp);
+    sort2(c,e,comp); sort2(d,f,comp);
+    sort2(b,c,comp); sort2(d,e,comp); sort2(f,g,comp);
+}
+
+template<typename T, typename Compare>
+static inline void sort9(T& a, T& b, T& c, T& d, T& e, T& f, T& g, T& h, T& i, Compare comp) {
+    sort2(a,d,comp); sort2(b,h,comp); sort2(c,f,comp); sort2(e,i,comp);
+    sort2(a,h,comp); sort2(c,e,comp); sort2(d,i,comp); sort2(f,g,comp);
+    sort2(a,c,comp); sort2(b,d,comp); sort2(e,f,comp); sort2(h,i,comp);
+    sort2(b,e,comp); sort2(d,g,comp); sort2(f,h,comp);
+    sort2(a,b,comp); sort2(c,e,comp); sort2(d,f,comp); sort2(g,i,comp);
+    sort2(c,d,comp); sort2(e,f,comp); sort2(g,h,comp);
+    sort2(b,c,comp); sort2(d,e,comp); sort2(f,g,comp);
+}
+
+template<typename T, typename Compare>
+static inline void sort10(T& a, T& b, T& c, T& d, T& e, T& f, T& g, T& h, T& i, T& j, Compare comp) {
+    sort2(a,b,comp); sort2(c,f,comp); sort2(d,g,comp); sort2(e,h,comp); sort2(i,j,comp);
+    sort2(a,g,comp); sort2(b,i,comp); sort2(c,e,comp); sort2(d,j,comp); sort2(f,h,comp);
+    sort2(a,c,comp); sort2(b,d,comp); sort2(e,f,comp); sort2(g,i,comp); sort2(h,j,comp);
+    sort2(a,b,comp); sort2(c,h,comp); sort2(d,f,comp); sort2(e,g,comp); sort2(i,j,comp);
+    sort2(b,c,comp); sort2(d,e,comp); sort2(f,g,comp); sort2(h,i,comp);
+    sort2(b,d,comp); sort2(c,e,comp); sort2(f,h,comp); sort2(g,i,comp);
+    sort2(c,d,comp); sort2(e,f,comp); sort2(g,h,comp);
+}
+
+template<typename T, typename Compare>
+static inline void sort11(T& a, T& b, T& c, T& d, T& e, T& f, T& g, T& h, T& i, T& j, T& k, Compare comp) {
+    sort2(a,j,comp); sort2(b,g,comp); sort2(c,e,comp); sort2(d,h,comp); sort2(f,i,comp);
+    sort2(a,b,comp); sort2(d,f,comp); sort2(e,k,comp); sort2(g,j,comp); sort2(h,i,comp);
+    sort2(b,d,comp); sort2(c,f,comp); sort2(e,h,comp); sort2(i,k,comp);
+    sort2(a,e,comp); sort2(b,c,comp); sort2(d,h,comp); sort2(f,j,comp); sort2(g,i,comp);
+    sort2(a,b,comp); sort2(c,g,comp); sort2(e,f,comp); sort2(h,i,comp);
+    sort2(j,k,comp);
+    sort2(c,e,comp); sort2(d,g,comp); sort2(f,h,comp); sort2(i,j,comp);
+    sort2(b,c,comp); sort2(d,e,comp); sort2(f,g,comp); sort2(h,i,comp);
+    sort2(c,d,comp); sort2(e,f,comp); sort2(g,h,comp);
+}
+
+template<typename T, typename Compare>
+static inline void sort12(T& a, T& b, T& c, T& d, T& e, T& f, T& g, T& h, T& i, T& j, T& k, T& l, Compare comp) {
+    sort2(a,i,comp); sort2(b,h,comp); sort2(c,g,comp); sort2(d,l,comp); sort2(e,k,comp); sort2(f,j,comp);
+    sort2(a,c,comp); sort2(b,e,comp); sort2(d,f,comp); sort2(g,i,comp); sort2(h,k,comp); sort2(j,l,comp);
+    sort2(a,b,comp); sort2(c,j,comp); sort2(e,h,comp); sort2(f,g,comp); sort2(k,l,comp);
+    sort2(b,d,comp); sort2(c,h,comp); sort2(e,j,comp); sort2(i,k,comp);
+    sort2(a,b,comp); sort2(c,d,comp); sort2(e,f,comp); sort2(g,h,comp); sort2(i,j,comp); sort2(k,l,comp);
+    sort2(b,c,comp); sort2(d,f,comp); sort2(g,i,comp); sort2(j,k,comp);
+    sort2(c,e,comp); sort2(d,g,comp); sort2(f,i,comp); sort2(h,j,comp);
+    sort2(b,c,comp); sort2(d,e,comp); sort2(f,g,comp); sort2(h,i,comp); sort2(j,k,comp);
+}
+template<typename T, typename Compare>
+static inline void sort13(T& a, T& b, T& c, T& d, T& e, T& f, T& g, T& h, T& i, T& j, T& k, T& l, T& m,
+                          Compare comp) {
+    sort2(a,m,comp); sort2(b,k,comp); sort2(c,j,comp); sort2(d,h,comp); sort2(f,l,comp); sort2(g,i,comp);
+    sort2(b,g,comp); sort2(c,d,comp); sort2(e,l,comp); sort2(h,j,comp); sort2(i,k,comp);
+    sort2(a,e,comp); sort2(b,c,comp); sort2(d,g,comp); sort2(h,i,comp); sort2(j,k,comp); sort2(l,m,comp);
+    sort2(e,g,comp); sort2(f,j,comp); sort2(i,l,comp); sort2(k,m,comp);
+    sort2(a,f,comp); sort2(d,i,comp); sort2(e,h,comp); sort2(g,l,comp); sort2(j,k,comp);
+    sort2(a,b,comp); sort2(c,f,comp); sort2(g,j,comp); sort2(h,i,comp); sort2(k,l,comp);
+    sort2(b,d,comp); sort2(c,e,comp); sort2(f,g,comp); sort2(j,k,comp);
+    sort2(b,c,comp); sort2(d,e,comp); sort2(f,h,comp); sort2(g,i,comp);
+    sort2(c,d,comp); sort2(e,f,comp); sort2(g,h,comp); sort2(i,j,comp);
+    sort2(d,e,comp); sort2(f,g,comp);
+}
+template<typename T, typename Compare>
+static inline void sort14(T& a, T& b, T& c, T& d, T& e, T& f, T& g, T& h, T& i, T& j, T& k, T& l,
+                        T& m, T& n, Compare comp) {
+    sort2(a,b,comp); sort2(c,d,comp); sort2(e,f,comp); sort2(g,h,comp); sort2(i,j,comp); sort2(k,l,comp); sort2(m,n,comp);
+    sort2(a,c,comp); sort2(b,d,comp); sort2(e,i,comp); sort2(f,j,comp); sort2(k,m,comp); sort2(l,n,comp);
+    sort2(a,e,comp); sort2(b,c,comp); sort2(d,h,comp); sort2(f,i,comp); sort2(g,k,comp); sort2(j,n,comp); sort2(l,m,comp);
+    sort2(a,g,comp); sort2(b,f,comp); sort2(d,j,comp); sort2(e,k,comp); sort2(h,n,comp); sort2(i,m,comp);
+    sort2(c,k,comp); sort2(d,l,comp); sort2(e,g,comp); sort2(h,j,comp);
+    sort2(b,d,comp); sort2(c,i,comp); sort2(f,l,comp); sort2(g,h,comp); sort2(k,m,comp);
+    sort2(b,e,comp); sort2(c,g,comp); sort2(d,f,comp); sort2(h,l,comp); sort2(i,k,comp); sort2(j,m,comp);
+    sort2(c,e,comp); sort2(d,g,comp); sort2(f,i,comp); sort2(h,k,comp); sort2(j,l,comp);
+    sort2(d,e,comp); sort2(f,g,comp); sort2(h,i,comp); sort2(j,k,comp);
+    sort2(g,h,comp);
+}
+template<typename T, typename Compare>
+static inline void sort15(T& a, T& b, T& c, T& d, T& e, T& f, T& g, T& h, T& i, T& j, T& k, T& l,
+                        T& m, T& n, T& o, Compare comp) {
+    sort2(b,c,comp); sort2(d,k,comp); sort2(e,o,comp); sort2(f,i,comp); sort2(g,n,comp); sort2(h,m,comp); sort2(j,l,comp);
+    sort2(a,o,comp); sort2(b,f,comp); sort2(c,i,comp); sort2(d,h,comp); sort2(g,j,comp); sort2(k,m,comp); sort2(l,n,comp);
+    sort2(a,h,comp); sort2(b,g,comp); sort2(c,j,comp); sort2(e,k,comp); sort2(f,l,comp); sort2(i,n,comp); sort2(m,o,comp);
+    sort2(a,g,comp); sort2(c,e,comp); sort2(d,f,comp); sort2(h,l,comp); sort2(i,k,comp); sort2(j,m,comp); sort2(n,o,comp);
+    sort2(a,d,comp); sort2(b,c,comp); sort2(e,h,comp); sort2(f,j,comp); sort2(g,i,comp); sort2(k,l,comp); sort2(m,n,comp);
+    sort2(a,b,comp); sort2(c,d,comp); sort2(e,g,comp); sort2(h,j,comp); sort2(k,m,comp); sort2(l,n,comp);
+    sort2(b,c,comp); sort2(d,f,comp); sort2(i,k,comp); sort2(l,m,comp);
+    sort2(d,e,comp); sort2(f,g,comp); sort2(h,i,comp); sort2(j,k,comp);
+    sort2(c,d,comp); sort2(e,f,comp); sort2(g,h,comp); sort2(i,j,comp); sort2(k,l,comp);
+    sort2(f,g,comp); sort2(h,i,comp);
+}
+template<typename T, typename Compare>
+static inline void sort16(T& a, T& b, T& c, T& d, T& e, T& f, T& g, T& h, T& i, T& j, T& k,
+                            T& l, T& m, T& n, T& o, T& p, Compare comp) {
+    sort2(a,n,comp); sort2(b,m,comp); sort2(c,p,comp); sort2(d,o,comp); sort2(e,i,comp);
+    sort2(f,g,comp); sort2(h,l,comp); sort2(j,k,comp);
+    sort2(a,f,comp); sort2(b,h,comp); sort2(c,j,comp); sort2(d,e,comp); sort2(g,n,comp);
+    sort2(i,o,comp); sort2(k,p,comp); sort2(l,m,comp);
+    sort2(a,b,comp); sort2(c,d,comp); sort2(e,f,comp); sort2(g,i,comp); sort2(h,j,comp);
+    sort2(k,l,comp); sort2(m,n,comp); sort2(o,p,comp);
+    sort2(a,c,comp); sort2(b,d,comp); sort2(e,k,comp); sort2(f,l,comp); sort2(g,h,comp);
+    sort2(i,j,comp); sort2(m,o,comp); sort2(n,p,comp);
+    sort2(b,c,comp); sort2(d,m,comp); sort2(e,g,comp); sort2(f,h,comp); sort2(i,k,comp);
+    sort2(j,l,comp); sort2(n,o,comp);
+    sort2(b,e,comp); sort2(c,g,comp); sort2(f,i,comp); sort2(h,k,comp); sort2(j,n,comp);
+    sort2(l,o,comp);
+    sort2(c,e,comp); sort2(d,g,comp); sort2(j,m,comp); sort2(l,n,comp);
+    sort2(d,f,comp); sort2(g,i,comp); sort2(h,j,comp); sort2(k,m,comp);
+    sort2(d,e,comp); sort2(f,g,comp); sort2(h,i,comp); sort2(j,k,comp); sort2(l,m,comp);
+    sort2(g,h,comp); sort2(i,j,comp);
+}
+
+template<typename T, typename Compare>
+static inline void sorting_network(T* l, int partsz_min1, Compare comp) {
+    switch (partsz_min1) {
+    case 0: break;
+    case 1:  sort2(l[0], l[1], comp); break;
+    case 2:  sort3(l[0], l[1], l[2], comp); break;
+    case 3:  sort4(l[0], l[1], l[2], l[3], comp); break;
+    case 4:  sort5(l[0], l[1], l[2], l[3], l[4], comp); break;
+    case 5:  sort6(l[0], l[1], l[2], l[3], l[4], l[5], comp); break;
+    case 6:  sort7(l[0], l[1], l[2], l[3], l[4], l[5], l[6], comp); break;
+    case 7:  sort8(l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7], comp); break;
+    case 8:  sort9(l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7],
+        l[8], comp); break;
+    case 9:  sort10(l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7],
+         l[8], l[9], comp); break;
+    case 10: sort11(l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7],
+        l[8], l[9], l[10], comp); break;
+    case 11: sort12(l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7],
+        l[8], l[9], l[10], l[11], comp); break;
+    case 12: sort13(l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7],
+        l[8], l[9], l[10], l[11], l[12], comp); break;
+    case 13: sort14(l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7],
+        l[8], l[9], l[10], l[11], l[12], l[13], comp); break;
+    case 14: sort15(l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7],
+        l[8], l[9], l[10], l[11], l[12], l[13], l[14], comp); break;
+    case 15: sort16(l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7],
+        l[8], l[9], l[10], l[11], l[12], l[13], l[14], l[15], comp); break;
+    default: break;
+    }
+}
+
+template<typename T, typename Compare>
+inline void heap_sift_down(T* left, ptrdiff_t n, ptrdiff_t j, T& k, Compare& comp) {
+    while (j * 2 + 1 < n) {
+        ptrdiff_t child = j * 2 + 1;
+        if (child + 1 < n && comp(left[child], left[child + 1])) child++;
+        if (!comp(k, left[child])) break;
+        left[j] = std::move(left[child]);
+        j = child;
+    }
+    left[j] = std::move(k);
+}
+
+template<typename T, typename Compare>
+void heap_sort(T* left, T* right, Compare comp) {
+    ptrdiff_t n = right - left + 1;
+    if (n < 2) return;
+
+    for (ptrdiff_t i = n / 2; ; ) {
+        if (i > 0) {
+            i--;
+            T k = std::move(left[i]);
+            heap_sift_down(left, n, i, k, comp);
+        }
+        else {
+            n--;
+            if (n == 0) return;
+            T k = std::move(left[n]);
+            left[n] = std::move(left[0]);
+            heap_sift_down(left, n, 0, k, comp);
+        }
+    }
+}
+template<typename T, typename Compare>
+static inline void med5(T& a, T& b, T& c, T& d, T& e, Compare comp) {
+    sort2(a, b, comp); sort2(c, d, comp);
+    sort2(a, c, comp); sort2(b, d, comp);
+    sort2(b, c, comp); sort2(c, e, comp);
+    sort2(b, c, comp);
+}
+
+template<typename T, typename Compare>
+static inline void med7(T& a, T& b, T& c, T& d, T& e, T& f, T& g, Compare comp) {
+    sort2(a, b, comp); sort2(c, d, comp); sort2(a, c, comp);
+    sort2(b, d, comp); sort2(b, c, comp); sort2(e, f, comp);
+    sort2(e, g, comp); sort2(a, e, comp);
+    sort2(b, f, comp); sort2(c, g, comp); sort2(b, e, comp);
+    sort2(c, e, comp);
+    sort2(d, f, comp); sort2(d, e, comp);
+}
+
+template<typename T, typename Compare>
+static T* partition_small(T* left, T* right, Compare comp) {
+
+    T* outerleft = left;
+    T* pivp = left + (right - left) / 2;
+
+    T piv = *pivp;
+    T l1 = left[1], l2 = left[2], l3 = left[3];
+    T r2 = right[-2], r1 = right[-1], r0 = *right;
+    med7(l1, l2, l3, piv, r2, r1, r0, comp);
+    left[1] = l1; left[2] = l2; left[3] = l3;
+    right[-2] = r2; right[-1] = r1; *right = r0;
+    left += 4;
+    right -= 3;
+
+    *pivp = *outerleft;
+    T swbuf[SMALLPART];
+    T *sw = swbuf, *lwr = left;
+
+    while (right - left >= UNROLL) for (int i = UNROLL; i--;) {
+        int h = comp(*left, piv);
+        *lwr = *sw = *left++;
+        lwr += h; sw += !h;
+    }
+    while (left <= right) {
+        int h = comp(*left, piv);
+        *lwr = *sw = *left++;
+        lwr += h; sw += !h;
+    }
+    std::memcpy(lwr, swbuf, (sw - swbuf) * sizeof(T));
+    lwr -= 1;
+    *outerleft = *lwr;
+    *lwr = piv;
+    return lwr;
+}
+
+template<typename T, typename Compare>
+static T* partition_large(T* left, T* right, Compare comp) {
+
+    T* outerleft = left;
+    T* pivp = left + (right - left) / 2;
+    T piv = *pivp;
+
+    int j = blqs_rand() & 7;
+    med5(left[1 + j], left[2 + j], left[3 + j], left[4 + j], left[5 + j], comp);
+    med5(left[11 + j], left[12 + j], left[13 + j], left[14 + j], left[15 + j], comp);
+    med5(left[21 + j], left[22 + j], left[23 + j], left[24 + j], left[25 + j], comp);
+    med5(pivp[-2], pivp[-1], piv, pivp[1], pivp[2], comp);
+    med5(right[-24 - j], right[-23 - j], right[-22 - j], right[-21 - j], right[-20 - j], comp);
+    med5(right[-14 - j], right[-13 - j], right[-12 - j], right[-11 - j], right[-10 - j], comp);
+    med5(right[-4 - j], right[-3 - j], right[-2 - j], right[-1 - j], right[ 0 - j], comp);
+
+    med7(left[3 + j], left[13 + j], left[23 + j], piv,  right[-22 - j], right[-12 - j],
+        right[-2 - j] , comp);
+
+    left += 1;
+    *pivp = *outerleft;
+
+    T swbuf[SWSZ];
+    T *lwr = left, *rwr = right, *sw = swbuf;
+
+    while (UNROLL < SWSZ - (sw - swbuf) && left < right - UNROLL) {
+        ptrdiff_t avail = std::min(right - left, SWSZ - (sw - swbuf));
+        T* endp = right - avail;
+        while (right > endp + UNROLL) {
+            for (int i = UNROLL; i--;) {
+                int h = comp(*right, piv);
+                *rwr = *sw = *right--;
+                rwr -= !h; sw += h;
+            }
+        }
+    }
+
+    while (right - left >= UNROLL &&
+            (rwr - right > UNROLL || left - lwr > UNROLL)) {
+
+        while (rwr - right > UNROLL && right - left >= UNROLL) {
+            for (int i = UNROLL; i--;) {
+                int h = comp(*left, piv);
+                *lwr = *rwr = *left++;
+                lwr += h; rwr -= !h;
+            }
+        }
+        while (left - lwr > UNROLL && right - left >= UNROLL) {
+            for (int i = UNROLL; i--;) {
+                int h = comp(*right, piv);
+                *rwr = *lwr = *right--;
+                rwr -= !h; lwr += h;
+            }
+        }
+    }
+    while ((lwr < left||rwr > right) && left <= right) {
+        while (rwr > right && left <= right) {
+            T x = *left++;
+            if (comp(x, piv)) *lwr++ = x;
+            else *rwr-- = x;
+        }
+        while (lwr < left && left <= right) {
+            T x = *right--;
+            if (comp(x, piv)) *lwr++ = x;
+            else *rwr-- = x;
+        }
+    }
+    while (left <= right && !comp(*right, piv)) {
+        right--;
+        rwr--;
+    }
+    std::memcpy(lwr, swbuf, (sw - swbuf) * sizeof(T));
+    *outerleft = *rwr;
+    *rwr = piv;
+    return rwr;
+}
+
+template<typename T, typename Compare>
+void smallsort(T* left, T* right, Compare comp) {
+    while (right - left > 15) {
+        T* mid = partition_small(left, right, comp);
+        smallsort(left, mid - 1, comp);
+        left = mid + 1;
+    }
+    sorting_network(left, right - left, comp);
+}
+
+template<typename T, typename Compare>
+void blqsort(T* left, T* right, Compare comp) {
+    while (1) {
+        ptrdiff_t partszm1 = right - left;
+        if (partszm1 <= SMALLPART) break;
+
+        T* mid = partition_large(left, right, comp);
+
+        if (mid - left < partszm1 / 16) {
+            if (mid > left) blqsort(left, mid - 1, comp);
+            T piv = *mid;
+            mid += 1;
+            // collect duplicates
+            for (T* p = mid; p <= right; p++) {
+                if (!comp(piv, *p)) {
+                    std::swap(*mid, *p);
+                    mid++;
+                }
+            }
+            left = mid;
+            if (right - left < SMALLPART) break;
+            // second chance before fallback to heapsort
+            mid = partition_large(left, right, comp);
+            if (mid - left < partszm1 / 16) {
+                if (mid > left) heap_sort(left, mid - 1, comp);
+                if (mid < right) heap_sort(mid + 1, right, comp);
+                return;
+            }
+        }
+        if (mid - left < right - mid) {
+            blqsort(left, mid - 1, comp);
+            left = mid + 1;
+        }
+        else {
+            blqsort(mid + 1, right, comp);
+            right = mid - 1;
+        }
+    }
+    smallsort(left, right, comp);
+}
+
+template <typename T, typename Compare = std::less<T>>
+void sort(T* first, T* last, Compare comp = Compare()) {
+
+    if (last - first < 2) return;
+    blqsort(first, last - 1, comp);
+}
+}
+#endif
+`
+
+> test.cpp
+
+`#include <cstdio>
+#include <cstdlib>
+#include <chrono>
+
+#include "blqs.h"
+
+constexpr int SIZE = 50000000;
+double data[SIZE];
+
+double time() {
+    static auto time0 = std::chrono::high_resolution_clock::now();
+    auto t = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> diff = t - time0;
+    return diff.count();
+}
+
+int main() {
+    double t0;
+    printf("Sorting %d million doubles\n", SIZE / 1000000);
+    for (int i = 0; i < SIZE; i++) data[i] = rand() / 1024.0;
+    t0 = time();
+    blqs::sort(data, data + SIZE);
+    printf("blqs::sort: %.2fs\n", time() - t0);
+}
+`
+`c++ -O3 test.cpp && ./a.out
+`
+`Sorting 50 million doubles
+blqs::sort: 0.95s
+`
+*std::sort* took 1.33. And on *x86* systems, it’s now three times as fast as *std::sort*
+
+Interestingly, this idiomatic *C* notation is compiled into very efficient, branchless code on ARM-based Macs using the `csel` command:
+`if (comp(x, piv)) *lwr++ = x;
+else *rwr-- = x;
+`
+Surprisingly, this doesn’t work with the more explicit version:
+
+This code is generated (on ARM Macs) - but only in the compact `if` version:
+
+`; x9 = current element pointer ; x0 = left destination (grows forwards)
+; x20 = right destination (grows backwards); d8  = pivot
+; x8  = 8  (positive increment) ; x10 = -8 (negative increment)
+loop:
+    ldr d0, [x9], #8
+    fcmp  d0, d8            ; compare value against pivot
+    csel x11, x0, x20, mi   ; target is left (x0) or right (x20)
+    str d0, [x11]           ; store value to the selected destination
+    csel  x12, x8, xzr, mi  ; left_step is 8 or 0
+    csel  x13, xzr, x10, mi ; right_step is 0 or -8
+    add   x0, x0, x12       ; left += left_step
+    add   x20, x20, x13     ; right += right_step
+    b.ls  loop
+`
+So, branchless without that *double store*.
+
+On *x86*, it works similarly with *Clang*. But not with *GCC*, and not with the longer `if` version either. It is also slower than the explicit, branchless version.
+
+> blqs.h
+
+`#ifndef BLQS_H
+#define BLQS_H
+
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <functional>
+#include <utility>
+
+#ifndef BLQS_RAND
+#define BLQS_RAND
+
+#include <random>
+static thread_local uint64_t blqs_seed;
+
+static inline unsigned blqs_rand(void) {
+    if (!blqs_seed) {
+        std::random_device rd;
+        blqs_seed =
+            ((uintptr_t)&blqs_seed) ^
+            (((uint64_t)rd() << 32) | (uint64_t)rd());
+        if (!blqs_seed) blqs_seed = 1;
+    }
+
+    uint64_t x = blqs_seed;
+    x ^= x << 13;
+    x ^= x >> 7;
+    x ^= x << 17;
+    blqs_seed = x;
+    return (unsigned)x;
+}
+#endif
+
+namespace blqs {
+
+constexpr int SMALLPART = 1024;
+constexpr int SWSZ = 512;
+constexpr int UNROLL = 16;
+
+template<typename T, typename Compare>
+static inline void sort2(T& a, T& b, Compare comp) {
+    T x = a; T y = b;
+    bool m = comp(x, y);
+    a = m ? x : y; b = m ? y : x;
+}
+
+template<typename T, typename Compare>
+static inline void sort3(T& a, T& b, T& c, Compare comp) {
+    sort2(a, b, comp); sort2(b, c, comp); sort2(a, b, comp);
+}
+
+template<typename T, typename Compare>
+static inline void sort4(T& a, T& b, T& c, T& d, Compare comp) {
+    sort2(a, b, comp); sort2(c, d, comp); sort2(a, c, comp);
+    sort2(b, d, comp); sort2(b, c, comp);
+}
+
+template<typename T, typename Compare>
+static inline void sort5(T& a, T& b, T& c, T& d, T& e, Compare comp) {
+    sort2(b, c, comp); sort2(d, e, comp); sort2(b, d, comp);
+    sort2(a, c, comp); sort2(a, d, comp); sort2(c, e, comp);
+    sort2(a, b, comp); sort2(c, d, comp); sort2(b, c, comp);
+}
+
+template<typename T, typename Compare>
+static inline void sort6(T& a, T& b, T& c, T& d, T& e, T& f, Compare comp) {
+    sort2(a, b, comp); sort2(c, d, comp); sort2(e, f, comp);
+    sort2(a, c, comp); sort2(b, d, comp); sort2(e, f, comp);
+    sort2(a, e, comp); sort2(b, f, comp); sort2(c, e, comp);
+    sort2(d, f, comp); sort2(b, c, comp); sort2(d, e, comp);
+    sort2(c, d, comp);
+}
+
+template<typename T, typename Compare>
+static inline void sort7(T& a, T& b, T& c, T& d, T& e, T& f, T& g, Compare comp) {
+    sort2(a, g, comp); sort2(c, d, comp); sort2(e, f, comp);
+    sort2(a, c, comp); sort2(b, e, comp); sort2(d, g, comp);
+    sort2(a, b, comp); sort2(c, f, comp); sort2(d, e, comp);
+    sort2(b, c, comp); sort2(e, g, comp);
+    sort2(c, d, comp); sort2(e, f, comp);
+    sort2(b, c, comp); sort2(d, e, comp); sort2(f, g, comp);
+}
+
+template<typename T, typename Compare>
+static inline void sort8(T& a, T& b, T& c, T& d, T& e, T& f, T& g, T& h, Compare comp) {
+    sort2(a,b,comp); sort2(c,d,comp); sort2(e,f,comp); sort2(g,h,comp);
+    sort2(a,c,comp); sort2(b,d,comp); sort2(e,g,comp); sort2(f,h,comp);
+    sort2(b,c,comp); sort2(f,g,comp);
+    sort2(a,e,comp); sort2(b,f,comp); sort2(c,g,comp); sort2(d,h,comp);
+    sort2(c,e,comp); sort2(d,f,comp);
+    sort2(b,c,comp); sort2(d,e,comp); sort2(f,g,comp);
+}
+
+template<typename T, typename Compare>
+static inline void sort9(T& a, T& b, T& c, T& d, T& e, T& f, T& g, T& h, T& i, Compare comp) {
+    sort2(a,d,comp); sort2(b,h,comp); sort2(c,f,comp); sort2(e,i,comp);
+    sort2(a,h,comp); sort2(c,e,comp); sort2(d,i,comp); sort2(f,g,comp);
+    sort2(a,c,comp); sort2(b,d,comp); sort2(e,f,comp); sort2(h,i,comp);
+    sort2(b,e,comp); sort2(d,g,comp); sort2(f,h,comp);
+    sort2(a,b,comp); sort2(c,e,comp); sort2(d,f,comp); sort2(g,i,comp);
+    sort2(c,d,comp); sort2(e,f,comp); sort2(g,h,comp);
+    sort2(b,c,comp); sort2(d,e,comp); sort2(f,g,comp);
+}
+
+template<typename T, typename Compare>
+static inline void sort10(T& a, T& b, T& c, T& d, T& e, T& f, T& g, T& h, T& i, T& j, Compare comp) {
+    sort2(a,b,comp); sort2(c,f,comp); sort2(d,g,comp); sort2(e,h,comp); sort2(i,j,comp);
+    sort2(a,g,comp); sort2(b,i,comp); sort2(c,e,comp); sort2(d,j,comp); sort2(f,h,comp);
+    sort2(a,c,comp); sort2(b,d,comp); sort2(e,f,comp); sort2(g,i,comp); sort2(h,j,comp);
+    sort2(a,b,comp); sort2(c,h,comp); sort2(d,f,comp); sort2(e,g,comp); sort2(i,j,comp);
+    sort2(b,c,comp); sort2(d,e,comp); sort2(f,g,comp); sort2(h,i,comp);
+    sort2(b,d,comp); sort2(c,e,comp); sort2(f,h,comp); sort2(g,i,comp);
+    sort2(c,d,comp); sort2(e,f,comp); sort2(g,h,comp);
+}
+
+template<typename T, typename Compare>
+static inline void sort11(T& a, T& b, T& c, T& d, T& e, T& f, T& g, T& h, T& i, T& j, T& k, Compare comp) {
+    sort2(a,j,comp); sort2(b,g,comp); sort2(c,e,comp); sort2(d,h,comp); sort2(f,i,comp);
+    sort2(a,b,comp); sort2(d,f,comp); sort2(e,k,comp); sort2(g,j,comp); sort2(h,i,comp);
+    sort2(b,d,comp); sort2(c,f,comp); sort2(e,h,comp); sort2(i,k,comp);
+    sort2(a,e,comp); sort2(b,c,comp); sort2(d,h,comp); sort2(f,j,comp); sort2(g,i,comp);
+    sort2(a,b,comp); sort2(c,g,comp); sort2(e,f,comp); sort2(h,i,comp);
+    sort2(j,k,comp);
+    sort2(c,e,comp); sort2(d,g,comp); sort2(f,h,comp); sort2(i,j,comp);
+    sort2(b,c,comp); sort2(d,e,comp); sort2(f,g,comp); sort2(h,i,comp);
+    sort2(c,d,comp); sort2(e,f,comp); sort2(g,h,comp);
+}
+
+template<typename T, typename Compare>
+static inline void sort12(T& a, T& b, T& c, T& d, T& e, T& f, T& g, T& h, T& i, T& j, T& k, T& l, Compare comp) {
+    sort2(a,i,comp); sort2(b,h,comp); sort2(c,g,comp); sort2(d,l,comp); sort2(e,k,comp); sort2(f,j,comp);
+    sort2(a,c,comp); sort2(b,e,comp); sort2(d,f,comp); sort2(g,i,comp); sort2(h,k,comp); sort2(j,l,comp);
+    sort2(a,b,comp); sort2(c,j,comp); sort2(e,h,comp); sort2(f,g,comp); sort2(k,l,comp);
+    sort2(b,d,comp); sort2(c,h,comp); sort2(e,j,comp); sort2(i,k,comp);
+    sort2(a,b,comp); sort2(c,d,comp); sort2(e,f,comp); sort2(g,h,comp); sort2(i,j,comp); sort2(k,l,comp);
+    sort2(b,c,comp); sort2(d,f,comp); sort2(g,i,comp); sort2(j,k,comp);
+    sort2(c,e,comp); sort2(d,g,comp); sort2(f,i,comp); sort2(h,j,comp);
+    sort2(b,c,comp); sort2(d,e,comp); sort2(f,g,comp); sort2(h,i,comp); sort2(j,k,comp);
+}
+template<typename T, typename Compare>
+static inline void sort13(T& a, T& b, T& c, T& d, T& e, T& f, T& g, T& h, T& i, T& j, T& k, T& l, T& m,
+                          Compare comp) {
+    sort2(a,m,comp); sort2(b,k,comp); sort2(c,j,comp); sort2(d,h,comp); sort2(f,l,comp); sort2(g,i,comp);
+    sort2(b,g,comp); sort2(c,d,comp); sort2(e,l,comp); sort2(h,j,comp); sort2(i,k,comp);
+    sort2(a,e,comp); sort2(b,c,comp); sort2(d,g,comp); sort2(h,i,comp); sort2(j,k,comp); sort2(l,m,comp);
+    sort2(e,g,comp); sort2(f,j,comp); sort2(i,l,comp); sort2(k,m,comp);
+    sort2(a,f,comp); sort2(d,i,comp); sort2(e,h,comp); sort2(g,l,comp); sort2(j,k,comp);
+    sort2(a,b,comp); sort2(c,f,comp); sort2(g,j,comp); sort2(h,i,comp); sort2(k,l,comp);
+    sort2(b,d,comp); sort2(c,e,comp); sort2(f,g,comp); sort2(j,k,comp);
+    sort2(b,c,comp); sort2(d,e,comp); sort2(f,h,comp); sort2(g,i,comp);
+    sort2(c,d,comp); sort2(e,f,comp); sort2(g,h,comp); sort2(i,j,comp);
+    sort2(d,e,comp); sort2(f,g,comp);
+}
+template<typename T, typename Compare>
+static inline void sort14(T& a, T& b, T& c, T& d, T& e, T& f, T& g, T& h, T& i, T& j, T& k, T& l,
+                        T& m, T& n, Compare comp) {
+    sort2(a,b,comp); sort2(c,d,comp); sort2(e,f,comp); sort2(g,h,comp); sort2(i,j,comp); sort2(k,l,comp); sort2(m,n,comp);
+    sort2(a,c,comp); sort2(b,d,comp); sort2(e,i,comp); sort2(f,j,comp); sort2(k,m,comp); sort2(l,n,comp);
+    sort2(a,e,comp); sort2(b,c,comp); sort2(d,h,comp); sort2(f,i,comp); sort2(g,k,comp); sort2(j,n,comp); sort2(l,m,comp);
+    sort2(a,g,comp); sort2(b,f,comp); sort2(d,j,comp); sort2(e,k,comp); sort2(h,n,comp); sort2(i,m,comp);
+    sort2(c,k,comp); sort2(d,l,comp); sort2(e,g,comp); sort2(h,j,comp);
+    sort2(b,d,comp); sort2(c,i,comp); sort2(f,l,comp); sort2(g,h,comp); sort2(k,m,comp);
+    sort2(b,e,comp); sort2(c,g,comp); sort2(d,f,comp); sort2(h,l,comp); sort2(i,k,comp); sort2(j,m,comp);
+    sort2(c,e,comp); sort2(d,g,comp); sort2(f,i,comp); sort2(h,k,comp); sort2(j,l,comp);
+    sort2(d,e,comp); sort2(f,g,comp); sort2(h,i,comp); sort2(j,k,comp);
+    sort2(g,h,comp);
+}
+template<typename T, typename Compare>
+static inline void sort15(T& a, T& b, T& c, T& d, T& e, T& f, T& g, T& h, T& i, T& j, T& k, T& l,
+                        T& m, T& n, T& o, Compare comp) {
+    sort2(b,c,comp); sort2(d,k,comp); sort2(e,o,comp); sort2(f,i,comp); sort2(g,n,comp); sort2(h,m,comp); sort2(j,l,comp);
+    sort2(a,o,comp); sort2(b,f,comp); sort2(c,i,comp); sort2(d,h,comp); sort2(g,j,comp); sort2(k,m,comp); sort2(l,n,comp);
+    sort2(a,h,comp); sort2(b,g,comp); sort2(c,j,comp); sort2(e,k,comp); sort2(f,l,comp); sort2(i,n,comp); sort2(m,o,comp);
+    sort2(a,g,comp); sort2(c,e,comp); sort2(d,f,comp); sort2(h,l,comp); sort2(i,k,comp); sort2(j,m,comp); sort2(n,o,comp);
+    sort2(a,d,comp); sort2(b,c,comp); sort2(e,h,comp); sort2(f,j,comp); sort2(g,i,comp); sort2(k,l,comp); sort2(m,n,comp);
+    sort2(a,b,comp); sort2(c,d,comp); sort2(e,g,comp); sort2(h,j,comp); sort2(k,m,comp); sort2(l,n,comp);
+    sort2(b,c,comp); sort2(d,f,comp); sort2(i,k,comp); sort2(l,m,comp);
+    sort2(d,e,comp); sort2(f,g,comp); sort2(h,i,comp); sort2(j,k,comp);
+    sort2(c,d,comp); sort2(e,f,comp); sort2(g,h,comp); sort2(i,j,comp); sort2(k,l,comp);
+    sort2(f,g,comp); sort2(h,i,comp);
+}
+template<typename T, typename Compare>
+static inline void sort16(T& a, T& b, T& c, T& d, T& e, T& f, T& g, T& h, T& i, T& j, T& k,
+                            T& l, T& m, T& n, T& o, T& p, Compare comp) {
+    sort2(a,n,comp); sort2(b,m,comp); sort2(c,p,comp); sort2(d,o,comp); sort2(e,i,comp);
+    sort2(f,g,comp); sort2(h,l,comp); sort2(j,k,comp);
+    sort2(a,f,comp); sort2(b,h,comp); sort2(c,j,comp); sort2(d,e,comp); sort2(g,n,comp);
+    sort2(i,o,comp); sort2(k,p,comp); sort2(l,m,comp);
+    sort2(a,b,comp); sort2(c,d,comp); sort2(e,f,comp); sort2(g,i,comp); sort2(h,j,comp);
+    sort2(k,l,comp); sort2(m,n,comp); sort2(o,p,comp);
+    sort2(a,c,comp); sort2(b,d,comp); sort2(e,k,comp); sort2(f,l,comp); sort2(g,h,comp);
+    sort2(i,j,comp); sort2(m,o,comp); sort2(n,p,comp);
+    sort2(b,c,comp); sort2(d,m,comp); sort2(e,g,comp); sort2(f,h,comp); sort2(i,k,comp);
+    sort2(j,l,comp); sort2(n,o,comp);
+    sort2(b,e,comp); sort2(c,g,comp); sort2(f,i,comp); sort2(h,k,comp); sort2(j,n,comp);
+    sort2(l,o,comp);
+    sort2(c,e,comp); sort2(d,g,comp); sort2(j,m,comp); sort2(l,n,comp);
+    sort2(d,f,comp); sort2(g,i,comp); sort2(h,j,comp); sort2(k,m,comp);
+    sort2(d,e,comp); sort2(f,g,comp); sort2(h,i,comp); sort2(j,k,comp); sort2(l,m,comp);
+    sort2(g,h,comp); sort2(i,j,comp);
+}
+
+template<typename T, typename Compare>
+static inline void sorting_network(T* l, int partsz_min1, Compare comp) {
+    switch (partsz_min1) {
+    case 0: break;
+    case 1:  sort2(l[0], l[1], comp); break;
+    case 2:  sort3(l[0], l[1], l[2], comp); break;
+    case 3:  sort4(l[0], l[1], l[2], l[3], comp); break;
+    case 4:  sort5(l[0], l[1], l[2], l[3], l[4], comp); break;
+    case 5:  sort6(l[0], l[1], l[2], l[3], l[4], l[5], comp); break;
+    case 6:  sort7(l[0], l[1], l[2], l[3], l[4], l[5], l[6], comp); break;
+    case 7:  sort8(l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7], comp); break;
+    case 8:  sort9(l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7],
+        l[8], comp); break;
+    case 9:  sort10(l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7],
+         l[8], l[9], comp); break;
+    case 10: sort11(l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7],
+        l[8], l[9], l[10], comp); break;
+    case 11: sort12(l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7],
+        l[8], l[9], l[10], l[11], comp); break;
+    case 12: sort13(l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7],
+        l[8], l[9], l[10], l[11], l[12], comp); break;
+    case 13: sort14(l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7],
+        l[8], l[9], l[10], l[11], l[12], l[13], comp); break;
+    case 14: sort15(l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7],
+        l[8], l[9], l[10], l[11], l[12], l[13], l[14], comp); break;
+    case 15: sort16(l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7],
+        l[8], l[9], l[10], l[11], l[12], l[13], l[14], l[15], comp); break;
+    default: break;
+    }
+}
+
+template<typename T, typename Compare>
+static inline void heap_sift_down(T* left, ptrdiff_t n, ptrdiff_t j, T& k, Compare& comp) {
+    while (j * 2 + 1 < n) {
+        ptrdiff_t child = j * 2 + 1;
+        if (child + 1 < n && comp(left[child], left[child + 1])) child++;
+        if (!comp(k, left[child])) break;
+        left[j] = std::move(left[child]);
+        j = child;
+    }
+    left[j] = std::move(k);
+}
+
+template<typename T, typename Compare>
+static void heap_sort(T* left, T* right, Compare comp) {
+    ptrdiff_t n = right - left + 1;
+    if (n < 2) return;
+
+    for (ptrdiff_t i = n / 2; ; ) {
+        if (i > 0) {
+            i--;
+            T k = std::move(left[i]);
+            heap_sift_down(left, n, i, k, comp);
+        }
+        else {
+            n--;
+            if (n == 0) return;
+            T k = std::move(left[n]);
+            left[n] = std::move(left[0]);
+            heap_sift_down(left, n, 0, k, comp);
+        }
+    }
+}
+template<typename T, typename Compare>
+static inline void med5(T& a, T& b, T& c, T& d, T& e, Compare comp) {
+    sort2(a, b, comp); sort2(c, d, comp);
+    sort2(a, c, comp); sort2(b, d, comp);
+    sort2(b, c, comp); sort2(c, e, comp);
+    sort2(b, c, comp);
+}
+
+template<typename T, typename Compare>
+static inline void med7(T& a, T& b, T& c, T& d, T& e, T& f, T& g, Compare comp) {
+    sort2(a, b, comp); sort2(c, d, comp); sort2(a, c, comp);
+    sort2(b, d, comp); sort2(b, c, comp); sort2(e, f, comp);
+    sort2(e, g, comp); sort2(a, e, comp);
+    sort2(b, f, comp); sort2(c, g, comp); sort2(b, e, comp);
+    sort2(c, e, comp);
+    sort2(d, f, comp); sort2(d, e, comp);
+}
+
+template<typename T, typename Compare>
+static inline  T* partition_small(T* left, T* right, Compare comp) {
+
+    T* outerleft = left;
+    T* pivp = left + (right - left) / 2;
+
+    T piv = *pivp;
+    T l1 = left[1], l2 = left[2], l3 = left[3];
+    T r2 = right[-2], r1 = right[-1], r0 = *right;
+    med7(l1, l2, l3, piv, r2, r1, r0, comp);
+    left[1] = l1; left[2] = l2; left[3] = l3;
+    right[-2] = r2; right[-1] = r1; *right = r0;
+    left += 4;
+    right -= 3;
+
+    *pivp = *outerleft;
+    T swbuf[SMALLPART];
+    T *sw = swbuf, *lwr = left;
+
+    while (right - left >= UNROLL) for (int i = UNROLL; i--;) {
+        T x = *left++;
+        if (comp(x, piv)) *lwr++ = x;
+        else *sw++ = x;
+    }
+    while (left <= right) {
+        T x = *left++;
+        if (comp(x, piv)) *lwr++ = x;
+        else *sw++ = x;
+    }
+    std::memcpy(lwr, swbuf, (sw - swbuf) * sizeof(T));
+    lwr -= 1;
+    *outerleft = *lwr;
+    *lwr = piv;
+    return lwr;
+}
+
+template<typename T, typename Compare>
+static inline T* partition_large(T* left, T* right, Compare comp) {
+
+    T* outerleft = left;
+    T* pivp = left + (right - left) / 2;
+    T piv = *pivp;
+
+    int j = blqs_rand() & 7;
+    med5(left[1 + j], left[2 + j], left[3 + j], left[4 + j], left[5 + j], comp);
+    med5(left[11 + j], left[12 + j], left[13 + j], left[14 + j], left[15 + j], comp);
+    med5(left[21 + j], left[22 + j], left[23 + j], left[24 + j], left[25 + j], comp);
+    med5(pivp[-2], pivp[-1], piv, pivp[1], pivp[2], comp);
+    med5(right[-24 - j], right[-23 - j], right[-22 - j], right[-21 - j], right[-20 - j], comp);
+    med5(right[-14 - j], right[-13 - j], right[-12 - j], right[-11 - j], right[-10 - j], comp);
+    med5(right[-4 - j], right[-3 - j], right[-2 - j], right[-1 - j], right[ 0 - j], comp);
+
+    med7(left[3 + j], left[13 + j], left[23 + j], piv,  right[-22 - j], right[-12 - j],
+        right[-2 - j] , comp);
+
+    left += 1;
+    *pivp = *outerleft;
+
+    T swbuf[SWSZ];
+    T *lwr = left, *rwr = right, *sw = swbuf;
+
+    while (UNROLL < SWSZ - (sw - swbuf) && left < right - UNROLL) {
+        ptrdiff_t avail = std::min(right - left, SWSZ - (sw - swbuf));
+        T* endp = right - avail;
+        while (right > endp + UNROLL) {
+            for (int i = UNROLL; i--;) {
+                T x = *right--;
+                if (comp(x, piv)) *sw++ = x;
+                else *rwr-- = x;
+            }
+        }
+    }
+
+    while (right - left >= UNROLL &&
+            (rwr - right > UNROLL || left - lwr > UNROLL)) {
+
+        while (rwr - right > UNROLL && right - left >= UNROLL) {
+            for (int i = UNROLL; i--;) {
+                T x = *left++;
+                if (comp(x, piv)) *lwr++ = x;
+                else *rwr-- = x;
+            }
+        }
+        while (left - lwr > UNROLL && right - left >= UNROLL) {
+            for (int i = UNROLL; i--;) {
+                T x = *right--;
+                if (comp(x, piv)) *lwr++ = x;
+                else *rwr-- = x;
+            }
+        }
+    }
+    while ((lwr < left||rwr > right) && left <= right) {
+        while (rwr > right && left <= right) {
+            T x = *left++;
+            if (comp(x, piv)) *lwr++ = x;
+            else *rwr-- = x;
+        }
+        while (lwr < left && left <= right) {
+            T x = *right--;
+            if (comp(x, piv)) *lwr++ = x;
+            else *rwr-- = x;
+        }
+    }
+    while (left <= right && !comp(*right, piv)) {
+        right--;
+        rwr--;
+    }
+    std::memcpy(lwr, swbuf, (sw - swbuf) * sizeof(T));
+    *outerleft = *rwr;
+    *rwr = piv;
+    return rwr;
+}
+
+template<typename T, typename Compare>
+static void smallsort(T* left, T* right, Compare comp) {
+    while (right - left > 15) {
+        T* mid = partition_small(left, right, comp);
+        smallsort(left, mid - 1, comp);
+        left = mid + 1;
+    }
+    sorting_network(left, right - left, comp);
+}
+
+template<typename T, typename Compare>
+static void blqsort(T* left, T* right, Compare comp) {
+    while (1) {
+        ptrdiff_t partszm1 = right - left;
+        if (partszm1 <= SMALLPART) break;
+
+        T* mid = partition_large(left, right, comp);
+
+        if (mid - left < partszm1 / 16) {
+            if (mid > left) blqsort(left, mid - 1, comp);
+            T piv = *mid;
+            mid += 1;
+            // collect duplicates
+            for (T* p = mid; p <= right; p++) {
+                if (!comp(piv, *p)) {
+                    std::swap(*mid, *p);
+                    mid++;
+                }
+            }
+            left = mid;
+            if (right - left < SMALLPART) break;
+            // second chance before fallback to heapsort
+            mid = partition_large(left, right, comp);
+            if (mid - left < partszm1 / 16) {
+                if (mid > left) heap_sort(left, mid - 1, comp);
+                if (mid < right) heap_sort(mid + 1, right, comp);
+                return;
+            }
+        }
+        if (mid - left < right - mid) {
+            blqsort(left, mid - 1, comp);
+            left = mid + 1;
+        }
+        else {
+            blqsort(mid + 1, right, comp);
+            right = mid - 1;
+        }
+    }
+    smallsort(left, right, comp);
+}
+
+template <typename T, typename Compare = std::less<T>>
+void sort(T* first, T* last, Compare comp = Compare()) {
+
+    if (last - first < 2) return;
+    blqsort(first, last - 1, comp);
+}
+}
+#endif
+`
+The 50 million doubles are now sorted on the ARM Mac almost twice as fast as with *std::sort*.
+
+`Sorting 50 million doubles
+blqs::sort: 0.67s
+`
+
+You only need to include `blqs.h`, and it can be used just as easily as *std::sort*.
+
+For the *C++* multithreaded variant, which uses *C++* threads, include `blqs_thr.h` instead of `blqs.h`. The function call remains the same.
+
+In practice, we often need to sort custom data structures. This is where *SIMD* libraries like *Google Highway* - while very fast for simple numbers - become difficult to use.
+
+Using *std::sort* or *blqsort* gives you much more flexibility.
+
+`#include "blqs.h"
+
+struct entry {
+    int id;
+    int value;
+    bool operator<(const entry& other) const { return id < other.id; }
+};
+
+struct entry data[SIZE];
+
+blqs::sort(data, data + SIZE);
+`
+Depending on the compiler and platform, either the `if` version or the explicit branchless version is used.
+
+For types with higher copy costs that are not `is_trivially_copyable` (such as strings), the buffer-based branchless approach becomes less efficient. In such cases, a *BlockQuicksort* (*Edelkamp* and *Weiß*) variant is used instead. This processes only the element indices in a branchless manner. This requires C++17 or later.
