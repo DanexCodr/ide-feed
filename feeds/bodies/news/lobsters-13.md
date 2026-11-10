@@ -1,112 +1,149 @@
-I don’t usually get involved in the internet reply-fest *du jour*, but
-this time I thought I’d give it a go.  It involves coffee, just in case you
-wondered.
+So, I've always been somewhat annoyed at SSL/TLS.
+It requires everyone to go through a complex "ACME" dance just to put up a public website.
+Worse, certificates expire every few months, so it's not a one and done thing:
+even with automation, maintaining a certificate requires care to ensure the ACME client always has access to DNS records or the web server.
 
-BTW: I’ve used a bit of the antipodean vernacular in this post.  You have
-been warned.
+... and the whole system doesn't even work because certificates are issued over plaintext connections,
+and trusted certificate aurthorities use very secure keys like ["4"](https://en.wikipedia.org/wiki/EMudhra)
+ snip
 
-There was a bit of a kerfuffle last week on the IndieWeb about whether or
-not people should have a “buy me a coffee” (or equivalent) link on their
-blog.  The argument of [the article that sparked the
-debate](https://hakkerman.eu/blog/i-wont-buy-you-a-coffee/)<sup>[1](https://peateasea.de/sure-mate-buy-me-a-bloody-coffee/#fn:discussion-takeoff)</sup>
-being that this is rampant capitalism, everything is getting monetised these
-days, it’s not going to cover your hosting costs, hosting doesn’t cost much
-anyway, so why bother, and please just stop.  Well, that was my impression.
+*There is prior art* of protest SSL [implementations](https://tom7.org/httpv/httpv.pdf),
+but I do actually want to encrypt web traffic.
+Passive eavesdropping is a real risk... but preventing it doesn't require the whole certificate thing:
+therefore, the best choice is a protest certificate.
 
-I can understand the perspective.  It seems that everything on the internet
-is being monetised in some way or form.  “Don’t forget to like and
-subscribe!”, “Join my newsletter!”, “Read my Substack!”, “Buy from my
-affiliate links!”, “And now a word from this video’s
-sponsor…”,<sup>[2](https://peateasea.de/sure-mate-buy-me-a-bloody-coffee/#fn:simplicissimus-segue)</sup> etc., etc., etc., ad nauseam.  And I get
-that, I really do.  There’s just *so* much advertising everywhere that it’s
-hard to get away from.  I agree: it’d be nice if there were islands of quiet
-in the online world where no call to monetary action existed.
+The only part of the certificate I directly control is the public key.
+Therefore, the simplest way to obtain a bad certificate is use a vanity private key such as 313333333337 (one of the most eleet primes).
+However, while the resulting public key would be weak, no one would know unless they try to break it.
 
-And I get it that personal blogs don’t strictly need a virtual tip jar.  My
-guess is that very few people are making any real money from them.  But it’s
-not about the money.  It’s more about recognition for the hard work that
-writing entails and about being seen for that work and someone going “Hey
-mate, love yer work, here’s a couple of bucks, good on ya!”.  So I’m
-throwing my hat into the ring on the side of the “Yep, have a ‘buy me a
-coffee’ button” group.
+A good protest should be obvious:
 
-If you look around my blog, you’ll see a [buy me a
-coffee](https://buymeacoffee.com/) button at the bottom of my articles.  I
-don’t get much money through those links.  If anything, I’ve received all of
-about 10 € over the blog’s entire lifetime.  It’s definitely not enough to
-cover my hosting costs.  That doesn’t matter.  What *does* matter is that
-each time someone drops me a tip via the buy-me-a-coffee button, I am
-*absolutely overjoyed*.  Someone read an article!  It was useful to them!
-And they liked it!  Wicked!
+# openssl s_client -connect maurycyz.com:443 < /dev/null 2> /dev/null \
+    | sed -n /BEGIN/,/END/p | grep -zE '////.?*////' --color=yes
 
-It’s brilliant.  It’s feedback.  Something I’ve written was valuable to
-someone!  Yay!  [insert short dance in front of laptop]
+-----BEGIN CERTIFICATE-----
+MIIFAjCCA+qgAwIBAgISBkOkuuyaN1ypD3PAPrLMyT7tMA0GCSqGSIb3DQEBCwUA
+MDMxCzAJBgNVBAYTAlVTMRYwFAYDVQQKEw1MZXQncyBFbmNyeXB0MQwwCgYDVQQD
+EwNZUjIwHhcNMjYxMTA5MTcyOTQ2WhcNMjcwMjA3MTcyOTQ1WjAXMRUwEwYDVQQD
+EwxtYXVyeWN5ei5jb20wggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQCg
+JyPf37Sj6PvU06m5////You+dont+actually+have+to+pick+random+privat
+e+keys//No+one+checks+these+things//A+certificate+authority+got+
+away+with+the+number+4+for+a+year/////DSfCAfXcsJfBpnHekS0qnf5YLl
+c54VuUNRVINcDkEwJDwyB96+xE/uXhtiGdk8ty1PF6jciLEYCJBHcmqOa5pOyV8m
+63yR3NE6hCQlaSLQQDo96Sb0/10aC5LqE7KwEskrP/qeCzT7vDN7fh+dXOGs+VMw
+eJvTAb0xHJpxhSK05i7DAgMBAAGjggIqMIICJjAOBgNVHQ8BAf8EBAMCBaAwEwYD
+VR0lBAwwCgYIKwYBBQUHAwEwDAYDVR0TAQH/BAIwADAdBgNVHQ4EFgQUBKBfDbwf
+dCnKeU83pMTWyFrJBwAwHwYDVR0jBBgwFoAUQBUtJnntMiCe35pyHdYyH4EMgQww
+MwYIKwYBBQUHAQEEJzAlMCMGCCsGAQUFBzAChhdodHRwOi8veXIyLmkubGVuY3Iu
+b3JnLzAnBgNVHREEIDAegg4qLm1hdXJ5Y3l6LmNvbYIMbWF1cnljeXouY29tMBMG
+A1UdIAQMMAowCAYGZ4EMAQIBMC8GA1UdHwQoMCYwJKAioCCGHmh0dHA6Ly95cjIu
+Yy5sZW5jci5vcmcvMTEwLmNybDCCAQsGCisGAQQB1nkCBAIEgfwEgfkA9wB1AExj
+3JjlnB2riPYeij3ero+rRKM3e1+blMP7oZz8wb4mAAABocGRbw4AAAQDAEYwRAIg
+HShWaEI2nVJEizSI6sJ/jnLaABZ3aTKoUL3pLo1uOgsCIEn+XiT2WHhm9LGN6kug
+O9R7Z4q0HiFA4RZ7tIMJQH5XAH4AjspHC6zeavOiBrCkeoS3Rv4fxr+VPiXmm07k
+AkjzxugAAAGhwZFyfQAIAAAFAEE0hdwEAwBHMEUCIDSms4Vf0llcvcldJd2Ool8i
+AiUQQlS0Zzbej+7Y1aR7AiEA79Ll+t6inu1PkUIgzNTXkE0S20VHYEYel5fkdKSA
+VTQwDQYJKoZIhvcNAQELBQADggEBAFi3A4fcjj4UKa9MFz1a8DWc+Jya2gJng13m
+2UFdWCaqsN7FJWQEjRiJ0npynmDnA3VMyjswUMHAMx4d8G3lHNPfZWGsCgpjVa/d
+IEoeZ6gTYjFa/Ovb64m4CcuQkm0GxcyAqMPs348e6Px32iU1R6MnV4UEUosnSPeK
+4ocuI3SoR9LHxX/yHOKcYTKLpIMwMdaAmWt0N7l59GOb8o+dz3R7cxtVV/lrZReZ
+/YPEAYRiNi7f+jNI1JCp0i8wXUb9NN7WlbmcFDecDG/++cRpAkoIk4m/LJindsuu
+kErrVZ4yLqB0Hvm+uNvWxr9y/qKFTYw9POx1oaZJO/SwXZdDBeY=
+-----END CERTIFICATE-----
 
-I rarely get emails about my blog articles.<sup>[3](https://peateasea.de/sure-mate-buy-me-a-bloody-coffee/#fn:no-comment-section)</sup> Most
-responses have come from someone giving a tip and saying, “Hey, nice
-article”.  That’s *so* cool!  It’s not money I can live off (otherwise I’d
-be living under a bridge<sup>[4](https://peateasea.de/sure-mate-buy-me-a-bloody-coffee/#fn:all-my-pets)</sup>); it’s a signal, it’s feedback, and
-it’s one of the small pieces of connection I get from the wider world after
-having put my thoughts and experience online.
+*First, let's look at mathematical framework* of RSA.
+To generate a key, pick two large prime numbers (p and q) and multiply them to yeild the modulus (n).
+Pick a small number, e as public exponent.
 
-Yes, most of the stuff I write is for me (or more realistically, for my
-future self).  Yet, when I write, I often have some imaginary “reader” in
-mind–someone who is going to benefit from the knowledge or experience I’m
-documenting.  So, if someone out there thinks “That was good, I’ll throw
-this bloke a couple of Euros his way and say hello”, then that’s bloody
-awesome.
+The RSA public key is composed of the modulus (n) and the public exponent:
 
-To be honest, if someone just dropped me a line via email and said “Hey,
-cool post, gudday mate” I’d also be over the moon.  For instance, the other
-night I was at the [Hannover TeX user group
-meeting](https://www.tex-hannover.de/) and someone mentioned that they’d
-stumbled across an [article of mine](https://peateasea.de/android-to-linux-photo-backup/) (one that I’ve referred to myself many
-times) and found it useful.  I was totally stoked!
+# Encryption requires knowing e (public)
+cyphertext = plaintext^e mod n
 
-Imagine a busker playing their guitar on a street corner, a hat sitting in
-front of them to collect what cash bystanders might throw their way.  Are
-they monetising what they’re doing?  Strictly speaking, sure.  Are they
-paying rent from it?  Most likely not.  Is this the evil tendrils of
-capitalism threading their way into every facet of our lives?  Ah, that
-would be a no.  Are you obliged to put money into their hat?  Not if you
-don’t want to.  If you enjoy their music, you can give them a nod and a
-smile and a bit of applause.  That’s great feedback for the musician.  And
-if you really like what they’re playing, you can throw a few coins into
-their hat.  That’s how busking works.
+The private key contains the modulus and the private exponent (d) which is chosen to be the multiplicate inverse of e modulo n.
+Exactly how d is found is not relevent, but the process requires knowing p and q.
 
-For small creators on the IndieWeb it’s exactly the same: people putting
-their stuff out there and maybe–just maybe–someone will connect with them
-and say “Hey mate, I liked what you wrote.  Nice stuff!” And, on the off
-chance that someone liked something enough, they might buy you a virtual
-coffee.  It’s the same act as someone moving forward from the crowd gathered
-around the busker, dropping coins into their hat, nodding and giving them a
-smile.  I can tell you, getting that recognition and some nice words via my
-buy-me-a-coffee link not only makes my day, it makes my frikken *week*.  The
-money doesn’t go far,<sup>[5](https://peateasea.de/sure-mate-buy-me-a-bloody-coffee/#fn:donated-to-other-blogs)</sup> but *shit*, it’s a nice
-feeling to know that something I created was sufficiently worthwhile for
-someone that they tipped me for it.
+# Decryption requires knowing d (pivate)
+= cyphertext^d mod n
 
-Will the money ever cover my hosting costs?  I don’t reckon, eh?  Am I
-over the moon if someone buys me a coffee?  You betcha!  And I think that’s
-the case for a lot of creators with such links on their blog: they’d be
-totally stoked to get a small donation and a “hullo” if someone liked one of
-their posts.<sup>[6](https://peateasea.de/sure-mate-buy-me-a-bloody-coffee/#fn:case-in-point)</sup>
+= plaintext^e^d mod n
+= plaintext^(e*d) mod n
+= plaintext^1 mod n
+= plaintext
 
-So sure, mate, buy me a bloody coffee!<sup>[7](https://peateasea.de/sure-mate-buy-me-a-bloody-coffee/#fn:i-love-coffee)</sup>  Or buy someone else
-a coffee.  But if you don’t want to, you don’t have to.  No one’s forcing
-you.
+This process can also be used for signing: simply call the thing with the private key "encrypting" and the public key "decrypting".
+Sending a message that anyone can decrypt but only the key holder can encrypt is usefull for authenticating where it came from.
+</p><p>
 
-And if you don’t want to dish out for a coffee, why not just drop me a line
-and let me know what you thought?  That would rock!
+*Ok, back to vanity keys.*
+The standard value for e is 65537 (0x10001),
+because the small number of set bits makes encryption faster.
+In fact, the CA I used will refuse to sign keys with a non-standard public exponent, so I can't do anything funny there.
 
-1. The discussion surrounding this post has really taken off. For most of the discussion, see the links in the [coffee saga follow-up post](https://hakkerman.eu/blog/coffee-saga/) by the same author. Unfortunately for them, the article ended up going viral on Hacker News. That’s probably a lot more attention than they expected to get from the post. And wow, when people have opinions on the internet, they *really* have opinions! [↩](https://peateasea.de/sure-mate-buy-me-a-bloody-coffee/#fnref:discussion-takeoff)
-2. Although, I have to say that the [Simplicissimus](https://www.youtube.com/@Simplicissimus) segues from video topic to sponsor advertising have to be some of the smoothest, subtlest and well thought out I’ve ever seen. Sometimes I find myself waiting for the ad, just so I can see how they handle the transition between topic and ad. [↩](https://peateasea.de/sure-mate-buy-me-a-bloody-coffee/#fnref:simplicissimus-segue)
-3. I don’t have and don’t want a comment section. There’s a reason why the phrase “don’t read the comments” is basic internet wisdom. [↩](https://peateasea.de/sure-mate-buy-me-a-bloody-coffee/#fnref:no-comment-section)
-4. And the animals I’ll have trapped will all have become my pets. But I digress… [↩](https://peateasea.de/sure-mate-buy-me-a-bloody-coffee/#fnref:all-my-pets)
-5. I think most of my buy-me-a-coffee money has gone to Cameron Kaiser’s blog [Old Vintage Computing Research](https://oldvcr.blogspot.com/). His posts are amazing! Go check them out! [↩](https://peateasea.de/sure-mate-buy-me-a-bloody-coffee/#fnref:donated-to-other-blogs)
-6. Case in point: after I’d written the first draft of this post, [spu](https://spu.io/) [wrote an article about how moved they were after receiving a buy-me-a-coffee donation](https://blog.spu.io/a-stranger-made-me-cry-today/). Small donation. Nice message. HUGE effect. That’s what I’m talking about. BTW: go buy that person a coffee; they write good stuff. [↩](https://peateasea.de/sure-mate-buy-me-a-bloody-coffee/#fnref:case-in-point)
-7. BTW: I frikken *love* coffee. [↩](https://peateasea.de/sure-mate-buy-me-a-bloody-coffee/#fnref:i-love-coffee)
+The modulus, n, is either 2,048 or 4,096 "user controlled" bits, so it's the ideal place to hide a message.
+However, to use the certificate, I'll need to find two large primes that multiply out to the vanity modulus.
 
-## Support
+My method starts by picking two random primes and calculating the resulting n value.
+Then, the bytes of n are modified to introduce message into the base64 encoding.
+Of course, the modified n is not the product of p and q, but this is fixable by setting q to n/p.
 
-If you liked this post, please [buy me a coffee](https://www.buymeacoffee.com/peateasea)!
+The resulting q value is very unlikely to be a prime (or integer), so I round it and find the next prime after the ideal q:
+which usually only requires changing the value of q by a few hundred.
+Since p and q are similar in size, a small change q only affects the least-sigifiant half of the product:
+
+58174124 * 918491824 = 53432457262362176
+(incrementing until the next prime...)
+58174124 * 918491843 = 53432458367670532
+
+As long as the message is embedded into the upper half of n, it's likely to survive undamaged.
+The original p and newly selected q can now be used to construct a functional RSA private key in the usual manner.
+
+From here, it's really just a matter of getting a certificate aurthority to sign the key:
+
+# Single domain
+openssl req -new -key priv.pem -subj '/C=US/CN=example.com' > cert_request
+certbot certonly --manual --csr cert_request
+
+# Wildcard
+cat > config<<EOF
+[ req ]
+req_extensions = req_ext
+
+[ req_ext ]
+subjectAltName = @alt_names
+
+[ alt_names ]
+DNS.1 = *.example.com
+DNS.2 = example.com
+EOF
+openssl req -new -key priv.pem -config config -subj '/C=US/CN=example.com' > cert_request
+certbot certonly --manual --csr cert_request
+
+... although since base64 operates on groups of three byte,
+it is possible for the message to be misaligned and not readable.
+However, since the layout of the certificate is static, it is possible to adjust the message's placement until it works:
+this should take less than four attempts.
+
+The result is a functional, trusted certificate with a longish message hidden in the public key.
+Renewal is done by resumbitting the CSR and repeating the ACME chalange, which can be automated.
+
+Base64 is missing most punctuation, but it provides the full ASCII alphabet,
+and the ~150 (RSA-2048) or ~320 (RSA-4096) available charaters provides plenty of space for jokes.
+Another option would be to target the base16 displayed in most browser's certificate viewer:
+this would provide a lot more space (2 chars/byte instea of 0.75), but requires careful word choice.
+
+*As for security*, this trick obviously reduces the entropy in the private key.
+However, it should still be secure:
+nearly identical methods have been considered as a form of compression.
+If the top-half of the modulus is fixed to a well known value, it doesn't have to be sent or stored as part of the key.
+
+A reduction of around 1/2 can be achieved through division, but the state of the art can
+fix 2/3 of the key, reducing the size to 1/3 of standard RSA while retaining a similar level of security...
+although I should note that such tricks have largly been abandoned in favor of other crytosystems which can directly use small keys.
+
+The manipulation of q may produce primes that are very close together, which makes it possible to factor n and recover the private key.
+A very small d value can also be a problem.
+Both of these are unlikely, but my script doesn't check for insecure values
+
+However, regardless of the key's security, it should be perfectly fine for a public website:
+modern TLS provides forward secrecy, so eavesdropping requires a man-in-the-middle attack even if the private key is compromised.

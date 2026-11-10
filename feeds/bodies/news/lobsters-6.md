@@ -1,80 +1,230 @@
-It’s been a really bad month (and year) for OT cybersecurity. From a wave of new, high-impact vulnerabilities, to [attacks on supermarket refrigerators](https://www.theguardian.com/world/2026/nov/02/supermarket-freezers-across-europe-hit-by-second-suspected-cyber-attack), to [attacks on blood banks](https://www.theguardian.com/technology/2026/nov/04/france-national-blood-service-hack-cyber-attack-europe), we’ve been left shorthanded and reeling. And that’s on top of [months of attacks against water utilities](https://techcrunch.com/2026/08/26/cisa-confirms-hackers-targeted-over-100-us-water-systems-during-july/).
+If you have read my recent [rant about programming languages](https://nchagnet.eu/blog/desert-island-languages/), you'll know I've been quite interested in [Gleam](https://gleam.run). Gleam is a functional language that targets BEAM, the Erlang VM,<sup>[1](https://nchagnet.eu/blog/you-should-try-gleam#fn:1)</sup> with a simple syntax and interoperability with the wider BEAM ecosystem (Erlang and Elixir). Interestingly, Gleam can *also* target JavaScript i.e., Gleam can be compiled into JavaScript and run through Node.js.
 
-Through all of this, I keep seeing the same comment from seasoned enterprise cybersecurity people, and as someone dealing with these cases on the front line, I find it very frustrating. They express intense shock that these systems are accessible via networks at all, then ask why they can’t just be disconnected. It goes something like this:
+I've been mostly using Rust for hobby projects, which at the moment is the only language that really makes coding enjoyable for me, and Gleam has managed to scratch that itch too. If you're a Rust *connaisseur*, then Gleam will feel familiar to you, bar a few key differences. I feel like 80% of the code I write could be copy pasted to Rust (with a tinge of search-and-replace for syntax) and it'd compile.
 
-![Quote post - From an IT guy and cybersecurity fellow, why aren't those critical things airgapped? Outside of remote observation for temperatures (which you could do with non-connected thermometers), I can't imagine why I would want a refrigerator that contains temperature-sensitive cultures of supplies to be connected to the internet.](https://tisiphone.net/wp-content/uploads/2026/11/image-1.png)
+This post won't give an exhaustive overview of the language, if you want to learn more, I recommend the [excellent interactive tour](https://tour.gleam.run). You'll get a good feel for Gleam in under half an hour.
 
-This is just one example, and I’m genuinely not trying to bash the OP. I’m certain they’re a very competent, experienced IT person, and I understand their frustration. But the situation is far more complicated than it looks, and calling the people who support and purchase these systems incompetent won’t fix it. So let me try to explain why so much OT, ICS, and IIoT is exposed, and which systems are in the worst state.
+## Gleam: the good
 
-## How We Got Here
+On its homepage, Gleam is described as "a **friendly** language for building **type-safe** systems that **scale**!" (emphasis theirs) which does a good job of conveying what Gleam is all about.
 
-Before we can talk about the current state of OT, we need to go back 15 to 20 years to discuss IT/OT convergence. Before then, industrial devices and network infrastructure were often highly bespoke, heterogeneous technologies engineered by vendors. Most communication was serial-based, protocols were custom, and even device firmware was developed in-house. A Rockwell system looked nothing like a Siemens system. When you purchased a system, it was designed, deployed, and supported by that specific OEM. They supplied the replacement parts. They trained the technicians and installers.
+### Gleam is friendly
 
-This got expensive, and it slowed down logistics, not just for parts but also for labour. So clever engineers and businesspeople looked at the IT landscape and had an idea. Using Windows computers as human-machine interfaces, and commercial Ethernet to encapsulate serial traffic, would be much cheaper to buy, replace, and train technicians to support.
+The syntax is extremely simple, most of the complex stuff is hidden by the Erlang runtime which you don't really have to interact with unless you want to! Of course, Gleam is a functional language, so if you have lived in a C-shaped imperative world your whole life, it might be a bit daunting at first. But if you compare it to other functional languages (OCaml, Haskell, Erlang), you'll quickly notice Gleam is much simpler. After using it a bit, it feels like all the functional parts of Rust, with a few missing ones, and none of the imperative parts.
 
-Over the years that followed, systems became a mix: lower-level PLCs and RTUs down at Level 1, and above them, numerous devices that were far more familiar to IT staff. Unfortunately, they were also familiar to hackers and hacking tools. This was the first change in exposure, and it was really just a loss of security by obscurity.
+Let's start from an example piece of code:
 
-The next change was the homogenisation of OEM deployments. To deploy and support large-scale systems more efficiently, most industrial vendors started producing very uniform deployments of technology across the [Purdue Model](https://en.wikipedia.org/wiki/Purdue_Enterprise_Reference_Architecture), in very static architectures. Network maps and addressing can look incredibly similar between deployments, even across verticals and countries. Once again, this was the most financially and logistically efficient solution.
+Dissecting this a bit, you can see a few specificities of Gleam:
 
-Unfortunately, any savvy cybersecurity professional can see how this lends itself to more scalable attacks, and even to automating parts of those attacks with tools and agents.
+- variables in Gleam are immutable (so no mut keyword or anything like that), chained functions here all return a new element.[2](https://nchagnet.eu/blog/you-should-try-gleam#fn:2) You can still shadow a binding with a new let, which is how you "update" a value.
+- |> (typed |>) is the pipe operator used to chain functions on data. The main constraint is that the piped variable should be the first argument of the function in the pipe.
+- just like Rust, errors in Gleam are just values as part of the Result monad.[3](https://nchagnet.eu/blog/you-should-try-gleam#fn:3)
 
-## The Age of Remote Connectivity
+Comparing with the Rust code snippet, you can see that, up to a few naming choices, they look pretty similar. The main difference in this example is really the piping vs. chaining syntax. **Gleam types have no methods** so piping is used instead.
 
-Over the last ten years, we’ve lived through the rapid adoption of remote connectivity in industrial environments around the world.
+The piping operator `|>` is the first of the three mascot features of Gleam you will meet in this post, the other two being the `use` pattern and tail-call optimization.
 
-There was a time when many industrial systems were effectively “air-gapped”. This certainly coincided with the serial era of industrial technology.
+#### The use pattern
 
-As IT/OT convergence took hold, a mix of tactics was used. In some flat corporate network environments, industrial control systems were simply plugged into existing cabling for the cheapest possible network access. This included both industrial and building automation systems. We still see this today in low-margin verticals, especially manufacturing. Those flat (or relatively flat) networks have been a thorn in the side of industrial cybersecurity people for decades.
+If you've written a lot of JavaScript, you might be used to the indentation creep that arises when nesting many callbacks into one another
 
-The more acceptable solution from an industry perspective was implementing a DMZ at Level 3.5 of the Purdue Model. Enterprise IT would live above it, and the industrial OT environment would live below it. Note that this is still some level of connectivity. Traditionally, it was accomplished with two firewalls and some kind of jump host for traversing between the two environments when needed.
+```javascript
+someFunc(arg, function(param) {
+  someOtherFunc(param, function(otherParam) {
+    // ...
+  })
+})
+```
 
-Then the scope expanded, faster than practitioners could adapt.
+In Gleam, many functions expect a callback, for example because as a way to control access to a resource and clean up when the process is done (closing a database connection, releasing a file handle, etc.). To avoid this kind of tower of callbacks, Gleam provides some syntactic sugar: `use param <- some_func(arg)` is equivalent to `some_func(arg, fn(param) { ... })`. The callback must always be the **last** argument of the function. That is the opposite of `|>`, which fills the first one.
 
-## Everything Wants Access
+#### Tail-call optimization
 
-Networking industrial systems beyond single factory floors made them far more robust and efficient. Ethernet and routing allowed for distributed control and telemetry not just inside a building, but across regional, national, and then international deployments. A single control centre could make real-time changes to power transmission across mountains and multiple substations via SCADA. A manufacturer could match production to demand down to the minute, second, or millisecond. Parts could be monitored for failure tolerances, and replacements planned months in advance.
+This one might genuinely trip you up if you're not familiar with it. The first thing you need to know is **there are no loops in Gleam**! Again, if you've written OCaml or Haskell before, you won't be surprised by this. In 98% of cases,<sup>[4](https://nchagnet.eu/blog/you-should-try-gleam#fn:4)</sup> loops are simple operations over bounded iterations. Think `for` loops on a list or a set. Exactly the kind of thing which in Rust you always have two ways of doing: one imperative with the exact `for` loop, one more functional with a combination of operations on iterators. Well, if you look at the code example in the previous section, you'll see Gleam uses the second kind and has a plethora of functions to iterate over lists, sets, tuples, strings, anything.
 
-But humans weren’t the limit! Computers could make these decisions on a massive scale, far faster than human operators alone. Raise production, lower production. Our society came to rely on this, with a massive push towards just-in-time logistics. Of course, that meant central SCADA servers needed bidirectional control of industrial devices across huge regions, via networks.
+But what if you need something more complicated? What about the 2%? This is where you would instead use **recursion**! A simple algorithm which illustrates this is Euclid's algorithm to compute the Greatest Common Divisor (GCD). Below you can find a Rust iterative example, and a Gleam recursive example.
 
-Global power grids are a significant example, and they’ve changed enormously over the past ten years. Consider the advent of renewable energy. Firstly, wind and solar farms are made up of numerous generation devices, which must be coordinated and monitored individually across geographically disparate locations. Secondly, home generation necessitates smart meters to monitor usage and buy-back. Finally, there’s the problem of inertia. Traditional generation sources like nuclear, gas, and hydroelectric are high-inertia. Their output can be readily controlled through fuel, and they provide a lot of grid frequency stability during sudden spikes and drops in demand. Renewables provide far less inertia and are far less predictable. We can’t turn the wind on and off. That makes careful monitoring of detailed telemetry, and adjustments to load and generation at machine speed, essential.
+Of course, you can also write the recursive version in Rust, but this usually isn't such a great idea. Recursion in imperative languages can quickly get out of hand: every call adds a new stack frame, and a deeply recursive function can blow the stack (the infamous **stack overflow**).
 
-Add centralised dispatch and repair with far fewer staff, plus mass consumer demand for exact, real-time electricity billing and status checking. The result? Many power companies around the world have little to no ability to switch to manual operations for more than a few days, if at all.
+On the BEAM there is no fixed-size stack, so runaway recursion eats heap memory until the process is killed instead, but the point remains: deep recursions equals trouble. To avoid that problem, compilers for functional languages implement a technique called Tail Call Optimization (TCO), which applies when the recursive call is the last thing the function does. The existing stack frame is then reused instead of stacking a new one, giving performance close to an imperative `while` loop.<sup>[5](https://nchagnet.eu/blog/you-should-try-gleam#fn:5)</sup>
 
-All of this requires many inputs and outputs: telemetry from multiple industrial devices via fibre, copper, LTE, and radio; billing systems; customer portals; even computers in maintenance trucks.
+### Gleam is type-safe
 
-And bulk electricity is just one example. Connectivity and centralisation have been huge cost and labour savers for every vertical around the world. Big industrial companies rely on central DCS and SCADA control, and the more geographically dispersed their systems are, the more connectivity they require.
+This piece of the slogan is mostly there to answer the obvious question "why Gleam and not Elixir?" (another Erlang-based language). While Elixir is a dynamically-typed language (with gradual typing now!), Gleam was *built* as a statically-typed language with a strong type system: strong types are its *raison d'être*.
 
-Take those supermarket refrigerators. Many countries hold supermarkets to regulatory standards for the temperature at which food is kept, and supermarkets don’t staff to have humans check this in real time. So most of it is done through mobile apps or central monitoring, which saves money, ensures regulations are met, and keeps food from spoiling. A thermometer that isn’t connected to anything is only useful when someone is standing in front of it.
+A `type` in Gleam encompasses both the `enum` and the `struct` concepts in Rust:
 
-## Everyone Wants Access
+Because Gleam types are algebraic data types, they are very useful to ensure undesired states are impossible. A great aspect of Gleam, which will be relevant a little bit later, is that it compiles to *both* the BEAM virtual machine *and* to JavaScript. So you can share these strong type definitions across different applications in both targets. This is particularly handy if you need a web application to communicate with a BEAM app.
 
-System efficiency is only part of the story, though. Human engineers and operators are expensive, and the 2020 pandemic forced remote support on many businesses that had never considered it. The cost savings were immediately clear to industrial operators and OEMs.
+### Gleam is made for systems that scale
 
-It costs an OEM far less to train and employ ten technicians in a central, regional office than to have one in every city or at every customer site. Those savings are passed on to customers in very tangible ways. While there have been holdouts who insist on local support at significant extra expense, the industry has shifted heavily to remote support for routine system monitoring and fault analysis.
+That, of course, refers to BEAM, the Erlang VM. Unlike languages which target the native system (Rust, Go, C++), a VM provides an extra abstraction layer between the system and the program. In the case of BEAM, that layer is exceptionally good at handling concurrent processes and failures while remaining fast.
 
-Assumptions about security controls are one of the most dangerous problems I encounter as a full-time incident responder in industrial environments. One of the most common is cybersecurity personnel assuming the only connectivity to OT is still the DMZ at Level 3.5 with a jump host. When I perform forensics, I typically find five to seven other remote access mechanisms. Some are software-based remote access tools. Others are extraneous modems, VPN concentrators, and wireless bridges installed by local staff and a multitude of vendors and subcontractors.
+Gleam makes good use of that, and this is what a concurrent program would look like:
 
-This isn’t even necessarily a contract violation. I’ve seen many major OEMs and specialist device suppliers add contractual language requiring some level of remote access in order to keep receiving support, or support within a reasonable SLA. I talk to numerous asset owners around the world, and even Fortune 50 and government clients struggle to change these terms. Some OEMs will simply only provide timely support via remote connection.
+```gleam
+// Omitted imports
+pub fn main() {
+  let order_number_and_amounts = [
+    #(101, 100),
+    #(102, 200),
+    #(103, 300)
+  ]
 
-So, as an OT cybersecurity industry, we have to work around this. We have to identify and evaluate these remote connections. We have to try to build segmentation and microsegmentation around them, if the OEMs and operations permit. If that fails, we monitor and log to the very best of our ability. But all changes to industrial environments are costly, and fighting OEM requirements isn’t just expensive. It can cause a life-safety incident.
+  order_number_and_amounts
+  |> list.each(fn(x) {
+    let #(order_no, amount) = x
+    let order_description = "Order #" <> int.to_string(order_no)
 
-## What’s Getting Hacked and Why?
+    // Spawn unlinked: a crashing worker must not take the parent down.
+    process.spawn_unlinked(fn() {
+      // 101 and 103 will succeed, 102 will crash
+      process_order(order_description, amount)
+    })
+  })
 
-Now that we understand the chaos of connectivity in modern industrial environments, we can talk about what’s getting hacked right now, and why. Why water? Why refrigerators?
+  io.println("All orders dispatched!")
 
-A few unfortunate, incredibly predictable factors have led us here, and my colleagues and I have been screaming about them for years:
+  // Keep the parent alive until the children have had time to run.
+  process.sleep(10)
+}
 
-- Distributed industrial systems tend to be far more exposed than those in a single building. Whether it’s water pumps, wind turbines, refrigerators, or solar panels, if you have a bunch of standalone industrial environments in a field that need connectivity, the most cost-effective solution is a modem per unit or some other wireless link. Putting firewalls or concentrators in front of every modem is expensive. Keeping them updated and monitored is even more expensive. We’ve seen a two-week delay in updating them end in catastrophe. Which leads us to:
-- The organisations you see repeatedly hit have next to no money for IT, let alone cybersecurity. Manufacturing runs on thin margins, while water and some transport systems are municipally funded, with almost no budget for system updates or cybersecurity programs. It’s very easy to say “why don’t you just” put a firewall and fibre connection on every refrigerator. The cost of doing that is days of operational shutdown, and orders of magnitude more than a simple mobile router. Water has kept my colleagues and me awake, and at bars, far more than any other vertical. It’s essential to society, with next to no investment across large parts of the world.
-- The devices you see repeatedly hit are fairly homogeneous and well documented. Complex industrial systems of systems are, as a rule, hard to break in a way that’s both reliable and dangerous. They’re full of redundancies and analogue and digital safety controls. Reliable attacks used to require engineering expertise. However, AI, and LLMs specifically, are certainly lowering that barrier to entry. Without controls, they can reveal which verticals are least defended and most exposed, and which devices are popular globally for a given function. Since vendors have trended towards homogenisation, the most commonly exposed devices, and their interfaces and vulnerabilities, can be understood and automated against.
-- Fixing the vulnerability isn’t easy, even if the organisation is aware of it. Industrial systems have long lifecycles, sometimes 10 to 30 years. They’re engineered and tested by the OEM to work in a very specific technology stack and topology. Any alteration can, at best, disrupt the process and, at worst, lead to injury or death. Either outcome can be far more damaging than a casual hacker. Because of these lifecycles, and the inability to replace systems, I still deal with Windows 2000, CE, and XP every week. They can’t be removed from production or modified without express authorisation from the OEM and engineers, plus a significant outage and testing window. All of this adds up to huge expenses for the asset owner.
+fn process_order(order: String, amount: Int) {
+  process.sleep(1)
+  case amount {
+    200 -> panic as "Payment failed!"
+    _ -> io.println(order <> " processed successfully")
+  }
+}
 
-As you can see, my colleagues and I have our work cut out for us. These systems are more connected than they have ever been. They contain out-of-support operating systems that can’t be replaced. Many of the most exposed systems are similar, well documented, and lack monitoring and basic cybersecurity controls because of budgets. And we’re now seeing the result first-hand in our cases: adversaries, enabled by LLM data gathering, are pinpointing these systems en masse and automating simple, disruptive attacks against the most exposed devices. That’s a very different scenario from the well-resourced, long-term state and criminal campaigns we’ve dealt with until now.
+// Stdout
+// ----
+// All orders dispatched!
+// Order #101 processed successfully
+// Order #103 processed successfully
+```
 
-## So, Why Don’t We Just Disconnect It?
+What you should take away from this code is that it's the BEAM that handles processes.
 
-The next time a headline lands about hacked pumps or freezers, and you feel the urge to ask why they don’t just disconnect it, remember that there’s rarely a single plug left to pull. These connections were built one sensible business decision at a time, and they now help keep the lights on, the water running, and the food cold.
+The call to `process.spawn_unlinked` triggers a new process with no link to its creator, so when order 102 crashes, neither the parent nor siblings are affected. With a plain `process.spawn` the child would be linked to the caller, and that `panic` would have taken the whole program down. If you look closely, I also added `process.sleep(10)` so the parent wouldn't close *before* the children could finish: this is a hack, since the delay is only a guess and a slower child would still be cut off.
 
-None of this makes it acceptable to leave systems directly connected where a regulation prohibits it, or where any other feasible security solution exists that doesn’t pose a safety risk. There should absolutely be a best effort to rearchitect these environments and add essential security controls, like the [SANS Five ICS Cybersecurity Critical Controls](https://www.sans.org/white-papers/five-ics-cybersecurity-critical-controls). But these things take time, and a little empathy would go a long way towards understanding the uphill battle low-resourced organisations are fighting in the middle of the current onslaught.
+Thankfully, a great advantage of the BEAM is how easy inter-process communication is, which the following code piece illustrates well:
 
-If you’re an enterprise security professional who’s angry about all this, good. We could use your help. Bring your frustration, and bring your curiosity too.
+```gleam
+// Omitted imports
+pub type PaymentError {
+  PaymentFailed
+}
+
+pub fn main() {
+  let parent = process.new_subject()
+  let orders = [
+    #(101, False),
+    #(102, True),
+    #(103, False)
+  ]
+
+  orders
+  |> list.each(fn(x) {
+    let #(order_no, should_fail) = x
+
+    process.spawn(fn() {
+      // Simulate processing time
+      process.sleep(1000)
+
+      // 101 and 103 succeed, 102 fails
+      let res = case should_fail {
+        True -> Error(PaymentFailed)
+        False -> Ok(Nil)
+      }
+
+      process.send(parent, #(order_no, res))
+    })
+  })
+
+  io.println("All orders dispatched!")
+
+  receive_results(list.length(orders), parent)
+}
+
+fn receive_results(
+  remaining: Int,
+  parent: process.Subject(#(Int, Result(Nil, PaymentError))),
+) -> Nil {
+  case remaining {
+    0 -> Nil
+
+    _ -> {
+      let #(order_no, res) = process.receive_forever(parent)
+
+      let status = case res {
+        Ok(_) -> "successful"
+        Error(_) -> "failed"
+      }
+
+      io.println(
+        "Processing of order #" <> int.to_string(order_no) <> " " <> status <> "!",
+      )
+
+      receive_results(remaining - 1, parent)
+    }
+  }
+}
+
+// Stdout
+// ----
+// All orders dispatched!
+// Processing of order #103 successful!
+// Processing of order #102 failed!
+// Processing of order #101 successful!
+//
+// The order of the last three lines depends on scheduling.
+```
+
+### OTP: the gift that keeps on giving
+
+In the paragraph above, I briefly showed how the BEAM virtual machine is great for concurrent programs communicating by message passing. If you're familiar with Go, this is similar to how it handles the same problem with *goroutines*. But the OTP (Open Telecom Platform), the set of libraries that ships with Erlang, is more powerful than that. It provides you with a built-in supervisor-actor paradigm which enables you to create scalable, concurrent services which can crash without taking down the whole application.
+
+In a nutshell, the OTP exposes *actors*: lightweight processes that hold state and communicate with each other via messages (like in the example above). When paired with a *supervisor*, the whole application becomes more resilient to any individual actor crashing: the supervisor will monitor processes and restart them as needed. It can also help start/stop groups of actors dynamically.
+
+If you're reading this and thinking "uh that sounds a lot like how I used Kubernetes", you're not alone. The OTP model is extremely similar to the controller-pod architecture of Kubernetes and solves a lot of the same problems.<sup>[6](https://nchagnet.eu/blog/you-should-try-gleam#fn:6)</sup>  However, in my experience, *a lot* of workflows using Kubernetes don't really need a cluster but still use one (and that's expensive!) because of the added bonus of the distributive experience. For those cases, the OTP provides a really interesting alternative.
+
+Let me give you a concrete example. Without going in too much detail, we have a common setup in my team which involves a handwritten Go job scheduler handling some other processes.
+
+The scheduler, each worker, and the user interface are all pods inside the cluster, managed by Kubernetes. To be honest, this works well, but it does introduce a lot of complexity. First of all, most of these services do not need to be so isolated from each other. The consequence here is that we need duplicate REST APIs in various places to enable communication between different services.
+
+What if we wanted to reorganize this within a Gleam application? There are two parts where Gleam would shine here:
+
+1. the OTP would essentially unify all scheduling services as actors within a single application,
+2. the user interface (currently a Node.js app) can be written in Gleam and compiled to JavaScript.
+
+Here is the revised architecture:
+
+Within the BEAM application, all actors would communicate via messages:
+
+- the HTTP server receives requests and saves them to the DB,
+- the workers would pick up jobs and write the status back to the DB.
+
+So instead of handling the deployment of multiple applications in separate pods, you can just let the OTP handle all process management within one VM (for the scheduling part).
+
+#### What does it mean to reuse code between the frontend and the backend?
+
+As mentioned before, one of the big advantages of Gleam is that it compiles to JavaScript. So you can bundle shared type definitions between the user interface and the job scheduler instead of keeping duplicate APIs in sync.
+
+## Gleam: the bad
+
+Every language has its flaws, and it's time for some honest feedback on Gleam. I don't pretend I have much experience with the language yet, so if any of these complaints feel unfair to you, feel free to [correct me](mailto:hi@nchagnet.eu). So far, these are the things I noticed:
+
+- the ecosystem is small. This is not Gleam's fault per se, just a consequence of being a young language,[7](https://nchagnet.eu/blog/you-should-try-gleam#fn:7) and there are mitigating factors such as the possibility to use external functions quite easily (Erlang, Elixir on BEAM, JavaScript on its own runtime) directly from Gleam. Yet, the community itself favours Gleam-first packages and as of today, there are some gaps in package variety.
+- The language is too simple. Well, to be honest I don't agree per se with this, I like it like this. But I totally understand that the lack of macros or other complex features can put a few people off (for example, I read that currying is dearly missed).
+- The BEAM virtual machine is an excellent target, but it's also a peculiarity. I couldn't really name any big company/system using it. Yet, a quick search shows that WhatsApp, Discord and Pinterest, as well as Cisco, Nintendo, and even the NHS rely on it. Erlang and BEAM are quietly powering huge platforms due to their reliability, but it's not as flashy as "Made in Rust" marketing. Where Rust had Mozilla, Go had Google and Java had Oracle, there isn't a big tech player pushing for Gleam/Erlang right now.
+
+Of course this is a very biased account. I think I'm missing a lot of flaws in the language itself, flaws that will show themselves once the honeymoon period is over. But for now, I'm having a blast with Gleam, and I can only encourage you to give it a try too! I'm sure just like me, you'll have a lot of fun!
+
+1. If like me this doesn't mean much to you, Erlang is *also* a functional language, albeit a much older one (about 40 years old), whose primary use has been for telecom systems. The BEAM shines with distributed, concurrent, fault-tolerant systems (so, telecom, obviously). [↩︎](https://nchagnet.eu/blog/you-should-try-gleam#fnref:1)
+2. One important thing about immutable languages is that when you do something like `let new_list = list.take([1, 2, 3], 2)`, you're not making a *copy* of the data (that'd be very wasteful), instead the common data in both variables comes from the same spot in the memory. [↩︎](https://nchagnet.eu/blog/you-should-try-gleam#fnref:2)
+3. Gleam also has the `Option` monad via `gleam/option`, but unlike Rust, it's somewhat discouraged and a simple `Result(T, Nil)` is preferred when possible. This is why `reduce` in Gleam returns `Result(T, Nil)` while Rust returns `Option<T>`. [↩︎](https://nchagnet.eu/blog/you-should-try-gleam#fnref:3)
+4. This is a completely made-up statistics, but I feel it's not too far from reality. [↩︎](https://nchagnet.eu/blog/you-should-try-gleam#fnref:4)
+5. Rust does not guarantee TCO. LLVM sometimes applies sibling-call optimisation, but it is not something you can rely on, and explicit tail calls are still unstable. Since Rust *also* gives you loops, the imperative style is generally the safer choice. Compilers for functional languages are usually much more aggressive here, since TCO is crucial to their performance. [↩︎](https://nchagnet.eu/blog/you-should-try-gleam#fnref:5)
+6. The main difference is really about isolation: an OTP node is a single OS process, and all the actors on it share the same memory, while Kubernetes gives each pod its own container and spreads them over the machines of the cluster. Erlang does know how to cluster several nodes together, but OTP has no cluster scheduler, no placement and no container isolation: you still have to deploy and place the nodes yourself. [↩︎](https://nchagnet.eu/blog/you-should-try-gleam#fnref:6)
+7. Gleam's exact age is debatable. According to [Wikipedia](https://en.wikipedia.org/wiki/Gleam_(programming_language)), Gleam was initially created in 2016, but it would only be considered a "serious" endeavour starting from 2019 (when it got numbered versioning) and only reached version 1.0.0 in 2024. [↩︎](https://nchagnet.eu/blog/you-should-try-gleam#fnref:7)

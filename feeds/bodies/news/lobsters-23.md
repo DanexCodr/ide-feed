@@ -1,239 +1,164 @@
-Going through a collection of old parts, CuriousMarc encountered some ICs that he couldn't
-identify.
-He opened up one of these ICs, and I studied it under the microscope.
-After some reverse engineering, I determined that it was a logic chip that implemented four NAND gates
-using old-fashioned diode-transistor logic (DTL).[1](http://www.righto.com/2026/11/signetics-st680a-dtl-nand.html#fn:tubetime)
-The chip turned out to be the ST680A, a member of the Signetics 600 series of chips from 1965.
-In this article, I discuss the circuitry in this chip and how diode-transistor logic works.
+Anders Murphy recently wrote about [faster streaming HTML with batches and aggregates](https://andersmurphy.com/2026/09/29/faster-streaming-html-with-batches-and-aggregates.html). The idea is simple. When the server streams HTML to a page, it should collect the changes and render once for the whole batch. Similarly, it makes sense to avoid rendering the same thing twice for two different pages to avoid resending the data that the client already has.
 
-Integrated circuits can be packaged in many ways. One of the most popular is the
-plastic DIP (Dual In-line Package), a black rectangle of epoxy with two rows of metal
-pins.
-This type of package was
-[invented](https://archive.org/details/signetics-corporation-condensed-catalog-spring-1969/page/n6/mode/1up) by Signetics: "Introduced in late 1965, the 600 series was the first integrated circuit family to be offered in a solid, plastic, dual in-line package (DIP)."
-Earlier integrated circuits were packaged in round metal cans or in small flat-packs.
-In 1965, engineers at Fairchild invented the DIP, which had two
-rows of pins on 0.1" spacing.
-Unlike the surface-mounted flat-pack, the DIP had pins that were inserted into holes, making
-manual or automated assembly quick and easy.
-Because the pins of a DIP were on a regular grid, rather than the circular pattern of a metal
-can, circuit board design and manufacturing were also easier
-([details](https://www.computerhistory.org/siliconengine/package-is-the-first-to-accommodate-system-design-considerations/)).
-The first DIP chips had ceramic packages.
-The plastic DIP, introduced by Signetics, was much cheaper and became very popular.
+I've been building [glimmer](https://github.com/jolt-lang/glimmer) and [glimmer-datastar](https://github.com/jolt-lang/glimmer-datastar) to do reactive server side rendering for [jolt](https://github.com/jolt-lang/jolt), and ran into similar problems. This post covers how both libraries have been reworked to facilitate batch processing, and how these changes are used in the [newsroom](https://github.com/yogthos/newsroom) app.
 
-The plastic DIP is less popular with me, however, because it is harder to open.
-With a ceramic package, I can simply tap it with a chisel and pop it open, but
-that doesn't work with epoxy packages.
-An epoxy package can be dissolved with nitric or sulfuric acid, but I try to avoid dangerous acids.
-Instead, CuriousMarc used [Antoine's hot air](https://www.youtube.com/watch?v=ZQeHHYJYWXo)
-decapping method.
-Unfortunately, the hot air technique doesn't always work. In this case, tiny bits of epoxy
-were stuck to the die, obscuring the circuitry.
-I used a few drops of boiling sulfuric acid to clean the die.
-(I'm okay with sulfuric
-acid in tiny quantities.)
+## The setup
 
-[![The die on its metal frame.](https://static.righto.com/images/st680a/die-package-w500.jpg)](https://static.righto.com/images/st680a/die-package.jpg)The die on its metal frame.
+Glimmer is a Reagent-style library where state lives in ratoms which UI components subscribe to. The original target was native GUIs such as [glimmer-gtk](https://github.com/jolt-lang/glimmer-gtk) and [glimmer-tui](https://github.com/jolt-lang/glimmer-tui), but the reactive core is toolkit agnostic. So, naturally I got curious if I could use the same model on the server with [Datastar](https://data-star.dev/) on the frontend.
 
-The photo above shows the silicon die
-on its metal frame, the lead frame.
-The golden blobs are where
-the bond wires were attached to the die.
-You can see the doped silicon regions that form diodes and bipolar NPN transistors,
-as well as 16 resistors in the center, forming serpentine paths.
+The way this works is that each open page keeps a Server-Sent Events stream to the server. When the page is rendered, any ratom the page reads is recorded, and the stream subscribes to it. Then whenever one of those ratoms changes, that causes the stream to render the page again. So, when a `swap!` happens on a ratom, that sends a `datastar-patch-elements` event with the new HTML to every page that renders it.
 
-Most chips have a passivation layer—a thin layer of silicon dioxide—over the chip.
-Inconveniently, this old chip didn't have a passivation layer, so the acid also stripped off
-the metal layer. (A few remnants are visible in the upper left.)
-Without the metal layer, I had to guess at how the components were connected to
-form logic gates.
-The die has very faint color differences where the silicon was protected by the metal,
-so that helped.
-Eventually, I came up with the diagram below, showing how the metal
-layer was probably configured.
-This wiring reveals that the chip implements four DTL NAND gates, which I'll describe
-in more detail below.
-One puzzle was that the chip has two unused diodes, indicated with question marks below.
+```
+(def state (ratom/atom {:greetings []}))
 
-## Transistors, diodes, and resistors
+(def handler
+  (-> (fn [_] {:status 200 :body (render-page @state)})
+      (datastar/wrap-datastar {:tick-ms 15})))
+```
 
-In this section, I'll explain how the patterns in the image correspond to components
-of the circuit.
-The silicon die is doped with various impurities to form regions with different
-electrical characteristics.
-These regions appear red or green under the microscope due to thin-film effects.
-As a result, 
-the chip's transistors, diodes, and resistors are visible.
+The first version did the obvious thing which is to wake up every stream that reads the ratom on a write to do a render. The naive approach works fine with a few pages that do occasional writes, but it doesn't scale with load because the cost ends up being writes * pages.
 
-The chip is made from bipolar NPN transistors, which have a completely different
-construction from the MOS transistors in modern ICs.
-In an NPN transistor, the current from the collector to the emitter is controlled
-by the current through the base.
-The collector is a large region of N-type silicon, silicon that is doped with
-atoms such as phosphorus or arsenic. 
-Since these elements have one more valence electron than silicon, they give the
-silicon more negative charge carriers, so it is called N for negative.
-The N-type silicon happens to appear reddish.
+## Render once per tick, not once per write
 
-On top of the collector, the base is a thin region of P-type silicon, which appears green.
-This silicon has been doped with atoms such as boron or gallium, which have 
-one fewer valence electron than silicon. The missing electrons form "holes", which
-act as positive charge carriers.
-Finally, the emitter is N-type silicon, on top of the base layer.
-These layers work together through semiconductor magic, amplifying the base current.
+The fix here is to decouple writes from render requests. A write only needs to mark the streams that read the ratom as dirty, then a separate render loop can run on a fixed timer specified by `:tick-ms`. And every dirty stream ends up being rendered exactly once each time it wakes up with all the changes that have been batched up since the last time:
 
-The chip's output transistors are slightly larger so they can sink more current.
-In the transistor on the right above, note that the collector contact wraps around three sides of
-the transistor. 
-The emitter is also larger, with an L-shaped contact.
-According to the datasheet, each output transistor can sink 2.5 mA of current.
+```
+(defn mark-dirty! [sched conn]
+  (swap! (:dirty sched) conj conn)
+  (wake! sched))
 
-The chip uses many diodes since it is diode-transistor logic. 
-The structure of a diode is similar to a transistor, but without the emitter.
-In a diode, current flows from the cathode (P-type silicon) to the anode (N-type).
+(defn- tick! [{:keys [txs dirty batch-fn] :as sched}]
+  (run-batch! batch-fn (drain txs))
+  ;; snapshot after the writes, so the connections they dirtied render now
+  (let [[conns _] (swap-vals! dirty (constantly #{}))]
+    (render-all! sched (vec conns))))
+```
 
-The chip uses 16 resistors, located in the middle of the die.
-A resistor is constructed from a long, thin region of doped silicon.
-Since silicon has moderately high resistance, a long strip of silicon acts
-as a resistor.
-Most of the resistors have a serpentine layout to fit a long resistor into a smaller area.
-These resistors consist of P-type silicon (green) in a "tub" of N-type silicon (red).
-The tub is connected to the positive voltage supply; since current doesn't flow from
-N-type silicon to P-type silicon, this isolates the resistors from each other.
+The loop sleeps out whatever is left of the tick before rendering, allowing every change that arrives to land in the same batch. Meanwhile, an idle loop simply parks on a channel without incurring any additional cost.
 
-## Operation of a DTL gate
+The effect on a burst with ten open streams and a hundred `swap!`s in a row is fairly dramatic as one would expect:
 
-Logic gates can be created in many ways.
-The earliest integrated circuits (such as the ones in the Apollo Guidance Computer)
-used Resistor-Transistor Logic (RTL), where logic gates were constructed from resistors
-and transistors.
+Before, the server had to do a thousand renders, most of which were thrown away. With ticks in place, the render count depends on the number of pages and how long the burst lasts rather than how many writes it contains. Incidentally, glimmer's GUI side already worked this way since a component's watcher holds a `pending` flag to ensure that a burst of changes queues a single deferred render on the UI thread.
 
-In March 1962, Signetics announced the first family of commercial Diode-Transistor Logic
-(DTL) integrated circuits ([details](https://www.computerhistory.org/siliconengine/standard-logic-ic-families-introduced/)).
-By using diodes on the inputs instead of resistors, DTL provided better performance than
-RTL. 
-However, DTL soon became overshadowed by TTL (Transistor-Transistor Logic), which
-was faster and used less power. (If you built digital circuits a few decades ago, you're
-probably familiar with the popular 7400 series of TTL chips.)
+## Slow clients drop frames instead of queueing them
 
-The diagram below shows how the DTL NAND gate works.
-If both inputs are high, the current from the first resistor flows through the
-base of the first transistor, turning it on.
-The transistor amplifies this current, passing a much larger current from the
-transistor's collector to the transistor's emitter.
-This current goes through the base of the second transistor, which turns on the
-second transistor.
-The second transistor passes an even larger current from the output pin to ground,
-pulling the output pin low.
+A tick produces at most one frame per stream, and each stream sends its frames through a channel with a sliding buffer of one. If a client hasn't taken the last frame by the time the next one is ready, the old frame is discarded so that the client always gets the latest update. This way a bad connection can't back up the render loop or build up an unbounded queue of stale HTML.
 
-But if one of the input pins is pulled low, the current from the resistor goes through
-the diode instead of the transistor.
-The first transistor turns off, and without a base current, the second transistor turns off.
-The third resistor pulls the output high.
-Thus, the output is low only if both inputs are high: a NAND gate.
+## Batched writes with `tx!`
 
-I'll point out a few features of this circuit.
-The diodes on the inputs ensure that one input doesn't affect the other input.
-The diode in the middle raises the voltage on the first transistor's emitter, so it
-requires more voltage to turn on, reducing the sensitivity to noise.
-The output uses a resistor to pull the output high; more advanced circuits use another
-transistor.
-When the output is low, the third resistor is still "trying" to pull the output high,
-which is wasting power.
-Moreover, the resistor limits the output current, so the high output is fairly weak.
-In some DTL families, you can get gates with different values for the output resistor,
-so you can select the tradeoff between wasting power and having an output that is too weak.
+Since ticks batch renders, it makes sense for writes to be batched as well, as an opt-in. This is done using `tx!` to queue a thunk that runs on the loop thread at the start of the next tick, and before a render happens:
 
-If you've used TTL integrated circuits from the 1970s, you know that chips usually have power
-and ground on diagonal pins: ground on pin 7 and power on pin 14.
-(Putting power and ground diagonally opposite both helps die layout and circuit board layout.)
-Much to my surprise, I found that the Signetics chips predate this standard and have
-ground on pin 1 and power on pin 8: still diagonal, but the wrong diagonal!
-The diagram below shows how the four NAND gates are wired in the chip.
+```
+(fn [request]
+  (datastar/tx! request #(swap! state update :greetings conj "hello"))
+  {:status 204})
+```
 
-## Three chips from one die
+Writes and renders have to take turns, so that a render can't observe a partial update. If you pass a `:batch-fn`, it receives all of a tick's thunks together, so you can run them in a transaction, and calling `tx!` returns a promise of the thunk's result.
 
-When I examined the die under the microscope, I figured out the circuit, but I was puzzled
-by two extra diodes, as if two NAND gates had a third input that wasn't used.
-The explanation is that Signetics used the same silicon layout for at least three different
-chips, applying a different metal layer for different functionality.
-This saved money since it's much cheaper to produce a single optical mask for the metal layer
-than a complete set of new masks.
-Signetics sold semi-custom ICs to customers, using an approach called variFEBS (Variable
-Functional Electronics Blocks). This approach used a custom metal layer on top of
-fixed silicon, providing custom circuits without the cost of a full mask set.
-These circuits didn't sell well, but Signetics used the same approach for standard ICs.
+## Using component cache to avoid rendering the same thing twice
 
-One IC with the same silicon as the quad NAND gate is the 670A chip, which
-has three NAND gates, each with three inputs (above left).
-The diagram below shows how the silicon can be wired to provide this functionality.
+While ticks cut renders per page, there is also waste across different pages to consider. If a hundred people are looking at the same 300-row board, rendering it a hundred times per tick produces a hundred identical strings.
 
-The layout for the triple chip above is a bit tricky because the top gate has inputs on
-both sides of the power (Vcc) pin.
-This creates a layout problem because the power and ground metal runs vertically to the
-resistors, blocking metal wiring from one side to the other.
-The solution is a "crossunder", a region of silicon that allows a signal to pass under
-the metal layer, connecting the inputs on the left to the rest of the circuitry on the right.
-This crossunder is visible near the top of the chip.
+To address that, glimmer-datastar provides its own hiccup renderer in `jolt.datastar.html`. The head of the vector is a component of `[row item]`, and its HTML is cached under the vector itself, so the key is the function plus its arguments. The whole board can now render once per change with every page showing it sharing the result.
 
-Another chip with the same layout is the 616A dual NAND gate, with five inputs on each gate.
-Since this chip has 10 inputs in total (compared to 8 on the quad gate), this chip
-uses the two "extra" diodes that I spotted.
-If that isn't enough inputs, each NAND gate has an expansion input; by connecting external
-diodes to the expansion input, the gate can be made as large as desired.
+As always, the tricky part is knowing when a cached entry is stale, since components read ratoms as well as their arguments, glimmer now has `capture` for this case:
 
-## Some history
+```
+(let [a (atom 1) b (atom 2)]
+  (r/capture #(+ @a @b)))   ; => [3 [a b]]
+```
 
-The history of Signetics is closely tied to Fairchild.
-The story of Fairchild's founding is well known: in 1957, eight
-engineers—the Traitorous Eight—left Shockley Semiconductor and created
-Fairchild Semiconductor.
-Hundreds of companies (the "Fairchildren") were started by engineers who left
-Fairchild.
-Signetics was one of those companies, formed in 1961 and [said](https://oac.cdlib.org/findaid/ark:/13030/kt9m3nf315/)
-to be the first company to exclusively design and manufacture integrated circuits.[2](http://www.righto.com/2026/11/signetics-st680a-dtl-nand.html#fn:signetics)
-Signetics announced its first product in 1962, a NAND gate that cost $125 (over $1000 in
-current dollars).[3](http://www.righto.com/2026/11/signetics-st680a-dtl-nand.html#fn:lojek) Not surprisingly, sales were weak.
+It runs a function and returns its result along with every reactive cell the function read. The cache stores each entry with those cells and the values it saw in them, and once any of those values changes, that indicates a need for a cache refresh. And on a hit, the cache simply reads the cells again.
 
-Signetics soon ran short of money, so in 1962, Corning Glass invested $1.7 million for 51%
-ownership of Signetics.
-Corning Glass may seem like a strange investor, but Corning was more of a high-tech
-company than you'd expect, making components such as resistors and [glass capacitors](https://www.righto.com/2026/06/space-shuttle-io-processor-boards.html#:~:text=were%20manufactured%20by-,Corning%20Glass%20Works,-%2C%20as%20indicated%20by), and later creating fiber optics.
-Moreover, in the early 1960s, integrated circuits were the hot area (much like AI now),
-and everyone wanted to get involved.
+The cache also admits an entry only when it's asked for more than once, so components that render once and never again don't push out ones that render every frame. It evicts by generation, which is roughly LRU without needing per-entry bookkeeping on the hit path.
 
-In 1963, the Department of Defense pushed for contractors to use integrated circuits
-in new products.
-Riding this wave, Signetics became the leading producer of integrated circuits.[4](http://www.righto.com/2026/11/signetics-st680a-dtl-nand.html#fn:making)
-However, Fairchild soon introduced a series of DTL chips that competed with Signetics. The
-Fairchild 930 series was faster than the Signetics chips and less than half the price,
-so Fairchild took much of the market from Signetics and dominated the IC market.
+On a 4-core machine, with 100 streams showing the 300-row board and one row changing per tick, a tick takes:
 
-Signetics also produced analog integrated circuits.
-Signetics is probably best known for creating the [555 timer chip](https://www.righto.com/2016/02/555-timer-teardown-inside-worlds-most.html) in 1970, said to be
-the world's most popular IC, with billions sold.[5](http://www.righto.com/2026/11/signetics-st680a-dtl-nand.html#fn:camenzind)
-Signetics was acquired by Philips in 1975, and then Philips Semiconductors was spun
-off as NXP (Next exPerience) in 2006. NXP is currently the #10 semiconductor manufacturer
-worldwide, so the heritage of Signetics lives on.
+The cache is the big win here while render threads level off, so two is the default.
 
-For more, follow me on
-Bluesky ([@righto.com](https://bsky.app/profile/righto.com)),
-Mastodon ([@[email protected]](https://oldbytes.space/@kenshirriff)),
-or [RSS](http://www.righto.com/feeds/posts/default).
-Thanks to CuriousMarc for providing the IC and thanks to TubeTime for finding the databook.
-AI statement: Despite the presence of the em dash, no AI was used in the writing of this article ([details](https://www.righto.com/p/index.html#ai)).
+And `capture` also fixes another problem unrelated to speed. Since a stream now knows exactly which cells its last render read, it only needs to watch those. A cell it stopped reading can be unwatched right away, rather than leaving a subscription behind that triggers extra renders later.
 
-## Notes and references
+## Not sending what the client already has: patches
 
-1. After I had reverse-engineered the chip, TubeTime found datasheets for it, making my reverse engineering unnecessary. (See the [Signetics Condensed Catalog 1969](https://archive.org/details/signetics-corporation-condensed-catalog-spring-1969/page/n5/mode/2up), [Utilogic II Databook 1971](https://archive.org/details/bitsavers_signeticsdcsUtilogicII600DTLTTL_3436170/page/20/mode/2up), and [Utilogic 2 Databook 1972](https://archive.org/details/bitsavers_signeticsdcsUtilogic2_4702034/page/n23/mode/2up).) We must have been unlucky with our original web searches since we didn't find anything. But this way you get to see what's inside the chip :-) [![The Signetics ST680A IC in its package. The large circular depression marks pin 1. From the date code, this chip is from 1971.](https://static.righto.com/images/st680a/signetics-package-w250.jpg)](https://static.righto.com/images/st680a/signetics-package.jpg)The Signetics ST680A IC in its package. The large circular depression marks pin 1. From the date code, this chip is from 1971. [↩](http://www.righto.com/2026/11/signetics-st680a-dtl-nand.html#fnref:tubetime)
-2. For more Signetics history, see [Signetics Founding History](https://www.computerhistory.org/collections/catalog/102770828/), written by Lionel Kattner, a co-founder of Signetics. He states that the company name was inspired by the words "signals" and "networks", as well as the high-tech suffix "-netics". [↩](http://www.righto.com/2026/11/signetics-st680a-dtl-nand.html#fnref:signetics)
-3. See [History of Semiconductor Engineering](https://link.amazon/B0hQihwp3), page 156. [↩](http://www.righto.com/2026/11/signetics-st680a-dtl-nand.html#fnref:lojek)
-4. The book [Making Silicon Valley](https://archive.org/details/makingsiliconval00chri/page/212/mode/2up) describes the history of Signetics. It has a negative view of the Corning investment, saying that Signetics executives "Van Poppelen and Kattner dissented on the grounds that Corning was not a good fit for an integrated circuit company. In their view, Corning was a staid Eastern firm, ignorant about semiconductors and antithetic to the ways and culture of the electronics industry on the West Coast. Their view later proved to be correct." [↩](http://www.righto.com/2026/11/signetics-st680a-dtl-nand.html#fnref:making)
-5. The 555 timer was created by analog IC wizard Hans Camenzind. If you're interested in analog circuits, you should read his book [Designing Analog Chips](http://www.designinganalogchips.com/), which you can download for free. [↩](http://www.righto.com/2026/11/signetics-st680a-dtl-nand.html#fnref:camenzind)
+With rendering no longer being the bottleneck, the wire becomes the main cost since a single row change to that 300-row board still sends a 40 KB page. One obvious solution here is to enable streaming compression which gets you part of the way. Using ring-chez-adapter's `wrap-gzip` compresses an SSE stream with a single deflate window across frames, so a frame that's almost identical to the previous one compresses to almost nothing. But that holds only while a frame fits in deflate's 32 KB window. Past that the saving mostly disappears, and even a one-row change costs 4316 gzipped bytes.
 
-1. isaac[November 8, 2026 at 12:13 PM](http://www.righto.com/2026/11/signetics-st680a-dtl-nand.html?showComment=1794168839998&m=1#c7709466141122581585)Really really awesome stuff Ken. Thanks. I will never miss a post from you! I've picked up some nice die shots of some chips and started mucking about trying to reverse engineer them a little, inspired by you. ThanksReply[Delete](https://www.blogger.com/comment/delete/6264947694886887540/7709466141122581585)RepliesReply
-2. Anonymous[November 8, 2026 at 12:45 PM](http://www.righto.com/2026/11/signetics-st680a-dtl-nand.html?showComment=1794170717653&m=1#c2808156614240019707)The bond wire welds look very poorly registered, some to the point of overlapping adjacent structures. How did the chip actually work with these apparent shorts?Reply[Delete](https://www.blogger.com/comment/delete/6264947694886887540/2808156614240019707)RepliesReply
-3. ![](http://www.blogger.com/img/blogger_logo_round_35.png)[Ken Shirriff](https://www.blogger.com/profile/08097301407311055124)[November 8, 2026 at 8:21 PM](http://www.righto.com/2026/11/signetics-st680a-dtl-nand.html?showComment=1794198073044&m=1#c6527306699979172651)Yes, the bond wires look crooked, but they were connected to the metal layer (which I dissolved). They were insulated from the underlying silicon by an oxide layer, so there weren't actually shorts.Reply[Delete](https://www.blogger.com/comment/delete/6264947694886887540/6527306699979172651)RepliesReply
-4. ![](http://www.blogger.com/img/blogger_logo_round_35.png)[Exophase](https://www.blogger.com/profile/03306077583436521311)[November 9, 2026 at 10:55 AM](http://www.righto.com/2026/11/signetics-st680a-dtl-nand.html?showComment=1794250509251&m=1#c7863258799490233647)> Signetics announced its first product in 1962, a NAND gate that cost $125 (over $1000 in current dollars). Not surprisingly, sales were weak. Signetics soon ran short of money, so in 1962, Corning Glass invested $1.7 million for 51% ownership of Signetics. Imagine being able to buy majority ownership in a cutting edge semiconductor firm for a mere 13,600 NAND gates.Reply[Delete](https://www.blogger.com/comment/delete/6264947694886887540/7863258799490233647)RepliesReply
-5. ![](http://www.blogger.com/img/blogger_logo_round_35.png)[VIdeoFlyer](https://www.blogger.com/profile/10117838642902682384)[November 9, 2026 at 2:09 PM](http://www.righto.com/2026/11/signetics-st680a-dtl-nand.html?showComment=1794262165528&m=1#c7224549635365413150)I am working on re-designing the logic symbol libraries used in KiCad. I am currently working on the 74LSxx series, and noticed something that I hadn't paid attention to in the past. The 74LSxx series of simple gates is just DTL with Schotkey diodes. All other TTL designes have multiple emitter designs, but the LS versions are all DTL based. On a side note, in the '70s Signetics had a two hard-bound book set that I have been searching to replace (PDF preferred at this point, but the original set would be OK). They were white with colored text and graphics. The first book was a complete databook of all of the Signetics IC's, and was around 2" thick. The second book was about an inch thick, and was a complete? set of application notes, and where I learned phase-locked-loops in depth. I still have a couple each of NE560s, NE561s, and NE562's with no markings. These were aquired from a surplus dealer originally in quanset huts at the Eastern edge of the Oakland Intl. Airport.Reply[Delete](https://www.blogger.com/comment/delete/6264947694886887540/7224549635365413150)RepliesReply
+So, we need to use patches to address the underlying problem. A component whose root element has an id, like `[:tr {:id ...}]`, is a *part* of the page. Since each stream compares its new page with the last one, part by part, it only needs to send parts that changed. Then, on the frontend, Datastar swaps each one in by id. When the page changes around its parts, such as a row being added, text outside every part being edited, or the client missing a frame, the whole page still gets sent.
+
+Since the size of a patch depends on the change rather than the page, the comparison is cheap too. A cached component brings its parts as the same shared vector on every page, so the diff can skip it with an identity check. On my machine, this roughly halved the time for each tick going from 21.7 ms with whole frames to just 7.0 ms with patches. Using the delta is key for incremental view maintenance because only parts of the page that change have to be sent as updates.
+
+## Aggregates: derived state that follows the change
+
+We're not done yet though, because another trick that can be applied is to use aggregates. Take a reaction like `(reaction (count (filter open? @todos)))`. It recomputes from scratch on every write, so whether a single row or a thousand change, the `reaction` still costs a thousand.
+
+Glimmer's new `glimmer.table` borrows from DBSP. A table is a keyed collection cell, and a view over it maps or filters only the rows that changed. An aggregate whose operation has an inverse, like a count or a sum, simply takes the old row out and puts the new one in:
+
+```
+(def todos (t/table {1 {:title "a" :done false}}))
+(def open (t/view todos (fn [_ v] (when-not (:done v) v))))
+(def open-count (t/aggregate open t/count-of))
+
+(t/put! todos 2 {:title "b" :done true})   ; costs one row, not the table
+```
+
+These are ordinary reactive cells, so pages subscribe to them with `@` like anything else. With ticks, the cache and patches, a write costs one row to derive, there is now one component to render, and one part to send.
+
+## Letting go of closed pages
+
+Of course, batching only helps if you're not doing work for pages nobody is looking at. So, when a client goes away, the server closes the stream's channel. A transducer on that channel runs on close and unwatches every cell the stream was tracking, making it possible to garbage collect the connection right away. And a render that the handler answers with a redirect or an error, such as a 401 after sign-out, cleans up the stream the same way.
+
+## What does this look like in practice
+
+I've always been interested in understanding how world news and events all connect to each other. There are many different things happening on any given day, and things that often seem like isolated events can often have shared underlying causes.
+
+Decision makers get fancy daily briefings prepared for them by analysts who review the events to produce a perfectly prepared report. So, I figured why can’t I have something like that too?
+
+And so, I built [Newsroom](https://github.com/yogthos/newsroom) which is a self-hosted news desk app to gather sources and write a daily briefing tailored to what I'm interested in. The app goes through hundreds of sources using a combination of RSS and web scraping. It then groups the news into categories and gets an LLM to build a graph of events and their connections to provide a basis for the report.
+
+It was a perfect project to exercise the library since it has a live sidebar showing the progress as each source is aggregated, and the model's progress as it streams.
+
+That kind of workload is the worst case for one-render-per-write. A run fetches its sources concurrently from several threads, and each source reports a result and a log line. Meanwhile, the model's progress updates many times a second while it streams. Every one of these events used to be a `swap!` on the run's status ratom, and every `swap!`, in turn, translated into a render of every page watching that reader's run.
+
+Now, the server asks for `{:tick-ms 200}` which prevents event flooding. However fast the status changes, an open page still renders at most five times a second, and a burst of sources finishing together all get packaged into a single frame. The whole change was just one line, since newsroom already asked for the same 200 ms through the old `:rate-limit-ms` option. What changed underneath though is that a tick now coalesces the writes instead of only spacing them out.
+
+Ticks can also split two related writes across frames to ensure correct order. A source used to set its state and then append its log line in a second `swap!`, so a page could show "ok, 12 items" in the source list before the log mentioned it. Now both go in one write:
+
+```
+(update-status! (:run-id ctx)
+                (fn [st]
+                  (-> st
+                      (update-in [:sources name] merge {:state :ok :count (count items)})
+                      (add-event {:text (str name ": " (count items) " items") :level :ok}))))
+```
+
+That's the same idea `tx!` enforces, done by hand where one function owns both writes. It also depends on glimmer's `swap!` being atomic, because sources call this from several threads at once.
+
+Each newsroom page has two live regions, the sidebar and the article, both running on separate streams. The sidebar reads the run status, which changes constantly during a run. The article reads only a counter bumped when a day is stored. Since a stream only watches what its last render read, the article doesn't need to repaint while a run is in progress.
+
+All readers have their own lanes in the form of a status ratom and a stored counter, so each reader's run only dirties their own pages. When a tab closes, or a reader signs out and the stream gets its 401, the stream drops its subscriptions.
+
+Incidentally, the same kind of batching also works for the database. Making the status of a run durable makes it possible to pick up where it was interrupted. But the same problem we talked about earlier came back from the other direction. Writing the status to SQLite on every `swap!` results in a database write per progress tick. So, Newsroom marks the run as unsaved instead, and a background thread writes the changed runs once a second:
+
+```
+(defn- update-status! [run-id f & args]
+  (swap! (status-of run-id) (fn [st] (if (identical? run-id (:run st)) (apply f st args) st)))
+  (when (and (instance? Run run-id) (.-job ^Run run-id))
+    (swap! unsaved conj run-id)
+    @saver))
+```
+
+This is the same tick pattern of marking the state dirty, and doing a flush on a timer. A restart loses at most a second of the log without the worry of having IO pressure. And the final state can be written synchronously when the run ends.
+
+## Summary
+
+Each layer that I've discussed in this post removes a different kind of repeated work:
+
+- ticks ensure that one render happens per page per tick rather than per write
+- the component cache: further gives one render per change on each page
+- sliding buffers give one frame in flight per client
+- `tx!` makes it so that a render can't see a partial update
+- patches send the change only for the page components that changed
+- tables derive state from the change instead of the collection itself
+- release on close cleans up pages nobody is looking at
+
+The reactive model is key for all of this, because the dependency tracking used to decide what to re-render can also be used to infer what can be skipped.

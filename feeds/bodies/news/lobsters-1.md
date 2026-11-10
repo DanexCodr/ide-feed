@@ -1,27 +1,63 @@
-On Friday morning, we became aware that a significant amount of email to Microsoft-run mail systems was being rejected. This included mail to hotmail.com and outlook.com.
+Here is a curiosity: an archive that can be constructed using a single GNU tar invocation, that is extracted in 8 distinct ways depending on what tool you use.
 
-The messages were being rejected with the following message:
+```
+$ printf hello > file
+$ touch empty
+$ tar --format=pax --pax-option='delete=?time,size:=512' \
+      --transform='s,^\./file$,café,' \
+      -cf hardest.tar file ./file empty
+```
 
-`550 5.7.1 Message rejected: Message lacks SPF/DKIM/DMARC Auth Records`
+It creates an archive `hardest.tar` from three files `file ./file empty` in sequence, where `file` is repeated so that GNU tar stores the second one as a hard link, and `empty` is empty. Exploiting the unique path of the second entry, the hard link is renamed to `café`. This triggers tar to create a pax header to store the file name as UTF-8. We add a `size=512` record to the pax header, which overrides the default `size=0` from the hard link. The value 512 is not a coincidence: it is exactly the size of a tar header.
 
-We checked our logs, and found that we’d seen this message over 500 times on Thursday, but not once before that.
+Visually, this archive has the following structure, with two basic interpretations based on whether a hard link can have a size or not.
 
-The affected messages all had [completely valid SPF and DKIM](https://www.mythic-beasts.com/support/hosting/mail/spf), but did not have a DMARC record. We added a DMARC record with a “none” policy to some of the affected domains, and sure enough, mail was then accepted again. A quick [fedi-survey](https://social.mythic-beasts.com/@beasts/117569497236204746) confirmed that we were not alone.
+![The structure of hardest.tar, with two basic interpretations based on whether a hard link can have a size or not.](https://stoppels.ch/2026/11/07/fig-hardest.svg)
 
-DMARC records are a way of publicly stating what you want recipients to do with email that claims to be from your domain, but which doesn’t pass verification checks (DKIM or SPF) and thus is potentially forged. Your DMARC policy can be one of the following:
+Now, POSIX says that data blocks for a hard link *“may be included”* in pax archives, but the implications of this are not entirely clear. So the 512 bytes after the hard link are its data, and not the header of `empty` as we archived it? How can a hard link have different contents from its previous counterpart `file`?
 
-- reject – recipients should reject mail that doesn’t pass DKIM or SPF. This is the real purpose of DMARC: if you’re confident that all legitimate outbound mail is properly authenticated, you can tell recipients to assume that anything else is forged, and bin it.
-- quarantine – recipients should treat such mail as suspicious.
-- none – your domain has no policy on what to do with mail that doesn’t pass DKIM or SPF.
+## Extracting it
 
-Publishing a policy of `none` is effectively the same as not publishing a policy at all.
+This archive gives by far the richest and most surprising results I've encountered so far when extracting it with well-known tar utilities and libraries. The results below were produced using the latest releases of all packages at the time of writing.
 
-Microsoft are now rejecting mail without a DMARC policy, but accepting mail with a policy of `none`. This is a massive and pointless change in their policy for incoming mail, made with no notice whatsoever.
+### GNU tar, BusyBox, Python, Go and Perl
 
-Last year Microsoft, introduced a policy that required domains *sending more than 5,000 messages per day* to have a DMARC record. This change was [announced in advance](https://techcommunity.microsoft.com/blog/microsoftdefenderforoffice365blog/strengthening-email-ecosystem-outlook%E2%80%99s-new-requirements-for-high%E2%80%90volume-senders/4399730). This latest change appears to be completely unannounced, which makes us wonder if it was even intentional. Of course, trying to contact Microsoft in order to resolve mail issues such as this is futile.
+This group is reasonable in principle: they ignore the size on the hard link, and extract `file`, its hard link `café`, and `empty`.
 
-*Update: [apparently](https://www.theregister.com/applications/2026/11/09/outlookcom-bounces-legit-emails-as-microsofts-authentication-crackdown-goes-sideways/5308428) it wasn’t intentional, but they haven’t figured out how to roll it back yet.*
+### bsdtar
 
-We’ve just applied `p=none` DMARC records to a large number of our customers’ domains. We generally try to avoid making unsolicited changes to DNS zones, but in this case we feel that it is the best option.
+This is the system `tar` utility of macOS, which is closer to POSIX in spirit regarding the concept of size on hard links, and writes the 512 bytes into the hard link. The end result is that `file` now contains the tar header of `empty`.
 
-If you’re in contact with Microsoft users affected by this, please encourage them to complain to Microsoft; it’s very likely that they are losing other legitimate email from other providers because of this unannounced change. Better still, encourage them to move to [an email provider that is pro-active in investigating email deliverability issues](https://www.mythic-beasts.com).
+### 7-Zip, node-tar, tar-fs, and Rust's tar & astral-tokio-tar
+
+This group agrees with bsdtar that the 512 bytes are data of the hard link, but doesn't write them into the hard link. Instead, they skip forward over the data, and you are left with just `file` and `café`, without `empty`.
+
+### Java's Commons Compress
+
+This is where you begin to need more imagination. Because `café` contains data, a *separate* file is created that contains the header of `empty` as data, while `file` keeps its original contents.
+
+### PHP's PharData
+
+Makes `café` a separate, empty file, and also extracts `empty`. Why not?
+
+### RubyGems
+
+Does not extract `café` at all, but to make up for it, it creates an empty directory `PaxHeaders` next to `file` and `empty`.
+
+### R
+
+R has an entirely different approach: it extracts `empty` with 512 null bytes. It mistakenly applies the size to `empty` instead of the hard link, and those 512 bytes are from an end-of-archive marker.
+
+### Bonus: Haskell
+
+Haskell's tar would be exactly like GNU tar, if only it did not have string decoding issues, which turn the file `café` into `cafÃ©` on disk (in the year 2026, this is not a rendering quirk of your browser).
+
+### .NET, Julia and uv's tar-codec
+
+These implementations reject the tarball. I believe this is the best thing you can do, even if it's technically not POSIX-compliant.
+
+## More of this
+
+This tarball is one of 134 tricky tarballs that I'm collecting and categorizing in my test suite [haampie/tar-minefield](https://github.com/haampie/tar-minefield), developed since the last post. Its website [https://stoppels.ch/tar](https://stoppels.ch/tar/) features a big table that shows how implementations deal with all these cases, as well as detailed info per test case. A variant from the tarball of this post [is included as a test case](https://stoppels.ch/tar/F35.html).
+
+If you'd like to discuss this, send me an email at *firstname[at]lastname.ch*.

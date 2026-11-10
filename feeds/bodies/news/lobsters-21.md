@@ -1,83 +1,139 @@
-[systemd](https://systemd.io/) recently [merged support for Rust](https://github.com/systemd/systemd/pull/44324). Going forward it will be possible to write systemd components in Rust in addition to C.
+*So what if you can handle thousands of concurrent users per core? Even the front page of HN gets you what? 100 concurrent users on a good day?*
 
-The choice to integrate another core language into a large and established project is always contentious. We have seen the same when Rust was adopted as an additional language for the [Linux kernel](https://docs.kernel.org/rust/index.html). As we know by now, that has mostly been successful.
+More like 30.
 
-Rust support in systemd has two possible meanings:
+*Exactly! Most successful apps have like what 10 or 20 concurrent users at any given time? This is basically academic for most projects. What does performance give you other than knowing that your app won't need to scale past a single server? Pointless!*
 
-1. leaf components (individual binaries)
-2. root components (Rust in the fundamental libsystemd-shared.so shared library itself)
+Well what if you could run multiple apps in one process?
 
-The project came to the conclusion that (1) is acceptable while (2) is (currently) not, as the scope and requirements are very different between these two options.
+*Isn't that the same as a bunch of apps behind a reverse proxy?*
 
-## Rust in systemd Shared Libraries 🥺
+No. It's not. Separate processes have to compete for OS resources, have their own thread pools, schedulers, heap, GC, caches and so on. Each process needs to be sized relative to the other apps running on the system.
 
-Option (2) is complicated. The details are best left to another blog post but the gist is that we require first-class shared library support in Rust. In the Rust community, this is often referred to as the “stable ABI problem,” which is a [well-known and long-standing issue](https://github.com/rust-lang/rfcs/issues/600). Until that is available we cannot integrate Rust into root components, otherwise every shared library and many binaries would be bloated by duplicated Rust code.
+But, in a single process you can size the process for the machine and then run an arbitrary number of apps in that process. If the apps share a process, they can share all sorts of things: a single JVM, GC, caches, buffers, http server, HTTPS certificate management, batching, game loop etc. You'd eliminate thread contention between apps. This lets you scale further with less resources!
 
-Static linking for a project like systemd that is split into many tiny components (> 180 binaries currently) is simply not practical or desirable. Generally, static linking works for the leaves of the OS but the core often has different requirements.
+Performance lets you run as many apps as you want in that one process.
 
-## Rust in systemd Binaries 😍
+> Disclaimer: all my writing and code is handcrafted by me. By the end of this you may wish it wasn't.
 
-Option (1) means that the shared code remains C-only, and we wrap this functionality as Rust crates. The crates are then used for Rust binaries. This allows us to consume all the core API functions uniformly across all components independent of whether they are written in Rust or in C.
+## Some numbers
 
-## Key Design Decisions
+If you have multiple JVMs you duplicate a bunch of fixed costs:
 
-When Rust was accepted into systemd, the project adopted the following [principles](https://github.com/systemd/systemd/blob/main/docs/CODING_STYLE.md#rust):
+- Separate heaps
+- Separate JIT
+- Separate GC
 
-- **Uniform Access to Core APIs.** The systemd shared library has a wide range of helpers that provide features and security that are far beyond what either libc or any Rust crate provide. The clearest example is systemd’s `chase*()` family of functions. It is a purely fd-based API for path lookup that the whole tree uses. Any new kernel feature that improves on the security and reliability of path lookup is immediately adopted and securely abstracted. There is no equivalent to any of this in core Rust.
-- **Uniform Behavior.** Binaries in C and in Rust look and behave identically in how they parse options, display help, and output error messages. It is inherently unacceptable for binaries in Rust to spuriously differ from systemd’s C binaries. The user should never have to care about the specific language a binary is implemented in. It simply shouldn’t affect behavior.
-- **Uniform Build System.** Like most contemporary programming languages, Rust comes with its own build and dependency management ecosystem: [cargo](https://doc.rust-lang.org/cargo/). Much like the kernel, systemd explicitly chose not to rely on cargo to build Rust. systemd uses [meson](https://mesonbuild.com/) as its build system and integrating a second build system next to it would be a bad idea in our opinion and a great way of complicating the lives of distribution maintainers. The security and supply-chain attack issues associated with cargo have been raised as a concern as well.
-- **Controlled Dependencies.** systemd maintains strictly loose dependencies on other projects. Nowadays, systemd links exclusively against libc. Every other dependency is provided via [`dlopen()`](https://man7.org/linux/man-pages/man3/dlopen.3.html) using [ELF notes](https://uapi-group.org/specifications/specs/elf_dlopen_metadata/) to mark the dependencies. Accepting a new dependency is a careful process and involves vetting the individual projects in terms of maintenance and security. While systemd doesn’t oppose the usage of external crates in principle, it is intentionally conservative in not accepting any dependency on them until the project has had some experience with the wider Rust ecosystem and community.
-- **No-std Rust.** systemd also doesn’t use the [Rust standard library](https://doc.rust-lang.org/reference/names/preludes.html#the-no_std-attribute). We currently don’t need to consume anything that the standard library provides. To reiterate an earlier point by way of example, none of the path lookup functionality provided by Rust is currently acceptable in the security sensitive system components provided by systemd.
-- **Fallible Allocations.** Failing allocations in Rust cause panics. systemd always treats allocations as fallible and handles them gracefully whenever possible. So systemd provides its own allocator crate that makes memory handling across the whole systemd codebase uniform. Again, much like the kernel does.
-- **No Gratuitous Rewrites.** Long-established and reliable parts of the codebase written in C will not be converted without good reason. If new languages have one downside it is that they cause rewrites of established and stable projects for the sake of using the language rather than solving an actual problem. One of the clearest examples is rewrites of components whose inherent attack surface is path-based lookup instead of memory safety. Projects ported to another language need more than a bug-for-bug compatible rewrite to actually benefit from the rewrite. It’s far more important to focus on removing their core attack surface.
-- **Rust Remains Optional.** The feature set available to existing users will not regress. We’re aware that Rust does not (yet) support all possible architectures, and there are places where introducing Rust would be complicated, so for now at least, Rust remains optional, and systemd without Rust remains fully usable and supported.
+If you have multiple HTTP servers you duplicate:
 
-## Closing Thoughts
+- event loop threads
+- byte buffers
+- queues
 
-Integrating Rust into systemd is an ongoing process. It is exciting to see where the many maintainers of the project are going to take it and how this will evolve. Rust is a good language. Its syntax is a matter of acquired taste and learning but it does bring a range of features to the table that an established project wants to use. One of the systemd maintainers recently discovered that his work on adopting [Fibers](https://github.com/systemd/systemd/pull/39771) in systemd naturally integrates with Rust in a surprisingly elegant way.
+If you have multiple framework engines you duplicate:
 
-systemd would also like to see Rust adopted in core components and is willing to engage with the Rust community to make this a reality. The hope is that adopting Rust, even if only in leaf binaries for now, sends another strong signal to the Rust community that core components of the Linux stack are adopting Rust. It would be nice if fundamental blockers such as the lack of first-class support for shared libraries or the ability to interact with the file system primarily through file descriptors were addressed.
+- html buffers
+- render threads
+- fragment caches
+- queues
 
-It was already an encouraging sign when the Rust community [quickly reverted a change in Rust 1.100](https://github.com/rust-lang/rust/pull/164855) that would’ve broken the newly merged Rust support in systemd. This is much appreciated and it is great to see that the community is paying attention. The systemd project is paying attention too!
+All of this adds up to more memory, more threads and more contention. If you own all your app and don't need the isolation a processes give you, then it can be a big performance win to have one JVM, one http server, and one framework engine.
 
-[systemd](https://systemd.io/) recently [merged support for Rust](https://github.com/systemd/systemd/pull/44324). Going forward it will be possible to write systemd components in Rust in addition to C.
+*Where were the numbers?*
 
-The choice to integrate another core language into a large and established project is always contentious. We have seen the same when Rust was adopted as an additional language for the [Linux kernel](https://docs.kernel.org/rust/index.html). As we know by now, that has mostly been successful.
+`X * n` where `X` is you fixed cost for the above and `n` is your number of apps. If all of the above takes 500MB, then four apps is an extra 1.5GB.
 
-Rust support in systemd has two possible meanings:
+## What is an app?
 
-1. leaf components (individual binaries)
-2. root components (Rust in the fundamental libsystemd-shared.so shared library itself)
+*A miserable little pile of secrets*
 
-The project came to the conclusion that (1) is acceptable while (2) is (currently) not, as the scope and requirements are very different between these two options.
+Indeed. If you think about it an app at it's simplest is a domain, a database and some routes.
 
-## Rust in systemd Shared Libraries 🥺
+```
+(def app
+  {:domain   "example.andersmurphy.com"
+   :db       {:name          "gol.db"
+              :migrations    migrations
+              :pragma-writer {:cache_size 15625}
+              :pragma
+              {:cache_size 2000
+               :page_size  4096
+               ;; 1GB
+               :mmap_size  1000000000}}
+   :routes   #'routes
+   :batch-fn #'batch-fn})
+```
 
-Option (2) is complicated. The details are best left to another blog post but the gist is that we require first-class shared library support in Rust. In the Rust community, this is often referred to as the “stable ABI problem,” which is a [well-known and long-standing issue](https://github.com/rust-lang/rfcs/issues/600). Until that is available we cannot integrate Rust into root components, otherwise every shared library and many binaries would be bloated by duplicated Rust code.
+## HTTPS certificate management with Clave
 
-Static linking for a project like systemd that is split into many tiny components (> 180 binaries currently) is simply not practical or desirable. Generally, static linking works for the leaves of the OS but the core often has different requirements.
+*But, my reverse proxy handles HTTPS certs and stuff! Where is your god now?*
 
-## Rust in systemd Binaries 😍
+Yes certs are a pain. But [Clave: Automatic HTTPS certificate management and renewal via ACME, implemented in pure Clojure with minimal dependencies](https://github.com/outskirtslabs/clave) exists. I use it with aleph. But, it also works with jetty and it's simple to extend to other servers.
 
-Option (1) means that the shared code remains C-only, and we wrap this functionality as Rust crates. The crates are then used for Rust binaries. This allows us to consume all the core API functions uniformly across all components independent of whether they are written in Rust or in C.
+```
+(clave-aleph/start-server router
+  (merge
+    config
+    {:http-versions             [:http2 :http1]
+     ::clave-aleph/http-options {:port 80}
+     ::clave-aleph/config
+     {:domains (mapv :domain apps)
+      :issuers
+      [{:directory-url
+        "https://acme-v02.api.letsencrypt.org/directory"
+        :email email}]}}))
+```
 
-## Key Design Decisions
+So no reverse proxy needed.
 
-When Rust was accepted into systemd, the project adopted the following [principles](https://github.com/systemd/systemd/blob/main/docs/CODING_STYLE.md#rust):
+## Bundling our apps
 
-- **Uniform Access to Core APIs.** The systemd shared library has a wide range of helpers that provide features and security that are far beyond what either libc or any Rust crate provide. The clearest example is systemd’s `chase*()` family of functions. It is a purely fd-based API for path lookup that the whole tree uses. Any new kernel feature that improves on the security and reliability of path lookup is immediately adopted and securely abstracted. There is no equivalent to any of this in core Rust.
-- **Uniform Behavior.** Binaries in C and in Rust look and behave identically in how they parse options, display help, and output error messages. It is inherently unacceptable for binaries in Rust to spuriously differ from systemd’s C binaries. The user should never have to care about the specific language a binary is implemented in. It simply shouldn’t affect behavior.
-- **Uniform Build System.** Like most contemporary programming languages, Rust comes with its own build and dependency management ecosystem: [cargo](https://doc.rust-lang.org/cargo/). Much like the kernel, systemd explicitly chose not to rely on cargo to build Rust. systemd uses [meson](https://mesonbuild.com/) as its build system and integrating a second build system next to it would be a bad idea in our opinion and a great way of complicating the lives of distribution maintainers. The security and supply-chain attack issues associated with cargo have been raised as a concern as well.
-- **Controlled Dependencies.** systemd maintains strictly loose dependencies on other projects. Nowadays, systemd links exclusively against libc. Every other dependency is provided via [`dlopen()`](https://man7.org/linux/man-pages/man3/dlopen.3.html) using [ELF notes](https://uapi-group.org/specifications/specs/elf_dlopen_metadata/) to mark the dependencies. Accepting a new dependency is a careful process and involves vetting the individual projects in terms of maintenance and security. While systemd doesn’t oppose the usage of external crates in principle, it is intentionally conservative in not accepting any dependency on them until the project has had some experience with the wider Rust ecosystem and community.
-- **No-std Rust.** systemd also doesn’t use the [Rust standard library](https://doc.rust-lang.org/reference/names/preludes.html#the-no_std-attribute). We currently don’t need to consume anything that the standard library provides. To reiterate an earlier point by way of example, none of the path lookup functionality provided by Rust is currently acceptable in the security sensitive system components provided by systemd.
-- **Fallible Allocations.** Failing allocations in Rust cause panics. systemd always treats allocations as fallible and handles them gracefully whenever possible. So systemd provides its own allocator crate that makes memory handling across the whole systemd codebase uniform. Again, much like the kernel does.
-- **No Gratuitous Rewrites.** Long-established and reliable parts of the codebase written in C will not be converted without good reason. If new languages have one downside it is that they cause rewrites of established and stable projects for the sake of using the language rather than solving an actual problem. One of the clearest examples is rewrites of components whose inherent attack surface is path-based lookup instead of memory safety. Projects ported to another language need more than a bug-for-bug compatible rewrite to actually benefit from the rewrite. It’s far more important to focus on removing their core attack surface.
-- **Rust Remains Optional.** The feature set available to existing users will not regress. We’re aware that Rust does not (yet) support all possible architectures, and there are places where introducing Rust would be complicated, so for now at least, Rust remains optional, and systemd without Rust remains fully usable and supported.
+To bundle our apps we import them as dependencies into a separate project who's only purpose is to configure and start the server.
 
-## Closing Thoughts
+```
+(ns app.main
+  (:gen-class)
+  (:require
+   [hyperlith.core :as h]
+   [billion-cells.main :as cells]
+   [billion-checkboxes.main :as boxes]
+   [game-of-life.main :as gol]
+   [clj-async-profiler.core :as prof]))
 
-Integrating Rust into systemd is an ongoing process. It is exciting to see where the many maintainers of the project are going to take it and how this will evolve. Rust is a good language. Its syntax is a matter of acquired taste and learning but it does bring a range of features to the table that an established project wants to use. One of the systemd maintainers recently discovered that his work on adopting [Fibers](https://github.com/systemd/systemd/pull/39771) in systemd naturally integrates with Rust in a surprisingly elegant way.
+(defn start-app! [& {:keys [mode]}]
+  (h/start-server!
++   {:apps               [cells/app boxes/app]
+     :tick-ms            100
+     :render-buffer-size (* 64 16384)
+     :email              (h/env :email)
+     :mode               mode}))
 
-systemd would also like to see Rust adopted in core components and is willing to engage with the Rust community to make this a reality. The hope is that adopting Rust, even if only in leaf binaries for now, sends another strong signal to the Rust community that core components of the Linux stack are adopting Rust. It would be nice if fundamental blockers such as the lack of first-class support for shared libraries or the ability to interact with the file system primarily through file descriptors were addressed.
+(defn -main [& _]
+  (start-app! :mode :prod))
+```
 
-It was already an encouraging sign when the Rust community [quickly reverted a change in Rust 1.100](https://github.com/rust-lang/rust/pull/164855) that would’ve broken the newly merged Rust support in systemd. This is much appreciated and it is great to see that the community is paying attention. The systemd project is paying attention too!
+So adding a new app is as simple as importing it and adding it to the list of apps:
+
+```
+:apps [cells/app boxes/app gol/app]
+```
+
+We can then build this project as an uberjar and `scp` it to the server.
+
+## Deployment
+
+*Well this is nice and all, but whenever you deploy an app, you restart the process. DOWNTIME! UNACCEPTABLE!*
+
+Here's a gif of me deploying the jar to production:
+
+![deploy gif](https://andersmurphy.com/assets/deploygol.gif)
+
+If a deploy is indistinguishable from network blip did the app really go down?
+
+## Conclusion
+
+That's it. We've reduced the overhead and cost of deploying a new app to zero.
+
+Code [can be found here](https://github.com/andersmurphy/hyperlith). All three apps are running on the same JVM, on the same 10$ VPS , [here](https://example.andersmurphy.com/), [here](https://checkboxes.andersmurphy.com/) and [here](https://cells.andersmurphy.com/).
+
+**Thanks to** Everyone on the [Datastar discord](https://discord.gg/bnRNgZjgPh) who read drafts of this and gave me feedback.

@@ -1,230 +1,272 @@
-If you have read my recent [rant about programming languages](https://nchagnet.eu/blog/desert-island-languages/), you'll know I've been quite interested in [Gleam](https://gleam.run). Gleam is a functional language that targets BEAM, the Erlang VM,<sup>[1](https://nchagnet.eu/blog/you-should-try-gleam#fn:1)</sup> with a simple syntax and interoperability with the wider BEAM ecosystem (Erlang and Elixir). Interestingly, Gleam can *also* target JavaScript i.e., Gleam can be compiled into JavaScript and run through Node.js.
+Links to blog articles look better when they’re accompanied by an image.
+If the HTML head has a `meta` tag like this, it will happen automatically:
 
-I've been mostly using Rust for hobby projects, which at the moment is the only language that really makes coding enjoyable for me, and Gleam has managed to scratch that itch too. If you're a Rust *connaisseur*, then Gleam will feel familiar to you, bar a few key differences. I feel like 80% of the code I write could be copy pasted to Rust (with a tinge of search-and-replace for syntax) and it'd compile.
-
-This post won't give an exhaustive overview of the language, if you want to learn more, I recommend the [excellent interactive tour](https://tour.gleam.run). You'll get a good feel for Gleam in under half an hour.
-
-## Gleam: the good
-
-On its homepage, Gleam is described as "a **friendly** language for building **type-safe** systems that **scale**!" (emphasis theirs) which does a good job of conveying what Gleam is all about.
-
-### Gleam is friendly
-
-The syntax is extremely simple, most of the complex stuff is hidden by the Erlang runtime which you don't really have to interact with unless you want to! Of course, Gleam is a functional language, so if you have lived in a C-shaped imperative world your whole life, it might be a bit daunting at first. But if you compare it to other functional languages (OCaml, Haskell, Erlang), you'll quickly notice Gleam is much simpler. After using it a bit, it feels like all the functional parts of Rust, with a few missing ones, and none of the imperative parts.
-
-Let's start from an example piece of code:
-
-Dissecting this a bit, you can see a few specificities of Gleam:
-
-- variables in Gleam are immutable (so no mut keyword or anything like that), chained functions here all return a new element.[2](https://nchagnet.eu/blog/you-should-try-gleam#fn:2) You can still shadow a binding with a new let, which is how you "update" a value.
-- |> (typed |>) is the pipe operator used to chain functions on data. The main constraint is that the piped variable should be the first argument of the function in the pipe.
-- just like Rust, errors in Gleam are just values as part of the Result monad.[3](https://nchagnet.eu/blog/you-should-try-gleam#fn:3)
-
-Comparing with the Rust code snippet, you can see that, up to a few naming choices, they look pretty similar. The main difference in this example is really the piping vs. chaining syntax. **Gleam types have no methods** so piping is used instead.
-
-The piping operator `|>` is the first of the three mascot features of Gleam you will meet in this post, the other two being the `use` pattern and tail-call optimization.
-
-#### The use pattern
-
-If you've written a lot of JavaScript, you might be used to the indentation creep that arises when nesting many callbacks into one another
-
-```javascript
-someFunc(arg, function(param) {
-  someOtherFunc(param, function(otherParam) {
-    // ...
-  })
-})
+```
+<meta
+  property="og:image"
+  content="https://eaj.no/posts/graph-images-with-typst/og.png"
+/>
 ```
 
-In Gleam, many functions expect a callback, for example because as a way to control access to a resource and clean up when the process is done (closing a database connection, releasing a file handle, etc.). To avoid this kind of tower of callbacks, Gleam provides some syntactic sugar: `use param <- some_func(arg)` is equivalent to `some_func(arg, fn(param) { ... })`. The callback must always be the **last** argument of the function. That is the opposite of `|>`, which fills the first one.
+My previous, tedious workflow for these kinds of images was to go to [unspash.com](https://unsplash.com),
+search for something like *structure* or *archive*, and then select an image
+I thought would fit the theme of the post. Being both boring and error-prone,
+I abandonded that process and set up a pipeline that generates image cards at build-time instead.
+They look like this:
 
-#### Tail-call optimization
+![The generated OpenGraph image for this blog post](https://eaj.no/posts/open-graph-images-with-typst/og.png)
 
-This one might genuinely trip you up if you're not familiar with it. The first thing you need to know is **there are no loops in Gleam**! Again, if you've written OCaml or Haskell before, you won't be surprised by this. In 98% of cases,<sup>[4](https://nchagnet.eu/blog/you-should-try-gleam#fn:4)</sup> loops are simple operations over bounded iterations. Think `for` loops on a list or a set. Exactly the kind of thing which in Rust you always have two ways of doing: one imperative with the exact `for` loop, one more functional with a combination of operations on iterators. Well, if you look at the code example in the previous section, you'll see Gleam uses the second kind and has a plethora of functions to iterate over lists, sets, tuples, strings, anything.
+Let me show you how I did it.
 
-But what if you need something more complicated? What about the 2%? This is where you would instead use **recursion**! A simple algorithm which illustrates this is Euclid's algorithm to compute the Greatest Common Divisor (GCD). Below you can find a Rust iterative example, and a Gleam recursive example.
+## Typst
 
-Of course, you can also write the recursive version in Rust, but this usually isn't such a great idea. Recursion in imperative languages can quickly get out of hand: every call adds a new stack frame, and a deeply recursive function can blow the stack (the infamous **stack overflow**).
+[Typst](https://typst.app) is a tool that generates high-quality documents from a simple markup language.
+A lovechild of [LaTeX](https://en.wikipedia.org/wiki/LaTeX) and [Markdown](https://en.wikipedia.org/wiki/Markdown),
+it works great for math whilst also keeping the day-to-day text formatting syntax bearable.
+As a small taste, this snippet (adapted from [the Typst README](https://github.com/typst/typst/blob/84cca406aafe7f830ed3f37f1cc6f0c8b6b65a03/README.md))
 
-On the BEAM there is no fixed-size stack, so runaway recursion eats heap memory until the process is killed instead, but the point remains: deep recursions equals trouble. To avoid that problem, compilers for functional languages implement a technique called Tail Call Optimization (TCO), which applies when the recursive call is the last thing the function does. The existing stack frame is then reused instead of stacking a new one, giving performance close to an imperative `while` loop.<sup>[5](https://nchagnet.eu/blog/you-should-try-gleam#fn:5)</sup>
+```
+#set page(width: 10cm, height: auto, margin: 1cm)
+#set heading(numbering: "I.")
 
-### Gleam is type-safe
+#let fib_1 = 1
+#let fib_2 = 1
 
-This piece of the slogan is mostly there to answer the obvious question "why Gleam and not Elixir?" (another Erlang-based language). While Elixir is a dynamically-typed language (with gradual typing now!), Gleam was *built* as a statically-typed language with a strong type system: strong types are its *raison d'être*.
+= The Fibonacci sequence
+The Fibonacci sequence is defined through the
+recurrence relation $F_n = F_(n-1) + F_(n-2)$,
+with $F_1 = #fib_1$ and $F_2 = #fib_2$.
+It can also be expressed in _closed form:_
 
-A `type` in Gleam encompasses both the `enum` and the `struct` concepts in Rust:
-
-Because Gleam types are algebraic data types, they are very useful to ensure undesired states are impossible. A great aspect of Gleam, which will be relevant a little bit later, is that it compiles to *both* the BEAM virtual machine *and* to JavaScript. So you can share these strong type definitions across different applications in both targets. This is particularly handy if you need a web application to communicate with a BEAM app.
-
-### Gleam is made for systems that scale
-
-That, of course, refers to BEAM, the Erlang VM. Unlike languages which target the native system (Rust, Go, C++), a VM provides an extra abstraction layer between the system and the program. In the case of BEAM, that layer is exceptionally good at handling concurrent processes and failures while remaining fast.
-
-Gleam makes good use of that, and this is what a concurrent program would look like:
-
-```gleam
-// Omitted imports
-pub fn main() {
-  let order_number_and_amounts = [
-    #(101, 100),
-    #(102, 200),
-    #(103, 300)
-  ]
-
-  order_number_and_amounts
-  |> list.each(fn(x) {
-    let #(order_no, amount) = x
-    let order_description = "Order #" <> int.to_string(order_no)
-
-    // Spawn unlinked: a crashing worker must not take the parent down.
-    process.spawn_unlinked(fn() {
-      // 101 and 103 will succeed, 102 will crash
-      process_order(order_description, amount)
-    })
-  })
-
-  io.println("All orders dispatched!")
-
-  // Keep the parent alive until the children have had time to run.
-  process.sleep(10)
-}
-
-fn process_order(order: String, amount: Int) {
-  process.sleep(1)
-  case amount {
-    200 -> panic as "Payment failed!"
-    _ -> io.println(order <> " processed successfully")
-  }
-}
-
-// Stdout
-// ----
-// All orders dispatched!
-// Order #101 processed successfully
-// Order #103 processed successfully
+$
+  F_n = round(1 / sqrt(5) phi.alt^n), quad
+  phi.alt = (1 + sqrt(5)) / 2.
+$
 ```
 
-What you should take away from this code is that it's the BEAM that handles processes.
+produces this fine document:
 
-The call to `process.spawn_unlinked` triggers a new process with no link to its creator, so when order 102 crashes, neither the parent nor siblings are affected. With a plain `process.spawn` the child would be linked to the caller, and that `panic` would have taken the whole program down. If you look closely, I also added `process.sleep(10)` so the parent wouldn't close *before* the children could finish: this is a hack, since the delay is only a guess and a slower child would still be cut off.
+![The output of typst compile --format png --ppi 144 typst-example.typ](https://eaj.no/_astro/typst-example.5LnWMFjg_Zy2nPw.webp)
 
-Thankfully, a great advantage of the BEAM is how easy inter-process communication is, which the following code piece illustrates well:
+By default the `typst` CLI will create a PDF, but it can also make PNGs. The above image was created with the command
 
-```gleam
-// Omitted imports
-pub type PaymentError {
-  PaymentFailed
-}
-
-pub fn main() {
-  let parent = process.new_subject()
-  let orders = [
-    #(101, False),
-    #(102, True),
-    #(103, False)
-  ]
-
-  orders
-  |> list.each(fn(x) {
-    let #(order_no, should_fail) = x
-
-    process.spawn(fn() {
-      // Simulate processing time
-      process.sleep(1000)
-
-      // 101 and 103 succeed, 102 fails
-      let res = case should_fail {
-        True -> Error(PaymentFailed)
-        False -> Ok(Nil)
-      }
-
-      process.send(parent, #(order_no, res))
-    })
-  })
-
-  io.println("All orders dispatched!")
-
-  receive_results(list.length(orders), parent)
-}
-
-fn receive_results(
-  remaining: Int,
-  parent: process.Subject(#(Int, Result(Nil, PaymentError))),
-) -> Nil {
-  case remaining {
-    0 -> Nil
-
-    _ -> {
-      let #(order_no, res) = process.receive_forever(parent)
-
-      let status = case res {
-        Ok(_) -> "successful"
-        Error(_) -> "failed"
-      }
-
-      io.println(
-        "Processing of order #" <> int.to_string(order_no) <> " " <> status <> "!",
-      )
-
-      receive_results(remaining - 1, parent)
-    }
-  }
-}
-
-// Stdout
-// ----
-// All orders dispatched!
-// Processing of order #103 successful!
-// Processing of order #102 failed!
-// Processing of order #101 successful!
-//
-// The order of the last three lines depends on scheduling.
+```
+typst compile \
+    --format png \
+    --ppi 250 \
+    typst-example.typ
 ```
 
-### OTP: the gift that keeps on giving
+But if you’d rather create something with a bit more pizzazz, by all means. How about
 
-In the paragraph above, I briefly showed how the BEAM virtual machine is great for concurrent programs communicating by message passing. If you're familiar with Go, this is similar to how it handles the same problem with *goroutines*. But the OTP (Open Telecom Platform), the set of libraries that ships with Erlang, is more powerful than that. It provides you with a built-in supervisor-actor paradigm which enables you to create scalable, concurrent services which can crash without taking down the whole application.
+```
+#set page(width: 1200pt, height: 630pt, margin: 80pt, fill: rgb("#FF1493"))
+#set text(font: "Comic Sans MS", fill: white, lang: "no")
 
-In a nutshell, the OTP exposes *actors*: lightweight processes that hold state and communicate with each other via messages (like in the example above). When paired with a *supervisor*, the whole application becomes more resilient to any individual actor crashing: the supervisor will monitor processes and restart them as needed. It can also help start/stop groups of actors dynamically.
+#grid(
+  rows: (1fr, auto),
+  align(left + horizon, {
+    text(size: 72pt, weight: 800, "Typst very nice")
+  }),
+  text(size: 24pt, "Would typst again"),
+)
+```
 
-If you're reading this and thinking "uh that sounds a lot like how I used Kubernetes", you're not alone. The OTP model is extremely similar to the controller-pod architecture of Kubernetes and solves a lot of the same problems.<sup>[6](https://nchagnet.eu/blog/you-should-try-gleam#fn:6)</sup>  However, in my experience, *a lot* of workflows using Kubernetes don't really need a cluster but still use one (and that's expensive!) because of the added bonus of the distributive experience. For those cases, the OTP provides a really interesting alternative.
+which yields
 
-Let me give you a concrete example. Without going in too much detail, we have a common setup in my team which involves a handwritten Go job scheduler handling some other processes.
+![This is clearly much better](https://eaj.no/_astro/fancy-typst.BxEfxVjE_8ItYQ.webp)
 
-The scheduler, each worker, and the user interface are all pods inside the cluster, managed by Kubernetes. To be honest, this works well, but it does introduce a lot of complexity. First of all, most of these services do not need to be so isolated from each other. The consequence here is that we need duplicate REST APIs in various places to enable communication between different services.
+Fantastic.
 
-What if we wanted to reorganize this within a Gleam application? There are two parts where Gleam would shine here:
+If all of my posts were titled *“Typst very nice”,* we’d be done, but, alas.
+Luckily, typst accepts inputs to a document with `--input key=value`,
+which is put in a `sys.inputs` dictionary for the template to read.
+So the template becomes
 
-1. the OTP would essentially unify all scheduling services as actors within a single application,
-2. the user interface (currently a Node.js app) can be written in Gleam and compiled to JavaScript.
+```
+#set page(width: 1200pt, height: 630pt, margin: 80pt, fill: rgb("#FF1493"))
+#set text(font: "Comic Sans MS", fill: white, lang: "no")
 
-Here is the revised architecture:
+#let title = sys.inputs.at("title", default: "You forgot the title :(")
+// Reading the input here ☝️
 
-Within the BEAM application, all actors would communicate via messages:
+#grid(
+  rows: (1fr, auto),
+  align(left + horizon, {
+    text(
+      size: if title.len() > 70 { 60pt } else { 72pt },
+      weight: 800,
+      title,
+    )
+  }),
+  text(size: 24pt, "Would typst again"),
+)
+```
 
-- the HTTP server receives requests and saves them to the DB,
-- the workers would pick up jobs and write the status back to the DB.
+which, when rendered with
 
-So instead of handling the deployment of multiple applications in separate pods, you can just let the OTP handle all process management within one VM (for the scheduling part).
+```
+typst compile \
+    --format png \
+    --ppi 144 \
+    --input title="Look ma, from the CLI!" fancy-typst-with-input.typ
+```
 
-#### What does it mean to reuse code between the frontend and the backend?
+becomes
 
-As mentioned before, one of the big advantages of Gleam is that it compiles to JavaScript. So you can bundle shared type definitions between the user interface and the job scheduler instead of keeping duplicate APIs in sync.
+![It’s … perfect.](https://eaj.no/_astro/fancy-typst-with-input.B9yxbOiI_1D5FbV.webp)
 
-## Gleam: the bad
+Perfection.
 
-Every language has its flaws, and it's time for some honest feedback on Gleam. I don't pretend I have much experience with the language yet, so if any of these complaints feel unfair to you, feel free to [correct me](mailto:hi@nchagnet.eu). So far, these are the things I noticed:
+Let’s move on to generating the images at build-time.
 
-- the ecosystem is small. This is not Gleam's fault per se, just a consequence of being a young language,[7](https://nchagnet.eu/blog/you-should-try-gleam#fn:7) and there are mitigating factors such as the possibility to use external functions quite easily (Erlang, Elixir on BEAM, JavaScript on its own runtime) directly from Gleam. Yet, the community itself favours Gleam-first packages and as of today, there are some gaps in package variety.
-- The language is too simple. Well, to be honest I don't agree per se with this, I like it like this. But I totally understand that the lack of macros or other complex features can put a few people off (for example, I read that currying is dearly missed).
-- The BEAM virtual machine is an excellent target, but it's also a peculiarity. I couldn't really name any big company/system using it. Yet, a quick search shows that WhatsApp, Discord and Pinterest, as well as Cisco, Nintendo, and even the NHS rely on it. Erlang and BEAM are quietly powering huge platforms due to their reliability, but it's not as flashy as "Made in Rust" marketing. Where Rust had Mozilla, Go had Google and Java had Oracle, there isn't a big tech player pushing for Gleam/Erlang right now.
+## Astro
 
-Of course this is a very biased account. I think I'm missing a lot of flaws in the language itself, flaws that will show themselves once the honeymoon period is over. But for now, I'm having a blast with Gleam, and I can only encourage you to give it a try too! I'm sure just like me, you'll have a lot of fun!
+This site is built with [Astro, a static site generator](https://astro.build).
+Articles are written in Markdown, which is then bundled into a
+[Content Collection](https://docs.astro.build/en/guides/content-collections/)
+by Astro. The details are irrelevant, what matters is that this lets me
+define metadata which I can query through a Javascript API.
 
-1. If like me this doesn't mean much to you, Erlang is *also* a functional language, albeit a much older one (about 40 years old), whose primary use has been for telecom systems. The BEAM shines with distributed, concurrent, fault-tolerant systems (so, telecom, obviously). [↩︎](https://nchagnet.eu/blog/you-should-try-gleam#fnref:1)
-2. One important thing about immutable languages is that when you do something like `let new_list = list.take([1, 2, 3], 2)`, you're not making a *copy* of the data (that'd be very wasteful), instead the common data in both variables comes from the same spot in the memory. [↩︎](https://nchagnet.eu/blog/you-should-try-gleam#fnref:2)
-3. Gleam also has the `Option` monad via `gleam/option`, but unlike Rust, it's somewhat discouraged and a simple `Result(T, Nil)` is preferred when possible. This is why `reduce` in Gleam returns `Result(T, Nil)` while Rust returns `Option<T>`. [↩︎](https://nchagnet.eu/blog/you-should-try-gleam#fnref:3)
-4. This is a completely made-up statistics, but I feel it's not too far from reality. [↩︎](https://nchagnet.eu/blog/you-should-try-gleam#fnref:4)
-5. Rust does not guarantee TCO. LLVM sometimes applies sibling-call optimisation, but it is not something you can rely on, and explicit tail calls are still unstable. Since Rust *also* gives you loops, the imperative style is generally the safer choice. Compilers for functional languages are usually much more aggressive here, since TCO is crucial to their performance. [↩︎](https://nchagnet.eu/blog/you-should-try-gleam#fnref:5)
-6. The main difference is really about isolation: an OTP node is a single OS process, and all the actors on it share the same memory, while Kubernetes gives each pod its own container and spreads them over the machines of the cluster. Erlang does know how to cluster several nodes together, but OTP has no cluster scheduler, no placement and no container isolation: you still have to deploy and place the nodes yourself. [↩︎](https://nchagnet.eu/blog/you-should-try-gleam#fnref:6)
-7. Gleam's exact age is debatable. According to [Wikipedia](https://en.wikipedia.org/wiki/Gleam_(programming_language)), Gleam was initially created in 2016, but it would only be considered a "serious" endeavour starting from 2019 (when it got numbered versioning) and only reached version 1.0.0 in 2024. [↩︎](https://nchagnet.eu/blog/you-should-try-gleam#fnref:7)
+The source code for the page template is at `src/pages/posts/[id].astro`.
+There are a few notable things about this file path:
+
+1. That it is in the src/pages/ directory tells Astro that this should be rendered as a page.
+2. The remainder of the path, /posts/[id], tells Astro where to put the page.
+3. [id] being in brackets means id is a dynamic parameter which must be defined at build time.
+
+In other words, Astro needs to know every ID when building the site—it can’t generate infinitely many
+IDs. A function called `getStaticPaths` exported from the template defines the set:
+
+```
+import type { GetStaticPathsResult } from "astro";
+import { getCollection } from "astro:content";
+
+export async function getStaticPaths(): Promise<GetStaticPathsResult> {
+  const posts = await getCollection("posts");
+  return posts.map((post) => ({
+    params: { id: post.id },
+    props: { post },
+  }));
+}
+```
+
+That is, fetch every article, and use its `id` as the `id` parameter.
+This is the object returned for the current page:
+
+```
+{
+  params: { id: "open-graph-images-with-typst" },
+  props: { post: {
+    /* Everything the template needs to render a post */
+  }}
+}
+```
+
+By default Astro will generate an HTML file, but it can also return other
+kinds of responses. Together with this blog post I also put
+the following snippet at `src/pages/api/build-info.json.ts`:
+
+```
+import type { APIRoute } from "astro";
+
+export const GET = (async () => {
+  const data = await getLatestJjMetadata();
+  return new Response(JSON.stringify(data), {
+    headers: { "content-type": "application/json" },
+  });
+}) satisfies APIRoute;
+
+async function getLatestJjMetadata(): Promise<{
+  changeId: string;
+  committedAt: Date;
+}> {
+  // Implementation cut for brevity
+}
+```
+
+Note that there are no parameters in brackets, so this will create a
+single JSON file at build time:
+
+```
+❯ tree dist/api
+dist/api
+└── build-info.json
+```
+
+And just like that, this blog [now has a JSON api](https://eaj.no/api/build-info.json).
+
+Note that the file extension is included in the path, i.e. `.json.ts`. This is
+because when the dev server is running it sets the appropriate `content-type` header
+to let the browser know what to do with the response, but once the page is built
+the result is a file with `.ts` stripped off. The browser
+then interprets the remaining file extension to know what content to expect at the path.
+
+You probably see where this is going: Create an API route which takes a post ID
+as a parameter and ends in `.png.ts`, gets the post title using the Astro Content Collection API,
+generates an image, and returns it in a response with the appropriate `content-type` header.
+
+You got it. Here’s the open graph image endpoint in its entirety, defined at
+`src/pages/posts/[id]/og.png.ts`:
+
+```
+import type { APIRoute, GetStaticPaths, InferGetStaticPropsType } from "astro";
+import { getCollection } from "astro:content";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+
+import { OPEN_GRAPH_TEMPLATE_PATH } from "@/utils";
+
+const execFileAsync = promisify(execFile);
+
+export const getStaticPaths = (async () => {
+  const posts = await getCollection("posts");
+  return posts.map((post) => ({
+    params: { id: post.id },
+    props: { title: post.data.title },
+  }));
+}) satisfies GetStaticPaths;
+
+type Props = InferGetStaticPropsType<typeof getStaticPaths>;
+
+export const GET = (async ({ props }) => {
+  const { stdout } = await execFileAsync(
+    "typst",
+    [
+      "compile",
+      OPEN_GRAPH_TEMPLATE_PATH,
+      "-",
+      "--format",
+      "png",
+      "--ppi",
+      "144",
+      "--input",
+      `title=${props.title}`,
+    ],
+    { encoding: "buffer" },
+  );
+  return new Response(new Uint8Array(stdout), {
+    headers: { "content-type": "image/png" },
+  });
+}) satisfies APIRoute<Props>;
+```
+
+Now go to `eaj.no/posts/open-graph-images-with-typst/og.png`, et voilà:
+
+![The generated OpenGraph image from the above code](https://eaj.no/posts/open-graph-images-with-typst/og.png)
+
+## Extra credit: Cache busting
+
+When a sharing platform loads the image for an article, it might very well be cached for a long time.
+Even if you decide to completely redo your entire branding, LinkedIn might insist on displaying your
+previous hideous design unless you handle it. A simple trick is to use a throwaway
+search parameter that doesn’t do anything other than make the URL unique:
+
+```
+/some-image.png?v=whatever
+```
+
+A straightforward (but silly) solution for creating this parameter is to generate a random string of characters every time
+the site is built, ensuring your image is always fetched anew.
+I landed on using a hash of the typst template and the title, so that the cache key only
+changes whenever the actual content does:

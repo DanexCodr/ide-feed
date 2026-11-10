@@ -1,370 +1,309 @@
-`malloc` has a very nice and simple interface: you ask for a certain amount of memory, and you’re given a `void` pointer to your block of contiguous bytes that’s been magicked into existence. Once you’re done with it, you call `free` with the same pointer and the memory disappears into the ether.
-
-But what’s actually happening here? Obviously, as we’re running as a userspace program, `malloc` must be asking the kernel for the memory through *syscalls*. However, we may be allocating many small blocks, and syscalls are expensive (575 ns for an empty one, as measured below), so some bookkeeping is done in the background. We’ll demonstrate this on GNU `libc` (`glibc`) with the program snippet below, which calls `malloc(16)` a thousand times.
-
-```c
-static void *ptrs[1000];
-
-int main(void) {
-    for (int i = 0; i < 1000; i++)
-        ptrs[i] = malloc(16);
-}
-```
-
-Using `strace`, we can see that the whole loop makes only two `brk` syscalls: the first asks where the *program break* is (the address where the process’s heap ends), and the second grows the heap by 132 KiB. These are both done in the first `malloc` call — the other 999 just take from that already allocated memory.
-
-```console
-$ strace -e trace=brk,mmap,munmap,write \
-    ./malloc1000 > /dev/null
-...
-brk(NULL)              = 0x59faca231000
-brk(0x59faca252000)    = 0x59faca252000
-+++ exited with 0 +++
-```
-
-You may see both `brk` and `sbrk` mentioned in discussions. `brk` is a syscall that sets the program break to the address it is provided, and `sbrk` is a `libc` convenience wrapper that takes a *delta*, increasing the program break by that amount.
-
-## The Address Space [#](https://benmandrew.com/articles/what-is-malloc-doing-anyway#the-address-space)
-
-A running process gets its own *address space*, split into a number of regions. These include `text` for executable code, `data` for initialised global variables, and `bss` for uninitialised global variables, among others. The following program prints one address from each region of the process.
-
-```c
-#define SHOW(label, p) \
-    printf("%-22s %p\n", label, (void *)(p))
-
-SHOW("main (text)", main);
-SHOW("initialised (data)", &initialised);
-SHOW("uninitialised (bss)", &uninitialised);
-SHOW("malloc(16) (heap)", malloc(16));
-SHOW("program break", sbrk(0));
-SHOW("printf (libc)", printf);
-SHOW("local (stack)", &local);
-```
-
-The addresses rise from the binary’s code up to its stack.
-
-```console
-$ ./layout
-main (text)            0x59c0791d7149
-initialised (data)     0x59c0791da020
-uninitialised (bss)    0x59c0791da028
-malloc(16) (heap)      0x59c0903182b0
-program break          0x59c090338000
-printf (libc)          0x711dcf7c15b0
-local (stack)          0x7ffff86c45ec
-```
-
-Some of these regions can change as the program runs. For example, `malloc(16)` grows the heap and moves the break up. Note that in this run, the break and `printf` in `libc` are 23.4 TiB apart, about 1,530 times the machine’s 15.6 GiB of RAM. Nearly all of that range is unmapped, so it costs no physical memory.
-
-## A Toy Allocator with `sbrk` [#](https://benmandrew.com/articles/what-is-malloc-doing-anyway#a-toy-allocator-with-sbrk)
-
-Because we can move the program break directly, we can write a little allocator of our own. This is called a *bump* allocator, because each call simply bumps up the amount of memory that we are allowed to use.
-
-```c
-void *my_malloc(size_t size) {
-    void *p = sbrk(align_up(size));
-    return p == (void *)-1 ? NULL : p;
-}
-
-void my_free(void *ptr) {
-    (void)ptr;
-}
-```
-
-This allocator is not very good! It moves the break on every single request, and each move is a syscall. We can time a syscall against `malloc` to see why `malloc` requests large blocks from the kernel and cuts them up itself. Each of the following three functions is timed over a million calls.
-
-```c
-static void *volatile sink;
-
-static void call_getppid(void) {
-    syscall(SYS_getppid);
-}
-
-static void call_sbrk(void) {
-    sink = sbrk(16);
-}
-
-static void call_malloc(void) {
-    sink = malloc(16);
-}
-```
-
-`sbrk(16)` costs only 35 ns more than the empty syscall, whereas `malloc(16)` runs 22.7 times faster than `sbrk(16)`.
-
-```console
-$ ./syscall-cost
-syscall(SYS_getppid)      575.2 ns per call
-sbrk(16)                  610.1 ns per call
-malloc(16)                 26.9 ns per call
-sbrk(16) / malloc(16)      22.7x
-```
-
-The bump allocator also has no way to reuse freed memory. Each request lands straight after the one before, so in the following example, `d` goes after `c` even though `b` has been freed.
-
-```console
-$ ./my-bump-1
-a = my_malloc(16)   start+0
-b = my_malloc(1)    start+16
-c = my_malloc(100)  start+32
-my_free(b)
-d = my_malloc(1)    start+144
-break               start+160
-```
-
-The rest of the post improves the allocator one stage at a time.
-
-## Chunks and Headers [#](https://benmandrew.com/articles/what-is-malloc-doing-anyway#chunks-and-headers)
-
-`malloc` actually allocates more memory than you request. This is because each allocation, or *chunk*, has a size header just before the returned pointer; this is how `free` works without passing an explicit size. Chunk sizes are always multiples of 16, so the low bits of the size are always zero, and `glibc` keeps three flags in them.
-
-```c
-size_t requests[] = {1, 24, 25, 1000};
-
-size_t count = sizeof requests / sizeof requests[0];
-for (size_t i = 0; i < count; i++) {
-    char *p = malloc(requests[i]);
-    size_t chunk = ((size_t *)p)[-1] & ~(size_t)7;
-    printf("%8zu %8zu\n", requests[i], chunk);
-}
-```
-
-Each chunk is the request plus 8 bytes for the header, rounded up to a multiple of 16, with a minimum of 32. The rounding keeps every pointer that `malloc` returns 16-byte aligned, which is the alignment x86-64 gives `max_align_t`, so the memory suits any C type. The 32-byte minimum leaves room for the list pointers that a chunk stores once it is freed.
-
-```console
-$ ./chunk-header
- request    chunk
-       1       32
-      24       32
-      25       48
-    1000     1008
-```
-
-When we free a chunk, it is put into what’s called a *free list* to allow reuse. When more data is requested, `malloc` looks through this free list and splits large chunks to fit small requests, and `free` merges free neighbours back together. Each chunk in the free list needs two pieces of information: its size (which we already have), and a pointer to the next chunk in the free list. `glibc` stores the pointer after the size, reusing the memory that the user stored their data in before it was freed!
-
-The toy allocator stores the same two fields in each chunk.
-
-```c
-typedef struct chunk {
-    size_t size;
-    struct chunk *next;
-} chunk_t;
-```
-
-## Splitting and Coalescing [#](https://benmandrew.com/articles/what-is-malloc-doing-anyway#splitting-and-coalescing)
-
-We can improve our `my_malloc` by rounding the request plus its header up to a multiple of 16 bytes, and taking the first chunk in the free list that is big enough. To keep things simple, the toy’s header is the whole `chunk_t`, so a chunk keeps room for `next` even while it is in use. That makes the header 16 bytes where `glibc`’s is 8, and `my_malloc(100)` takes a 128-byte chunk where `malloc(100)` takes 112.
-
-```c
-void *my_malloc(size_t size) {
-    size_t need = align_up(size + HEADER_SIZE, ALIGN);
-    for (chunk_t **link = &free_list; *link != NULL;
-         link = &(*link)->next)
-        if ((*link)->size >= need)
-            return take(link, need);
-    if (grow_heap(need) != 0)
-        return NULL;
-    return my_malloc(size);
-}
-```
-
-We define `take` to split that chunk, leaving whatever the request does not need in the free list.
-
-```c
-static void *take(chunk_t **link, size_t need) {
-    chunk_t *c = *link;
-    if (c->size > need) {
-        chunk_t *rest = (chunk_t *)((char *)c + need);
-        rest->size = c->size - need;
-        rest->next = c->next;
-        c->size = need;
-        *link = rest;
-    } else {
-        *link = c->next;
-    }
-    return (char *)c + HEADER_SIZE;
-}
-```
-
-When no free chunk fits, `grow_heap` moves the program break up in 64 KiB steps using `sbrk` and puts the new space on the free list as one chunk.
-
-With headers, we can now actually implement a proper `my_free` function! It steps back from the pointer to the header and hands the chunk `c` to `insert_free`. That function walks the list to find the free chunks either side of `c` by address, `prev` and `next`, and links `c` in between them. Then, if `c` ends where `next` starts, or starts where `prev` ends, the two become one chunk.
-
-```c
-if (next != NULL && (char *)c + c->size == (char *)next) {
-    c->size += next->size;
-    c->next = next->next;
-}
-if (prev != NULL && (char *)prev + prev->size == (char *)c) {
-    prev->size += c->size;
-    prev->next = c->next;
-}
-```
-
-A test program allocates `a`, `b` and `c`, frees `a` and `b`, allocates `d`, then frees the rest.
-
-Each line shows the chunk that the call allocated, if any, and then the free list. Every chunk is an `[offset, size]` pair counted from the start of the heap, and the offset is where its header starts, 16 bytes before the pointer that `my_malloc` returns.
-
-```console
-$ ./my-freelist-2
-a = my_malloc(100)   [0, 128]     free: [128, 65408]
-b = my_malloc(200)   [128, 224]   free: [352, 65184]
-c = my_malloc(100)   [352, 128]   free: [480, 65056]
-my_free(a)                        free: [0, 128] [480, 65056]
-my_free(b)                        free: [0, 352] [480, 65056]
-d = my_malloc(50)    [0, 80]      free: [80, 272] [480, 65056]
-my_free(c)                        free: [80, 65456]
-my_free(d)                        free: [0, 65536]
-```
-
-`d` gets the chunk at offset 0, split from the 352-byte chunk that `a` and `b` merged into. The bump allocator put its fourth request after everything else. Freeing `c` merges three chunks into one, and freeing `d` leaves the single 64 KiB chunk that `grow_heap` added.
-
-## Demand Paging [#](https://benmandrew.com/articles/what-is-malloc-doing-anyway#demand-paging)
-
-`my_free` reuses memory, but it never returns any to the kernel. Whether a free chunk still costs RAM depends on when the kernel puts physical memory behind an address. Each process sees *virtual memory*, which the kernel maps onto physical RAM in 4 KiB *pages*. That separation allows the kernel to hand out address ranges with no physical RAM behind them — a virtual page only needs to be backed by physical memory on its *first write*.
-
-The following program moves the break up by 1 GiB, then writes one byte to every page and prints a row after each 256 MiB.
-
-```c
-char *p = sbrk(SIZE);
-print_row(0);
-for (size_t offset = 0; offset < SIZE; offset += PAGE_SIZE) {
-    p[offset] = 1;
-    if ((offset + PAGE_SIZE) % (SIZE / 4) == 0)
-        print_row((long)((offset + PAGE_SIZE) >> 20));
-}
-```
-
-Virtual size counts the addresses the process has mapped, and *resident set size* (RSS) counts the pages that are in RAM. Straight after `sbrk`, virtual size is already just over 1 GiB, while RSS is 1308 KiB. Each 256 MiB written then costs 65,536 page faults, one per 4 KiB page, increasing the RSS.
-
-```console
-$ ./demand-paging
-   written     faults        virtual       resident
-     0 MiB          3    1050916 KiB       1308 KiB
-   256 MiB      65539    1050916 KiB     263536 KiB
-   512 MiB     131075    1050916 KiB     525680 KiB
-   768 MiB     196611    1050916 KiB     787824 KiB
-  1024 MiB     262147    1050916 KiB    1049968 KiB
-```
-
-Once a chunk’s pages have been written, they stay resident after `my_free`, until the allocator gives them back to the kernel.
-
-## Giving Memory Back [#](https://benmandrew.com/articles/what-is-malloc-doing-anyway#giving-memory-back)
-
-We give memory back to the kernel by *lowering* the break. We introduce a new function, `trim`, that lowers the break once the free chunk at the top of the heap reaches 128 KiB, keeping 64 KiB so that the next few requests don’t move the break straight back up.
-
-```c
-static void trim(void) {
-    chunk_t *top = free_list;
-    if (top == NULL)
-        return;
-    while (top->next != NULL)
-        top = top->next;
-    char *end = (char *)top + top->size;
-    if (end != (char *)sbrk(0) || top->size < TRIM_THRESHOLD)
-        return;
-    size_t release =
-        (top->size - TOP_PAD) / PAGE_SIZE * PAGE_SIZE;
-    top->size -= release;
-    sbrk(-(intptr_t)release);
-}
-```
-
-A test program allocates 1 MiB and then a 16-byte chunk above it, then writes to every page of the 1 MiB block. (*Anonymous RSS* counts resident memory with no backing file, which keeps `libc`’s code out of the numbers.)
-
-```console
-$ ./my-trim-3
-                                 break         anonymous RSS
-my_malloc(1 MiB), my_malloc(16)  start+1088 KiB     1124 KiB
-my_free(1 MiB)                   start+1088 KiB     1124 KiB
-my_free(16)                      start+64 KiB        160 KiB
-```
-
-Freeing the 1 MiB block leaves the break at 1088 KiB and anonymous RSS at 1124 KiB, because the 16-byte chunk above it is still live. Once that chunk goes too, `trim` lowers the break to 64 KiB, dropping the anonymous RSS to 160 KiB.
-
-Only the top of the heap can be given back. A live chunk holds the break above it, so every free chunk below it stays resident, as the 1 MiB block did here. Over a long run, many allocations and deallocations leave free gaps between live chunks that later requests rarely fill, which is called *fragmentation*. These gaps stay resident, so in a long-running program, fragmentation can grow RSS until a memory limit kills the process.
-
-## Large Blocks with `mmap` [#](https://benmandrew.com/articles/what-is-malloc-doing-anyway#large-blocks-with-mmap)
-
-The `mmap` syscall usually maps a file into the address space. With the `MAP_ANONYMOUS` flag there is no backing file, and the kernel creates a zero-filled, page-aligned mapping anywhere in the address space. Like the heap, its resident pages count towards the anonymous RSS. The `munmap` syscall returns a block with its own mapping to the kernel as soon as it is freed, whatever lies next to it.
-
-To integrate this into our own allocator, `my_malloc` chooses between `sbrk` and `mmap` by the size of the request. Any request of 128 KiB or more, header included, gets a mapping of its own from `map_chunk`, rounded up to whole pages; smaller requests take the existing `sbrk` free list path.
-
-```c
-static void *map_chunk(size_t need) {
-    size_t len = align_up(need, PAGE_SIZE);
-    chunk_t *c = mmap(NULL, len, PROT_READ | PROT_WRITE,
-                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    if (c == MAP_FAILED)
-        return NULL;
-    c->size = len | MMAPPED; // chunk is mapped
-    return (char *)c + HEADER_SIZE;
-}
-```
-
-For `mmap`ped chunks, we use one of the three flags in the size header (M) to record that this chunk has its own mapping. `my_free` checks this bit to know how to free it. It unmaps a mapped chunk with `munmap`, and puts any other chunk back on the free list, where `trim` can release it.
-
-```c
-void my_free(void *ptr) {
-    if (ptr == NULL)
-        return;
-    chunk_t *c = (chunk_t *)((char *)ptr - HEADER_SIZE);
-    if (c->size & MMAPPED) {
-        munmap(c, c->size & ~(size_t)MMAPPED);
-        return;
-    }
-    insert_free(c);
-    trim();
-}
-```
-
-Running the previous demo again, we see that freeing the 1 MiB block drops the anonymous RSS while the 16-byte chunk is still live.
-
-```console
-$ ./my-mmap-4
-                                 break         anonymous RSS
-my_malloc(1 MiB), my_malloc(16)  start+64 KiB       1128 KiB
-my_free(1 MiB)                   start+64 KiB        100 KiB
-my_free(16)                      start+64 KiB        100 KiB
-```
-
-The following diagram shows how this might look in the address space.
-
-Why not `mmap` everything? Some allocators do! Even `glibc` creates extra heaps, called *arenas*, with `mmap`, and spreads threads across them so that they don’t all contend for the lock on the main heap. However, separate mappings have separate regions with no guarantee of contiguity, and chunks can’t be coalesced across these gaps. On the other hand, allocating with `sbrk` just bumps up the one contiguous region that you already have. A freed chunk that stays on the heap keeps its pages resident, so reusing it causes no page faults. Each new mapping starts with no physical memory behind it, and faults on every page it writes.
-
-## Comparing Performance [#](https://benmandrew.com/articles/what-is-malloc-doing-anyway#comparing-performance)
-
-We compare the performance of our allocators against `glibc`’s `malloc` with a workload that repeatedly allocates and deallocates blocks of varying sizes<sup>[1](https://benmandrew.com/articles/what-is-malloc-doing-anyway#fn:1)</sup>. To measure the speed, we find the average time of a *step*: free a random live block, allocate a replacement of random size, and write to each of its pages. At the end of the run, the live blocks hold 10.3 MiB. The last two columns give the anonymous RSS at that point, and again after every block is freed, which is the memory the allocator keeps.
-
-| Allocator | Average time per step (µs) | Anonymous RSS, blocks live (MiB) | Anonymous RSS, all freed (MiB) |
-| --- | --- | --- | --- |
-| `my-bump-1` | 1.72 | 1425 | 1425 |
-| `my-freelist-2` | 5.12 | 17.8 | 17.8 |
-| `my-trim-3` | 11.2 | 14.5 | 0.188 |
-| `my-mmap-4` | 11.8 | 11.2 | 0.188 |
-| `glibc` | 0.0789 | 19.0 | 19.0 |
-
-`my-bump-1` never frees or reuses memory, so its RSS is the 1425 MiB that the run allocates in total. Its 1.72 µs per step comes from an `sbrk` call for every request and page faults on new pages. `my-freelist-2` reuses memory, so its RSS of 17.8 MiB is much closer to the 10.3 MiB of live data. However, each step walks the list twice: `my_malloc` walks it to find a fit, and `insert_free` walks it to find the chunk’s neighbours. `my-trim-3` adds a third walk, because `trim` looks for the last free chunk on every `my_free`. `my-freelist-2` and `my-trim-3` run 65 and 142 times slower than `glibc` respectively. In return, `my-trim-3` keeps only 0.188 MiB once every block is freed. `my-mmap-4` calls `mmap` for large requests, which raises its time per step to 11.8 µs but gives it the lowest RSS with blocks live, at 11.2 MiB.
-
-Why is `glibc` so fast? The slowdowns in our allocators are due to having to walk a long free list of chunks multiple times. `glibc` instead keeps free chunks in *bins*, separate lists by size, so a request can walk a list of appropriately sized chunks directly. It also keeps up to seven freed chunks of each small size in a thread-local cache (tcache) and hands them straight back to the next request of that size.
-
-The tcache also explains the last column, where `glibc` keeps 19.0 MiB after every block is freed. The heap counts a cached chunk as in use, so one near the top stops `glibc` from lowering the break. The `GLIBC_TUNABLES` environment variable can turn the tcache off with `GLIBC_TUNABLES=glibc.malloc.tcache_count=0`, or fix the `mmap` threshold at 128 KiB with `GLIBC_TUNABLES=glibc.malloc.mmap_threshold=131072`.
-
-| Allocator | Average time per step (µs) | Anonymous RSS, blocks live (MiB) | Anonymous RSS, all freed (MiB) |
-| --- | --- | --- | --- |
-| `glibc` | 0.0789 | 19.0 | 19.0 |
-| `glibc`, `tcache_count=0` | 0.121 | 17.4 | 0.250 |
-| `glibc`, `mmap_threshold=131072` | 0.843 | 12.1 | 5.85 |
-
-With the tcache off, freeing everything leaves 0.250 MiB, and each step takes 1.5 times as long as before.
-
-`glibc` makes 51 `mmap` calls in the whole run, against the 5040 that `my-mmap-4` makes. Freeing a mapped chunk raises `glibc`’s threshold to that chunk’s size, so later large requests come from the heap. With the threshold fixed at 128 KiB, every large request pays for its syscalls and page faults again, and `glibc` runs 10.7 times slower.
-
-`malloc` spends memory to stay away from the kernel, parcelling out large blocks in userspace so that most calls never make a syscall.
-
-## Links [#](https://benmandrew.com/articles/what-is-malloc-doing-anyway#links)
-
-- Reproducible snippets for each program (link).
-- glibc’s own description of its allocator’s internals, covering chunks, bins, arenas and the tcache (link).
-- The man pages for brk(2) and sbrk(2) (link), mmap(2) (link), mallopt(3) (link) and malloc_trim(3) (link).
-
-1. The benchmark keeps 4000 blocks live, and each step frees a random block and allocates a replacement of a random size. Of the requests, 90% are 16 to 512 bytes, 9% are up to 16 KiB, and 1% are 128 KiB to 256 KiB. Each new block gets one write per page. An allocator runs 500,000 steps in a fresh process, built at `-O2`. Run on an Intel Xeon E3-1230 v3. [↩︎](https://benmandrew.com/articles/what-is-malloc-doing-anyway#fnref:1)
+Today, November 10th, we celebrate the 17th anniversary of Go’s [open source
+release](https://opensource.googleblog.com/2009/11/hey-ho-lets-go.html)!
+
+Over the past year, we released [Go 1.26 in February](https://go.dev/blog/go1.26) and [Go 1.27
+in August](https://go.dev/blog/go1.27), alongside a steady stream of releases across our
+[`golang.org/x`](https://pkg.go.dev/golang.org/x) libraries and developer tools.
+Meanwhile, the pace of change across the software industry continues to
+accelerate, driven by shifting hardware, evolving security threats, and the
+rapid rise of AI-assisted development and agentic systems.
+
+In a tumultuous time for the industry, Go aims to be a steady hand on the
+tiller. Our goal is to keep Go grounded in its foundational principles of
+simplicity, reliability, efficiency, and an unwavering commitment to
+[compatibility](https://go.dev/doc/go1compat), while adapting to modern hardware, production
+workloads, and developer workflows. Increasingly, our investments serve a *dual
+purpose*: what helps human engineers write, understand, and maintain reliable Go
+code at scale also provides the guardrails and authoritative context that AI
+coding assistants and agents need to be effective.
+
+## Core language and library improvements
+
+In the language itself, Go 1.26 and 1.27 addressed several long-standing
+restrictions in generics and everyday Go syntax, guided by years of real-world
+experience. When generics first landed in Go 1.18, methods could not declare
+their own type parameters, which sometimes forced awkward package-level
+functions and “inside-out” nested calls. Go 1.27 introduced [generic
+methods](https://go.dev/blog/generic-methods) on non-interface types (such as the new
+[`Rand.N`](https://go.dev/pkg/math/rand/v2#Rand.N) method in `math/rand/v2`),
+allowing APIs to stay naturally organized on types and enabling readable method
+chaining. Together with support for self-referential type constraints in Go 1.26
+and broader type inference for generic function values in Go 1.27, generics in
+Go feel more complete and natural than ever.
+
+Alongside generics, two refinements to value construction make everyday Go code
+cleaner and more concise. Go 1.26 extended the built-in `new` function to
+[accept an initial value expression](https://go.dev/doc/go1.26#language), allowing `new(42)`
+or `new("go1.26")` without the ubiquitous `newInt`-style helper functions used
+to populate optional pointer fields in JSON and protocol buffer structs. And in
+Go 1.27, struct literal keys can [refer directly to fields of embedded or nested
+structs](https://go.dev/doc/go1.27#language), reducing boilerplate in composite literals.
+
+In the standard library, our focus has been on evolving Go’s “production stack”
+and eliminating subtle operational traps. Few packages are as central to that as
+`encoding/json`, which has been a mainstay of Go since before Go 1.0. While its
+core model has held up remarkably well for over 15 years, tighter JSON standards
+and security expectations have turned some of its original defaults into
+interoperability and security hazards, such as silently accepting invalid UTF-8
+or duplicate object keys and matching struct fields case-insensitively. At
+the same time, its buffered design prevented true streaming and limited
+performance. Addressing these issues while upholding Go’s compatibility promise
+for the millions of existing programs that depend on `encoding/json` meant
+designing a new major version of the package.
+
+Six years in the making, the new [`encoding/json/v2`](https://go.dev/pkg/encoding/json/v2) and
+[`encoding/json/jsontext`](https://go.dev/pkg/encoding/json/jsontext) packages reached general
+availability in Go 1.27. Driven by Joe Tsai, Daniel Martí, and contributors from
+across the Go community, this [modern JSON API](https://go.dev/blog/jsonv2) brings safer,
+stricter defaults, flexible caller- and type-specified customization, and up to
+10× faster unmarshaling, while cleanly separating high-level semantic marshaling
+(`json/v2`) from low-level, reflection-free syntactic streaming (`jsontext`).
+Crucially, we didn’t leave existing code behind: the original
+[`encoding/json`](https://go.dev/pkg/encoding/json) package is now implemented entirely in
+terms of `v2` under the hood. Existing `v1` callers get faster unmarshaling
+simply by upgrading, and packages using `v1` and `v2` interoperate seamlessly so
+that the ecosystem can migrate gradually without flag days.
+
+We’ve also brought new production diagnostics to Go’s concurrency primitives.
+Concurrency is one of Go’s greatest strengths, but goroutines accidentally left
+blocked on abandoned channels or locks can silently leak memory and CPU in
+long-running services, and traditional goroutine profiles cannot distinguish
+leaked goroutines from ones legitimately waiting for work. First previewed in Go
+1.26 and now generally available in Go 1.27, the new [goroutine leak
+profiler](https://go.dev/blog/goroutine-leak-profiles) (`goroutineleak` in `runtime/pprof` and
+`/debug/pprof/goroutineleak` in `net/http/pprof`) solves this for production
+services. Contributed by Vlad Saioc and Uber’s Programming Systems team,
+building on academic research with Aarhus University and Washington University
+in St. Louis, the profiler repurposes the garbage collector’s reachability phase
+to identify goroutines blocked on concurrency primitives that no runnable
+goroutine can ever reach. That allows it to pinpoint leaks in production with
+near-zero false positives and zero overhead when not in use.
+
+In `net/http`, closing an HTTP/1 response body with even a single unread
+byte—such as a trailing newline left behind by a JSON decoder—previously forced
+the client to tear down the underlying TCP and TLS connection. Go 1.27’s HTTP
+transport now [automatically drains small unread response bodies in the
+background](https://go.dev/blog/http-connection-reuse) on close, turning a widespread latency
+footgun into up to a 5× speedup for sequential HTTP/1 requests while letting
+application code stay clean and simple.
+
+These releases also added several notable standard library APIs, including a
+native [`uuid`](https://go.dev/pkg/uuid) package, a generic and type-safe
+[`errors.AsType`](https://go.dev/pkg/errors#AsType), and an in-memory
+[`httptest.NewTestServer`](https://go.dev/pkg/net/http/httptest#NewTestServer) designed for
+virtual-time testing with [`testing/synctest`](https://go.dev/pkg/testing/synctest). Existing
+packages saw significant speedups as well: [`io.ReadAll`](https://go.dev/pkg/io#ReadAll) now
+runs twice as fast while allocating half as much memory,
+[`compress/flate`](https://go.dev/pkg/compress/flate) compresses faster (speeding up `gzip`,
+`zip`, `zlib`, and `png`), and [`image/jpeg`](https://go.dev/pkg/image/jpeg) has a faster,
+more accurate encoder and decoder.
+
+## Making the most of modern hardware
+
+Modern CPUs look very different from the hardware Go first launched on 17 years
+ago, with wide vector units and deep, non-uniform memory hierarchies. A major
+focus of our runtime and compiler work is ensuring Go programs make full use of
+modern silicon, both transparently when you upgrade your toolchain and through
+new APIs when you need explicit control.
+
+After debuting as an experiment in Go 1.25, the [Green Tea garbage
+collector](https://go.dev/blog/greenteagc) became the default in Go 1.26. By organizing object
+marking around contiguous memory spans rather than chasing pointers across the
+heap, Green Tea aligns with modern CPU memory architectures to reduce garbage
+collection overhead by 10–40% in real-world workloads—and by an additional ~10%
+on recent `amd64` processors using AVX-512 vector instructions during scanning.
+
+Of course, the runtime shouldn’t be the only part of a Go program that can tap
+into vector hardware. Without access to Single Instruction, Multiple Data (SIMD)
+capabilities, compute-intensive software, from cryptography and media processing
+to data analytics and AI, leaves a significant portion of modern silicon dark.
+Until recently, the only way to light up that hardware in Go was by writing and
+maintaining per-architecture assembly. To change that, Go 1.26 and 1.27
+introduced two experimental SIMD packages: [`simd/archsimd`](https://go.dev/blog/archsimd),
+for low-level access to architecture-specific vector instructions on `amd64`,
+`arm64` (NEON), and WebAssembly (`wasm`); and [`simd`](https://go.dev/blog/simd-experiment), a
+higher-level, width-agnostic API that provides portable, near-assembly
+performance across architectures with automatic fallback emulation.
+
+We’ve also attacked the cost of memory allocation from multiple angles. The
+cheapest heap allocation is the one that never happens: in Go 1.26, the compiler
+began [allocating initial slice backing stores on the
+stack](https://go.dev/blog/allocation-optimizations) at `append` sites—even for slices that
+ultimately escape to the heap—eliminating the flurry of small heap allocations
+that typically accompany slice growth. And for heap allocations more broadly, Go
+1.27 introduced [size-specialized memory
+allocation](https://go.dev/blog/size-specialized-allocations) to speed up allocating the small
+objects (such as small structs, slices, and strings) that dominate allocator
+time. Generating dedicated fast-path allocator routines for size classes up to
+80 bytes made small allocations up to 30% faster and improved overall
+performance in allocation-heavy programs. Together with a ~30% reduction in
+baseline `cgo` call overhead in Go 1.26, these improvements make Go programs
+faster and leaner out of the box.
+
+## Secure software and ecosystem defense
+
+Go’s approach to security spans the entire lifecycle of software: providing safe
+APIs by design, preparing cryptography for the future, and actively defending
+the live ecosystem as new threats emerge.
+
+To defend against store-now, decrypt-later attacks and support the industry’s
+accelerating timelines for quantum readiness, Go has continued expanding its
+post-quantum cryptography support. Go 1.26 enabled hybrid post-quantum key
+exchanges (`SecP256r1MLKEM768` and `SecP384r1MLKEM1024`) by default in
+`crypto/tls` and added the [`crypto/hpke`](https://go.dev/pkg/crypto/hpke) package
+(implementing RFC 9180 Hybrid Public Key Encryption, including post-quantum
+hybrid KEMs). Go 1.27 followed up with the new
+[`crypto/mldsa`](https://go.dev/pkg/crypto/mldsa) package, implementing the FIPS 204
+post-quantum ML-DSA signature standard and integrating it into `crypto/x509` and
+`crypto/tls`.
+
+At the same time, we’ve continued hardening the standard library and runtime
+against subtle classes of vulnerabilities. Most key generation and signing
+functions across Go’s `crypto/...` packages now unconditionally draw from a
+secure system randomness source, closing off a classic footgun where
+non-cryptographic readers were accidentally passed in. Under the hood, Go 1.26
+also added 64-bit heap base address randomization to harden `cgo` binaries and
+introduced the experimental [`runtime/secret`](https://go.dev/pkg/runtime/secret) package for
+eagerly erasing sensitive cryptographic temporaries from registers, stack
+frames, and the heap.
+
+Securing Go deployments also requires rapid vulnerability and incident response
+in a fast-moving threat landscape. From the Go vulnerability database and
+[`govulncheck`](https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck) to our
+release infrastructure, we’ve invested heavily in ecosystem defense. In October,
+that preparation was put to the test during the [eMudhra certificate key
+disclosure incident](https://go.dev/blog/emudhra-incident), when eight intermediate TLS and
+code-signing certificates chaining to a widely trusted root CA were discovered
+to use trivially weak private keys. Because Linux lacks a uniform OS-level
+certificate revocation mechanism, Go’s built-in TLS verifier is the frontline
+defense for millions of Linux services. Within seven and a half hours of initial
+notification, the Go Security team shipped a targeted block in our first-ever
+[URGENT track](https://go.dev/doc/security/policy#urgent) security release (Go 1.27.3 and Go
+1.26.10) alongside an updated Go vulnerability database entry so `govulncheck`
+could flag affected binaries, giving Go users everything they needed to protect
+their deployments before the weak keys were publicly disclosed the next morning.
+
+## Advancing the broader Go platform and tooling
+
+Go has always been more than a compiler and standard library: it is an
+end-to-end platform for software engineering. Over the past year, our work in
+[`golang.org/x/tools`](https://pkg.go.dev/golang.org/x/tools), the
+[`gopls` language server](https://go.dev/gopls), [`vscode-go`](https://github.com/golang/vscode-go),
+and [`pkg.go.dev`](https://pkg.go.dev) has focused on making that platform even
+more productive for both human developers and AI coding assistants.
+
+In [last fall’s Go Developer Survey](https://go.dev/blog/survey2025), the single biggest
+challenge developers reported was ensuring their code follows best practices and
+current Go idioms. As Go evolves while standing by its compatibility promise,
+older ways of writing code continue to work alongside newer, clearer, or faster
+alternatives, creating a natural drift in idioms over time. That drift has been
+compounded by AI coding assistants, which gravitate toward the older patterns
+that dominate their training data.
+
+Go 1.26 tackled this with a [complete overhaul of the `go fix`
+command](https://go.dev/blog/gofix), returning the long-dormant tool to its [pre-Go 1.0
+roots](https://go.dev/blog/introducing-gofix) to apply [dozens of automatic
+*modernizers*](https://pkg.go.dev/golang.org/x/tools/go/analysis/passes/modernize)
+across entire codebases. What `gofmt` did for stylistic consistency, modernizers
+aim to do for idiomatic consistency. Available both as instant suggestions in
+`gopls` and as bulk, push-button upgrades in `go fix`, modernizers simplify
+existing code and help developers discover new language and library features. We
+now routinely consider whether new language and library proposals should ship
+with a modernizer of their own. Just as importantly, modernizers give coding
+agents an immediate way to bring generated code up to date, while helping shift
+the global corpus of open source Go code so that future models learn modern
+idioms from the start.
+
+Bespoke modernizers work well for the language and standard library, but a
+centralized team can never write them for every third-party module in the
+ecosystem. That’s why Go 1.26 also introduced the annotation-driven
+[source-level inliner](https://go.dev/blog/inliner), the first step toward a “self-service”
+paradigm for automated code maintenance. Any package author can now annotate a
+deprecated function, type, or constant with `//go:fix inline`, and the inliner
+will safely migrate callers and references via `go fix` or in the IDE, carefully
+handling evaluation order, side effects, and name shadowing.
+
+In the editor, we’ve made four feature-packed releases of `gopls` over the past
+year ([v0.21.0](https://go.dev/gopls/release/v0.21.0), [v0.22.0](https://go.dev/gopls/release/v0.22.0),
+[v0.23.0](https://go.dev/gopls/release/v0.23.0), and [v0.24.0](https://go.dev/gopls/release/v0.24.0)). In
+collaboration with the Dart team, we designed and proposed an open Language
+Server Protocol (LSP) extension for [interactive
+refactoring](https://go.dev/blog/interactive-refactoring), allowing language servers to ask
+for user input through dynamic, multi-step dialogs in any supporting editor. Now
+integrated into `gopls` and `vscode-go`, interactive refactoring powers
+customizable struct tag addition and removal, interface implementation
+(including generic interfaces) with live symbol search, and cross-package
+declaration moves. Beyond refactoring, `gopls` also gained generalized package
+renaming across directories, zero-configuration support for editing Go assembly
+files, subexpression hover inspection, completions and inlay hints for promoted
+fields, automatic `govulncheck` scanning when `go.mod` dependencies change, and
+continued enhancements to its [built-in Model Context Protocol (MCP)
+server](https://go.dev/gopls/features/mcp) for AI coding assistants.
+
+Rounding out the developer platform, in May we launched the official
+[`pkg.go.dev` API](https://go.dev/blog/pkgsite-api) and followed up with support for
+[`go doc pkg@version`](https://go.dev/doc/go1.27#go-doc) in Go 1.27. Previously, developer
+tools and IDE integrations had to resort to fragile web scraping to query
+ecosystem metadata. Today, the `pkg.go.dev` API gives tool authors and AI coding
+agents a fast, authoritative service for querying module versions, package
+symbols, importers, and vulnerability data, while `go doc pkg@version` makes it
+easy to pull up documentation for any version of any package right from the
+command line.
+
+## Looking ahead
+
+We have an ambitious year ahead for Go.
+
+On the tooling front, we’re building on the `pkg.go.dev` API, `gopls`, and `go fix` to make Go’s developer tools even more capable for both human developers
+and coding agents. Following the strong community response to `go fix` and
+`//go:fix inline`, we’re exploring ways to [expand self-service static
+analysis](https://go.dev/issue/82464), enabling developers, package maintainers, and
+organizations to easily integrate custom analyzers and domain-specific
+best-practice checks directly into their development workflows. We’re also
+exploring ways to surface richer package health and quality signals on
+`pkg.go.dev` and through its API, helping developers and coding agents evaluate
+and choose trustworthy, reliable dependencies.
+
+In the language and libraries, Go 1.28 will resolve one of Go’s longest-standing
+language requests by allowing [composite literals to omit redundant
+types](https://go.dev/issue/12854) whenever the type can be inferred from context, cutting
+visual noise in deeply nested configurations, API requests, and table-driven
+tests. And with recent generics refinements and [hashing
+APIs](https://go.dev/pkg/hash/maphash#Hasher) in place, we’ve just accepted a
+swath of proposals for [generic collection APIs](https://go.dev/issue/80590)—including sets,
+ordered maps, and more—which will land in `golang.org/x/exp` over the next few
+weeks so the community can try them out and share feedback ahead of future
+standard library inclusion.
+
+Under the hood, we’re working hard to graduate a large subset of the `simd` and
+`simd/archsimd` packages (covering `amd64`, `arm64` NEON, and `wasm`) in Go
+1.28, with further expansions and `arm64` scalable vector (SVE) support targeted
+for Go 1.29. Amid the global RAM crunch, reducing Go’s memory footprint is also
+one of our major priorities for the coming year.
+
+In the toolchain, Go 1.28 will increase build parallelism by [writing compiler
+export data early](https://go.dev/issue/15734) and streamline static analysis by [decoupling
+tool export data from the compiler](https://go.dev/issue/79427). Looking further out, we’re
+working to support [`cgo` builds without requiring a C toolchain](https://go.dev/issue/81450),
+and we’re kicking the tires on WebAssembly’s early-stage stack-switching
+extension, which is already showing promising improvements in Go Wasm
+performance and binary size.
+
+Finally, ensuring Go stands the test of time means scaling not just our
+technology, but the open source project itself. Over the past year, some of Go’s
+most impactful advances, including `encoding/json/v2` and the `goroutineleak`
+profile, were driven by or built in close partnership with contributors outside
+Google. To better support our growing ecosystem and contributor base, we’re
+working to bridge the gap between Go maintainers at Google and our broader
+community, and to diversify Go’s technical stewardship. That includes
+[restructuring the proposal process](https://go.dev/issue/80580) to improve throughput, give
+the community clearer visibility into the process and input into prioritization,
+and formally involve community contributors in triage and review. Beyond
+proposals, we are building a clearer contributor ladder to empower proven
+contributors with greater autonomy, decision-making privileges, and maintenance
+responsibilities, and opening up maintainer summits and day-to-day
+communications to trusted contributors from our amazing community.
+
+Seventeen years in, Go is thriving because of the people who use it, build with
+it, and contribute to it every day. Thank you to everyone in the Go community
+for being part of this journey, and we wish you all the best in the year ahead!

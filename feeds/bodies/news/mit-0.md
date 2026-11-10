@@ -1,53 +1,23 @@
-Today, a scientist who wants to simulate a physical process must pick the right tool for that one job, such as a solver built for flowing water or another designed to model the way a protein folds. Each one is hand-coded around the specific equations that dictate how that process behaves.
+The MIT Schwarzman College of Computing welcomes seven new faculty members in core computing and shared positions to the MIT community in 2026. They’re inventing and using artificial intelligence and computing technologies in new ways to transform areas such as environmental science, quantum computing, human-AI interaction, and macroeconomics and finance.
 
-Researchers at MIT, the University of British Columbia (UBC), and elsewhere have now replaced that patchwork with a single deep-learning system, called [WorldParticle](https://worldparticle.github.io/WorldParticle_Web/#top), that could help engineers model different physical phenomena, from sliding sand to folding proteins, with one unified artificial intelligence architecture.
+“It’s a pleasure to welcome these outstanding faculty members to MIT, whose innovative research is leading advances in AI and computing and its impact on society,” says Dan Huttenlocher, dean of the MIT Schwarzman College of Computing and the Panasonic Professor of Electrical Engineering and Computer Science.
 
-Scientists and engineers could use this system to model processes that typically require separate simulators, such as a fluid sloshing against a deformable solid. This could offer a faster, more accurate way to simulate how sloshing oil might impact an elastic valve in a storage tank, for instance. It could also help engineers study where and how granular materials, like sand or soil, could move when a soft robot touches them.
+These hires include core faculty with appointments in the Department of Electrical Engineering and Computer Science (EECS), which reports jointly to the MIT Schwarzman College of Computing and School of Engineering, as well as shared faculty positions between the college and other departments, including Urban Studies and Planning, Mathematics, Economics; and, at MIT Sloan School of Management, the Finance Group and the Work and Organization Studies Group.
 
-The system represents every material it simulates, from a dune of sand to a protein molecule, as tiny particles and predicts where those particles will move one step at a time. Because it learns the underlying dynamics rather than being programmed with an equation, the model can adapt to materials, forces, and environments it never encountered during training.
+The new shared faculty include:
 
-In the long term, the researchers hope this work helps scientists discover new materials and explore physical processes they would be unable to effectively study with existing simulation methods.
+[David Bruns-Smith](https://brunssmith.com/), an assistant professor at the MIT Sloan School of Management, who holds an MIT Schwarzman College of Computing shared position with EECS, joined MIT in September. He is also a member of the Laboratory for Information and Decision Systems. His recent research has focused on debiased machine learning with applications in macroeconomics and household finance. Previously, he was a postdoc at Stanford Data Science, and he completed his PhD in computer science at the University of California at Berkeley.
 
-“We want to have a GPT moment for simulation,” says Peter Yichen Chen, a former MIT postdoc who is now an assistant professor at UBC, and is a co-corresponding author of an open-access [paper](https://arxiv.org/pdf/2605.15305) on this technique. “Every time people want to build a simulator for a particular physical phenomenon, they need to code it up from scratch. Our vision is to have a foundation model that works out of the box for any scenario you want to simulate. This is a first step in that direction.”
+[Zana Buçinca](https://zbucinca.github.io/), an assistant professor at the MIT Sloan School of Management, who holds an MIT Schwarzman College of Computing shared position with EECS, joined MIT in September. She is also a member of the Laboratory for Information and Decision Systems. Her research interests lie at the intersection of human-AI interaction and the future of work, and involve designing human-AI interaction techniques that complement people and amplify their values in AI-assisted work. She was a postdoc at Microsoft in the Office of Applied Research, and received her PhD in computer science from Harvard University.
 
-Chen is joined by co-corresponding and co-lead author Minghao Guo, an MIT postdoc; co-lead authors Caoliwen Wang and Siyuan Chen, UBC graduate students; Wojciech Matusik, an MIT professor of electrical engineering and computer science who leads the Computational Design and Fabrication Group within the Computer Science and Artificial Intelligence Laboratory (CSAIL); and others at UBC, Georgia Tech, Inria, Meta, the University of Pennsylvania, the University of Utah, the University of California at Los Angeles, and the University of Hong Kong. The research will be presented at the ACM SIGGRAPH Conference and Exhibition on Computer Graphics and Interactive Techniques in Asia.
+[Alexandra Cabral](https://a-cabral.github.io/), an assistant professor in the Department of Urban Studies and Planning, who holds an MIT Schwarzman College of Computing shared position with the Institute for Data, Systems, and Society (IDSS), joined MIT in September. Her research focus includes low-cost sensor networks, smart cities, environmental informatics, and low-resource computing. Previously, she was a postdoc in the Ka Moamoa Lab at Georgia Tech and served as a 2025-26 NSF ICICLE Educational Fellow. She earned her PhD in computer science from Harvard University.
 
-**Unified simulation**
+[Alexandru Damian](https://alex-damian.github.io/), an assistant professor in the Department of Mathematics, who holds an MIT Schwarzman College of Computing shared position with EECS, joined MIT in September. He is also a member of the Laboratory for Information and Decision Systems. His work is focused on developing a predictive, and ultimately prescriptive, theory of deep learning. He holds a BS in mathematics from Duke University and a PhD in applied and computational mathematics from Princeton University.
 
-For this work, the researchers drew inspiration from world models. These powerful AI systems learn the rules that govern the physical world so they can predict how objects or environments will change over time in response to certain actions or conditions.
+[Lindsey Raymond](https://www.lindseyrraymond.com/) PhD ’24, an assistant professor in the Department of Economics, who holds an MIT Schwarzman College of Computing shared position with EECS, joined MIT in July. She is also a member of LIDS. Her research involves the effects of digital technologies and artificial intelligence on labor markets, firms, and market competition. She was a postdoc in economics and computation at Microsoft, and earned her PhD from MIT Sloan.
 
-The researchers applied these concepts to develop a unified AI architecture that can simulate multiple types of physical phenomena.
+The new core faculty are:
 
-“If you study deformable objects and fluids, you would need two simulators — one for each physical regime. But if you unify them into one model, maybe you could couple the physics of these two processes and gain insights into new problems?” Guo says.
+[Jas Brooks](https://mit-pel.com/), the KDD Career Development Professor in Communications and Technology, joined EECS as an assistant professor in September. They are also a member of the Computer Science and Artificial Intelligence Laboratory. Their work focuses on perceptual engineering: the design of computational interfaces that sense and modulate human sensory perception. Previously, they were a Rising Star in EECS, a Siebel Scholar, and a National Science Foundation Graduate Research Fellow. They hold a BS and PhD in computer science from the University of Chicago.
 
-WorldParticle breaks an object into thousands or millions of tiny, three-dimensional dots, or particles, using what is known as a Lagrangian representation. It tracks the movement and velocity of the particles over space and time to simulate the material’s dynamics.
-
-Typically, when scientists model materials and physical processes using Lagrangian particles, they use a governing equation that defines the fundamental laws which control how that material behaves over time and space. They must convert that complex equation into a formula a numerical solver can handle, repeating these steps for each material and process they want to model.
-
-Instead, the researchers designed a neural network that learns to solve governing equations in general, eliminating the need to design a new model and solver to handle each one.
-
-Once WorldParticle converts an object into particles, a neural network takes the 3D positions and physical properties of the particles as inputs. It outputs their positions and properties for the next frame of the simulation, predicting the material’s motion over time and space in one-second increments.
-
-“It is a similar architecture to ChatGPT. But instead of predicting one word at a time to write a piece of text, we are predicting how these particles will move, one step at a time,” Chen says.
-
-Before each simulation step, WorldParticle separates the external forces that affect the physical system, like impulse forces that affect an ocean wave when it slams into a seawall.
-
-After predicting the initial states of the particles, WorldParticle integrates the external forces back into the simulation, correcting its particle predictions based on how those forces affect the object’s behavior. In this way, the system can generalize to unseen materials, changing environmental conditions, and varied forces.
-
-**A general, scalable framework**
-
-But because a complex object could be broken into millions of particles, the problem quickly becomes too computationally intensive for the model to handle.
-
-To streamline processing, the researchers employed a merging technique to combine and compress particles while still allowing WorldParticle to capture fine-grained details of their behavior.
-
-“We needed to do a lot of detailed engineering and employ many tweaks to the architecture for it to be truly generalizable and scalable,” Guo says.
-
-They demonstrated WorldParticle by modeling six different physical phenomena, including deformable objects, granular materials, and proteins, with higher accuracy than numerical simulation methods.
-
-For instance, WorldParticle effectively captured how a granular object would collapse into a pile while some baseline methods left sand particles floating in the air. Their method also modeled how protein structures change over time about 100 times faster than numerical simulators, Guo adds.
-
-The general-purpose framework could be applied to many materials and processes, including soft robot manipulation tasks, RNA evolution, and astrophysical phenomena like the merging of galaxies, the researchers say.
-
-Moving forward, they want to adapt WorldParticle to simulate these and other physical systems. They also want to build on this work toward the development of a full, general-purpose simulation pipeline for scientific discovery.
-
-“We see the unification of computation and science giving us new insights and tools to discover physical phenomena or explain some unexplainable physical phenomena,” Guo says. “With a unified model, we could unlock many discoveries that we can’t even imagine.”
+[Hengyun (Harry) Zhou](https://zphy.github.io/people.html) ’16 joined EECS as an assistant professor in March. He is also a member of the Research Laboratory of Electronics. His research focuses on accelerating the development of large-scale, fault-tolerant quantum computers through full-stack architectural innovation. Before coming to MIT, he previously served as the Quantum Error Correction Architecture Lead at QuEra Computing. He earned his PhD in physics from Harvard University.
