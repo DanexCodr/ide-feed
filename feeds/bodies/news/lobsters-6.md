@@ -1,80 +1,323 @@
-It’s been a really bad month (and year) for OT cybersecurity. From a wave of new, high-impact vulnerabilities, to [attacks on supermarket refrigerators](https://www.theguardian.com/world/2026/nov/02/supermarket-freezers-across-europe-hit-by-second-suspected-cyber-attack), to [attacks on blood banks](https://www.theguardian.com/technology/2026/nov/04/france-national-blood-service-hack-cyber-attack-europe), we’ve been left shorthanded and reeling. And that’s on top of [months of attacks against water utilities](https://techcrunch.com/2026/08/26/cisa-confirms-hackers-targeted-over-100-us-water-systems-during-july/).
+1. Quick Answer: what’s new in Node.js 27
+2. New Iterator superpower: zip, zipKeyed, join, and includes
+  1. Pairing sequences lazily with Iterator.zip()
+  2. Combining endless iterators: solar generation and household consumption
+  3. Turning columns into objects with Iterator.zipKeyed()
+  4. Finishing pipelines with Iterator.prototype.join() and includes()
+3. More accurate sums with Math.sumPrecise()
+4. node:net/promises and async-iterable TCP servers
+5. Virtual File System (node:vfs) is now unflagged
+6. More Node.js Core upgrades: fs, Permissions, Test Runner, and HTTP
+  1. Atomic temporary files with fs.mkstemp() and native fs.glob()
+  2. Permission Model gets --allow-env
+  3. Built-in Test Runner: stable watch mode and Jest-style mock helpers
+  4. Smarter HTTP & HTTP/2 defaults
+  5. Why remove the prototype from req.headers?
+7. Under the hood: V8 15.6, the 4 GB Heap Default, and OpenSSL 4.1
+8. Heads-up: Node.js 27 breaking changes
+  1. 1. req.headers has a null prototype
+  2. 2. Memory limits for multi-process deployments
+  3. 3. V8 serialization format and larger heap snapshots
+  4. 4. V8 behavior changes that can break tests and caches
+  5. 5. Deprecations, removals, and platform changes
+9. Should you use Node.js 27 today?
+10. Wrapping up
+11. Frequently Asked Questions
+  1. Why did Node.js 27 start with an Alpha release in October 2026?
+  2. Will Node.js 27 become an LTS release even though 27 is an odd number?
+  3. What are the biggest JavaScript features in Node.js 27?
+  4. How did the default memory limit change in Node.js 27?
+  5. Should I run Node.js 27 in production?
 
-Through all of this, I keep seeing the same comment from seasoned enterprise cybersecurity people, and as someone dealing with these cases on the front line, I find it very frustrating. They express intense shock that these systems are accessible via networks at all, then ask why they can’t just be disconnected. It goes something like this:
+On October 29, 2026, the Node.js team published [`v27.0.0-alpha.0.0.0`](https://nodejs.org/en/blog/release/v27.0.0-alpha.0.0.0). If you have been using Node.js for a few years, that version string alone probably made you do a double take. Where is the usual October `v27.0.0` Current release?
 
-![Quote post - From an IT guy and cybersecurity fellow, why aren't those critical things airgapped? Outside of remote observation for temperatures (which you could do with non-connected thermometers), I can't imagine why I would want a refrigerator that contains temperature-sensitive cultures of supplies to be connected to the internet.](https://tisiphone.net/wp-content/uploads/2026/11/image-1.png)
+Node.js 27 is the first release to follow the new annual schedule. Under the old schedule, October brought a major release that reached end of life six months later without entering Long Term Support (LTS). October now starts a six-month Alpha phase, ahead of the `27.0.0` Current release in April 2027 and LTS promotion in October 2027.
 
-This is just one example, and I’m genuinely not trying to bash the OP. I’m certain they’re a very competent, experienced IT person, and I understand their frustration. But the situation is far more complicated than it looks, and calling the people who support and purchase these systems incompetent won’t fix it. So let me try to explain why so much OT, ICS, and IIoT is exposed, and which systems are in the worst state.
+In this first Alpha, V8 moves from 14.6 to 15.6, adding `Iterator.zip()`, `Iterator.zipKeyed()`, `Iterator.prototype.join()`, `Iterator.prototype.includes()`, and `Math.sumPrecise()`. There is a promises API for `node:net`, along with async-iterable TCP servers. The Virtual File System (`node:vfs`) is now unflagged, the Permission Model gains `--allow-env`, and HTTP and memory defaults change too.
 
-## How We Got Here
+We’ll start with the JavaScript and Node.js APIs you can use in everyday code, comparing them with the older approaches. Then we’ll cover runtime changes and what to check before upgrading.
 
-Before we can talk about the current state of OT, we need to go back 15 to 20 years to discuss IT/OT convergence. Before then, industrial devices and network infrastructure were often highly bespoke, heterogeneous technologies engineered by vendors. Most communication was serial-based, protocols were custom, and even device firmware was developed in-house. A Rockwell system looked nothing like a Siemens system. When you purchased a system, it was designed, deployed, and supported by that specific OEM. They supplied the replacement parts. They trained the technicians and installers.
+## Quick Answer: what’s new in Node.js 27
 
-This got expensive, and it slowed down logistics, not just for parts but also for labour. So clever engineers and businesspeople looked at the IT landscape and had an idea. Using Windows computers as human-machine interfaces, and commercial Ethernet to encapsulate serial traffic, would be much cheaper to buy, replace, and train technicians to support.
+The main additions in Node.js 27 so far:
 
-Over the years that followed, systems became a mix: lower-level PLCs and RTUs down at Level 1, and above them, numerous devices that were far more familiar to IT staff. Unfortunately, they were also familiar to hackers and hacking tools. This was the first change in exposure, and it was really just a loss of security by obscurity.
+1. New Iterator helpers (zip, zipKeyed, join, includes) pair sequences, join their values into strings, and search them without collecting intermediate arrays.
+2. Math.sumPrecise() sums an iterable of numbers without rounding each intermediate addition.
+3. node:net/promises and async-iterable net.Server let you use async/await to set up TCP servers and sockets.
+4. Virtual File System (node:vfs) is unflagged, making in-memory file systems and --vfs-load available without --experimental-vfs.
+5. Core upgrades across fs, permissions, test runner, and http, including atomic temp files with fs.mkstemp(), --allow-env, Jest-style mock helpers, and a 65-second HTTP keepAliveTimeout.
+6. V8 15.6 and OpenSSL 4.1 update sorting and cryptography, and the default heap limit rises to 4 GB on an 8 GB machine.
 
-The next change was the homogenisation of OEM deployments. To deploy and support large-scale systems more efficiently, most industrial vendors started producing very uniform deployments of technology across the [Purdue Model](https://en.wikipedia.org/wiki/Purdue_Enterprise_Reference_Architecture), in very static architectures. Network maps and addressing can look incredibly similar between deployments, even across verticals and countries. Once again, this was the most financially and logistically efficient solution.
+For example, we can format a list of products and total their prices:
 
-Unfortunately, any savvy cybersecurity professional can see how this lends itself to more scalable attacks, and even to automating parts of those attacks with tools and agents.
+If you want to experiment locally, [check your current Node.js version](https://nodejsdesignpatterns.com/blog/checking-node-js-version/) before running the snippets below.
 
-## The Age of Remote Connectivity
+## New Iterator superpower: `zip`, `zipKeyed`, `join`, and `includes`
 
-Over the last ten years, we’ve lived through the rapid adoption of remote connectivity in industrial environments around the world.
+This is the part of the release I’m most excited about. I love seeing how far we can push streams, iterators, and generators. Our article on [JavaScript async iterators](https://nodejsdesignpatterns.com/blog/javascript-async-iterators/) should give you an idea of what I mean.
 
-There was a time when many industrial systems were effectively “air-gapped”. This certainly coincided with the serial era of industrial technology.
+In [What’s new in Node.js 26](https://nodejsdesignpatterns.com/blog/whats-new-in-nodejs-26/), we used `Iterator.concat()` to consume multiple iterables one after another. Node.js 27, through V8 15.6, lets us consume them side by side, pairing values at the same position.
 
-As IT/OT convergence took hold, a mix of tactics was used. In some flat corporate network environments, industrial control systems were simply plugged into existing cabling for the cheapest possible network access. This included both industrial and building automation systems. We still see this today in low-margin verticals, especially manufacturing. Those flat (or relatively flat) networks have been a thorn in the side of industrial cybersecurity people for decades.
+### Pairing sequences lazily with `Iterator.zip()`
 
-The more acceptable solution from an industry perspective was implementing a DMZ at Level 3.5 of the Purdue Model. Enterprise IT would live above it, and the industrial OT environment would live below it. Note that this is still some level of connectivity. Traditionally, it was accomplished with two firewalls and some kind of jump host for traversing between the two environments when needed.
+Suppose you are checking a weather forecast against the temperatures recorded over the same four days. The predictions come from your model, while the actual values come from observations. To calculate each day’s error, you need to pair the values at the same position. Both sequences must cover the same days in the same order.
 
-Then the scope expanded, faster than practitioners could adapt.
+In Node.js 26 and earlier, if both sequences were arrays, you would typically use `.map()` with an index lookup:
 
-## Everything Wants Access
+That works well for arrays. But what if observations come from a generator, or your model returns an iterator of predictions? Index lookups won’t work on those inputs, and converting them to arrays means loading both sequences into memory first.
 
-Networking industrial systems beyond single factory floors made them far more robust and efficient. Ethernet and routing allowed for distributed control and telemetry not just inside a building, but across regional, national, and then international deployments. A single control centre could make real-time changes to power transmission across mountains and multiple substations via SCADA. A manufacturer could match production to demand down to the minute, second, or millisecond. Parts could be monitored for failure tolerances, and replacements planned months in advance.
+In Node.js 27, `Iterator.zip()` takes an iterable of iterables and returns a lazy iterator of pairs. We can calculate the errors with the same pipeline whether the inputs are arrays or iterators:
 
-But humans weren’t the limit! Computers could make these decisions on a massive scale, far faster than human operators alone. Raise production, lower production. Our society came to rely on this, with a massive push towards just-in-time logistics. Of course, that meant central SCADA servers needed bidirectional control of industrial devices across huge regions, via networks.
+Each pair contains a prediction and its corresponding observation. A positive error means the day was warmer than predicted; a negative error means it was cooler. The pairing and mapping happen one item at a time. Only the final `.toArray()` collects the errors into an array so we can print them together.
 
-Global power grids are a significant example, and they’ve changed enormously over the past ten years. Consider the advent of renewable energy. Firstly, wind and solar farms are made up of numerous generation devices, which must be coordinated and monitored individually across geographically disparate locations. Secondly, home generation necessitates smart meters to monitor usage and buy-back. Finally, there’s the problem of inertia. Traditional generation sources like nuclear, gas, and hydroelectric are high-inertia. Their output can be readily controlled through fuel, and they provide a lot of grid frequency stability during sudden spikes and drops in demand. Renewables provide far less inertia and are far less predictable. We can’t turn the wind on and off. That makes careful monitoring of detailed telemetry, and adjustments to load and generation at machine speed, essential.
+Another common use is the dot product of two vectors: multiply matching components, then add the products. This operation appears in graphics, machine learning, and numerical computing:
 
-Add centralised dispatch and repair with far fewer staff, plus mass consumer demand for exact, real-time electricity billing and status checking. The result? Many power companies around the world have little to no ability to switch to manual operations for more than a few days, if at all.
+Here we never collect the pairs or products into an intermediate array. We also use `mode: 'strict'` because a dot product requires vectors of equal length: silently ignoring extra components would hide an input error.
 
-All of this requires many inputs and outputs: telemetry from multiple industrial devices via fibre, copper, LTE, and radio; billing systems; customer portals; even computers in maintenance trucks.
+### Combining endless iterators: solar generation and household consumption
 
-And bulk electricity is just one example. Connectivity and centralisation have been huge cost and labour savers for every vertical around the world. Big industrial companies rely on central DCS and SCADA control, and the more geographically dispersed their systems are, the more connectivity they require.
+So far, our inputs have been arrays. But `Iterator.zip()` also works with iterators that have no end. Imagine a home with two power meters: one measures solar generation, and the other measures household consumption. Each meter gives us its current reading in watts whenever we poll it. Subtracting consumption from generation tells us whether the house has surplus power to export or needs to import power from the grid (assuming there is no battery).
 
-Take those supermarket refrigerators. Many countries hold supermarkets to regulatory standards for the temperature at which food is kept, and supermarkets don’t staff to have humans check this in real time. So most of it is done through mobile apps or central monitoring, which saves money, ensures regulations are met, and keeps food from spoiling. A thermometer that isn’t connected to anything is only useful when someone is standing in front of it.
+We can wrap each meter in an endless generator. Here we simulate the readings with random values so the example runs without hardware:
 
-## Everyone Wants Access
+Neither generator reads anything until we request a value from `netPower`. Each request polls both meters once and calculates the difference. Both input iterators can keep producing readings forever, but `.take(5)` limits this demo to five pairs. Collecting either input with `[...solar]` or `.toArray()` would never finish and would eventually exhaust memory.
 
-System efficiency is only part of the story, though. Human engineers and operators are expensive, and the 2020 pandemic forced remote support on many businesses that had never considered it. The cost savings were immediately clear to industrial operators and OEMs.
+These are synchronous, on-demand readings: the two meters are polled sequentially, close together, rather than at exactly the same instant. The loop takes five readings immediately; `zip()` does not add a polling interval. With real hardware, the callbacks would read the meters instead of generating random numbers.
 
-It costs an OEM far less to train and employ ten technicians in a central, regional office than to have one in every city or at every customer site. Those savings are passed on to customers in very tangible ways. While there have been holdouts who insist on local support at significant extra expense, the industry has shifted heavily to remote support for routine system monitoring and fault analysis.
+### Turning columns into objects with `Iterator.zipKeyed()`
 
-Assumptions about security controls are one of the most dangerous problems I encounter as a full-time incident responder in industrial environments. One of the most common is cybersecurity personnel assuming the only connectivity to OT is still the DMZ at Level 3.5 with a jump host. When I perform forensics, I typically find five to seven other remote access mechanisms. Some are software-based remote access tools. Others are extraneous modems, VPN concentrators, and wireless bridges installed by local staff and a multitude of vendors and subcontractors.
+Tuple arrays like `[prediction, observation]` are easy to read for two or three items, but once you have four or five parallel sources, positional destructuring gets easy to mix up.
 
-This isn’t even necessarily a contract violation. I’ve seen many major OEMs and specialist device suppliers add contractual language requiring some level of remote access in order to keep receiving support, or support within a reasonable SLA. I talk to numerous asset owners around the world, and even Fortune 50 and government clients struggle to change these terms. Some OEMs will simply only provide timely support via remote connection.
+`Iterator.zipKeyed()` accepts an object whose values are iterables. Each step yields an object with the same keys, so you can refer to values by name instead of position:
 
-So, as an OT cybersecurity industry, we have to work around this. We have to identify and evaluate these remote connections. We have to try to build segmentation and microsegmentation around them, if the OEMs and operations permit. If that fails, we monitor and log to the very best of our ability. But all changes to industrial environments are costly, and fighting OEM requirements isn’t just expensive. It can cause a life-safety incident.
+If an API returns each field as a separate array, like user IDs, names, and roles, `Iterator.zipKeyed()` lets you process them together as a lazy sequence of row objects. The arrays must describe the same records in the same order.
 
-## What’s Getting Hacked and Why?
+### Finishing pipelines with `Iterator.prototype.join()` and `includes()`
 
-Now that we understand the chaos of connectivity in modern industrial environments, we can talk about what’s getting hacked right now, and why. Why water? Why refrigerators?
+In Node.js 26, a common way to format a lazy iterator pipeline as a string was to call `.toArray().join(', ')` at the end. The final `.toArray()` allocated an array of strings that `.join()` consumed and discarded.
 
-A few unfortunate, incredibly predictable factors have led us here, and my colleagues and I have been screaming about them for years:
+V8 15.6 adds two terminal helpers directly onto `Iterator.prototype`:
 
-- Distributed industrial systems tend to be far more exposed than those in a single building. Whether it’s water pumps, wind turbines, refrigerators, or solar panels, if you have a bunch of standalone industrial environments in a field that need connectivity, the most cost-effective solution is a modem per unit or some other wireless link. Putting firewalls or concentrators in front of every modem is expensive. Keeping them updated and monitored is even more expensive. We’ve seen a two-week delay in updating them end in catastrophe. Which leads us to:
-- The organisations you see repeatedly hit have next to no money for IT, let alone cybersecurity. Manufacturing runs on thin margins, while water and some transport systems are municipally funded, with almost no budget for system updates or cybersecurity programs. It’s very easy to say “why don’t you just” put a firewall and fibre connection on every refrigerator. The cost of doing that is days of operational shutdown, and orders of magnitude more than a simple mobile router. Water has kept my colleagues and me awake, and at bars, far more than any other vertical. It’s essential to society, with next to no investment across large parts of the world.
-- The devices you see repeatedly hit are fairly homogeneous and well documented. Complex industrial systems of systems are, as a rule, hard to break in a way that’s both reliable and dangerous. They’re full of redundancies and analogue and digital safety controls. Reliable attacks used to require engineering expertise. However, AI, and LLMs specifically, are certainly lowering that barrier to entry. Without controls, they can reveal which verticals are least defended and most exposed, and which devices are popular globally for a given function. Since vendors have trended towards homogenisation, the most commonly exposed devices, and their interfaces and vulnerabilities, can be understood and automated against.
-- Fixing the vulnerability isn’t easy, even if the organisation is aware of it. Industrial systems have long lifecycles, sometimes 10 to 30 years. They’re engineered and tested by the OEM to work in a very specific technology stack and topology. Any alteration can, at best, disrupt the process and, at worst, lead to injury or death. Either outcome can be far more damaging than a casual hacker. Because of these lifecycles, and the inability to replace systems, I still deal with Windows 2000, CE, and XP every week. They can’t be removed from production or modified without express authorisation from the OEM and engineers, plus a significant outage and testing window. All of this adds up to huge expenses for the asset owner.
+- Iterator.prototype.join(separator): consumes the iterator and joins items into a string directly.
+- Iterator.prototype.includes(value): consumes the iterator until it finds a matching value (using SameValueZero equality, just like Array.prototype.includes()) and short-circuits immediately.
 
-As you can see, my colleagues and I have our work cut out for us. These systems are more connected than they have ever been. They contain out-of-support operating systems that can’t be replaced. Many of the most exposed systems are similar, well documented, and lack monitoring and basic cybersecurity controls because of budgets. And we’re now seeing the result first-hand in our cases: adversaries, enabled by LLM data gathering, are pinpointing these systems en masse and automating simple, disruptive attacks against the most exposed devices. That’s a very different scenario from the well-resourced, long-term state and criminal campaigns we’ve dealt with until now.
+For `join()`, let’s return to our sensor readings. This time we only need one temperature sensor, and we want to format five readings as a comma-separated string. As before, we simulate the hardware so you can run the example locally:
 
-## So, Why Don’t We Just Disconnect It?
+`.take(5)` makes the endless source finite, `.map()` formats each reading, and `.join()` builds the string without collecting an intermediate array. These five readings are taken immediately, with no delay between them. Without `.take(5)`, joining this endless iterator would never finish.
 
-The next time a headline lands about hacked pumps or freezers, and you feel the urge to ask why they don’t just disconnect it, remember that there’s rarely a single plug left to pull. These connections were built one sensible business decision at a time, and they now help keep the lights on, the water running, and the food cold.
+For `includes()`, imagine checking whether a commit message references a particular issue. `String.prototype.matchAll()` already returns an iterator, so we can extract the complete references and search them directly:
 
-None of this makes it acceptable to leave systems directly connected where a regulation prohibits it, or where any other feasible security solution exists that doesn’t pose a safety risk. There should absolutely be a best effort to rearchitect these environments and add essential security controls, like the [SANS Five ICS Cybersecurity Critical Controls](https://www.sans.org/white-papers/five-ics-cybersecurity-critical-controls). But these things take time, and a little empathy would go a long way towards understanding the uphill battle low-resourced organisations are fighting in the middle of the current onslaught.
+`includes()` stops as soon as it finds `APP-142`, without extracting the later reference. Matching complete references also avoids the false positive you would get from `message.includes('APP-14')`, which matches part of `APP-142`. The search consumes the iterator, so create a fresh one for another search.
 
-If you’re an enterprise security professional who’s angry about all this, good. We could use your help. Bring your frustration, and bring your curiosity too.
+## More accurate sums with `Math.sumPrecise()`
+
+Beyond iterator helpers, V8 15.6 also brings a useful addition for numerical calculations: `Math.sumPrecise()`. To see why it matters, let’s look at a familiar floating-point surprise.
+
+When you sum numbers with `.reduce((a, b) => a + b, 0)`, each addition rounds its intermediate result to the nearest representable 64-bit float. Over dozens or thousands of additions, those tiny rounding errors accumulate. Worse, if you add a small number (`0.1`) to a huge number (`1e20`) and later add `-1e20`, the `0.1` is lost completely during the first addition because a 64-bit float doesn’t have enough mantissa bits to hold both magnitudes at once.
+
+In Node.js 27, V8 15.6 enables `Math.sumPrecise()` by default. It accepts any iterable of numbers, computes the sum using an internal high-precision accumulator, and rounds only once at the very end:
+
+`Math.sumPrecise()` accepts any iterable, so it also works with the iterators from the previous section. You can pass the result of `.map()` directly into `Math.sumPrecise()` without calling `.toArray()` first:
+
+## `node:net/promises` and async-iterable TCP servers
+
+The core `node:net` module gets iterator support too.
+
+For years, `node:fs`, `node:dns`, `node:stream`, `node:timers`, and `node:readline` have all had `.promises` sub-modules. Yet `node:net` remained purely callback- and event-driven. If you wanted to spin up a TCP server on an ephemeral port in a test or connect a client socket using `async`/`await`, you had to wrap `'listening'`, `'connect'`, and `'error'` events by hand.
+
+In Node.js 26 and earlier, setting up a TCP server and client with `async`/`await` looked like this:
+
+Node.js 27 introduces the experimental `node:net/promises` module with two helpers, `listen()` and `connect()`, and makes `net.Server` itself an async iterable.
+
+Let’s try something fun and build a small TCP chat server. Each connected client can send a line of text, and the server forwards it to every other client, prefixed with the sender’s connection ID:
+
+Run the server from the companion repo:
+
+Then open two or three other terminals and run this command in each (with [netcat](https://man.openbsd.org/nc) installed):
+
+Each terminal receives its connection ID, for example `Connected as 127.0.0.1:54321`. Type a message and press Enter. The other terminals receive a line such as `127.0.0.1:54321 > Hello everyone!`. The server does not echo messages back to their sender. Press Ctrl+C in a client terminal to disconnect, or in the server terminal to close the chat and all active connections.
+
+With three netcat clients connected, each terminal receives the other clients’ messages:
+
+![A TCP chat server above three netcat clients exchanging messages, with each received message prefixed by the sender's address and port](https://nodejsdesignpatterns.com/_astro/tcp-chat.Ds3bKZa4_Z2qaq4n.webp)
+
+`listen()` resolves once the server is listening. The `clients` map tracks active sockets by their remote address and port, which distinguish connections to this server. These are connection labels, not permanent user identities: reconnecting can give a client a different port.
+
+Inside each handler, `readline` turns the socket’s byte stream into lines. TCP chunks do not correspond to messages: a line may arrive in several chunks, or one chunk may contain several lines. Each completed line is broadcast to every other active socket. The `finally` block removes disconnected clients and closes their resources.
+
+The outer connection loop starts each `handleConnection(socket)` call **without awaiting it**. That lets it accept the next client while earlier handlers wait for messages. Each handler still awaits its own incoming lines, so clients can remain connected and chat concurrently. The `.catch()` handles rejected handler promises; socket errors are handled separately, and `server.maxConnections = 10` caps open connections for this demo.
+
+## Virtual File System (`node:vfs`) is now unflagged
+
+Testing code that reads configuration files often means mocking `node:fs` or creating temporary directories and cleaning them up afterward. Bundling assets or templates into an archive poses a related problem: how can your application read them through its usual `node:fs` calls?
+
+The new `node:vfs` (Virtual File System) module was originally introduced behind `--experimental-vfs`, and in Node.js 27 it is unflagged and available out of the box (though still marked Experimental Stability 1 while the API settles).
+
+With `node:vfs`, you can create an isolated, in-memory file system with `vfs.create()`, populate it using standard `fs`-style methods, and mount it so regular `node:fs` operations (and `import` / `require()`) can read from it directly. `VirtualFileSystem` also supports Explicit Resource Management (`using`), which unmounts it when execution leaves the block:
+
+`memoryFs.mount()` mounts the virtual file system under a reserved namespace (`path.join(os.devNull, 'vfs')`, such as `/dev/null/vfs/1` on POSIX), so a virtual mount can never accidentally shadow or overwrite real files on your disk. If you want to compare this with working on real files, check out our guide on [reading and writing files in Node.js](https://nodejsdesignpatterns.com/blog/reading-writing-files-nodejs/).
+
+You can also use `node:vfs` through `--vfs-load` on the CLI without an experimental flag:
+
+That command mounts the companion repo’s `04-vfs/bundle` directory and runs its `index.js`, which prints `Hello from the VFS bundle`. You can also pass a ZIP archive; Node.js runs its `package.json` `"main"` or `index.js` entry point from the mounted archive. And if you use Single Executable Applications (SEA), `vfsArchive` is now mounted at layer 0 and automatically available inside Worker threads too.
+
+## More Node.js Core upgrades: `fs`, Permissions, Test Runner, and HTTP
+
+There are changes across the standard library too, from temporary files to HTTP server defaults.
+
+### Atomic temporary files with `fs.mkstemp()` and native `fs.glob()`
+
+Until now, if you needed a temporary file in Node.js, your safest built-in option was `fs.mkdtemp()` to create a temporary *directory*, and then opening a file inside it. Creating a random filename yourself and calling `fs.open()` was error-prone and required a retry loop in case of collisions.
+
+Node.js 27 adds APIs modeled on POSIX `mkstemp(3)`: `fs.mkstemp()`, `fs.mkstempSync()`, and `fsPromises.mkstemp()`. It atomically generates a unique filename (appending six random characters to your prefix) and opens the file in a single step, returning both the `path` and the open `FileHandle` (or file descriptor `fd`):
+
+The built-in `fs.glob()` (introduced in Node.js 22) was ported from JavaScript to native C++ in Node.js 27. The [maintainers’ benchmarks](https://github.com/nodejs/node/pull/65392#issuecomment-5443229793) show substantial speedups for some workloads, but gains vary by API and options, and one synchronous exclude-pattern workload regressed. Benchmark your own patterns before assuming a speedup.
+
+### Permission Model gets `--allow-env`
+
+As we covered in our guide to [environment variables in Node.js](https://nodejsdesignpatterns.com/blog/nodejs-environment-variables/), `process.env` is where most applications keep their most sensitive secrets (API keys, database URLs, signing tokens). It is also the very first place a compromised dependency looks when trying to exfiltrate credentials.
+
+Node.js 27 adds `--allow-env` to the Permission Model (`--permission`). When `--permission` is enabled, every environment variable not explicitly matched by `--allow-env` is scrubbed at process startup before any JavaScript runs (except runtime variables like `PATH`, `HOME`, `LANG`, and `NODE_OPTIONS`, plus variables explicitly loaded via `--env-file`):
+
+Node.js also scrubs disallowed variables from the underlying OS environment block and restricts access to `/proc/self/environ` on Linux. Native code loaded by Node.js sees the reduced environment too. This reduces accidental exposure; the Permission Model is not a sandbox for malicious code. You can remove a variable after reading it with `process.permission.drop('env', 'VARIABLE_NAME')`. Keep `NODE_ENV` explicitly if your application uses it, since it is not preserved by default.
+
+### Built-in Test Runner: stable watch mode and Jest-style mock helpers
+
+The built-in `node:test` runner has three updates:
+
+- Watch mode (node --test --watch) is now officially stable (Stability 2).
+- --test-forbid-only fails the test run if any test is marked with { only: true } or test.only(), so CI can catch accidental .only commits.
+- Shorthand methods on mocks: instead of wrapping simple return values or promises inside fn.mock.mockImplementation(() => ...), MockFunctionContext now has mockReturnValue(), mockResolvedValue(), mockRejectedValue(), and mockThrownValue():
+
+### Smarter HTTP & HTTP/2 defaults
+
+These three HTTP changes affect production web servers:
+
+1. http.Server keepAliveTimeout increased from 5 seconds to 65 seconds: Running a Node.js HTTP server behind an AWS Application Load Balancer (ALB), Nginx, or Cloudflare can produce intermittent 502 Bad Gateway errors when the proxy keeps an upstream connection available longer than Node.js keeps it open. AWS ALB, for example, defaults to a 60-second idle timeout, while Node.js historically set keepAliveTimeout to 5 seconds (5000 ms). If Node.js closes an idle socket just as the proxy reuses it, the forwarded request can fail with a 502. The actual socket timeout also includes keepAliveTimeoutBuffer (1 second by default). The new default keepAliveTimeout of 65 seconds (65000 ms) exceeds a 60-second proxy timeout. Check your proxy’s actual idle timeout and configure Node’s timeout to exceed it; 65 seconds does not cover every proxy configuration.
+2. req.headers and req.trailers now have a null prototype: The header dictionaries on incoming requests no longer inherit from Object.prototype (Object.getPrototypeOf(req.headers) === null), matching the existing behavior of req.headersDistinct and req.trailersDistinct. Only these header objects lose their prototype: req itself is still a regular IncomingMessage. We explain the reasoning just below, and the breaking changes section shows what to do if your code calls req.headers.hasOwnProperty(...).
+3. Larger HTTP/2 window sizes: node:http2 increased its default flow-control window sizes and trimmed per-request callback overhead, improving throughput on high-bandwidth HTTP/2 connections without manual tuning.
+
+#### Why remove the prototype from `req.headers`?
+
+If you are curious why this change was made: it seems a bit weird on the surface, right? Why would Node.js remove the prototype from an otherwise ordinary object?
+
+`req.headers` is a dictionary: the keys are header names chosen by whoever sent the request, and the values are whatever they sent. An ordinary JavaScript object is a poor fit for that kind of data, because it inherits properties from `Object.prototype` that have nothing to do with what you stored in it:
+
+Our empty `ordinary` object already “has” a `constructor`, inherited from its prototype. `__proto__` is even more surprising: `Object.prototype` defines an accessor with that name, so reading it returns the prototype, and assigning to it tries to change the prototype instead of storing a value. Both names are already lowercase, which matters here because Node.js lowercases incoming header names. A client can send a `constructor` or `__proto__` header, and it arrives under exactly that key.
+
+Notice that the example uses `__proto__` in two different ways. `{ __proto__: null }` is special object-literal syntax that creates the object with no prototype at all (`Object.create(null)` does the same thing, and the new Node.js code uses the literal form). The later `headers['__proto__'] = ...` is an ordinary assignment: with no inherited `__proto__` setter to intercept it, it simply stores an own property, like any other key.
+
+That’s the motivation in [PR #62900](https://github.com/nodejs/node/pull/62900), by Matteo Collina. Besides consistency with the `*Distinct` APIs, its commit message says the change “Fixes prototype pollution concerns where headers like `__proto__` could be interpreted as prototype manipulation.” My reading is that the goal is clean dictionary semantics: a key exists in `req.headers` only if the request sent it.
+
+The [March 2026 security releases](https://nodejs.org/en/blog/vulnerability/march-2026-security-releases) already included a real bug of this kind. CVE-2026-21710 was a denial-of-service flaw in `req.headersDistinct`, and it went like this:
+
+1. A request arrives with a header named __proto__.
+2. The application accesses req.headersDistinct.
+3. While building the dictionary, the lookup dest['__proto__'] resolves to the inherited Object.prototype instead of undefined.
+4. The accumulation logic calls .push() on that value, which isn’t an array.
+5. The resulting TypeError can crash the process if nothing catches it.
+
+Because the exception is thrown synchronously inside a property getter, an `'error'` event listener can’t catch it. The fix initialized the `headersDistinct` and `trailersDistinct` objects with `{ __proto__: null }`, which is the behavior PR #62900 later extended to `headers` and `trailers`. The advisory covers `headersDistinct` only, so it doesn’t mean `req.headers` had the same crash. The bug also stopped at crashing the process: a header couldn’t use it to modify `Object.prototype` globally. And a null-prototype object removes inherited-property hazards only where the headers are created. If you merge headers into an ordinary object, that target still has the inherited `__proto__` accessor.
+
+## Under the hood: V8 15.6, the 4 GB Heap Default, and OpenSSL 4.1
+
+Node.js 27 also updates its engine and bundled dependencies. Most of the V8 details below come from Joyee Cheung’s [Notable V8 changes from Node.js 26 to 27 (Alpha)](https://nodejs.org/en/blog/announcements/notable-v8-changes-from-node-js-26-to-27-alpha) on the Node.js blog, which is worth reading in full if you maintain performance-sensitive code or native tooling:
+
+- Default Heap Limit up to 4 GB on mid-sized machines: When `--max-old-space-size` is not specified, V8 now sets the default old-generation heap limit to half of physical memory (or container cgroup memory), clamped between 256 MB and 4 GB. Previously, machines with less than 15 GB of RAM were capped at 2 GB. On an 8 GB container or VM, the default old-generation limit therefore rises from 2 GB to 4 GB (and on a 6 GB machine, from 2 GB to 3 GB). These are old-generation limits, not limits on the process’s total memory use.
+- `Buffer` and `ArrayBuffer` memory affects garbage collection scheduling: Memory held by `Buffer` and `ArrayBuffer` instances is now included in V8’s global allocation limit. If your app allocates large off-heap buffers (for example, image processing or large file buffers), this affects when garbage collection is scheduled. The global allocation limit is distinct from the old-generation heap limit and does not impose a hard cap on the process’s total memory.
+- Slightly more memory per worker and per native object: Each V8 isolate (the main thread and every worker thread) uses about 180 KB more for property lookup caches, and every JavaScript object that wraps a native resource (a socket, file handle, stream, hash, or blob) may use about 16 bytes more on the heap and about 50 bytes more outside it. That’s negligible for most apps, but it adds up if you spawn many workers or hold many open sockets.
+- Fewer hard crashes on fatal errors: More fatal V8 errors now go through Node.js’s fatal error handling before aborting, so `--report-on-fatalerror` can produce a diagnostic report in cases that previously aborted without one. Some extreme inputs (overly long template literals, classes with too many elements, a regexp too large to compile) now throw a `RangeError` instead of crashing the process. The V8 post is explicit that this isn’t guaranteed, so don’t build program logic around it.
+- V8 15.6 performance improvements: These numbers come from V8’s own benchmarks, and the impact varies with platform, workload, and build configuration. Measure your application before counting on a speedup.
+  - Array.prototype.sort() now uses PowerSort instead of TimSort for large arrays (still stable, with better performance on tricky input distributions).
+  - await on an already-fulfilled Promise is faster and allocates less, and async generators are around 6% faster on the async-fs JetStream3 benchmark.
+  - Reading properties from objects with many (or deleted) properties is about 10% faster on JetStream3’s richards and about 20% faster on espree-wtb.
+  - JSON.parse() is faster on some inputs, such as payloads with many strings or arrays of objects that share the same shape.
+  - Worst-case garbage collection pauses dropped from about 45 ms to about 10 ms in V8’s benchmarks.
+  - Regexps are now compiled to machine code the first time they run instead of after a warmup. Regexps that run many times can get faster, while one-off regexps may get slower because they pay the compilation cost up front.
+  - Intl.Locale.prototype.variants is now available to inspect locale variants (for example, new Intl.Locale('sl-rozaj-biske').variants returns 'biske-rozaj').
+- OpenSSL 4.1.0, Undici 8.12, SQLite 3.54, and npm 12.1.0: Node.js 27 upgrades its bundled cryptography to OpenSSL 4.1.0, strips out all legacy OpenSSL 1.x compatibility shims and engine APIs, bumps `npm` to 12.1.0, and updates `NODE_MODULE_VERSION` to 153.
+
+## Heads-up: Node.js 27 breaking changes
+
+The Alpha window gives you time to check for breaking changes before the stable release. Most applications won’t encounter all of these, but check your code and dependencies for the following changes.
+
+### 1. `req.headers` has a `null` prototype
+
+As we saw in [the HTTP section](https://nodejsdesignpatterns.com/blog/whats-new-in-nodejs-27/#why-remove-the-prototype-from-reqheaders), the header dictionaries no longer have a prototype. Normal property access (`req.headers['content-type']`), destructuring, and `Object.keys()` work as before. What breaks is calling methods inherited from `Object.prototype`: `req.headers.hasOwnProperty('authorization')` now throws a `TypeError` (and calling a method looked up on a dictionary of external data was never a good idea anyway).
+
+Replace it with `Object.hasOwn(req.headers, 'authorization')`, which doesn’t rely on the object’s prototype and works on both Node.js 26 and 27. Please don’t “fix” this by restoring `Object.prototype` on the headers object. The `in` operator still works on null-prototype objects, but the updated Node.js docs advise against using it here, and `Object.hasOwn()` expresses the own-property check you actually mean.
+
+This runnable example shows both the failure and the fix. Keep in mind that checking for a header’s presence does not authenticate its value:
+
+### 2. Memory limits for multi-process deployments
+
+If you run multiple Node.js processes on a 6 GB or 8 GB machine and relied on the old implicit 2 GB heap cap to keep them from starving each other, pass `--max-old-space-size=2048` explicitly. Similarly, if your application holds hundreds of megabytes of `Buffer` data in memory alongside a large JS heap, be aware that `Buffer` allocations now influence V8’s global allocation limit and garbage collection scheduling.
+
+### 3. V8 serialization format and larger heap snapshots
+
+- v8.serialize(), structuredClone(), and postMessage() use a new V8 serialization format (which adds support for TypedArrays and resizable ArrayBuffers larger than 4 GB in structuredClone() and postMessage()). Node.js 27 can still read data serialized by older Node.js versions, but older Node.js versions cannot deserialize payloads produced by v8.serialize() in Node.js 27. Watch out if you store v8.serialize() blobs in Redis or a database shared across mixed Node.js versions during a rolling upgrade!
+- Heap snapshots are ~2x larger and include full script source: v8.writeHeapSnapshot() and v8.getHeapSnapshot() now always include internal objects, numeric values, and the complete source code of scripts (instead of truncating at 1024 characters). As always, treat .heapsnapshot files as sensitive data because they may contain secrets present in your source or memory.
+
+### 4. V8 behavior changes that can break tests and caches
+
+Most V8 changes are invisible, but a few can break code that depends on exact results:
+
+- Math results can differ in the last bit: V8 now uses LLVM’s libm for some Math functions. For example, Math.log(3) returns 1.0986122886681096 in Node.js 26 and 1.0986122886681098 in Node.js 27. Tests that compare floating-point results against hard-coded values may fail, so compare with a tolerance instead.
+- Math.random() produces a different sequence for the same --random-seed: the generator now runs xorshift128+ directly without a cache. If your tests or fixtures pass --random-seed to get reproducible values, expect new ones (with --random-seed=42, the first value changes from 0.6159659788862542 to 0.22876995452731475).
+- Array.prototype.sort() calls your comparator a different number of times: as we saw in the previous section, V8 switched to PowerSort for bigger arrays. Sorting with a consistent comparator gives the same result, but tests that count or record comparator calls, or comparators with side effects, can behave differently.
+- Code caches are invalidated more often: v8.cachedDataVersionTag() now changes whenever Node.js applies its own patches on top of V8, not only on V8 upgrades. The built-in module compilation cache and cached data from vm.Script or vm.Module can be invalidated across Node.js patch and minor releases, so expect more cache misses if you persist that data between upgrades.
+
+The [V8 changes post](https://nodejs.org/en/blog/announcements/notable-v8-changes-from-node-js-26-to-27-alpha) lists more edge cases, including fractional `getTimezoneOffset()` values for historical dates and stricter `take()`/`drop()` limits on iterators.
+
+### 5. Deprecations, removals, and platform changes
+
+- node:domain is now runtime-deprecated: Importing or using node:domain emits a runtime deprecation warning (and its internals have been ported to AsyncLocalStorage).
+- Private _http_* modules deprecated and _tls_* removed: Undocumented internal modules (_http_agent, _http_client, _http_common, _http_incoming, _http_outgoing, _http_server) are deprecated, and _tls_common / _tls_wrap have reached End-of-Life. Always import from node:http and node:tls.
+- OpenSSL engines and OpenSSL 1.x dropped: Building from source requires OpenSSL 3.0 or newer (bundled binary builds ship OpenSSL 4.1.0), and custom OpenSSL engine APIs (clientCertEngine, privateKeyEngine, crypto.setEngine()) are gone.
+- Calling Hmac.digest() multiple times is runtime-deprecated.
+- --no-experimental-websocket removed: The global WebSocket client is permanent and can no longer be disabled via CLI flag.
+- Intel macOS (darwin-x64) downgraded to experimental: Apple Silicon (darwin-arm64) remains Tier 1, while Intel macOS support is now experimental.
+
+## Should you use Node.js 27 today?
+
+For production, the release date matters. For library authors and local experiments, there is already code to try:
+
+- For production workloads: If you are reading this before April 2027, keep using an LTS release. Node.js 27 is still in its Alpha testing phase during that period. It is scheduled to enter Current in April 2027 and become LTS in October 2027 (with support until April 2030). Once a stable release is available, evaluate it against your application’s support requirements.
+- For open-source library and framework authors: Add it to your CI now. As we explained in our article on the new release schedule, the Alpha channel lets maintainers catch breaking changes (like null-prototype req.headers, V8 15.6 changes, or native add-on ABI updates) months before users upgrade. The Node.js team patched npm engines checks in this Alpha so CI can accept the -alpha prerelease tag.
+- For local experimentation and learning: Try Iterator.zipKeyed(), Math.sumPrecise(), node:net/promises, and node:vfs in a side project to get familiar with the APIs.
+
+If you want to install the Alpha side by side with your stable LTS runtime without messing up your system setup, check out our guide on [5 ways to install Node.js](https://nodejsdesignpatterns.com/blog/5-ways-to-install-node-js/) using version managers like `fnm` or `nvm`.
+
+## Wrapping up
+
+Node.js 27 starts the annual release schedule, with every major version going on to LTS. Its first Alpha includes V8 15.6, `node:net/promises`, an unflagged `node:vfs`, `fs.mkstemp()`, and `--allow-env`.
+
+I’d start by trying `Iterator.zipKeyed()` and `Iterator.prototype.join()` in a data-transformation script. They let you process parallel collections lazily without collecting intermediate arrays.
+
+For the full list of commits and low-level details, check out the [official Node.js 27.0.0-alpha.0.0.0 release notes](https://nodejs.org/en/blog/release/v27.0.0-alpha.0.0.0) and the companion post on [Notable V8 changes from Node.js 26 to 27 (Alpha)](https://nodejs.org/en/blog/announcements/notable-v8-changes-from-node-js-26-to-27-alpha).
+
+Thanks to the Node.js releasers, V8 maintainers, and contributors who worked on this first Alpha and the new release schedule.
+
+See you in the next article!
+
+## Frequently Asked Questions
+
+### Why did Node.js 27 start with an Alpha release in October 2026?
+
+Node.js 27 is the first version under the new Node.js release schedule. Instead of two major releases per year, Node.js now ships one major release every April, preceded by a six-month Alpha testing phase starting in October.
+
+### Will Node.js 27 become an LTS release even though 27 is an odd number?
+
+Yes. Under the new release schedule, the old odd/even rule is gone and every yearly major release becomes LTS. Node.js 27 will enter Current in April 2027, move to LTS in October 2027, and be supported until April 2030.
+
+### What are the biggest JavaScript features in Node.js 27?
+
+Thanks to V8 15.6, Node.js 27 ships `Iterator.zip()`, `Iterator.zipKeyed()`, `Iterator.prototype.join()`, `Iterator.prototype.includes()`, `Math.sumPrecise()`, and `Intl.Locale.prototype.variants` enabled by default.
+
+### How did the default memory limit change in Node.js 27?
+
+When `--max-old-space-size` is not set, V8 now defaults to half of physical memory clamped between 256 MB and 4 GB (meaning an 8 GB machine gets a 4 GB heap instead of 2 GB). Additionally, memory held by `Buffer` and `ArrayBuffer` instances now counts toward V8’s global allocation limit, affecting when garbage collection runs.
+
+### Should I run Node.js 27 in production?
+
+If you are reading this before April 2027, keep production workloads on an LTS release. Node.js 27 is still in its Alpha testing phase during that period, intended for library authors, CI pipelines, and experimentation. It is scheduled to enter Current in April 2027 and LTS in October 2027. Once a stable release is available, evaluate it against your application’s support requirements.

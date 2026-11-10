@@ -1,99 +1,89 @@
-Today I'm introducing a new interpolating spline. Its name is S9. Without further demagoguery, here it is -
+In July, we [announced a series of planned updates](https://blog.pypi.org/posts/2026-07-22-ui-updates/) to the PyPI user interface. Shaped by [user research with members of the Python community](https://github.com/pypi/warehouse/issues/20111), the updates aim to improve how we surface security signals and display package details.
 
-You can click on knots and drag to see how this thing works.
+We're pleased to share that this work is now complete and live on [PyPI](https://pypi.org/).
 
-For comparison with other splines, [here](https://gasiulis.name/interpolating-splines/) is a demo. And [here](https://github.com/aurimasg/splines) you can find the implementation source.
+## Context[¶](https://blog.pypi.org/posts/2026-11-06-ui-updates-complete/#context)
 
-## Why automatic spline at all?
+With the rapid growth of the Python ecosystem, PyPI has become an increasingly attractive target for malicious actors. In response, the PyPI team has [delivered many security features](https://docs.pypi.org/about/security-and-internals/#pypi-security-features) while taking a more active role in helping PyPI users assess and understand package security.
 
-For decades people were used to manually clicking and dragging cubic Bézier points until they developed Stockholm syndrome for it. Sometimes experienced designers will even tell you about having some magic rules like "keeping control arm lengths to about a third of chord length" which is good advice, but only if no better option is available. The fact is, humans cannot manually come up with good looking sequences of curves. The problem is inability to see subtle variations in the curvature of polynomial curves.
+[Digital attestations](https://blog.pypi.org/posts/2024-11-14-pypi-now-supports-digital-attestations/), introduced in 2024, are an example of this effort, providing a verifiable record of a release file's *provenance* (where it came from). However, provenance and attestations are still unfamiliar concepts for many PyPI users, and PyPI's interface did little to communicate their meaning, importance, or limitations.
 
-So what is this curvature anyway? The best way to explain is using a related concept called [osculating circle](https://en.wikipedia.org/wiki/Osculating_circle). It is an approximation of how the curve is bending at any point on it. Take a look at this demo -
+To address this, PyPI partnered with [Kabu Creative](https://kabucreative.com/) to bring clearer security signals to the PyPI UI, implementing the recommendations developed in the [OpenSSF Attestations Style Guide](https://repos.openssf.org/attestations-style-guide).
 
-If you play with this for long enough, you will see a pattern. If a circle size along the curve changes very little, the curve looks better. If it changes a lot, the curve looks worse. This smoothness of how the circle changes along the curve is called curvature variation. Less variation is better.
+Here's a look at what's changed, what it means for you, and what actions you can take.
 
-We can visualise this in a different way. If we record the reciprocal of osculating circle radius on every step of the curve, we get curvature profile of a curve.
+## The New Security Tab[¶](https://blog.pypi.org/posts/2026-11-06-ui-updates-complete/#the-new-security-tab)
 
-Now you can see another pattern. If this plot is smooth, the curve also looks smooth.
+The new **security tab** communicates release provenance states and displays per-file attestations, giving you a dedicated place to verify where the release files came from.
 
-However, it can be very difficult to see how smooth or not smooth this blue function is. Especially in absence of large spikes and multiple turns. Instead, let me show you another related plot. Here, in red, is a plot of a function representing curvature variation of the curve. And the rule is simple - thinner this plot gets, less curvature variation the curve has. We want the red part to be as close to the horizontal grey line as possible. For example, a section of a circle will have an integral (red number next to function plot) of this function equal to zero.
+### Provenance States[¶](https://blog.pypi.org/posts/2026-11-06-ui-updates-complete/#provenance-states)
 
-As you can see, it can be quite hard to get this red function to relax. But it can still be worse though. This is just one segment. How about we connect two curves?
+PyPI calculates each release's provenance state by checking whether each release file has an attestation. Typically, a release will be in one of two states:
 
-See now you have to juggle more than two balls - you need to make individual curves smooth, but also keep the connection between the curves continuous too. In other words, the blue function must not have any gaps and the red function must stay as flat as possible.
+#### Full Provenance[¶](https://blog.pypi.org/posts/2026-11-06-ui-updates-complete/#full-provenance)
 
-This gets worse with every additional curve because polynomial curves have this property where changing one side of it will change curvature on the other side as well.
+This means that 100% of the release files have attestations, carrying either or both of the supported attestation types:
 
-At this point you should see that trying to get harmony out of 20 or 30 connected curves has the same entertainment value as colonoscopy. This is what splines solve. Automatic smoothness of individual segments and continuity between curves.
+**[PyPI Publish](https://docs.pypi.org/attestations/publish/v1/) attestations** confirm the file was published by a [PyPI Trusted Publisher](https://docs.pypi.org/trusted-publishers/):
 
-## The goal.
+**[SLSA Build Provenance](https://slsa.dev/spec/v1.2/build-provenance) attestations** link the file back to its exact source commit, build platform, and instructions:
 
-The goal for S9 is to look good and to adapt to changes smoothly so it is useful in interactive CAD applications. This requires the following -
+You can review attestation metadata directly in the UI, or click on the transparency log link for more information.
 
-- Easy formation of round objects. It is easier to add more knots to reduce roundness than to add knots to increase roundness.
-- Maximum curvature only at knots or near knots. It must not have spikes of curvature in the middle between two knots.
-- Smooth transitions for any change in knot configuration. It must not have sudden changes of direction or form when the user drags knots.
-- Minimize unwanted inflections. Avoid situations where knots find themselves in low curvature valleys.
-- Hard maximum of one inflection per segment.
+#### No Provenance[¶](https://blog.pypi.org/posts/2026-11-06-ui-updates-complete/#no-provenance)
 
-The primary goal is roundness. I want a spline which feels natural for forming fundamentally round and smooth objects.
+"No provenance" simply means that no file in the release has an attestation. This is typical for older releases or projects that have not yet configured Trusted Publishing. **No provenance does not necessarily indicate that a release or release file is malicious; it instead means that the *file origin cannot be cryptographically verified***.
 
-## What are the current best splines?
+When there is no provenance, you should rely on surrounding trust signals to assess security, such as maintainer history, release patterns, and repository activity. If you maintain the package, consider using [Trusted Publishing](https://docs.pypi.org/trusted-publishers/) with a [publisher that generates attestations](https://docs.pypi.org/attestations/producing-attestations/) for your next release.
 
-At the moment there are very few splines that are optimized for the same goal as S9. In my opinion, the best published G2-continuous interpolating spline is [this one](https://raphlinus.github.io/curves/2018/12/21/new-spline.html). In fact, it is very good, only using one cubic curve to connect a pair of knots. I doubt you can do much better than this with a single cubic. Second best is [κ-Curves](https://zhipeiyan.github.io/projects/kCurves/kCurves.pdf), which is implemented in Adobe Illustrator as a "Curvature" tool. Using quadratic curves, but has a few fundamental problems where the solver can fail without special case handling. Then there is [Hobby](https://tug.org/TUGboat/tb34-2/tb107jackowski.pdf) spline. A very old one. It does not guarantee G2 continuity, but the solver is much simpler. Apple Keynote and some other applications use it.
+### Provenance Warnings[¶](https://blog.pypi.org/posts/2026-11-06-ui-updates-complete/#provenance-warnings)
 
-There are some other, more famous splines like Catmull-Rom. I'm sure they have use cases even today, but they have no use in any even remotely serious CAD application. In fact, I would argue that any locally solved spline would have a flaw somewhere that cannot be fixed.
+Provenance warnings are designed to help you identify when a file may not have come from the project's maintainers, for example, if an attacker has taken over an account or a publishing workflow.
 
-## Some facts about the spline.
+When provenance metadata looks unusual or conflicts with a project's history, PyPI surfaces a prominent warning. Many warnings have legitimate explanations, but each one is worth checking before you install.
 
-I decided to call this spline S9 because it is my 9th attempt to come up with a decent spline. I still have the first 8.
+This means that some files carry attestations while others do not (e.g., wheels were published via Trusted Publishing, but the source tarball was uploaded using an API token).
 
-- This spline is curvature-continuous at knots. This is called G2 continuity.
-- Knots are connected using non-polynomial curves based on the Cesàro equation.
-- Has lower curvature variation and better roundness for a wider subset of inputs than most splines in the same category.
+Exercise caution if you see this warning. Check release notes for build issues or ask in the project's issue tracker before installing.
 
-## How does it work?
+This warning indicates that files within the same release originate from different build systems or source repositories.
 
-Fundamentally this spline works in a similar way to Hobby spline. It has two separate elements to it -
+Check the attestation metadata to confirm whether all files came from sources controlled by the maintainers.
 
-- Find a way to create a curve only given two tangent angles. One at the beginning of the curve and another at the end.
-- Run a global solver which rotates these angles at each knot until curvatures of neighbouring segments match at knots.
+This warning tells you that the release files originated from a different repository or workflow than a previous release. While often legitimate (such as an organization name change or repository migration), it can also indicate a compromised pipeline or account takeover.
 
-The solver part is not a problem. The issue is how to come up with a curve parametrized by two angles. And it is harder than it looks.
+If you see this warning, check the project release notes or official channels to confirm that an infrastructure migration was planned.
 
-## The curve.
+This means that a project that previously published with attestations has changed to uploading release files without them.
 
-The final and the most important part is the curve this spline is made of. After years of attempts, the best I was able to do is to describe the curve as a function of arc length.
+Check whether the maintainers intentionally changed their publishing process, for example by switching back to API tokens, or by changing their publishing configuration so that it no longer generates attestations. If this is unexpected, treat the release with skepticism until verified.
 
-For greek letter connoisseurs, [here](https://www.desmos.com/calculator/qca9hs1dyx) is an implementation of the curve in Desmos graphing calculator. That thing is powerful.
+To learn more about provenance and attestations, including provenance warnings, see our [user documentation](https://docs.pypi.org/using-pypi/package-security/provenance/).
 
-Curve math is explained in detail in comments for [S9 curve](https://github.com/aurimasg/splines/blob/main/Splines/S9Curve.h). Weight computation rules are sprinkled around in the [solver](https://github.com/aurimasg/splines/blob/main/Splines/SplineS9.cpp).
+## Redesigned Project Detail Page[¶](https://blog.pypi.org/posts/2026-11-06-ui-updates-complete/#redesigned-project-detail-page)
 
-The curve solver is given two tangent angles and two weight parameters which are somewhat abstract, but the idea is as follows -
+To support these changes, the project detail page has also been updated:
 
-- Weight of one gives a linear change of curvature.
-- Weight of zero gives maximum curvature. Practically it is a cusp.
-- Weight in between transitions from linear curvature change to more and more violent turn as weight decreases.
+- Provenance warnings now appear at the top of the page, alongside status banners for yanked releases, archived projects, and pre-releases. If a project or release is quarantined, only the quarantine banner is shown, as it takes precedence over all other warnings and banners.
+- When a release has full provenance or provenance warnings, its provenance state is displayed in the sidebar, linking through to the security tab for more information.
+- Metadata is now ordered by utility and labeled as "PyPI data" or "Data verified by PyPI", replacing the old design where data was grouped and ordered by verification status.
 
-For two weights of 1, the curve is identical to the [Euler spiral](https://en.wikipedia.org/wiki/Euler_spiral). This formula also has extra knobs to control curvature change near ends when weights decrease.
+## Release Files and Release History[¶](https://blog.pypi.org/posts/2026-11-06-ui-updates-complete/#release-files-and-release-history)
 
-Weights are calculated from start and end angles. Which, like velocity function for Hobby spline, reduces a number of free parameters to two.
+The redesigned **release files tab** helps you find the right file by searching and filtering long lists. You can also view the provenance state of each file within the table, and quickly identify late files, which are marked with an orange warning icon.
 
-So what does this curve look like?
+Late file warnings are shown when one or more files were uploaded more than 14 days after the initial release timestamp. These warnings only appear on releases prior to July 2026, when a policy was introduced to [reject new files after 14 days](https://blog.pypi.org/posts/2026-07-22-releases-now-reject-new-files-after-14-days/).
 
-Input is two tangent angles you can adjust with sliders.
+The **release history tab** now also provides more details about each release, exposing file count, provenance state, and release status (i.e., quarantined, yanked, archived, or pre-release).
 
-This curve, when used with automatic weight computation, will form high curvature spikes at the ends for large angles. This is a requirement for this type of spline. But for low to medium angles, it does have very little curvature variation which was the goal.
+## Getting Help[¶](https://blog.pypi.org/posts/2026-11-06-ui-updates-complete/#getting-help)
 
-## Final remarks.
+Alongside the interface updates, [PyPI's user documentation](https://docs.pypi.org/) has been extended to help you better navigate package security. Read our [package security guide](https://docs.pypi.org/using-pypi/package-security/introduction/) to learn about:
 
-The source repository includes implementation of both curve solver and spline solver. However, it is not meant to be a full implementation of path construction solution for CAD. For example, it does not include G2-continuous transitions from straight to curved segments, sharp corners or angle locking. These features would be independent additions.
+## Looking Ahead & Acknowledgments[¶](https://blog.pypi.org/posts/2026-11-06-ui-updates-complete/#looking-ahead-acknowledgments)
 
-## Further reading.
+The new security tab gives PyPI a dedicated home for future attestation types and security notices. To help the wider open source ecosystem benefit from this work, we've also [published a case study in the OpenSSF Attestations Style Guide](https://repos.openssf.org/attestations-style-guide/pypi-case-study) detailing the design patterns and warnings developed during this project.
 
-Here is a minimal list of resources for anyone interested in curves and splines -
+This initiative was funded by the [Open Source Security Foundation](https://openssf.org/) and implemented by [Kabu Creative](https://kabucreative.com/). We would like to thank [Dustin Ingram](https://github.com/di), [Zach Steindler](https://github.com/steiza), and the members of the [OpenSSF Securing Software Repositories Working Group](https://repos.openssf.org/) for championing this effort. Special thanks to [Mike Fiedler](https://github.com/miketheman), [Jacob Coffee](https://github.com/JacobCoffee), and members of the PyPI team for their thoughtful design feedback and code reviews, [@cofiem](https://github.com/cofiem) for their contributions to the new release files tab, and our [user interview participants](https://github.com/pypi/warehouse/issues/20111) and community testers for helping shape the final design.
 
-[Minimum Curvature Variation Curves, Networks, and Surfaces for Fair Free-Form Shape Design](https://www2.eecs.berkeley.edu/Pubs/TechRpts/1993/Archive/CSD-93-732.pdf). Henry Packard Moreton. 1992.
-[From Spiral to Spline: Optimal Techniques in Interactive Curve Design](https://levien.com/phd/thesis.pdf). Raphael Linus Levien. 2009.
-[Typographers, programmers and mathematicians, or the case of an æsthetically pleasing interpolation](https://tug.org/TUGboat/tb34-2/tb107jackowski.pdf). Bogusław Jackowski. 2013.
-[κ-Curves: Interpolation at Local Maximum Curvature](https://zhipeiyan.github.io/projects/kCurves/kCurves.pdf). Zhipei Yan, Stephen Schiller, Gregg Wilensky, Nathan Carr, Scott Schaefer. 2017.
+Finally, we would like to thank the OpenSSF for its funding and continued partnership in securing the Python packaging ecosystem.

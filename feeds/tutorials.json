@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-09T15:30:46Z",
+  "updated": "2026-11-10T01:18:31Z",
   "items": [
     {
       "id": "devto-4943245",
@@ -86,27 +86,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4941092",
-      "title": "gp-grid: A Free, Open-Source TypeScript Data Grid for React, Vue, and Angular (No Paywalled Features)",
-      "desc": "By Hadil Ben Abdallah | 15 min read",
-      "tag": "tutorial",
-      "published": "2026-11-02T09:05:46Z",
-      "order": 8,
-      "url": "https://dev.to/hadil/gp-grid-a-free-open-source-typescript-data-grid-for-react-vue-and-angular-no-paywalled-5heb",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Ffhh705ti5amsemyc79e9.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAgEF/8QAFgEBAQEAAAAAAAAAAAAAAAAAAQAC/9oADAMBAAIQAxAAAAHPYuhCyP/EABQQAQAAAAAAAAAAAAAAAAAAADD/2gAIAQEAAQUCD//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABYQAQEBAAAAAAAAAAAAAAAAAAAxIP/aAAgBAQAGPwJE1//EABgQAQEBAQEAAAAAAAAAAAAAAAABEWFB/9oACAEBAAE/IepeG8LPWpVrX//aAAwDAQACAAMAAAAQEZ//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAWEQEBAQAAAAAAAAAAAAAAAAAAARH/2gAIAQIBAT8QjI//xAAbEAEAAgIDAAAAAAAAAAAAAAABABExQSGB8f/aAAgBAQABPxAKC08WLOTDsiI5kwqKEVOqiqrU/9k=",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4958335",
       "title": "One Markdown File Can Hijack Your AI Coding Agent: The Hidden Cost of Blindly Trusting AGENTS.md",
       "desc": "By 𝗝𝗼𝗵𝗻 | 8 min read",
       "tag": "tutorial",
       "published": "2026-11-05T15:30:00Z",
-      "order": 9,
+      "order": 8,
       "url": "https://dev.to/johnnylemonny/one-markdown-file-can-hijack-your-ai-coding-agent-the-hidden-cost-of-blindly-trusting-agentsmd-167n",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fgp9mzlfxjcl32v27828r.jpg",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAgMABP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHhtFIicf/EABkQAAEFAAAAAAAAAAAAAAAAABAAARESIf/aAAgBAQABBQJVwy5//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFxAAAwEAAAAAAAAAAAAAAAAAEBEgIf/aAAgBAQAGPwIaq//EABsQAQADAQADAAAAAAAAAAAAAAEAESExEHGR/9oACAEBAAE/ITkprPsAFoj3Crh2NVXkDfH/2gAMAwEAAgADAAAAECx//8QAFREBAQAAAAAAAAAAAAAAAAAAAAH/2gAIAQMBAT8QR//EABYRAQEBAAAAAAAAAAAAAAAAAAABYf/aAAgBAgEBPxC4r//EABsQAAMBAQADAAAAAAAAAAAAAAABESExYXGB/9oACAEBAAE/EEXuZ0dTbI8ILJyJyYo6kokon408n//Z",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4941092",
+      "title": "gp-grid: A Free, Open-Source TypeScript Data Grid for React, Vue, and Angular (No Paywalled Features)",
+      "desc": "By Hadil Ben Abdallah | 15 min read",
+      "tag": "tutorial",
+      "published": "2026-11-02T09:05:46Z",
+      "order": 9,
+      "url": "https://dev.to/hadil/gp-grid-a-free-open-source-typescript-data-grid-for-react-vue-and-angular-no-paywalled-5heb",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Ffhh705ti5amsemyc79e9.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAgEF/8QAFgEBAQEAAAAAAAAAAAAAAAAAAQAC/9oADAMBAAIQAxAAAAHPYuhCyP/EABQQAQAAAAAAAAAAAAAAAAAAADD/2gAIAQEAAQUCD//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABYQAQEBAAAAAAAAAAAAAAAAAAAxIP/aAAgBAQAGPwJE1//EABgQAQEBAQEAAAAAAAAAAAAAAAABEWFB/9oACAEBAAE/IepeG8LPWpVrX//aAAwDAQACAAMAAAAQEZ//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAWEQEBAQAAAAAAAAAAAAAAAAAAARH/2gAIAQIBAT8QjI//xAAbEAEAAgIDAAAAAAAAAAAAAAABABExQSGB8f/aAAgBAQABPxAKC08WLOTDsiI5kwqKEVOqiqrU/9k=",
       "color": "#3B49DF"
     },
     {
@@ -146,12 +146,24 @@
       "color": "#3B49DF"
     },
     {
+      "id": "devto-4978768",
+      "title": "Trocar de provedor não deveria ser uma dor de cabeça",
+      "desc": "By Clinton Rocha | 7 min read",
+      "tag": "tutorial",
+      "published": "2026-11-05T17:49:45Z",
+      "order": 13,
+      "url": "https://dev.to/he4rt/trocar-de-provedor-nao-deveria-ser-uma-dor-de-cabeca-50ee",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F5t380u5l0r4uezqilpd5.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAQMAAv/EABYBAQEBAAAAAAAAAAAAAAAAAAACBP/aAAwDAQACEAMQAAABiT2mk5T/xAAVEAEBAAAAAAAAAAAAAAAAAAARIP/aAAgBAQABBQJhj//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABURAQEAAAAAAAAAAAAAAAAAAAAh/9oACAECAQE/Aar/xAAWEAADAAAAAAAAAAAAAAAAAAAQIDH/2gAIAQEABj8CWn//xAAeEAEAAQMFAQAAAAAAAAAAAAABABExoRAhQVFhcf/aAAgBAQABPyGq+J8cRY24lRsMV7R90//aAAwDAQACAAMAAAAQQq//xAAVEQEBAAAAAAAAAAAAAAAAAAAAIf/aAAgBAwEBPxCq/8QAGBEAAgMAAAAAAAAAAAAAAAAAAAERMUH/2gAIAQIBAT8QjDG6H//EABwQAQEAAgIDAAAAAAAAAAAAAAERACExYVGBkf/aAAgBAQABPxCylS00U9Ypwkuy3ErvR1lNX63gSgOecD2d4lalfLgEuf/Z",
+      "color": "#3B49DF"
+    },
+    {
       "id": "devto-4991005",
       "title": "Being, Doing, Having: Why 50 Years of Senior Craft Lives in Context, Not Code",
       "desc": "By Randal L. Schwartz | 29 min read",
       "tag": "tutorial",
       "published": "2026-11-06T23:51:03Z",
-      "order": 13,
+      "order": 14,
       "url": "https://dev.to/gde/being-doing-having-why-50-years-of-senior-craft-lives-in-context-not-code-29dl",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fmc7bd0mpw7k0aq4vsqj4.jpg",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwIE/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAH/2gAMAwEAAhADEAAAAcbBdrSMH//EABkQAAMAAwAAAAAAAAAAAAAAAAABEQIQIv/aAAgBAQABBQIUIjLlao3T/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFhAAAwAAAAAAAAAAAAAAAAAAECAh/9oACAEBAAY/AhG//8QAGxAAAwEBAAMAAAAAAAAAAAAAAAERITFBUYH/2gAIAQEAAT8h8X0W79LPWCqgjiKuDm0//9oADAMBAAIAAwAAABCn3//EABcRAAMBAAAAAAAAAAAAAAAAAAABETH/2gAIAQMBAT8QKph//8QAFxEBAAMAAAAAAAAAAAAAAAAAABEhMf/aAAgBAgEBPxBc6//EABsQAQACAwEBAAAAAAAAAAAAAAEAESExQVFh/9oACAEBAAE/EBblTxxnaqmBMst2XoiuD6x4Styq66dgVsJlDWif/9k=",
@@ -163,7 +175,7 @@
       "desc": "By Martin Šošić | 7 min read",
       "tag": "tutorial",
       "published": "2026-11-05T09:21:35Z",
-      "order": 14,
+      "order": 15,
       "url": "https://dev.to/wasp/a-maintainers-advice-on-contributing-to-open-source-in-2026-4ea1",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto/https%3A%2F%2Fwasp.sh%2Fimg%2Fblog%2F2026-08-13-advice-for-contributing-in-2026%2Fbanner.webp",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAQIE/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEAMQAAAB2JQFSf/EABgQAAIDAAAAAAAAAAAAAAAAAAEhABAg/9oACAEBAAEFAshwqv/EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABcQAQEBAQAAAAAAAAAAAAAAAAABQSD/2gAIAQEABj8CRWca/8QAHxAAAgAGAwEAAAAAAAAAAAAAAAERITFBUXFhgZHR/9oACAEBAAE/IV1HQ5P4JVDcsNCcVf0oPBcyxvn0f//aAAwDAQACAAMAAAAQ0Y//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/ED//xAAdEAACAwACAwAAAAAAAAAAAAABEQAhMUFRgbHB/9oACAEBAAE/EENqh7iU91YXUZHAAhsG3b+SwSS1ZeIAGWHuGmLlO+VNnJQKqHBW3s5//9k=",
@@ -175,7 +187,7 @@
       "desc": "By S M Tahosin | 10 min read",
       "tag": "tutorial",
       "published": "2026-11-09T05:56:52Z",
-      "order": 15,
+      "order": 16,
       "url": "https://dev.to/smtahosin/php-dies-after-every-request-how-the-zend-engine-actually-runs-your-code-2843",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fiili.io%2FnMfkIcB.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAgMAAQT/xAAVAQEBAAAAAAAAAAAAAAAAAAAAAv/aAAwDAQACEAMQAAABxWtiVwxP/8QAGhAAAgMBAQAAAAAAAAAAAAAAAAECESEQQf/aAAgBAQABBQJONXAaKw83n//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABcQAAMBAAAAAAAAAAAAAAAAAAAQMRH/2gAIAQEABj8ChFqr/8QAGhABAQEAAwEAAAAAAAAAAAAAAREAEDFRQf/aAAgBAQABPyGDTfeD2ar+N5iw5VVa5V3/2gAMAwEAAgADAAAAEMt//8QAFxEBAQEBAAAAAAAAAAAAAAAAAQARIf/aAAgBAwEBPxB5Gt//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/ED//xAAcEAEAAwACAwAAAAAAAAAAAAABABEhMUFhcaH/2gAIAQEAAT8QAKuyHd9wRaO9bn2KKqi7Bl1Vrl+YLWuWIgV1mRuOHbzANcrif//Z",
@@ -187,7 +199,7 @@
       "desc": "By Randal L. Schwartz | 29 min read",
       "tag": "tutorial",
       "published": "2026-11-01T00:41:17Z",
-      "order": 16,
+      "order": 17,
       "url": "https://dev.to/gde/all-that-glisters-is-softmax-shiny-object-interns-airplane-magazine-execs-and-why-ai-labs-can-18af",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fqlk0251k4s6ucmxlzfnw.jpg",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwIE/8QAFQEBAQAAAAAAAAAAAAAAAAAAAQL/2gAMAwEAAhADEAAAAc6Bd0w3A//EABsQAQACAgMAAAAAAAAAAAAAAAEAAhJBAxEx/9oACAEBAAEFAsSUKjyFVxJ3D3Wv/8QAFhEBAQEAAAAAAAAAAAAAAAAAABEh/9oACAEDAQE/AcR//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAGBAAAgMAAAAAAAAAAAAAAAAAEDEAAVH/2gAIAQEABj8CYyM0P//EABoQAQEAAwEBAAAAAAAAAAAAAAEAESFBUcH/2gAIAQEAAT8hChld2XiR818W6zwgMvbu/9oADAMBAAIAAwAAABD3L//EABYRAQEBAAAAAAAAAAAAAAAAAAEAIf/aAAgBAwEBPxDEg1v/xAAWEQEBAQAAAAAAAAAAAAAAAAABABH/2gAIAQIBAT8QNY2//8QAGxABAAMBAQEBAAAAAAAAAAAAAQARIUGBUfD/2gAIAQEAAT8QctGbpcoZJxCI7RwIIo8hl0wCLEV21+9hAmnX7kvXbvrP/9k=",
@@ -199,22 +211,10 @@
       "desc": "By Elsie Rainee | 2 min read",
       "tag": "tutorial",
       "published": "2026-11-02T11:35:22Z",
-      "order": 17,
+      "order": 18,
       "url": "https://dev.to/elsie-rainee/two-truths-and-a-lie-developer-edition-k8n",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fsyugm3scjglnspzm8ays.jpg",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAgMBBP/EABYBAQEBAAAAAAAAAAAAAAAAAAABAv/aAAwDAQACEAMQAAAB4mWmToGv/8QAGRAAAwADAAAAAAAAAAAAAAAAAAEQAhEh/9oACAEBAAEFAkjUZiPkZ//EABYRAQEBAAAAAAAAAAAAAAAAAAABQf/aAAgBAwEBPwGsf//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABQQAQAAAAAAAAAAAAAAAAAAADD/2gAIAQEABj8CD//EABsQAAICAwEAAAAAAAAAAAAAAAABESExQZEQ/9oACAEBAAE/IUQLauDSjXBKos8lnmR//9oADAMBAAIAAwAAABBZv//EABcRAQEBAQAAAAAAAAAAAAAAAAEAESH/2gAIAQMBAT8QXcIJ/8QAGBEBAQADAAAAAAAAAAAAAAAAAQARIVH/2gAIAQIBAT8QVzqHt//EAB0QAAICAgMBAAAAAAAAAAAAAAERACExUUFxsZH/2gAIAQEAAT8QMAJHLWfsQGBjS0YsKEdcwIqJO1ANtFhTgEkapeRsq1ql5DIQFdT/2Q==",
-      "color": "#3B49DF"
-    },
-    {
-      "id": "devto-4978768",
-      "title": "Trocar de provedor não deveria ser uma dor de cabeça",
-      "desc": "By Clinton Rocha | 7 min read",
-      "tag": "tutorial",
-      "published": "2026-11-05T17:49:45Z",
-      "order": 18,
-      "url": "https://dev.to/he4rt/trocar-de-provedor-nao-deveria-ser-uma-dor-de-cabeca-50ee",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F5t380u5l0r4uezqilpd5.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAQMAAv/EABYBAQEBAAAAAAAAAAAAAAAAAAACBP/aAAwDAQACEAMQAAABiT2mk5T/xAAVEAEBAAAAAAAAAAAAAAAAAAARIP/aAAgBAQABBQJhj//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABURAQEAAAAAAAAAAAAAAAAAAAAh/9oACAECAQE/Aar/xAAWEAADAAAAAAAAAAAAAAAAAAAQIDH/2gAIAQEABj8CWn//xAAeEAEAAQMFAQAAAAAAAAAAAAABABExoRAhQVFhcf/aAAgBAQABPyGq+J8cRY24lRsMV7R90//aAAwDAQACAAMAAAAQQq//xAAVEQEBAAAAAAAAAAAAAAAAAAAAIf/aAAgBAwEBPxCq/8QAGBEAAgMAAAAAAAAAAAAAAAAAAAERMUH/2gAIAQIBAT8QjDG6H//EABwQAQEAAgIDAAAAAAAAAAAAAAERACExYVGBkf/aAAgBAQABPxCylS00U9Ypwkuy3ErvR1lNX63gSgOecD2d4lalfLgEuf/Z",
       "color": "#3B49DF"
     },
     {
@@ -302,24 +302,12 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4869371",
-      "title": "How I finally understood the Liskov Substitution Principle",
-      "desc": "By Christian Vasquez | 4 min read",
-      "tag": "tutorial",
-      "published": "2026-10-26T22:03:26Z",
-      "order": 26,
-      "url": "https://dev.to/chrisvasqm/how-i-finally-understood-the-liskov-substitution-principle-19ek",
-      "image": "https://media2.dev.to/dynamic/image/width=1200,height=627,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fzf8i86a7xb222qaa5kwr.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAARACADASIAAhEBAxEB/8QAGAAAAwEBAAAAAAAAAAAAAAAAAAIDAQT/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAHsWukaUUcAMA//xAAbEAACAgMBAAAAAAAAAAAAAAAAAREhECAiMf/aAAgBAQABBQJxNFCSY/VietP/xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAEDAQE/AR//xAAUEQEAAAAAAAAAAAAAAAAAAAAg/9oACAECAQE/AR//xAAcEAABBAMBAAAAAAAAAAAAAAAAAhExQQEQIDL/2gAIAQEABj8ChJCSEnnBZembn//EACAQAAIBAQkAAAAAAAAAAAAAAAERABAgITFhcYGRweH/2gAIAQEAAT8hAU5o8vH74OZ2YD6YJFxbWjYhJuz/AP/aAAwDAQACAAMAAAAQ2+Ac/8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAwEBPxAf/8QAFxEAAwEAAAAAAAAAAAAAAAAAAAEREP/aAAgBAgEBPxCsr3//xAAgEAEAAgAFBQAAAAAAAAAAAAABABEhMVFh0SBBcZGh/9oACAEBAAE/ENL28g+qhbdtsUTiX6PhxKCI5UG/kRQRgOICA5h3YyokLy2Jt0//2Q==",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4944141",
       "title": "How I Made Yet Another Project During a Global Teen Hackathon with Prizes",
       "desc": "By Tyler N | 9 min read",
       "tag": "tutorial",
       "published": "2026-10-30T21:07:45Z",
-      "order": 27,
+      "order": 26,
       "url": "https://dev.to/tyleruploads/how-i-made-yet-another-project-during-a-global-teen-hackathon-with-prizes-38hc",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fm9vivpavqjce812u6hn2.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAAECAwX/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAHQGFckH//EABcQAQADAAAAAAAAAAAAAAAAAAABICH/2gAIAQEAAQUCai3/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAUEAEAAAAAAAAAAAAAAAAAAAAw/9oACAEBAAY/Ag//xAAaEAACAwEBAAAAAAAAAAAAAAABEQAQIUGR/9oACAEBAAE/IdoRWA+QN9ojJyBOf//aAAwDAQACAAMAAAAQEU//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/ED//xAAbEAADAQEAAwAAAAAAAAAAAAAAASERcUFh0f/aAAgBAQABPxBTEhw/ohFXoO+HnqEtZVfAnHCTFen/2Q==",
@@ -331,7 +319,7 @@
       "desc": "By amananandrai | 36 min read",
       "tag": "tutorial",
       "published": "2026-10-28T00:39:09Z",
-      "order": 28,
+      "order": 27,
       "url": "https://dev.to/amananandrai/101-indian-monuments-modelled-in-the-browser-g4f",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Ff5wouh2oemeu0fx5dto3.jpg",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAAEE/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEAMQAAAB3ywA/8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQABBQIP/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAGBAAAgMAAAAAAAAAAAAAAAAAAAEQIEH/2gAIAQEAAT8hQ5W0/9oADAMBAAIAAwAAABARz//EABURAQEAAAAAAAAAAAAAAAAAAAAB/9oACAEDAQE/EFf/xAAVEQEBAAAAAAAAAAAAAAAAAAAAAf/aAAgBAgEBPxBH/8QAGxABAQACAwEAAAAAAAAAAAAAAQARMRAhQXH/2gAIAQEAAT8QQ5lguw84eSOvkai//9k=",

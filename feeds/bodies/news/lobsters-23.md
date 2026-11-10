@@ -1,39 +1,239 @@
-2.0.0 gave the machines that mount docker’s socket a read-only Docker API, enough for Traefik or Dozzle to find them. 3.0.0 serves the API with its changes, on the host too. In between:
+Going through a collection of old parts, CuriousMarc encountered some ICs that he couldn't
+identify.
+He opened up one of these ICs, and I studied it under the microscope.
+After some reverse engineering, I determined that it was a logic chip that implemented four NAND gates
+using old-fashioned diode-transistor logic (DTL).[1](http://www.righto.com/2026/11/signetics-st680a-dtl-nand.html#fn:tubetime)
+The chip turned out to be the ST680A, a member of the Signetics 600 series of chips from 1965.
+In this article, I discuss the circuitry in this chip and how diode-transistor logic works.
 
-- 2.1.0: published ports answer over IPv6 too, and -p takes IPv6 addresses.2.2.0: fixes for what came up moving a whole server of compose projects to nspawn. compose got anonymous volumes, networks made again when their definition changes, `down SERVICE` and a `start` that brings up what a service depends on.2.3.0: every layer is applied inside the tree it is extracted into and checked against the digest its image names for it.2.3.1: packages on [apt.nspawn.org](https://apt.nspawn.org) (Debian 13+, Ubuntu 24.04+) and [rpm.nspawn.org](https://rpm.nspawn.org) (Fedora 44+).2.4.0: `-p PORT` takes a free port of the host, and a pull of an image index picks the entry for the host’s platform.
+Integrated circuits can be packaged in many ways. One of the most popular is the
+plastic DIP (Dual In-line Package), a black rectangle of epoxy with two rows of metal
+pins.
+This type of package was
+[invented](https://archive.org/details/signetics-corporation-condensed-catalog-spring-1969/page/n6/mode/1up) by Signetics: "Introduced in late 1965, the 600 series was the first integrated circuit family to be offered in a solid, plastic, dual in-line package (DIP)."
+Earlier integrated circuits were packaged in round metal cans or in small flat-packs.
+In 1965, engineers at Fairchild invented the DIP, which had two
+rows of pins on 0.1" spacing.
+Unlike the surface-mounted flat-pack, the DIP had pins that were inserted into holes, making
+manual or automated assembly quick and easy.
+Because the pins of a DIP were on a regular grid, rather than the circular pattern of a metal
+can, circuit board design and manufacturing were also easier
+([details](https://www.computerhistory.org/siliconengine/package-is-the-first-to-accommodate-system-design-considerations/)).
+The first DIP chips had ceramic packages.
+The plastic DIP, introduced by Signetics, was much cheaper and became very popular.
 
-The host’s socket is `/run/nspawn/api.sock`, opened by `nspawn-api.socket`. Its main purpose is compatibility: tools that manage containers through the Docker API, like GitLab Runner’s docker executor, can use nspawn’s machines instead. `nspawn` is still the command line for managing them, but the `docker` command works against the socket too.
+The plastic DIP is less popular with me, however, because it is harder to open.
+With a ceramic package, I can simply tap it with a chisel and pop it open, but
+that doesn't work with epoxy packages.
+An epoxy package can be dissolved with nitric or sulfuric acid, but I try to avoid dangerous acids.
+Instead, CuriousMarc used [Antoine's hot air](https://www.youtube.com/watch?v=ZQeHHYJYWXo)
+decapping method.
+Unfortunately, the hot air technique doesn't always work. In this case, tiny bits of epoxy
+were stuck to the die, obscuring the circuitry.
+I used a few drops of boiling sulfuric acid to clean the die.
+(I'm okay with sulfuric
+acid in tiny quantities.)
 
-The packages ship the socket turned off. Once it listens, `nspawn-api.service` starts on the first connection:
+[![The die on its metal frame.](https://static.righto.com/images/st680a/die-package-w500.jpg)](https://static.righto.com/images/st680a/die-package.jpg)The die on its metal frame.
 
-With `DOCKER_HOST` pointing at it, the `docker` command talks to nspawn:
+The photo above shows the silicon die
+on its metal frame, the lead frame.
+The golden blobs are where
+the bond wires were attached to the die.
+You can see the doped silicon regions that form diodes and bipolar NPN transistors,
+as well as 16 resistors in the center, forming serpentine paths.
 
-The API server is a client of the bus service, as the command line is. Everything it does is a method of `org.nspawn`, under the same polkit actions: reads and waits need `org.nspawn.inspect`, logs and changes need `org.nspawn.manage`. Every user can connect, but polkit is never asked to prompt, since nothing on a socket can answer an authentication agent. Root can do everything, and any other user needs a polkit rule, like `nspawn-wheel.rules`, which the packages ship as an example. As with the `docker` group, a user with `org.nspawn.manage` is root on the host: a machine runs commands as root and can mount any host path.
+Most chips have a passivation layer—a thin layer of silicon dioxide—over the chip.
+Inconveniently, this old chip didn't have a passivation layer, so the acid also stripped off
+the metal layer. (A few remnants are visible in the upper left.)
+Without the metal layer, I had to guess at how the components were connected to
+form logic gates.
+The die has very faint color differences where the silicon was protected by the metal,
+so that helped.
+Eventually, I came up with the diagram below, showing how the metal
+layer was probably configured.
+This wiring reveals that the chip implements four DTL NAND gates, which I'll describe
+in more detail below.
+One puzzle was that the chip has two unused diodes, indicated with question marks below.
 
-What one socket’s clients hold at once (connections, log and event streams, waits, attaches, execs) is bounded, and a user other than root gets a share of each, so no user can keep the others or root out.
+## Transistors, diodes, and resistors
 
-Clients that only look at `/run/docker.sock` find it with a drop-in, on a host where nothing else has that path:
+In this section, I'll explain how the patterns in the image correspond to components
+of the circuit.
+The silicon die is doped with various impurities to form regions with different
+electrical characteristics.
+These regions appear red or green under the microscope due to thin-film effects.
+As a result, 
+the chip's transistors, diodes, and resistors are visible.
 
-It answers in the shapes of API 1.51, and of the versions down to 1.24 that clients ask for.
+The chip is made from bipolar NPN transistors, which have a completely different
+construction from the MOS transistors in modern ICs.
+In an NPN transistor, the current from the collector to the emitter is controlled
+by the current through the base.
+The collector is a large region of N-type silicon, silicon that is doped with
+atoms such as phosphorus or arsenic. 
+Since these elements have one more valence electron than silicon, they give the
+silicon more negative charge carriers, so it is called N for negative.
+The N-type silicon happens to appear reddish.
 
-- Containers: create, start, stop, restart, kill, pause, unpause, wait, update, remove and prune, with AutoRemove. A create’s settings become the machine’s options: what nspawn has no use for comes back in Warnings, and what would change what the container does is refused with 400.**attach:** with the input too. The program gets the client’s input, and its output comes back byte for byte, which is what `docker run -i`, `docker run -it` and `docker start -ai` use.**exec:** with a terminal or with stdout and stderr apart, input, variables, working directory and user. A command that is not found exits 127, one that can’t run 126.**archive:** `HEAD`, `GET` and `PUT` on `/containers/ID/archive`, so `docker cp` works both ways, on running and stopped containers, keeping owners and modes.**Images:** pull, with the engine’s progress messages and its “Image is up to date” and “Downloaded newer image”, remove and prune. An image’s ID is its config’s digest.**Volumes and networks:** create, inspect, list, remove and prune, and `connect` and `disconnect` with aliases and fixed addresses, running or not. `bridge`, `host` and `none` are the predefined networks.
+On top of the collector, the base is a thin region of P-type silicon, which appears green.
+This silicon has been doped with atoms such as boron or gallium, which have 
+one fewer valence electron than silicon. The missing electrons form "holes", which
+act as positive charge carriers.
+Finally, the emitter is N-type silicon, on top of the base layer.
+These layers work together through semiconductor magic, amplifying the base current.
 
-## GitLab Runner[**](https://blog.nspawn.org/posts/nspawn-3-0-a-docker-compatible-engine-api-for-systemd-nspawn-containers/#gitlab-runner)
+The chip's output transistors are slightly larger so they can sink more current.
+In the transistor on the right above, note that the collector contact wraps around three sides of
+the transistor. 
+The emitter is also larger, with an L-shaped contact.
+According to the datasheet, each output transistor can sink 2.5 mA of current.
 
-GitLab Runner’s docker executor runs its jobs on nspawn’s machines through the API. Its `host` setting points at the socket:
+The chip uses many diodes since it is diode-transistor logic. 
+The structure of a diode is similar to a transistor, but without the emitter.
+In a diode, current flows from the cathode (P-type silicon) to the anode (N-type).
 
-A variable’s value can now hold line breaks (`-e`, compose’s `environment`, the API’s `Env`). GitLab’s `CI_COMMIT_MESSAGE` for a commit with a body is one.
+The chip uses 16 resistors, located in the middle of the die.
+A resistor is constructed from a long, thin region of doped silicon.
+Since silicon has moderately high resistance, a long strip of silicon acts
+as a resistor.
+Most of the resistors have a serpentine layout to fit a long resistor into a smaller area.
+These resistors consist of P-type silicon (green) in a "tub" of N-type silicon (red).
+The tub is connected to the positive voltage supply; since current doesn't flow from
+N-type silicon to P-type silicon, this isolates the resistors from each other.
 
-- **A machine’s API socket takes changes.** In 2.0.0 the socket inside a machine was read-only. Now a machine that mounts `/var/run/docker.sock`, `/run/docker.sock` or `/run/nspawn/api.sock` read-write can create, start, exec in and remove containers, pull and remove images, and create volumes and networks. With `:ro` the socket reads, follows logs and kills, and refuses everything else with 403. Only root inside the machine can connect, and it sees every machine and their `-e` variables (`--secret` values never show). A proxy or a dashboard that only reads should mount it `:ro`, the Traefik example in the 2.0 post included: `/var/run/docker.sock:/var/run/docker.sock:ro`.**A record pulled or built that never ran is an image, not a container.** The API’s container list, inspect and prune leave it out, and `GET /images/json` lists it.**The bus says what failed.** A failed method or job carries an error name under `org.nspawn.Error`: `NotAuthorized`, `NoSuchMachine`, `NoSuchImage`, `NoSuchNetwork`, `NoSuchVolume`, `NoSuchPath`, `Exists`, `InUse`, `NotRunning`, `AlreadyRunning`, `Paused`, `NotPaused`, `Invalid`, and `Failed` for the rest.
+## Operation of a DTL gate
 
-- `nspawn info`: the service’s version, its machines by state, images, directories, default backend, log driver, registry and the host. -f json or -f TEMPLATE, and it exits 1 when the service doesn’t answer. The API’s GET /info answers from it.**`nspawn images inspect`:** the records of images as JSON or through `-f TEMPLATE`. `nspawn image` is now the same group as `nspawn images`.**`-P`/`--publish-all`:** publishes every port the image exposes that no `-p` publishes, on a free port of the host.**Volumes:** `volume create --label`, `volume ls --filter label=`, and `system prune --volumes` removes the unnamed volumes, which only the API creates.**`--timezone auto`**, the default, gives a writable root without the host’s zone a copy of `/etc/localtime`, which tzdata can replace, instead of systemd-nspawn’s read-only bind.**A bare `-e VAR` that isn’t set is left out** instead of refused, so `-e DEBUG` passes it on only where it’s set.**No line of a machine’s output is lost to journald’s rate limit.** The unit’s `LogRateLimitIntervalSec=0` never reached journald, which kept its default of 10000 lines in 30 seconds. The hooks drop-in now sets an interval of one microsecond with a burst of a million.**A build of a tag replaces the image of that reference** while nothing ran from it, mkosi builds too. If a machine or an image of another reference has the name, the build goes beside it under a free name (`app-2`) and says so.
+Logic gates can be created in many ways.
+The earliest integrated circuits (such as the ones in the Apollo Guidance Computer)
+used Resistor-Transistor Logic (RTL), where logic gates were constructed from resistors
+and transistors.
 
-The full list is in the [release notes](https://github.com/nspawn/nspawn/blob/3.0.0/docs/releases/3.0.0.md).
+In March 1962, Signetics announced the first family of commercial Diode-Transistor Logic
+(DTL) integrated circuits ([details](https://www.computerhistory.org/siliconengine/standard-logic-ic-families-introduced/)).
+By using diodes on the inputs instead of resistors, DTL provided better performance than
+RTL. 
+However, DTL soon became overshadowed by TTL (Transistor-Transistor Logic), which
+was faster and used less power. (If you built digital circuits a few decades ago, you're
+probably familiar with the popular 7400 series of TTL chips.)
 
-- Image builds, loads, imports, tags, pushes and commits, container renames and exports, swarm and plugins answer 501 “not supported”. docker build against the socket doesn’t work, nspawn build does.A stopped container’s volumes are mounted only while it runs, so copies to or from them are refused until it starts.`nspawn run -i` reads the output through the journal, which drops empty lines. The API’s attach doesn’t.`nspawn generate` doesn’t keep the name the API gave a network, and compose refuses network names with a `.`.mstack is still experimental and untested, and doesn’t serve the API.
+The diagram below shows how the DTL NAND gate works.
+If both inputs are high, the current from the first resistor flows through the
+base of the first transistor, turning it on.
+The transistor amplifies this current, passing a much larger current from the
+transistor's collector to the transistor's emitter.
+This current goes through the base of the second transistor, which turns on the
+second transistor.
+The second transistor passes an even larger current from the output pin to ground,
+pulling the output pin low.
 
-Both are out already:
+But if one of the input pins is pulled low, the current from the resistor goes through
+the diode instead of the transistor.
+The first transistor turns off, and without a base current, the second transistor turns off.
+The third resistor pulls the output high.
+Thus, the output is low only if both inputs are high: a NAND gate.
 
-- 3.1.0 adds --device-cgroup-rule, for devices that come and go while the machine runs, like a USB device being flashed: -v /dev/bus/usb:/dev/bus/usb --device-cgroup-rule 'c 189:* rwm'. An app given devices of the host now runs without a user namespace, and a machine that ran in one keeps its files’ owners shifted, so make it again with nspawn rm and run or create.3.2.0 reads the name of a machine or an image the same way in every command: an image goes by its local name or its reference, so `images rm somos/app:1` and `run somos-app-1` both work. `run` never consumes or replaces an image: the machine goes beside it.
+I'll point out a few features of this circuit.
+The diodes on the inputs ensure that one input doesn't affect the other input.
+The diode in the middle raises the voltage on the first transistor's emitter, so it
+requires more voltage to turn on, reducing the sensitivity to noise.
+The output uses a resistor to pull the output high; more advanced circuits use another
+transistor.
+When the output is low, the third resistor is still "trying" to pull the output high,
+which is wasting power.
+Moreover, the resistor limits the output current, so the high output is fairly weak.
+In some DTL families, you can get gates with different values for the output resistor,
+so you can select the tradeoff between wasting power and having an output that is too weak.
 
-The requirements are the same as for 2.0.0. Packages for Fedora, Debian/Ubuntu and Arch are attached to the [release](https://github.com/nspawn/nspawn/releases/tag/3.2.0), and apt.nspawn.org and rpm.nspawn.org have the first two. If a client of the Docker API fails against nspawn where it works with docker, open an issue with what it sent.
+If you've used TTL integrated circuits from the 1970s, you know that chips usually have power
+and ground on diagonal pins: ground on pin 7 and power on pin 14.
+(Putting power and ground diagonally opposite both helps die layout and circuit board layout.)
+Much to my surprise, I found that the Signetics chips predate this standard and have
+ground on pin 1 and power on pin 8: still diagonal, but the wrong diagonal!
+The diagram below shows how the four NAND gates are wired in the chip.
+
+## Three chips from one die
+
+When I examined the die under the microscope, I figured out the circuit, but I was puzzled
+by two extra diodes, as if two NAND gates had a third input that wasn't used.
+The explanation is that Signetics used the same silicon layout for at least three different
+chips, applying a different metal layer for different functionality.
+This saved money since it's much cheaper to produce a single optical mask for the metal layer
+than a complete set of new masks.
+Signetics sold semi-custom ICs to customers, using an approach called variFEBS (Variable
+Functional Electronics Blocks). This approach used a custom metal layer on top of
+fixed silicon, providing custom circuits without the cost of a full mask set.
+These circuits didn't sell well, but Signetics used the same approach for standard ICs.
+
+One IC with the same silicon as the quad NAND gate is the 670A chip, which
+has three NAND gates, each with three inputs (above left).
+The diagram below shows how the silicon can be wired to provide this functionality.
+
+The layout for the triple chip above is a bit tricky because the top gate has inputs on
+both sides of the power (Vcc) pin.
+This creates a layout problem because the power and ground metal runs vertically to the
+resistors, blocking metal wiring from one side to the other.
+The solution is a "crossunder", a region of silicon that allows a signal to pass under
+the metal layer, connecting the inputs on the left to the rest of the circuitry on the right.
+This crossunder is visible near the top of the chip.
+
+Another chip with the same layout is the 616A dual NAND gate, with five inputs on each gate.
+Since this chip has 10 inputs in total (compared to 8 on the quad gate), this chip
+uses the two "extra" diodes that I spotted.
+If that isn't enough inputs, each NAND gate has an expansion input; by connecting external
+diodes to the expansion input, the gate can be made as large as desired.
+
+## Some history
+
+The history of Signetics is closely tied to Fairchild.
+The story of Fairchild's founding is well known: in 1957, eight
+engineers—the Traitorous Eight—left Shockley Semiconductor and created
+Fairchild Semiconductor.
+Hundreds of companies (the "Fairchildren") were started by engineers who left
+Fairchild.
+Signetics was one of those companies, formed in 1961 and [said](https://oac.cdlib.org/findaid/ark:/13030/kt9m3nf315/)
+to be the first company to exclusively design and manufacture integrated circuits.[2](http://www.righto.com/2026/11/signetics-st680a-dtl-nand.html#fn:signetics)
+Signetics announced its first product in 1962, a NAND gate that cost $125 (over $1000 in
+current dollars).[3](http://www.righto.com/2026/11/signetics-st680a-dtl-nand.html#fn:lojek) Not surprisingly, sales were weak.
+
+Signetics soon ran short of money, so in 1962, Corning Glass invested $1.7 million for 51%
+ownership of Signetics.
+Corning Glass may seem like a strange investor, but Corning was more of a high-tech
+company than you'd expect, making components such as resistors and [glass capacitors](https://www.righto.com/2026/06/space-shuttle-io-processor-boards.html#:~:text=were%20manufactured%20by-,Corning%20Glass%20Works,-%2C%20as%20indicated%20by), and later creating fiber optics.
+Moreover, in the early 1960s, integrated circuits were the hot area (much like AI now),
+and everyone wanted to get involved.
+
+In 1963, the Department of Defense pushed for contractors to use integrated circuits
+in new products.
+Riding this wave, Signetics became the leading producer of integrated circuits.[4](http://www.righto.com/2026/11/signetics-st680a-dtl-nand.html#fn:making)
+However, Fairchild soon introduced a series of DTL chips that competed with Signetics. The
+Fairchild 930 series was faster than the Signetics chips and less than half the price,
+so Fairchild took much of the market from Signetics and dominated the IC market.
+
+Signetics also produced analog integrated circuits.
+Signetics is probably best known for creating the [555 timer chip](https://www.righto.com/2016/02/555-timer-teardown-inside-worlds-most.html) in 1970, said to be
+the world's most popular IC, with billions sold.[5](http://www.righto.com/2026/11/signetics-st680a-dtl-nand.html#fn:camenzind)
+Signetics was acquired by Philips in 1975, and then Philips Semiconductors was spun
+off as NXP (Next exPerience) in 2006. NXP is currently the #10 semiconductor manufacturer
+worldwide, so the heritage of Signetics lives on.
+
+For more, follow me on
+Bluesky ([@righto.com](https://bsky.app/profile/righto.com)),
+Mastodon ([@[email protected]](https://oldbytes.space/@kenshirriff)),
+or [RSS](http://www.righto.com/feeds/posts/default).
+Thanks to CuriousMarc for providing the IC and thanks to TubeTime for finding the databook.
+AI statement: Despite the presence of the em dash, no AI was used in the writing of this article ([details](https://www.righto.com/p/index.html#ai)).
+
+## Notes and references
+
+1. After I had reverse-engineered the chip, TubeTime found datasheets for it, making my reverse engineering unnecessary. (See the [Signetics Condensed Catalog 1969](https://archive.org/details/signetics-corporation-condensed-catalog-spring-1969/page/n5/mode/2up), [Utilogic II Databook 1971](https://archive.org/details/bitsavers_signeticsdcsUtilogicII600DTLTTL_3436170/page/20/mode/2up), and [Utilogic 2 Databook 1972](https://archive.org/details/bitsavers_signeticsdcsUtilogic2_4702034/page/n23/mode/2up).) We must have been unlucky with our original web searches since we didn't find anything. But this way you get to see what's inside the chip :-) [![The Signetics ST680A IC in its package. The large circular depression marks pin 1. From the date code, this chip is from 1971.](https://static.righto.com/images/st680a/signetics-package-w250.jpg)](https://static.righto.com/images/st680a/signetics-package.jpg)The Signetics ST680A IC in its package. The large circular depression marks pin 1. From the date code, this chip is from 1971. [↩](http://www.righto.com/2026/11/signetics-st680a-dtl-nand.html#fnref:tubetime)
+2. For more Signetics history, see [Signetics Founding History](https://www.computerhistory.org/collections/catalog/102770828/), written by Lionel Kattner, a co-founder of Signetics. He states that the company name was inspired by the words "signals" and "networks", as well as the high-tech suffix "-netics". [↩](http://www.righto.com/2026/11/signetics-st680a-dtl-nand.html#fnref:signetics)
+3. See [History of Semiconductor Engineering](https://link.amazon/B0hQihwp3), page 156. [↩](http://www.righto.com/2026/11/signetics-st680a-dtl-nand.html#fnref:lojek)
+4. The book [Making Silicon Valley](https://archive.org/details/makingsiliconval00chri/page/212/mode/2up) describes the history of Signetics. It has a negative view of the Corning investment, saying that Signetics executives "Van Poppelen and Kattner dissented on the grounds that Corning was not a good fit for an integrated circuit company. In their view, Corning was a staid Eastern firm, ignorant about semiconductors and antithetic to the ways and culture of the electronics industry on the West Coast. Their view later proved to be correct." [↩](http://www.righto.com/2026/11/signetics-st680a-dtl-nand.html#fnref:making)
+5. The 555 timer was created by analog IC wizard Hans Camenzind. If you're interested in analog circuits, you should read his book [Designing Analog Chips](http://www.designinganalogchips.com/), which you can download for free. [↩](http://www.righto.com/2026/11/signetics-st680a-dtl-nand.html#fnref:camenzind)
+
+1. isaac[November 8, 2026 at 12:13 PM](http://www.righto.com/2026/11/signetics-st680a-dtl-nand.html?showComment=1794168839998&m=1#c7709466141122581585)Really really awesome stuff Ken. Thanks. I will never miss a post from you! I've picked up some nice die shots of some chips and started mucking about trying to reverse engineer them a little, inspired by you. ThanksReply[Delete](https://www.blogger.com/comment/delete/6264947694886887540/7709466141122581585)RepliesReply
+2. Anonymous[November 8, 2026 at 12:45 PM](http://www.righto.com/2026/11/signetics-st680a-dtl-nand.html?showComment=1794170717653&m=1#c2808156614240019707)The bond wire welds look very poorly registered, some to the point of overlapping adjacent structures. How did the chip actually work with these apparent shorts?Reply[Delete](https://www.blogger.com/comment/delete/6264947694886887540/2808156614240019707)RepliesReply
+3. ![](http://www.blogger.com/img/blogger_logo_round_35.png)[Ken Shirriff](https://www.blogger.com/profile/08097301407311055124)[November 8, 2026 at 8:21 PM](http://www.righto.com/2026/11/signetics-st680a-dtl-nand.html?showComment=1794198073044&m=1#c6527306699979172651)Yes, the bond wires look crooked, but they were connected to the metal layer (which I dissolved). They were insulated from the underlying silicon by an oxide layer, so there weren't actually shorts.Reply[Delete](https://www.blogger.com/comment/delete/6264947694886887540/6527306699979172651)RepliesReply
+4. ![](http://www.blogger.com/img/blogger_logo_round_35.png)[Exophase](https://www.blogger.com/profile/03306077583436521311)[November 9, 2026 at 10:55 AM](http://www.righto.com/2026/11/signetics-st680a-dtl-nand.html?showComment=1794250509251&m=1#c7863258799490233647)> Signetics announced its first product in 1962, a NAND gate that cost $125 (over $1000 in current dollars). Not surprisingly, sales were weak. Signetics soon ran short of money, so in 1962, Corning Glass invested $1.7 million for 51% ownership of Signetics. Imagine being able to buy majority ownership in a cutting edge semiconductor firm for a mere 13,600 NAND gates.Reply[Delete](https://www.blogger.com/comment/delete/6264947694886887540/7863258799490233647)RepliesReply
+5. ![](http://www.blogger.com/img/blogger_logo_round_35.png)[VIdeoFlyer](https://www.blogger.com/profile/10117838642902682384)[November 9, 2026 at 2:09 PM](http://www.righto.com/2026/11/signetics-st680a-dtl-nand.html?showComment=1794262165528&m=1#c7224549635365413150)I am working on re-designing the logic symbol libraries used in KiCad. I am currently working on the 74LSxx series, and noticed something that I hadn't paid attention to in the past. The 74LSxx series of simple gates is just DTL with Schotkey diodes. All other TTL designes have multiple emitter designs, but the LS versions are all DTL based. On a side note, in the '70s Signetics had a two hard-bound book set that I have been searching to replace (PDF preferred at this point, but the original set would be OK). They were white with colored text and graphics. The first book was a complete databook of all of the Signetics IC's, and was around 2" thick. The second book was about an inch thick, and was a complete? set of application notes, and where I learned phase-locked-loops in depth. I still have a couple each of NE560s, NE561s, and NE562's with no markings. These were aquired from a surplus dealer originally in quanset huts at the Eastern edge of the Oakland Intl. Airport.Reply[Delete](https://www.blogger.com/comment/delete/6264947694886887540/7224549635365413150)RepliesReply
