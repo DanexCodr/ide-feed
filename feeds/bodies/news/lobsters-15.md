@@ -1,36 +1,27 @@
-When I set up the infrastructure for [Casuarina Linux](https://casuarina.org/) I repurposed an AMD AM4 system with
-Ryzen 9 5950X 16-Core CPU (105W TDP) and 32Gb of DDR4 RAM as the build server. I set it up
-in our laundry, connected it via a smart plug, and reset its counters. Over the course of the
-project I would regularly pull package updates from [Chimera Linux](https://chimera-linux.org/), build and install them locally,
-and then push them to the repo, which would trigger Buildbot to build and publish them.
+On Friday morning, we became aware that a significant amount of email to Microsoft-run mail systems was being rejected. This included mail to hotmail.com and outlook.com.
 
-The project ran from 30 March 2026 to 8 November 2026 (a bit over 7 months) the total
-energy used was 98.4 kWh. My electricity plan is a 100% renewable plan (meaning they offset the
-non-renewable parts) and costs AU$0.33
- kWh. Ignoring the daily service fee the cost of that
-electricity is AU$32.47
-.
+The messages were being rejected with the following message:
 
-Since it turned out I was the only one doing package updates I kept the builder off when idle. When
-there were packages to build I’d hit the power button (on the machine, not the smart plug) and some
-time later when it was done I’d press it again to shut it down. This was pretty beneficial as the
-idle draw was about 55W.
+`550 5.7.1 Message rejected: Message lacks SPF/DKIM/DMARC Auth Records`
 
-The number of package builds was around 5000. `SELECT COUNT(name) FROM logs WHERE name LIKE 'pkg:%';` from the Buildbot `state.sqlite` yields 5201, however that’s probably slightly inflated
-due to rebuilds/packages that failed to build on the first try.
+We checked our logs, and found that we’d seen this message over 500 times on Thursday, but not once before that.
 
-The actual usage is likely more than double the 98kWh figure as all packages were built on my
-desktop machine first, before pushing to the repository for the builder to pick up. That machine is
-an AM5 system with AMD Ryzen 9 9950X3D 16-Core CPU (170W TDP), 64Gb DDR5 RAM. Additionally our house
-has rooftop solar, and where possible I would kick off builds during the day so there was a better
-chance of using the solar. That would have reduced the actual cost, but I have no way to measure the
-specific amount.
+The affected messages all had [completely valid SPF and DKIM](https://www.mythic-beasts.com/support/hosting/mail/spf), but did not have a DMARC record. We added a DMARC record with a “none” policy to some of the affected domains, and sure enough, mail was then accepted again. A quick [fedi-survey](https://social.mythic-beasts.com/@beasts/117569497236204746) confirmed that we were not alone.
 
-The slowest package by far to build was Chromium, taking just shy of 4 hours to complete. For
-comparison Firefox takes about 50 minutes. Power draw measured by the smart plug when the builder
-was fully loaded is about 193W. So 4 hours at 193W is 0.77kWh, which means a Chromium build costs
-about 25 cents.
+DMARC records are a way of publicly stating what you want recipients to do with email that claims to be from your domain, but which doesn’t pass verification checks (DKIM or SPF) and thus is potentially forged. Your DMARC policy can be one of the following:
 
-Overall it cost a bit under AU$5
- a month (ignoring solar, and my workstation) to
-build all the packages for a Linux distribution. That’s not too bad I think.
+- reject – recipients should reject mail that doesn’t pass DKIM or SPF. This is the real purpose of DMARC: if you’re confident that all legitimate outbound mail is properly authenticated, you can tell recipients to assume that anything else is forged, and bin it.
+- quarantine – recipients should treat such mail as suspicious.
+- none – your domain has no policy on what to do with mail that doesn’t pass DKIM or SPF.
+
+Publishing a policy of `none` is effectively the same as not publishing a policy at all.
+
+Microsoft are now rejecting mail without a DMARC policy, but accepting mail with a policy of `none`. This is a massive and pointless change in their policy for incoming mail, made with no notice whatsoever.
+
+Last year Microsoft, introduced a policy that required domains *sending more than 5,000 messages per day* to have a DMARC record. This change was [announced in advance](https://techcommunity.microsoft.com/blog/microsoftdefenderforoffice365blog/strengthening-email-ecosystem-outlook%E2%80%99s-new-requirements-for-high%E2%80%90volume-senders/4399730). This latest change appears to be completely unannounced, which makes us wonder if it was even intentional. Of course, trying to contact Microsoft in order to resolve mail issues such as this is futile.
+
+*Update: [apparently](https://www.theregister.com/applications/2026/11/09/outlookcom-bounces-legit-emails-as-microsofts-authentication-crackdown-goes-sideways/5308428) it wasn’t intentional, but they haven’t figured out how to roll it back yet.*
+
+We’ve just applied `p=none` DMARC records to a large number of our customers’ domains. We generally try to avoid making unsolicited changes to DNS zones, but in this case we feel that it is the best option.
+
+If you’re in contact with Microsoft users affected by this, please encourage them to complain to Microsoft; it’s very likely that they are losing other legitimate email from other providers because of this unannounced change. Better still, encourage them to move to [an email provider that is pro-active in investigating email deliverability issues](https://www.mythic-beasts.com).

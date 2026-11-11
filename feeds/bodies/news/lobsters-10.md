@@ -1,491 +1,502 @@
-Well that was a ride, where do I start ?
-
-I am currently on a quest to build some open source networking equipment with the final boss being a full router.
-
-There are a lot of very valuable and less complex pieces of hardware on the way that also need building, one of them being the common networking switch.
-
-Previously I was building the infrastructure to handle ethernet packets and worked my way up to a simple three-port switch that I had taped it out via Tiny Tapeout. But a few days after that tapeout, as I was still reeling from the adrenaline of rushing to meet the deadline, an unexpected opportunity presented itself: the possibility of taping out my own full chip, free of charge!
-
-But there was one slight problem, I only had four days to design the entire thing, also known as 96 hours ( putting it in hours definitely does not make it sound less terrifying ).
-
-A few months back, I wrote that building a full matrix multiplication accelerator with some in-silicon debug infrastructure in under 2 weeks was too tight of a deadline, all around a terrible idea and should absolutely never be attempted, especially not in a corporate setting.
-Well since then I have discovered a new circle of hell: designing a full ASIC solo in 4 days.
-
-It’s caffeinated down here.
-
-But now that I have gazed upon these new depths of hell, let me tell you about the journey of building full ASICs!
-
-## Will the fab talk to me?[#](https://essenceia.github.io/projects/expresso/#will-the-fab-talk-to-me)
-
-No … no they won’t …
-
-But they will talk to wafer.space, and wafer.space will talk to me.
-
-Now I suspect you might be wondering: what is wafer.space again ?
-
-A few months ago, something happened.
-Tim Ansell, formerly part of the team at Google that got us the SkyWater 130nm and GlobalFoundries 180nm open source PDKs, left Google and started wafer.space where he opened up the possibility for mere mortals to taped out their own chip at GlobalFoundries for an affordable price.
-They offer the services of getting your chip manufactured on GlobalFoundaries 180nm and optionally get it packaged.
-
-### Big chips and little chips[#](https://essenceia.github.io/projects/expresso/#big-chips-and-little-chips)
-
-Chips come in all rectangular sizes with the size measured in area.
-
-Area is one of the primary concerns of the design as it is once again a question of cold calculated economics, because, when you go to get a chip manufactured you pay per \( mm^2 \) of area.
-
-Take for example the price quoted bellow by IHP (another fab) for their own multiwafer runs. If you participate in this run you will get back a set number of chips (40 in this case) and your final chip cost will correspond to how big your chip ultimately is.
-
-Yet, more area is not simply more expensive because of the direct manufacturing cost, there is a second more subtle factor inflating the price, and that is yield.
-
-Ultimately broken chips have no value, actually we could argue that we should ascribe negative value to broken chips because identifying which chips are broken costs money, and selling a customer a broken chip costs even more money. So maximizing the ratio of good chips to manufactured chips is of primary importance. This ratio is called the yield.
-
-Chips can be broken for a plethora of reasons, but for simplicity I will put them in two different buckets. Firstly it could be a design issue, in which case all your chips are equally affected. Secondly it could be a manufacturing defect that affects your chips semi-randomly.
-
-Manufacturing defects that occur during semiconductor device fabrication can be modeled as constant defect probability per unit of area, meaning that chips with higher area have a higher probability of having a defect, and thus lower yield, leading to ultimately higher costs.
-
-This doesn’t impact the price which I pay to the chip area per-se, but it affects the average net price that I will pay per functional chip.
-
-This is the double reason why area optimization is such a concern when designing chips.
-
-Now GlobaFoundaries 180nm (gf180) is not a young node, and the polite way of calling something old is *“mature”*. With node maturity comes increased expertise of the process by the foundry leading to better yields over time. So gf180 is a node with excellent yields for which area related defects are not a concern especially compared to younger leading edge nodes.
-
-Wafer.space now offers 4 chip sizes, commonly referred to in the community as the “full”, “half”**s** and “quarter” slots.
-
-For people in need of some perspective, the full slot and its nearly 13mm2 of area is the same size as the entire Tiny Tapeout gf180 shuttle chip. The same chip that is capable of accommodating unto 160 project tiles and all the Tiny Tapeout common infrastructure. For reference, my two systolic arrays (8 bit integer and bfloat16) and the original switch all fit on only 4 tiles and my largest design to date, the blake2s hashing accelerator on 8.
-
-### Dicing[#](https://essenceia.github.io/projects/expresso/#dicing)
-
-But getting the silicon manufactured is only the first battle of the war.
-
-Once you get your chip onto a wafer, there are two more important steps to clear before it can actually be called a chip.
-
-Semiconductors are manufactured on a substrate called a wafer, this is a solid silicon disk that then needs to be very precisely broken up into individual chips. This step is called dicing.
-
-So once the wafers have exited the fab and the guys at wafer.space take delivery of the full set of wafers, they call to another specialized service to dice them into individual chips along the scrible lines using a very precise diamond saw.
-
-At that point, wafer.space offers two possibilities. The first is to mail you the diced chips directly, the second is to get the chips packaged for you.
-
-### Packaging ?[#](https://essenceia.github.io/projects/expresso/#packaging-)
-
-Raw semiconductor silicon is beautiful but unless you are also in the habit of collecting expensive crystals to look at, they are not much use as is. After all, how do you communicate with a piece of doped silicon crystal?
-
-In order to both power our chip and be able to communicate with it, we need to package it in the form in which we can connect it to a wider electronic circuit.
-
-That is, unless you just happen to have a micromanipulator and about 56 microprobes lying in your garage that you can use for chip bringup. In which case please do tell me if you ever need some help clearing out your garage, I have nothing planned that day.
-
-Chip packages come in different forms, the most common being some kind of black plastic enclosures used not only to create accessible connections to the silicon but also for protecting the delicate die and the connections from the environmental damage caused by shocks, humidity and extreme temperature fluctuations.
-
-The type of package we chose also affects how we architect the IO and thus what our silicon floorplan will look like. There are two big families of packages:
-
-- wire bonded
-- flip-chip
-
-In the case of flip-chips the IO pin connections will be spread out regularly all over the floorplan leading to shorter logic to pin connections, and supporting a greater pin density and count. But on the flip side (put intended), flip chips packaging requires a lot more precision and is more expensive compared to …
-
-Wire bonding works by conning your silicon to a pad in the package using a very thin fly wire made from gold or aluminium.
-
-This is done by a wire bonding machine that will physically pull a wire from a IO landing pad on the silicon and connect it to a landing pad on the package. The silicon would be placed at the center of the package and would be connected to the pads placed all around it on the package, themselves connected to the larger exterior pads.
-
-In this case the IO pad structures of the silicon would be located towards the exterior of the chip creating two distinct zones, the padring and the core region where most of the logic is located.
-
-There are many sub-flavors of wire bonded packaging, and wafer.space decided to offer something called chip-on-board packaging (CoB), which is a bit different to how mass market chips are classically packaged but also much more cost effective for small scale fabrication.
-
-For CoB the chip is not bonded out to an enclosed package, but rather, the connections are made directly to a PCB.
-
-Once the chip has been bonded onto the PCB, a protective epoxy layer called a globtop is deposited and hardened on top of the silicon and the bonds. Some of you might have already noticed black blobs on commercial PCBs in the past, and without even realizing it you might have been looking at a CoB packaging.
-
-But unlike the dull black glob tops, wafer.space has opted for the rarer beautifully transparent epoxy, allowing you to directly see the chip bonded though the package.
-
-### Take my money ![#](https://essenceia.github.io/projects/expresso/#take-my-money-)
-
-With your silicon bonded you now have what can officially be called a chip! 🥳
-
-What wafer.space is selling : the possibility for anyone to make their own full prototype chip run for the price of an expensive vacation, is honestly revolutionary.
-
-DARPA and google gave us the tools, Tiny Tapeout offered us a chance to sharpen our skills and wafer.space gave us direct access to manufacturing.
-
-Once more, in the spirit of transparency, I was invited onto the shuttle for free, but this sentiment comes from a genuine belief, so much so that as soon as the following manufacturing run sales opened I put my money where my mouth is, and bought my slot outright.
-
-![](https://essenceia.github.io/projects/expresso/shut_up_and_take_my_money.png)
-
-Somehow this is still cheaper than flying back for Christmas.
-
-## Chip architecture[#](https://essenceia.github.io/projects/expresso/#chip-architecture)
-
-If you are new here and this is your first time reading this blog, welcome.
-
-For those for whom this isn’t our first rodeo: you might be wondering how full chips differ from what I have been doing so far ?
-
-In previous episodes, I had been taping out my designs through Tiny Tapeout. Tiny Tapeout is a shuttle chip where multiple projects share the same chip, and in doing so share a common infrastructure. That infrastructure includes handling the silicon’s IO, the power and clock distribution as well as manufacturing and sticking the chip onto a functional development boards.
-
-All important parts that I now get the luxury of handling on my own, which also means I also get the luxury of making all the mistakes!
-
-But, after having gotten the chance to perfect my understanding and experience of the tapeout process through 9 prior Tiny Tapeout tapeouts this sounds the natural next step.
-
-With Tiny Tapeout, you don’t control the number of pins, nor do you have a precise idea of the timing of the signals arriving from the chip’s pins to the pins of your macro. Additionally, even though you can buy extra tiles on Tiny Tapeout, the smallest quarter slot chip on wafer.space still gives you more core area than the largest configuration of Tiny Tapeout has to offer.
-And finally, Tiny Tapeout only gives you one chip per dev board, whereas with wafer.space you get a minimum order lot size of 1000 chips.
-
-### Pins[#](https://essenceia.github.io/projects/expresso/#pins)
-
-For the purposes of the networking chip project, the real game changer is having control over the pin architecture, meaning I can now decide both the number and the type of the pins.
-
-Because I am comunicating with the PHY chip using an RMII interface, I care very much about pins as each Ethernet port interface requires 7 pins. This was also the reason why the initial version of the networking switch had only 3 ports: I only had 24 pins.
-
-You can refer to the previous article [Designing an Ethernet Switch ASIC](https://talesonthewire.com/projects/ethernet_switch_asic/) for an explanation on why each port needs 7 pins and each pin is used for.
-
-So now that I have a whopping 46 pins maximum to play with, we can get cooking!
-
-Anatomically pins are analog blocks with a landing pad for the wire bonded wire on one end. These are included as part of the GlobalFoundries open source foundry provided IO cell library, and although all the pins share the same height, width and landing pad sizes, each features different analog layouts according to its functionality.
-
-The most important types of pins for this design are the input pins, the bidirectional pins and the power delivery pins. Have fun playing spot the difference.
-
-![](https://essenceia.github.io/projects/expresso/io/io_in.png)
-
-*Input IO pin*
-
-![](https://essenceia.github.io/projects/expresso/io/io_bidir.png)
-
-*Bidirectional IO pin*
-
-![](https://essenceia.github.io/projects/expresso/io/io_dvdd.png)
-
-*VDD IO power pin*
-
-![](https://essenceia.github.io/projects/expresso/io/io_dvss.png)
-
-*VSS IO power pin*
-
-Interestingly, the standard library does not offer any pure output pins, so outputs are handled by bidirectional pins statically configured in output mode.
-
-Looking at the floorplans provided above you might notice that these pins have no analog components directly under the landing pad, known as a “circuit under pad” design, making them a little less compact but more structurally resilient.
-
-This is because these pins were originally designed to be compatible with a version of the GlobalFoundary 180nm process with only 3 metalization layers, but multiple levels of a metal structure must be present between the top metal layer where the pad is and the analog circuit beneath in order to help isolate it from the force applied to the pad of wedge bonding. During wedge bonding the bond is physically pressed in place requiring applying a lot of force to the silicon and potentially leading to breakages in the circuits underneath if sufficient structural support pillars aren’t present.
-
-### Padring[#](https://essenceia.github.io/projects/expresso/#padring)
-
-As discussed earlier, there are different families of packaging for chips resulting in different types of I/O design: flip-chips and wire bonding. Wire bonded chips such as mine have their pins facing the exterior of the chip organized in a structure called a pad ring.
-This is a ring surrounding the core area of the chip, connecting all the different I/O pads together. This ring is used both for noise isolation and to share power between all the different pins. Because the padring is an uninterrupted crown of pins the space between the pins is filled by very simple structures called filler cells used to close the power connections within the ring.
-
-The IO also plays a crucial role in dealing with electrostatic discharge. (To whom many electronics have perished, including my little sister’s laptop that I may or may not have murdered while upgrading her ram when I was 15. 🪦 )
-
-Each pin contains structures that will act as forward biased diodes in the event of an electrostatic discharge steering the charge though the power rails and protecting the sensitive core logic.
-
-### Power delivery[#](https://essenceia.github.io/projects/expresso/#power-delivery)
-
-So we actually have four types of power delivery pins : two for ground and two for power.
-
-The difference between the two groups is that one is used to provide power to the IO itself and the other is used to power the chip’s core logic.
-
-Thus, it is possible to run the I/O and the internal design at different voltages. The areas for which a different power source is used is called a power domain. For example, the I/O could run at 5V, accepting 5V input signals and driving 5V outputs while internally the chip core runs the logic at 3.3V.
-In this case, we would have different pins for powering the I/O and for powering the internal core. But, in the case of this networking chip, core power is shorted to IO power and both are in the same power domains.
-
-Such a setup is only made possible because the foundry provided 7 track standard cell library is, to put it mildly: rugged. The cell target operating range is between 1.62 and 5.5V voltage and -40 to 125C.
-
-So shorting the IO and core voltage and deciding to run the entire thing at 5V is just an average Tuesday.
+![An artisan inspecting a hairline crack in a forged iron ring with a fine metal pick.](https://forge-blog.github.io/posts/rust-std-memory-safety/cover.webp)
+
+- How we found and validated the bugs
+- Patterns of Rust’s Safety Bugs
+  - Pattern 1: Trusting code not to panic
+  - Pattern 2: Trusting user-provided implementations to be correct
+  - Pattern 3: Trusting the underlying system
+- Conclusion
+  - Familiar patterns are still difficult (Patterns 1 and 2)
+  - System boundary bugs are now within reach (Pattern 3)
+  - Rust’s high bar is hard to meet but worth keeping
+- Beyond the lab
+
+Microsoft’s FORGE Lab found several memory safety issues in Rust’s standard library (`std` and `core`), including cases where code written entirely in safe Rust can trigger undefined behavior. The research used Hyenas, FORGE’s frontier research version of codename MDASH, an AI-powered vulnerability-scanning system. The findings reveal three recurring patterns of misplaced trust in unsafe code: trusting code not to panic, trusting user-provided implementations to be correct, and trusting the underlying system.
+
+Rust’s safety guarantees are precisely what make these findings interesting. Its rich type system and ownership model rule out whole classes of memory-safety issues, but much of the standard library relies on unsafe code underneath its safe APIs. When that code breaks its safety contract, even safe Rust can encounter behavior the language is designed to prevent.
+
+Rust’s memory-safety guarantees are increasingly important as the language
+becomes part of software that billions of people rely on every day. Billions of
+people are estimated to interact with Rust-based software or operating systems
+daily, often without knowing it.
+Microsoft made Rust a
+[Tier-1 internal language](https://rustfoundation.org/media/guest-post-rust-is-tier-1-language-at-microsoft/)
+alongside C++, C#, and TypeScript, GitHub
+[rewrote the Copilot agent runtime in Rust](https://github.blog/ai-and-ml/generative-ai/migrating-the-github-copilot-runtime-to-rust-using-copilot/),
+and [Bun](https://bun.com/blog/bun-in-rust),
+[Android](https://blog.google/security/rust-in-android-move-fast-fix-things/),
+the [Linux kernel](https://lwn.net/Articles/1050174/), and
+[Cloudflare](https://blog.cloudflare.com/20-percent-internet-upgrade/) are
+moving code to it as well. Much of this software relies on Rust’s foundational
+libraries, `core` and `std`, and the safety guarantees of the APIs they provide.
+Bugs in those libraries can have consequences well beyond the code where they
+originate.
+
+Unsafe Rust has been a long-running interest for us. Our team includes the
+people behind [Rudra](https://dl.acm.org/doi/10.1145/3477132.3483570), a static
+analyzer that looked for memory-safety bugs across the Rust ecosystem in 2021.
+We also write many of our own tools in Rust, so its safety is more than a
+research topic for us. This year, we took a closer look at the standard library
+to see what kinds of mistakes still show up in its unsafe code today.
+
+In this post, we share some of the bugs we reported to the Rust issue tracker.
+We use them to discuss what Rust does and doesn’t guarantee, why writing correct
+unsafe Rust is so difficult, and why Rust’s safety model still matters even
+though its memory safety isn’t perfect.
+
+## How we found and validated the bugs
+
+At [Microsoft FORGE Lab](https://www.microsoft.com/en-us/security/blog/2026/10/07/3-lessons-from-frontier-ai-vulnerability-research/), we study vulnerabilities in complex software, including the Rust standard library. Our team combines years of experience in vulnerability research with AI-assisted tools that help us investigate code and find bugs that are difficult to uncover through traditional analysis alone.
+
+Some of the bugs in this post were found with help from Hyenas, our research version of [codename MDASH](https://www.microsoft.com/en-us/security/blog/2026/05/12/defense-at-ai-speed-microsofts-new-multi-model-agentic-security-system-tops-leading-industry-benchmark/). Our researchers investigated the underlying code, reproduced the bugs, assessed their potential security impact, and worked with Rust maintainers to report and fix them.
+
+This post focuses on soundness bugs in the standard library’s unsafe code. Bugs in the compiler itself, such as miscompilations and holes in the type system, are a different topic that we don’t cover here.
+
+## Patterns of Rust’s Safety Bugs
+
+At the lowest level, Rust uses
+[`unsafe` blocks](https://doc.rust-lang.org/book/ch20-01-unsafe-rust.html) to
+work with raw pointers and interact directly with the operating system.
+Much of the standard library, including `Vec` and `String`,
+is built from small unsafe pieces wrapped in safe APIs.
+Inside an `unsafe` block, the programmer takes responsibility for the guarantees
+the compiler can’t check, and that responsibility extends to the safe API built
+around it. That API must be
+[sound](https://doc.rust-lang.org/nomicon/safe-unsafe-meaning.html): no matter
+how safe code uses it, it must be impossible to trigger undefined behavior.
+
+Upholding that promise is harder than it looks. Consider a function that returns
+the byte at `idx` from any type that can be viewed as a byte slice, skipping the
+redundant bounds check after doing its own:
+
+```rust
+pub fn get<S: AsRef<[u8]>>(s: &S, idx: usize) -> Option<u8> {
+    if idx < s.as_ref().len() {
+        // SAFETY: we just checked that `idx` is in bounds.
+        Some(unsafe { *s.as_ref().get_unchecked(idx) })
+    } else {
+        None
+    }
+}
+```
+
+The hard part of unsafe Rust is knowing what you can trust. The function above
+looks correct, but it assumes that two calls to `as_ref` return the same slice.
+Because `S` is chosen by the caller, a safe `AsRef`
+implementation can return a long slice the first time and an empty one the
+second, and `get` reads out of bounds. Unsafe code must be careful with every
+call it makes, and the bugs we found fall into three patterns of misplaced
+trust: trusting code not to panic, trusting user-provided implementations to be
+correct, and trusting the underlying system.
+
+### Pattern 1: Trusting code not to panic
+
+Unsafe code often breaks an invariant for a moment and restores it afterward;
+for example, it may allocate an uninitialized buffer and fill it directly,
+avoiding redundant writes to zero the memory first. That’s fine as long as the
+function runs to the end. But many operations in Rust can panic,
+from out-of-bounds indexing to calls into user-provided code, and by default a
+panic unwinds: it leaves the function early while still running destructors.
+Unwinding inside that window becomes an invisible exit that exposes the broken
+invariant to code that trusts it. Bugs of this kind are called panic safety
+bugs.
+
+![Flow diagram: a function breaks an invariant, calls code that may panic, and restores the invariant before returning. If the call panics, unwinding skips the restore step and runs a destructor on the broken state, causing undefined behavior.](https://forge-blog.github.io/posts/rust-std-memory-safety/panic-safety.svg)
+
+#### `MapWindows::clone` (#156501)
+
+We identified
+[a panic safety issue in `MapWindows::clone`](https://github.com/rust-lang/rust/issues/156501).
+[`Iterator::map_windows`](https://doc.rust-lang.org/nightly/std/iter/trait.Iterator.html#method.map_windows),
+a nightly API, yields overlapping windows of `N` items. It keeps the current
+window in a `Buffer` whose destructor drops the `N` items starting at `start`.
+In Rust 1.97.0,
+[`library/core/src/iter/adapters/map_windows.rs`](https://github.com/rust-lang/rust/blob/1.97.0/library/core/src/iter/adapters/map_windows.rs#L37-L43)
+defines it as:
+
+```rust
+37struct Buffer<T, const N: usize> {
+38    // Invariant: `self.buffer[self.start..self.start + N]` is initialized,
+39    // with all other elements being uninitialized. This also
+40    // implies that `self.start <= N`.
+41    buffer: [[MaybeUninit<T>; N]; 2],
+42    start: usize,
+43}
+```
+
+[`Buffer::clone`](https://github.com/rust-lang/rust/blob/1.97.0/library/core/src/iter/adapters/map_windows.rs#L195-L203),
+in the same file, built the new buffer first and filled it afterward:
+
+```rust
+195impl<T: Clone, const N: usize> Clone for Buffer<T, N> {
+196    fn clone(&self) -> Self {
+197        let mut buffer = Buffer {
+198            buffer: [[const { MaybeUninit::uninit() }; N], [const { MaybeUninit::uninit() }; N]],
+199            start: self.start,
+200        };
+201        buffer.as_uninit_array_mut().write(self.as_array_ref().clone());
+202        buffer
+203    }
+204}
+```
+
+After line 197, `buffer` breaks its own invariant: its slots are uninitialized,
+but its destructor is already armed. The `clone()` call on line 201 runs the
+user’s `T::clone` before the slots are written. If that call panics, unwinding
+drops `buffer` and runs `drop_in_place` on `N` uninitialized values. Our proof of
+concept uses only safe code: an element type whose `clone` always panics, which causes
+a crash when the destructor accesses uninitialized memory. The
+[fix](https://github.com/rust-lang/rust/commit/4a647a5084fa9100cb506185fa9ee9ed454374ab)
+holds the new buffer in `ManuallyDrop` until it is fully written, so unwinding
+leaks the half-built buffer instead of dropping it.
+
+The general lesson is to treat every call to code you don’t control, such as
+`clone`, `drop`, comparisons, closures, and iterator methods, as a possible early
+exit. Either finish the work that may panic before breaking an invariant, or
+make the broken state safe to unwind through: hold it in `ManuallyDrop`, or use
+a guard whose destructor restores the invariant, like `Vec`’s internal
+`SetLenOnDrop`. The Rustonomicon covers this under
+[exception safety](https://doc.rust-lang.org/nomicon/exception-safety.html).
+
+#### Allocators must not unwind
+
+The recently stabilized `Allocator` API shows how hard panic safety is to get
+right. With `std`, an allocation failure
+[aborts the process](https://doc.rust-lang.org/std/alloc/fn.handle_alloc_error.html)
+by default instead of unwinding, so much of the standard library’s unsafe code
+assumes allocation never unwinds. Custom allocators can break that assumption.
+While the API was being stabilized, we reported
+[one place in `BTreeMap::insert`](https://github.com/rust-lang/rust/issues/156490)
+that becomes unsound when an allocator unwinds, and others reported more
+([#159334](https://github.com/rust-lang/rust/issues/159334),
+[#159368](https://github.com/rust-lang/rust/issues/159368),
+[#159370](https://github.com/rust-lang/rust/issues/159370)). Fixing them one by
+one would mean auditing everything that allocates, so the
+[stabilization](https://github.com/rust-lang/rust/pull/156882), shipping in
+Rust 1.100 on November 12, instead requires implementors never to unwind from
+the trait’s methods or from `drop`. The proposal notes that “unwinding out of
+many allocation-related methods was found to be a pervasive source of
+unsoundness.”
+
+### Pattern 2: Trusting user-provided implementations to be correct
+
+Unsafe code often calls into code its caller provides: a comparator, a trait
+implementation, a closure. That code is safe, but safe doesn’t mean correct, and
+it can return inconsistent or plainly wrong answers. The question is who is
+responsible when it does. In C++, it’s the caller. `std::sort` requires its
+comparator to be a strict weak ordering, and breaking that rule is undefined
+behavior. With libstdc++, sorting equal elements with `<=` reads past the end of
+the vector:
+
+```cpp
+std::vector<int> v(100, 42);
+// Bug: `<=` is not a strict weak ordering, since cmp(a, a) is true.
+std::sort(v.begin(), v.end(), [](int a, int b) { return a <= b; });
+// AddressSanitizer: heap-buffer-overflow in std::__introsort_loop
+```
+
+The same comparator passed to Rust’s
+[`sort_by`](https://doc.rust-lang.org/std/primitive.slice.html#method.sort_by)
+is only a logic error. The sort may panic or leave the slice in an unspecified
+order, but it never causes undefined behavior. The responsibility sits with the
+unsafe code. The comparator is safe code supplied by the caller, so the unsafe
+code inside the sort must stay sound no matter what it returns. The same goes for every safe
+trait a user can implement: comparisons can be inconsistent, an
+`ExactSizeIterator` can report a length that doesn’t match the items it yields,
+and `Borrow` can return a different value on each call.
+
+#### `str::replace` with a custom `Pattern` (#156491)
+
+Another of our bug reports shows how easy this trust is to miss:
+[`str::replace` with a custom `Pattern` can create a non-UTF-8 `String`](https://github.com/rust-lang/rust/issues/156491).
+String search APIs accept any type that implements the nightly `Pattern` trait,
+and a pattern can describe itself through `as_utf8_pattern`. `str::replace` uses
+that description to take a fast path when replacing one ASCII byte with another.
+In Rust 1.96.0, the fast path in
+[`library/alloc/src/str.rs`](https://github.com/rust-lang/rust/blob/1.96.0/library/alloc/src/str.rs#L268-L278)
+looked like this:
+
+```rust
+268pub fn replace<P: Pattern>(&self, from: P, to: &str) -> String {
+269    // Fast path for replacing a single ASCII character with another.
+270    if let Some(from_byte) = match from.as_utf8_pattern() {
+271        Some(Utf8Pattern::StringPattern([from_byte])) => Some(*from_byte),
+272        Some(Utf8Pattern::CharPattern(c)) => c.as_ascii().map(|ascii_char| ascii_char.to_u8()),
+273        _ => None,
+274    } {
+275        if let [to_byte] = to.as_bytes() {
+276            return unsafe { replace_ascii(self.as_bytes(), from_byte, *to_byte) };
+277        }
+278    }
+```
+
+[`replace_ascii`](https://github.com/rust-lang/rust/blob/1.96.0/library/alloc/src/str.rs#L708-L712),
+in the same file, then rewrites the bytes:
+
+```rust
+708unsafe fn replace_ascii(utf8_bytes: &[u8], from: u8, to: u8) -> String {
+709    let result: Vec<u8> = utf8_bytes.iter().map(|b| if *b == from { to } else { *b }).collect();
+710    // SAFETY: We replaced ascii with ascii on valid utf8 strings.
+711    unsafe { String::from_utf8_unchecked(result) }
+712}
+```
+
+The `CharPattern` branch on line 272 checks that the character is ASCII, but the
+`StringPattern` branch on line 271 assumes a one-byte string pattern must be
+ASCII. That holds for `&str` patterns, but `StringPattern` stored `&[u8]`, and
+`as_utf8_pattern` is a safe method any `Pattern` can implement. In our proof of
+concept, a custom pattern reports the single byte `0x80`, which only appears
+inside multibyte UTF-8 sequences:
+
+```rust
+impl Pattern for NonAsciiBytePattern {
+    // ...
+    fn as_utf8_pattern(&self) -> Option<Utf8Pattern<'_>> {
+        static NEEDLE: [u8; 1] = [0x80];
+        Some(Utf8Pattern::StringPattern(&NEEDLE))
+    }
+}
+
+// "\u{d000}" is [ed, 80, 80]; the result is [ed, 3f, 3f], which is not UTF-8.
+let corrupted = "\u{d000}".replace(NonAsciiBytePattern, "?");
+```
+
+`str::replace` rewrites the continuation bytes and returns a `String` that isn’t
+valid UTF-8, and later string operations that rely on UTF-8 reach undefined
+behavior. The
+[fix](https://github.com/rust-lang/rust/pull/156556) changed `StringPattern` to
+hold `&str` instead of `&[u8]`, so the type itself now guarantees UTF-8.
+
+When unsafe code depends on a property of a user-provided implementation, don’t
+take it on faith. Call the implementation once and keep the result, validate
+what it returns, or encode the property in a type that safe code can’t forge, as
+this fix did. If none of those work, make the trait `unsafe` so implementors
+explicitly promise to uphold it.
+
+#### More examples
+
+`join` shows how easy it is to fix this kind of bug only partway. In 2020, we
+reported that it trusted `Borrow::borrow` to return the same string on each call
+([CVE-2020-36323](https://rustsec.org/advisories/CVE-2020-36323.html)), and the
+fix handled strings that shrink between calls. In April 2026, the same function
+[needed another fix](https://github.com/rust-lang/rust/pull/155708): `join`
+borrows the first element twice, and if it grows on the second call, the
+remaining-length calculation underflows into a heap overflow. The earlier fix
+had never covered that path.
+
+Others reported similar problems in the `Pattern` API this year. A safe
+`Pattern` can hand back a valid searcher built for a different string, and
+consumers such as `strip_prefix_of` apply its ranges to the original string
+unchecked, reading out of bounds
+([#158265](https://github.com/rust-lang/rust/issues/158265)). The same problem
+turned up in `split_once`
+([#165076](https://github.com/rust-lang/rust/issues/165076)) after a report that
+the `Searcher` contract doesn’t spell out what `str::split` relies on
+([#164904](https://github.com/rust-lang/rust/issues/164904)). Both bugs are
+still open.
+
+### Pattern 3: Trusting the underlying system
+
+The first two patterns stay inside Rust code. The third sits at the boundary
+with the operating system, where unsafe code trusts process-wide state such as
+signal stacks, memory mappings, and the environment, which other threads, C
+libraries, or the kernel can touch at any time. These bugs have been hard to
+find automatically, because a static analyzer would need to model all of that
+surrounding behavior. AI agents change the picture: they understand enough about
+the environment the code runs in to make this area practical to search. We
+started exploring it and found some interesting bugs.
+
+#### `process::exit` and the main thread’s signal stack (#161018)
+
+When a thread overflows its stack, Rust prints a clear message and aborts
+instead of crashing with a bare segmentation fault:
 
 ```text
-┏━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━┓
-┃                      ┃ Hold     ┃ Reg to   ┃          ┃          ┃ of which ┃ Setup     ┃ Reg to   ┃           ┃ Setup    ┃ of which  ┃          ┃           ┃
-┃                      ┃ Worst    ┃ Reg      ┃          ┃ Hold Vio ┃ reg to   ┃ Worst     ┃ Reg      ┃           ┃ Vio      ┃ reg to    ┃ Max Cap  ┃ Max Slew  ┃
-┃ Corner/Group         ┃ Slack    ┃ Paths    ┃ Hold TNS ┃ Count    ┃ reg      ┃ Slack     ┃ Paths    ┃ Setup TNS ┃ Count    ┃ reg       ┃ Violati… ┃ Violatio… ┃
-┡━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━┩
-│ Overall              │ 0.1951   │ 0.2897   │ 0.0000   │ 0        │ 0        │ -5.5684   │ -5.5684  │ -1272.41… │ 1065     │ 1060      │ 145      │ 2601      │
-│ nom_tt_025C_3v30     │ 1.0471   │ 1.0471   │ 0.0000   │ 0        │ 0        │ 3.7457    │ 7.6040   │ 0.0000    │ 0        │ 0         │ 136      │ 1204      │
-│ nom_ss_125C_3v00     │ 2.3477   │ 2.3477   │ 0.0000   │ 0        │ 0        │ -4.5534   │ -4.5534  │ -973.8862 │ 353      │ 352       │ 137      │ 2410      │
-│ nom_ff_n40C_3v60     │ 0.4488   │ 0.4878   │ 0.0000   │ 0        │ 0        │ 4.6815    │ 12.7768  │ 0.0000    │ 0        │ 0         │ 136      │ 532       │
-│ min_tt_025C_3v30     │ 1.0388   │ 1.0388   │ 0.0000   │ 0        │ 0        │ 3.7448    │ 8.0005   │ 0.0000    │ 0        │ 0         │ 130      │ 1149      │
-│ min_ss_125C_3v00     │ 2.3336   │ 2.3336   │ 0.0000   │ 0        │ 0        │ -3.7267   │ -3.7267  │ -764.3782 │ 296      │ 295       │ 131      │ 2304      │
-│ min_ff_n40C_3v60     │ 0.4466   │ 0.4826   │ 0.0000   │ 0        │ 0        │ 4.6844    │ 12.9664  │ 0.0000    │ 0        │ 0         │ 130      │ 481       │
-│ max_tt_025C_3v30     │ 1.0579   │ 1.0579   │ 0.0000   │ 0        │ 0        │ 3.7465    │ 7.0758   │ 0.0000    │ 0        │ 0         │ 141      │ 1320      │
-│ max_ss_125C_3v00     │ 2.3651   │ 2.3651   │ 0.0000   │ 0        │ 0        │ -5.5684   │ -5.5684  │ -1272.41… │ 416      │ 413       │ 142      │ 2601      │
-│ max_ff_n40C_3v60     │ 0.4527   │ 0.4945   │ 0.0000   │ 0        │ 0        │ 4.6771    │ 12.4714  │ 0.0000    │ 0        │ 0         │ 140      │ 641       │
-│ nom_tt_025C_5v00     │ 0.5200   │ 0.6317   │ 0.0000   │ 0        │ 0        │ 4.5785    │ 11.4278  │ 0.0000    │ 0        │ 0         │ 139      │ 673       │
-│ nom_ss_125C_4v50     │ 1.1099   │ 1.3887   │ 0.0000   │ 0        │ 0        │ 3.5360    │ 4.4721   │ 0.0000    │ 0        │ 0         │ 139      │ 1444      │
-│ nom_ff_n40C_5v50     │ 0.1981   │ 0.2942   │ 0.0000   │ 0        │ 0        │ 5.0271    │ 14.5140  │ 0.0000    │ 0        │ 0         │ 139      │ 249       │
-│ min_tt_025C_5v00     │ 0.5113   │ 0.6248   │ 0.0000   │ 0        │ 0        │ 4.5846    │ 11.6500  │ 0.0000    │ 0        │ 0         │ 133      │ 648       │
-│ min_ss_125C_4v50     │ 1.0892   │ 1.3768   │ 0.0000   │ 0        │ 0        │ 3.5474    │ 4.8628   │ 0.0000    │ 0        │ 0         │ 134      │ 1365      │
-│ min_ff_n40C_5v50     │ 0.1951   │ 0.2897   │ 0.0000   │ 0        │ 0        │ 5.0285    │ 14.6577  │ 0.0000    │ 0        │ 0         │ 132      │ 223       │
-│ max_tt_025C_5v00     │ 0.5316   │ 0.6407   │ 0.0000   │ 0        │ 0        │ 4.5719    │ 11.1135  │ 0.0000    │ 0        │ 0         │ 143      │ 784       │
-│ max_ss_125C_4v50     │ 1.1382   │ 1.4034   │ 0.0000   │ 0        │ 0        │ 3.5178    │ 3.8667   │ 0.0000    │ 0        │ 0         │ 145      │ 1518      │
-│ max_ff_n40C_5v50     │ 0.2026   │ 0.3003   │ 0.0000   │ 0        │ 0        │ 5.0257    │ 14.3356  │ 0.0000    │ 0        │ 0         │ 143      │ 449       │
-└──────────────────────┴──────────┴──────────┴──────────┴──────────┴──────────┴───────────┴──────────┴───────────┴──────────┴───────────┴──────────┴───────────┘
+thread 'main' (3307186) has overflowed its stack
+fatal runtime error: stack overflow, aborting
 ```
 
-Example of a random timing report from another chip I am working on, with corners ranging from 3 to 5.5V and -40 to 125C. And again, this is still just a subset of all the corners there are: there are even more where this came from!
+This relies on a few pieces of process-wide state. Each thread’s stack ends in a
+guard page, an inaccessible region just past the stack’s limit: `pthread`
+reserves one for every spawned thread, and on Linux the kernel’s own stack guard
+plays that role for the main thread. Touching it raises `SIGSEGV`, and Rust
+registers a handler for that signal. The handler can’t run on the stack that just
+overflowed, so Rust also gives each thread an alternate signal stack, a small
+separate mapping with a guard page of its own, which the kernel switches to when
+it delivers the signal. The handler checks that the faulting address is inside
+the guard page, prints the message, and aborts.
 
-For reference, this is just a tiny bit unusual.
+![Diagram: one column of memory. The main thread’s stack frames grow down until the next frame lands in the guard page below, which has no access. That access raises SIGSEGV, which invokes Rust’s registered signal handler. The handler runs on the alternate signal stack, a separate read/write mapping further down with its own guard page. In the bug, process::exit in a child thread unmaps that alternate stack while it is still registered.](https://forge-blog.github.io/posts/rust-std-memory-safety/stack-overflow.svg)
 
-Most designs have separate power domains as modern nodes have cell libraries designed for much lower operating voltages in order to help reduce the area power density making cooling easier and to help optimize power consumption. In the case of leading edge nodes, internal logic targets operating voltages as low as 0.7 to 0.8 V. This forces having at least separate IO and core power domains, since your IO typically starts at 1.8V and above.
+[We found](https://github.com/rust-lang/rust/issues/161018) that calling
+`process::exit` from a child thread tears down the main thread’s alternate stack
+while the main thread is still running. `process::exit` runs the runtime’s
+cleanup before calling libc’s `exit`, and in Rust 1.98.0 that cleanup ends in
+[`library/std/src/sys/pal/unix/stack_overflow.rs`](https://github.com/rust-lang/rust/blob/1.98.0/library/std/src/sys/pal/unix/stack_overflow.rs#L196-L203):
 
-Yet, you sometimes need separate power domains even if they operate at the same voltage, such as cases where you want to isolate a sensitive analog block from the power supply noise caused by a quickly toggling digital part. You might even prolong this separation of an analog and digital power domains to the IO, in which case rather than having a fully connected padring working within the same power domain you would be splitting the padding into analog IO power and digital IO power.
-
-Remember the filler cells I talked about earlier? Well there exists a special type of filler cell called a splitter used specially to split the pad ring in such cases. But, because of ESD concerns this splitter is not as simple as breaking the power line, but that is a discussion for another day.
-
-### Clock and reset[#](https://essenceia.github.io/projects/expresso/#clock-and-reset)
-
-The clock for this chip is supplied though a Schmitt trigger input pin and is strategically logged in the corner of the chip right next to the reset signal, and isolated from the rest of the pins by two power pins. This is done to limit the clock signal’s impact onto the neighboring pins given its toggle frequency, as well as to prevent the clock signal for the neighboring pins cross talk. The reset signal by comparison is a very stable signal producing little crosstalk of its own.
-
-From this point on the clock signal is pulled into the center of the floorplan and then distributed through a balanced clock tree throughout the chip.
-
-Such “shielding” is even more important in our case since we are doing wire bonding and we can also have cross talk between signals occurring between the fly wires, this would be less of a problem for a flip-chip package.
-
-## Zhe switch[#](https://essenceia.github.io/projects/expresso/#zhe-switch)
-
-This is a different challenge compared to what I was doing with Tiny Tapeout as I now have access to two great resources: firstly, a lot more pins to play with, and secondly, a lot more space.
-Even if I target the smallest possible chip, I am still blessed with more area than I know what to do with.
-
-Even before being invited to contribute I was already eyeing the wafer.space slots, so selecting the switch at the crown project of the ASIC was the easy choice.
-
-The problem is that the switch was initially designed for the constraints of Tiny Tapeout. As such, not only does it have an odd architecture with only three ports, but it was designed to be as space efficient as possible. Here, space is something I am swimming in, but with only 96 hours ahead of me I have no time to redesign an entirely new switch from scratch.
-So the plan is to re-adapt the existing switch to make the best use of being its own chip.
-
-The first and the most important change was to be able to make use of these abundant pins and have the switch to support more ports.
-
-No longer shall I be constrained by my pin count! 🔥 w 🔥
-
-… (Until I need more than 7 ports that is.)
-
-### Parameters[#](https://essenceia.github.io/projects/expresso/#parameters)
-
-Most of the verilog code you will see online tends to use hard coded widths like so :
-
-```verilog
-module add(
-	input wire [7:0] a_i, 
-	input wire [7:0] b_i,
-	output wire [7:0] res_o,
-	output wire carry_o
-);
-	assign {carry_o, res_o} = a_i + b_i; 
-endmodule
+```rust
+196pub unsafe fn cleanup() {
+197    if cfg!(panic = "immediate-abort") {
+198        return;
+199    }
+200    // FIXME: I probably cause more bugs than I'm worth!
+201    // see https://github.com/rust-lang/rust/issues/111272
+202    unsafe { drop_handler(MAIN_ALTSTACK.load(Ordering::Relaxed)) };
+203}
 ```
 
-What this code gains in ease of writing it loses in flexibility.
+Line 202 passes `MAIN_ALTSTACK`, the main thread’s alternate stack, to
+[`drop_handler`](https://github.com/rust-lang/rust/blob/1.98.0/library/std/src/sys/pal/unix/stack_overflow.rs#L297-L301):
 
-In RTL, we have a concept called parameters, which exist for an instance of a module and allow you to define, at instantiation, certain values. These values can then be used to size up buses or are macro like conditions to define which sections of the code should be included in the final hardware.
-
-```verilog
-module add#(
-	parameter W = 8
-)(
-	input wire [W-1:0] a_i, 
-	input wire [W-1:0] b_i,
-	output wire [W-1:0] res_o,
-	output wire carry_o
-);
-	assign {carry_o, res_o} = a_i + b_i; 
-endmodule
+```rust
+297// SAFETY: we warned the caller this disables the alternate signal stack!
+298unsafe { sigaltstack(&disabling_stack, ptr::null_mut()) };
+299// SAFETY: We know from `get_stackp` that the alternate stack we installed is part of
+300// a mapping that started one page earlier, so walk back a page and unmap from there.
+301unsafe { munmap(data.sub(page_size), sigstack_size + page_size) };
 ```
 
-These generic values can then be inherited down the design hierarchy allowing dependent modules to be resized accordingly.
+Line 298 disables the alternate stack of the calling thread, but line 301 unmaps
+the main thread’s. The code assumes it runs on the main thread, which isn’t true
+when a child thread calls `process::exit`. The main thread keeps running until
+libc’s `exit` finishes, with its signal stack registration still pointing at
+unmapped memory. If it overflows its stack in that window, the kernel can’t
+deliver the signal, and our proof of concept dies with a plain segmentation
+fault instead of Rust’s message. The bug dates back to
+[2015](https://github.com/rust-lang/rust/pull/28069), and the
+[fix](https://github.com/rust-lang/rust/pull/161037) stops cleaning up the main
+thread’s alternate stack altogether.
 
-### Complexity[#](https://essenceia.github.io/projects/expresso/#complexity)
+We also checked whether this could become a security issue. In theory, it could
+lead to code execution: if a writable mapping landed at the old alternate
+stack’s address, the kernel would deliver the main thread’s next signal onto it,
+and another thread could overwrite the handler’s frame, such as its return
+address, while it runs. In practice, the conditions are very tight. Everything
+has to happen in the brief window before libc’s `exit` finishes, the new mapping
+must have exactly the right size to reuse that address, and overwriting the
+frame takes a second race inside a short handler. For issue #161018, our testing
+found no reliable exploitation path under the conditions examined, and we
+assessed practical exploitation as unlikely. This assessment does not
+automatically apply to the other issues discussed.
+The [issue](https://github.com/rust-lang/rust/issues/161018) has more details in
+its security impact analysis.
 
-The original switch implementation was partially generic : it contained quite a few generic values, but these were mostly added out of habit to help clean up the design and keep things more readable, rather than truly making the design dimensions fully configurable.
+#### `CommandExt::exec` and the global environment (#156951)
 
-The reason for not making the design fully generic was out of a calculated decision to shy away from as much unnecessary complexity as possible. The original design was facing the hard physical constraints of Tiny Tapeout pin count, so making it fully generic to support an arbitrary amount of ports would have been an unnecessary premature optimization, and most importantly cost complexity.
+[Our other report](https://github.com/rust-lang/rust/issues/156951) involves the
+process environment. On Unix, `CommandExt::exec` replaces the current process
+with a new program. When the command has its own environment variables, `exec`
+points the process-global `environ` at a new array, calls `execvp`, and restores
+`environ` if `execvp` fails. In Rust 1.99.0, `Command::exec` takes the
+environment lock in
+[`library/std/src/sys/process/unix/unix.rs`](https://github.com/rust-lang/rust/blob/1.99.0/library/std/src/sys/process/unix/unix.rs#L242-L244):
 
-My grief against complexity comes from two calculated trade-offs.
+[`Command::do_exec`](https://github.com/rust-lang/rust/blob/1.99.0/library/std/src/sys/process/unix/unix.rs#L409-L414),
+in the same file, then swaps the environment:
 
-First, I find it is orders of magnitude cheaper to add complexity than to remove it.
-
-Secondly, complexity is especially expensive for hardware design because of the necessity to not have no have any bugs in the hardware. The only way of reaching this bug free state is through thought verification of operation under all possible scenarios. As we add complexity, we add hardware states such that the size of the space of states we need to explore grows exponentially.
-
-Now I know exponential growth might sound like an exaggeration, after all exponential growth is so fast that it is hard for our brains to conceive, but I assure you I am not.
-
-This problem is more formally called the “state explosion problem”.
-
-### Scale Up[#](https://essenceia.github.io/projects/expresso/#scale-up)
-
-So the biggest change in the switch was to move the number of supported ports from a static three to a generic number.
-
-Even if the RTL scales, and I could theoretically run a simulation with 48 ports, the logic itself still has scaling limits. After all, behind the abstraction of the code we are designing hardware logic for which physical constraints still apply.
-
-As the structures get wider, the number of logic elements on a path increases, the paths get physically longer and the timing degrades. And so, with \(1.73mm^2\) of core area available, timing is the wall I hit first.
-
-Given the switch was already quite tight on timing, scaling it too far would push it beyond the limits of the current design requiring a rethink of the architecture. Rethink that I cannot afford to execute in so little time.
-
-Lastly, I said I was scaling the number of ports, but because of how tight the timings are on the switch lookup table already was, it is not getting scaled up. And because it still only has four entries, and scaling beyond four ports would result in too much contention on the table and not enough hits, it would not make any sense to go beyond 4 ports for now.
-
-Thus, I settled on four ports for the switch.
-
-### Pin correspondance[#](https://essenceia.github.io/projects/expresso/#pin-correspondance)
-
-Given I now control the full ASICs layout I can also control exactly which signal maps to which pin on the padring.
-
-Since the switch was intended to work with a specific Microchip family of external physical-layer chips, and that these chips had a known pinout, I decided to choose the pin order based on how directly I could draw the connecting wire onto the PCB.
-
-## Beacon[#](https://essenceia.github.io/projects/expresso/#beacon)
-
-One of the best drawbacks of the switch scaling limit was that I was left with a few pins and lots of area to play with.
-
-And unlike with Tiny Tapeout where multiple projects share that same common infrastructure allowing only one project to be enabled at a time, this time I could have multiple designs working in parallel.
-And I had just the perfect project to include in parallel.
-
-A few months back I did the two things the entire Internet knows not to do: firstly I asked Reddit for advice, secondly I followed it.
-
-This project is called *“Until Heat Death Do Us Part"* and is a very serious implementation of an ethernet connected beacon that broadcasts its current time over 100 Mbit Ethernet with the ability to do so without overflow for the next \(10^{100}\) years. Also believed to be roughly the estimated heat death of the universe, give or take a few powers of 10 years.
-
-I have a full write-up about this ASIC’s here for those interested in getting the full story: [Until Heat Death Do Us Part.](https://talesonthewire.com/projects/until_heat_death_do_us_part/)
-
-## Full chip[#](https://essenceia.github.io/projects/expresso/#full-chip)
-
-![](https://essenceia.github.io/projects/expresso/full_floorplan_pretty.png)
-
-*Full chip floorplan render.*
-
-Putting it all together: this chip features two designs, the 4 port 100Mbps networking switch and the ethernet broadcast beacon. The networking switch is the denser design on the right hand side of the floorplan with the beacon being the on the left side, each designed placed next to there respective port pins.
-
-## What comes next?[#](https://essenceia.github.io/projects/expresso/#what-comes-next)
-
-It’s already been a few months since the chip has been sent to the fab. Since then the first batch of produced wafers have exited the fab and been received by the wafer.space.
-
-Andrew Wingate shared with us some absolutely gorgeous pictures of the diced wafers, and there is my little chip in the flesh sitting on the top right corner of the reticle:
-
-The dies are then picked off the diced wafer using a custom built robot and sorted per chip type into a tape reel. From there the chips will be either sent to the bond house for packaging or directly sent to the customer.
-
-And now I am like a child waiting for Christmas, impaciently awaiting a package, inside the first batch of my own full custom ASIC chips.
-
-Now, the chip doesn’t make a full networking equipment on its own, which is why I am also prototyping a PCB for the switch. Hopefully someday I can plug the chip in to get a fully functional switch.
-
-Here is to hoping the first iteration of the silicon just works !
-
-.. which anyone working in the industry can attest to, A0s are rare enough to be legendary.
-
-Manufacturing revisions of a chip are identified by a letter followed by a number.
-
-A0 is the first iteration, minor revision such as changing some of the higher metalization layers will increment the number and major revisions requiring a new mask set for the bottom layers, where the transistors are built, increment the letter and reset the number. So revisions might go: A0, A1, A2, B0, B1, B2, B3, C0, etc…
-
-Meanwhile the networking equipment project continues, chasing after building increasingly complex systems. Without going too deep into which next networking features I want to add, it is becoming quickly apparent that I will need to integrate some form of a CPU.
-
-This is because as I target more advanced networking applications the tasks my silicon needs to accomplish become increasingly varied and start featuring a large array of tasks that occur rarely enough, and have sufficiently lax performance requirements to be better suited for software than hardware.
-
-As for the matter of which CPU architecture to choose, although RISC-V is in vogue I find that, as a result of RISC-V’s architectural choices, it is just too expensive to implement in terms of area for systems like mine.
-
-My needs when selecting witch CPU architecture to use are:
-
-- be cheap to implement in hardware
-- have a pre-existing software ecosystem, meaning having C compiler and debugger support
-- not get me sued
-
-If only gcc were to maintain something like the “Status of Supported Architectures from Maintainers’ Point of View” at [https://gcc.gnu.org/backends.html](https://gcc.gnu.org/backends.html) then maybe I could know what my options where.
-
-```text
-Architecture characteristic key
------------------------------------------------------------------------
-H       A hardware implementation does not exist.
-M       A hardware implementation is not currently being manufactured.
-S       A Free simulator does not exist.
-L       Integer registers are narrower than 32 bits.
-Q       Integer registers are at least 64 bits wide.
-N       Memory is not byte addressable, and/or bytes are not eight bits.
-F       Floating point arithmetic is not included in the instruction set
-I       Architecture does not use IEEE format floating point numbers
-C       Architecture does not have a single condition code register.
-B       Architecture has delay slots.
-D       Architecture has a stack that grows upward.
-
-l       Port cannot use ILP32 mode integer arithmetic.
-q       Port can use LP64 mode integer arithmetic.
-r       Port can switch between ILP32 and LP64 at runtime.
-        (Not necessarily supported by all subtargets.)
-p       Port uses define_peephole (as opposed to define_peephole2).
-b       Port uses '"* ..."' notation for output template code.
-f       Port does not define prologue and/or epilogue RTL expanders.
-m       Port does not use define_constants.
-g       Port does not define TARGET_ASM_FUNCTION_(PRO|EPI)LOGUE.
-i       Port generates multiple inheritance thunks using
-        TARGET_ASM_OUTPUT_MI(_VCALL)_THUNK.
-a       Port uses LRA (by default, i.e. unless overridden by a switch).
-t       All insns either produce exactly one assembly instruction, or
-        trigger a define_split.
-e       <arch>-elf is not a supported target.
-s       <arch>-elf is the correct target to use with the simulator
-        in /cvs/src.
-
-          |      Characteristics
-Target     | HMSLQNFICBD lqrpbfmgiates
------------+--------------------------
-aarch64    |     Q        q  b  gia  s
-alpha      |  ?  Q   C    q    mgi  e
-arc        |          B      b  gia
-arm        |                 b   ia  s
-avr        |    L  FI    l  p   g a
-bfin       |       F            gi
-bpf        | HM  Q FIC   lq  b    a
-c6x        |   S     CB         gi
-cris       |       F  B         gia  s
-csky       |                 b   ia
-epiphany   |         C          gia  s
-fr30       | ??    FI B     pb mg    s
-frv        | ??       B      b   i   s
-gcn        |   S     C D  q       a e
-h8300      |       FI B         g a  s
-i386       |     Q        q  b   ia
-ia64       |   ? Q   C    qr b m i
-iq2000     | ???   FICB      b  g at
-lm32       |       F            g
-m32c       |    L  FI    l   b  g    s
-m32r       |       FI        b    a  s
-m68k       |                pb   i
-mcore      |  ?    FI       pb mg    s
-mep        |       F C       b  g  t s
-microblaze |         CB          ia  s
-mips       |     Q   CB   qr     ia  s
-mmix       | HM  Q   C    q      ia e
-mn10300    | ??                 gi   s
-moxie      |       F            g  t s
-msp430     |    L  FI    l   b  g    s
-nds32      |       F C           ia  s
-nios2      |         C           ia
-nvptx      |   S Q   C    q    mg   e
-pa         |     Q   CBD  qr b   i  e
-pdp11      |    L   IC    qr b      e
-pru        |    L  F              a  s
-riscv      |     Q   C    qr    gia
-rl78       |    L  F     l      g    s
-rs6000     |     Q   C    qrpb   ia
-rx         |                         s
-s390       |     Q        qr    gia e
-sh         |     Q   CB   qrp    i
-sparc      |     Q   CB   qr b   ia
-stormy16   | ???L  FIC D l   b   ia
-v850       |                    g a  s
-vax        |  M     I        b   i  e
-visium     |          B         g  t s
-xtensa     |         C
+```rust
+409    _reset = Some(Reset(*sys::env::environ()));
+410    *sys::env::environ() = envp.as_ptr();
+411}
+412
+413libc::execvp(self.get_program_cstr().as_ptr(), self.get_argv().as_ptr());
+414Err(io::Error::last_os_error())
 ```
 
-Behold: so many beautiful options supported that most people have never even heard of!
+Line 242 takes only the read side of the environment lock, yet line 410 writes
+the process-global `environ`; line 409 saves the old value so it can be restored
+if `execvp` on line 413 fails. Writing `environ` under a read lock lets other
+threads in. A thread calling `env::var` takes the same read lock and can see
+variables meant only for the new program, and two failed `exec` calls racing
+each other can leave `environ` pointing at a freed array that a later
+`env::vars_os()` reads. Both proofs of concept use only safe Rust. A
+[2018 fix](https://github.com/rust-lang/rust/pull/55939) held an exclusive lock
+here, but when the environment lock became a
+[read-write lock](https://github.com/rust-lang/rust/pull/81850) in 2021, `exec`
+kept the read side. A fix that avoids touching `environ` by calling `execve`
+directly is [in review](https://github.com/rust-lang/rust/pull/157144).
 
-And within this list there is one 16 bit architecture that caught my eye, at the heart of one of the longest produced systems and deeply intertwined with computer history as it saw the first version of Unix written in C.
+The environment has caused trouble before. After a
+[discussion that began in 2015](https://github.com/rust-lang/rust/issues/27970),
+the 2024 edition
+[marked `env::set_var` as `unsafe`](https://doc.rust-lang.org/edition-guide/rust-2024/newly-unsafe-functions.html),
+because C functions on most Unix platforms read the environment without going
+through Rust’s lock.
 
-What better choice than a PDP-11?
+#### `process::exit` and thread-local destructors (#164243)
 
-## Closing[#](https://essenceia.github.io/projects/expresso/#closing)
+Getting this boundary right is hard, and more problems are still open. While
+exploring this area, we independently ran into a double free in safe code that
+`process::exit` can cause through thread-local destructors. It was reported by
+someone else ([#164243](https://github.com/rust-lang/rust/issues/164243)), but
+it’s worth mentioning here. libc’s `exit` first runs the calling thread’s
+thread-local destructors, as C++ requires, and Rust registers its destructors
+the same way. If a destructor calls `process::exit` while a thread local is
+being replaced, libc drops that thread local a second time. A
+[proposed fix](https://github.com/rust-lang/rust/pull/165125) switches
+`process::exit` to POSIX `_exit`, which ends the process without running these
+handlers.
 
-A year ago, I started on a journey to go from being solely a hardware designer to building an entire ASIC from scratch without any institutional backing.
+## Conclusion
 
-It’s been a long road, passing though multiple smaller macro tapeouts, each allowing me to delve deeper into what it takes to make ASICs. This chip is my 10th solo tapeout, a fitting number to finally graduate into building full chips.
+Every unsafe block rests on assumptions about the code around it. The bugs in
+this post came from three kinds of misplaced trust:
 
-Standing upon this mountain I can tell you the road ahead is still very long.
+- that code won’t panic at the wrong moment,
+- that a caller-provided implementation behaves correctly, and
+- that the process-wide state Rust shares with the operating system and the C library stays the way the code expects.
 
-And with my first batch of full custom ASICs landing into my mailbox in a few weeks a new risk has emergeded, leading me to proclaim a new goal: not starting a fabless semiconductor company.
+### Familiar patterns are still difficult (Patterns 1 and 2)
 
-![](https://essenceia.github.io/projects/expresso/waffle.jpg)
+The first two patterns are well studied. [Rudra](https://dl.acm.org/doi/10.1145/3477132.3483570) looked for both in 2021, and the standard library was already fixing panic safety bugs in 2015 ([CVE-2015-20001](https://rustsec.org/advisories/CVE-2015-20001.html)). They remain challenging to avoid because any call inside unsafe code might unwind or run code the caller supplied.
 
-*Tradional celebratory Waffle House.*
+What we saw this year was mixed. On the positive side, the nightly process is
+working. Many reports were caught while the affected APIs were still unstable,
+and several were fixed by changing the design before stabilization.
+`StringPattern` now [holds `&str` instead of `&[u8]`](https://github.com/rust-lang/rust/pull/156556),
+and `Allocator` was
+[stabilized](https://github.com/rust-lang/rust/pull/156882) with a rule that
+implementors must not unwind. At the same time, bugs in these patterns still
+reach stable releases, and their fixes aren’t always complete. `join` was fixed
+in 2020 and
+[needed another fix](https://github.com/rust-lang/rust/pull/155708) in 2026 for
+a path the first fix had missed.
 
-**Current life goals**
+### System boundary bugs are now within reach (Pattern 3)
 
-- Have kids
-- Spend time with loved ones
-- Make chips
-- Eat waffles
-- Get a wire bonder
-- Not get a job
-- Not startting a fabless semiconductor company 🆕
+The third pattern is different. Its bugs live where Rust meets the layers below
+it: the kernel, through system calls such as `sigaltstack` and `munmap`, and the
+C library, through process-wide state such as `environ` and the cleanup that
+libc’s `exit` runs. Getting them right takes knowledge that lives outside
+Rust’s type system, which has made these bugs difficult to find with
+traditional static analysis. That may also be why they last so long. The
+`process::exit` signal stack bug was in the standard library for nearly 11
+years, and `exec` has written `environ` under a read lock since 2021. Unlike our
+reports in the first two patterns, both affect stable Rust.
 
-Thanks again to wafer.space for giving me this opportunity to join the shuttle, Tiny Tapeout for making the 9 previous tapeouts possible and the open source silicon community for building the tools making all of this possible.
+Language models already know a great deal about how these interfaces behave, so
+agentic scanners can check unsafe code against the system it runs on, not just
+the language. We
+think this boundary is one of the most promising places for agentic security
+research, in Rust and beyond.
 
-If you enjoyed this, I will be sipping coffee at a Silicon Valley neighborhood cafe between the 10th and 12th of November, so if you feel like nerding out over caffeine shoot me an [email](mailto:julia.desmazes@gmail.com).
+### Rust’s high bar is hard to meet but worth keeping
+
+Rust holds its safe APIs to a stricter standard than C and C++. Safe code must never be able to cause undefined behavior, no matter how it uses an API. In C++, a comparator that breaks `std::sort`’s ordering requirement causes undefined behavior, while Rust’s `sort` must stay memory-safe with any `Ord` implementation. POSIX doesn’t guarantee that `setenv` is safe to call while another thread reads the environment. That makes memory safety bugs in Rust hard to compare one-to-one with bugs in other languages.
+
+For the same reason, a soundness bug in the standard library isn’t automatically
+a vulnerability in the programs that use it. Each bug in this post needs an
+unusual setup to trigger, such as a panic at exactly the wrong moment, a
+deliberately misbehaving implementation, or calling `process::exit` from a child
+thread. It becomes a serious vulnerability only if a real program reaches the
+API in that way.
+
+Rust’s safety standard is strict and difficult to meet, but it’s also useful. It gives an unambiguous answer to what counts as a soundness bug, so problems can be fixed and prevented once in the library, instead of in every program that uses it. Rust’s safety model strikes the right balance between control, safety, and performance for systems programming, which is why so many projects choose it.
+
+## Beyond the lab
+
+At Microsoft FORGE Lab, we’re exploring how technology such as codename MDASH can help researchers find bugs like the ones in this post at greater scale. Rust’s standard library is one of several foundational open source projects where we’re applying this approach.
+
+**This research also extends beyond the lab.** It helps inform the development of codename MDASH, which brings agentic vulnerability discovery into Microsoft Defender. These findings can also serve as inputs to Microsoft Perception, our new multi-agent security system, where specialized agents work together across broader security workflows. For example, the Web App Pen Test Agent can use codename MDASH findings to help prioritize testing, validate exploitability against live applications, and produce actionable vulnerabilities that downstream agents can use to prioritize and support remediation. This connects AI-powered code analysis with real-world security validation and response, helping security teams move from identifying potential vulnerabilities to understanding and addressing actual risk.
+
+Our goal isn’t to simply find more bugs, it’s to identify meaningful issues, turn those findings into actionable research, and improve the safety of foundational software that developers and organizations depend on.

@@ -1,309 +1,80 @@
-Today, November 10th, we celebrate the 17th anniversary of Go’s [open source
-release](https://opensource.googleblog.com/2009/11/hey-ho-lets-go.html)!
+It’s been a really bad month (and year) for OT cybersecurity. From a wave of new, high-impact vulnerabilities, to [attacks on supermarket refrigerators](https://www.theguardian.com/world/2026/nov/02/supermarket-freezers-across-europe-hit-by-second-suspected-cyber-attack), to [attacks on blood banks](https://www.theguardian.com/technology/2026/nov/04/france-national-blood-service-hack-cyber-attack-europe), we’ve been left shorthanded and reeling. And that’s on top of [months of attacks against water utilities](https://techcrunch.com/2026/08/26/cisa-confirms-hackers-targeted-over-100-us-water-systems-during-july/).
 
-Over the past year, we released [Go 1.26 in February](https://go.dev/blog/go1.26) and [Go 1.27
-in August](https://go.dev/blog/go1.27), alongside a steady stream of releases across our
-[`golang.org/x`](https://pkg.go.dev/golang.org/x) libraries and developer tools.
-Meanwhile, the pace of change across the software industry continues to
-accelerate, driven by shifting hardware, evolving security threats, and the
-rapid rise of AI-assisted development and agentic systems.
+Through all of this, I keep seeing the same comment from seasoned enterprise cybersecurity people, and as someone dealing with these cases on the front line, I find it very frustrating. They express intense shock that these systems are accessible via networks at all, then ask why they can’t just be disconnected. It goes something like this:
 
-In a tumultuous time for the industry, Go aims to be a steady hand on the
-tiller. Our goal is to keep Go grounded in its foundational principles of
-simplicity, reliability, efficiency, and an unwavering commitment to
-[compatibility](https://go.dev/doc/go1compat), while adapting to modern hardware, production
-workloads, and developer workflows. Increasingly, our investments serve a *dual
-purpose*: what helps human engineers write, understand, and maintain reliable Go
-code at scale also provides the guardrails and authoritative context that AI
-coding assistants and agents need to be effective.
+![Quote post - From an IT guy and cybersecurity fellow, why aren't those critical things airgapped? Outside of remote observation for temperatures (which you could do with non-connected thermometers), I can't imagine why I would want a refrigerator that contains temperature-sensitive cultures of supplies to be connected to the internet.](https://tisiphone.net/wp-content/uploads/2026/11/image-1.png)
 
-## Core language and library improvements
+This is just one example, and I’m genuinely not trying to bash the OP. I’m certain they’re a very competent, experienced IT person, and I understand their frustration. But the situation is far more complicated than it looks, and calling the people who support and purchase these systems incompetent won’t fix it. So let me try to explain why so much OT, ICS, and IIoT is exposed, and which systems are in the worst state.
 
-In the language itself, Go 1.26 and 1.27 addressed several long-standing
-restrictions in generics and everyday Go syntax, guided by years of real-world
-experience. When generics first landed in Go 1.18, methods could not declare
-their own type parameters, which sometimes forced awkward package-level
-functions and “inside-out” nested calls. Go 1.27 introduced [generic
-methods](https://go.dev/blog/generic-methods) on non-interface types (such as the new
-[`Rand.N`](https://go.dev/pkg/math/rand/v2#Rand.N) method in `math/rand/v2`),
-allowing APIs to stay naturally organized on types and enabling readable method
-chaining. Together with support for self-referential type constraints in Go 1.26
-and broader type inference for generic function values in Go 1.27, generics in
-Go feel more complete and natural than ever.
+## How We Got Here
 
-Alongside generics, two refinements to value construction make everyday Go code
-cleaner and more concise. Go 1.26 extended the built-in `new` function to
-[accept an initial value expression](https://go.dev/doc/go1.26#language), allowing `new(42)`
-or `new("go1.26")` without the ubiquitous `newInt`-style helper functions used
-to populate optional pointer fields in JSON and protocol buffer structs. And in
-Go 1.27, struct literal keys can [refer directly to fields of embedded or nested
-structs](https://go.dev/doc/go1.27#language), reducing boilerplate in composite literals.
+Before we can talk about the current state of OT, we need to go back 15 to 20 years to discuss IT/OT convergence. Before then, industrial devices and network infrastructure were often highly bespoke, heterogeneous technologies engineered by vendors. Most communication was serial-based, protocols were custom, and even device firmware was developed in-house. A Rockwell system looked nothing like a Siemens system. When you purchased a system, it was designed, deployed, and supported by that specific OEM. They supplied the replacement parts. They trained the technicians and installers.
 
-In the standard library, our focus has been on evolving Go’s “production stack”
-and eliminating subtle operational traps. Few packages are as central to that as
-`encoding/json`, which has been a mainstay of Go since before Go 1.0. While its
-core model has held up remarkably well for over 15 years, tighter JSON standards
-and security expectations have turned some of its original defaults into
-interoperability and security hazards, such as silently accepting invalid UTF-8
-or duplicate object keys and matching struct fields case-insensitively. At
-the same time, its buffered design prevented true streaming and limited
-performance. Addressing these issues while upholding Go’s compatibility promise
-for the millions of existing programs that depend on `encoding/json` meant
-designing a new major version of the package.
+This got expensive, and it slowed down logistics, not just for parts but also for labour. So clever engineers and businesspeople looked at the IT landscape and had an idea. Using Windows computers as human-machine interfaces, and commercial Ethernet to encapsulate serial traffic, would be much cheaper to buy, replace, and train technicians to support.
 
-Six years in the making, the new [`encoding/json/v2`](https://go.dev/pkg/encoding/json/v2) and
-[`encoding/json/jsontext`](https://go.dev/pkg/encoding/json/jsontext) packages reached general
-availability in Go 1.27. Driven by Joe Tsai, Daniel Martí, and contributors from
-across the Go community, this [modern JSON API](https://go.dev/blog/jsonv2) brings safer,
-stricter defaults, flexible caller- and type-specified customization, and up to
-10× faster unmarshaling, while cleanly separating high-level semantic marshaling
-(`json/v2`) from low-level, reflection-free syntactic streaming (`jsontext`).
-Crucially, we didn’t leave existing code behind: the original
-[`encoding/json`](https://go.dev/pkg/encoding/json) package is now implemented entirely in
-terms of `v2` under the hood. Existing `v1` callers get faster unmarshaling
-simply by upgrading, and packages using `v1` and `v2` interoperate seamlessly so
-that the ecosystem can migrate gradually without flag days.
+Over the years that followed, systems became a mix: lower-level PLCs and RTUs down at Level 1, and above them, numerous devices that were far more familiar to IT staff. Unfortunately, they were also familiar to hackers and hacking tools. This was the first change in exposure, and it was really just a loss of security by obscurity.
 
-We’ve also brought new production diagnostics to Go’s concurrency primitives.
-Concurrency is one of Go’s greatest strengths, but goroutines accidentally left
-blocked on abandoned channels or locks can silently leak memory and CPU in
-long-running services, and traditional goroutine profiles cannot distinguish
-leaked goroutines from ones legitimately waiting for work. First previewed in Go
-1.26 and now generally available in Go 1.27, the new [goroutine leak
-profiler](https://go.dev/blog/goroutine-leak-profiles) (`goroutineleak` in `runtime/pprof` and
-`/debug/pprof/goroutineleak` in `net/http/pprof`) solves this for production
-services. Contributed by Vlad Saioc and Uber’s Programming Systems team,
-building on academic research with Aarhus University and Washington University
-in St. Louis, the profiler repurposes the garbage collector’s reachability phase
-to identify goroutines blocked on concurrency primitives that no runnable
-goroutine can ever reach. That allows it to pinpoint leaks in production with
-near-zero false positives and zero overhead when not in use.
+The next change was the homogenisation of OEM deployments. To deploy and support large-scale systems more efficiently, most industrial vendors started producing very uniform deployments of technology across the [Purdue Model](https://en.wikipedia.org/wiki/Purdue_Enterprise_Reference_Architecture), in very static architectures. Network maps and addressing can look incredibly similar between deployments, even across verticals and countries. Once again, this was the most financially and logistically efficient solution.
 
-In `net/http`, closing an HTTP/1 response body with even a single unread
-byte—such as a trailing newline left behind by a JSON decoder—previously forced
-the client to tear down the underlying TCP and TLS connection. Go 1.27’s HTTP
-transport now [automatically drains small unread response bodies in the
-background](https://go.dev/blog/http-connection-reuse) on close, turning a widespread latency
-footgun into up to a 5× speedup for sequential HTTP/1 requests while letting
-application code stay clean and simple.
+Unfortunately, any savvy cybersecurity professional can see how this lends itself to more scalable attacks, and even to automating parts of those attacks with tools and agents.
 
-These releases also added several notable standard library APIs, including a
-native [`uuid`](https://go.dev/pkg/uuid) package, a generic and type-safe
-[`errors.AsType`](https://go.dev/pkg/errors#AsType), and an in-memory
-[`httptest.NewTestServer`](https://go.dev/pkg/net/http/httptest#NewTestServer) designed for
-virtual-time testing with [`testing/synctest`](https://go.dev/pkg/testing/synctest). Existing
-packages saw significant speedups as well: [`io.ReadAll`](https://go.dev/pkg/io#ReadAll) now
-runs twice as fast while allocating half as much memory,
-[`compress/flate`](https://go.dev/pkg/compress/flate) compresses faster (speeding up `gzip`,
-`zip`, `zlib`, and `png`), and [`image/jpeg`](https://go.dev/pkg/image/jpeg) has a faster,
-more accurate encoder and decoder.
+## The Age of Remote Connectivity
 
-## Making the most of modern hardware
+Over the last ten years, we’ve lived through the rapid adoption of remote connectivity in industrial environments around the world.
 
-Modern CPUs look very different from the hardware Go first launched on 17 years
-ago, with wide vector units and deep, non-uniform memory hierarchies. A major
-focus of our runtime and compiler work is ensuring Go programs make full use of
-modern silicon, both transparently when you upgrade your toolchain and through
-new APIs when you need explicit control.
+There was a time when many industrial systems were effectively “air-gapped”. This certainly coincided with the serial era of industrial technology.
 
-After debuting as an experiment in Go 1.25, the [Green Tea garbage
-collector](https://go.dev/blog/greenteagc) became the default in Go 1.26. By organizing object
-marking around contiguous memory spans rather than chasing pointers across the
-heap, Green Tea aligns with modern CPU memory architectures to reduce garbage
-collection overhead by 10–40% in real-world workloads—and by an additional ~10%
-on recent `amd64` processors using AVX-512 vector instructions during scanning.
+As IT/OT convergence took hold, a mix of tactics was used. In some flat corporate network environments, industrial control systems were simply plugged into existing cabling for the cheapest possible network access. This included both industrial and building automation systems. We still see this today in low-margin verticals, especially manufacturing. Those flat (or relatively flat) networks have been a thorn in the side of industrial cybersecurity people for decades.
 
-Of course, the runtime shouldn’t be the only part of a Go program that can tap
-into vector hardware. Without access to Single Instruction, Multiple Data (SIMD)
-capabilities, compute-intensive software, from cryptography and media processing
-to data analytics and AI, leaves a significant portion of modern silicon dark.
-Until recently, the only way to light up that hardware in Go was by writing and
-maintaining per-architecture assembly. To change that, Go 1.26 and 1.27
-introduced two experimental SIMD packages: [`simd/archsimd`](https://go.dev/blog/archsimd),
-for low-level access to architecture-specific vector instructions on `amd64`,
-`arm64` (NEON), and WebAssembly (`wasm`); and [`simd`](https://go.dev/blog/simd-experiment), a
-higher-level, width-agnostic API that provides portable, near-assembly
-performance across architectures with automatic fallback emulation.
+The more acceptable solution from an industry perspective was implementing a DMZ at Level 3.5 of the Purdue Model. Enterprise IT would live above it, and the industrial OT environment would live below it. Note that this is still some level of connectivity. Traditionally, it was accomplished with two firewalls and some kind of jump host for traversing between the two environments when needed.
 
-We’ve also attacked the cost of memory allocation from multiple angles. The
-cheapest heap allocation is the one that never happens: in Go 1.26, the compiler
-began [allocating initial slice backing stores on the
-stack](https://go.dev/blog/allocation-optimizations) at `append` sites—even for slices that
-ultimately escape to the heap—eliminating the flurry of small heap allocations
-that typically accompany slice growth. And for heap allocations more broadly, Go
-1.27 introduced [size-specialized memory
-allocation](https://go.dev/blog/size-specialized-allocations) to speed up allocating the small
-objects (such as small structs, slices, and strings) that dominate allocator
-time. Generating dedicated fast-path allocator routines for size classes up to
-80 bytes made small allocations up to 30% faster and improved overall
-performance in allocation-heavy programs. Together with a ~30% reduction in
-baseline `cgo` call overhead in Go 1.26, these improvements make Go programs
-faster and leaner out of the box.
+Then the scope expanded, faster than practitioners could adapt.
 
-## Secure software and ecosystem defense
+## Everything Wants Access
 
-Go’s approach to security spans the entire lifecycle of software: providing safe
-APIs by design, preparing cryptography for the future, and actively defending
-the live ecosystem as new threats emerge.
+Networking industrial systems beyond single factory floors made them far more robust and efficient. Ethernet and routing allowed for distributed control and telemetry not just inside a building, but across regional, national, and then international deployments. A single control centre could make real-time changes to power transmission across mountains and multiple substations via SCADA. A manufacturer could match production to demand down to the minute, second, or millisecond. Parts could be monitored for failure tolerances, and replacements planned months in advance.
 
-To defend against store-now, decrypt-later attacks and support the industry’s
-accelerating timelines for quantum readiness, Go has continued expanding its
-post-quantum cryptography support. Go 1.26 enabled hybrid post-quantum key
-exchanges (`SecP256r1MLKEM768` and `SecP384r1MLKEM1024`) by default in
-`crypto/tls` and added the [`crypto/hpke`](https://go.dev/pkg/crypto/hpke) package
-(implementing RFC 9180 Hybrid Public Key Encryption, including post-quantum
-hybrid KEMs). Go 1.27 followed up with the new
-[`crypto/mldsa`](https://go.dev/pkg/crypto/mldsa) package, implementing the FIPS 204
-post-quantum ML-DSA signature standard and integrating it into `crypto/x509` and
-`crypto/tls`.
+But humans weren’t the limit! Computers could make these decisions on a massive scale, far faster than human operators alone. Raise production, lower production. Our society came to rely on this, with a massive push towards just-in-time logistics. Of course, that meant central SCADA servers needed bidirectional control of industrial devices across huge regions, via networks.
 
-At the same time, we’ve continued hardening the standard library and runtime
-against subtle classes of vulnerabilities. Most key generation and signing
-functions across Go’s `crypto/...` packages now unconditionally draw from a
-secure system randomness source, closing off a classic footgun where
-non-cryptographic readers were accidentally passed in. Under the hood, Go 1.26
-also added 64-bit heap base address randomization to harden `cgo` binaries and
-introduced the experimental [`runtime/secret`](https://go.dev/pkg/runtime/secret) package for
-eagerly erasing sensitive cryptographic temporaries from registers, stack
-frames, and the heap.
+Global power grids are a significant example, and they’ve changed enormously over the past ten years. Consider the advent of renewable energy. Firstly, wind and solar farms are made up of numerous generation devices, which must be coordinated and monitored individually across geographically disparate locations. Secondly, home generation necessitates smart meters to monitor usage and buy-back. Finally, there’s the problem of inertia. Traditional generation sources like nuclear, gas, and hydroelectric are high-inertia. Their output can be readily controlled through fuel, and they provide a lot of grid frequency stability during sudden spikes and drops in demand. Renewables provide far less inertia and are far less predictable. We can’t turn the wind on and off. That makes careful monitoring of detailed telemetry, and adjustments to load and generation at machine speed, essential.
 
-Securing Go deployments also requires rapid vulnerability and incident response
-in a fast-moving threat landscape. From the Go vulnerability database and
-[`govulncheck`](https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck) to our
-release infrastructure, we’ve invested heavily in ecosystem defense. In October,
-that preparation was put to the test during the [eMudhra certificate key
-disclosure incident](https://go.dev/blog/emudhra-incident), when eight intermediate TLS and
-code-signing certificates chaining to a widely trusted root CA were discovered
-to use trivially weak private keys. Because Linux lacks a uniform OS-level
-certificate revocation mechanism, Go’s built-in TLS verifier is the frontline
-defense for millions of Linux services. Within seven and a half hours of initial
-notification, the Go Security team shipped a targeted block in our first-ever
-[URGENT track](https://go.dev/doc/security/policy#urgent) security release (Go 1.27.3 and Go
-1.26.10) alongside an updated Go vulnerability database entry so `govulncheck`
-could flag affected binaries, giving Go users everything they needed to protect
-their deployments before the weak keys were publicly disclosed the next morning.
+Add centralised dispatch and repair with far fewer staff, plus mass consumer demand for exact, real-time electricity billing and status checking. The result? Many power companies around the world have little to no ability to switch to manual operations for more than a few days, if at all.
 
-## Advancing the broader Go platform and tooling
+All of this requires many inputs and outputs: telemetry from multiple industrial devices via fibre, copper, LTE, and radio; billing systems; customer portals; even computers in maintenance trucks.
 
-Go has always been more than a compiler and standard library: it is an
-end-to-end platform for software engineering. Over the past year, our work in
-[`golang.org/x/tools`](https://pkg.go.dev/golang.org/x/tools), the
-[`gopls` language server](https://go.dev/gopls), [`vscode-go`](https://github.com/golang/vscode-go),
-and [`pkg.go.dev`](https://pkg.go.dev) has focused on making that platform even
-more productive for both human developers and AI coding assistants.
+And bulk electricity is just one example. Connectivity and centralisation have been huge cost and labour savers for every vertical around the world. Big industrial companies rely on central DCS and SCADA control, and the more geographically dispersed their systems are, the more connectivity they require.
 
-In [last fall’s Go Developer Survey](https://go.dev/blog/survey2025), the single biggest
-challenge developers reported was ensuring their code follows best practices and
-current Go idioms. As Go evolves while standing by its compatibility promise,
-older ways of writing code continue to work alongside newer, clearer, or faster
-alternatives, creating a natural drift in idioms over time. That drift has been
-compounded by AI coding assistants, which gravitate toward the older patterns
-that dominate their training data.
+Take those supermarket refrigerators. Many countries hold supermarkets to regulatory standards for the temperature at which food is kept, and supermarkets don’t staff to have humans check this in real time. So most of it is done through mobile apps or central monitoring, which saves money, ensures regulations are met, and keeps food from spoiling. A thermometer that isn’t connected to anything is only useful when someone is standing in front of it.
 
-Go 1.26 tackled this with a [complete overhaul of the `go fix`
-command](https://go.dev/blog/gofix), returning the long-dormant tool to its [pre-Go 1.0
-roots](https://go.dev/blog/introducing-gofix) to apply [dozens of automatic
-*modernizers*](https://pkg.go.dev/golang.org/x/tools/go/analysis/passes/modernize)
-across entire codebases. What `gofmt` did for stylistic consistency, modernizers
-aim to do for idiomatic consistency. Available both as instant suggestions in
-`gopls` and as bulk, push-button upgrades in `go fix`, modernizers simplify
-existing code and help developers discover new language and library features. We
-now routinely consider whether new language and library proposals should ship
-with a modernizer of their own. Just as importantly, modernizers give coding
-agents an immediate way to bring generated code up to date, while helping shift
-the global corpus of open source Go code so that future models learn modern
-idioms from the start.
+## Everyone Wants Access
 
-Bespoke modernizers work well for the language and standard library, but a
-centralized team can never write them for every third-party module in the
-ecosystem. That’s why Go 1.26 also introduced the annotation-driven
-[source-level inliner](https://go.dev/blog/inliner), the first step toward a “self-service”
-paradigm for automated code maintenance. Any package author can now annotate a
-deprecated function, type, or constant with `//go:fix inline`, and the inliner
-will safely migrate callers and references via `go fix` or in the IDE, carefully
-handling evaluation order, side effects, and name shadowing.
+System efficiency is only part of the story, though. Human engineers and operators are expensive, and the 2020 pandemic forced remote support on many businesses that had never considered it. The cost savings were immediately clear to industrial operators and OEMs.
 
-In the editor, we’ve made four feature-packed releases of `gopls` over the past
-year ([v0.21.0](https://go.dev/gopls/release/v0.21.0), [v0.22.0](https://go.dev/gopls/release/v0.22.0),
-[v0.23.0](https://go.dev/gopls/release/v0.23.0), and [v0.24.0](https://go.dev/gopls/release/v0.24.0)). In
-collaboration with the Dart team, we designed and proposed an open Language
-Server Protocol (LSP) extension for [interactive
-refactoring](https://go.dev/blog/interactive-refactoring), allowing language servers to ask
-for user input through dynamic, multi-step dialogs in any supporting editor. Now
-integrated into `gopls` and `vscode-go`, interactive refactoring powers
-customizable struct tag addition and removal, interface implementation
-(including generic interfaces) with live symbol search, and cross-package
-declaration moves. Beyond refactoring, `gopls` also gained generalized package
-renaming across directories, zero-configuration support for editing Go assembly
-files, subexpression hover inspection, completions and inlay hints for promoted
-fields, automatic `govulncheck` scanning when `go.mod` dependencies change, and
-continued enhancements to its [built-in Model Context Protocol (MCP)
-server](https://go.dev/gopls/features/mcp) for AI coding assistants.
+It costs an OEM far less to train and employ ten technicians in a central, regional office than to have one in every city or at every customer site. Those savings are passed on to customers in very tangible ways. While there have been holdouts who insist on local support at significant extra expense, the industry has shifted heavily to remote support for routine system monitoring and fault analysis.
 
-Rounding out the developer platform, in May we launched the official
-[`pkg.go.dev` API](https://go.dev/blog/pkgsite-api) and followed up with support for
-[`go doc pkg@version`](https://go.dev/doc/go1.27#go-doc) in Go 1.27. Previously, developer
-tools and IDE integrations had to resort to fragile web scraping to query
-ecosystem metadata. Today, the `pkg.go.dev` API gives tool authors and AI coding
-agents a fast, authoritative service for querying module versions, package
-symbols, importers, and vulnerability data, while `go doc pkg@version` makes it
-easy to pull up documentation for any version of any package right from the
-command line.
+Assumptions about security controls are one of the most dangerous problems I encounter as a full-time incident responder in industrial environments. One of the most common is cybersecurity personnel assuming the only connectivity to OT is still the DMZ at Level 3.5 with a jump host. When I perform forensics, I typically find five to seven other remote access mechanisms. Some are software-based remote access tools. Others are extraneous modems, VPN concentrators, and wireless bridges installed by local staff and a multitude of vendors and subcontractors.
 
-## Looking ahead
+This isn’t even necessarily a contract violation. I’ve seen many major OEMs and specialist device suppliers add contractual language requiring some level of remote access in order to keep receiving support, or support within a reasonable SLA. I talk to numerous asset owners around the world, and even Fortune 50 and government clients struggle to change these terms. Some OEMs will simply only provide timely support via remote connection.
 
-We have an ambitious year ahead for Go.
+So, as an OT cybersecurity industry, we have to work around this. We have to identify and evaluate these remote connections. We have to try to build segmentation and microsegmentation around them, if the OEMs and operations permit. If that fails, we monitor and log to the very best of our ability. But all changes to industrial environments are costly, and fighting OEM requirements isn’t just expensive. It can cause a life-safety incident.
 
-On the tooling front, we’re building on the `pkg.go.dev` API, `gopls`, and `go fix` to make Go’s developer tools even more capable for both human developers
-and coding agents. Following the strong community response to `go fix` and
-`//go:fix inline`, we’re exploring ways to [expand self-service static
-analysis](https://go.dev/issue/82464), enabling developers, package maintainers, and
-organizations to easily integrate custom analyzers and domain-specific
-best-practice checks directly into their development workflows. We’re also
-exploring ways to surface richer package health and quality signals on
-`pkg.go.dev` and through its API, helping developers and coding agents evaluate
-and choose trustworthy, reliable dependencies.
+## What’s Getting Hacked and Why?
 
-In the language and libraries, Go 1.28 will resolve one of Go’s longest-standing
-language requests by allowing [composite literals to omit redundant
-types](https://go.dev/issue/12854) whenever the type can be inferred from context, cutting
-visual noise in deeply nested configurations, API requests, and table-driven
-tests. And with recent generics refinements and [hashing
-APIs](https://go.dev/pkg/hash/maphash#Hasher) in place, we’ve just accepted a
-swath of proposals for [generic collection APIs](https://go.dev/issue/80590)—including sets,
-ordered maps, and more—which will land in `golang.org/x/exp` over the next few
-weeks so the community can try them out and share feedback ahead of future
-standard library inclusion.
+Now that we understand the chaos of connectivity in modern industrial environments, we can talk about what’s getting hacked right now, and why. Why water? Why refrigerators?
 
-Under the hood, we’re working hard to graduate a large subset of the `simd` and
-`simd/archsimd` packages (covering `amd64`, `arm64` NEON, and `wasm`) in Go
-1.28, with further expansions and `arm64` scalable vector (SVE) support targeted
-for Go 1.29. Amid the global RAM crunch, reducing Go’s memory footprint is also
-one of our major priorities for the coming year.
+A few unfortunate, incredibly predictable factors have led us here, and my colleagues and I have been screaming about them for years:
 
-In the toolchain, Go 1.28 will increase build parallelism by [writing compiler
-export data early](https://go.dev/issue/15734) and streamline static analysis by [decoupling
-tool export data from the compiler](https://go.dev/issue/79427). Looking further out, we’re
-working to support [`cgo` builds without requiring a C toolchain](https://go.dev/issue/81450),
-and we’re kicking the tires on WebAssembly’s early-stage stack-switching
-extension, which is already showing promising improvements in Go Wasm
-performance and binary size.
+- Distributed industrial systems tend to be far more exposed than those in a single building. Whether it’s water pumps, wind turbines, refrigerators, or solar panels, if you have a bunch of standalone industrial environments in a field that need connectivity, the most cost-effective solution is a modem per unit or some other wireless link. Putting firewalls or concentrators in front of every modem is expensive. Keeping them updated and monitored is even more expensive. We’ve seen a two-week delay in updating them end in catastrophe. Which leads us to:
+- The organisations you see repeatedly hit have next to no money for IT, let alone cybersecurity. Manufacturing runs on thin margins, while water and some transport systems are municipally funded, with almost no budget for system updates or cybersecurity programs. It’s very easy to say “why don’t you just” put a firewall and fibre connection on every refrigerator. The cost of doing that is days of operational shutdown, and orders of magnitude more than a simple mobile router. Water has kept my colleagues and me awake, and at bars, far more than any other vertical. It’s essential to society, with next to no investment across large parts of the world.
+- The devices you see repeatedly hit are fairly homogeneous and well documented. Complex industrial systems of systems are, as a rule, hard to break in a way that’s both reliable and dangerous. They’re full of redundancies and analogue and digital safety controls. Reliable attacks used to require engineering expertise. However, AI, and LLMs specifically, are certainly lowering that barrier to entry. Without controls, they can reveal which verticals are least defended and most exposed, and which devices are popular globally for a given function. Since vendors have trended towards homogenisation, the most commonly exposed devices, and their interfaces and vulnerabilities, can be understood and automated against.
+- Fixing the vulnerability isn’t easy, even if the organisation is aware of it. Industrial systems have long lifecycles, sometimes 10 to 30 years. They’re engineered and tested by the OEM to work in a very specific technology stack and topology. Any alteration can, at best, disrupt the process and, at worst, lead to injury or death. Either outcome can be far more damaging than a casual hacker. Because of these lifecycles, and the inability to replace systems, I still deal with Windows 2000, CE, and XP every week. They can’t be removed from production or modified without express authorisation from the OEM and engineers, plus a significant outage and testing window. All of this adds up to huge expenses for the asset owner.
 
-Finally, ensuring Go stands the test of time means scaling not just our
-technology, but the open source project itself. Over the past year, some of Go’s
-most impactful advances, including `encoding/json/v2` and the `goroutineleak`
-profile, were driven by or built in close partnership with contributors outside
-Google. To better support our growing ecosystem and contributor base, we’re
-working to bridge the gap between Go maintainers at Google and our broader
-community, and to diversify Go’s technical stewardship. That includes
-[restructuring the proposal process](https://go.dev/issue/80580) to improve throughput, give
-the community clearer visibility into the process and input into prioritization,
-and formally involve community contributors in triage and review. Beyond
-proposals, we are building a clearer contributor ladder to empower proven
-contributors with greater autonomy, decision-making privileges, and maintenance
-responsibilities, and opening up maintainer summits and day-to-day
-communications to trusted contributors from our amazing community.
+As you can see, my colleagues and I have our work cut out for us. These systems are more connected than they have ever been. They contain out-of-support operating systems that can’t be replaced. Many of the most exposed systems are similar, well documented, and lack monitoring and basic cybersecurity controls because of budgets. And we’re now seeing the result first-hand in our cases: adversaries, enabled by LLM data gathering, are pinpointing these systems en masse and automating simple, disruptive attacks against the most exposed devices. That’s a very different scenario from the well-resourced, long-term state and criminal campaigns we’ve dealt with until now.
 
-Seventeen years in, Go is thriving because of the people who use it, build with
-it, and contribute to it every day. Thank you to everyone in the Go community
-for being part of this journey, and we wish you all the best in the year ahead!
+## So, Why Don’t We Just Disconnect It?
+
+The next time a headline lands about hacked pumps or freezers, and you feel the urge to ask why they don’t just disconnect it, remember that there’s rarely a single plug left to pull. These connections were built one sensible business decision at a time, and they now help keep the lights on, the water running, and the food cold.
+
+None of this makes it acceptable to leave systems directly connected where a regulation prohibits it, or where any other feasible security solution exists that doesn’t pose a safety risk. There should absolutely be a best effort to rearchitect these environments and add essential security controls, like the [SANS Five ICS Cybersecurity Critical Controls](https://www.sans.org/white-papers/five-ics-cybersecurity-critical-controls). But these things take time, and a little empathy would go a long way towards understanding the uphill battle low-resourced organisations are fighting in the middle of the current onslaught.
+
+If you’re an enterprise security professional who’s angry about all this, good. We could use your help. Bring your frustration, and bring your curiosity too.

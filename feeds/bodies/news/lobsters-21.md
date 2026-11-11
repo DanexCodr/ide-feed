@@ -1,139 +1,36 @@
-*So what if you can handle thousands of concurrent users per core? Even the front page of HN gets you what? 100 concurrent users on a good day?*
+When I set up the infrastructure for [Casuarina Linux](https://casuarina.org/) I repurposed an AMD AM4 system with
+Ryzen 9 5950X 16-Core CPU (105W TDP) and 32Gb of DDR4 RAM as the build server. I set it up
+in our laundry, connected it via a smart plug, and reset its counters. Over the course of the
+project I would regularly pull package updates from [Chimera Linux](https://chimera-linux.org/), build and install them locally,
+and then push them to the repo, which would trigger Buildbot to build and publish them.
 
-More like 30.
+The project ran from 30 March 2026 to 8 November 2026 (a bit over 7 months) the total
+energy used was 98.4 kWh. My electricity plan is a 100% renewable plan (meaning they offset the
+non-renewable parts) and costs AU$0.33
+ kWh. Ignoring the daily service fee the cost of that
+electricity is AU$32.47
+.
 
-*Exactly! Most successful apps have like what 10 or 20 concurrent users at any given time? This is basically academic for most projects. What does performance give you other than knowing that your app won't need to scale past a single server? Pointless!*
+Since it turned out I was the only one doing package updates I kept the builder off when idle. When
+there were packages to build I’d hit the power button (on the machine, not the smart plug) and some
+time later when it was done I’d press it again to shut it down. This was pretty beneficial as the
+idle draw was about 55W.
 
-Well what if you could run multiple apps in one process?
+The number of package builds was around 5000. `SELECT COUNT(name) FROM logs WHERE name LIKE 'pkg:%';` from the Buildbot `state.sqlite` yields 5201, however that’s probably slightly inflated
+due to rebuilds/packages that failed to build on the first try.
 
-*Isn't that the same as a bunch of apps behind a reverse proxy?*
+The actual usage is likely more than double the 98kWh figure as all packages were built on my
+desktop machine first, before pushing to the repository for the builder to pick up. That machine is
+an AM5 system with AMD Ryzen 9 9950X3D 16-Core CPU (170W TDP), 64Gb DDR5 RAM. Additionally our house
+has rooftop solar, and where possible I would kick off builds during the day so there was a better
+chance of using the solar. That would have reduced the actual cost, but I have no way to measure the
+specific amount.
 
-No. It's not. Separate processes have to compete for OS resources, have their own thread pools, schedulers, heap, GC, caches and so on. Each process needs to be sized relative to the other apps running on the system.
+The slowest package by far to build was Chromium, taking just shy of 4 hours to complete. For
+comparison Firefox takes about 50 minutes. Power draw measured by the smart plug when the builder
+was fully loaded is about 193W. So 4 hours at 193W is 0.77kWh, which means a Chromium build costs
+about 25 cents.
 
-But, in a single process you can size the process for the machine and then run an arbitrary number of apps in that process. If the apps share a process, they can share all sorts of things: a single JVM, GC, caches, buffers, http server, HTTPS certificate management, batching, game loop etc. You'd eliminate thread contention between apps. This lets you scale further with less resources!
-
-Performance lets you run as many apps as you want in that one process.
-
-> Disclaimer: all my writing and code is handcrafted by me. By the end of this you may wish it wasn't.
-
-## Some numbers
-
-If you have multiple JVMs you duplicate a bunch of fixed costs:
-
-- Separate heaps
-- Separate JIT
-- Separate GC
-
-If you have multiple HTTP servers you duplicate:
-
-- event loop threads
-- byte buffers
-- queues
-
-If you have multiple framework engines you duplicate:
-
-- html buffers
-- render threads
-- fragment caches
-- queues
-
-All of this adds up to more memory, more threads and more contention. If you own all your app and don't need the isolation a processes give you, then it can be a big performance win to have one JVM, one http server, and one framework engine.
-
-*Where were the numbers?*
-
-`X * n` where `X` is you fixed cost for the above and `n` is your number of apps. If all of the above takes 500MB, then four apps is an extra 1.5GB.
-
-## What is an app?
-
-*A miserable little pile of secrets*
-
-Indeed. If you think about it an app at it's simplest is a domain, a database and some routes.
-
-```
-(def app
-  {:domain   "example.andersmurphy.com"
-   :db       {:name          "gol.db"
-              :migrations    migrations
-              :pragma-writer {:cache_size 15625}
-              :pragma
-              {:cache_size 2000
-               :page_size  4096
-               ;; 1GB
-               :mmap_size  1000000000}}
-   :routes   #'routes
-   :batch-fn #'batch-fn})
-```
-
-## HTTPS certificate management with Clave
-
-*But, my reverse proxy handles HTTPS certs and stuff! Where is your god now?*
-
-Yes certs are a pain. But [Clave: Automatic HTTPS certificate management and renewal via ACME, implemented in pure Clojure with minimal dependencies](https://github.com/outskirtslabs/clave) exists. I use it with aleph. But, it also works with jetty and it's simple to extend to other servers.
-
-```
-(clave-aleph/start-server router
-  (merge
-    config
-    {:http-versions             [:http2 :http1]
-     ::clave-aleph/http-options {:port 80}
-     ::clave-aleph/config
-     {:domains (mapv :domain apps)
-      :issuers
-      [{:directory-url
-        "https://acme-v02.api.letsencrypt.org/directory"
-        :email email}]}}))
-```
-
-So no reverse proxy needed.
-
-## Bundling our apps
-
-To bundle our apps we import them as dependencies into a separate project who's only purpose is to configure and start the server.
-
-```
-(ns app.main
-  (:gen-class)
-  (:require
-   [hyperlith.core :as h]
-   [billion-cells.main :as cells]
-   [billion-checkboxes.main :as boxes]
-   [game-of-life.main :as gol]
-   [clj-async-profiler.core :as prof]))
-
-(defn start-app! [& {:keys [mode]}]
-  (h/start-server!
-+   {:apps               [cells/app boxes/app]
-     :tick-ms            100
-     :render-buffer-size (* 64 16384)
-     :email              (h/env :email)
-     :mode               mode}))
-
-(defn -main [& _]
-  (start-app! :mode :prod))
-```
-
-So adding a new app is as simple as importing it and adding it to the list of apps:
-
-```
-:apps [cells/app boxes/app gol/app]
-```
-
-We can then build this project as an uberjar and `scp` it to the server.
-
-## Deployment
-
-*Well this is nice and all, but whenever you deploy an app, you restart the process. DOWNTIME! UNACCEPTABLE!*
-
-Here's a gif of me deploying the jar to production:
-
-![deploy gif](https://andersmurphy.com/assets/deploygol.gif)
-
-If a deploy is indistinguishable from network blip did the app really go down?
-
-## Conclusion
-
-That's it. We've reduced the overhead and cost of deploying a new app to zero.
-
-Code [can be found here](https://github.com/andersmurphy/hyperlith). All three apps are running on the same JVM, on the same 10$ VPS , [here](https://example.andersmurphy.com/), [here](https://checkboxes.andersmurphy.com/) and [here](https://cells.andersmurphy.com/).
-
-**Thanks to** Everyone on the [Datastar discord](https://discord.gg/bnRNgZjgPh) who read drafts of this and gave me feedback.
+Overall it cost a bit under AU$5
+ a month (ignoring solar, and my workstation) to
+build all the packages for a Linux distribution. That’s not too bad I think.
