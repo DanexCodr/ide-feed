@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-11T05:11:15Z",
+  "updated": "2026-11-11T13:45:03Z",
   "items": [
     {
       "id": "devto-4943245",
@@ -50,15 +50,15 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4878017",
-      "title": "Four Ways a Test Can Lie to You",
-      "desc": "By Ken W Alger | 12 min read",
+      "id": "devto-5015589",
+      "title": "We Keep Hearing About AI Productivity. The QA Group Chat Told a Different Story.",
+      "desc": "By xulingfeng | 12 min read",
       "tag": "tutorial",
-      "published": "2026-10-28T13:32:00Z",
+      "published": "2026-11-11T08:35:15Z",
       "order": 5,
-      "url": "https://dev.to/kenwalger/four-ways-a-test-can-lie-to-you-2ibf",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fjn2ygonhg2bm9uetvhqj.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAgME/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAH/2gAMAwEAAhADEAAAAcLkkU0D/8QAGBAAAgMAAAAAAAAAAAAAAAAAABEBECD/2gAIAQEAAQUCEKpx/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFhAAAwAAAAAAAAAAAAAAAAAAARAg/9oACAEBAAY/AqC//8QAGhAAAgMBAQAAAAAAAAAAAAAAACEBEDERcf/aAAgBAQABPyEmDZuHsUh3Tr8V/9oADAMBAAIAAwAAABAgj//EABURAQEAAAAAAAAAAAAAAAAAAAAB/9oACAEDAQE/EEf/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/ED//xAAcEAACAwEAAwAAAAAAAAAAAAAAAREhMWFRcYH/2gAIAQEAAT8QTSjtCTSFKdItMNNHr4JR9HfWeTs+hOZ9n//Z",
+      "url": "https://dev.to/xulingfeng/we-keep-hearing-about-ai-productivity-the-qa-group-chat-told-a-different-story-2nma",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fjm7bc53mhi6cxl48ue89.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAwQBAgX/xAAXAQADAQAAAAAAAAAAAAAAAAAAAQID/9oADAMBAAIQAxAAAAFYy5WaVAxnX//EABsQAAEFAQEAAAAAAAAAAAAAAAEAAgMRISIx/9oACAEBAAEFAqUWOJwu1R+s7FAL/8QAFREBAQAAAAAAAAAAAAAAAAAAABH/2gAIAQMBAT8BR//EABYRAQEBAAAAAAAAAAAAAAAAAAABEf/aAAgBAgEBPwGtf//EABgQAAIDAAAAAAAAAAAAAAAAAAARECAh/9oACAEBAAY/AowVGf/EAB4QAQACAQQDAAAAAAAAAAAAAAEAESEQQVFxMWGB/9oACAEBAAE/IexObtGPCvuUFUfdMF1NxgYpaWjzP//aAAwDAQACAAMAAAAQfe//xAAVEQEBAAAAAAAAAAAAAAAAAAABEP/aAAgBAwEBPxAj/8QAFxEBAAMAAAAAAAAAAAAAAAAAABExQf/aAAgBAgEBPxCiGv/EABsQAQEBAQEAAwAAAAAAAAAAAAERADFBEFGR/9oACAEBAAE/ECgemiqIVc/AMJ5/cIknv0ZZPhUwY2O4m+AdeCkL0m//2Q==",
       "color": "#3B49DF"
     },
     {
@@ -254,12 +254,24 @@
       "color": "#3B49DF"
     },
     {
+      "id": "devto-5015013",
+      "title": "Part 5: The Control That Protected an Empty Bucket",
+      "desc": "By Nnamdi Felix Ibe | 12 min read",
+      "tag": "tutorial",
+      "published": "2026-11-11T06:32:19Z",
+      "order": 22,
+      "url": "https://dev.to/ndcodes/part-5-the-control-that-protected-an-empty-bucket-e1j",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F1v9spk1il2i1k2pk4bfp.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAAEDBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHsugio/8QAFxABAAMAAAAAAAAAAAAAAAAAAREgIf/aAAgBAQABBQJdGb//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAUEAEAAAAAAAAAAAAAAAAAAAAw/9oACAEBAAY/Ag//xAAYEAEBAAMAAAAAAAAAAAAAAAABABEgMf/aAAgBAQABPyFREy6S42//2gAMAwEAAgADAAAAEMH/AP/EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QP//EABwQAAMAAgMBAAAAAAAAAAAAAAABETHwIUFRYf/aAAgBAQABPxBbJxjaTGDK1jG6E2R+sn1kIf/Z",
+      "color": "#3B49DF"
+    },
+    {
       "id": "devto-5004421",
       "title": "I Used gp-grid to Build a React Food Festival App with Advanced Data Grid Features",
       "desc": "By Hadil Ben Abdallah | 16 min read",
       "tag": "tutorial",
       "published": "2026-11-10T09:04:10Z",
-      "order": 22,
+      "order": 23,
       "url": "https://dev.to/hadil/i-used-gp-grid-to-build-a-react-food-festival-app-with-advanced-data-grid-features-3l22",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fn4q9jewu74jn3w6oo3yn.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAAMAAAAAAAAAAAAAAAAAAQACBP/EABYBAQEBAAAAAAAAAAAAAAAAAAIAAf/aAAwDAQACEAMQAAABwMEbA7f/xAAZEAADAAMAAAAAAAAAAAAAAAAAERIBECH/2gAIAQEAAQUCXBklD1WT/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAGxAAAwEAAwEAAAAAAAAAAAAAAAERIRAxQWH/2gAIAQEAAT8h9NE81Jjx0ipRNJwp9D//2gAMAwEAAgADAAAAEFyf/8QAFREBAQAAAAAAAAAAAAAAAAAAACH/2gAIAQMBAT8QV//EABcRAAMBAAAAAAAAAAAAAAAAAAABETH/2gAIAQIBAT8QFFp//8QAGxABAAMAAwEAAAAAAAAAAAAAAQARITFBUWH/2gAIAQEAAT8QGtgrjIpRTpqIoCfa4iGTT3UCw4zxXVTKtcxWt59n/9k=",
@@ -271,7 +283,7 @@
       "desc": "By Ken W Alger | 10 min read",
       "tag": "tutorial",
       "published": "2026-11-03T13:53:00Z",
-      "order": 23,
+      "order": 24,
       "url": "https://dev.to/kenwalger/rack-before-you-remember-2jl3",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fjta595mrd2d2908smur0.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAwUAAQT/xAAUAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAGwa1gsYAI//8QAGhAAAwEAAwAAAAAAAAAAAAAAAAECEQMSE//aAAgBAQABBQKn1lcuF0keslLZLWykf//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABURAQEAAAAAAAAAAAAAAAAAAAEQ/9oACAECAQE/ASf/xAAXEAEBAQEAAAAAAAAAAAAAAAAQAQJR/9oACAEBAAY/AidKZp//xAAbEAACAwADAAAAAAAAAAAAAAAAAREhQXGRof/aAAgBAQABPyGxfg7KaNxpHJ0LlESySHcFB//aAAwDAQACAAMAAAAQiO//xAAVEQEBAAAAAAAAAAAAAAAAAAABAP/aAAgBAwEBPxBJv//EABYRAAMAAAAAAAAAAAAAAAAAAAABEf/aAAgBAgEBPxBqRH//xAAdEAEAAwACAwEAAAAAAAAAAAABABEhMUFhcYGh/9oACAEBAAE/EMi1a8I6+pHYO3g4+uz7C++MATXLiaLdlgFtwa67f5P/2Q==",
@@ -283,22 +295,10 @@
       "desc": "By Harsh  | 4 min read",
       "tag": "tutorial",
       "published": "2026-11-03T13:36:07Z",
-      "order": 24,
+      "order": 25,
       "url": "https://dev.to/harsh2644/i-let-ai-build-a-feature-without-giving-it-the-full-context-6h",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fvjfvxjyuym3m70wcniah.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAgQBAwX/xAAUAQEAAAAAAAAAAAAAAAAAAAAC/9oADAMBAAIQAxAAAAFjPOEVyGwr/8QAHBABAAIBBQAAAAAAAAAAAAAAAQACEQMQEhMh/9oACAEBAAEFAvF7LbNLEolJyM5jqWT/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAcEAACAgIDAAAAAAAAAAAAAAABEQAQEiExMnH/2gAIAQEABj8CU5p46mgX7OtIkqf/xAAdEAEBAQABBQEAAAAAAAAAAAABEQBBITFRYZGx/9oACAEBAAE/IR6jULMCd+hMfSBzlr7DG5/Wjw/dakuHf//aAAwDAQACAAMAAAAQcX//xAAVEQEBAAAAAAAAAAAAAAAAAAAAAf/aAAgBAwEBPxBX/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPxA//8QAHRABAQACAgMBAAAAAAAAAAAAAREAITGhUWFxwf/aAAgBAQABPxCvBBVsyQnPeLNCt84pHm0aMSpIiufWAKdtl4q6+TX5jrkohHrP/9k=",
-      "color": "#3B49DF"
-    },
-    {
-      "id": "devto-4929802",
-      "title": "Are You a Python Developer or a Python Expert? 7 Tests I Failed Building 3 Desktop Apps",
-      "desc": "By Akhouri Anmol Kumar | 6 min read",
-      "tag": "tutorial",
-      "published": "2026-10-28T10:13:29Z",
-      "order": 25,
-      "url": "https://dev.to/akhourianmolkumar/are-you-a-python-developer-or-a-python-expert-7-tests-i-failed-building-3-desktop-apps-2fp4",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fz79ftelq3gss34zn235x.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAAECAwT/xAAVAQEBAAAAAAAAAAAAAAAAAAABAv/aAAwDAQACEAMQAAABy1iRMnL/AP/EABgQAQEBAQEAAAAAAAAAAAAAAAEAEBEh/9oACAEBAAEFAvJ3rKxn/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFREBAQAAAAAAAAAAAAAAAAAAABH/2gAIAQIBAT8Bqv/EABQQAQAAAAAAAAAAAAAAAAAAADD/2gAIAQEABj8CD//EABsQAAIDAAMAAAAAAAAAAAAAAAABESExEEFR/9oACAEBAAE/IVW5F8wSIErsa18IP//aAAwDAQACAAMAAAAQyi//xAAWEQEBAQAAAAAAAAAAAAAAAAAAARH/2gAIAQMBAT8QkY//xAAVEQEBAAAAAAAAAAAAAAAAAAABAP/aAAgBAgEBPxBiL//EABsQAQEBAQADAQAAAAAAAAAAAAERACEQUWGh/9oACAEBAAE/ECi9J2JjKq/SL+YkbpswgC4Q7qoiel8A29u//9k=",
       "color": "#3B49DF"
     },
     {
@@ -323,18 +323,6 @@
       "url": "https://dev.to/gde/the-postcard-that-ate-six-grammars-1980-smalltalk-80-1976-make-tdd-and-the-four-attractors-of-45me",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F5gl4u3vgt6joi8tfi99i.jpg",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAABAID/8QAFQEBAQAAAAAAAAAAAAAAAAAAAQD/2gAMAwEAAhADEAAAAS2dgxhqZv/EABgQAQEBAQEAAAAAAAAAAAAAAAExABEh/9oACAEBAAEFAlHcOEYU8G7/xAAVEQEBAAAAAAAAAAAAAAAAAAAAAf/aAAgBAwEBPwFX/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAGBABAAMBAAAAAAAAAAAAAAAAAQARISD/2gAIAQEABj8CCZGjev/EABoQAAIDAQEAAAAAAAAAAAAAAAABESFRMaH/2gAIAQEAAT8hQdiCr0lYQXRp09F0XWVaKhDZ/9oADAMBAAIAAwAAABDtz//EABURAQEAAAAAAAAAAAAAAAAAABEQ/9oACAEDAQE/EBj/xAAWEQEBAQAAAAAAAAAAAAAAAAAAARH/2gAIAQIBAT8Q1K//xAAcEAEBAQEAAgMAAAAAAAAAAAABEQAhMUFRkcH/2gAIAQEAAT8QGp6V/M3kFnyzm+oGnXp5ruVAQ+mYUI9jwLjDYFS23Kw9HDf/2Q==",
-      "color": "#3B49DF"
-    },
-    {
-      "id": "devto-4944141",
-      "title": "How I Made Yet Another Project During a Global Teen Hackathon with Prizes",
-      "desc": "By Tyler N | 9 min read",
-      "tag": "tutorial",
-      "published": "2026-10-30T21:07:45Z",
-      "order": 28,
-      "url": "https://dev.to/tyleruploads/how-i-made-yet-another-project-during-a-global-teen-hackathon-with-prizes-38hc",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fm9vivpavqjce812u6hn2.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAAECAwX/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAHQGFckH//EABcQAQADAAAAAAAAAAAAAAAAAAABICH/2gAIAQEAAQUCai3/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAUEAEAAAAAAAAAAAAAAAAAAAAw/9oACAEBAAY/Ag//xAAaEAACAwEBAAAAAAAAAAAAAAABEQAQIUGR/9oACAEBAAE/IdoRWA+QN9ojJyBOf//aAAwDAQACAAMAAAAQEU//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/ED//xAAbEAADAQEAAwAAAAAAAAAAAAAAASERcUFh0f/aAAgBAQABPxBTEhw/ohFXoO+HnqEtZVfAnHCTFen/2Q==",
       "color": "#3B49DF"
     },
     {

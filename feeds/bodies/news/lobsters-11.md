@@ -1,230 +1,126 @@
-If you have read my recent [rant about programming languages](https://nchagnet.eu/blog/desert-island-languages/), you'll know I've been quite interested in [Gleam](https://gleam.run). Gleam is a functional language that targets BEAM, the Erlang VM,<sup>[1](https://nchagnet.eu/blog/you-should-try-gleam#fn:1)</sup> with a simple syntax and interoperability with the wider BEAM ecosystem (Erlang and Elixir). Interestingly, Gleam can *also* target JavaScript i.e., Gleam can be compiled into JavaScript and run through Node.js.
-
-I've been mostly using Rust for hobby projects, which at the moment is the only language that really makes coding enjoyable for me, and Gleam has managed to scratch that itch too. If you're a Rust *connaisseur*, then Gleam will feel familiar to you, bar a few key differences. I feel like 80% of the code I write could be copy pasted to Rust (with a tinge of search-and-replace for syntax) and it'd compile.
-
-This post won't give an exhaustive overview of the language, if you want to learn more, I recommend the [excellent interactive tour](https://tour.gleam.run). You'll get a good feel for Gleam in under half an hour.
-
-## Gleam: the good
-
-On its homepage, Gleam is described as "a **friendly** language for building **type-safe** systems that **scale**!" (emphasis theirs) which does a good job of conveying what Gleam is all about.
-
-### Gleam is friendly
-
-The syntax is extremely simple, most of the complex stuff is hidden by the Erlang runtime which you don't really have to interact with unless you want to! Of course, Gleam is a functional language, so if you have lived in a C-shaped imperative world your whole life, it might be a bit daunting at first. But if you compare it to other functional languages (OCaml, Haskell, Erlang), you'll quickly notice Gleam is much simpler. After using it a bit, it feels like all the functional parts of Rust, with a few missing ones, and none of the imperative parts.
-
-Let's start from an example piece of code:
-
-Dissecting this a bit, you can see a few specificities of Gleam:
-
-- variables in Gleam are immutable (so no mut keyword or anything like that), chained functions here all return a new element.[2](https://nchagnet.eu/blog/you-should-try-gleam#fn:2) You can still shadow a binding with a new let, which is how you "update" a value.
-- |> (typed |>) is the pipe operator used to chain functions on data. The main constraint is that the piped variable should be the first argument of the function in the pipe.
-- just like Rust, errors in Gleam are just values as part of the Result monad.[3](https://nchagnet.eu/blog/you-should-try-gleam#fn:3)
-
-Comparing with the Rust code snippet, you can see that, up to a few naming choices, they look pretty similar. The main difference in this example is really the piping vs. chaining syntax. **Gleam types have no methods** so piping is used instead.
-
-The piping operator `|>` is the first of the three mascot features of Gleam you will meet in this post, the other two being the `use` pattern and tail-call optimization.
-
-#### The use pattern
-
-If you've written a lot of JavaScript, you might be used to the indentation creep that arises when nesting many callbacks into one another
-
-```javascript
-someFunc(arg, function(param) {
-  someOtherFunc(param, function(otherParam) {
-    // ...
-  })
-})
-```
-
-In Gleam, many functions expect a callback, for example because as a way to control access to a resource and clean up when the process is done (closing a database connection, releasing a file handle, etc.). To avoid this kind of tower of callbacks, Gleam provides some syntactic sugar: `use param <- some_func(arg)` is equivalent to `some_func(arg, fn(param) { ... })`. The callback must always be the **last** argument of the function. That is the opposite of `|>`, which fills the first one.
-
-#### Tail-call optimization
-
-This one might genuinely trip you up if you're not familiar with it. The first thing you need to know is **there are no loops in Gleam**! Again, if you've written OCaml or Haskell before, you won't be surprised by this. In 98% of cases,<sup>[4](https://nchagnet.eu/blog/you-should-try-gleam#fn:4)</sup> loops are simple operations over bounded iterations. Think `for` loops on a list or a set. Exactly the kind of thing which in Rust you always have two ways of doing: one imperative with the exact `for` loop, one more functional with a combination of operations on iterators. Well, if you look at the code example in the previous section, you'll see Gleam uses the second kind and has a plethora of functions to iterate over lists, sets, tuples, strings, anything.
-
-But what if you need something more complicated? What about the 2%? This is where you would instead use **recursion**! A simple algorithm which illustrates this is Euclid's algorithm to compute the Greatest Common Divisor (GCD). Below you can find a Rust iterative example, and a Gleam recursive example.
-
-Of course, you can also write the recursive version in Rust, but this usually isn't such a great idea. Recursion in imperative languages can quickly get out of hand: every call adds a new stack frame, and a deeply recursive function can blow the stack (the infamous **stack overflow**).
-
-On the BEAM there is no fixed-size stack, so runaway recursion eats heap memory until the process is killed instead, but the point remains: deep recursions equals trouble. To avoid that problem, compilers for functional languages implement a technique called Tail Call Optimization (TCO), which applies when the recursive call is the last thing the function does. The existing stack frame is then reused instead of stacking a new one, giving performance close to an imperative `while` loop.<sup>[5](https://nchagnet.eu/blog/you-should-try-gleam#fn:5)</sup>
-
-### Gleam is type-safe
-
-This piece of the slogan is mostly there to answer the obvious question "why Gleam and not Elixir?" (another Erlang-based language). While Elixir is a dynamically-typed language (with gradual typing now!), Gleam was *built* as a statically-typed language with a strong type system: strong types are its *raison d'être*.
-
-A `type` in Gleam encompasses both the `enum` and the `struct` concepts in Rust:
-
-Because Gleam types are algebraic data types, they are very useful to ensure undesired states are impossible. A great aspect of Gleam, which will be relevant a little bit later, is that it compiles to *both* the BEAM virtual machine *and* to JavaScript. So you can share these strong type definitions across different applications in both targets. This is particularly handy if you need a web application to communicate with a BEAM app.
-
-### Gleam is made for systems that scale
-
-That, of course, refers to BEAM, the Erlang VM. Unlike languages which target the native system (Rust, Go, C++), a VM provides an extra abstraction layer between the system and the program. In the case of BEAM, that layer is exceptionally good at handling concurrent processes and failures while remaining fast.
-
-Gleam makes good use of that, and this is what a concurrent program would look like:
-
-```gleam
-// Omitted imports
-pub fn main() {
-  let order_number_and_amounts = [
-    #(101, 100),
-    #(102, 200),
-    #(103, 300)
-  ]
-
-  order_number_and_amounts
-  |> list.each(fn(x) {
-    let #(order_no, amount) = x
-    let order_description = "Order #" <> int.to_string(order_no)
-
-    // Spawn unlinked: a crashing worker must not take the parent down.
-    process.spawn_unlinked(fn() {
-      // 101 and 103 will succeed, 102 will crash
-      process_order(order_description, amount)
-    })
-  })
-
-  io.println("All orders dispatched!")
-
-  // Keep the parent alive until the children have had time to run.
-  process.sleep(10)
-}
-
-fn process_order(order: String, amount: Int) {
-  process.sleep(1)
-  case amount {
-    200 -> panic as "Payment failed!"
-    _ -> io.println(order <> " processed successfully")
-  }
-}
-
-// Stdout
-// ----
-// All orders dispatched!
-// Order #101 processed successfully
-// Order #103 processed successfully
-```
-
-What you should take away from this code is that it's the BEAM that handles processes.
-
-The call to `process.spawn_unlinked` triggers a new process with no link to its creator, so when order 102 crashes, neither the parent nor siblings are affected. With a plain `process.spawn` the child would be linked to the caller, and that `panic` would have taken the whole program down. If you look closely, I also added `process.sleep(10)` so the parent wouldn't close *before* the children could finish: this is a hack, since the delay is only a guess and a slower child would still be cut off.
-
-Thankfully, a great advantage of the BEAM is how easy inter-process communication is, which the following code piece illustrates well:
-
-```gleam
-// Omitted imports
-pub type PaymentError {
-  PaymentFailed
-}
-
-pub fn main() {
-  let parent = process.new_subject()
-  let orders = [
-    #(101, False),
-    #(102, True),
-    #(103, False)
-  ]
-
-  orders
-  |> list.each(fn(x) {
-    let #(order_no, should_fail) = x
-
-    process.spawn(fn() {
-      // Simulate processing time
-      process.sleep(1000)
-
-      // 101 and 103 succeed, 102 fails
-      let res = case should_fail {
-        True -> Error(PaymentFailed)
-        False -> Ok(Nil)
-      }
-
-      process.send(parent, #(order_no, res))
-    })
-  })
-
-  io.println("All orders dispatched!")
-
-  receive_results(list.length(orders), parent)
-}
-
-fn receive_results(
-  remaining: Int,
-  parent: process.Subject(#(Int, Result(Nil, PaymentError))),
-) -> Nil {
-  case remaining {
-    0 -> Nil
-
-    _ -> {
-      let #(order_no, res) = process.receive_forever(parent)
-
-      let status = case res {
-        Ok(_) -> "successful"
-        Error(_) -> "failed"
-      }
-
-      io.println(
-        "Processing of order #" <> int.to_string(order_no) <> " " <> status <> "!",
-      )
-
-      receive_results(remaining - 1, parent)
-    }
-  }
-}
-
-// Stdout
-// ----
-// All orders dispatched!
-// Processing of order #103 successful!
-// Processing of order #102 failed!
-// Processing of order #101 successful!
-//
-// The order of the last three lines depends on scheduling.
-```
-
-### OTP: the gift that keeps on giving
-
-In the paragraph above, I briefly showed how the BEAM virtual machine is great for concurrent programs communicating by message passing. If you're familiar with Go, this is similar to how it handles the same problem with *goroutines*. But the OTP (Open Telecom Platform), the set of libraries that ships with Erlang, is more powerful than that. It provides you with a built-in supervisor-actor paradigm which enables you to create scalable, concurrent services which can crash without taking down the whole application.
-
-In a nutshell, the OTP exposes *actors*: lightweight processes that hold state and communicate with each other via messages (like in the example above). When paired with a *supervisor*, the whole application becomes more resilient to any individual actor crashing: the supervisor will monitor processes and restart them as needed. It can also help start/stop groups of actors dynamically.
-
-If you're reading this and thinking "uh that sounds a lot like how I used Kubernetes", you're not alone. The OTP model is extremely similar to the controller-pod architecture of Kubernetes and solves a lot of the same problems.<sup>[6](https://nchagnet.eu/blog/you-should-try-gleam#fn:6)</sup>  However, in my experience, *a lot* of workflows using Kubernetes don't really need a cluster but still use one (and that's expensive!) because of the added bonus of the distributive experience. For those cases, the OTP provides a really interesting alternative.
-
-Let me give you a concrete example. Without going in too much detail, we have a common setup in my team which involves a handwritten Go job scheduler handling some other processes.
-
-The scheduler, each worker, and the user interface are all pods inside the cluster, managed by Kubernetes. To be honest, this works well, but it does introduce a lot of complexity. First of all, most of these services do not need to be so isolated from each other. The consequence here is that we need duplicate REST APIs in various places to enable communication between different services.
-
-What if we wanted to reorganize this within a Gleam application? There are two parts where Gleam would shine here:
-
-1. the OTP would essentially unify all scheduling services as actors within a single application,
-2. the user interface (currently a Node.js app) can be written in Gleam and compiled to JavaScript.
-
-Here is the revised architecture:
-
-Within the BEAM application, all actors would communicate via messages:
-
-- the HTTP server receives requests and saves them to the DB,
-- the workers would pick up jobs and write the status back to the DB.
-
-So instead of handling the deployment of multiple applications in separate pods, you can just let the OTP handle all process management within one VM (for the scheduling part).
-
-#### What does it mean to reuse code between the frontend and the backend?
-
-As mentioned before, one of the big advantages of Gleam is that it compiles to JavaScript. So you can bundle shared type definitions between the user interface and the job scheduler instead of keeping duplicate APIs in sync.
-
-## Gleam: the bad
-
-Every language has its flaws, and it's time for some honest feedback on Gleam. I don't pretend I have much experience with the language yet, so if any of these complaints feel unfair to you, feel free to [correct me](mailto:hi@nchagnet.eu). So far, these are the things I noticed:
-
-- the ecosystem is small. This is not Gleam's fault per se, just a consequence of being a young language,[7](https://nchagnet.eu/blog/you-should-try-gleam#fn:7) and there are mitigating factors such as the possibility to use external functions quite easily (Erlang, Elixir on BEAM, JavaScript on its own runtime) directly from Gleam. Yet, the community itself favours Gleam-first packages and as of today, there are some gaps in package variety.
-- The language is too simple. Well, to be honest I don't agree per se with this, I like it like this. But I totally understand that the lack of macros or other complex features can put a few people off (for example, I read that currying is dearly missed).
-- The BEAM virtual machine is an excellent target, but it's also a peculiarity. I couldn't really name any big company/system using it. Yet, a quick search shows that WhatsApp, Discord and Pinterest, as well as Cisco, Nintendo, and even the NHS rely on it. Erlang and BEAM are quietly powering huge platforms due to their reliability, but it's not as flashy as "Made in Rust" marketing. Where Rust had Mozilla, Go had Google and Java had Oracle, there isn't a big tech player pushing for Gleam/Erlang right now.
-
-Of course this is a very biased account. I think I'm missing a lot of flaws in the language itself, flaws that will show themselves once the honeymoon period is over. But for now, I'm having a blast with Gleam, and I can only encourage you to give it a try too! I'm sure just like me, you'll have a lot of fun!
-
-1. If like me this doesn't mean much to you, Erlang is *also* a functional language, albeit a much older one (about 40 years old), whose primary use has been for telecom systems. The BEAM shines with distributed, concurrent, fault-tolerant systems (so, telecom, obviously). [↩︎](https://nchagnet.eu/blog/you-should-try-gleam#fnref:1)
-2. One important thing about immutable languages is that when you do something like `let new_list = list.take([1, 2, 3], 2)`, you're not making a *copy* of the data (that'd be very wasteful), instead the common data in both variables comes from the same spot in the memory. [↩︎](https://nchagnet.eu/blog/you-should-try-gleam#fnref:2)
-3. Gleam also has the `Option` monad via `gleam/option`, but unlike Rust, it's somewhat discouraged and a simple `Result(T, Nil)` is preferred when possible. This is why `reduce` in Gleam returns `Result(T, Nil)` while Rust returns `Option<T>`. [↩︎](https://nchagnet.eu/blog/you-should-try-gleam#fnref:3)
-4. This is a completely made-up statistics, but I feel it's not too far from reality. [↩︎](https://nchagnet.eu/blog/you-should-try-gleam#fnref:4)
-5. Rust does not guarantee TCO. LLVM sometimes applies sibling-call optimisation, but it is not something you can rely on, and explicit tail calls are still unstable. Since Rust *also* gives you loops, the imperative style is generally the safer choice. Compilers for functional languages are usually much more aggressive here, since TCO is crucial to their performance. [↩︎](https://nchagnet.eu/blog/you-should-try-gleam#fnref:5)
-6. The main difference is really about isolation: an OTP node is a single OS process, and all the actors on it share the same memory, while Kubernetes gives each pod its own container and spreads them over the machines of the cluster. Erlang does know how to cluster several nodes together, but OTP has no cluster scheduler, no placement and no container isolation: you still have to deploy and place the nodes yourself. [↩︎](https://nchagnet.eu/blog/you-should-try-gleam#fnref:6)
-7. Gleam's exact age is debatable. According to [Wikipedia](https://en.wikipedia.org/wiki/Gleam_(programming_language)), Gleam was initially created in 2016, but it would only be considered a "serious" endeavour starting from 2019 (when it got numbered versioning) and only reached version 1.0.0 in 2024. [↩︎](https://nchagnet.eu/blog/you-should-try-gleam#fnref:7)
+Somewhere on an IRC channel, I ended up in a conversation about the
+[The Filthy Human Hands (FHH) License](https://whirling.top/fhh/).
+It wasn't the first time *weird* licenses were discussed there:
+[Reticulum](https://reticulum.network/manual/license.html)'s sparked some
+interesting discussions as well.
+
+Let's start from the beginning.
+
+If you don't want to read the [Wikipedia
+article on Free Software](https://en.wikipedia.org/wiki/The_Free_Software_Definition), a couple
+of years ago, I gave a [small
+presentation](https://dustri.org/b/files/le09.pdf) at school as part of the
+"Oral communication in English" course, which is a (shoddy)
+cake-based explanation of the topic. Long story short, a Free Software is a
+software with 4 freedoms:
+
+> 1. The freedom to run the program as you wish, for any purpose.
+> 2. The freedom to study how the program works, and change it to make it do what you wish. Access to the source code is a precondition for this.
+> 3. The freedom to redistribute copies so you can help others.
+> 4. The freedom to distribute copies of your modified versions to others. By doing this you can give the whole community a chance to benefit from your changes.
+
+There is also the term Open Source, which is more or less Free Software but
+without the *sociopolitical* aspect of it, which is like a pizza without
+olives, or art without context: something devoid of meaning, a
+*business-oriented product* instead of a creation. Like in every
+sociopolitical endeavour, people sometimes disagree, leading to subtle but
+important variations. One of the most important one in the Free Software
+movement has been the question of the
+[copyleft](https://en.wikipedia.org/wiki/Copyleft): should derivatives of Free
+Software be licensed under the same license? Some licenses, like the
+[GPL](https://en.wikipedia.org/wiki/GNU_General_Public_License) says yes and
+this includes everything built on top of GPL code, the
+[LGPL](https://en.wikipedia.org/wiki/GNU_Lesser_General_Public_License) says
+that only code under LGPL needs to be released as LGPL, and others, called
+permissive licenses, like the
+[BSD](https://en.wikipedia.org/wiki/BSD_licenses) and
+[MIT](https://en.wikipedia.org/wiki/MIT_License) don't impose such
+restrictions.
+
+The Free Software movement started in 1986, so we're around 40 years later now,
+and the picture is pretty bleak: technically, one could argue that it won, as
+every computer-using company in the world
+depends on Free Software one way or the other: Firefox, Linux, VLC, Chrome,
+Ubuntu, Apache, nginx, Wikipedia, Open Street Map, Open Food Facts, … as well
+as more fundamental software components like curl, libxml, busybox, OpenSSL,
+GCC, clang, …
+
+Yet virtually none of them do contribute back to those commons,
+some of them being thanklessly maintained by [a random person in
+Nebraska](https://xkcd.com/2347/). Worse, a handful of computer-related
+companies ("cloud providers") are making ungodly amount of money
+renting infrastructure running Free Software, most smart™ devices are running
+Free Software, every single software producing/selling company depends on Free
+Software, and again, almost none contribute back meaningfully. A small number
+are trying to sponsor some projects they're depending on, but it often feels
+like a crass move for software that are maintained as a hobby: "Could you
+please garden a bit more efficiently, and add 150 apple trees to your small
+garden? We need it for our business, here is a 1000€ one-time payment"
+
+With AI making everything worse, Free Software maintainers are now wasting
+their time dealing with unreviewable useless pull-requests, drowning into a sea
+of low-quality no-fix-provided bug reports, being demoralized by vibe-coded
+forks adding shiny features that are never going to be upstreamable and thus
+upstreamed. It really feels as if nobody is even contemplating making the
+pedestrian effort of trying to avoid murdering the golden goose.
+
+Copyleft does help to mitigate those behaviours a bit, as companies aren't
+usually big fans to having to release their secret source code. The [Asahi
+Linux](https://asahilinux.org/2026/11/progress-report-7-3/) project recently
+re-licensed its software from MIT to LGPL, to make it, if only symbolically,
+harder for people to profit from the labor without giving anything back.
+Unfortunately, there are a handful of tricks to bypass copyleft:
+
+- Don't use software under copyleft licenses, duh.
+- Use strong boundaries, like Android is doing: Linux for its kernel, but everything running on top of it can have whatever license
+- Rent the software to the users, every Cloud is doing that, and most ISP too.
+- Provide a context-free dump of the modifications and prevent users from modifying the code their devices are running
+- Simply ignore the license as the odds of somebody suing you are low, but big corporation do care about this kind of things, which is nice.
+
+If copyleft isn't the answer, maybe it's time to find better licenses? In my
+opinion, the freedom 0, being able to run the program for whatever purpose,
+might be the crux of the problem. [Reticulum](https://reticulum.network/)'s
+license has the following paragraph, because of course a decentralised secure
+communication network could help killing people more efficiently:
+
+> The Software shall not be used in any kind of system which includes amongst
+>   its functions the ability to purposefully do harm to human beings.
+
+This sounds reasonable in theory, but it means that it's not Free anymore. Do
+we care? Well, Linux distributions usually have strict policies
+([debian](https://www.debian.org/social_contract.en.html#guidelines),
+[fedora](https://docs.fedoraproject.org/en-US/packaging-guidelines/LicensingGuidelines/),
+…) when it comes to what software they package, with non-Free ones being either
+forbidden, on living in their own not-enabled-by-default dedicated repository.
+
+One step further is the [The Filthy Human Hands (FHH) License](https://whirling.top/fhh/),
+with:
+
+> No part of a work under this license may be used or reproduced in any manner
+> by organizations or businesses with more than fifty (50) employees. An
+> exception is granted to allow ISPs and other hosting services to reproduce the
+> work for the purposes of display and distribution.
+>
+> No part of a work under this license may be used or reproduced in any manner
+> which promotes bigotry of any kind. This includes but is not limited to
+> fascism, racism, sexism, misogyny, ableism, transphobia (including erasure
+> and/or denial of nonbinary identities), homophobia, ageism, sane-ism (including
+> denial of multiplicity and/or plurality), and discrimination against non-human
+> identities.
+
+What's interesting here, from a technical point of view, is that this isn't
+really enforceable, legally speaking, as most terms are pretty vague. I think
+it's by design, and must be taken as a statement. One could use any other
+open-to-interpretation terms and obtain the same effects, namely that any
+entity with a legal department won't use it, and those small enough to not have
+one won't be able to sell/rent to those who do. What's beautiful about it, is
+that it does fit perfectly into the idea of the small web, of small communities
+with bespoke governance, of bricolage and of excluding
+authoritarianism/capitalism/morons/… by design.
+
+Given the current dire state of the world, I think it's time to realise that
+Free Software isn't enough anymore, and that not wanting to have code ending up
+in whatever war machine bombing kids and families is less radical than the idea
+of Free Software at its inception 40 years ago. I'd love a `weird-license`
+repositories in Linux distributions with lovely, quirky, useful, useless,
+handcrafted software under all kind of [bespoke ah-hoc licenses](https://www.acdw.net/licenses/).

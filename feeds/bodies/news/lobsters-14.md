@@ -1,70 +1,502 @@
-In my [recent
-blog post](https://databasearchitects.blogspot.com/2026/10/the-benchmarking-crisis.html) I remarked that database benchmarking is in a crisis
-because AI agents start to overfit on individual benchmarks with
-questionable techniques, which drives execution times towards zero. This
-has happened with [TPC-D](https://www.tpc.org/tpcd/default5.asp) in the past, and
-broke the benchmark. [TPC-H](https://www.tpc.org/tpch/default5.asp) tries to fight
-that with rules, but most people who publish (unofficial) TPC-H results
-simply ignore the rules. In combination with overly eager AI agents,
-this leads to brutal overfitting.
+![An artisan inspecting a hairline crack in a forged iron ring with a fine metal pick.](https://forge-blog.github.io/posts/rust-std-memory-safety/cover.webp)
 
-We are seeing the next level of that with the [GenDB-V system](https://github.com/GenLang-V/GenDB-V). The
-corresponding paper commands [“Stop Handcrafting Your Engine!
-GenDB-V: Towards AI-Generated and Formally Verified Database
-Systems”](https://arxiv.org/pdf/2611.02779), and reports speedups of 22× to 61× over Umbra and DuckDB,
-and all that in a fully verified system. These are indeed impressive
-claims, and would suggest that traditional database engines are in
-trouble.
+- How we found and validated the bugs
+- Patterns of Rust’s Safety Bugs
+  - Pattern 1: Trusting code not to panic
+  - Pattern 2: Trusting user-provided implementations to be correct
+  - Pattern 3: Trusting the underlying system
+- Conclusion
+  - Familiar patterns are still difficult (Patterns 1 and 2)
+  - System boundary bugs are now within reach (Pattern 3)
+  - Rust’s high bar is hard to meet but worth keeping
+- Beyond the lab
 
-Taking a step back, though, it should be clear that a performance
-improvement of a factor of 22 over Umbra is infeasible, at least if we
-are talking about traditional query processing. At SF10, the 22 TPC-H
-queries read roughly 15GB of (compressed) base data, and on a 9950X3D
-Umbra runs all queries in a total of roughly 540ms. On that machine the
-memory touched for data divided by the memory bandwidth (54GB/s) alone
-is about 280ms; anything below that is infeasible. Better compression
-might bring that down a bit, but not by an order of magnitude.
+Microsoft’s FORGE Lab found several memory safety issues in Rust’s standard library (`std` and `core`), including cases where code written entirely in safe Rust can trigger undefined behavior. The research used Hyenas, FORGE’s frontier research version of codename MDASH, an AI-powered vulnerability-scanning system. The findings reveal three recurring patterns of misplaced trust in unsafe code: trusting code not to panic, trusting user-provided implementations to be correct, and trusting the underlying system.
 
-Unsurprisingly, the most dramatic gains of GenDB-V come from
-precomputation. The agents have carefully handcrafted auxiliary data
-structures for each query, which are computed at load time, and which
-avoid most of the work. The physical design is heavily tuned to the
-queries, too, for example, there is an extra structure that lists the
-`supplier` rows in `s_acctbal DESC` order, which
-makes `Q2` trivial. Similar per-query data structures are
-built for most queries. And we see that in the performance numbers:
-Several queries already run in near-constant time at SF100: Q2 in 0.7
-ms, Q17 in about 15 ms and Q4 in about 17 ms on one thread. That is the
-TPC-D symptom, without stored aggregates.
+Rust’s safety guarantees are precisely what make these findings interesting. Its rich type system and ownership model rule out whole classes of memory-safety issues, but much of the standard library relies on unsafe code underneath its safe APIs. When that code breaks its safety contract, even safe Rust can encounter behavior the language is designed to prevent.
 
-There is also a “plain-array” mode, which, at first glance, is more
-fair, as it avoids these excessive preparations and also reports
-performance improvements of just roughly a factor of 3, which seems
-achievable. But when looking closely, we see that here the agents did
-something even more insane: They [hard-coded](https://github.com/GenLang-V/GenDB-V/blob/a85741904b9fe6338827ea19d5b932fc389c07cc/results/tpch-sf100/gendb-v-plain-array-storage/queries/q18/code/lookup.rs#L31-L65)
-their knowledge about the data generator. They “know” that each customer
-`k` will be at row `k-1`. And they know that dbgen
-numbers the `i`-th order `32·(i/8) + i%8`, so key
-`k` should be at row `8·(k/32) + k%32 − 1`. Which
-makes the join in query `Q18` super cheap.
+Rust’s memory-safety guarantees are increasingly important as the language
+becomes part of software that billions of people rely on every day. Billions of
+people are estimated to interact with Rust-based software or operating systems
+daily, often without knowing it.
+Microsoft made Rust a
+[Tier-1 internal language](https://rustfoundation.org/media/guest-post-rust-is-tier-1-language-at-microsoft/)
+alongside C++, C#, and TypeScript, GitHub
+[rewrote the Copilot agent runtime in Rust](https://github.blog/ai-and-ml/generative-ai/migrating-the-github-copilot-runtime-to-rust-using-copilot/),
+and [Bun](https://bun.com/blog/bun-in-rust),
+[Android](https://blog.google/security/rust-in-android-move-fast-fix-things/),
+the [Linux kernel](https://lwn.net/Articles/1050174/), and
+[Cloudflare](https://blog.cloudflare.com/20-percent-internet-upgrade/) are
+moving code to it as well. Much of this software relies on Rust’s foundational
+libraries, `core` and `std`, and the safety guarantees of the APIs they provide.
+Bugs in those libraries can have consequences well beyond the code where they
+originate.
 
-How does all this fit together with the claim of a fully verified
-database engine? Well, the code *does* check if the hard-coded
-knowledge about the data generator holds in practice, e.g., by checking
-if the guessed join partner row is correct. If not, it falls back to a
-super slow generic nested loop implementation, but as that never happens
-with the official TPC-H data generator, that code path is irrelevant in
-the reported experiments.
+Unsafe Rust has been a long-running interest for us. Our team includes the
+people behind [Rudra](https://dl.acm.org/doi/10.1145/3477132.3483570), a static
+analyzer that looked for memory-safety bugs across the Rust ecosystem in 2021.
+We also write many of our own tools in Rust, so its safety is more than a
+research topic for us. This year, we took a closer look at the standard library
+to see what kinds of mistakes still show up in its unsafe code today.
 
-Which brings me back to my original blog post claim: Letting AI
-agents optimize for a given database benchmark makes the benchmark
-useless. They will do their best to find insane tricks to speed up this
-particular benchmark, but none of that would work in a real system. The
-high tuning and synthesis time aside, deleting a single tuple (or
-inserting one in the middle) can most likely cause the whole approach to
-fall off a cliff, as it forces the slow fallback path. Which is not
-something you want in a production system.
+In this post, we share some of the bugs we reported to the Rust issue tracker.
+We use them to discuss what Rust does and doesn’t guarantee, why writing correct
+unsafe Rust is so difficult, and why Rust’s safety model still matters even
+though its memory safety isn’t perfect.
 
-1. Anonymous[November 9, 2026 at 11:03 PM](http://databasearchitects.blogspot.com/2026/11/next-level-benchmarking-overfitting.html?showComment=1794261820555&m=1#c2601522861808326995)Stop handcrafting your engine. Start reverse-engineering dbgen!Reply[Delete](https://www.blogger.com/comment/delete/8891884956165580080/2601522861808326995)RepliesReply
-2. ![](http://www.blogger.com/img/blogger_logo_round_35.png)[Jiale Lao](https://www.blogger.com/profile/05140552817855082587)[November 10, 2026 at 5:51 AM](http://databasearchitects.blogspot.com/2026/11/next-level-benchmarking-overfitting.html?showComment=1794286266672&m=1#c8276766814915557113)Thank you, Thomas, for reading our paper and code so carefully. I am Jiale, one of the authors of GenDB-V. Your observations are correct, and I would like to add my view on the setting. Two settings. Umbra and DuckDB are general-purpose engines: fast for any query on any data. GenDB-V, like Bespoke OLAP and JetStream, builds a specialized engine for one customer: their schema, data, hot query templates, and even hardware. Here, using knowledge of the workload is the purpose. For ad-hoc queries, such a system should hand over to the best general-purpose engines, such as Umbra and DuckDB. So I see the two approaches as partners, not competitors. I do not claim that agents can build an engine that is fast on many workloads: just for a very specific setting, specialized for the customer. Verification is the main point. The key feature of GenDB-V is that instead of trusting agents for correctness, we can formally verify it independently. Every synthesized package is formally proved correct for every database of the schema. So each assumption must be checked in the code, and a failed check never gives a wrong answer silently: the code takes a general path. Today that path is GenDB-V's own slow proven code, but it can be easily extended to be Umbra or DuckDB. Fair and unfair specialization. I agree that guessing where dbgen puts each key is fitting to the generator, not to a customer. A property that the storage creates, or that the customer declares and the system checks, is fair. An accident of the generator is not. I will constrain the agents to the first kind. Agents also find good ideas. One example is TPC-H Q21 with agent-designed storage. The storage keeps each order's lineitems next to each other, for any input order. The EXISTS and NOT EXISTS conditions are then checked inside each order's own lineitems, in place of a semi-join and an anti-join on lineitem. No part of the query result is computed at load time. It is a classic physical-design idea that any engine could use. I fully agree that the database community needs new kinds of benchmarks, and I made one attempt in this direction in my earlier work, SQLBarber (SIGMOD 2026). I am excited to see more great benchmarks in the future. Benchmarks drove the development of today's great engines, and they can do the same in the LLM era 🙂 Best, Jiale Reply[Delete](https://www.blogger.com/comment/delete/8891884956165580080/8276766814915557113)Replies![](http://www.blogger.com/img/blogger_logo_round_35.png)[Thomas Neumann](https://www.blogger.com/profile/15209393663505917383)[November 10, 2026 at 6:32 AM](http://databasearchitects.blogspot.com/2026/11/next-level-benchmarking-overfitting.html?showComment=1794288724373&m=1#c7139384101526622934)You see I have two problems here: One is, you literally tell us to "stop handcrafting (our) engine". Which mean you are marketing your approach as a general solution and as a replacement for existing database engines, which it is clearly not. It might be an additional enhancement, like, e.g., physical design wizards did in the past. But you will always need a fallback engine, at the very least for ad-hoc queries. And second, I am pretty sure that I could build a program that computes a secure hash over the input at load time to identify that it is the canonical TPC-H data, e.g., by hard-coding all relevant scale factors, and then produces the answers to all queries purely from the knowledge about the data generator, without ever looking at the data. That would have near zero runtime for all relevant scale factors. And it would still be "correct", because I could fall back to, e.g., an embedded DuckDB/Postgres/sqlite, the performance of which would then be totally irrelevant because it would never trigger in practice. Which is clearly absurd, of course. But where do you draw the line? Why is recognizing the data set + scale factor "bad" when the other optimizations you do are not? TPC-H tries to codify this, which works to varying degrees _if_ people follow the rules (which many don't). I think we can only fight this if a) the benchmark is unknown to the engine developer before execution, and b) the data changes over time, which rules out the most extreme precomputations.[Delete](https://www.blogger.com/comment/delete/8891884956165580080/7139384101526622934)RepliesReplyAnonymous[November 10, 2026 at 6:38 AM](http://databasearchitects.blogspot.com/2026/11/next-level-benchmarking-overfitting.html?showComment=1794289129521&m=1#c2596651545972729392)If formal verification is the main contribution, why are the headline results dominated by 20–60× speedups? Verification establishes correctness, but what does it tell us about the validity of those performance comparisons?[Delete](https://www.blogger.com/comment/delete/8891884956165580080/2596651545972729392)RepliesReply![](http://www.blogger.com/img/blogger_logo_round_35.png)[Jiale Lao](https://www.blogger.com/profile/05140552817855082587)[November 10, 2026 at 7:49 AM](http://databasearchitects.blogspot.com/2026/11/next-level-benchmarking-overfitting.html?showComment=1794293356838&m=1#c5226967946689298888)It is an honour to discuss this with you here. As a PhD student, I admire your work, and Umbra is one of my favourite systems and papers. I am sorry for the title: it describes a possible future as if it were a present fact. I will discuss changing it with my co-authors. GenDB-V has two modes. Template synthesis builds specialized code for hot templates. That mode is an addition to a general-purpose engine, as physical design wizards were. Engine synthesis builds one general engine, proved correct for any schema, data and query in the supported SQL subset. In coverage and correctness it is a complete query engine for that subset. In performance it is not there yet: agents improved it over many versions, first on TPC-H and then on a second benchmark, but on manually created unseen queries it is still slower than Umbra. I will put its code and results in our repository. My next step is an adversarial loop. Agents optimize the engine on all the benchmarks I have. Then the engine is frozen, and a separate adversarial agent writes new workloads against it: new queries on the known benchmarks, and completely new benchmarks. I report the frozen engine's result. After that, the agents may optimize on the queries where it lost, and the next round brings a new attack. The open question is whether the gap on unseen workloads shrinks over the rounds, that is, whether agents can build an engine that truly generalizes. This is in the spirit of your proposal of fresh workloads for each round. On the line: your example is a good test. The proof checker ensures correctness for every possible database, and nothing more. Your program would not pass it. A hash has a fixed size, so different databases can share a hash value; a secure hash is good enough in practice, but a mathematical proof must hold for all databases. Falling back to a production SQL engine cannot pass either, because none comes with proofs today; so currently GenDB-V falls back to its own engine, which is verified but slow. But I agree that the proof says nothing about performance: an optimization is correct for every database, and fast only for some. So the proof does not draw the whole line. Your (a) fits general-purpose engines; in the specialized setting the hot templates are known by design. Your (b) applies to both: a customer's data also changes, so the speed should hold on data the agent has never seen. What I want to suggest is a direction: agents write code and proofs together, checked against a formal specification of SQL. Our proofs are only as good as our SQLSpec, which is our own reading of SQL. So I would like to invite the community to work on a shared, standard formal semantics for SQL. With it, verified engines and verified optimizations become possible for everyone, and maybe one day agents can bring a verified engine close to hand-built ones.[Delete](https://www.blogger.com/comment/delete/8891884956165580080/5226967946689298888)RepliesReplyReply
-3. Anonymous[November 10, 2026 at 4:48 PM](http://databasearchitects.blogspot.com/2026/11/next-level-benchmarking-overfitting.html?showComment=1794325694886&m=1#c6052280506263378931)I don't think "correct SQLSpec" can solve the hardcoding dbgen logic problem Thomas pointed out. At the end of the day, you are verifying a database "correct", which has nothing to do with performance. In production, performance is part of correctness -- if a distribution drift of customer data causes a critical query to become orders of magnitude slower (as the example case would), that is a bug and an outage. The most egregious thing I find about this work is the attempt to portray formal verification as a green checkmark next to an arbitrary system, and disregard the fact that it proves a much narrower mathematical property that is highly sensitive to the exact formal definitions and assumptions with many pitfalls. P.S. I generally like to assume the best of intentions from researchers, but I find your replies to sound a lot like AI. Reply[Delete](https://www.blogger.com/comment/delete/8891884956165580080/6052280506263378931)Replies![](http://www.blogger.com/img/blogger_logo_round_35.png)[Jiale Lao](https://www.blogger.com/profile/05140552817855082587)[November 10, 2026 at 6:35 PM](http://databasearchitects.blogspot.com/2026/11/next-level-benchmarking-overfitting.html?showComment=1794332131347&m=1#c9012829694785422033)Hi, I never claim that formal verification can ensure performance, both in the paper and in my previous responses. The ONLY thing formal verification can ensure is that, the results returned by the code, is allowed by the outcome specified in SQLSpec, and that is all. For performance, we can only rely on benchmark feedback to guide the optimization, and as the final metric, not formal verification. Then we have the issue with benhmark evaluation: agents or systems overfitting to the benchmark, though in some cases, we want such specialization for customized code for hot templates. PS: I give you my word, all the intentions from my previous comments come from me. I did use AI to re-write my draft, and the prompt is "make it simple, clear, and concise", and by Fable 5.2, and that is all. If we do not like the "AI-Style", from now on, I will use my original draft. Or if you want more, you can have a meeting with me to discuss more[Delete](https://www.blogger.com/comment/delete/8891884956165580080/9012829694785422033)RepliesReplyAnonymous[November 10, 2026 at 6:41 PM](http://databasearchitects.blogspot.com/2026/11/next-level-benchmarking-overfitting.html?showComment=1794332510231&m=1#c2252808039527462621)You didn't even understand why the previous one said that "performance" should be part of "correctness". [Delete](https://www.blogger.com/comment/delete/8891884956165580080/2252808039527462621)RepliesReply![](http://www.blogger.com/img/blogger_logo_round_35.png)[Jiale Lao](https://www.blogger.com/profile/05140552817855082587)[November 10, 2026 at 6:50 PM](http://databasearchitects.blogspot.com/2026/11/next-level-benchmarking-overfitting.html?showComment=1794333025147&m=1#c2695349625585135525)All the optimizations for the hot paths, are checked at runtime: (1) If the data changes and the assumption does not hold anymore, the specialized code will never be executed. (2) If the fallback system is a powerful general-purpose engine, such as Umbra or DuckDB, this query would not be orders of magnitude slower.[Delete](https://www.blogger.com/comment/delete/8891884956165580080/2695349625585135525)RepliesReplyAnonymous[November 10, 2026 at 7:09 PM](http://databasearchitects.blogspot.com/2026/11/next-level-benchmarking-overfitting.html?showComment=1794334144662&m=1#c166012171792992602)Given all your clarifications, why is synthesizing a standalone database engine the right abstraction in the first place? If the goal is hot-query specialization, existing engines already offer workload-aware physical design, materialization, query compilation, and other optimization techniques. Coding agents can also help engineers implement and test new optimizations within these engines. What concrete capability does GenDB-V provide that cannot be achieved more economically by augmenting an existing engine? And what evidence demonstrates that advantage?[Delete](https://www.blogger.com/comment/delete/8891884956165580080/166012171792992602)RepliesReplyAnonymous[November 10, 2026 at 7:38 PM](http://databasearchitects.blogspot.com/2026/11/next-level-benchmarking-overfitting.html?showComment=1794335910425&m=1#c7998873343848161854)"All the optimizations for the hot paths, are checked at runtime: (1) If the data changes and the assumption does not hold anymore, the specialized code will never be executed. (2) If the fallback system is a powerful general-purpose engine, such as Umbra or DuckDB, this query would not be orders of magnitude slower." ------ Well I guess the point is. If your agent is overfitting too much, then the solution will be very sensitive to specific benchmark features. This means that, if the workload got drifted, even by a little bit, your solution will fail the checker and you can only fall back. Ofc you can use a faster backend engine, but if your agent is falling-back in 99.9% of the time (ofc in more realistic, drifted workloads, not a fixed one), where is your contribution? I feel one major point of previous discussions is that, you don't have systematic and reasonable enough evaluation, and people doubt you over-claiming. [Delete](https://www.blogger.com/comment/delete/8891884956165580080/7998873343848161854)RepliesReplyAnonymous[November 10, 2026 at 7:48 PM](http://databasearchitects.blogspot.com/2026/11/next-level-benchmarking-overfitting.html?showComment=1794336521953&m=1#c4499859402792491649)“This means that, if the workload got drifted, even by a little bit, your solution will fail the checker and you can only fall back.” ------ Well, he can always add another "smart" agent to handle workload drift.[Delete](https://www.blogger.com/comment/delete/8891884956165580080/4499859402792491649)RepliesReply![](http://www.blogger.com/img/blogger_logo_round_35.png)[Jiale Lao](https://www.blogger.com/profile/05140552817855082587)[November 10, 2026 at 7:56 PM](http://databasearchitects.blogspot.com/2026/11/next-level-benchmarking-overfitting.html?showComment=1794336970947&m=1#c5887606534572232010)For hot-query specialization by coding agents, it is not a new claim from GenDB-V (but from previous GenDB, Bespoke OLAP, and JetStream), so I will not discuss more on this. I like the discussions in Bespoke OLAP paper: there are some advantages from directly implementing specialized code compared to tuning an existing system. For the abstraction of synthesizing a standalone database engine, isn't this itself an interesting and exciting direction to explore, as a research project? One important "economical benefit" of GenDB-V, I would say formal verification. No production SQL engine is formally verified to the best of my knowledge (correct me if I am wrong). It was so difficult and expensive to formally verify something: seL4’s 8,700-line C kernel took about 20 person-years! And now it is possible, to have a formally verified standalone database engine, and we achieve this in a much cheaper way, isn't this exciting? BTW, just to give some contexts in case some people are not familiar with formal verification: formal verification does not mean "bug-free", just the code is verified against the formal specification, which is SQLSpec in GenDB-V. I do not claim this spec is correct. So I open-source it and hope the community could fix and refine it together. [Delete](https://www.blogger.com/comment/delete/8891884956165580080/5887606534572232010)RepliesReply![](http://www.blogger.com/img/blogger_logo_round_35.png)[Jiale Lao](https://www.blogger.com/profile/05140552817855082587)[November 10, 2026 at 8:17 PM](http://databasearchitects.blogspot.com/2026/11/next-level-benchmarking-overfitting.html?showComment=1794338256663&m=1#c985918672034093992)"I feel one major point of previous discussions is that, you don't have systematic and reasonable enough evaluation, and people doubt you over-claiming." ------ I totally agree that I over-claimed for performance. The honest performance claim should be that, the synthesized engine can outperform untuned general-purpose engine, on a specific target . I will update the claims. And I will run new experiments, with more strict settings and evaluations. Happy to take any suggestions. For example, the tool from Microsoft to generate skewed TPC-H data, and this is totally invisible to agents during synthesis? BTW, I am always open to feedbacks, discussions, and suggestions, and will always improve based on these. Just hope, the discussion is open, healthy, friendly, and not emotional 🙂[Delete](https://www.blogger.com/comment/delete/8891884956165580080/985918672034093992)RepliesReplyReply
+## How we found and validated the bugs
+
+At [Microsoft FORGE Lab](https://www.microsoft.com/en-us/security/blog/2026/10/07/3-lessons-from-frontier-ai-vulnerability-research/), we study vulnerabilities in complex software, including the Rust standard library. Our team combines years of experience in vulnerability research with AI-assisted tools that help us investigate code and find bugs that are difficult to uncover through traditional analysis alone.
+
+Some of the bugs in this post were found with help from Hyenas, our research version of [codename MDASH](https://www.microsoft.com/en-us/security/blog/2026/05/12/defense-at-ai-speed-microsofts-new-multi-model-agentic-security-system-tops-leading-industry-benchmark/). Our researchers investigated the underlying code, reproduced the bugs, assessed their potential security impact, and worked with Rust maintainers to report and fix them.
+
+This post focuses on soundness bugs in the standard library’s unsafe code. Bugs in the compiler itself, such as miscompilations and holes in the type system, are a different topic that we don’t cover here.
+
+## Patterns of Rust’s Safety Bugs
+
+At the lowest level, Rust uses
+[`unsafe` blocks](https://doc.rust-lang.org/book/ch20-01-unsafe-rust.html) to
+work with raw pointers and interact directly with the operating system.
+Much of the standard library, including `Vec` and `String`,
+is built from small unsafe pieces wrapped in safe APIs.
+Inside an `unsafe` block, the programmer takes responsibility for the guarantees
+the compiler can’t check, and that responsibility extends to the safe API built
+around it. That API must be
+[sound](https://doc.rust-lang.org/nomicon/safe-unsafe-meaning.html): no matter
+how safe code uses it, it must be impossible to trigger undefined behavior.
+
+Upholding that promise is harder than it looks. Consider a function that returns
+the byte at `idx` from any type that can be viewed as a byte slice, skipping the
+redundant bounds check after doing its own:
+
+```rust
+pub fn get<S: AsRef<[u8]>>(s: &S, idx: usize) -> Option<u8> {
+    if idx < s.as_ref().len() {
+        // SAFETY: we just checked that `idx` is in bounds.
+        Some(unsafe { *s.as_ref().get_unchecked(idx) })
+    } else {
+        None
+    }
+}
+```
+
+The hard part of unsafe Rust is knowing what you can trust. The function above
+looks correct, but it assumes that two calls to `as_ref` return the same slice.
+Because `S` is chosen by the caller, a safe `AsRef`
+implementation can return a long slice the first time and an empty one the
+second, and `get` reads out of bounds. Unsafe code must be careful with every
+call it makes, and the bugs we found fall into three patterns of misplaced
+trust: trusting code not to panic, trusting user-provided implementations to be
+correct, and trusting the underlying system.
+
+### Pattern 1: Trusting code not to panic
+
+Unsafe code often breaks an invariant for a moment and restores it afterward;
+for example, it may allocate an uninitialized buffer and fill it directly,
+avoiding redundant writes to zero the memory first. That’s fine as long as the
+function runs to the end. But many operations in Rust can panic,
+from out-of-bounds indexing to calls into user-provided code, and by default a
+panic unwinds: it leaves the function early while still running destructors.
+Unwinding inside that window becomes an invisible exit that exposes the broken
+invariant to code that trusts it. Bugs of this kind are called panic safety
+bugs.
+
+![Flow diagram: a function breaks an invariant, calls code that may panic, and restores the invariant before returning. If the call panics, unwinding skips the restore step and runs a destructor on the broken state, causing undefined behavior.](https://forge-blog.github.io/posts/rust-std-memory-safety/panic-safety.svg)
+
+#### `MapWindows::clone` (#156501)
+
+We identified
+[a panic safety issue in `MapWindows::clone`](https://github.com/rust-lang/rust/issues/156501).
+[`Iterator::map_windows`](https://doc.rust-lang.org/nightly/std/iter/trait.Iterator.html#method.map_windows),
+a nightly API, yields overlapping windows of `N` items. It keeps the current
+window in a `Buffer` whose destructor drops the `N` items starting at `start`.
+In Rust 1.97.0,
+[`library/core/src/iter/adapters/map_windows.rs`](https://github.com/rust-lang/rust/blob/1.97.0/library/core/src/iter/adapters/map_windows.rs#L37-L43)
+defines it as:
+
+```rust
+37struct Buffer<T, const N: usize> {
+38    // Invariant: `self.buffer[self.start..self.start + N]` is initialized,
+39    // with all other elements being uninitialized. This also
+40    // implies that `self.start <= N`.
+41    buffer: [[MaybeUninit<T>; N]; 2],
+42    start: usize,
+43}
+```
+
+[`Buffer::clone`](https://github.com/rust-lang/rust/blob/1.97.0/library/core/src/iter/adapters/map_windows.rs#L195-L203),
+in the same file, built the new buffer first and filled it afterward:
+
+```rust
+195impl<T: Clone, const N: usize> Clone for Buffer<T, N> {
+196    fn clone(&self) -> Self {
+197        let mut buffer = Buffer {
+198            buffer: [[const { MaybeUninit::uninit() }; N], [const { MaybeUninit::uninit() }; N]],
+199            start: self.start,
+200        };
+201        buffer.as_uninit_array_mut().write(self.as_array_ref().clone());
+202        buffer
+203    }
+204}
+```
+
+After line 197, `buffer` breaks its own invariant: its slots are uninitialized,
+but its destructor is already armed. The `clone()` call on line 201 runs the
+user’s `T::clone` before the slots are written. If that call panics, unwinding
+drops `buffer` and runs `drop_in_place` on `N` uninitialized values. Our proof of
+concept uses only safe code: an element type whose `clone` always panics, which causes
+a crash when the destructor accesses uninitialized memory. The
+[fix](https://github.com/rust-lang/rust/commit/4a647a5084fa9100cb506185fa9ee9ed454374ab)
+holds the new buffer in `ManuallyDrop` until it is fully written, so unwinding
+leaks the half-built buffer instead of dropping it.
+
+The general lesson is to treat every call to code you don’t control, such as
+`clone`, `drop`, comparisons, closures, and iterator methods, as a possible early
+exit. Either finish the work that may panic before breaking an invariant, or
+make the broken state safe to unwind through: hold it in `ManuallyDrop`, or use
+a guard whose destructor restores the invariant, like `Vec`’s internal
+`SetLenOnDrop`. The Rustonomicon covers this under
+[exception safety](https://doc.rust-lang.org/nomicon/exception-safety.html).
+
+#### Allocators must not unwind
+
+The recently stabilized `Allocator` API shows how hard panic safety is to get
+right. With `std`, an allocation failure
+[aborts the process](https://doc.rust-lang.org/std/alloc/fn.handle_alloc_error.html)
+by default instead of unwinding, so much of the standard library’s unsafe code
+assumes allocation never unwinds. Custom allocators can break that assumption.
+While the API was being stabilized, we reported
+[one place in `BTreeMap::insert`](https://github.com/rust-lang/rust/issues/156490)
+that becomes unsound when an allocator unwinds, and others reported more
+([#159334](https://github.com/rust-lang/rust/issues/159334),
+[#159368](https://github.com/rust-lang/rust/issues/159368),
+[#159370](https://github.com/rust-lang/rust/issues/159370)). Fixing them one by
+one would mean auditing everything that allocates, so the
+[stabilization](https://github.com/rust-lang/rust/pull/156882), shipping in
+Rust 1.100 on November 12, instead requires implementors never to unwind from
+the trait’s methods or from `drop`. The proposal notes that “unwinding out of
+many allocation-related methods was found to be a pervasive source of
+unsoundness.”
+
+### Pattern 2: Trusting user-provided implementations to be correct
+
+Unsafe code often calls into code its caller provides: a comparator, a trait
+implementation, a closure. That code is safe, but safe doesn’t mean correct, and
+it can return inconsistent or plainly wrong answers. The question is who is
+responsible when it does. In C++, it’s the caller. `std::sort` requires its
+comparator to be a strict weak ordering, and breaking that rule is undefined
+behavior. With libstdc++, sorting equal elements with `<=` reads past the end of
+the vector:
+
+```cpp
+std::vector<int> v(100, 42);
+// Bug: `<=` is not a strict weak ordering, since cmp(a, a) is true.
+std::sort(v.begin(), v.end(), [](int a, int b) { return a <= b; });
+// AddressSanitizer: heap-buffer-overflow in std::__introsort_loop
+```
+
+The same comparator passed to Rust’s
+[`sort_by`](https://doc.rust-lang.org/std/primitive.slice.html#method.sort_by)
+is only a logic error. The sort may panic or leave the slice in an unspecified
+order, but it never causes undefined behavior. The responsibility sits with the
+unsafe code. The comparator is safe code supplied by the caller, so the unsafe
+code inside the sort must stay sound no matter what it returns. The same goes for every safe
+trait a user can implement: comparisons can be inconsistent, an
+`ExactSizeIterator` can report a length that doesn’t match the items it yields,
+and `Borrow` can return a different value on each call.
+
+#### `str::replace` with a custom `Pattern` (#156491)
+
+Another of our bug reports shows how easy this trust is to miss:
+[`str::replace` with a custom `Pattern` can create a non-UTF-8 `String`](https://github.com/rust-lang/rust/issues/156491).
+String search APIs accept any type that implements the nightly `Pattern` trait,
+and a pattern can describe itself through `as_utf8_pattern`. `str::replace` uses
+that description to take a fast path when replacing one ASCII byte with another.
+In Rust 1.96.0, the fast path in
+[`library/alloc/src/str.rs`](https://github.com/rust-lang/rust/blob/1.96.0/library/alloc/src/str.rs#L268-L278)
+looked like this:
+
+```rust
+268pub fn replace<P: Pattern>(&self, from: P, to: &str) -> String {
+269    // Fast path for replacing a single ASCII character with another.
+270    if let Some(from_byte) = match from.as_utf8_pattern() {
+271        Some(Utf8Pattern::StringPattern([from_byte])) => Some(*from_byte),
+272        Some(Utf8Pattern::CharPattern(c)) => c.as_ascii().map(|ascii_char| ascii_char.to_u8()),
+273        _ => None,
+274    } {
+275        if let [to_byte] = to.as_bytes() {
+276            return unsafe { replace_ascii(self.as_bytes(), from_byte, *to_byte) };
+277        }
+278    }
+```
+
+[`replace_ascii`](https://github.com/rust-lang/rust/blob/1.96.0/library/alloc/src/str.rs#L708-L712),
+in the same file, then rewrites the bytes:
+
+```rust
+708unsafe fn replace_ascii(utf8_bytes: &[u8], from: u8, to: u8) -> String {
+709    let result: Vec<u8> = utf8_bytes.iter().map(|b| if *b == from { to } else { *b }).collect();
+710    // SAFETY: We replaced ascii with ascii on valid utf8 strings.
+711    unsafe { String::from_utf8_unchecked(result) }
+712}
+```
+
+The `CharPattern` branch on line 272 checks that the character is ASCII, but the
+`StringPattern` branch on line 271 assumes a one-byte string pattern must be
+ASCII. That holds for `&str` patterns, but `StringPattern` stored `&[u8]`, and
+`as_utf8_pattern` is a safe method any `Pattern` can implement. In our proof of
+concept, a custom pattern reports the single byte `0x80`, which only appears
+inside multibyte UTF-8 sequences:
+
+```rust
+impl Pattern for NonAsciiBytePattern {
+    // ...
+    fn as_utf8_pattern(&self) -> Option<Utf8Pattern<'_>> {
+        static NEEDLE: [u8; 1] = [0x80];
+        Some(Utf8Pattern::StringPattern(&NEEDLE))
+    }
+}
+
+// "\u{d000}" is [ed, 80, 80]; the result is [ed, 3f, 3f], which is not UTF-8.
+let corrupted = "\u{d000}".replace(NonAsciiBytePattern, "?");
+```
+
+`str::replace` rewrites the continuation bytes and returns a `String` that isn’t
+valid UTF-8, and later string operations that rely on UTF-8 reach undefined
+behavior. The
+[fix](https://github.com/rust-lang/rust/pull/156556) changed `StringPattern` to
+hold `&str` instead of `&[u8]`, so the type itself now guarantees UTF-8.
+
+When unsafe code depends on a property of a user-provided implementation, don’t
+take it on faith. Call the implementation once and keep the result, validate
+what it returns, or encode the property in a type that safe code can’t forge, as
+this fix did. If none of those work, make the trait `unsafe` so implementors
+explicitly promise to uphold it.
+
+#### More examples
+
+`join` shows how easy it is to fix this kind of bug only partway. In 2020, we
+reported that it trusted `Borrow::borrow` to return the same string on each call
+([CVE-2020-36323](https://rustsec.org/advisories/CVE-2020-36323.html)), and the
+fix handled strings that shrink between calls. In April 2026, the same function
+[needed another fix](https://github.com/rust-lang/rust/pull/155708): `join`
+borrows the first element twice, and if it grows on the second call, the
+remaining-length calculation underflows into a heap overflow. The earlier fix
+had never covered that path.
+
+Others reported similar problems in the `Pattern` API this year. A safe
+`Pattern` can hand back a valid searcher built for a different string, and
+consumers such as `strip_prefix_of` apply its ranges to the original string
+unchecked, reading out of bounds
+([#158265](https://github.com/rust-lang/rust/issues/158265)). The same problem
+turned up in `split_once`
+([#165076](https://github.com/rust-lang/rust/issues/165076)) after a report that
+the `Searcher` contract doesn’t spell out what `str::split` relies on
+([#164904](https://github.com/rust-lang/rust/issues/164904)). Both bugs are
+still open.
+
+### Pattern 3: Trusting the underlying system
+
+The first two patterns stay inside Rust code. The third sits at the boundary
+with the operating system, where unsafe code trusts process-wide state such as
+signal stacks, memory mappings, and the environment, which other threads, C
+libraries, or the kernel can touch at any time. These bugs have been hard to
+find automatically, because a static analyzer would need to model all of that
+surrounding behavior. AI agents change the picture: they understand enough about
+the environment the code runs in to make this area practical to search. We
+started exploring it and found some interesting bugs.
+
+#### `process::exit` and the main thread’s signal stack (#161018)
+
+When a thread overflows its stack, Rust prints a clear message and aborts
+instead of crashing with a bare segmentation fault:
+
+```text
+thread 'main' (3307186) has overflowed its stack
+fatal runtime error: stack overflow, aborting
+```
+
+This relies on a few pieces of process-wide state. Each thread’s stack ends in a
+guard page, an inaccessible region just past the stack’s limit: `pthread`
+reserves one for every spawned thread, and on Linux the kernel’s own stack guard
+plays that role for the main thread. Touching it raises `SIGSEGV`, and Rust
+registers a handler for that signal. The handler can’t run on the stack that just
+overflowed, so Rust also gives each thread an alternate signal stack, a small
+separate mapping with a guard page of its own, which the kernel switches to when
+it delivers the signal. The handler checks that the faulting address is inside
+the guard page, prints the message, and aborts.
+
+![Diagram: one column of memory. The main thread’s stack frames grow down until the next frame lands in the guard page below, which has no access. That access raises SIGSEGV, which invokes Rust’s registered signal handler. The handler runs on the alternate signal stack, a separate read/write mapping further down with its own guard page. In the bug, process::exit in a child thread unmaps that alternate stack while it is still registered.](https://forge-blog.github.io/posts/rust-std-memory-safety/stack-overflow.svg)
+
+[We found](https://github.com/rust-lang/rust/issues/161018) that calling
+`process::exit` from a child thread tears down the main thread’s alternate stack
+while the main thread is still running. `process::exit` runs the runtime’s
+cleanup before calling libc’s `exit`, and in Rust 1.98.0 that cleanup ends in
+[`library/std/src/sys/pal/unix/stack_overflow.rs`](https://github.com/rust-lang/rust/blob/1.98.0/library/std/src/sys/pal/unix/stack_overflow.rs#L196-L203):
+
+```rust
+196pub unsafe fn cleanup() {
+197    if cfg!(panic = "immediate-abort") {
+198        return;
+199    }
+200    // FIXME: I probably cause more bugs than I'm worth!
+201    // see https://github.com/rust-lang/rust/issues/111272
+202    unsafe { drop_handler(MAIN_ALTSTACK.load(Ordering::Relaxed)) };
+203}
+```
+
+Line 202 passes `MAIN_ALTSTACK`, the main thread’s alternate stack, to
+[`drop_handler`](https://github.com/rust-lang/rust/blob/1.98.0/library/std/src/sys/pal/unix/stack_overflow.rs#L297-L301):
+
+```rust
+297// SAFETY: we warned the caller this disables the alternate signal stack!
+298unsafe { sigaltstack(&disabling_stack, ptr::null_mut()) };
+299// SAFETY: We know from `get_stackp` that the alternate stack we installed is part of
+300// a mapping that started one page earlier, so walk back a page and unmap from there.
+301unsafe { munmap(data.sub(page_size), sigstack_size + page_size) };
+```
+
+Line 298 disables the alternate stack of the calling thread, but line 301 unmaps
+the main thread’s. The code assumes it runs on the main thread, which isn’t true
+when a child thread calls `process::exit`. The main thread keeps running until
+libc’s `exit` finishes, with its signal stack registration still pointing at
+unmapped memory. If it overflows its stack in that window, the kernel can’t
+deliver the signal, and our proof of concept dies with a plain segmentation
+fault instead of Rust’s message. The bug dates back to
+[2015](https://github.com/rust-lang/rust/pull/28069), and the
+[fix](https://github.com/rust-lang/rust/pull/161037) stops cleaning up the main
+thread’s alternate stack altogether.
+
+We also checked whether this could become a security issue. In theory, it could
+lead to code execution: if a writable mapping landed at the old alternate
+stack’s address, the kernel would deliver the main thread’s next signal onto it,
+and another thread could overwrite the handler’s frame, such as its return
+address, while it runs. In practice, the conditions are very tight. Everything
+has to happen in the brief window before libc’s `exit` finishes, the new mapping
+must have exactly the right size to reuse that address, and overwriting the
+frame takes a second race inside a short handler. For issue #161018, our testing
+found no reliable exploitation path under the conditions examined, and we
+assessed practical exploitation as unlikely. This assessment does not
+automatically apply to the other issues discussed.
+The [issue](https://github.com/rust-lang/rust/issues/161018) has more details in
+its security impact analysis.
+
+#### `CommandExt::exec` and the global environment (#156951)
+
+[Our other report](https://github.com/rust-lang/rust/issues/156951) involves the
+process environment. On Unix, `CommandExt::exec` replaces the current process
+with a new program. When the command has its own environment variables, `exec`
+points the process-global `environ` at a new array, calls `execvp`, and restores
+`environ` if `execvp` fails. In Rust 1.99.0, `Command::exec` takes the
+environment lock in
+[`library/std/src/sys/process/unix/unix.rs`](https://github.com/rust-lang/rust/blob/1.99.0/library/std/src/sys/process/unix/unix.rs#L242-L244):
+
+[`Command::do_exec`](https://github.com/rust-lang/rust/blob/1.99.0/library/std/src/sys/process/unix/unix.rs#L409-L414),
+in the same file, then swaps the environment:
+
+```rust
+409    _reset = Some(Reset(*sys::env::environ()));
+410    *sys::env::environ() = envp.as_ptr();
+411}
+412
+413libc::execvp(self.get_program_cstr().as_ptr(), self.get_argv().as_ptr());
+414Err(io::Error::last_os_error())
+```
+
+Line 242 takes only the read side of the environment lock, yet line 410 writes
+the process-global `environ`; line 409 saves the old value so it can be restored
+if `execvp` on line 413 fails. Writing `environ` under a read lock lets other
+threads in. A thread calling `env::var` takes the same read lock and can see
+variables meant only for the new program, and two failed `exec` calls racing
+each other can leave `environ` pointing at a freed array that a later
+`env::vars_os()` reads. Both proofs of concept use only safe Rust. A
+[2018 fix](https://github.com/rust-lang/rust/pull/55939) held an exclusive lock
+here, but when the environment lock became a
+[read-write lock](https://github.com/rust-lang/rust/pull/81850) in 2021, `exec`
+kept the read side. A fix that avoids touching `environ` by calling `execve`
+directly is [in review](https://github.com/rust-lang/rust/pull/157144).
+
+The environment has caused trouble before. After a
+[discussion that began in 2015](https://github.com/rust-lang/rust/issues/27970),
+the 2024 edition
+[marked `env::set_var` as `unsafe`](https://doc.rust-lang.org/edition-guide/rust-2024/newly-unsafe-functions.html),
+because C functions on most Unix platforms read the environment without going
+through Rust’s lock.
+
+#### `process::exit` and thread-local destructors (#164243)
+
+Getting this boundary right is hard, and more problems are still open. While
+exploring this area, we independently ran into a double free in safe code that
+`process::exit` can cause through thread-local destructors. It was reported by
+someone else ([#164243](https://github.com/rust-lang/rust/issues/164243)), but
+it’s worth mentioning here. libc’s `exit` first runs the calling thread’s
+thread-local destructors, as C++ requires, and Rust registers its destructors
+the same way. If a destructor calls `process::exit` while a thread local is
+being replaced, libc drops that thread local a second time. A
+[proposed fix](https://github.com/rust-lang/rust/pull/165125) switches
+`process::exit` to POSIX `_exit`, which ends the process without running these
+handlers.
+
+## Conclusion
+
+Every unsafe block rests on assumptions about the code around it. The bugs in
+this post came from three kinds of misplaced trust:
+
+- that code won’t panic at the wrong moment,
+- that a caller-provided implementation behaves correctly, and
+- that the process-wide state Rust shares with the operating system and the C library stays the way the code expects.
+
+### Familiar patterns are still difficult (Patterns 1 and 2)
+
+The first two patterns are well studied. [Rudra](https://dl.acm.org/doi/10.1145/3477132.3483570) looked for both in 2021, and the standard library was already fixing panic safety bugs in 2015 ([CVE-2015-20001](https://rustsec.org/advisories/CVE-2015-20001.html)). They remain challenging to avoid because any call inside unsafe code might unwind or run code the caller supplied.
+
+What we saw this year was mixed. On the positive side, the nightly process is
+working. Many reports were caught while the affected APIs were still unstable,
+and several were fixed by changing the design before stabilization.
+`StringPattern` now [holds `&str` instead of `&[u8]`](https://github.com/rust-lang/rust/pull/156556),
+and `Allocator` was
+[stabilized](https://github.com/rust-lang/rust/pull/156882) with a rule that
+implementors must not unwind. At the same time, bugs in these patterns still
+reach stable releases, and their fixes aren’t always complete. `join` was fixed
+in 2020 and
+[needed another fix](https://github.com/rust-lang/rust/pull/155708) in 2026 for
+a path the first fix had missed.
+
+### System boundary bugs are now within reach (Pattern 3)
+
+The third pattern is different. Its bugs live where Rust meets the layers below
+it: the kernel, through system calls such as `sigaltstack` and `munmap`, and the
+C library, through process-wide state such as `environ` and the cleanup that
+libc’s `exit` runs. Getting them right takes knowledge that lives outside
+Rust’s type system, which has made these bugs difficult to find with
+traditional static analysis. That may also be why they last so long. The
+`process::exit` signal stack bug was in the standard library for nearly 11
+years, and `exec` has written `environ` under a read lock since 2021. Unlike our
+reports in the first two patterns, both affect stable Rust.
+
+Language models already know a great deal about how these interfaces behave, so
+agentic scanners can check unsafe code against the system it runs on, not just
+the language. We
+think this boundary is one of the most promising places for agentic security
+research, in Rust and beyond.
+
+### Rust’s high bar is hard to meet but worth keeping
+
+Rust holds its safe APIs to a stricter standard than C and C++. Safe code must never be able to cause undefined behavior, no matter how it uses an API. In C++, a comparator that breaks `std::sort`’s ordering requirement causes undefined behavior, while Rust’s `sort` must stay memory-safe with any `Ord` implementation. POSIX doesn’t guarantee that `setenv` is safe to call while another thread reads the environment. That makes memory safety bugs in Rust hard to compare one-to-one with bugs in other languages.
+
+For the same reason, a soundness bug in the standard library isn’t automatically
+a vulnerability in the programs that use it. Each bug in this post needs an
+unusual setup to trigger, such as a panic at exactly the wrong moment, a
+deliberately misbehaving implementation, or calling `process::exit` from a child
+thread. It becomes a serious vulnerability only if a real program reaches the
+API in that way.
+
+Rust’s safety standard is strict and difficult to meet, but it’s also useful. It gives an unambiguous answer to what counts as a soundness bug, so problems can be fixed and prevented once in the library, instead of in every program that uses it. Rust’s safety model strikes the right balance between control, safety, and performance for systems programming, which is why so many projects choose it.
+
+## Beyond the lab
+
+At Microsoft FORGE Lab, we’re exploring how technology such as codename MDASH can help researchers find bugs like the ones in this post at greater scale. Rust’s standard library is one of several foundational open source projects where we’re applying this approach.
+
+**This research also extends beyond the lab.** It helps inform the development of codename MDASH, which brings agentic vulnerability discovery into Microsoft Defender. These findings can also serve as inputs to Microsoft Perception, our new multi-agent security system, where specialized agents work together across broader security workflows. For example, the Web App Pen Test Agent can use codename MDASH findings to help prioritize testing, validate exploitability against live applications, and produce actionable vulnerabilities that downstream agents can use to prioritize and support remediation. This connects AI-powered code analysis with real-world security validation and response, helping security teams move from identifying potential vulnerabilities to understanding and addressing actual risk.
+
+Our goal isn’t to simply find more bugs, it’s to identify meaningful issues, turn those findings into actionable research, and improve the safety of foundational software that developers and organizations depend on.

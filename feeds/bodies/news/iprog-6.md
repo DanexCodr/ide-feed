@@ -1,112 +1,14 @@
-AI is in the limelight on I Programmer this week. Mike James reports that Geoffrey Hinton, godfather of AI and a Nobel Laureate for his lifetime's work in the field, is now of the opinion we might be better off without AI. Meanwhile the GitHub Octoverse Report reveals the massive impact AI is having on open source software development. To receive this digest automatically by email, sign up for our weekly [ newsletter. ](<https://www.i-programmer.info/register.html>) **October 29 - November 4, 2026** | 
+Page 1 of 2 It came into operation in 1951 and, while the machines of its time were producing lists of prime numbers and ballistic trajectories, it was handling orders for teacakes and figuring wage packets.
 
-### Featured Articles  
+## J Lyons & Co - innovators
 
----  
+In C20th Britain, J Lyons was a huge business concern that derived its profits from selling large numbers of low cost items. The company baked the bread and cakes, blended the tea and even printed the packaging needed for its products and delivered them to its own restaurants. The management structures necessary to control this operation had developed as the company grew from its small beginnings but it needed to be an innovator to survive. It was estimated that only a farthing profit was made on each of 150 million meals it served per year and the profit per item was measured in decimal fractions of a penny. _Lyons' Corner House on Coventry Street, London, 1942_ The need to control costs generated an avalanche of paperwork which was dealt with by an army of clerks. But don't think of this as a haphazard system - it was an organized and as streamlined as it could be. Each waitress wrote out a bill as the customer ordered and these were returned to head office for sorting and totalling on the same day. The modern organization was the result of the appointment of graduates as management trainees - an innovation in itself. One in particular, John Simmons, a Cambridge maths graduate, revolutionized the management structure. He built a centralized but modular clerical machine to process the data. While it initially relied on mechanical calculators, making them effective required adopting an internal decimalized currency—working in pounds and decimal fractions of a pound rather than the pounds, shillings (20 to a pound), and pence (12 to a shilling) used in the UK at the time. When LEO was built, it adopted these decimal routines for calculations, but had to be programmed to convert and output the final results in pounds, shillings, and pence. The management of Lyons realized that the multi-base currency was a severe handicap to the use of mechanical methods of accounting and recording. In 1937 they donated £50 to the Decimal Association to further the cause of a change to decimalisation - which didn't happen until 1971. Despite using carefully designed custom stationery for collecting the data, they resisted the wholesale adoption of [punch card technology](<https://www.i-programmer.info/history/people/440-herman-hollerith.html>), which was increasingly being used in the USA, and making inroads into larger UK companies. While Hollerith machines were used in some administrative departments, Lyons was thinking of something more sophisticated and more complete. In 1947 two senior managers from Lyons,Oliver Standingford and Raymond Thompson, went on a tour of the USA to see the developments that were happening in electronic calculators. At the last minute they heard some very general details of the ENIAC project which had been a closely kept secret. [ENIAC](<https://www.i-programmer.info/history/8-people/341-eckert-and-mauchley-and-eniac.html?start=1>) is generally regarded as the first computer - but it was huge, slow and unreliable. It used thousands of valves and enough power for a small town. They didn't manage to see ENIAC but they did find out a lot about current computer technology and they returned enthused about the idea of using an "electronic brain" to automate the data processing at Lyons. At the time this idea would, and probably should, have been rejected by any company not already up to its elbows in electronics. But the Lyons management was so structured that it was already a computerized system but lacking the computer. It was clear that with the right hardware it could all be made to work and the benefits were obvious. It must have seemed just a matter of time before it all became possible and Lyons decided they didn't want to wait.
 
-* * *
+## Funding for EDSAC
 
-[ jQuery 4 - Plugins ](<https://www.i-programmer.info/programming/207-jquery/19260-jquery-4-plugins.html>)   
-04 Nov  |  Ian Elliot    
-[ ](<https://www.i-programmer.info/programming/207-jquery/19260-jquery-4-plugins.html>) If jQuery doesn't do what you want then make it so by writing a plugin - it is suprisingly easy. This is an exclusive extract from Ian Elliot's new book on jQuery 4. <ASIN:187196248X>  
+While in the USA they learned that a stored-program computer modeled on John von Neumann's EDVAC report was under construction by [Maurice Wilkes](<https://www.i-programmer.info/history/people/738-maurice-wilkes.html>) at Cambridge. The Lyon's board, in 1947, decided to donate £3,000 to the project in return for information which would help with their own project. Along with the donation came Ernest Lenaerts, a Lyon's clerk who had learned all about high speed electronics during the war. He was seconded to Cambridge for 12 months during which he learned a great deal about [EDSAC](<https://www.i-programmer.info/history/people/738-maurice-wilkes.html>) and wrote a long report that explained exactly how it worked. You might think that he would be regarded as a "spy in the camp" but the Cambridge researchers were very willing to help and surprisingly thought of the loan of Lenaerts as being as valuable as the money!
 
-* * *
+## John Pinkerton
 
-[ The Programmer's Guide to Chaos ](<https://www.i-programmer.info/babbages-bag/306-chaos.html>)   
-03 Nov  |  Mike James    
-[ ](<https://www.i-programmer.info/babbages-bag/306-chaos.html>) You might well think that “chaos” isn’t something that really should be mentioned in the same breath as “computer”, but you’d be wrong. Here's an overview of a fascinating and disturbing topic and one that every programmer should know something about. <ASIN:B081YS81L7>  
-
-### Programming News and Views  
-
-* * *
-
-[ Hinton: Better Off Never Developing AI ](<https://www.i-programmer.info/news/105-artificial-intelligence/19262-hinton-better-off-never-developing-ai.html>)   
-04 Nov  |  Mike James    
-[ ](<https://www.i-programmer.info/news/105-artificial-intelligence/19262-hinton-better-off-never-developing-ai.html>) When the godfather of AI suggests that we might be better off without AI, then you probably should listen. His lifetime quest to make AI real seems to have a bitter ending - or does it?  
-
-* * *
-
-[ Impact of AI on GitHub Revealed In Octoverse 2026 ](<https://www.i-programmer.info/news/136-open-source/19263-impact-of-ai-on-github-revealed-in-octoverse-2026.html>)   
-04 Nov  |  Sue Gee    
-[ ](<https://www.i-programmer.info/news/136-open-source/19263-impact-of-ai-on-github-revealed-in-octoverse-2026.html>) GitHub's Octoverse 2026 Report points to a surge in developer activity driven by AI. Overall commits on the platform saw a historic explosion, reaching 34.3 billion, up from 12.9 billion in 2025. Productivity rocketed with repositories using agent configurations logging eight times as many commits on average compared with those without.  
-
-* * *
-
-[ Wing Python 12.1 Adds Guided Autonomous Development ](<https://www.i-programmer.info/news/192-photography-a-imaging/19259-wing-python-121-adds-guided-autonomous-development.html>)   
-03 Nov  |  Kay Ewbank    
-[ ](<https://www.i-programmer.info/news/192-photography-a-imaging/19259-wing-python-121-adds-guided-autonomous-development.html>) Wing Python IDE version 12.1 has been released with a new Tasks Manager, an agent that runs the Tasks tool's queues for you. Other improvements include support for other AI agents and a redesigned new project page.  
-
-* * *
-
-[ Firefox Devtools MCP Updated ](<https://www.i-programmer.info/news/86-browsers/19258-firefox-devtools-mcp-updated.html>)   
-03 Nov  |  Ian Elliot    
-[ ](<https://www.i-programmer.info/news/86-browsers/19258-firefox-devtools-mcp-updated.html>) The Firefox Devtools MCP for AI agent testing has been updated. The tool is a Model Context Protocol server that lets AI assistants inspect and control Firefox browser through the WebDriver BiDi.  
-
-* * *
-
-[ Evolutionary Architecture in .NET By Example ](<https://www.i-programmer.info/news/89-net/19256-evolutionary-architecture-in-net-by-example.html>)   
-02 Nov  |  Nikos Vaggalis    
-[ ](<https://www.i-programmer.info/news/89-net/19256-evolutionary-architecture-in-net-by-example.html>) This is an evolutionary architecture guide for .NET software development, illustrating how applications can organically scale from simple beginnings to complex distributed systems.  
-
-* * *
-
-[ Android Dev Summit Focuses On AI and Performance ](<https://www.i-programmer.info/news/193-android/19255-android-dev-summit-focuses-on-ai-and-performance.html>)   
-02 Nov  |  Kay Ewbank    
-[ ](<https://www.i-programmer.info/news/193-android/19255-android-dev-summit-focuses-on-ai-and-performance.html>) At the Android Dev Summit last week the focus was split between yet more AI-related features and ways to create and ship better performing apps.For Android developers, however, the announcement that there's a new stable version of Android Studio Rabbit 2 is probably the more important news.  
-
-* * *
-
-[ Mastering Humanoid Mobility ](<https://www.i-programmer.info/news/169-robotics/19254-mastering-humanoid-mobility.html>)   
-01 Nov  |  Sue Gee    
-[ ](<https://www.i-programmer.info/news/169-robotics/19254-mastering-humanoid-mobility.html>) Robots have made incredible advances thanks to reinforcement learning. See the Unitree G1 vault barriers, climb ladders, and more, in a manner fit for the real world.  
-
-* * *
-
-[ Wearable Interactive Touchscreen ](<https://www.i-programmer.info/news/91-hardware/19253-wearable-interactive-touchscreen.html>)   
-30 Oct  |  Lucy Black    
-[ ](<https://www.i-programmer.info/news/91-hardware/19253-wearable-interactive-touchscreen.html>) Researchers from the National University of Singapore (NUS) have demonstrated a wearable touchscreen made from electronic fibers that can function as pixels and can also sense touch.  
-
-* * *
-
-[ Quadruped Robot Manipulates Rubik's Cube ](<https://www.i-programmer.info/news/169-robotics/19238-quadruped-robot-meets-rubiks-cube.html>)   
-30 Oct  |  Sue Gee    
-[ ](<https://www.i-programmer.info/news/169-robotics/19238-quadruped-robot-meets-rubiks-cube.html>) Researchers at the Robotics Systems Lab at ETH Zurich have trained a quadruped robot to solve a giant Rubik's cube without any human intervention. It is intended as a demonstration of the robot's ability to use its sensors, planning, and full-body movement control to manipulate a moving object with its feet over an extended period of time.  
-
-* * *
-
-[ The JFrog Agent Plugin: Securing AI Supply Chains And Coding Agents ](<https://www.i-programmer.info/news/240-devops/19250-the-jfrog-agent-plugin-securing-ai-supply-chains-and-coding-agents.html>)   
-29 Oct  |  Nikos Vaggalis    
-[ ](<https://www.i-programmer.info/news/240-devops/19250-the-jfrog-agent-plugin-securing-ai-supply-chains-and-coding-agents.html>) The Agent Plugin is part of Jfrog's AI supply chain solutions designed to secure and govern AI-assisted software development.  
-
-* * *
-
-[ GitHub Universe Recap - CoPilot Dominates ](<https://www.i-programmer.info/news/105-artificial-intelligence/19251-github-universe-recap-copilot-dominates.html>)   
-29 Oct  |  Kay Ewbank    
-[ ](<https://www.i-programmer.info/news/105-artificial-intelligence/19251-github-universe-recap-copilot-dominates.html>) GitHub Universe is concluding today, and this year's announcements have mainly been about improvements to GitHub Copilot, GitHub's AI-based code helper system.  
-
-### Book Watch  
-
-* * *
-
-[ Java in a Nutshell, 9th Ed (O'Reilly) ](<https://www.i-programmer.info/book-watch-archive/19261-java-in-a-nutshell-9th-ed-oreilly.html>)   
-
-This book explains Java through to Java 25, and provides a learning path for new developers. Examples are used to demonstrate how to take complete advantage of modern Java APIs and development best practices. This thoroughly revised guide includes new material on recent enhancements to Java, with an entirely new chapter dedicated to Java 25's Compact Source Files and Instance Main Methods feature, which makes the language more accessible than ever for beginners. It also features an interactive Java sandbox for hands-on practice. <ASIN:B0GZ7986BP >  
-
-* * *
-
-[ Bayesian Workflow (Chapman & Hall) ](<https://www.i-programmer.info/book-watch-archive/19257-bayesian-workflow-chapman-a-hall.html>)   
-
-This book explores the intricate workflows of applied Bayesian statistics, aiming to uncover the tacit knowledge often overlooked in published papers and textbooks. By systematizing the process of Bayesian model development, Andrew Gelman, Aki Vehtari, Richard McElreath et al seek to improve applied analyses and inspire future innovations in theory, methods, and software. <ASIN:0367490145 >  
-
-* * *
-
-[ The Craft of Post-Training (No Starch Press) ](<https://www.i-programmer.info/book-watch-archive/19252-the-craft-of-post-training-no-starch-press.html>)   
-
-This book examines post-training, the work of taking a raw, general AI model and shaping it into something that behaves, follows instructions, refuses what it shouldn’t do, and handles the specific job you need. It’s the human hand on the machine, and the part almost no one explains.   
-Chris von Csefalvay shows the decisions behind every technique: when to fine-tune and when not to, why a model quietly gets worse, and which method fits the constraint you’re actually under. The math is here, because knowing why a technique works is what lets you debug it when it breaks. <ASIN:1718505205>  
-
-I Programmer has reported news for over 12 years. You can access [ I Programmer Weekly ](<https://www.i-programmer.info/i-programmer-weekly>) back to January 2012 for all the headlines plus the book reviews and articles.
-
-To keep up with the latest news and receive this digest automatically by email, [ sign up ](<https://www.i-programmer.info/register.html>) for our [ weekly newsletter ](<https://www.i-programmer.info/edit-profile.html?layout=form>) and follow us on [ Twitter, ](<http://twitter.com/Iprogrammerinfo>) [ Facebook, ](<http://www.facebook.com/pages/iProgrammer/127140977307932#%21/pages/iProgrammer/127140977307932?v=wall>) and [ LinkedIn ](<http://www.linkedin.com/company/i-programmer>) , where you are welcome to share all our stories.
-
-You can also subscribe to our RSS Feeds - we have one for [ Full Contents ](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=3&format=raw>) , another for [ News ](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=1&format=raw>) and also one for [ Books ](<https://www.i-programmer.info/component/ninjarsssyndicator/?feed_id=2&format=raw>) with details of reviews and additions to Book Watch.
+The project was underway but it needed a leader. Lyons placed an advertisement in the periodical Nature, which didn't mention who the job was with and didn't make it clear that it was all about computers. After all who at the time would have recognized the job title! Dr John Pinkerton answered the ad. Maurice Wilkes had tipped him off that it might well be Lyons looking for people for their computer project. _Dr John Pinkerton (1919-1997)  
+_ Pinkerton had worked on radar during the war and returned to Cambridge to do research into ultrasonics. While there he heard the lecture given by Hartree who had been to the US and seen the computing revolution that was in progress - he thought it was interesting but saw no possibility of getting involved. In his last year he applied for 20 or more jobs but became increasingly choosy. However, because he was due to be married he felt that a job was essential! Lyons arranged a carefully planned interview that lasted a whole day. They showed him the existing manual data processing methods in action and explained their plans for a fully engineered version of the EDSAC - which you have to remember wasn't at that point actually working. It all sounded a little crazy but, as Pinkerton said, "great fun!"  <ASIN:1841151858> <ASIN:0077092368>

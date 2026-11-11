@@ -1,203 +1,696 @@
-This post is a fun little side quest to kickstart my journey optimising *regional* calendars.
+i was recently having a discussion online about different perspectives on
+signals. It led to a question me and someone else asked simultaneously: what if
+you could *ignore* or *handle* the absolute, unstoppable order from the kernel
+to be killed or stopped?
 
-Computing the date of Easter faster is not going to matter in any real application. Even in places where it might seem to matter, like high frequency trading applications, it is probably better to just use an in-memory lookup table for holiday dates...  
-However, no "Fast Date" series would be complete without some mention of this classic problem.
+# [#](https://vulpinecitrus.info/blog/what-if-you-could-handle-sigkill/#Signals) 
+Signals
 
-The rules for Easter were broadly decided at the First Council of Nicaea, organised by Emperor Constantine in 325 AD, ultimately landing on *the first Sunday after the first full moon, on or after March 21*. Later, for operational efficiency, the church defined *"full moon"* according to a formula, which was eventually modified by Pope Gregory XIII in 1582 *("Gregorian Easter")*, with the first Easter under the new rules applying in most Catholic countries the following year.  
-The Church of England first observed the new date of Easter in 1753, but Eastern / Orthodox churches continue to follow the old rules.
+Signals in POSIX are a form of IPC
+ that allows
+userland processes (and the kernel) to send each other simple indications of
+actions to take. The Linux kernel, at the time of writing, handles about [31 of
+those](https://elixir.bootlin.com/linux/v6.13/source/arch/x86/include/uapi/asm/signal.h#L22)
+on the x86(-64) architecture. The most frequent situation where you might
+encounter signals as a developer is when making *handlers* for these signals:
+callbacks which are to be executed upon the reception of a signal by your
+process. You may also *mask* these signals to stop them from triggering anything
+on your program.
 
-This article is about the new "Gregorian" Easter, because it is much more complex and slow to compute. For more details on the underlying algorithm, you can see [Gauss's Algorithm on Wikipedia ![](https://www.benjoffe.com/static/media/link-external.f2d3f5e2e0517a859106527b07648224.svg)](https://en.wikipedia.org/wiki/Date_of_Easter#Gauss's_Easter_algorithm) *(the first known self-contained function, which basically all later algorithms build on)*.
+There are, however, two signals that cannot be stopped or handled: `SIGKILL` and
+`SIGSTOP`.
 
-### The Function
+`SIGKILL` is an indication to terminate immediately and messily. Essentially,
+the process receiving this signal is abruptly ended, and marked as dead. Its
+parent must then, at some point, reap it so that resources can be freed.
 
-The code below runs really fast.  
-It's around twice as fast as a standard  easter function that you might find in a typical date library, and I suspect it may be the fastest one made so far 🤷.  
-Part of that speed is attributable to using **only 5 multiplications** *(whereas typical reference algorithms have 10 or more multiplications)*.
+`SIGSTOP` is a weirder signal. When a process is running on a CPU and receives
+`SIGSTOP`, it is marked as blocked and removed from the running CPU (or moved in
+the background from the point of view of the user). After getting stopped, a
+process remains stuck until receiving a `SIGCONT` signal. [Multiple
+signals](https://elixir.bootlin.com/linux/v6.13/source/include/linux/signal.h#L422)
+can indicate a block, but `SIGSTOP` is the only unavoidable one of those. You
+may know that you can stop a process in a shell, via `^Z`. Shells usually do not
+throw `SIGSTOP` directly, but `SIGTSTP`, which may be caught or fail. `SIGSTOP`
+is considered “reserved” for the kernel only to throw.
 
-The accuracy range of around `-11m → +16m` years might seem a bit of overkill, but the reason I targeted this range is so that any date library that expresses dates via a signed or unsigned 32‑bit "rata die", is covered by this function. This means that if you decide to not clamp the logic to years after 1582, at least it will return something resembling the correct rules, rather than garbage.
+So, what if we *could* ignore, or even handle `SIGKILL` and `SIGSTOP`? Surely,
+because everyone in userspace made sure to *never* register a handler on those
+signals or ignore them, things shouldn’t go wrong, right?
 
-1. u32 constexpr *SHIFT* = 400 * 19 * (25 * 30 * 2 - 39)
-2. u64 constexpr *M19* = (1 << 32) / 19 + 1 + (11 << 32)
-3. u32 constexpr *M1C* = (1 << 32) / 100 + 1
-4. u32 constexpr *M25* = (1 << 32) * 8 / 25 + 1
-5. u32 constexpr *M30* = (1 << 32) / 30 + 1
-6. u32 constexpr *M67* = (1 << 32) * 6 / 7
-7. 
-8. u32 *y* = *year* + *SHIFT* // Constant fold
-9. u32 *c* = (u64) *y* * *M1C* >> 32 // y / 100
-10. u32 *a* = (u64) *c* * *M25* >> 32 // c * 8 / 25
-11. u64 *b* = (u64) *y* * *M19* // Hi & lo bits
-12. u32 *d* = (u32) *b* > 0x90000000 // (y % 19) > 10
-13. u32 *e* = *b* >> 32 // Metonic cycle
-14. u32 *f* = *c* - (*c* >> 2) // Julian map
-15. u32 *g* = *a* - *f* + *e* // Epact
-16. u32 *h* = (u64) *g* * *M30* >> 32 // g / 30
-17. u32 *i* = (*g* + (*h* << 1)) & 31 // g % 30
-18. u32 *j* = 31 - *i* - (*d* >= *i*) // Epact adjust
-19. u32 *k* = *y* + (*y* >> 2) + *j* - *f* // Weekday input
-20. u32 *m* = *k* * *M67* >> 29 // 7 - (k % 7)
-21. u32 *v* = *j* + *m* + 115 // Bit prep
-22. u32 ***month*** = *v* >> 5
-23. u32 ***day*** = (*v* & 31) + (*v* >> 7)
+…right?
 
-1. u32 constexpr *SHIFT* = 400 * 19 * (25 * 30 * 2 - 39)
-2. u64 constexpr *M19* = (1 << 32) / 19 + 1 + (11 << 32)
-3. u32 constexpr *M1C* = (1 << 32) / 100 + 1
-4. u32 constexpr *M25* = (1 << 32) * 8 / 25 + 1
-5. u32 constexpr *M30* = (1 << 32) / 30 + 1
-6. u32 constexpr *M67* = (1 << 32) * 6 / 7
-7. 
-8. u32 *y* = *year* + *SHIFT* // Constant fold
-9. u32 *c* = (u64) *y* * *M1C* >> 32 // y / 100
-10. u32 *a* = (u64) *c* * *M25* >> 32 // c * 8 / 25
-11. u64 *b* = (u64) *y* * *M19* // Hi & lo bits
-12. u32 *d* = (u32) *b* > 0x90000000 // (y % 19) > 10
-13. u32 *e* = *b* >> 32 // Metonic cycle
-14. u32 *f* = *c* - (*c* >> 2) // Julian map
-15. u32 *g* = *a* - *f* + *e* // Epact
-16. u32 *h* = (u64) *g* * *M30* >> 32 // g / 30
-17. u32 *i* = (*g* + (*h* << 1)) & 31 // g % 30
-18. u32 *j* = 31 - *i* - (*d* >= *i*) // Epact adjust
-19. u32 *k* = *y* + (*y* >> 2) + *j* - *f* // Weekday input
-20. u32 *m* = *k* * *M67* >> 29 // 7 - (k % 7)
-21. **return** *j* + *m* - 3
+# [#](https://vulpinecitrus.info/blog/what-if-you-could-handle-sigkill/#Fucking_Around:_Messing_with_Linux) 
+Fucking Around: Messing with Linux
 
-Note that this function contains more terms than traditional Easter functions, but bear in mind that the compiled assembly will be a lot smaller. So if you don't care about the speed, but want a tiny impact on binary size, that could be a reason to consider this function.
+My initial idea was to go into the signal handling code of Linux and remove
+anything that treats `SIGKILL` or `SIGSTOP` differently from other signals. i
+had originally wondered what exactly makes these two signals specials. It did
+not take long to realize that Linux’s signal handling code explicitly treats
+them very differently.
 
-The rest of this post will briefly explain the tricks used in this function:
+## [##](https://vulpinecitrus.info/blog/what-if-you-could-handle-sigkill/#How_Linux_Handles_Firing_Signals) 
+How Linux Handles Firing Signals
 
-*See also [benchmark results](https://www.benjoffe.com/fast-easter#benchmarks).*
+Let’s go through a simple overview of how signals firing are handled by the
+Linux kernel. For the sake of clarity, have a little diagram, so you can follow
+along:
 
-1. u32 constexpr SHIFT = 400 * 19 * (25 * 30 * 2 - 39)
+Linux’s implementation of signals explicitly refuses that user processes mask
+`SIGKILL` and `SIGSTOP` or handle them. About all of that logic is located in
+`kernel/signal.c` and in the appropriate `arch/$ARCH/kernel/signal(_?(32|64)?.c`
+file. i will give examples in `arch/x86/kernel/signal.c`.
 
-You'll notice that the very first thing we do is add a strange value `SHIFT` to the input value. This is done for two reasons:
+When the kernel is about to leave kernelspace, in `kernel/entry/common.c`’s
+[`exit_to_user_mode_loop`](https://elixir.bootlin.com/linux/v6.13/source/kernel/entry/common.c#L90),
+it checks for work left over to handle. That includes [pending
+signals](https://elixir.bootlin.com/linux/v6.13/source/kernel/entry/common.c#L111)
+to be sent or handled. When some signals are pending, Linux will next run
+[`arch_do_signal_or_restart`](https://elixir.bootlin.com/linux/v6.13/source/arch/x86/kernel/signal.c#L333)
+for the current architecture. There are essentially three steps in that
+function: *getting* the signal and *handling* the signal if a user-defined
+handler was found.
 
-For example, most Easter algorithms have a term like `(5 + 8 * c) / 25`, where `c` is the century (`year / 100 + 1`). The term `25` in the calculation of shift is responsible for aligning the century such that the constant `5` can be removed, resulting in `c * 8 / 25`, which is then approximated in the final algorithm with a single mul-shift: `(u64) c * M25 >> 32`.
+[`get_signal`](https://elixir.bootlin.com/linux/v6.13/source/kernel/signal.c#L2801)
+runs a loop to dequeue signals that are not masked and process them. Right after
+dequeuing, the [potential
+handler](https://elixir.bootlin.com/linux/v6.13/source/kernel/signal.c#L2928) is
+retrieved. And, if that handler is not the default handler that ignores the
+signal (`SIG_IGN`), it is stored in a `ksignal` structure and `get_signal`
+returns. Otherwise, the code checks for, among other things, whether the target
+process is a global init and the signal can be ignored, and whether the signal
+is a kind of `stop`. If that latter case is true, we prepare the process to be
+stopped and call `do_signal_stop`, which handles *all* stop signals. Finally, if
+the signal is not a kind of stop and was not handled, its default behaviour is
+killing the process, which is done via `do_group_exit`. While scouring Linux’s
+code initially, his gave me a first intuition: the kernel *expects* that there
+is no user-set handler for `SIGSTOP` and `SIGKILL` in order to fall back on
+default behaviour. If there was a user-set handler, they would be handled like
+regular signals. Either there is logic right at the entry of handler setup code
+that explicitly removes `SIGSTOP` and `SIGKILL`, or that check is *outside of
+Linux*, which could mean having to rewrite parts of libc, or using raw syscalls.
 
-Other terms in `SHIFT`: `19, 400, 30` are all doing similar things related to the 19-year-cycle, 400-year-cycle, and mod-30 steps.  
-The term `* 2` is different. Without this term, the range of coverage would be -5,403,600 → +22,363,835; which doesn't quite cover the range we wanted, which for signed 32-bit rata die, is ±5.88m years. Including `* 2` increases the value of shift by exactly 5,700,000, which is how many years it takes for the Easter pattern to repeat, and gets the range we are after.
+If the signal is not handled by the kernel in `get_signal`, i.e. a handler is
+set in `ksig`, the kernel then calls `handle_signal`. Just as with many other
+functions in Linux, the name is deceptive: no signal is actually handled in
+there (in fact, as far as i have seen, it is the only part of the top-level
+signal handling function `arch_do_signal_or_restart` that never handles
+signals). What `handle_signal` does is that it sets up the stack frame of the
+signal handler and sets and saves pointers to restart execution in user mode
+later. The process goes through `handle_signal` as defined in your [current
+architecture](https://elixir.bootlin.com/linux/v6.13/source/arch/x86/kernel/signal.c#L255),
+which, on x86(-64), then calls
+[`setup_rt_frame`](https://elixir.bootlin.com/linux/v6.13/source/arch/x86/kernel/signal.c#L236)
+to set up a return frame with the correct ABI
+ for the signal. On x86, the state of the FPU
+ is also saved and reset. Down
+at the last function in the call chain for frame setup, the instruction pointer
+[is
+set](https://elixir.bootlin.com/linux/v6.13/source/arch/x86/kernel/signal_64.c#L210)
+to `ksig->ka.sa.sa_handler`, so that when those registers are restored the
+machine immediately executes your handler. After all of that is done,
+[`signal_setup_done`](https://elixir.bootlin.com/linux/v6.13/source/kernel/signal.c#L3079)
+is called to change some internal states, and the frame setup is done.
 
-If you like this type of optimisation, but are not a fan of the low-level bit-shifting and so on, then you might prefer to use this function here below. It is a much more readable version of the function, which only has these higher-level optimisations applied.
+At the end of an iteration of the work loop in `exit_to_user_mode_loop`, the
+kernel [returns to user
+mode](https://elixir.bootlin.com/linux/v6.13/source/kernel/entry/common.c#L117)
+to execute the necessary work.
 
-Note that unlike in the main function presented earlier, `MOD 30` needs to be a positive-modulus function (even for positive dates), and that the `nextSunday` helper is anchored to the internal logic of the function, not related to Unix day-counting.
+Userspace programs use the
+[`rt_sigaction`](https://elixir.bootlin.com/linux/v6.13/source/kernel/signal.c#L4606)
+syscall as the entry point to set a handler for a signal. This one does not
+specifically exclude our signals until you look at
+[`do_sigaction`](https://elixir.bootlin.com/linux/v6.13/source/kernel/signal.c#L4285),
+which checks for something called
+[`sig_kernel_only`](https://elixir.bootlin.com/linux/v6.13/source/include/linux/signal.h#L445).
+That macro checks if the signal is one of `SIGKILL` or `SIGSTOP` and throws out
+a `-EINVAL` if that is true. This means that, as expected, there was logic
+somewhere early when the kernel receives a handler setup syscall that explicitly
+prevents setting one for `SIGKILL` or `SIGSTOP`.
 
-1. u32 getEpact(u32 *y*, u32 *c*, u32 *f*) {
-2. u32 *n* = *y* % 19
-3. u32 *i* = i32(11 * *n* - *f* + *c* * 8 / 25) MOD 30
-4. **return** 31 - *i* - ((*n* > 10) >= *i*)
-5. }
-6. 
-7. u32 nextSunday = (u32 *k*) => 7 - (*k* % 7)
-8. 
-9. // Returns days since March 22:
-10. u32 simpleEaster(i32 *year*) {
-11. u32 constexpr SHIFT = 400 * 19 * (25 * 30 * 2 - 39)
-12. u32 *y* = *year* + SHIFT
-13. u32 *c* = *y* / 100
-14. u32 *f* = *c* - *c* / 4
-15. u32 *j* = getEpact(*y*, *c*, *f*)
-16. u32 *m* = nextSunday(*y* + *y* / 4 + *j* - *f*)
-17. **return** *j* + *m* - 3
-18. }
+## [##](https://vulpinecitrus.info/blog/what-if-you-could-handle-sigkill/#Linux_and_Masked_Signals) 
+Linux and Masked Signals
 
-<small>*Note: a [variant ![](https://www.benjoffe.com/static/media/link-external.f2d3f5e2e0517a859106527b07648224.svg)](https://github.com/benjoffe/fast-world-calendars/blob/main/easter/algorithms/benjoffe.hpp#L101) in the C++ repo has some small optimisations not shown here (fast day-of-week and fast mod 30), and a range of [-73,803,600 .. 70,208,581].*</small>
+As for setting *masks*, the set of signals ignored for a given task, the kernel
+entry point is
+[`rt_sigprocmask`](https://elixir.bootlin.com/linux/v6.13/source/kernel/signal.c#L3320).
+It [explicitly
+prevents](https://elixir.bootlin.com/linux/v6.13/source/kernel/signal.c#L3335)
+blocking either `SIGKILL` or `SIGSTOP` before calling
+[`sigprocmask`](https://elixir.bootlin.com/linux/v6.13/source/kernel/signal.c#L3237).
+When a signal is sent, before queuing,
+[`prepare_signal`](https://elixir.bootlin.com/linux/v6.13/source/kernel/signal.c#L870)
+is called. One of its roles is checking that a signal is blocked or cannot be
+delivered (global init is the target, the target is unkillable in some way,
+etc). Surprisingly, *blocked signals are always queued*, because the signal mask
+and handling might change between queueing and dequeueing. However, if the
+signal is not masked but [no handler is
+set](https://elixir.bootlin.com/linux/v6.13/source/kernel/signal.c#L80), it will
+get
+[dropped](https://elixir.bootlin.com/linux/v6.13/source/kernel/signal.c#L1053).
 
-Computing `year % 19` is a staple of Easter algorithms.  
-It's related to the *Metonic cycle*, where every 19 years there are nearly exactly 235 full moons.
+From reading the code that handles signals, signal masking and signal handlers,
+it’s clear that there are multiple places that explicitly exclude setting
+handlers for and masking `SIGKILL` and `SIGSTOP`.
 
-It is traditionally used in Easter algorithms in two ways:
+So i went in and patched them.
 
-We are going to compute these same things using a single multiplication.  
-These steps seem unavoidable at first, but they can be eliminated. We'll begin by expanding the first one:
+## [##](https://vulpinecitrus.info/blog/what-if-you-could-handle-sigkill/#Patching_Linux) 
+Patching Linux
 
-`(11 * (year % 19) + ... ) MOD 30`  
-`(11 * (year - year / 19 * 19) + ... ) MOD 30`  
-`(11 * year - year / 19 * 209 + ... ) MOD 30`  
-`(11 * year + year / 19 + ... ) MOD 30`
+There are four things i need to look at:
 
-The last step there might be the least obvious. It works because we can add any multiple of `30` to the multiplier and get the same result (a property of `MOD`), so add `30 × 7 = 210`, which means we can remove the multiplication by `209` and just invert the sign.
+- Allowing processes to mask (sigprocmask) both kernel signals
+- Allowing processes to handle (sigaction) both kernel signals
+- Making sure that if a handler is set for one of these two signals, or they are masked, that the default behaviour is masked
+- Patching any other instance of SIGKILL or SIGSTOP explicitly mentioned in kernel/signal.c
 
-This leaves us with only two terms related to *year* which can be computed efficiently in parallel, however using a 64‑bit multiplier, we can actually merge these into one (fixed-point multiplication by `11 1/19`):
-
-`u64 constexpr M19 = (1 << 32) / 19 + 1 + (11 << 32)`  
-`((year * M19 >> 32) + ... ) MOD 30`
-
-*<small>This is the only 64‑bit multiplication in the function, and a 32-bit compiler should have no trouble turning that back into the previous pair of multiplications.</small>*
-
-The algebra above relies on `MOD 30`, which is different to `% 30` in C for negative numbers.  
-The value being computed does not go negative over our range, so the substitutions remain valid.
-
-Now on to the other term: `(year % 19) > 10`. It is a well known trick to use the low bits from the mul-shift of division by `19` as a comparison cutoff, and the version used in my function is `u32(b) > 0x90000000`. The extra term in our multiplier (`11 << 32`) has no effect in the lower 32‑bits, so this still works. Cassio Neri has written about things like this, if you want to read more you can start with this [Overload Edition 154 ![](https://www.benjoffe.com/static/media/link-external.f2d3f5e2e0517a859106527b07648224.svg)](https://accu.org/journals/overload/27/154/overload154.pdf).
-
-So, this is just one multiplication plus the `MOD 30`, which is usually an additional two multiplications, but we'll eliminate those later in *[Trick #4](https://www.benjoffe.com/fast-easter#trick4)*.
-
-There's always a `% 7` term in these Easter functions, which is then *subtracted* from a final result. This is because Easter is on the “*first Sunday after [...]*”.
-
-Clearly we are going to use the fast-mod-7 trick from the [weekday article](https://www.benjoffe.com/fast-day-of-week). If you haven't read that article, you should. You won't understand this section otherwise, and frankly, it's a better article than this one.
-
-1. u32 const *M67* = (1 << 32) * 6 / 7
-2. u32 *y* = *x* * *M67* >> 29
-
-The same mod-7 trick as before, but notice that the mapping is reversed? (The numbers track anti-clockwise)
-
-So why not just subtract the result of `% 7` like everybody else? Well, that would make the final line be: `j - m + C` (for some constant `C`). This does not fit the pattern of a single-operation `LEA` instruction on x86.
-
-Instead, we adapt the fast-mod-7 code to use a fixed-point multiplier of `6 / 7` (rather than `1 / 7`) before the right-shift-29, which means this line actually counts mod-7 backwards for us! This means the final line can be `j + m + C`, which fits `LEA` and saves... one cycle  😀 <small>*(depending on the compiler and CPU...)*.</small>
-
-1. u32 constexpr *M30* = (1 << 32) / 30 + 1 ···
-2. u32 *h* = (u64) *g* * *M30* >> 32
-3. u32 *i* = (*g* + (*h* << 1)) & 31
-
-This one is pretty obvious if you've been following this blog series.  
-`MOD 30` can be calculated faster by using our favourite identity:
-
-This was introduced and proven in the [weekday](https://www.benjoffe.com/fast-day-of-week) article, and utilised more notably in the [time-of-day](https://www.benjoffe.com/fast-time-of-day) article.  
-Here setting `D = 30, c = 2` gives us the useful version where we can apply `MOD 32` *(same as `& 31`)*.
-
-This final bit, I'm not sure if it's been done before exactly like this.
-
-Easter can only ever be in March or April (month 3 or 4), and luckily March is 31 days long, which means we can use `% 32` to truncate dates there. A straightforward modulus would cause March 32 to overflow to April `0`, a non-existent date, so we add the term `v >> 7` which increments the date when it overflows *(a lucky coincidence relying on April, month `4`, being a power-of-2)*.
-
-I have seen similar things done before using `% 31`, but I have not seen this with the clean bit-mask approach.
-
-So, that's it. A bunch of fussing about to make a simple streamlined function that is next to impossible to read... but fast.
-
-This article was prompted by Twitter/X user [Dirk Loss ![](https://www.benjoffe.com/static/media/link-external.f2d3f5e2e0517a859106527b07648224.svg)](https://x.com/dloss/status/2090496142173692232) replying to one of my posts with a link to a ChatGPT thread, where he used AI to compute Easter faster. [See ChatGPT thread. ![](https://www.benjoffe.com/static/media/link-external.f2d3f5e2e0517a859106527b07648224.svg)](https://chatgpt.com/share/6a873ce2-6d24-83eb-9fbe-1e4a1fd46c9f)
-
-The AI actually did a pretty good job.  It used learnings from my prior blog posts to apply various optimisations, but also came up with new twists on these ideas. It produced a function that is *really fast*, and that is accurate over the range 1498–14,544. The range is a fairly reasonable choice given that the modern rules for Easter took effect after 1582, and nobody really needs Easter further into the future.
-
-In a serious case of *"Not Invented Here"* syndrome <small>(on behalf of human kind)</small>, I had to see if I could beat the AI. I clearly did, otherwise there wouldn't be this blog post. The wider-range algorithm presented in this article has around 5-15% higher throughput across tested platforms, and similar latency (despite the wider range).
-
-My algorithm was adapted from the one presented in Calendrical Calculations (Reingold and Dershowitz).  
-I did not apply any learnings from the ChatGPT one, though we settled on several similar steps.
-
-I suspect this function could be optimised more, as it still has the same overarching structure of existing algorithms going back a *very* long time.  
-I tried for a little while to find a shortcut solution using the Python "Z3 Theorem Prover", which found an alternative which is a further 15-20% faster than my main one, however it's only accurate over a micro range [1894 .. 2199]. [It is available in the testcase repo ![](https://www.benjoffe.com/static/media/link-external.f2d3f5e2e0517a859106527b07648224.svg)](https://github.com/benjoffe/fast-world-calendars/blob/main/easter/algorithms/benjoffe.hpp#L115). If you can find a function of similar or faster speed with a wider range, feel free to let me know and I will update the repo and this page!
-
-Although I beat the AI in this case, it’s a pretty mild victory as it was just a basic model with a moderate amount of compute. It’s sad to know that if frontier models were pointed at the problems I’ve been tackling in this blog series, they would probably unearth every last jewel of optimisation left in the blink of an eye. I hope that I have time to explore this space more before it becomes barren.
-
-If you enjoyed this post, you should [follow me on X ![](https://www.benjoffe.com/static/media/link-external.f2d3f5e2e0517a859106527b07648224.svg)](https://x.com/benjoffe) to get notified when I publish more date and algorithm related articles.
-
-Exhaustive tests of the ranges asserted in this article can be verified via the testcase code: [https://github.com/benjoffe/fast-world-calendars  ![](https://www.benjoffe.com/static/media/link-external.f2d3f5e2e0517a859106527b07648224.svg)](https://github.com/benjoffe/fast-world-calendars).
-
-The same repository is used for benchmarking, where a large set of random years are loaded into memory and tested.
-
-All results were obtained by running the benchmark with `-repeat=10` and recording the *median* results.  
-The `-batch` flag runs each computation 3 times before loading the next entry from memory. This ensures that the processor is not bottlenecked by memory access.  
-Latency results use the same command but replace the batch flag with `-latency`. This mode feeds the result of each computation into the next, so there is no parallelisation.
+i begin with creating a simple KConfig key in the [“Kernel
+Hacking”](https://elixir.bootlin.com/linux/v6.13/source/lib/Kconfig.debug#L2)
+menu in `lib/Kconfig.debug`. This is the first part of [my patch](https://git.vulpinecitrus.info/Lymkwi/linux/commit/3bc478b0ac9afd6274e9f90a8a024e759da1b3e4.patch):
 
 ```
-git clone https://github.com/benjoffe/fast-world-calendars.git
-cd fast-world-calendars
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j
-./build/bin/easter_test
-./build/bin/easter_bench -batch
-./build/bin/easter_bench -latency
+config KILL_STOP_HANDLING
+	bool "Make SIGSTOP and SIGKILL handlable by regular programs"
+	help
+	  This prevents the kernel from blocking handling of SIGSTOP and SIGKILL by
+	  regular user programs.
+
+	  If unsure, say N.
 ```
 
-The number in a small font size represents the number of nanoseconds per year computation.  
-The larger number is the ratio of these results compared to the `New` function as a baseline.
+Starting from there, i can hide or replace any part of signal handling code that
+explicitly refuses `SIGSTOP` or `SIGKILL` using something like:
 
-**Note:** the benchmarks compute *"Days since 22 March"* (not day and month), as some of the reference algorithms only return this value.  
-If my optimisation of the day/month step is novel, then the speedup would be larger than presented here.
+```
+#ifdef CONFIG_KILL_STOP_HANDLING
+    // Code that does not discriminate signals
+#else
+    // Previous code
+#endif
+```
+
+So, let’s get started.
+
+### [###](https://vulpinecitrus.info/blog/what-if-you-could-handle-sigkill/#Signal_Masking_Syscall) 
+Signal Masking Syscall
+
+Your machine enters the signal masking procedure via the
+[`rt_sigprocmask`](https://elixir.bootlin.com/linux/v6.13/source/kernel/signal.c#L3320)
+syscall (previously `sigprocmask` before real-time signals were introduced):
+
+```
+/**
+ *  sys_rt_sigprocmask - change the list of currently blocked signals
+ *  @how: whether to add, remove, or set signals
+ *  @nset: stores pending signals
+ *  @oset: previous value of signal mask if non-null
+ *  @sigsetsize: size of sigset_t type
+ */
+SYSCALL_DEFINE4(rt_sigprocmask, int, how, sigset_t __user *, nset,
+		sigset_t __user *, oset, size_t, sigsetsize)
+{
+```
+
+In that function, after some declarations and tests, if the `nset` argument is
+`true`, we proceed to call `sigprocmask` after copying the `new_set` of signals:
+
+```
+if (copy_from_user(&new_set, nset, sizeof(sigset_t)))
+    return -EFAULT;
+sigdelsetmask(&new_set, sigmask(SIGKILL)|sigmask(SIGSTOP));
+
+error = sigprocmask(how, &new_set, NULL);
+if (error)
+    return error;
+```
+
+If you don’t blink, you can actually catch an explicit reference to our kernel
+signals! Right before moving to the actual handler of the syscall’s operation,
+we see a call to `sigdelsetmask`, which is more or less a “remove from set”
+operation“ (a *set negation* and *store*). It is actually implemented as [`sig &= ~mask`](https://elixir.bootlin.com/linux/v6.13/source/include/linux/signal.h#L227).
+
+This little line can be easily masked:
+
+```
+#ifndef CONFIG_KILL_STOP_HANDLING
+    sigdelsetmask(&new_set, sigmask(SIGKILL)|sigmask(SIGSTOP));
+#endif
+```
+
+`sigprocmask` can actually perform different operations depending on `how`,
+which can be any of `SIG_BLOCK`, `SIG_UNBLOCK`, and `SIG_SETMASK`. The first two
+are operations over the existing mask, whereas the last one sets the mask from
+exactly what you give.
+
+The code of that function, in
+[`kernel/signal.c`](https://elixir.bootlin.com/linux/v6.13/source/kernel/signal.c#L3237)
+(again) then does the following. It sets `oldset` to the old set, and then
+dispatches over the value of `how` to perform the correct binary operation
+between the `oldset` and the `set` it is given:
+
+```
+int sigprocmask(int how, sigset_t *set, sigset_t *oldset)
+{
+	struct task_struct *tsk = current;
+	sigset_t newset;
+
+	/* Lockless, only current can change ->blocked, never from irq */
+	if (oldset)
+		*oldset = tsk->blocked;
+
+	switch (how) {
+	case SIG_BLOCK:
+		sigorsets(&newset, &tsk->blocked, set);
+		break;
+	case SIG_UNBLOCK:
+		sigandnsets(&newset, &tsk->blocked, set);
+		break;
+	case SIG_SETMASK:
+		newset = *set;
+		break;
+	default:
+		return -EINVAL;
+	}
+	// ... SNIP ...
+}
+```
+
+As the comment points out, this function will “happy block “unblockable”
+signals like SIGKILL and friends“. As such, there’s no need to keep going in the
+chain of calls. In fact, the rest of the calls only deal with taking locks,
+setting sets, and such.
+
+There are other places where `SIGSTOP` and `SIGKILL` are mentioned for masking:
+
+- `set_current_blocked` is meant to be a user-mode friendly entrypoint to block a given set of signals. It removes SIGKILL and SIGSTOP preventively, so we can remove that.
+- the compatibility definition of `rt_sigprocmask` also explicitly blocks our two signals, exactly the same way rt_sigprocmask does
+
+### [###](https://vulpinecitrus.info/blog/what-if-you-could-handle-sigkill/#Signal_Handler_Setup_Syscall) 
+Signal Handler Setup Syscall
+
+Similarly to before, the syscall for entry is
+[`rt_sigaction`](https://elixir.bootlin.com/linux/v6.13/source/kernel/signal.c#L4606):
+
+```
+/**
+ *  sys_rt_sigaction - alter an action taken by a process
+ *  @sig: signal to be sent
+ *  @act: new sigaction
+ *  @oact: used to save the previous sigaction
+ *  @sigsetsize: size of sigset_t type
+ */
+SYSCALL_DEFINE4(rt_sigaction, int, sig,
+		const struct sigaction __user *, act,
+		struct sigaction __user *, oact,
+		size_t, sigsetsize)
+{
+```
+
+Nothing in the code explicitly talks about `SIGSTOP` or `SIGKILL`, so let us
+inspect the next step:
+
+```
+ret = do_sigaction(sig, act ? &new_sa : NULL, oact ? &old_sa : NULL);
+```
+
+In [`do_sigaction`](https://elixir.bootlin.com/linux/v6.13/source/kernel/signal.c#L4279),
+the code goes as follows:
+
+```
+int do_sigaction(int sig, struct k_sigaction *act, struct k_sigaction *oact)
+{
+	struct task_struct *p = current, *t;
+	struct k_sigaction *k;
+	sigset_t mask;
+
+	if (!valid_signal(sig) || sig < 1 || (act && sig_kernel_only(sig)))
+		return -EINVAL;
+
+	k = &p->sighand->action[sig-1];
+
+	spin_lock_irq(&p->sighand->siglock);
+	if (k->sa.sa_flags & SA_IMMUTABLE) {
+		spin_unlock_irq(&p->sighand->siglock);
+		return -EINVAL;
+	}
+```
+
+There is a check that the signal number is not valid (too big), or inferior to 1
+(also invalid), or that there is a new `k_sigaction` to setup *and* the signal
+is *kernel only*.
+
+Kernel only, huh?
+
+[`sig_kernel_only`](https://elixir.bootlin.com/linux/v6.13/source/include/linux/signal.h#L445)
+is defined as a call to `siginmask`, with the set of signals
+`SIG_KERNEL_ONLY_MASK`, defined
+[here](https://elixir.bootlin.com/linux/v6.13/source/include/linux/signal.h#L419):
+
+```
+#define SIG_KERNEL_ONLY_MASK (\
+	rt_sigmask(SIGKILL)   |  rt_sigmask(SIGSTOP))
+```
+
+So, if we *change* that definition… we would no longer be treating `SIGKILL`
+and `SIGSTOP` differently anywhere that this is used:
+
+```
+#ifdef CONFIG_KILL_STOP_HANDLING
+#define SIG_KERNEL_ONLY_MASK 0
+#else
+#define SIG_KERNEL_ONLY_MASK (\
+ 	rt_sigmask(SIGKILL)   |  rt_sigmask(SIGSTOP))
+#endif // CONFIG_KILL_STOP_HANDLING
+```
+
+Conveniently, there are multiple places in `kernel/signal.c` where
+`sig_kernel_only` is used:
+
+- in `sig_task_ignored`, when determining whether to send the signal being sent to the task if it is the global init process
+- in `get_signal`, to also prevent global init and container inits from receiving unwanted signals
+
+With this change, when a new handler is to be set from userspace, we will no
+longer reject the attempt if the target signal is `SIGKILL` or `SIGSTOP`.
+
+### [###](https://vulpinecitrus.info/blog/what-if-you-could-handle-sigkill/#Signal_Waiting) 
+Signal Waiting
+
+There is one last syscall that needs to change its behaviour regarding signals:
+`timedwait`.
+
+[`rt_sigtimedwait`](https://elixir.bootlin.com/linux/v6.13/source/kernel/signal.c#L3806)
+lets a process synchronously waits for one of the provided signals to become
+*pending* (i.e. in queue). It then performs some checks, and goes into
+[`do_sigtimedwait`](https://elixir.bootlin.com/linux/v6.13/source/kernel/signal.c#L3747).
+A process is also not allowed to *wait* for `SIGKILL` or `SIGSTOP`, because it
+is not supposed to react to these signals. Consequently, the set of signals to
+wait for is deprived of these two signals at the start of `do_sigtimedwait`:
+
+```
+static int do_sigtimedwait(const sigset_t *which, kernel_siginfo_t *info,
+		    const struct timespec64 *ts)
+{
+	ktime_t *to = NULL, timeout = KTIME_MAX;
+	struct task_struct *tsk = current;
+	sigset_t mask = *which;
+	enum pid_type type;
+	int sig, ret = 0;
+
+	if (ts) {
+		if (!timespec64_valid(ts))
+			return -EINVAL;
+		timeout = timespec64_to_ktime(*ts);
+		to = &timeout;
+	}
+
+	/*
+	 * Invert the set of allowed signals to get those we want to block.
+	 */
+	sigdelsetmask(&mask, sigmask(SIGKILL) | sigmask(SIGSTOP));
+	signotset(&mask);
+
+	spin_lock_irq(&tsk->sighand->siglock);
+	sig = dequeue_signal(&mask, info, &type);
+	// ... bla bla bla
+```
+
+The set of signals to wait for is inverted, and provided to `dequeue_signal`.
+That function waits for a signal *not* in the set, and returns it. Changing the
+line removing our two signals is all we need to remove the second to last
+reference to `SIGSTOP` in `kernel/signal.c`:
+
+```
+#ifndef CONFIG_KILL_STOP_HANDLING
+	sigdelsetmask(&mask, sigmask(SIGKILL) | sigmask(SIGSTOP));
+#endif
+```
+
+### [###](https://vulpinecitrus.info/blog/what-if-you-could-handle-sigkill/#Signal_Retrieval_Stage) 
+Signal Retrieval Stage
+
+As mentioned before, the first thing done when a signal is pending is calling
+`get_signal`. In the main loop, the handler is retrieved. If no handler is
+present, we keep applying defaults. For all stopping signals, this is done here:
+
+```
+if (sig_kernel_stop(signr)) {
+    /*
+     * The default action is to stop all threads in
+     * the thread group.  The job control signals
+     * do nothing in an orphaned pgrp, but SIGSTOP
+     * always works.  Note that siglock needs to be
+     * dropped during the call to is_orphaned_pgrp()
+     * because of lock ordering with tasklist_lock.
+     * This allows an intervening SIGCONT to be posted.
+     * We need to check for that and bail out if necessary.
+     */
+    if (signr != SIGSTOP) {
+        spin_unlock_irq(&sighand->siglock);
+
+        /* signals can be posted during this window */
+
+        if (is_current_pgrp_orphaned())
+            goto relock;
+
+        spin_lock_irq(&sighand->siglock);
+    }
+
+    if (likely(do_signal_stop(signr))) {
+        /* It released the siglock.  */
+        goto relock;
+    }
+
+    /*
+     * We didn't actually stop, due to a race
+     * with SIGCONT or something like that.
+     */
+    continue;
+}
+```
+
+Here, `SIGSTOP` is treated differently from other signals because it
+*supposedly* always works. In our world, it does not, so it will have the same
+behaviour as other stop signals on those orphaned pgrps:
+
+```
+    /*
+     * The default action is to stop all threads in
+     * the thread group.  The job control signals
+     * do nothing in an orphaned pgrp, but SIGSTOP
+     * always works.  Note that siglock needs to be
+     * dropped during the call to is_orphaned_pgrp()
+     * because of lock ordering with tasklist_lock.
+     * This allows an intervening SIGCONT to be posted.
+     * We need to check for that and bail out if necessary.
+     */
+#ifndef CONFIG_KILL_STOP_HANDLING
+if (signr != SIGSTOP) {
+#endif
+    spin_unlock_irq(&sighand->siglock);
+
+    /* signals can be posted during this window */
+
+    if (is_current_pgrp_orphaned())
+        goto relock;
+
+    spin_lock_irq(&sighand->siglock);
+#ifndef CONFIG_KILL_STOP_HANDLING
+}
+#endif
+```
+
+And that’s it.
+
+### [###](https://vulpinecitrus.info/blog/what-if-you-could-handle-sigkill/#Building,_Booting) 
+Building, Booting
+
+Now, with our kernel done, i just run:
+
+```
+./scripts/config -e CONFIG_KILL_STOP_HANDLING
+make bzImage modules
+sudo make headers_install
+sudo make modules_install INSTALL_MOD_STRIP=1
+sudo cp arch/x86_64/boot/bzImage /boot/vmlinuz-killstop
+```
+
+Remember, [always strip your modules in
+production](https://vulpinecitrus.info/blog/irregular-reminder-kernel-install-mod-strip/). i also
+preemptively went in to disable `CONFIG_LOCALVERSION_AUTO`, and set
+`CONFIG_LOCALVERSION` to `"-killstop"`, to better identify this kernel. i built
+[my
+mod](https://git.vulpinecitrus.info/Lymkwi/linux/src/branch/handle-kill-stop)
+over a Linux 6.13.0 tree straight from the repos of Linus Torvalds himself.
+
+As i am on Arch Linux, i run a good old `sudo mkinitcpio -g /boot/initramfs-killstop.img --kernelimage /boot/vmlinuz-killstop -k 6.13.0-killstop-dirty`,
+then `sudo grub-mkconfig -o /boot/grub/grub.cfg`, cross the fingers on my paws,
+and reboot.
+
+# [#](https://vulpinecitrus.info/blog/what-if-you-could-handle-sigkill/#Finding_Out:_Booting_My_Modded_Linux) 
+Finding Out: Booting My Modded Linux
+
+i booted. And nothing happened. Nothing dramatically exploded. Nothing stopped.
+Everything was normal. i had booted on the stock Arch Linux by accident while
+running back to my bedroom to grab the dog collar that holds my authentication
+token.
+
+The second time around, i booted, and nothing happened. Nothing dramatically
+exploded, nothing stopped. Everything was normal. i ran `uname -r` and was
+greeted by
+
+```
+6.13.0-killstop-dirty
+```
+
+i was in.
+
+Manipulating signals in Linux userland programs feel somewhat archaic. They kind
+of *are* in a sense. The functions you are supposed to use differ a lot from
+those i was taught in college. In fact, the ones i used here are much more
+convenient and stick with the conventions of the syscalls. They are found in
+`signal.h`.
+
+Now, i want to write a program that can do one of two things: mask or handle
+`SIGINT`, `SIGKILL`, `SIGSEGV`, `SIGTERM` and `SIGSTOP`. i am leaving `SIGUSR1`
+and `SIGHUP` to still have an out to kill my program. i will have a `main`, and
+i can write either `mask()` or `handle()` in it to pick what i do.
+
+The `handle()` function, as well as some boilerplate for later, look like this:
+
+```
+int forever(void) {
+    while (1) {
+        ;
+    }
+}
+
+void setup_handlers(void) {
+    signal(SIGINT, catch_function);
+    signal(SIGKILL, catch_function);
+    signal(SIGSEGV, catch_function);
+    signal(SIGTERM, catch_function);
+    signal(SIGSTOP, catch_function);
+    // i never actually check it worked, but, eh
+    printf("Successfully set handler for signal numbers %d, %d, %d, %d and %d\n",
+                SIGINT, SIGKILL, SIGSEGV, SIGTERM, SIGSTOP);
+}
+
+void please_kill(void) {
+    unsigned int pid = getpid();
+    printf("Please run:\n\tkill -9 %d; kill -11 %d; kill %d; kill -19 %d;\n",
+                pid, pid, pid, pid);
+}
+
+int handle(void) {
+    setup_handler();
+    please_kill();
+    forever();
+    return EXIT_SUCCESS;
+}
+```
+
+First we setup handlers for all our signals and point to `catch_function`, shown
+below, using [`signal`(2)](https://man.archlinux.org/man/signal.2). Then, we simply get the `pid` of the process with
+[`getpid`(2)](https://man.archlinux.org/man/getpid.2) from `unistd.h`, and prompt the user to <del>wreck the shit out of</del> give all they can to kill the
+current process. Finally, we spin forever. If for some reason that loop ends, we
+exit successfully.
+
+The catch function will have customized messages for every single one of the
+POSIX signals we catch:
+
+```
+static void catch_function(int signo) {
+    status = signo;
+    switch (signo) {
+        case SIGINT:
+            fputs("awawa! x3 you touched my SIGINT~\n", stderr);
+            break;
+        case SIGKILL:
+            fputs("awawawawa :3 you tried to SIGKILL me~ teehee~\n", stderr);
+            break;
+        case SIGSEGV:
+            fputs("ouchies! my memory SIGSEGVd x3!\n", stderr);
+            break;
+        case SIGTERM:
+            fputs("i'm not gonna SIGTERM, meaning! >:3c\n", stderr);
+            break;
+        case SIGSTOP:
+            fputs("owo *notices your SIGSTOP*\n", stderr);
+            break;
+        default:
+            break;
+    }
+}
+```
+
+For *masking*, we use `sigset_t` to create a set of signals. **It is very
+important to call
+[`sigemptyset`(3)](https://man.archlinux.org/man/sigemptyset.3) or [`sigfillset`(3)](https://man.archlinux.org/man/sigfillset.3) on it**, or you will suffer the wrath of
+uninitialized memory:
+
+```
+sigset_t mask, old;
+sigemptyset(&mask);
+sigemptyset(&old);
+```
+
+Then, i add the signals i want in my set with [`sigaddset`(3)](https://man.archlinux.org/man/sigaddset.3):
+
+```
+sigaddset(&mask, SIGINT);
+sigaddset(&mask, SIGKILL);
+sigaddset(&mask, SIGSEGV);
+sigaddset(&mask, SIGTERM);
+sigaddset(&mask, SIGSTOP);
+```
+
+i then call [`sigprocmask`(2)](https://man.archlinux.org/man/sigprocmask.2) using that set:
+
+```
+if ((res = sigprocmask(SIG_BLOCK, &mask, &old)) != 0) {
+    fprintf(stderr, "Error masking away signals: %d\n", res);
+    return -1;
+}
+```
+
+i then call `please_kill()` the same way i do for signal handling before, so
+that i can prompt my user to kill my process in many colourful ways, then spin
+forever.
+
+The result, at least for signal handling, is something like
+[this](https://eldritch.cafe/@SharpLimefox/113976467185768571): a process that
+can handle, for example, `SIGKILL`. As a result, conventional means of killing a
+program are completely ineffective against it, as expected.
+
+# [#](https://vulpinecitrus.info/blog/what-if-you-could-handle-sigkill/#Conclusion) 
+Conclusion
+
+There are many things i haven’t touched on. `SIGSTOP` is actually referenced [a
+whole lot](https://elixir.bootlin.com/linux/v6.13/C/ident/SIGSTOP), and [same
+for `SIGKILL`](https://elixir.bootlin.com/linux/v6.13/C/ident/SIGKILL). i
+figured the files i touched are the part i was mostly interested in, but other
+things could be worth looking into. [`ptrace`(2)](https://man.archlinux.org/man/ptrace.2) reacts on signals, so does
+[`strace`(1)](https://man.archlinux.org/man/strace.1). There are [specific trap
+invocations](https://elixir.bootlin.com/linux/v6.13/source/kernel/signal.c#L905)
+that are supposed to notify `ptrace` upon signals being fired, and all kinds of
+things. [signalfd](https://elixir.bootlin.com/linux/v6.13/source/fs/signalfd.c)
+is something i could have looked into as well, but i did not. `kernel/ptrace.c`
+also [sometimes explicitly singles out kernel signals](https://elixir.bootlin.com/linux/v6.13/source/kernel/ptrace.c#L1089) for some actions. By all means, my patches are not complete. Yet, they will let you do
+what i set out to do when i started this: handle and mask the two signals that
+nobody is supposed to mask or handle.
+
+And you know? It turned out fine. Nothing exploded on my system. As i could
+predict, because this was otherwise *impossible*, nobody did it. The signal
+system was setup in such a way that you would most likely realize something you
+were doing was *wrong*, and not try it.
+
+To pull back further, it is interesting to notice how the rules we all take for
+granted are just *set somewhere* in code. They were written by someone, at some
+point. If there is code restricting you from doing something, someone wrote it.
+Either they did not think anyone would want to do that thing, or they
+specifically prevented you from doing it. Those rules are written somewhere, and
+you can take it in your paws to go sniff around the code, pull out the relevant
+parts, and hack around the things that bother you. For fun, learning, or
+convenience.

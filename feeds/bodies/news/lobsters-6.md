@@ -1,189 +1,309 @@
-Thirty years ago, on November 11, 1996 the young Brazilian student Rafael Sagula posted the source code for his tiny HTTP download tool online. That was *httpget* 0.1: a little over 100 lines of C code. Bare bones source code with almost no error checks and limited functionality.
-
-## **httpget**
-
-When I found the source code of that initial httpget release just days after Rafael put it online, I had no idea how HTTP worked. The *language* to speak over the network to ask for resources. Okay, I already knew we call it *protocol* but not a lot more. I also had never heard of neither httpget nor Rafael before. I imagine that I found httpget by searching on Altavista since this was before Google, but I can’t recall the details.
-
-Seeing the simplicity of this code it was not difficult to immediately spot the fundamental basics of the protocol. I presume maybe in the same vain how countless others in decades to follow also have thought of it when seeing the details for the first time. Much later I would come to understand that to be *an illusion* of simplicity, but in those early days I was more amazed and fascinated. I already enjoyed doing network programming and HTTP reasoned with me at once.
-
-httpget 0.1 was almost completely without error checks and it used plain IPv4 addresses; no hostnames or URLs.
-
-I, still a naive and enthusiastic developer with an Open Source mindset (even though that term would not be established until 15-16 months later), addressed some immediate bugs I ran into and added name resolving to the tool. I made diffs and emailed patches over to Rafael; the standard way we exchanged code changes back then. I knew about [RCS](https://en.wikipedia.org/wiki/Revision_Control_System) and [CVS](https://en.wikipedia.org/wiki/Concurrent_Versions_System) for version control, but the use of these tools was spotty. It would actually take until September 1999 until I adopted CVS fully for the curl project. We later switched to using git in 2010.
-
-## **Internet in 1996**
-
-The average internet connection speed of a normal household in Sweden, where I lived and I still live, in 1996 was 30 kbps. 30 kilobit per second. This was before v90 came and bumped the modems up to 56 kilobits. Ordinary mortals connected to the internet using modems over their single phone lines. Today, the average Swedish connection speed is 200 megabits/second.
-
-Thirty years ago there were just 36 million global Internet users and 250,000 websites. Compared to the 6 or 7 billion users and 1 billion websites of today.
-
-We used simpler protocols and while encrypted protocols like SSL existed, they were not used a lot and only for a few rare sites.
-
-**Computers in 1996**
-
-In November 1996, my main home computer was still an Amiga 3000 powered by a 25Mhz 68030 CPU but in early 1997 I upgraded to a faster and more modern machine: an Intel Pentium 120Mhz. I ran Windows 95 on this thing, and its prime use was to run an X server so that I could connect to my work computers and pop up X11 terminals at home. I built the first versions of httpget remotely on SunOS, Solaris and Dell Unix – because they happened to be what we had running at work.
-
-I installed and tested Linux for the first time at work in 1997. I got our first public web servers up and of course I made sure curl worked fine on it. I did not switch to Linux on my home machine until 2000 when I also updated to an Intel Pentium III 733 Mhz box.
-
-## **What I needed to download**
-
-In 1996 I was working as a software developer doing embedded systems and Unix development in C, for a small Swedish company called Frontec Railway Systems. While working there, I came to learn about and enjoy [IRC](https://en.wikipedia.org/wiki/IRC), and in my spare time a few friends and I developed an [IRC bot](https://en.wikipedia.org/wiki/IRC_bot) we called [Dancer](https://github.com/bagder/dancer-416). Spare time developing a TCP client written in C.
-
-As the IRC bot slowly grew more capable, I wanted to use its extension capability and provide a currency translation service for the participants in the *channel* (the IRC term for a chat room*)*. In an international channel like ours, we frequently discussed the price of things and having the bot able to quickly explain how much a hundred German Marks equaled in US Dollars could be a useful service.
-
-My currency service needed to update currency rates maybe once per day so that it could use decently accurate rates. I found an HTTP page listing a bunch of currency rates and the *httpget* tool for doing the downloads, and then the bot could offer up-to-date currency rate translations. All was good.
-
-## **Development**
-
-I discovered computers and programming as a teenager on a Commodore 64. I got hooked immediately. I first learned Basic and moved on to 6510 assembler pretty quickly. In the late 1980s me and my friends had demo groups where we would write cool demos (and some game attempts) in assembler (under the group name *Horizon*). I established my habit of spending spare time on programming back then.
-
-In the early 1990s I moved over to Amiga, started writing a text editor, got my first job at IBM where I truly got into a lot of C and Unix for the first time. Together with some friends we ran a BBS (*The Holy Grail*), for which we eventually would write our own BBS software; me and my brother Björn. I learned Motorola 68000 assembler on the Amiga. I wrote 8086 assembler on PC.
-
-I never attended university. I got my first computer job at IBM when I was twenty. I then thought I would take the uni route later, but I never did. I remain uneducated.
-
-In the early 1990s I discovered both the Internet and the world of freely available source code and I was hooked.
-
-## **Maintainer**
-
-Rafael was not terribly keen on dealing with my patches for httpget. I believe he mostly just put his code out without any particular desire to do anything more with it. Instead I became the httpget maintainer and kept polishing it. My main project was Dancer, the IRC bot. httpget was just a side-project to make sure the currency service kept working fine.
-
-## **Gopher and rename**
-
-At some point I fell over a gopher site that provided many more currency rates than the HTTP page I was scraping at the time so of course I had to add support for that as well to the download tool. With gopher support added, it was not just http anymore and the name of the tool was no longer accurate. It became *urlget*. A third listing was found that provided rates over FTP and, yes, I added support for that protocol as well.
-
-## **Community**
-
-Already from the start I made the source code available under a free license, continuing what Rafel kicked off. He hosted the first releases, but during 1997 I took over and hosted the tarballs on the website I set up and administrated for work. I told my friends and the news about the tool slowly spread. I started getting bug reports from users and occasionally someone sent me patches to fix problems or add features.
-
-This was a time of many Unix flavors and as I wanted widest possible use and adoption, I knew that I needed help and assistance from friends to make sure it built and ran fine on all those different systems.
-
-## **Upload and rename to curl**
-
-In the beginning of 1998 I added upload support to the urlget tool (both FTP upload and HTTP POST) and again I realized the name of the tool was wrong. I decided I should try a name that contains the word URL, that can be pronounced in English and that is easy (and short) to type on a keyboard. *cURL* it was.
-
-The leading ‘c’ could be short for *client* but I also liked that the name could be pronounced as *see URL*, as the tool would display the resource at the URL. You would see it (in a terminal). Naming things is hard.
-
-curl 4.0 was released on March 20, 1998. By then it had grown to 3,300 lines of code and it featured 24 command line options and it spoke three protocols.
-
-## **Change of focus**
-
-Gradually I lost interest in the IRC bot and the currency service but I stuck with curl. People used it, I got feedback, it improved.
-
-I started and participated in several other Open Source projects, but curl remained my main baby and focus.
-
-## **Library**
-
-The concept of a *function library* that offers useful functionality to other programs is a concept I learned already on my Amiga days. As an example, I wrote the scripting language ([FPL)](https://github.com/vidarh/FPL) for our Amiga text editor ([FrexxEd](https://github.com/vidarh/FrexxEd)) as a library, and we could later use that language for our BBS software, [FrexxLink](https://bjorn.haxx.se/) (which ran on OS/2) as well as in Dancer, the IRC bot.
-
-A library is sort of next-level cool: not only is the source code available for everyone, but the functionality is as well; in an easy-to-use way.
-
-The idea of converting curl into a library was already in the back of head from the start and in the summer of 2000 I refactored the internals and in August that year we introduced the first ever libcurl. Maybe someone else wants to do Internet transfers in their services or tools? Turns out some did!
-
-One of the first adopters of libcurl was the PHP language which almost immediately decided that libcurl would become their default internet transfer engine. Being a key component and therefore part of their success journey helped getting users, getting testing, bug reports, feature requests and making the library solid.
-
-## **Language**
-
-curl is a child of the 1990s. Back then there were not a lot of options and language alternatives if you wanted to write a program that would easily build and run on most available operating systems and CPU architectures. Sure, C++ maybe could have been an option but I never liked it – and I still don’t. I’m also a strong believer in continuous and non-stop improvements and iterations; not rewrites. curl was never rewritten and if I get my way, it never will be. We do however repeatedly refactor and rearchitect internals to adapt to a changing world.
-
-## **Growth**
-
-I wanted curl to be usable by everyone on every machine so it was designed and written for that purpose from the start. The source code in a portable way and the license in a liberal way.
-
-We did most things wrong at the beginning but we learned, adapted, tried again, iterated and we kept doing release after release. Gradually we learned and did better. Every release with lots of bugs fixed and often a few new features. I kept spending my spare time on curl. Every day, every week, every year. Given enough time, something great can grow.
-
-## **Life**
-
-I did my first twenty-three years of this journey with curl only as my hobby. While curl happened, life also happened in parallel. I have switched jobs many times. I got married, bought a house, got two kids, and saw the kids grow up to be amazing adults. Somewhere in there I also managed to convert my hobby into my full time job. Living the dream.
-
-curl is my life. My life is curl. I have been invited and able to speak to audiences hundreds of times in a dozen countries. I have received multiple awards and even gold medals straight from the hands of royalties for my open source work.
-
-## **Time**
-
-I don’t have an end goal with curl and I never did. I just want it to do internet transfers the best way possible: fast, securely, using the proper protocols in optimal ways. There is no rush towards anything. It is just a non-stop walk forward with never-ending polish and tightening every bolt there is.
-
-Thirty years have flown by and yet the development pace is still intense. We regularly implement new transfer protocol features before anyone else. We have leading implementations for lots of network solutions. We ship code that carries a huge portion of the world’s internet infrastructure on its shoulders without fuss.
-
-## **Motivation**
-
-I still enjoy building things. Writing code to create something that did not exist before; and maybe even more so to make the program actually do things users want and like. I enjoy fixing bugs partly for that reason, but I also like the puzzle and the challenge of debugging and solving tricky problems. Designing a software architecture, coming up with APIs and figuring out how to provide powerful network transfer functionality to power billions of devices are things that make me eager to get started again every morning – still after thirty years.
-
-## **Engineering**
-
-It never really gets done. The world of the Internet and its transfers keeps changing. New protocols, new versions, new flavors, new third party libraries, new build tools and environments force us to constantly change and adapt.
-
-I want curl to be a leader in internet transfers, its protocol implementations and every aspect of the project. I want us to be an exemplary Open Source project and run every tiny piece of it in an almost excessively transparent and progressive way. curl should be a top contender for the most-secure software component you can find. Our project should be friendly and welcoming to newcomers, both users and developers and not the least, there can be no other software project to compete with the amount, the accuracy and the plethora of documentation. Not to mention that we never break APIs or ABIs. Applications and scripts should be able to keep running, unmodified, even when they upgrade curl. Until the end of times.
-
-I’m a firm believer in iterating and never rewriting. We fix, we refactor and we clean up but rewriting into another language or even using the same language is out of the question.
-
-Simply put: software engineering done right.
-
-## **IETF**
-
-While curl speaks more than two dozen protocols (at least counting URL schemes), it has always been most known for HTTP(S) and I think we put the most work and efforts into its HTTP engine. We know lots of people use curl for debugging HTTP in general and their server implementations in particular. We were early adopters of both HTTP/2 and HTTP/3. We are often told people use our way of speaking HTTP and our source code as guidance for how things should be done. This is an honor and a huge responsibility that we take seriously.
-
-After I first had learned about HTTP from reading httpget source code and then of course studied the RFC documentation explaining the specifics. In the late 2000s I learned about the HTTPbis effort and joined the mailing list for the HTTP specification update in the works. In 2009 I participated in my first ever IETF meeting that took place in Stockholm, Sweden. There, I got to meet some of the HTTP RFC authors and main people for the first time: Roy, Larry, Mark, Julian etc. They are all lovely people and I really felt that I would be able to make curl better by hanging out in the HTTP IETF circles more. I also wanted to contribute back my own experiences and viewpoints to maybe help improve the world ever so slightly.
-
-That community later started the HTTP Workshop series out of which I have been to every single instance. Hanging out with the primary HTTP implementers in the world is fun, super educational and humbling. I believe this networking makes HTTP and all the involved  implementations even better.
-
-## **Independence**
-
-curl is not a legal entity or a formal organization of any kind. It is a bunch of loosely connected people on the Internet who have a common goal, a few mailing lists, a website and some git repositories. curl is not hosted under any umbrella, not part of any larger organization and is not owned or controlled by any company. It is probably as free and independent as a software project can be. I believe this is an excellent position for curl and gives us maximum flexibility and control of our own destiny.
-
-## **Numbers**
-
-libcurl runs in an estimated thirty billion installations today. It is a rough estimate since the majority of all libcurl users never tell us they use it, but we need to find it mentioned in their credit screens, open source license windows or their manuals. A super popular app might use libcurl today and not tomorrow, or vice versa, which can make the numbers shift by several billions overnight. In reality of course, once the pulse raise has calmed down and your ego is content, these numbers do not matter. In our corner of the world, things don’t change notably when we go from a thousand installs to billions. We still work with similar people, in similar ways, with similar challenges.
-
-## **Where**
-
-For me, and for many others, the coolest place curl has been used is probably on Mars. It was confirmed by NASA that curl was used to aid the Mars landing mission, even if they don’t tell us exactly for what and where.
-
-A ridiculously common question to me is “what is the weirdest place you’ve seen curl run?” I have ceased getting surprised about what devices and what things that are Internet connected and thus where curl runs. Light-bulbs, dish washers, AC units, heat pumps, cars, printers, blenders, ovens, toy robots, drones, guns, motorcycles, medical devices, fridges, soundbars and espresso machines. Of course in addition to all those “traditional” things we already expect to run curl: games, servers, cars, printers, TVs, watches, tablets, game consoles, blue-tooth speakers, routers, mobile phone apps and their operating systems.
-
-Our modern society is keen at eventually making everything network connected, and once they are, they can use curl and libcurl to perform their transfers.
-
-## **BDFL**
-
-Benevolent Dictator For Life. A term popularly used to describe the steering mechanism of many Open Source projects. Basically a single person being the captain of the ship. The one who can commandeer the direction, who can dictate truths about the project and who says yes and no firmly. For better and for worse, I remain the BDFL for curl. I try to repeat that curl is not a solo-show and it was never a one-man circus. We are literally thousands of people who have contributed code, and every year there are hundreds of new authors helping out. I may remain the captain of the ship, but no ship above a certain size can be managed without a lot of additional man power and curl is no different.
-
-I may very well remain BDFL for a long time to come because I love my role and because I don’t know any other way to live my life or to run the curl project. There are no succession plans and I am against doing such. There is no *heir* or *vice-BDFL* prepared to take over. Instead we document everything and every detail so there are no secrets, so that no formal hand-over should be necessary (except for some rare passwords). If I get run over by a truck tomorrow, you guys can figure it out and continue. You don’t need me.
-
-## **Consequences**
-
-My email address is commonly listed in the regular curl license and this license is usually included in license listings, credit screens or manuals. When random people run into problems or issues with products in this modern society, they often struggle to find someone to help them. There is no one to contact or ask. My email then sometimes serves as a last resort to finally get the answers they’ve been fighting for. I frequently get emails about products I never knew existed, I certainly didn’t know they used curl and I for sure don’t know how to help the users with their problems…
-
-The much darker side of the traces curl usage leaves in products, is when malicious tools, services and attackers use tools that can be associated with me and my email address. I have been accused of various attacks and “hacking” people and companies multiple times. I have received death threats multiple times and I strongly suspect that my US visa problems were triggered by something in these veins.
-
-## **Giving everything away for free**
-
-I stick to the Open Source ethos and spirit. It is a fundamental part of my belief system and I am convinced this is the superior way to produce software to build society on. I do everything I can to stick to the liberal license curl is shipped under because I love the concept. It is however not an easy pitch: give everything away for free and then try to get someone to pay for it. I think it is fair to say that if I wanted to optimize for money, I should have played this one out differently. That would have been another life. Not my life.
-
-## **Proud**
-
-Of course **I feel immensely proud of what we have accomplished**. The little toy thing in 1996 kicked off a journey that led to the creation and continued maintenance of a modern Internet infrastructure cornerstone. We have reached this point, not by talking, not by using marketing nor by tricking someone into using our code. We conquered the world by shipping consistent top quality over several decades. curl runs in all these devices and services done by all those companies because it is the right choice for them, selected because it is Open Source, rock-solid and fast – and also likely to be around in the future. Everyone can depend on us to keep shipping updates in a proven stellar fashion and minimal friction. Forever and ever.
-
-## **Future**
-
-There are many dimensions of the future to consider here. The future of Open Source. The future of curl. The future of internet transfers. The future of the C programming language and the future for me, personally. At least.
-
-I don’t think I can guess the future any better than other humans. I was never good at it and I never really tried to. I always only focus on the next coming months and make quick adjustments when things *make turns*.
-
-I think Open Source is a solid way to do foundational software, now and in the future. It will continue to have a funding problem and too many projects live and die with a single maintainer. But building common and open building blocks is simply a requirement for speedy development, for building reliable components and for being able to produce products and services at the speed we seem to want. I don’t believe AI will kill Open Source.
-
-I think curl has many more years of service ahead. Primarily because it is the trusted solution and nothing else is even close to this long proven track record, secondarily because it runs on all platforms like no alternatives. I do not rule out that it will be replaced by an alternative at some point, when projects written in C are gradually phased out. (If they ever are.)
-
-Internet transfers in general seem like a fundamental idea that probably is going to be around in a similar style for a long time. The protocols will keep evolving, changing and getting updated but the client/server/protocol concept seems solid and likely to be here for the long term.
-
-I personally will keep working on curl and Internet transfers for as long as I think it is fun and challenging. I turn 56 years old in a few weeks. I hope to be able to spend several more decades on this.
-
-## **Thanks to**
-
-Thank you mom and dad for your understanding and supporting attitude when I as a teenager got completely sucked into a world of computers and programming. Thanks Björn and Kjell for all the awesome times and all the fun when we learned development together and took our first stumbling steps as programmers. Thanks to the Horizon team for the fun and all the demos, copy parties we did and attended. Thanks to Huddinge Vi Unga who owned the machine and sponsored the dual phone connections for our BBS for several years as we discovered fidonet and a world of people and communication. Thanks Jonas for getting me that first job at IBM when I had no work experience at all. Thanks to Bjørn for co-creating the Dancer bot project with me to the people in #amiga IRC chat on Efnet and then IRCnet for your support. Thanks to my bosses at Frontec in the mid 1990s who allowed me to do spare time development on their various Unix machines (even though you probably were not aware of the full extent). Thanks to all the early users and adopters of curl who pushed me forward and who brought it into all the important Linux distros early on and showed me this thing had legs. Thanks Anja, my wife, for keeping up with me spending all this time in front of my machines, and for sometimes boring you to death rambling about some miniscule detail from the curl project that I couldn’t let go from my mind. Thanks to my kids Agnes and Rex for being the lights of my life, for being awesome and for not being particularly impressed by or interested in what I do. You do your life. Thanks to everyone who ever contributed to the curl project, in whatever capacity. In particular, thanks to Stefan, Viktor, James, Viktor, Dan, Jay, Daniel, Max for being part of the core maintainer team for ages. Thanks to Björn, Kjell and Linus of Haxx for being awesome friends and always supporting me and curl whenever it has been needed – and for the Rockbox side-adventure of course. Thanks to Larry at wolfSSL for believing in me and curl enough to allow me to work on curl full-time without even blinking. Thanks to all curl sponsors, donors and to all awesome paying customers of curl support, who combined are what makes it possible for me to do what I do. Thanks to everyone who ever invited me to conferences and events to talk and meet people. Thanks to Patrik who nominated me to the Polhem Prize award that I then received in the form of a gold medal. Thanks Michael for nominating me for the IVA gold medal. Thanks to all others whose names I forgot to include here.
-
-Thanks to everyone who uses curl and continues to participate in curl development.
-
-## **Wasn’t it a 25 years anniversary just a while ago?**
-
-Yes. We have two separate birthdays: httpget was born in November 1996. curl was born in March 1998.
-
-## **In memory of**
-
-Rafael Sagula unfortunately left us much too early. He died in 2016. I am grateful for him kick-starting this thing for us.
+Today, November 10th, we celebrate the 17th anniversary of Go’s [open source
+release](https://opensource.googleblog.com/2009/11/hey-ho-lets-go.html)!
+
+Over the past year, we released [Go 1.26 in February](https://go.dev/blog/go1.26) and [Go 1.27
+in August](https://go.dev/blog/go1.27), alongside a steady stream of releases across our
+[`golang.org/x`](https://pkg.go.dev/golang.org/x) libraries and developer tools.
+Meanwhile, the pace of change across the software industry continues to
+accelerate, driven by shifting hardware, evolving security threats, and the
+rapid rise of AI-assisted development and agentic systems.
+
+In a tumultuous time for the industry, Go aims to be a steady hand on the
+tiller. Our goal is to keep Go grounded in its foundational principles of
+simplicity, reliability, efficiency, and an unwavering commitment to
+[compatibility](https://go.dev/doc/go1compat), while adapting to modern hardware, production
+workloads, and developer workflows. Increasingly, our investments serve a *dual
+purpose*: what helps human engineers write, understand, and maintain reliable Go
+code at scale also provides the guardrails and authoritative context that AI
+coding assistants and agents need to be effective.
+
+## Core language and library improvements
+
+In the language itself, Go 1.26 and 1.27 addressed several long-standing
+restrictions in generics and everyday Go syntax, guided by years of real-world
+experience. When generics first landed in Go 1.18, methods could not declare
+their own type parameters, which sometimes forced awkward package-level
+functions and “inside-out” nested calls. Go 1.27 introduced [generic
+methods](https://go.dev/blog/generic-methods) on non-interface types (such as the new
+[`Rand.N`](https://go.dev/pkg/math/rand/v2#Rand.N) method in `math/rand/v2`),
+allowing APIs to stay naturally organized on types and enabling readable method
+chaining. Together with support for self-referential type constraints in Go 1.26
+and broader type inference for generic function values in Go 1.27, generics in
+Go feel more complete and natural than ever.
+
+Alongside generics, two refinements to value construction make everyday Go code
+cleaner and more concise. Go 1.26 extended the built-in `new` function to
+[accept an initial value expression](https://go.dev/doc/go1.26#language), allowing `new(42)`
+or `new("go1.26")` without the ubiquitous `newInt`-style helper functions used
+to populate optional pointer fields in JSON and protocol buffer structs. And in
+Go 1.27, struct literal keys can [refer directly to fields of embedded or nested
+structs](https://go.dev/doc/go1.27#language), reducing boilerplate in composite literals.
+
+In the standard library, our focus has been on evolving Go’s “production stack”
+and eliminating subtle operational traps. Few packages are as central to that as
+`encoding/json`, which has been a mainstay of Go since before Go 1.0. While its
+core model has held up remarkably well for over 15 years, tighter JSON standards
+and security expectations have turned some of its original defaults into
+interoperability and security hazards, such as silently accepting invalid UTF-8
+or duplicate object keys and matching struct fields case-insensitively. At
+the same time, its buffered design prevented true streaming and limited
+performance. Addressing these issues while upholding Go’s compatibility promise
+for the millions of existing programs that depend on `encoding/json` meant
+designing a new major version of the package.
+
+Six years in the making, the new [`encoding/json/v2`](https://go.dev/pkg/encoding/json/v2) and
+[`encoding/json/jsontext`](https://go.dev/pkg/encoding/json/jsontext) packages reached general
+availability in Go 1.27. Driven by Joe Tsai, Daniel Martí, and contributors from
+across the Go community, this [modern JSON API](https://go.dev/blog/jsonv2) brings safer,
+stricter defaults, flexible caller- and type-specified customization, and up to
+10× faster unmarshaling, while cleanly separating high-level semantic marshaling
+(`json/v2`) from low-level, reflection-free syntactic streaming (`jsontext`).
+Crucially, we didn’t leave existing code behind: the original
+[`encoding/json`](https://go.dev/pkg/encoding/json) package is now implemented entirely in
+terms of `v2` under the hood. Existing `v1` callers get faster unmarshaling
+simply by upgrading, and packages using `v1` and `v2` interoperate seamlessly so
+that the ecosystem can migrate gradually without flag days.
+
+We’ve also brought new production diagnostics to Go’s concurrency primitives.
+Concurrency is one of Go’s greatest strengths, but goroutines accidentally left
+blocked on abandoned channels or locks can silently leak memory and CPU in
+long-running services, and traditional goroutine profiles cannot distinguish
+leaked goroutines from ones legitimately waiting for work. First previewed in Go
+1.26 and now generally available in Go 1.27, the new [goroutine leak
+profiler](https://go.dev/blog/goroutine-leak-profiles) (`goroutineleak` in `runtime/pprof` and
+`/debug/pprof/goroutineleak` in `net/http/pprof`) solves this for production
+services. Contributed by Vlad Saioc and Uber’s Programming Systems team,
+building on academic research with Aarhus University and Washington University
+in St. Louis, the profiler repurposes the garbage collector’s reachability phase
+to identify goroutines blocked on concurrency primitives that no runnable
+goroutine can ever reach. That allows it to pinpoint leaks in production with
+near-zero false positives and zero overhead when not in use.
+
+In `net/http`, closing an HTTP/1 response body with even a single unread
+byte—such as a trailing newline left behind by a JSON decoder—previously forced
+the client to tear down the underlying TCP and TLS connection. Go 1.27’s HTTP
+transport now [automatically drains small unread response bodies in the
+background](https://go.dev/blog/http-connection-reuse) on close, turning a widespread latency
+footgun into up to a 5× speedup for sequential HTTP/1 requests while letting
+application code stay clean and simple.
+
+These releases also added several notable standard library APIs, including a
+native [`uuid`](https://go.dev/pkg/uuid) package, a generic and type-safe
+[`errors.AsType`](https://go.dev/pkg/errors#AsType), and an in-memory
+[`httptest.NewTestServer`](https://go.dev/pkg/net/http/httptest#NewTestServer) designed for
+virtual-time testing with [`testing/synctest`](https://go.dev/pkg/testing/synctest). Existing
+packages saw significant speedups as well: [`io.ReadAll`](https://go.dev/pkg/io#ReadAll) now
+runs twice as fast while allocating half as much memory,
+[`compress/flate`](https://go.dev/pkg/compress/flate) compresses faster (speeding up `gzip`,
+`zip`, `zlib`, and `png`), and [`image/jpeg`](https://go.dev/pkg/image/jpeg) has a faster,
+more accurate encoder and decoder.
+
+## Making the most of modern hardware
+
+Modern CPUs look very different from the hardware Go first launched on 17 years
+ago, with wide vector units and deep, non-uniform memory hierarchies. A major
+focus of our runtime and compiler work is ensuring Go programs make full use of
+modern silicon, both transparently when you upgrade your toolchain and through
+new APIs when you need explicit control.
+
+After debuting as an experiment in Go 1.25, the [Green Tea garbage
+collector](https://go.dev/blog/greenteagc) became the default in Go 1.26. By organizing object
+marking around contiguous memory spans rather than chasing pointers across the
+heap, Green Tea aligns with modern CPU memory architectures to reduce garbage
+collection overhead by 10–40% in real-world workloads—and by an additional ~10%
+on recent `amd64` processors using AVX-512 vector instructions during scanning.
+
+Of course, the runtime shouldn’t be the only part of a Go program that can tap
+into vector hardware. Without access to Single Instruction, Multiple Data (SIMD)
+capabilities, compute-intensive software, from cryptography and media processing
+to data analytics and AI, leaves a significant portion of modern silicon dark.
+Until recently, the only way to light up that hardware in Go was by writing and
+maintaining per-architecture assembly. To change that, Go 1.26 and 1.27
+introduced two experimental SIMD packages: [`simd/archsimd`](https://go.dev/blog/archsimd),
+for low-level access to architecture-specific vector instructions on `amd64`,
+`arm64` (NEON), and WebAssembly (`wasm`); and [`simd`](https://go.dev/blog/simd-experiment), a
+higher-level, width-agnostic API that provides portable, near-assembly
+performance across architectures with automatic fallback emulation.
+
+We’ve also attacked the cost of memory allocation from multiple angles. The
+cheapest heap allocation is the one that never happens: in Go 1.26, the compiler
+began [allocating initial slice backing stores on the
+stack](https://go.dev/blog/allocation-optimizations) at `append` sites—even for slices that
+ultimately escape to the heap—eliminating the flurry of small heap allocations
+that typically accompany slice growth. And for heap allocations more broadly, Go
+1.27 introduced [size-specialized memory
+allocation](https://go.dev/blog/size-specialized-allocations) to speed up allocating the small
+objects (such as small structs, slices, and strings) that dominate allocator
+time. Generating dedicated fast-path allocator routines for size classes up to
+80 bytes made small allocations up to 30% faster and improved overall
+performance in allocation-heavy programs. Together with a ~30% reduction in
+baseline `cgo` call overhead in Go 1.26, these improvements make Go programs
+faster and leaner out of the box.
+
+## Secure software and ecosystem defense
+
+Go’s approach to security spans the entire lifecycle of software: providing safe
+APIs by design, preparing cryptography for the future, and actively defending
+the live ecosystem as new threats emerge.
+
+To defend against store-now, decrypt-later attacks and support the industry’s
+accelerating timelines for quantum readiness, Go has continued expanding its
+post-quantum cryptography support. Go 1.26 enabled hybrid post-quantum key
+exchanges (`SecP256r1MLKEM768` and `SecP384r1MLKEM1024`) by default in
+`crypto/tls` and added the [`crypto/hpke`](https://go.dev/pkg/crypto/hpke) package
+(implementing RFC 9180 Hybrid Public Key Encryption, including post-quantum
+hybrid KEMs). Go 1.27 followed up with the new
+[`crypto/mldsa`](https://go.dev/pkg/crypto/mldsa) package, implementing the FIPS 204
+post-quantum ML-DSA signature standard and integrating it into `crypto/x509` and
+`crypto/tls`.
+
+At the same time, we’ve continued hardening the standard library and runtime
+against subtle classes of vulnerabilities. Most key generation and signing
+functions across Go’s `crypto/...` packages now unconditionally draw from a
+secure system randomness source, closing off a classic footgun where
+non-cryptographic readers were accidentally passed in. Under the hood, Go 1.26
+also added 64-bit heap base address randomization to harden `cgo` binaries and
+introduced the experimental [`runtime/secret`](https://go.dev/pkg/runtime/secret) package for
+eagerly erasing sensitive cryptographic temporaries from registers, stack
+frames, and the heap.
+
+Securing Go deployments also requires rapid vulnerability and incident response
+in a fast-moving threat landscape. From the Go vulnerability database and
+[`govulncheck`](https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck) to our
+release infrastructure, we’ve invested heavily in ecosystem defense. In October,
+that preparation was put to the test during the [eMudhra certificate key
+disclosure incident](https://go.dev/blog/emudhra-incident), when eight intermediate TLS and
+code-signing certificates chaining to a widely trusted root CA were discovered
+to use trivially weak private keys. Because Linux lacks a uniform OS-level
+certificate revocation mechanism, Go’s built-in TLS verifier is the frontline
+defense for millions of Linux services. Within seven and a half hours of initial
+notification, the Go Security team shipped a targeted block in our first-ever
+[URGENT track](https://go.dev/doc/security/policy#urgent) security release (Go 1.27.3 and Go
+1.26.10) alongside an updated Go vulnerability database entry so `govulncheck`
+could flag affected binaries, giving Go users everything they needed to protect
+their deployments before the weak keys were publicly disclosed the next morning.
+
+## Advancing the broader Go platform and tooling
+
+Go has always been more than a compiler and standard library: it is an
+end-to-end platform for software engineering. Over the past year, our work in
+[`golang.org/x/tools`](https://pkg.go.dev/golang.org/x/tools), the
+[`gopls` language server](https://go.dev/gopls), [`vscode-go`](https://github.com/golang/vscode-go),
+and [`pkg.go.dev`](https://pkg.go.dev) has focused on making that platform even
+more productive for both human developers and AI coding assistants.
+
+In [last fall’s Go Developer Survey](https://go.dev/blog/survey2025), the single biggest
+challenge developers reported was ensuring their code follows best practices and
+current Go idioms. As Go evolves while standing by its compatibility promise,
+older ways of writing code continue to work alongside newer, clearer, or faster
+alternatives, creating a natural drift in idioms over time. That drift has been
+compounded by AI coding assistants, which gravitate toward the older patterns
+that dominate their training data.
+
+Go 1.26 tackled this with a [complete overhaul of the `go fix`
+command](https://go.dev/blog/gofix), returning the long-dormant tool to its [pre-Go 1.0
+roots](https://go.dev/blog/introducing-gofix) to apply [dozens of automatic
+*modernizers*](https://pkg.go.dev/golang.org/x/tools/go/analysis/passes/modernize)
+across entire codebases. What `gofmt` did for stylistic consistency, modernizers
+aim to do for idiomatic consistency. Available both as instant suggestions in
+`gopls` and as bulk, push-button upgrades in `go fix`, modernizers simplify
+existing code and help developers discover new language and library features. We
+now routinely consider whether new language and library proposals should ship
+with a modernizer of their own. Just as importantly, modernizers give coding
+agents an immediate way to bring generated code up to date, while helping shift
+the global corpus of open source Go code so that future models learn modern
+idioms from the start.
+
+Bespoke modernizers work well for the language and standard library, but a
+centralized team can never write them for every third-party module in the
+ecosystem. That’s why Go 1.26 also introduced the annotation-driven
+[source-level inliner](https://go.dev/blog/inliner), the first step toward a “self-service”
+paradigm for automated code maintenance. Any package author can now annotate a
+deprecated function, type, or constant with `//go:fix inline`, and the inliner
+will safely migrate callers and references via `go fix` or in the IDE, carefully
+handling evaluation order, side effects, and name shadowing.
+
+In the editor, we’ve made four feature-packed releases of `gopls` over the past
+year ([v0.21.0](https://go.dev/gopls/release/v0.21.0), [v0.22.0](https://go.dev/gopls/release/v0.22.0),
+[v0.23.0](https://go.dev/gopls/release/v0.23.0), and [v0.24.0](https://go.dev/gopls/release/v0.24.0)). In
+collaboration with the Dart team, we designed and proposed an open Language
+Server Protocol (LSP) extension for [interactive
+refactoring](https://go.dev/blog/interactive-refactoring), allowing language servers to ask
+for user input through dynamic, multi-step dialogs in any supporting editor. Now
+integrated into `gopls` and `vscode-go`, interactive refactoring powers
+customizable struct tag addition and removal, interface implementation
+(including generic interfaces) with live symbol search, and cross-package
+declaration moves. Beyond refactoring, `gopls` also gained generalized package
+renaming across directories, zero-configuration support for editing Go assembly
+files, subexpression hover inspection, completions and inlay hints for promoted
+fields, automatic `govulncheck` scanning when `go.mod` dependencies change, and
+continued enhancements to its [built-in Model Context Protocol (MCP)
+server](https://go.dev/gopls/features/mcp) for AI coding assistants.
+
+Rounding out the developer platform, in May we launched the official
+[`pkg.go.dev` API](https://go.dev/blog/pkgsite-api) and followed up with support for
+[`go doc pkg@version`](https://go.dev/doc/go1.27#go-doc) in Go 1.27. Previously, developer
+tools and IDE integrations had to resort to fragile web scraping to query
+ecosystem metadata. Today, the `pkg.go.dev` API gives tool authors and AI coding
+agents a fast, authoritative service for querying module versions, package
+symbols, importers, and vulnerability data, while `go doc pkg@version` makes it
+easy to pull up documentation for any version of any package right from the
+command line.
+
+## Looking ahead
+
+We have an ambitious year ahead for Go.
+
+On the tooling front, we’re building on the `pkg.go.dev` API, `gopls`, and `go fix` to make Go’s developer tools even more capable for both human developers
+and coding agents. Following the strong community response to `go fix` and
+`//go:fix inline`, we’re exploring ways to [expand self-service static
+analysis](https://go.dev/issue/82464), enabling developers, package maintainers, and
+organizations to easily integrate custom analyzers and domain-specific
+best-practice checks directly into their development workflows. We’re also
+exploring ways to surface richer package health and quality signals on
+`pkg.go.dev` and through its API, helping developers and coding agents evaluate
+and choose trustworthy, reliable dependencies.
+
+In the language and libraries, Go 1.28 will resolve one of Go’s longest-standing
+language requests by allowing [composite literals to omit redundant
+types](https://go.dev/issue/12854) whenever the type can be inferred from context, cutting
+visual noise in deeply nested configurations, API requests, and table-driven
+tests. And with recent generics refinements and [hashing
+APIs](https://go.dev/pkg/hash/maphash#Hasher) in place, we’ve just accepted a
+swath of proposals for [generic collection APIs](https://go.dev/issue/80590)—including sets,
+ordered maps, and more—which will land in `golang.org/x/exp` over the next few
+weeks so the community can try them out and share feedback ahead of future
+standard library inclusion.
+
+Under the hood, we’re working hard to graduate a large subset of the `simd` and
+`simd/archsimd` packages (covering `amd64`, `arm64` NEON, and `wasm`) in Go
+1.28, with further expansions and `arm64` scalable vector (SVE) support targeted
+for Go 1.29. Amid the global RAM crunch, reducing Go’s memory footprint is also
+one of our major priorities for the coming year.
+
+In the toolchain, Go 1.28 will increase build parallelism by [writing compiler
+export data early](https://go.dev/issue/15734) and streamline static analysis by [decoupling
+tool export data from the compiler](https://go.dev/issue/79427). Looking further out, we’re
+working to support [`cgo` builds without requiring a C toolchain](https://go.dev/issue/81450),
+and we’re kicking the tires on WebAssembly’s early-stage stack-switching
+extension, which is already showing promising improvements in Go Wasm
+performance and binary size.
+
+Finally, ensuring Go stands the test of time means scaling not just our
+technology, but the open source project itself. Over the past year, some of Go’s
+most impactful advances, including `encoding/json/v2` and the `goroutineleak`
+profile, were driven by or built in close partnership with contributors outside
+Google. To better support our growing ecosystem and contributor base, we’re
+working to bridge the gap between Go maintainers at Google and our broader
+community, and to diversify Go’s technical stewardship. That includes
+[restructuring the proposal process](https://go.dev/issue/80580) to improve throughput, give
+the community clearer visibility into the process and input into prioritization,
+and formally involve community contributors in triage and review. Beyond
+proposals, we are building a clearer contributor ladder to empower proven
+contributors with greater autonomy, decision-making privileges, and maintenance
+responsibilities, and opening up maintainer summits and day-to-day
+communications to trusted contributors from our amazing community.
+
+Seventeen years in, Go is thriving because of the people who use it, build with
+it, and contribute to it every day. Thank you to everyone in the Go community
+for being part of this journey, and we wish you all the best in the year ahead!
