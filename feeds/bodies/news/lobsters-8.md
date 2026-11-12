@@ -17,5 +17,3 @@
 λ
 
 All material is (C) Doug Hoyte unless otherwise noted or implied. All rights reserved.
-
-[Discuss on Hacker News](https://news.ycombinator.com/item?id=50439448)

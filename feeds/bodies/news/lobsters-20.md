@@ -1,507 +1,232 @@
-This post demonstrates how to use monads in the Lean programming language
-(Lean 4, to be specific). If you're not familiar with Lean, this part of the
-language is very similar to other functional programming languages, like
-Haskell or OCaml.
-
-## Motivating example - evaluating expressions
-
-Suppose we want to write a simple numerical expression evaluator that supports
-numbers with addition and division:
-
-```
-inductive Expr where
-  | num : Int → Expr
-  | add : Expr → Expr → Expr
-  | div : Expr → Expr → Expr
-```
-
-What happens when we encounter a division by zero? We'll want our evaluator
-to report this as a failure, which will be represented explicitly using the
-the Option type:
-
-```
-def safeDiv (x y : Int) : Option Int :=
-  if y == 0 then none else some (x / y)
-```
-
-With this in hand, the eval function can be written as follows:
-
-```
-def eval : Expr → Option Int
-  | .num n => some n
-  | .add a b =>
-    match eval a with
-    | none => none
-    | some x =>
-      match eval b with
-      | none => none
-      | some y => some (x + y)
-  | .div a b =>
-    match eval a with
-    | none => none
-    | some x =>
-      match eval b with
-      | none => none
-      | some y => safeDiv x y
-```
-
-safeDiv returns an Option; to propagate that possible failure to
-its caller, eval also returns an Option, and - moreover - has to perform
-lots of tedious checking for the possibility of a none value. Is there a
-better way?
-
-Note a common code pattern repeated here:
-
-1. Examine the value of an Option
-2. If it's none, return none without proceeding
-3. Otherwise if it's some result, continue the computation with result
-
-We can extract it into a helper function:
-
-```
-def withSome (result : Option α) (onSuccess : α → Option β) : Option β :=
-  match result with
-  | none => none
-  | some x => onSuccess x
-```
-
-And rewrite our eval using this helper:
-
-```
-def evalWithSome : Expr → Option Int
-  | .num n => some n
-  | .add a b =>
-      withSome (evalWithSome a) (fun x =>
-        withSome (evalWithSome b) (fun y =>
-          some (x + y)))
-  | .div a b =>
-      withSome (evalWithSome a) (fun x =>
-        withSome (evalWithSome b) (fun y =>
-          safeDiv x y))
-```
-
-This is already much better; we can make it even cleaner using operator
-overloading:
-
-```
-infixl:55 " >>? " => withSome
-
-def evalOp : Expr → Option Int
-  | .num n => some n
-  | .add a b =>
-    evalOp a >>? fun x =>
-    evalOp b >>? fun y =>
-    some (x + y)
-  | .div a b =>
-    evalOp a >>? fun x =>
-    evalOp b >>? fun y =>
-    safeDiv x y
-```
-
-Congratulations - we've pretty much invented monads!
-
-## Option as a Monad in expression evaluation
-
-In simplified form, the Monad type class in Lean is defined as:
-
-```
-class Monad (m : Type → Type) where
-  pure : α → m α
-  bind : m α → (α → m β) → m β
-```
-
-In our code, pure is equivalent to some, and bind is equivalent
-to withSome; in fact, the Monad instance for Option is something
-like:
-
-```
-instance : Monad Option where
-  pure x := some x
-  bind opt next :=
-    match opt with
-    | none => none
-    | some x => next x
-```
-
-An operator akin to >>? for monads is already defined in Lean; it's called
->>=, and picks up the bind method of the Monad type class. So we can
-rewrite our evaluator using the standard Monad instance, without defining
-withSome or the >>? operator [[1]](https://eli.thegreenplace.net/2026/monads-in-lean/#footnote-1):
-
-```
-def evalBind : Expr → Option Int
-  | .num n => pure n
-  | .add a b =>
-    evalBind a >>= fun x =>
-    evalBind b >>= fun y =>
-    some (x + y)
-  | .div a b =>
-    evalBind a >>= fun x =>
-    evalBind b >>= fun y =>
-    safeDiv x y
-```
-
-We can go even further with the do notation, which is syntactic sugar around
->>= that lets us rewrite the evaluator as:
-
-```
-def evalDo : Expr → Option Int
-  | .num n => pure n
-  | .add a b => do
-    let x ← evalDo a
-    let y ← evalDo b
-    some (x + y)
-  | .div a b => do
-    let x ← evalDo a
-    let y ← evalDo b
-    safeDiv x y
-```
-
-This notation should be familiar if you've seen Lean code dealing with I/O;
-we'll revisit I/O later in the post.
-
-## Monads for modeling side effects
-
-Functional programming languages place a lot of emphasis on *pure* functions
-that are free of side effects. There's no question that such functions are
-easier to reason about, debug, and even optimize (by memoization). That said,
-the real world is messy and sometimes side effects are inescapable; monads
-help encapsulate side effects in functional programs.
-
-The core idea is: side effects are encapsulated inside a Monad, which
-wraps the value returned from a computation. The bind method (or the
-equivalent >>= operator) lets us take a wrapped value and push it into the
-next computation in the sequence. This may look familiar from
-continuation-passing style (CPS). Continuations themselves can also be modeled
-with a monad [[2]](https://eli.thegreenplace.net/2026/monads-in-lean/#footnote-2).
-
-The definition of bind is:
-
-```
-bind : m α → (α → m β) → m β
-```
-
-Here's a mental model to think about it:
-
-1. Take a value wrapped with potential side effects
-2. Take a computation that takes this value and may produce additional side effects
-3. Combine the results into a final wrapped value
-
-Chaining multiple binds together is essentially a sequence of computations
-while keeping track of the side effects. A monad decouples what computations
-*do* from *how they are sequenced*. The programmer describes the sequence of
-computations and their dependencies, while the monad's bind implementation
-handles the bookkeeping necessary to combine their side effects.
-
-Our evaluator case study shows one example of side effects: early return from
-a computation with a none value.
-
-Let's see another idiomatic way of doing that, with the Except type that
-contains either a successful result or an error value (very similar to the
-Result type in Rust).
-
-We'll begin by writing an exception-returning version of safeDiv:
-
-```
-def safeDivExc (x y : Int) : Except String Int :=
-  if y == 0 then .error "division by zero" else .ok (x / y)
-```
-
-Instead of writing a whole new eval variant for Except, we'll
-create a generic one that works with any Monad [[3]](https://eli.thegreenplace.net/2026/monads-in-lean/#footnote-3):
-
-```
-def evalM {m : Type → Type} [Monad m]
-    (div : Int → Int → m Int) : Expr → m Int
-  | .num n => pure n
-  | .add a b =>
-    do
-      let x ← evalM div a
-      let y ← evalM div b
-      pure (x + y)
-  | .div a b =>
-    do
-      let x ← evalM div a
-      let y ← evalM div b
-      div x y
-```
-
-Now evalM can be used with safeDivExc to implement an evaluator where
-division returns Except; used with safeDiv, it would be equivalent to
-the Option-specific evalDo we've written before.
-
-```
-#eval evalM safeDiv (.add (.num 4) (.div (.num 6) (.num 0)))
-#eval evalM safeDivExc (.add (.num 4) (.div (.num 6) (.num 0)))
-```
-
-## Logging computations - an example of the writer monad
-
-Let's look at a more advanced example: an evaluator that also *logs* the
-computation it executes in a linear log of strings. The challenge here is that
-we still have to combine that with Option to support the divide-by-zero
-case, so we'll start by creating a new structure to carry the state of the
-computation:
-
-```
-structure LoggedOption (α : Type) where
-  value : Option α
-  log : List String
-```
-
-This will be the result of one eval call; it produces an optional value,
-along with a list of strings (the log). Here's the Monad implementation for
-this type:
-
-```
-instance : Monad LoggedOption where
-  pure x := ⟨some x, []⟩
-  bind v next :=
-    match v.value with
-    | none => ⟨none, v.log⟩
-    | some x =>
-      let nextResult := next x
-      ⟨nextResult.value, v.log ++ nextResult.log⟩
-```
-
-The main idea is combining the stored log with the log of the next computation
-by appending them (thus accumulating a linear log). Here's our evaluator:
-
-```
-def evalLogged : Expr → LoggedOption Int
-  | .num n => pure n
-  | .add a b => do
-    let x ← evalLogged a
-    let y ← evalLogged b
-    ⟨some (x + y), [s!"adding {x} and {y}"]⟩
-  | .div a b => do
-    let x ← evalLogged a
-    let y ← evalLogged b
-    match y with
-    | 0 => ⟨none, [s!"dividing {x} by zero"]⟩
-    | _ => ⟨some (x / y), [s!"dividing {x} by {y}"]⟩
-```
-
-Note how the code of evalLogged doesn't have to deal with the mechanics
-of logging too much (other than adding new log entries). All of that is hidden
-within the monad instance. LoggedOption is an example of the *writer monad*,
-which is a write-only version of the *state monad*.
-
-## State monad
-
-One of the most important use cases of monads in functional programming
-languages is modeling mutable state through a computation.
-
-A stateful computation is modeled as a function that takes an initial state
-and returns a tuple containing the result value and a new, updated state. In
-Lean notation:
-
-```
-def State (σ : Type) (α : Type) : Type :=
-  σ → (α × σ)
-```
-
-To demonstrate this in action, let's enhance our evaluator to support variable
-assignments and lookups. Our state is going to be an association list of
-name, value pairs:
-
-```
-abbrev Vars := List (String × Int)
-```
-
-And we'll augment our expression enum with additional operations:
-
-```
-inductive ExprV where
-  | num : Int → ExprV
-  | add : ExprV → ExprV → ExprV
-  | div : ExprV → ExprV → ExprV
-  | store : String → ExprV → ExprV
-  | load : String → ExprV
-```
-
-This is going to be our state monad:
-
-```
-structure EvalM (α : Type) where
-  run : Vars → Option (α × Vars)
-```
-
-Note the correspondence of the run function to the State signature
-above:
-
-- It takes the current state, which for our use cases is an association list carrying values for all defined variables.
-- It returns an optional result which is a pair of some value (in our case, the result of the computation) and an updated state.
-
-This is its Monad class implementation:
-
-```
-instance : Monad EvalM where
-  pure x := ⟨fun vars => some (x, vars)⟩
-  bind action next := ⟨fun vars =>
-    match action.run vars with
-    | none => none
-    | some (x, vars') => (next x).run vars'⟩
-```
-
-And finally, the evaluator:
-
-```
-def evalState : ExprV → EvalM Int
-  | .num n => pure n
-  | .add a b => do
-    let x ← evalState a
-    let y ← evalState b
-    pure (x + y)
-  | .div a b => do
-    let x ← evalState a
-    let y ← evalState b
-    ⟨fun vars => (safeDiv x y).map (fun value => (value, vars))⟩
-  | .load name =>
-    ⟨fun vars => do
-      let value ← vars.lookup name
-      pure (value, vars)⟩
-  | .store name rhs => do
-    let value ← evalState rhs
-    ⟨fun vars =>
-      let vars' := (name, value) :: vars.filter (fun p => p.1 != name)
-      some (value, vars')⟩
-```
-
-Operations that don't deal with variables directly (like .num and
-.add) just do their work as before. .div only has to deal with the
-actual monad type to ensure that none is propagated in case of division
-by zero. Note also that this evaluator supports stores as expressions, since
-they separately return a value and the updated state; therefore, computations
-like this one will work:
-
-```
--- (x := 12) + (x / 3): the right operand sees the left operand's assignment.
-#eval (evalState
-  (.add (.store "x" (.num 12))
-        (.div (.load "x") (.num 3)))).run []
-```
-
-Producing the result some (16, [("x", 12)]).
-
-In a language with mutable state, modeling side effects is easy - just assign
-some state (like a struct field or class member). In a functional language like
-Lean, however, we have to carry this state across the computations explicitly;
-monads help us do this with elegance - by hiding most of the mechanics of
-actually carrying the state around, the majority of the code remains free
-of bookkeeping.
-
-## IO monad
-
-Perhaps the most well known example of a monad in functional programming
-languages like Lean and Haskell is IO. To anyone who's written a "real"
-program that interacts with the outer world, IO is very familiar. Here's
-a customized "Hello" program that's typically taught in the first 15
-minutes of learning a new programming language:
-
-```
-def greet : IO Unit := do
-  let stdin ← IO.getStdin
-  IO.println "What is your name?"
-  let name ← stdin.getLine
-  IO.println s!"Hello, {name}"
-```
-
-Note the do notation here, suggesting monads. As mentioned before, do
-is syntactic sugar for the monad's bind method, or the >>= operator; we
-can rewrite this code more explicitly as:
-
-```
-def greetBind : IO Unit :=
-  IO.getStdin >>= fun stdin =>
-  IO.println "What is your name?" >>= fun _ =>
-  stdin.getLine >>= fun name =>
-  IO.println s!"Hello, {name}"
-```
-
-In essence, IO is a state monad, where the state carried around represents
-the "outside world". IO operations like println act on that world,
-and its state is carried over using bind, like other state monads.
-
-Here's a version of our expression evaluator that logs directly to standard out,
-instead of collecting the log as a list of strings:
-
-```
-def evalIO : Expr → OptionT IO Int
-  | .num n => pure n
-  | .add a b => do
-    let x ← evalIO a
-    let y ← evalIO b
-    IO.println s!"adding {x} and {y}"
-    pure (x + y)
-  | .div a b => do
-    let x ← evalIO a
-    let y ← evalIO b
-    IO.println s!"dividing {x} by {y}"
-    OptionT.mk (pure (safeDiv x y))
-```
-
-The only unusual construct here is OptionT, which is a *monad transformer*
-that helps us compose Option (for propagating failure from safe division)
-with the IO Monad [[4]](https://eli.thegreenplace.net/2026/monads-in-lean/#footnote-4).
-
-The IO monad also supports throw for Python-like exception behavior,
-but in this example we use Option explicitly; exceptions are a matter of
-programming preference, and using them inside library functions like eval
-doesn't feel right to me.
-
-## Monad laws in Lean
-
-Just like in Haskell, monads in Lean should obey [certain laws](https://lean-lang.org/doc/reference/latest/Functors___-Monads-and--do--Notation/Laws/).
-Those are:
-
-**Left identity**: wrapping a value in pure and immediately passing it to
-f with bind should be equivalent to just calling f on the value:
-
-```
-pure v >>= f       =    f v
-```
-
-**Right identity**: extracting a value from a computation and immediately
-wrapping it with pure again should not change the computation:
-
-```
-m >>= pure         =    m
-```
-
-**Associativity**: the grouping of operations doesn't matter, as long as their
-order remains the same:
-
-```
-(m >>= f) >>= g    =    m >>= (fun v => f v >>= g)
-```
-
-Let's see how Option obeys these laws.
-
-For left identity, pure v is some v and the bind implementation
-matches some x to next x, which is equivalent to f v.
-
-For right identity, m >>= pure just rewraps a some value in pure,
-leaving none alone - this is equivalent to keeping things as they are.
-
-For associativity, if m is none then both sides are none. If m
-is some v, the left side is f v >>= g, and the right side reduces to
-the same, so again they are equivalent.
-
-While Lean doesn't enforce that a Monad instance obeys these laws, it has
-a separate type class called LawfulMonad which *does* require Lean proofs;
-this is useful for Lean's main use case - proving theorems about programs,
-expressed through its powerful type system. But this is a topic for another
-day.
-
-| [[1]](https://eli.thegreenplace.net/2026/monads-in-lean/#footnote-reference-1) | We've replaced some n by pure n in the .num case; technically this isn't necessary, but it will be useful later in the post when we examine other types implementing Monad. |
-| --- | --- |
-
-| [[2]](https://eli.thegreenplace.net/2026/monads-in-lean/#footnote-reference-2) | This is explored in Philip Wadler's classical paper "The essence of functional programming". |
-| --- | --- |
-
-| [[3]](https://eli.thegreenplace.net/2026/monads-in-lean/#footnote-reference-3) | Except also happens to implement Monad. |
-| --- | --- |
-
-| [[4]](https://eli.thegreenplace.net/2026/monads-in-lean/#footnote-reference-4) | We could also have used OptionT in earlier examples, e.g. instead of explicitly defining LoggedOption - try changing that code to use OptionT as an exercise. |
-| --- | --- |
+The Rust Project [participated](https://blog.rust-lang.org/2026/04/30/gsoc-2026-selected-projects/) in [Google Summer of Code (GSoC)](https://summerofcode.withgoogle.com) for the third time this year. This time we had 13 projects, and our dear contributors have been working very hard on them for several months. As usual, the projects had various durations, so while some of them have ended in August, the last one has only finished in November, so we have been waiting until we have all the results before publishing this blog post.
+
+**We are very happy to announce that all 13 projects were successful and passed their final evaluation!** We consider it to be a testament to the diligence of our contributors, and the helpfulness of our mentors, that we are able to keep a very high rate<sup>[[1]](https://blog.rust-lang.org/2026/11/11/gsoc-2026-results/#fn-success-rate)</sup> of successful GSoC projects several years in a row.
+
+At the start of summer, we had a video call with our contributors, so that we could all get to know each other a bit, and learn about their projects. Over the following few months, we continuously communicated with the contributors, provided guidance and answered their questions and reviewed their pull requests. And most importantly, we learned many new things together! It was an overall great experience. We are grateful for all Rust contributions done by our GSoC participants and for the time we spent working together, and we hope that we will continue seeing at least some of them around in the future.
+
+**We would like to thank all our Rust GSoC 2026 contributors. You did a great job!**
+
+Even though this year we had fewer projects than in 2025, mostly due to limited mentoring capacity, Google Summer of Code 2026 was again a success for the Rust Project. We think that GSoC is a great way of introducing new contributors to our community, and we are looking forward to participating in GSoC (and other mentorship programs, such as [Outreachy](https://blog.rust-lang.org/2026/05/04/outreachy-2026-may/)) again in the near future. If you are interested in becoming a (GSoC) contributor, check out our [GSoC project idea list](https://github.com/rust-lang/google-summer-of-code) and our [guide for new contributors](https://forge.rust-lang.org/how-to-start-contributing.html).
+
+Below you can find a brief summary of our GSoC 2026 projects. You can find more information about the original goals of the projects [here](https://github.com/rust-lang/google-summer-of-code/blob/main/gsoc/runs/2026.md). For easier navigation, here is an index of the project descriptions in alphabetical order:
+
+And now strap in, as there is a ton of great content to read about here!
+
+### A Frontend for Safe GPU Offloading in Rust
+
+- Contributor: Marcelo Domínguez
+- Mentor: Manuel Drehwald
+- Final report
+
+Marcelo worked on improving the usability of cross-vendor GPU programs in Rust using the `std::offload` module. At the start of the project, the offload prototype was only a proof of concept. It assumed that the offloaded code was bug-free, and it required users to write a lot of boilerplate code. Marcelo resolved both issues over the summer.
+
+First, he implemented proper type checking. Marcelo extended the compiler to verify that the arguments passed to any offload call are of the correct type, as expected by the GPU kernel. Kernel launches are thus now safe.
+
+After that, he added support for generic kernels. The compiler now collects all generic instantiations launched from the CPU side, and loads that info later when compiling GPU kernels to make sure we instantiate them as needed. Marcelo also added support to select which GPU to use, which is helpful for laptops with both an integrated and a dedicated GPU, as well as for servers with multiple GPUs. He also added two macros that removed the need for any boilerplate when writing and launching GPU kernels.
+
+The hardest part of this project by far was dealing with references. Due to Rust semantics, we cannot just map types containing mutable references to GPUs and then process them using multiple threads. Previous Rust GPU projects used raw pointers as a workaround, but we obviously wanted to avoid those. Marcelo managed to implement a sound abstraction so that users can now safely declare how their kernels will access mutable arguments.
+
+As a cherry on top, Marcelo also ported the [RajaPerf](https://github.com/llnl/rajaperf) performance suite from C++ to Rust and used it to benchmark his pull requests. His safe Rust version matches the performance of the original C++ code, and is now described in a [GPU offload paper](https://arxiv.org/abs/2608.13759) that he is working on together with his mentor, Manuel. This was Marcelo's [second](https://blog.rust-lang.org/2025/11/18/gsoc-2025-results/#abi-layout-handling-for-the-automatic-differentiation-feature) Rust GSoC project, and same as last year, we are very happy with the results. Great job!
+
+### Adding WebAssembly Linking Support to Wild
+
+- Contributor: Kei Akiyama
+- Mentor: David Lattimore
+- Final report
+
+The goal of this project was simple on paper: teach the [Wild](https://github.com/davidlattimore/wild) linker to link WebAssembly (Wasm) programs. However, adding support for a new linker target is of course far from simple. Luckily, Kei already had a lot of experience with Wild, as this was his second [GSoC project](https://blog.rust-lang.org/2025/11/18/gsoc-2025-results/#improve-wild-linker-test-suites) working on the Wild linker.
+
+And as expected, Kei did a great job! Prior to GSoC 2026, Wild had no Wasm output support. Now, the Wasm support is sufficiently good that Wild can link a range of complex programs to Wasm. For example, it is able to link itself, SQLite, ripgrep, CPython and even the SpiderMonkey JavaScript engine.
+
+And the linking performance is excellent! When compared to `wasm-ld`, the de-facto standard Wasm linker, which is based on the LLD linker, Wild is 2-15x faster, and uses 2-5x less memory. You can find more benchmarks in his [final report](https://lapla.dev/posts/gsoc_final2#link-performance), where he also explains that achieving this performance took quite some work, because Wild's ELF linking performance did not immediately translate to being fast when linking Wasm.
+
+Even after this GSoC project ended, Kei has continued improving Wild's Wasm support, as well as contributing to other parts of Wild. Thank you for bringing fast linking to a new set of use-cases, Kei! You are a valued member of the Wild team.
+
+### Bringing autodiff and offload into Rust CI
+
+- Contributor: Shota Sugano
+- Mentor: Manuel Drehwald
+- Final report
+
+The goal of this project was to build the experimental `std::autodiff` module, which implements automatic differentiation of Rust code, and the `std::offload` module, which allows offloading Rust code to GPUs, in the CI of the Rust compiler.
+
+Shota has already been contributing to this area in the months leading up to this year's GSoC, so he had no issues getting started. After valiantly fighting with our CI, he made both modules available in the official `nightly` compiler channel. Rust users can thus now simply install them with a single rustup command, rather than having to compile rustc from source! This is a huge benefit for gathering feedback on these features in the wild, as it makes it much easier to experiment with them.
+
+Beyond making these projects available via rustup, he also worked on making it simpler to build projects that use `std::offload`. The original compilation pipeline was derived from Clang's support for GPU offload, so it involved calling clang helper binaries. That is clearly not optimal, so Shota worked on replacing it by directly calling the underlying LLVM APIs from rustc.
+
+The last piece of his project was enabling testing in CI for both offload and autodiff, which already helped prevent multiple regressions. Right now, the GPU offload pipeline only tests the CPU setup side, but his work allowed us to talk to GPU hardware vendors, two of which already agreed to provide the Rust Project with GPU hardware so that in the future we can also run those tests on dedicated GPUs.
+
+Overall, the project was a success. Shota had to show a lot of patience and endurance when working with various CMake quirks and CI challenges. We would like to extend a special thank you for that!
+
+### Debugger for Miri
+
+- Contributor: Mohamed Ali
+- Mentor: Oli Scherer
+- Final report
+
+miri is a tool that can detect undefined behavior (UB) in unsafe Rust code. It used to have a prototype of an interactive debugger called `priroda`, but it became unmaintained some time ago. The goal of this project was to re-establish `priroda`, to make it easier to use miri interactively, debug how and why is UB introduced in Rust programs, and also help rustc developers analyse MIR, one of the intermediate representations of Rust programs.
+
+Mohamed successfully reached both main goals of this project. He created a miri interface for the gdb debugger, which allows debugging programs executed by miri. You can set breakpoints, step through individual instructions, analyse MIR local variables and inspect the debugged program's state, with miri acting as a "virtual CPU". So when you encounter your next miri UB report, you can actually debug the program state that caused UB by running `priroda`! Mohamed also created a command-line interface for `priroda`, which is used to test it in miri's CI. This will ensure that it keeps working properly and will not bitrot again.
+
+Mohamed also added basic support for the Debugger Adapter Protocol, which allows using `priroda` together with IDEs such as Visual Studio Code. Currently, connecting priroda to an IDE is a bit involved, so the next step would be to build a plugin for an IDE that would allow showing all the extra state that miri has, which gdb doesn't know how to interpret.
+
+Debugging programs executed by miri is very exciting. Thank you for all your work!
+
+### Implementing impl and mut restrictions
+
+- Contributor: Ryosuke Yamano
+- Mentors: Jacob Pratt, Urgau
+- Final report
+
+The goal of this project was to implement two new language features that were accepted in [RFC 3323](https://rust-lang.github.io/rfcs/3323-restrictions.html):
+
+- Impl restrictions (impl(crate) trait Foo {}), which allow restricting in which modules you are able to implement a given trait.
+- Mut restrictions (struct Foo { pub mut(crate) bar: u8 }), which allow restricting in which modules you are able to mutate a given field.
+
+Ryosuke had to familiarize himself with the compiler's codebase and do a lot of implementation work to get both features working. This included implementing parsing of the new syntax, recording its metadata in the compiler's Abstract Syntax Tree, implementing resolution of the restricted crate paths, and finally adding checks to enforce both restriction rules. This all amounted to around five thousand lines of Rust code!
+
+Once the new features were implemented and available on nightly, Ryosuke wrote a [Call for Testing](https://blog.rust-lang.org/inside-rust/2026/08/10/call-for-testing-impl-and-mut-restrictions/) blog post. It had to be very exciting to announce to the world that he implemented two new features from scratch, and people can now play with them on the nightly channel! After the blog post was published, users reported a few issues, which Ryosuke promptly fixed. He also contributed to rustdoc to improve how the impl and mut restrictions are rendered in the generated documentation pages.
+
+Now that the features are available on nightly, feedback is being gathered on them, with the plan being to stabilize them in 2027. If you would like to provide feedback on the impl and mut restrictions, you can do so in [this issue](https://github.com/rust-lang/rust/issues/160614).
+
+The goal of this project was clear, and Ryosuke achieved it completely. Awesome work!
+
+### Improving Ergonomics and Safety of serialport-rs
+
+- Contributor: Tanmay
+- Mentor: Christian Meusel
+- Final report
+
+The goal of this project, which was done in collaboration with the [Rust Embedded Working Group](https://rust-embedded.org), was to improve the API ergonomics and type safety of the [serialport-rs](https://github.com/serialport/serialport-rs) crate.
+
+The serialport project is a bit different from some other projects which participated in this year's Google Summer of Code. It is more on the side of "facility management" than rocket science. Its challenges are taming finicky operating system APIs and making good abstractions, rather than full-blown software engineering.
+
+Tanmay led many fruitful discussions about potential design decisions, and did a lot of field research on how other crates that depend on serialport actually use its API, to figure out how to make the upcoming breaking API changes less disruptive and painful for them.
+
+Tanmay also worked on sanding off some rough edges of the serialport API, such as replacing Boxed trait objects with enums, and making errors explicit in places where the legacy API used to panic. Some of the work still waits for integration. It is targeting the upcoming serialport 5.0 release.
+
+Christian (Tanmay's mentor) found working alongside Tanmay very motivational, and he was able to catch up with a lot of other unrelated work in order to integrate Tanmay's changes. He noted that working with Tanmay was fun and productive, and that it was pure joy to see him grow from his first contribution in the bonding phase to seasoned contributions. Thank you, Tanmay!
+
+> This was my first Google Summer of Code as well. It was challenging, motivating, fun and definitely worth it. I would show up again.
+>
+> Christian Meusel
+
+### libc: transition differing bit-width time and offset variants and deprecate bug-prone constants
+
+- Contributor: Adam Martinez
+- Mentor: Trevor Gross
+- Final report
+
+[`libc`](https://github.com/rust-lang/libc) is a foundational crate that is used by thousands of other crates across the Rust ecosystem. For the past several years, its maintainers have been attempting to publish a stable 1.0 release of the crate. Because this crate has to support interoperating with C on many compilation targets with weird quirks, this requires an enormous amount of work. We already had a GSoC project for moving `libc` towards 1.0 [last year](https://blog.rust-lang.org/2025/11/18/gsoc-2025-results/#modernising-the-libc-crate), and the goal of Adam's project was to make more progress in that direction.
+
+And we can happily say that progress was indeed made! The original goal of Adam's project was to deprecate a number of constants that were difficult to maintain and cleanup inconsistencies in handling 32-bit/64-bit variants of file and time handling functions<sup>[[2]](https://blog.rust-lang.org/2026/11/11/gsoc-2026-results/#fn-2038)</sup>. Adam was able to resolve that in a few weeks, and then he moved on to resolve a number of various issues blocking the [1.0 milestone](https://github.com/rust-lang/libc/issues/3248).
+
+Saying that Adam was productive would be… an understatement. We could follow his work in real-time, because he was posting [daily GSoC reports](https://dybucc.github.io/gsoc-2026-report/daily-reports/) for *116 days (!) in a row*. The diligence and consistency with which he tackled so many complicated issues was an inspiration to us. In fact, sometimes the `libc` reviewers were not able to keep up!
+
+You can find all Adam's `libc` pull requests [here](https://github.com/rust-lang/libc/pulls?q=is%3Apr+author%3Adybucc). You might notice that many of them have lots of comments, and even more discussions happened in GitHub issues and on Zulip. In addition to implementing the necessary code, making changes that affect interesting C platforms and architectures also required him to do a ton of research, and a lot of considerations of edge cases and possible backwards compatibility breakages. His work also took him on a whirlwind tour of diverse platforms; Adam's contributions spanned FreeBSD, NetBSD, Android, Hurd, NuttX, AIX, VxWorks, Fuchsia, L4Re and more.
+
+Even though more work will still be required to get `libc` to 1.0, Adam's contributions made a significant dent in this effort. Thank you very much for all your work!
+
+### Link Linux kernel and its Modules with Wild
+
+- Contributor: Vishruth Thimmaiah
+- Mentor: David Lattimore
+- Final report
+
+Linker scripts are arcane commands that can be used to instruct a linker to construct the final binary in a custom way. The [Wild](https://github.com/davidlattimore/wild) linker used to implement only basic linker script functionality, which Vishruth greatly expanded during his GSoC project.
+
+Thanks to that, Wild can now successfully link Linux kernel modules, and it's even close to being able to link the Linux kernel itself! Vishruth's work involved greatly expanding expression evaluation support, location counters, program headers, etc. In addition to adding support for many missing bits of linker script support, Vishruth implemented support for partial linking (-r) as this is needed in order to link Linux kernel modules. You can find all the linker script features that he implemented [here](https://github.com/wild-linker/wild/blob/main/LINKER_SCRIPT_SUPPORT.md).
+
+Adding all those peculiar features to Wild required performing many cross-cutting changes to its codebase, which Vishruth managed to do really well. And it was not at the cost of performance! Wild now manages to link Linux kernel modules such as `btrfs` or `amdgpu` 2-4x faster than the BFD (GNU ld) or LLD linkers<sup>[[3]](https://blog.rust-lang.org/2026/11/11/gsoc-2026-results/#fn-mold)</sup>. You can find more benchmarks in his [final report](https://vishthimmaiah.dev/blog/gsoc-26#benchmarks).
+
+Vishruth has continued to contribute to Wild even after his GSoC project ended and has become a valued contributor to the project. Thank you very much for making Wild better, Vishruth!
+
+### Migrating rust-analyzer assists to SyntaxEditor
+
+- Contributor: bit-aloo
+- Mentors: Chayim Refael Friedman, Lukas Wirth
+- Final report
+
+rust-analyzer uses [rowan](https://github.com/rust-analyzer/rowan) for its syntax trees, a library for Concrete Syntax Trees. `rowan` has served us well over the years, but it has some downsides that cause major performance problems and also smaller convenience issues. In particular, memory fragmentation causes rust-analyzer to consume much more memory than it actually needs (in the order of redundant gigabytes).
+
+We wanted to rewrite `rowan` to change that. The problem was that many parts in rust-analyzer touch syntax trees, and in particular assists (code actions) of which we have a lot. They also use mutable tree editing, a feature of `rowan` that can be convenient but was a major obstacle in rewriting it to be more efficient.
+
+During his project, bit-aloo first migrated all rust-analyzer code from mutable tree editing to `SyntaxEditor`, a new abstraction that was created specifically to avoid mutation. After that, he removed mutable editing from `rowan` altogether.
+
+The migration process is incremental and `rowan` is still inefficient in various aspects. However, we believe that the parts which required changes to large amounts of code are behind us, and we can complete the migration with more focused changes. bit-aloo is continuing to work on that even after his GSoC project ended. And he was also accepted as a member of the rust-analyzer team, so congratulations! We would like to thank him for his work, and hope to continue working with him to improve rust-analyzer for everyone.
+
+### Port std::arch test suite to rust-lang/rust
+
+- Contributor: Sumit Kumar
+- Mentors: Jakub Beránek, Folkert de Vries
+- Final report
+
+The `std::arch` module of the Rust standard library contains various intrinsic functions that provide architecture and vendor-specific functionality. Their implementation lives in the [stdarch](https://github.com/rust-lang/stdarch) repository, which is included as a [Josh](https://blog.rust-lang.org/inside-rust/2026/06/04/how-josh-helps-rust-manage-code-across-multiple-repositories/) subtree in the main compiler repo (`rust-lang/rust`).
+
+When someone changes the intrinsics in the main repo, breakages can silently creep in, because the main repo does not execute all the `stdarch` tests in its CI. That can cause friction when we synchronize the changes between the two repositories. Ideally, we would run all of `stdarch`'s tests in the main repo to detect any issues as soon as possible.
+
+And that is where Sumit came in! Over the course of his GSoC project, he examined the (very!) complex ways the intrinsics are tested in `stdarch`, and started porting them over to the main repo. But this was not a matter of copying over a few lines of YAML. The compiler repo uses its own build system (called `bootstrap`) and a CI workflow structure that is quite different from the `stdarch` repository. Sumit thus had to first understand what is each test suite doing, reimplement it as a part of bootstrap and finally integrate it into the compiler's CI workflows.
+
+We run ~90 CI jobs across several hardware architectures, operating systems and *OS versions*. Getting all that to work while testing *vendor-specific* intrinsics required a lot of diligent work… and a lot of patience. It took *five months* for [one](https://github.com/rust-lang/rust/pull/156674) of the test suites to finally succeed on the main repo's CI, and it required Sumit to completely refactor how the suite worked, for it to be more compatible with bootstrap. As another example, a [different](https://github.com/rust-lang/rust/pull/156356) test suite that Sumit also got to work required running the tests in an Intel CPU emulator on CI.
+
+Sumit ported most of the `stdarch` test suites to `bootstrap`, including intrinsics verification against reference *C* implementations, checks for automatically generated source code being up-to-date, and various unit tests for individual intrinsics and CPU feature detection logic. There is one [remaining](https://github.com/rust-lang/rust/pull/160850) test suite to port, but the ported tests are already helping us find issues, which is great.
+
+You can check Sumit's `rust-lang` PRs [here](https://github.com/search?q=author%3Axonx4l+org%3Arust-lang&type=pullrequests); notice that he was also contributing to other parts of Rust in the meantime! Sumit's work will help us make LLVM upgrades and land intrinsics changes more easily. Thank you, Sumit!
+
+### Reorganizing tests/ui/issues
+
+- Contributor: zedddie
+- Mentors: Teapot, Kivooeo
+- Final report
+
+The goal of this project was to get rid of a very scary place in the Rust compiler's test suite: a directory called `tests/ui/issues`. It contained thousands of test files based on historical Rust issues, dating back all the way to 2012. The problem with those tests was that they were named only with an issue number (e.g. `issue-37291`). When such a test would break, it was quite difficult to figure out what was it even supposed to test, because there was little context attached to it.
+
+Even though we already had a GSoC project to tackle this problem [last year](https://blog.rust-lang.org/2025/11/18/gsoc-2025-results/#mapping-the-maze-of-rust-s-ui-test-suite-with-established-continuous-integration-practices), due to the sheer amount of uncategorized tests, there were still over four hundred tests left in this directory by the time zedddie started working on this project.
+
+For each test in this directory, zedddie had to first understand what was the test doing and dig through its original GitHub issue and any other related issues and pull requests. Then they had to figure out what would be the best location to move the test under, search for any possible duplicates, come up with a descriptive name for the test (that tends to be very difficult!), and finally add a short description to the test that explains the context of why the test was added in the first place. Rinse and repeat, for hundreds of tests.
+
+zedddie rolled up their sleeves, and categorized over 300 tests in 30 pull requests. Together with other contributors helping out over this summer, zedddie was finally able to remove the last batch of [uncategorized tests](https://github.com/rust-lang/rust/pull/160176) at the start of August. As zedddie said in their [final report](https://gist.github.com/zedddie/7170d2280bc9e19da84cd7eb4e3b32e0): "What is left to do: nothing, tests/ui/issues is gone".
+
+While this work might sound a bit bland, its positive effect on the maintainability of our test suite, and improving the lives of Rust compiler contributors, is considerable. It is also apparently a great way to learn about cool niche edge cases of Rust that most Rust developers might not know about! After migrating the remaining uncategorized UI tests, zedddie continued contributing to the next trait solver and const generics. Thank you very much for helping us finally get rid of `tests/ui/issues`, zedddie!
+
+### Utilize debugger APIs to improve debug info test accuracy and error reporting
+
+- Contributor: Anthony Bolden
+- Mentors: Jakub Beránek, Jieyou Xu
+- Final report
+
+The Rust debugging experience leaves a [lot to be desired](https://blog.rust-lang.org/2026/09/07/rust-debugging-survey-2026-results/). One reason why we struggled to improve it is that many of our debuginfo test suites did not even run in CI for the past few years, as they were difficult to maintain. When something changed in the type visualizers, the implementation details of a standard library type or in debugger internals, someone had to go through tens of tests and manually update them. This was not sustainable, so the test suite rotted.
+
+Luckily for us, Anthony took that affront personally. Even before his GSoC project, he spent considerable effort on improving the quality of debug visualizers of various Rust standard library types, and gained an impressive amount of knowledge about debuggers.
+
+During his GSoC project, he completely overhauled how our debuginfo test infrastructure works, both for [LLDB](https://github.com/rust-lang/rust/pull/158298) and [GDB](https://github.com/rust-lang/rust/pull/160377). Thanks to his improvements, we can now easily "rebless" the reference output when something changes, which makes it much easier to keep our test suite up-to-date. The new tests also record much more information about the internal state of the debugger recorded during the test, which helps with diagnosing issues that cause type visualizers to stop working.
+
+In addition to redesigning the test suite, Anthony also actually managed to re-enable the LLDB tests on both Windows and Linux in our CI again (after several years of being skipped there!). This will allow us to avoid debuginfo regressions and make it easier to improve the Rust debugging experience. Oh, and it goes without saying that while doing all that, he also made numerous improvements to Rust type visualizers. You can find his PRs [here](https://github.com/rust-lang/rust/pulls?q=is%3Apr+state%3Amerged+author%3Awalnut356).
+
+Anthony's amazing contributions and his deep expertise in debuggers led to him being invited to the Rust [Compiler team](https://rust-lang.org/governance/teams/compiler/#team-compiler), which was much deserved. What else can we add, other than: thank you for your awesome work!
+
+### XDG path support for rustup
+
+- Contributor: Guicheng Liu
+- Mentor: rami3l
+- Final report
+
+The support for platform-specific directories (platformdirs) has been a long-standing feature request for rustup, to have more fine-grained filesystem directory choices. This project investigated how that issue could be resolved.
+
+The real complexity of this feature request lies within a decade worth of different assumptions that previous iterations of rustup and cargo have made: it turns out that quite a lot of them are no longer true if we were to implement platformdirs support truly faithfully.
+
+Guicheng first worked on cleaning up the interactions between `rustup self uninstall` and `$CARGO_HOME/bin` as a warmup. This issue itself is a very good demonstration of all that compatibility baggage: somehow `$CARGO_HOME/bin` has become the default binary directory for all things Rust, so rustup ended up installing itself and all its proxies into it. As a result, it has been super annoying to many that everything in `$CARGO_HOME` is gone with `rustup self uninstall`.
+
+After that, he started the actual implementation of platformdirs support in rustup. This was no easy task! Not because the code itself was hard to write, but because it takes a lot of effort to figure out what should be the desired behavior in the first place. Also, in order to determine the appropriate platformdirs semantics, some prior research is often required to see how things became what they are today, so the decoupling of different concerns could proceed, and migration paths could be designed accordingly. It was in this sense that this is different from a typical GSoC project, and luckily thanks to the effort he has put into this project, we have not only come up with the final patch, but also discovered and fixed some tiny preexisting issues with this long-untouched aspect of the rustup codebase along the way.
+
+Thank you for digging into this complex topic, Guicheng!
+
+## Conclusion
+
+We would like to thank all contributors who have participated in Google Summer of Code 2026 with us! Your contributions helped make Rust better, and introduced you as new members of our community, which is a reason to celebrate. We are looking forward to participating in GSoC again next year!
+
+We would also like to thank Google for organizing the Google Summer of Code program and for allowing us to host a large number of projects every year. And last, but not least, we would like to thank all the Rust mentors who were tirelessly helping our contributors to complete their projects. Without you, Rust GSoC would not be possible.
+
+1. 97.5% over a three-year period, if you are wondering (40 out of 41 projects were successful so far). [↩](https://blog.rust-lang.org/2026/11/11/gsoc-2026-results/#fr-success-rate-1)
+2. If you were wondering, then yes, this is actually related to the famous [2038 problem](https://en.wikipedia.org/wiki/Year_2038_problem) :) [↩](https://blog.rust-lang.org/2026/11/11/gsoc-2026-results/#fr-2038-1)
+3. In case you were wondering, the `mold` linker does not support linker scripts required to link Linux kernel modules at the moment, so Vishruth did not compare the performance of Wild against `mold` here. [↩](https://blog.rust-lang.org/2026/11/11/gsoc-2026-results/#fr-mold-1)

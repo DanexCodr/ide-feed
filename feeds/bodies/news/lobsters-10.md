@@ -1,220 +1,256 @@
-I’ve been using `ed25519-sk` keys with YubiKeys since practically the moment they were available. But because of some specific use-cases (and because, frankly, YubiKeys are expensive) I’ve had a few traditional on-disk keys hanging around for a while just waiting for me to finally decide to get rid of them.
+After two detailed articles (that I hope you read!), we have a great technique to connect two elements with a line you can shape using `border-shape` and `shape()`.
 
-This post documents how I’m using various secure enclaves (YubiKey, TPM, Apple Secure Enclave) to hold/encrypt SSH key material and achieve the goal of not having any unprotected key material living on-disk.
+In this article, we will explore more types of connections commonly used to create graphs and diagrams. Of course, we can’t cover them all, but the technique is generic, so if you understand it well, you can easily tweak the code to create your own connections.
 
-## First – Isn’t using a passphrase enough?
+Before we start, let me remind you that the goal is not to invent a new or better way to create graphs with CSS. This remains an experiment to explore modern features and create things that were impossible (or very difficult) to achieve using only CSS. This can also serve as proof of concept that it’s indeed possible using CSS. If so, it can lead to a better, more intuitive implementation.
 
-Probably. I don’t intend to imply that this post is the *only* way that anyone should be doing SSH keys. Using a passphrase will encrypt the key with bcrypt & AES which keeps it protected even if the on-disk keyfile leaks somehow.
+Enough talking, let’s start!
 
-And with a functioning ssh-agent, the passphrase should only need to be entered once per session, with the decrypted key material being held in RAM after that point.
+At the time of writing, only Chrome and Edge fully support the features we’ll use.
 
-So yes, the ’traditional’ method is probably fine for most threat models. But I’m still keen to move to hardware-backed keys anyway, mostly for the satisfaction.
+## Dynamic Connection
 
-## About hardware-resident keys
+The first connection type adjusts based on the element position and shapes. It’s similar to what we did in the previous articles, but this time we are not only connecting the centers, but we are also considering the sides.
 
-When I say ‘hardware-resident’ keys, I mean keys that use a secure enclave or purpose-built hardware like [YubiKeys](https://www.yubico.com/) to store or protect the key material.
+Let’s start with a demo:
 
-The theoretical benefit here is that the hardware used to *generate* the SSH key is needed in order to *use* the key. There’s no mechanism that allows leaking or exfiltrating keys that generated using this method. Any material that *does* exist on-disk is useless without the hardware.
+If you drag the elements around, you will notice the connection considers the closest sides to connect both elements, and if they get too close, it connects their centers. A dynamic connection!
 
-## Goals
+If you look closely, you’ll notice we have four different positions, and therefore four different shapes (one curved line and three straight lines).
 
-So I want to:
+![Four pairs of teal and orange rounded squares, each pair connected by a line: one S-shaped curve from side to side, and three straight lines connecting the closest sides or centers depending on how the squares are positioned.](https://i0.wp.com/blog.master.dev/wp-content/uploads/2026/11/dynamic-connection-four-shapes.png?w=876&quality=80&ssl=1)
 
-- Switch to using hardware-resident keys entirely
-- Do so as natively as possible, avoiding additional software where I can
-- Test these in various real-world scenarios, such as running within an LXC or noninteractively mounting an SSHFS server
+Did you forget a few cases? There are more positions!
 
-## Hardware
+Yes, but don’t forget the anchor position configuration. We have four regions where only one is visible at a time, and they are all symmetric, so the scale transformation gives us the remaining ones. If this last sentence sounds strange, go back to [the first article](https://blog.master.dev/two-circles-one-arrow-and-anchor-positioning/) to refresh your memory.
 
-I’m going to try three different hardware methods for achieving this, which I think will cover all of my needs:
+The shape is identical to the one we used in the previous article, same as the `border-shape` code.
 
-- Method 1: YubiKey
-- Method 2: TPM
-- Method 3: Apple Secure Enclave
-
-## Method 1: YubiKey
-
-With a YubiKey (5 and newer), SSH keys can be directly enrolled into the device using `ed25519-sk` (where the `-sk` stands for “Security Key”). This doesn’t require any additional software beyond OpenSSH itself.
-
-To store a new SSH key on a YubiKey, insert it and run:
-
-```sh
-ssh-keygen -t ed25519-sk -O resident -O application="ssh:yournamehere" -f ~/.ssh/id_ed25519-sk
+```css
+.link *:before {
+  border-shape: if(
+    style(condition_1): 
+      shape(from ?? ??,curve to 50% 50% with ?? ??,smooth to ?? ??);
+    style(condition_2): 
+      shape(from ?? ??,curve to 50% 50% with ?? ??,smooth to ?? ??);
+    style(condition_3): 
+      shape(from ?? ??,curve to 50% 50% with ?? ??,smooth to ?? ??);
+    else: 
+      shape(from ?? ??,curve to 50% 50% with ?? ??,smooth to ?? ??))
+    padding-box;
+}
 ```
 
-The `application` tag set in the command is arbitrary and can be set to whatever memorable string you prefer to differentiate between multiple SSH keys if you want to create multiple keys on the same YubiKey.
+So far, nothing has changed compared to the previous article. We moved from two shapes to four, so we need three conditions instead of one.
 
-If you have `ykman` installed, you can now inspect the list of credentials enrolled in the device:
+Let’s start with the first condition: when both elements are close, draw a line from the center of the first element to the center of the second one. Said differently, when their distance is smaller than a specified value, we draw a line from the top-left corner to the bottom-right corner of the pseudo-element.
 
-```text
-$ ykman fido credentials list
-Enter your PIN: 
-Credential ID  RP ID             Username  Display name
-0f41fb61...    ssh:yournamehere  openssh   openssh
+```css
+style((hypot(100cqw,100cqh) < 200px)): 
+      shape(from 0 0,curve to 50% 50% with 50% 50%,smooth to 100% 100%);
 ```
 
-If `ykman` complains that you haven’t set a FIDO PIN on the YubiKey yet, you can do this with `ykman fido access change-pin`.
+The `shape()` value should be clear, and if you are wondering about `hypot()`, it’s the hypotenuse math function. It calculates the diagonal of the pseudo-element, which is the distance between the centers of the two circles.
 
-Note that you don’t actually need `ykman` to enrol or use SSH keys with a YubiKey but it does make managing the device more convenient.
+Let’s move to the second condition: when the vertical distance between the elements is smaller than a specified value, we link the right and left edges.
 
-Once the key has been created, you can retrieve the public key from disk:
+See that? I simply adjusted two values compared to the previous shape. That `60px` is half the element size. It’s defined as a variable in the demo, and yes, it’s a little drawback for this type of connection since the element size needs to be known.
 
-```text
-$ cat ~/.ssh/id_ed25519-sk.pub 
-sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIA9B+2GGCkQvBzpa4WobQhfC9YU5Su3pKXBmVLSXEqfRAAAAEHNzaDp5b3VybmFtZWhlcmU= alice@hostname
+I suppose you got the idea, so here is the full code:
+
+```css
+.link *:before {
+  border-shape: if(
+    style((hypot(100cqw,100cqh) < 200px)): 
+      shape(from 0 0,curve to 50% 50% with 50% 50%,smooth to 100% 100%);
+    style((100cqh < 200px) and (100cqh < 100cqw)): 
+      shape(from 60px 0,curve to 50% 50% with 50% 50%,smooth to calc(100% - 60px) 100%);
+    style((100cqw < 250px) and (100cqh > 100cqw)): 
+      shape(from 0 60px,curve to 50% 50% with 50% 50%,smooth to 100% calc(100% - 60px));
+    else: 
+      shape(from 60px 0,curve to 50% 50% with 200px 0,smooth to calc(100% - 60px) 100%))
+    padding-box;
+}
 ```
 
-This key can be used like any other SSH public key – added to `authorized_keys` on a host, copied with `ssh-copy-id`, or pasted into services that depend on SSH like Git forges.
+I am adding an extra rule for the second and third conditions to illustrate that we can use `and`/`or` to create precise conditions. In this case, I want to avoid some edge cases where the connection didn’t look good to me.
 
-You will also find a `~/.ssh/id_ed25519-sk` file on disk (without the `.pub` extension). Note that although this *looks* like a private key, it doesn’t actually contain the key material. This is just a handle to find the relevant key on the hardware device.
+![A teal square above and slightly left of an orange square, connected by a short, nearly vertical straight line between their closest edges.](https://i0.wp.com/blog.master.dev/wp-content/uploads/2026/11/conditions-and-or-edge-cases.png?w=401&quality=80&ssl=1)
 
-To configure the key for authentication, it can be enrolled with `ssh-add` like a regular key, or specified directly in `~/.ssh/config`:
+For the extremities, it’s exactly the same logic. We keep the same `if()` structure, and we update the `shape()` values. For this reason, I wrote the following code in the demo:
 
-```text
-Host blog.infected.systems
-    IdentityFile ~/.ssh/id_ed25519-sk
+```css
+.link *:before,
+.link *:after {
+  border-shape: if(
+    style((hypot(100cqw,100cqh) < 200px)): 
+      var(--shape1);
+    style((100cqh < 200px) and (100cqh < 100cqw)): 
+      var(--shape2);
+    style((100cqw < 250px) and (100cqh > 100cqw)): 
+      var(--shape3);
+    else: 
+      var(--shape4))
+    padding-box;
+}
 ```
 
-From here, you can now SSH into the destination host as with a regular key. SSH will ask you to tap the YubiKey to confirm presence when the SSH command runs.
+Then, each pseudo-element defines its own shapes.
 
-### Unattended YubiKey usage
+If you are wondering about the logic behind the specified values, the conditions, their numbers, etc., the answer is: there is no logic. It’s a matter of personal choices. As I said in the introduction, it’s a generic technique. I simply built on what we learned in the previous article to create a more complex-looking connection.
 
-When using an `ed25519-sk` key created with the default settings as above, you will be asked to confirm your presence whenever the key is used by physically touching the YubiKey.
+Give it a try! Pick up a pen and paper, draw the connection, and try to code it. Start with one shape, then think about the different conditions and how you want to update it. Don’t be shy; it’s a fun exercise. Do it before moving to the next section because we are increasing the difficulty a bit.
 
-It’s probably a good idea to keep this default, but if you have a specific use-case that requires unattended key usage, you can generate a `no-touch-required` key as follows:
+Let’s not forget that we can add as many elements as we want to create a fancy graph!
 
-```sh
-ssh-keygen -t ed25519-sk -O resident -O no-touch-required -O application="ssh:nameyourkey" -f ~/.ssh/id_ed25519-sk
+![A graph of six colored nodes labeled A through F connected by curved and straight gray lines, forming a flowchart-like diagram.](https://i0.wp.com/blog.master.dev/wp-content/uploads/2026/11/dynamic-connection-graph.png?w=935&quality=80&ssl=1)
+
+## Static Connection
+
+Let’s try another type of connection. I am calling this static because the idea is to keep a line connected to the same sides, regardless of the element positions.
+
+Here is a demo to better understand:
+
+See that? We have a right-to-left connection, and the good news is that this type of connection doesn’t require us to know the element size, but we lose the symmetry.
+
+![Four pairs of teal and orange rectangles in different positions, each connected from the right side of the teal one to the left side of the orange one, with the line curving or looping around as needed.](https://i0.wp.com/blog.master.dev/wp-content/uploads/2026/11/static-connection-right-to-left.png?w=1151&quality=80&ssl=1)
+
+What symmetry? I don’t get it.
+
+Here is a better figure showing the four different regions (explained in the first article) and the shape in each one of them:
+
+![Four diagrams labeled A, B, C, and D, each showing a teal square and an orange square at opposite corners of a thin rectangle, connected by a right-to-left curved line whose shape differs between the left and right columns.](https://i0.wp.com/blog.master.dev/wp-content/uploads/2026/11/static-connection-four-regions.png?w=711&quality=80&ssl=1)
+
+A and C are still symmetric (as are B and D), but A and B are no longer symmetric (same for C and D). This means we need a different strategy than simply working on one position and flipping it to get the others.
+
+To do this, I will update the anchor position configuration. A slightly different one, better suited to this case.
+
+We update the following:
+
+```css
+.link > * {
+  position: absolute;
+  --_x: calc(anchor(--c1 inside) + anchor-size(--c1)/2);
+  --_y: calc(anchor(--c2 inside) + anchor-size(--c2)/2);
+}
+
+.link :is(a,b) {top:  var(--_x); bottom: var(--_y);}
+.link :is(a,c) {left: var(--_x); right:  var(--_y);}
+.link :is(c,d) {top:  var(--_y); bottom: var(--_x);}
+.link :is(b,d) {left: var(--_y); right:  var(--_x);}
+
+.link b {scale: -1  1} 
+.link c {scale:  1 -1} 
+.link d {scale: -1 -1} 
 ```
 
-When using a `no-touch-required` key, although it isn’t possible for a malicious actor to exfiltrate the key even with root access to the host the YubiKey is plugged into, a malicious actor with access could use the key without requiring any presence detection or human interaction. So do make sure this is actually suitable for your risk appetite before doing it.
+We replace it with this:
 
-To use a `no-touch-required` key for unattended authentication to remote servers, you need to prepend the entry in the `authorized_keys` file on the destination host with `no-touch-required`, otherwise OpenSSH’s default security settings will reject the key.
+```css
+.link > * {
+  position: absolute;
+  --_x: calc(anchor(var(--x) inside) + anchor-size(var(--x))/2);
+  --_y: calc(anchor(var(--y) inside) + anchor-size(var(--y))/2);
+  container-type: size;
+}
+.link :is(a,b) {top:  var(--_x); bottom: var(--_y)}
+.link :is(a,c) {left: anchor(var(--x) outside); right: anchor(var(--y) outside)}
+.link :is(c,d) {top:  var(--_y); bottom: var(--_x)}
+.link :is(b,d) {left: anchor(var(--y) inside); right: anchor(var(--x) inside)}
 
-For example:
-
-```text
-$ cat ~/.ssh/authorized_keys 
-no-touch-required sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIA9B+2GGCkQvBzpa4WobQhfC9YU5Su3pKXBmVLSXEqfRAAAAEHNzaDp5b3VybmFtZWhlcmU= alice@hostname
+.link :is(c,d) {scale:  1 -1}
 ```
 
-## Method 2: TPM
+The top and bottom values stay the same, but the left and right ones are updated. And only C and D need the scale for horizontal symmetry with A and B.
 
-YubiKeys are nice, though fairly expensive. It would be useful if we could use the TPM we already have on our host to protect key material instead. Well, it turns out we can!
+Drag the elements in the demo below to understand the different regions. (You can compare it with [the demo](https://codepen.io/t_afif/pen/LERWyvX/e943ba53f15ff9dd70c149a6bce0cac0) of the first article.)
 
-Unfortunately this does require additional software, but it’s a fairly minimal Golang package – [ssh-tpm-agent](https://github.com/Foxboron/ssh-tpm-agent). It can be installed with Go directly from GitHub, but is natively packaged by Ubuntu and [I’m working on packaging it for Fedora](https://bugzilla.redhat.com/show_bug.cgi?id=2565411).
+Whatever the anchor position configuration, the important requirement is that we always have one visible region at a time. The other requirement when creating the shapes is the continuity between the regions.
 
-To create a TPM-backed SSH key with a PIN, run:
+Continuity? What?!
 
-```sh
-ssh-tpm-keygen -N "your-pin"
+If we forget the implementation and play with different demos, it looks like we have a unique connection linking both elements. In reality, we have four, but thanks to the “continuity” effect, the illusion is perfect.
+
+Here is the previous example where I am using different colors:
+
+You can clearly see we have four different connections, but when moving from one to another, they share the same position/shape to create the continuity effect, making it look like it’s one. That’s why I always chose a straight line for the switch because it’s the easiest option.
+
+For this new connection, we need to have continuity between two curved lines!
+
+```css
+.link :is(a,c):before {
+  border-shape: shape(from 0   0,curve to 50% 50% with 150px 0,smooth to 100% 100%) padding-box;
+}
+.link :is(b,d):before {
+  border-shape: shape(from 100% 0,curve to 50% 50% with calc(100% + 150px) 0,smooth to 0   100%) padding-box;
+}
 ```
 
-The process will ask you where to store the key. From here, once again we have a keypair with a `.pub` file that we can use in `authorized_keys` or copy however we wish.
+A and C still share the same shape (and B and D do too).
 
-To use the TPM-backed key we need to use the TPM-aware SSH agent provided by the `ssh-tpm-agent` package. If you installed the native Golang package rather than something vendored by your distribution, you can enable the systemd socket unit for the agent as follows:
+See that? The illusion is perfect! The moment we switch between A and B, the curve is the same in both areas.
 
-```sh
-ssh-tpm-agent --install-user-units && systemctl --user enable --now ssh-tpm-agent.socket
+Let’s add a condition to make the line straight when the vertical distance is small:
+
+```css
+.link *:before {
+  border-shape: shape(from 0 0,curve to 50% 50% with if(style(100cqh < 100px): 0;else: 150px;) 0,smooth to 100% 100%) padding-box;
+}
+.link :is(b,d):before {
+  border-shape: shape(from 100% 0,curve to 50% 50% with if(style(100cqh < 100px): 100%;else: calc(100% + 150px);) 0,smooth to 0 100%) padding-box;
+}
 ```
 
-To ensure the socket for the agent can be discovered by SSH processes run within your shell session, add the following to your `.bashrc` or the equivalent for your shell:
+What? `if()` inside `shape()`?!
 
-```sh
-export SSH_AUTH_SOCK="$(ssh-tpm-agent --print-socket)"
-```
+Yes, we can do that. The whole `if()` block will resolve to a value, so you can place it wherever you want as long as the returned value is valid there. Since I only want to update one value, putting an `if()` inside `shape()` is more interesting and requires less code than putting two `shape()` values inside `if()`.
 
-Again, we can now use this key to authenticate to servers as if it were any other traditional on-disk key.
+Here is the full demo again.
 
-### Unattended TPM usage
+And that’s only one of 10 different cases! Yes, we can have all the possible connections.
 
-If you want this key to be available unattended, or to services that don’t use a full shell such as [systemd mount units](https://blog.infected.systems/posts/2025-10-14-the-five-megabyte-nas/), you can create a new key without a PIN (pass `-N ""` to the `ssh-tpm-keygen` command) and specify the socket path in `~/.ssh/config` instead of relying on `SSH_AUTH_SOCK` (although this relies on the socket address being predictable – i.e. your UID being stable):
+Left-to-left:
 
-```text
-Host blog.infected.systems
-    IdentityAgent /run/user/1000/ssh-tpm-agent.sock
-    IdentityFile ~/.ssh/id_ecdsa
-```
+Right-to-right:
 
-Note that `ssh-tpm-agent` does not account for the values in the TPM Platform Configuration Registers (PCRs) which record the state of the booted system – firmware versions etc, so changes of hardware/firmware/OS will not cause the system to refuse to unseal the key (unlike, say, something like BitLocker). So ensure that using a PIN-free key is appropriate for your risk model before doing so.
+Bottom-to-left (or left-to-bottom):
 
-### A caveat regarding TPM keys
+Bottom-to-top (or top-to-bottom):
 
-You will notice though that the private keyfile held on disk uses a `.tpm` extension this time. This is where an important caveat of the TPM method comes in – Unlike the YubiKey approach, the private key material *is* actually being stored on disk here. This is because TPM devices do not natively support enrolling SSH keys. So what is happening is that the private key material is being stored on disk in encrypted form, and the TPM is being used to decrypt it.
+And so on.
 
-This is still a device-bound credential as the key cannot be used without the TPM device even if the keyfile is leaked or exfiltrated but it is a relevant distinction compared to device-*resident* credentials such as `-sk` keys.
+Can you do the remaining ones? Take this as homework. Study the demos I shared, then try a new one. The logic is always the same. Start by identifying a suitable anchor position configuration based on potential symmetry. Then draw the shape, keeping the continuity effect in mind.
 
-## Method 3: Apple Secure Enclave
+And of course, it’s even more interesting if you combine different connections into one graph.
 
-As of macOS Sequoia, the Smart Card Auth system within macOS is able to natively handle SSH keys as identities.
+![Four colored rectangles labeled A, B, C, and D connected in a loop by curved gray lines that leave from and arrive at different sides of each block.](https://i0.wp.com/blog.master.dev/wp-content/uploads/2026/11/combined-connections-graph.png?w=886&quality=80&ssl=1)
 
-We can generate one as follows:
+## Want More?
 
-```sh
-sc_auth create-ctk-identity -l "ssh-labelyourkey" -k p-256-ne -t bio
-```
+Now that we have seen the potential of this technique, let’s push it a bit further and create some fancy demos!
 
-The options above:
+What about a straight line that bends when both elements get closer?
 
-- -l labels our key. Choose a unique and useful name here as we’ll need this to find the right key handle file on disk later.
-- -k p-256-ne creates a non exportable (-ne) key. This is important to ensure we’re actually creating a key that will stay resident in the enclave.
-- -t bio requires TouchID to use the key.
+Some physics using pure CSS! And the line stretches (gets thinner) if the elements are too far apart.
 
-Then we can list the key:
+The idea is to define a static shape, then adjust the height based on the width. When the latter gets smaller, the height increases, and vice versa.
 
-```text
-% sc_auth list-ctk-identities
+Here is a demo to better understand what’s going on. Resize the element to see how the curve behaves:
 
-Key Type Public Key Hash                          Prot Label            Common Name      Email Address Valid To          Valid 
-p-256-ne B15235464F87EC7C8DEE89BFA06399FFD6678E99 bio  ssh-labelyourkey ssh-labelyourkey               04/11/2027, 09:29 YES
-```
+And don’t ask me about the math; I had to ask [two](https://math.stackexchange.com/q/5130987/695610) [questions](https://math.stackexchange.com/q/5131829/695610) online to find a good approximation of some complex formulas.
 
-To export a handle to disk that allows OpenSSH to use the key from the secure enclave, you can do:
+Let’s try something different: a zig-zag connector. This one is not robust, so don’t stretch it too far, or it may break. Don’t say I didn’t warn you!
 
-```sh
-(cd ~/.ssh && ssh-keygen -w /usr/lib/ssh-keychain.dylib -K -N "")
-```
+A double zig-zag, maybe?
 
-When prompted for a pin during export, you can leave it blank as it isn’t used here. A public key and private key handle file will be created on-disk in the `~/.ssh` directory.
+There are some scroll-driven animations, but don’t worry, I won’t bother you with a boring explanation. Enjoy the fun demos!
 
-Note that the command above will export a key handle for *all of the SSH keys* you have enrolled in the Secure Enclave (you can create many if desired by repeating the process above). I wasn’t able to find a way to export individual key handles [despite Apple’s docs suggesting that you should be able to with KEYCHAIN_CERTIFICATES](https://keith.github.io/xcode-man-pages/ssh-keychain.8.html). Your best bet will be to use a clear label using the `-l` flag when creating the key so you can easily find the handle for it after it has been exported to disk.
+And what about a spring connector? You can go wild with this one; it won’t break!
 
-Once we have our pubkey and handle file, we can process these as we normally would – copying the public key to an `authorized_keys` file on a remote host or adding it to whatever services we prefer.
+Do you have another crazy connector idea? Share it in the comments. I am up for any CSS coding challenge.
 
-To use SSH keys from the Secure Enclave, we need to set `SSH_SK_PROVIDER` in our shell. We can add this to `~/.zshrc`:
+## Conclusion
 
-```sh
-export SSH_SK_PROVIDER=/usr/lib/ssh-keychain.dylib
-```
+We are done! I hope you enjoyed this series. Another one packed with a lot of CSS fun. Do you remember when creating basic shapes was a nightmare?! Now, we can make graphs with complex connections that even SVG cannot easily create!
 
-After a restart of the shell, the key will work like any other – though you may need to specify it directly as in my case it wasn’t being autodiscovered by macOS’s SSH agent:
-
-```text
-Host blog.infected.systems
-    IdentityFile ~/.ssh/id_ecdsa_sk_rk_ssh-labelyourkey
-```
-
-### Running a Mac in ‘clamshell mode’
-
-If you run your Mac in what Apple calls ‘clamshell mode’ (i.e. a laptop with the lid shut), then the initial `create-ctk-identity` command will fail with an error like this:
-
-```text
-Error: Error Domain=com.apple.LocalAuthentication Code=-4 "Touch ID is not available in closed clamshell mode." UserInfo={BiometryType=1, Subcode=10, NSDebugDescription=Touch ID is not available in closed clamshell mode., NSLocalizedDescription=Authentication canceled.}
-```
-
-Unfortunately it seems that keys created with `-t bio` do actually require full TouchID in order to generate or use – unlike other operations such as unlocking the Safari Keychain or using Apple Pay which fall back to a user password when in clamshell mode.
-
-There is an option to use `-t none` to create a key without presence confirmation enabled at all. This carries the same risk as I discussed in the section about using YubiKeys unattended so you’ll have to decide whether it works for your risk model.
-
-If, like me, you use the machine in clamshell mode basically all the time there are some alternative options that still retain presence detection though:
-
-- You could buy one of Apple’s expensive bluetooth keyboards with Touch ID.
-- Or, the YubiKey 5C Nano is tiny and can sit almost flush in the side of a closed MacBook and can be used with Method 1 including presence detection.
-
-## Final note
-
-With a mix of these three approaches, I’ve finally been able to deprecate on-disk keys from all my setups.
-
-Hopefully some of the info in this post is helpful to people! It’s nothing that can’t already be found online but I’ve gathered it into one place mostly for my own convenience.
-
-The main gotcha to be aware of with hardware-resident keys is that they’re, well, hardware resident. Hardware malfunction/loss/change can render keys unusable. So it’s probably better to make sure you at least have multiple keys. Remember, `authorized_keys` can take as many keys as you care to put in it so redundancy is the best move here I think.
+Again, what we have done is not something for production (at least not yet). Use it for fun, use it to create fancy stuff, but most importantly, understand the features we have used: anchor positioning, `shape()`, `border-shape`, `if()` conditions, etc. Once they are widely available, you will definitely use them in production.

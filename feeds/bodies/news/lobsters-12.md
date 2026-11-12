@@ -1,170 +1,226 @@
-That subtitle is a little bit of a mouthful, but I’ve been wanting to talk about Andrew Kensler’s `permute()` function for a while and I wanted to make it clear right off the bat why it’s useful. `permute()` is used some in the graphics community, especially in offline rendering, and the techniques are more widely known in cryptography*, but it’s applicable to so much more than graphics and cryptography.
+I’ve discovered a voltage fault injection vulnerability on the GA100 die, allowing an operator to blow arbitrary fuses. Utilizing this vulnerability, I’ve converted my CMP 170HX 8GB card into what is effectively an A100-80G! Further, my unlocked cards actually perform ~1.2x faster than a retail A100 by having all functional SMs enabled (~120-126, die-lottery dependent), rather than the yield-safe 108 SMs NVIDIA chose for all production A100 cards. Finally, CMP-disabled features like NVLink, PCIe Gen4, NVJPG, NVDEC, MIG are all unlockable with this approach, though I haven’t specifically tested NVJPG/NVDEC/MIG.
 
-Let’s first talk about the problem it solves. You want to iterate over \(k\) items of an array of length \(n\), in random order, where \(k \leq n\). Those \(k\) items cannot contain duplicates from the original array (they must each correspond to a unique index). Or, you want to get a random sample of \(k\) items without replacement.
+Here’s how my “A100-80G” appears and functions.
 
-When I say “random”, this is obviously pseudorandom, but there are varying degrees of pseudorandomness. This is unquestionably *not* cryptographically secure, that’s not its intended use. I can’t say that I know enough about pseudorandomness to say how statistically indistiguishable from random this is or for what applications it will be random enough. It’s good enough to use for computing rendering integrals, and I’d be comfortable using it for a lot of casual statistical analysis.
+NVIDIA uses fuses for product segmentation, security features, and other fun access control features - and crucially, there are several functions where blowing a fuse on an NVIDIA die can grant you *more* access, not less. In a properly secured design, a blown fuse should always induce a more restrictive state, because a blown fuse cannot be unblown in an economically feasible way. NVIDIA’s design allows one to *relax* restrictions by blowing more fuses!
 
-**Update May 27, 2021:** [I saw what looks to be a nice improvement to the randomness of this](https://github.com/camel-cdr/cauldron/blob/main/tools/random/permute/README.md), and extends it to work for 64-bit integers. I recommend taking a look after reading this post!
+In this post, I will go over the GA100 die, its fuse controller, the use of VFI, and future research directions. I’ve decided to publish some of the work that enabled my research [here](https://github.com/kate-land/ga100vfi).
 
-Anyway, the canonical way to randomly iterate over an array is to first shuffle it with the Fisher-Yates shuffle, and then iterate over the shuffled array.
+## Acknowledgements
 
-*I found [this Stack Overflow answer](https://stackoverflow.com/a/1866710/624250) from 2009 that gives the exact same idea, so I should be clear that Andrew Kensler didn't really invent the method I'll talk about here, but I think he popularized the use of it in graphics and certainly created the particular hash function I'll show at the end.
+My work builds on [prior research by Jon Pry](https://www.researchgate.net/publication/408132536_A_Canary_in_the_Crypto_Mine_Defeating_Stack_Protection_in_a_GPU_Secure_Coprocessor) and numerous others who have dedicated much of their time towards better understanding the GA100 die. I am disclosing my findings subsequent to another security researcher independently discovering the same vulnerability; I believe it to be in the best interest of the public to make this information publicly available. These findings were disclosed to NVIDIA’s product security team ahead of the publication of this article.
 
-# The Fisher-Yates shuffle (and its limitations)
+## GA100 versions
 
-The shuffle works something like this:
+The GA100 is an NVIDIA die that has been used to power almost 20 different SKUs - the A100 being the most well-known variant. I won’t delve into [every SKU](https://www.techpowerup.com/gpu-specs/nvidia-ga100.g931), but I will present the GA100 manifestations that matter to my work, covering the different versions of the CMP 170HX and the A100.
 
-1. For the first item in the array, randomly swap it with any item (including itself). Whatever is now in the first position is “fixed”.
-2. For the second item in the array, randomly swap it with any of the non-fixed items (i.e. after the first item). The second item is now “fixed”.
-3. For the third item, swap it with any of the non-fixed items (i.e. after the second item).
-4. Etc. until you get to the last item.
+As fabbed, the GA100 die has 128 SMs, 12 FBPs, 5 NVDEC units, a PCIe Gen4 x16 controller, and depending on the framebuffer size, comes with 4-6 stacks of HBM co-packaged with the die. NVIDIA uses eFuses for yield-control and product segmentation–undifferentiated GA100s turn into more restrictive variants based on defect testing and manufacturer demand.
 
-The C++ code looks something like this:
+In one of the most extreme manifestations of product segmentation, the CMP 170HX, an Ethereum mining card with nominally 8 or 10 GB of application-exposed framebuffer capacity, actually comes with, respectively, ~80 and ~40 GB of HBM onboard! This work chiefly centers around how to fully unlock and use that capacity. Previous work has made great strides in unlocking the GA100 via software methods; VFI takes us across the last mile.
 
-`1
-2
-3
-4
-5
-6
-7
-8
-template<typename T>
-void fisher_yates_shuffle(std::vector<T> *vec) {
-  int n = vec->size();
-  for (int i = 0; i < n-1; i++) {
-    int swap_idx = uniform_rand_int(i, n-1);
-    std::swap((*vec)[i], (*vec)[swap_idx]);
-  }
-}
-`
+| SKU | Out-of-box | Software (cmpunlocker) | GA100VFI |
+| --- | --- | --- | --- |
+| CMP 170HX 8GB |  |  |  |
+| Framebuffer | 8 GB | 64 GB | 64-80 GB<sup>[1](https://blog.kate.land/posts/using-voltage-glitching-to-unlock-the-a100/#user-content-fn-1)</sup> |
+| CMP 170HX 10GB |  |  |  |
+| Framebuffer | 10 GB | 40 GB<sup>[2](https://blog.kate.land/posts/using-voltage-glitching-to-unlock-the-a100/#user-content-fn-2)</sup> | 40-48 GB |
+| Both CMPs |  |  |  |
+| SMs | 70 | 70 | 120-128 |
+| PCIe generation | 1 | 2 | 4 |
+| NVLink | No | No | Yes<sup>[3](https://blog.kate.land/posts/using-voltage-glitching-to-unlock-the-a100/#user-content-fn-3)</sup> |
+| ECC | No | No | Yes<sup>[4](https://blog.kate.land/posts/using-voltage-glitching-to-unlock-the-a100/#user-content-fn-4)</sup> |
+| Multi-Instance GPUs | No | No | Yes<sup>[4](https://blog.kate.land/posts/using-voltage-glitching-to-unlock-the-a100/#user-content-fn-4)</sup> |
+| NVDEC | 0 | 0 | 5<sup>[4](https://blog.kate.land/posts/using-voltage-glitching-to-unlock-the-a100/#user-content-fn-4)</sup> |
 
-`uniform_rand_int(min, max)` is inclusive of both min and max, i.e. \(\textnormal{swap\_idx} \in \{i, i+1, \dots, n-1\}\)
+## Hardware restrictions
 
-Obviously this manipulates the array in place, which may not be desirable for a bunch of reasons. In practice you might call this with an array of indices or an array of pointers.
+So, how does NVIDIA utilize fuses to produce both a datacenter A100 and a mining CMP card from one die? To understand this, we need to take a closer look at the fuse controller located on the GA100.
 
-**There are a bunch of situations where the Fisher-Yates shuffle doesn’t work very well, because you need to store the shuffled array.**
+The fuse controller is a block that contains 16,384 eFuses (512 rows of 32) and a bunch of logic surrounding that raw fuse macro. Its job is to perform fuse readout and programming, protect the underlying fuses, and provide usable “option words” to the rest of the die. These option words subsequently decide how the die functions and what features are enabled.
 
-1. The rendering case, which is what motivated Kensler. This is when you’re iterating over a LOT of arrays simultaneously, like 10s of thousands or millions on one computer. Or maybe iterating over one array in a million different random orders. In other words, rather than fully iterating over one array, then the next array, etc. you want to get the i‘th shuffled value of a million arrays, then get the i+1‘th shuffled value of those arrays, etc.
-2. The case where you want to draw a “small” random sample (without replacement, i.e. no duplicates) from a huge array. Think, you want to get 10,000 unique random items from an “array” that’s a billion items long, like a database.
-3. You want to compute something, like an average, over a really large random sample from an even huger array, neither of which can fit in memory, and it’s really important that you don’t have duplicate values.
+Each eFuse can be in one of two states (blown=1, unblown=0), and the 512 rows are divided into 4 regions:
 
-In the latter two cases there’s obviously a lot more to think about, like the cost of just reading incoherent values from the large array. There are other good ways to solve #2 and #3 too, especially if you’re doing distributed computing. But a lot of the techniques I know share the problem that you need to scan over the entire array at least once. If you have constant-time access into the array, Kensler’s method is always linear only in the size of your random sample, not in the original array.
+1. Regular fuses (rows 0-221). These are straightforward; often single (pairs of) fuses will map to an option word, such as OPT_ENABLE_FUSE_PROGRAM (an option word that determines whether further fuse programming is allowed or not). Regular fuses have built-in redundancy: for example, OPT_ENABLE_FUSE_PROGRAM consists of a PRI and RED (primary and redundant) fuse, in this case the primary instance is fuse 0 of row 0, and the redundant is fuse 0 of row 1. Some option words are scalars, such as OPT_X_COORDINATE, which is 9 bits wide and ostensibly holds the x-coordinate of the die on the fabbed wafer. Importantly, if a regular fuse is blown, there is basically no remedy to persistently unblow it (save for RIR later).
+2. Fuseless fuses (rows 222-487). This is a weird one. Apparently NVIDIA got frustrated with accidentally blowing regular fuses and ruining their engineering samples, and came up with a system to encode effective option words in a JTAG chain-like format (see this patent). Think about FF as essentially a script that describes what option words should have what values. FF fuses (excuse the RAS syndrome) concern most of the functionality we can unlock using VFI. This is because FF option words can be trivially cleared by simply writing new FF rows! We’ll about this more in depth, later. For now, you should know that NVIDIA also knows this, because under normal conditions, you are strictly prevented from performing any FF fuse blows.
+3. IFF fuses (rows 487-512). These contain instructions in a different format than the FF one. They’re out of scope for this post, and they’re mainly useful for on-the-fly reprogramming of fuse controller option words. They are usually not accessible in a production card.
+4. RIR fuses (8 rows of 32 fuses, which are technically not part of the 512 rows). These are provided by the designer of the fuse macro (TSMC datasheet here) and are essentially the first party designer’s intended “fuse repair” mechanism. The RIR section on a GA100 has space for 16 repair instructions, each overriding the value of an identified single fuse in the main 512 rows. Unfortunately for us, specifically in the 8 GB 170HX SKU, 15 of the 16 RIR words are all ones, and the 16th word encodes a useless repair instruction that can only be rarely leveraged for any interesting unlock. The story is different for the 10 GB SKU, but that’s a matter for another day…
 
-In other words, if you want to iterate over \(k\) random, unique items from an array of length \(n\), then the Fisher-Yates shuffle is \(O(n)\) time and \(O(n)\) memory. As I’ll show in a second, this can be reduced to \(O(k)\) time and \(O(k)\) memory. But `permute()` is \(O(k)\) time and \(O(1)\) memory, the best you could possibly do. Not only that, but with `permute()` you can arbitrarily query random indices in constant time, which means you can use it in parallel across multiple threads or computers.
+There are two really interesting groups of fuses for the VFI-based unlock:
 
-## Incremental Fisher-Yates shuffle
+1. “Control fuses”. The term comes from NVIDIA’s Tegra hardware headers, they use it to refer specifically to rows 0 and 1, which specify the values of highly security-sensitive option words.
+2. Fuseless fuses, which encode all of the interesting option words that decide whether a GA100 is born to be a measly mining card or an AI datacenter workhorse.
 
-I think it’s worth mentioning you can extend the Fisher-Yates shuffle to handle #2. You use a sparse map to keep track of swapped indices rather than putting them into the array. When you swap the next index, you check your map to see if the original or swapped locations in the array have already been swapped. If so, you use the values from the map, otherwise you just use the original indices, and then you update the map. Here’s a code snippet to show what that looks like. This will select \(k\) random unique integers from the values \(\{0,1,\dots,n-1\}\).
+Before we name some of the FF-encoded option words, we’ll have to first understand the FF record format in a bit more detail, then talk about the die blocks that govern the features we are interested in.
 
-`1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-std::vector<int> get_k_indices(int n, int k) {
-  std::vector<int> indices(k);
-  std::unordered_map<int, int> index_map;
-  for (int i = 0; i < k; i++) {
-    int swap_idx = uniform_rand_int(i, n-1);
+### Fuseless fuses
 
-    // Get the new index and the previous. If they've been swapped before
-    // they'll be in the map.
-    auto swap_val_it = index_map.find(swap_idx);
-    auto prev_val_it = index_map.find(i);
-    int swap_val = (swap_val_it == index_map.end()) 
-        ? swap_idx
-        : swap_val_it->second;
-    int prev_val = (prev_val_it == index_map.end()) ? i : prev_val_it->second;
+Each FF row is a 32-bit record. Bits 0–4 select a chain, bit 5 distinguishes FF from IFF (0 for FF), bits 6–15 select a 16-bit block, and bits 16–31 supply that block’s new value. The JTAG-chain picture from the patent is quite literal here: the controller builds the option data by replaying these records into chains. Fixed locations in each chain correspond to individual option words.
 
-    indices[i] = swap_val;
-    index_map[swap_idx] = prev_val;
-    // We don't need to set the prev_idx in the map,
-    // it will never be checked again.
-  }
-  return indices;
-}
-`
+If two records address the same chain and block, the later record wins. For example, `0x0fe805c1` means chain 1, block 23, data `0x0fe8`. Appending that record can clear an *effective* bit set by an earlier FF record. No physical fuse is unblown; a new row replaces the old 16-bit block. This works for FF-backed options, not the regular control fuses in rows 0 and 1.
 
-But still, even this “incremental” Fisher-Yates shuffle requires \(O(k)\) memory, which makes it unsuitable for case #1 or case #3.
+Now that we know how FF words are encoded, here’s a list of the interesting words and their locations. These were discovered by a particularly helpful researcher who cross-compared FF values and effective option words from different GA100 SKUs in order to differentially understand the FF chain/block to option word mappings, as there is no known official mapping.
 
-**Update**: I believe this is equivalent to, but less elegant than, [Floyd's algorithm for random sampling without replacement](https://fermatslibrary.com/s/a-sample-of-brilliance). So if you want to use that (like if you're in case #2 and really care about good randomness), implement Floyd's algorithm, rather than the way I've framed it here.
+| Named option | Inferred FF location | Use |
+| --- | --- | --- |
+| `NV_FUSE_OPT_FBIO_DISABLE` | Chain 1 bits 83–106; blocks 5–6 | Memory I/O floorsweep |
+| `NV_FUSE_OPT_FBPA_DISABLE` | Chain 1 bits 107–130; blocks 6–8 | Memory subpartition floorsweep |
+| `NV_FUSE_OPT_GPC_DISABLE` | Chain 1 bits 131–138; block 8 | GPC floorsweep |
+| `NV_FUSE_OPT_TPC_GPC0_DISABLE` through `NV_FUSE_OPT_TPC_GPC7_DISABLE` | Chain 1 bits `187+8i` through `194+8i` for GPC `i`; blocks 11–15 | Eight TPC masks |
+| `NV_FUSE_OPT_PES_DISABLE` | Chain 1 bits 251–274; blocks 15–17 | PES floorsweep |
+| `NV_FUSE_OPT_FBP_DISABLE` | Chain 1 bits 307–318; block 19 | Framebuffer partition floorsweep |
+| `NV_FUSE_OPT_ROP_L2_DISABLE` | Chain 1 bits 319–342; blocks 19–21 | ROP/L2 floorsweep |
+| `NV_FUSE_OPT_NVLINK_DISABLE` | Chain 1 bits 368–370; block 23 | NVLink disable mask |
+| `NV_FUSE_OPT_DISABLE_GEN3_SPEED` | Chain 2 block 39; **which of bits 1 and 9 is unresolved** | PCIe Gen3 speed restriction |
+| `NV_FUSE_OPT_PCIE_MAGIC_BITS_D[25]` | Chain 2 block 47 bit 3 | Gen4 speed-disable flag |
+| `NV_FUSE_OPT_PCIE_BOOT_GEN23_DISABLE` | Chain 2 block 49 bit 6 | PCIe boot policy |
+| `NV_FUSE_OPT_PCIE_BOOT_GEN3_DISABLE` | Chain 2 block 49 bit 7 | PCIe boot policy |
+| `NV_FUSE_OPT_PCIE_DEVIDA` | Chain 2, bits 593–608; blocks 37–38 | Device identity |
+| `NV_FUSE_OPT_PCIE_DEVIDB` | Chain 2, bits 609–624; blocks 38–39 | Device identity |
+| `NV_FUSE_OPT_SYS_PIPE_DISABLE` | Chain 1, bits 372–379; block 23 | Multi-instance GPU enabled pipes |
 
-# Kensler’s permute()
+The acronyms FBIO/FBPA/FBP/TPC/GPC/PES/ROP all refer to microarchitectural elements, please see this diagram from the GA100 whitepaper to further understand how these are related to each other:
 
-Kensler introduced `permute()` in his paper [Correlated Multi-Jittered Sampling](https://graphics.pixar.com/library/MultiJitteredSampling/). I didn’t quite understand how it worked when I first read it, so I also wanted to write this blog post to break it down and hopefully help others appreciate it. However if you just want the code, [skip to the bottom](https://andrew-helmer.github.io/permute/#final-implementation)!
+FBP is the internal NVIDIA term for a “framebuffer partition”, with 2 FBPs to one HBM stack. FBPAs are subpartitions, 2 FBPAs to one FBP. PES/ROP are blocks (seemingly graphics-related) that are required for an SM to function.
 
-The function acts as a “stateless” pseudorandom iterator over an array. It takes in a seed value for a permutation, the length of the array, and the index you’d like to map to a different index. It looks like this:
+With this knowledge in hand, *what if* we could write new FF rows that set the _DISABLE words to be all zeroes, or at least, as permissive as possible given die defects? If we look at how the _DISABLE options are used in conjunction with other elements, we’ll quickly see that these _DISABLE words are the primary lever we have in preventing parts of the die from being “floorswept”. After illuminating the “what-if”, I’ll talk about the “how”: the exact application of voltage fault injection and the fuse controller safeguards we can defeat with VFI.
 
-and if you wanted to use it, say to get 10 random unique values from a vector, you might do:
+### Floorsweeping
 
-So how do we construct this magic function?
+NVIDIA puts these options in charge of setting floorsweep signals, which will render a die element unreachable (and likely powered down). From experiments, I believe the floorsweep lines are specified in RTL, emanating from the fuse controller and terminating in individual functional blocks and controlling some master power/clock domain switch within the block. I have observed the floorsweeping behavior to correspond with very little latency with the value of the fuse controller’s effective status words for each functional block.
 
-## An invertible hash function
+Let’s take FBP floorsweeping, for example. On one of my 8 GB cards, `OPT_FBP_DISABLE` was `0x852`: FBPs 1, 4, 6, and 11 were masked. The separate `OPT_FBP_DEFECTIVE` mask was `0x840`, covering 6 and 11. After I reduced the FF-backed disable mask to `0x840` with a replacement FF row, the extra masks on 1 and 4 were gone, but the defective 6 and 11 stayed disabled. That leaves 10 of the die’s 12 FBPs in the effective mask. Functionally, FBPs 1 and 4, which refused register reads and writes when `OPT_FBP_DISABLE` was `0x852`, became responsive after this fuse write.
 
-The first thing we need is a hash function that is *invertible* for a given power-of-two sized domain. What does that mean? For a given number of bits \(n\), every value from \(0\) to \(2^n-1\) will be hashed to a single unique value in the same range. It’s a one-to-one and onto mapping, i.e. a *bijective* function. Let’s give a super simple example: adding 1. Let’s say our domain is 2-bit integers. If we add one to a 2-bit number, we’ll get a unique 2-bit number.
+Although the functional blocks can be “unfloorswept” with FF writes, this does not fully suffice to render the block fully available to an end application - the default framebuffer geometry configuration uses only a portion of each available HBM stack, for example.
 
-In binary:
+To bypass that, we can utilize what is essentially a small modification to [cmpunlocker](https://github.com/amoghmunikote/cmpunlocker)’s method. The usual driver patch for the 8 -> 64 GB unlocks writes to a particular set of feature configuration words (FBPA_CFG, SM_SPEED_SELECT, etc.). The default values are chosen to succeed for the commonly found variant of the 170HX, which has the _DISABLE FF-derived option words preventing certain functional blocks from being used (any attempt to use them will return floorswept errors). With the unlocking FF burns in place, we can write even more permissive words into the configuration registers, resulting in what is functionally an A100-80G.
 
-Adding is generally, an invertible hashing operation. Another invertible operation in binary is multiplying by an odd number, let’s say 3.  \(f(x) = (x * 3) \mod 4\), with:
+## Achieving the FF burn
 
-A **non-invertible** operation is multiplying by two or any even number:
+With the information we have, it seems straightforward that if one could blow arbitrary FF fuses, any GA100 could be fully unlocked to its maximum capability, as determined by die yield and the populated memory stacks. But how do we blow FF fuses? Let’s take a look at the fuse programming functionality of the fuse controller to understand more.
 
-so we can’t do that.
+To request a fuse blow, one must write to the FUSEADDR, FUSEWDATA, and FUSECTRL registers belonging to the fuse controller. Although not nominally accessible to the host or to unprivileged requesters, with the *Canary in the Crypto Mine* ROP, opening up the responsible privilege level masks is trivial. And so, many researchers have attempted to coerce the fuse controller to blow fuses in the FF region. Some of our shared observations follow:
 
-Kensler outlines more invertible operations in power-of-two domains, especially xor’s and combinations with a seed value, where different seed values give different permutations. Ultimately, we get some invertible hash function:
+1. The fuse controller has an internal FSM, and it indicates its current state via the FUSECTRL_STATE bits.
+2. The fuse controller enters a WRITE_PROGRAM state per each “hot” bit in the requested FUSEWDATA value. This tracks with the expected fuse programming behavior.
+3. However, unless a specific option word is cleared, writes to fuse addresses outside of the FPF range (rows 96-221) do not actually take place. Fuses in this region (believed to be “field programmable fuses” indicating a watermark of which ucode versions have run, alongside other field-relevant information) do take effect, and the fuse controller state machine behaves identically between FPF and non-FPF regions.
 
-## Cycle-walking
+The specific option word I am referring to is OPT_SECURED_BURN_FEATURE_ENABLE (“SBFE”), and it is set to be 1 in all production cards. When this option word is clear, fuse programming is allowed in any address. When it is set, only FPF fuses may be blown. To date, no one has found any way to burn FF fuses with SBFE=1, even when operating the fuse controller from HS contexts. It is not clear what “secured burn” truly means, I speculate that there must be a software-only way to perform non-FPF burns even with SBFE=1, and we just don’t know what the “secured” adjective really means here.
 
-Already, we can see that this hash will allow us to randomly iterate over an array with length power-of-two. But what about arrays of other lengths? Kensler uses a technique from cryptography called “cycle walking”, which was invented in [“Ciphers with Arbitrary Finite Domains”](http://www.cs.ucdavis.edu/~rogaway/papers/subset.pdf) by Black and Rogaway. Cycle-walking is a fancy name, but the idea is simple: we just repeat the hash until the value is less than the length of the array! So we get a `permute()` function like this:
+> Note
+> *PLM*, *HS*, *ucode*, …; I am delving into using a bunch of NVIDIA-specific terminology in this section as the explanation gets deeper. For a really in-depth explanation of what these mean, I refer you to other sources such as [Je Ne Sais Quoi - Falcons over the Horizon](https://hexkyz.blogspot.com/2021/11/je-ne-sais-quoi-falcons-over-horizon.html).
 
-Obviously this can be really slow since it could take a lot of hashes to get to where we want, but we’ll get to that in a second. First, why does this work at all? This is where the bijective mapping comes in. We start with an index that is less than the length of the array and we hash it until we get another value less than the length of the array. Let’s visualize it like this:
+Importantly, as people have figured out on more permissive cards, it is possible to perform FF burns with SBFE=0! And as it turns out, achieving this state is how we achieve the GA100 unlock. After much trial-and-error, I have resorted to inducing this state via voltage fault injection, and I was able to achieve it. Let’s talk some more about voltage glitching.
 
-where \(hash^3(x)\) is \(hash(hash(hash(x)))\) or, if you prefer the function composition notation, \(hash \circ hash \circ hash(x)\). In this case, I’ve bolded the first two hashes to indicate that the values are bigger than the length of the array. The last hash is our final permuted value.
+### Voltage fault injection
 
-Because our hash function is invertible, we can invert the final hashed value (note that we don’t need to actually implement the inverse, this is just theoretical):
+Much has been said about VFI, and I’ll leave the in-depth explanation to other sources. In short, applying brief pulses of low supply voltage will often cause unexpected behavior in integrated circuits. I asked GPT-6 Astra to design an STM32G4 based board that taps into the PWMVID signal on the CMP PCB. PWMVID is an NVIDIA standard for voltage regulators, and my glitcher intercepts the PWM signal emitted by the GA100 die, and replaces it with its own waveform fed into the MP2888B VRM driver IC. With my setup, I can induce the card’s own VRM to produce timed glitches for me, which is simpler than MOSFET-based setups and enables faster glitching than attempting to directly drive the PMBus.
 
-By inverting the final value, which was less than the length of the array, we again get a value larger than or equal to the length of the array. So if we did this loop in reverse until we got a value less than the length of the array, we would get back the original index.
+The glitcher requires two connections to the PCB, ideally done with magnet/enameled wire. One wire taps NVVDD for voltage sensing, and another wire taps the PWMVID signal. The only other required step for the glitcher to function is the removal of a 0402 0ohm resistor, which will break the connection between the GA100 output PWM pin and the VRM IC. Finding where to place the taps is trivial by tracing the pinout of the MP2888B, specifically its PWMVID and VOSEN pins (the MP2888B shares a footprint with its sibling public chip MP2888A). Test points directly adjacent to the MP2888B enable relatively easy installation of the PWMVID tap.
 
-In other words, **our loop is also an invertible hash function**. But rather than mapping within a power-of-two sized domain, it maps within the domain of the array’s length, which is exactly what we’ve been trying to achieve.
+With this tap in place, a single glitch attempt involves this sequence:
 
-## Making it (average) constant-time
+1. Remove card power
+2. Apply card power
+3. Start a timer (“glitch timer”) as soon as NVVDD crosses a threshold
+4. Execute a proposed voltage waveform by issuing a PWMVID signal, aligned to the glitch timer
+5. Observe card behavior, repeat from step 1 as needed
 
-We need to make this faster, specifically we don’t want a lot of loop iterations. Let’s say that we have a really good hash function such that there’s roughly a 50% probability that any bit (within our power-of-two domain) will be 1 after hashing. Now, we modify our hash function to specify the power-of-two domain. We do this by taking in a mask that limits the bits which get hashed. Here’s an example (but a bad hash function).
+My setup achieves steps 1/2 with a simple ACPI S0 -> S3 -> S0 transition, which can be done in a few seconds on a modern desktop platform. More intrusive modifications or expensive rigs can probably achieve a better experiment rate, but in my experience this setup suffices to unlock cards in somewhere between 1 hour and 48 hours of glitching time using the approach described later.
 
-If our hash domain is the two-bit (unsigned) integers, then our mask would be 11 in binary, or 0x3. If our domain is the 32-bit integers, it would be 0xFFFFFFFF.
+For the NVVDD threshold, the Astra-authored firmware uses an STM32 comparator to detect when NVVDD crosses 225mV, after which a tight DMA loop drives the desired duties on the PWMVID pin. After S0, the host inspects the card state and decides what to do next; if it involves another glitch, the glitcher board will be commanded over USB with a glitch pattern. Then the host induces S3 with an RTC timer to wake back up in ~3s (empirically derived period for decent stability).
 
-Now, in our `permute()` function, we’ll use a mask with all the bits set up to the most significant bit of the highest possible index (that is, `len - 1`). Here’s a really inefficient (\(O(\log n)\)) implementation for clarity:
+Sometimes the host will fail to return to S0, I’ve remedied this with relegating bookkeeping and glitch campaign preparation to an SBC (Radxa Cubie A5E) which also can drive the motherboard power/reset button pins via GPIO if the glitch target host is unresponsive.
 
-However a lot of processors (e.g. x86 processors) have a single instruction that can get the number of leading zeros of an integer. In GCC you can use this with the instrisic `__builtin_clz(x)`, which even on processors that don’t have the instruction will compile to a constant-time operation. So if you use GCC you could write:
+More specifics are shared in the [GA100VFI repository](https://github.com/kate-land/ga100vfi) if you’re interested. For now, let’s take a look at the different interesting states we can trigger via VFI, as well as the specific glitch state that we need to burn FF rows. To help illuminate the differences between each glitch state, I have built an empirical model of how the fuse controller starts up when voltage is applied. Note that without the RTL that implements the fuse controller, all we have are guesses. Here are the hypothesized boot stages:
 
-This may not be super portable, here is how Kensler does it with bit arithmetic.
+1. Sense RIR, as required by the fuse macro
+2. Sense (from fuse macro into readout register) control rows
+3. Latch control rows into control row-derived option words
+4. Sense remaining rows
+5. Latch regular fuse values into their option words
+6. Parse FF chain
+7. Latch FF chain values into their option words
 
-With this, our `permute()` function looks something like:
+These hypothetical stages are based on what I can actually read from the die: controller states, raw rows when `CMD_READ` works, the published option words, and whether the PRI ring can still reach the rest of the GPU. By looking at a few key values, we can tell glitch outcomes apart. Importantly, glitch patterns and outcomes are very much die-specific, so consider these example waveforms and responses to be just that, examples. Let’s take a look at 3 interesting glitch states.
 
-Because of this mask, we know that our hashing domain is less than two times the size of the array. Since our hash function has a 50/50 chance of flipping the most significant bit, or rather of hashing to a value in the lower half of its domain, we can say that *on average*, this will take less than two iterations. We’ve got our fast random iterator!
+#### 1. All fuses sensed as zero
 
-## Final implementation
+Some glitches make almost every published option word read as zero. In one captured state, 669 of 672 named option reads were zero; the other three were error responses. The controller’s CRC status was `0x00` (not parsed yet), the PCIe ID read as `2080` (the base GA100 PCIe product ID, does not correspond to a real retail product), and the GPU’s PRI ring was held in reset.
 
-We still need to make a *good* invertible hash function. As I mentioned, Kensler outlines a bunch of invertible operations, and he uses hill-climbing to find a good hash function. I won’t go into that in more detail, but here is the final code using his hash. I’ve adapted Kensler’s code to the way I’ve structured this blog post:
+This state is consistent with a catastrophic failure on behalf of the fuse controller. The card comes up basically unusable, because almost all boot functions are disrupted by the all-zero state. However, interesting enough, the card trains at PCIe Gen4 natively! Some slightly altered variants may showcase sections of fuses being successfully latched, or containing garbled values instead of all-zeroes. I was not able to push any of these states towards an FF burn; in almost all of them the fuse controller is unreachable or dysfunctional.
 
-Okay, there’s one additional thing at the end, the `(static_cast<uint64_t>(idx) + seed) % len`, but that won’t break anything and adds a little extra randomness. The cast to 64-bit is necessary to prevent an overflow bug that could lead to repeats.
+#### 2. RIR read disrupted
 
-I hope that you find this as elegant and useful as I have! One final note: Kensler mentions that this hash only works well up to domains of about \(2^{27}\). For larger domains you could maybe use two calls of the permute function, although if it’s not random enough, that could exacerbate correlations. Overall I really just wanted to present the ideas here.
+Reading the RIR data on the CMP 170HX 8GB reveals its exact effect: 15 noop repair instructions, and one write that changes the value of a fuse in row 18, whose option word we can monitor. Further, because the RIR sense is consumed internally by the fuse macro instead of directly by the fuse controller, we can observe a disrupted RIR latch by attempting to read the raw row - the observed bitflip remains consistent across the flipped option word as well as the raw fuse row. This sets an interesting chronological checkpoint in investigating die boot (RIR sense must happen prior to other fuse sensing), but is not a useful glitch in itself.
+
+#### 3. Goldilock’s glitch
+
+The successful three-pulse state on my first card seemed to disrupt precisely the row0/1 based option words, while leaving other fuses and option words intact. In this state, all of the row0/1 derived option words are zero. The initial readbacks look like this:
+
+| Signal | Initial readback |
+| --- | --- |
+| PCI ID and access | `20c2`; BAR0 and the PRI ring respond |
+| `FUSECTRL` | `0xe0040000` (`IDLE`) |
+| `CRC_STATUS` | `0x55` (both halves parsed without errors) |
+| `DISABLE_SW_OVERRIDE` | `0` |
+| `OPT_SECURED_BURN_FEATURE_ENABLE` | `0` |
+| `ENABLE_FUSE_PROGRAM` | `0` |
+| FUSECTRL/FUSEOPT privilege masks | `0xffffffff` for both |
+| Raw rows 0 and 1 | Both still `0x53557c3d`, unchanged from before the glitch |
+
+At this stage, we are still not yet capable of issuing FF writes, because ENABLE_FUSE_PROGRAM=0. I am honestly not sure why ENABLE_FUSE_PROGRAM would *ever* be zero, given it’s 1 in retail boards, so this almost reads to me like a way to implement a glitch-detection canary (or at least it would be elegant to do so).
+
+Fuse sensing happens one row at a time, with all 32 fuses powered for sensing with one line, meaning it is much more challenging for an attacker to make a single fuse appear as cleared or set. It would make sense, then, to include a “canary” fuse that disables security-critical features (like fuse burning) when it is cleared, because usually the attacker can only manipulate fuse sensing at the row granularity at most. So, when the row0/1 option words come up as all cleared, ENABLE_FUSE_PROGRAM=0 stops us from burning any fuses.
+
+However, take a look at what we have in this state: DISABLE_SW_OVERRIDE=0. This word is normally 1, and it stops us from setting the EN_SW_OVERRIDE register to 1, which then lets us “shadow” most of the option words exposed by the fuse controller. Doing so involves writing to a register CTRL_OPT_*, corresponding to option word OPT_*, which then determines the effective value STATUS_OPT_*. This is what lets us shadow SBFE to be 0. But, even though we have DSOV=0, ENABLE_FUSE_PROGRAM turns out to be one of the option words that are impossible to shadow, even with DSOV=0. So it seems we’re stuck.
+
+At least that’s what I thought, and I banged my head against the wall in this state for a while. Then I noticed that there is one fuse controller command I haven’t tried issuing yet: SENSE_CTRL. I had refrained from issuing this, because on the face of it it seems like all of the row0/1 (control fuse) derived option words would match their fused values, which would reset SBFE, turn off software option word shadowing, and leave us unable to fuse. To my surprise, when I issued this command, all of the control-fuse-derived options went to their fused value, *except* DISABLE_SW_OVERRIDE, which remained 0!
+
+With DSOV=0, we can trivially set SBFE to 0, ENABLE_FUSE_PROGRAM is 1 because it matches its fused value, and we are off to the races! One wrinkle remains in that FUSEWDATA may have a locked down PLM, but with DSOV=0, we can just write 0 to OPT_SECURE_FUSE_WDATA_WR_SECURE to set the PLM to be all-ones, opening host access for fusing.
+
+At this point, all that’s left to do is to calculate _DISABLE words that match the _DEFECTIVE values for the features we are interested in, and issue FF burns. Note that the occupied FF space and defective bits differ per die, so each burn must be die-tailored.
+
+## End results
+
+### Framebuffer unlock
+
+On 8 GB cards with 80 GB intact (seems to be around ~90% of 8 GB cards from my limited sample size), the unlock yields the full 80 GB as a usable framebuffer. Multiple synthetic tests (writing pseudorandom words throughout the full framebuffer and reading them back after L2 invalidation) as well as real workloads (such as vLLM and SGLand) are fully functional.
+As mentioned, one of my cards has only 64 GB intact. In this case, the hardware unlock yields no framebuffer advantage.
+
+### Compute unlock
+
+The 170HX is limited to 70 SMs out of the box. In practice, there are almost always >120 SMs non-defective on the die, and the unlock allows using them all. This results in a significant performance uplift, ~1.7x compared to the software-only 170HX unlock, and even an impressive ~1.2x over a retail A100!
+
+### PCIe generation
+
+The only thing that stops [cmpunlocker](https://github.com/amoghmunikote/cmpunlocker) from advancing beyond PCIe Gen2 are the FF option words. With relevant bits cleared, Gen3/4 train and are confirmed to be fully functional. When combined with the PCIe decoupling capacitor mod, up to PCIe Gen4 x16 is attainable, matching a retail A100 PCIe variant.
+
+### NVLink
+
+Zeroing out the OPT_NVLINK_DISABLE word is only one of the required mods for NVLink to actually work. Because the CMP 170HX PCB is missing the U11 IC (which connects PCIe 3.3v to an NVLink bridge pin), a stock board fails to bring up the reference clock generator on attached NVLink bridges. Simply bridging two of the pins on the footprint of U11 resolves this issue, although it removes whatever regulation or protection was provided by U11. Be careful if you’re bridging GPUs powered by different power supplies, as this will connect the +3.3V rails together unless you leave U11 unpopulated on some of your GPUs! The NVLink bridge works fine if you just patch U11 on one of the boards in the pair.
+
+On the firmware side of NVLink enablement, there is a ROM check that needs to be bypassed with additional host-side commands. I’m sure your clanker can figure it out ;)
+
+While investigating the NVLink unlock, I also found a few interesting quirks with NVIDIA’s NVLink implementation on the GA100. I will be posting a further blog post on this, so stay tuned!
+
+## Future directions
+
+With arbitrary fuse burning, we mostly gain feature unlocks. Some security-sensitive options are shipped unblown by default, and burning them may lead to interesting footholds. But what’s more interesting to me are the deeper glitch states where many default-blown security-sensitive fuses sense unblown, enabling routes like debug HS execution, which grant unprecedented access to die internals.
+
+## References
+
+- Jon Pry, A Canary in the Crypto Mine: Defeating Stack Protection in a GPU Secure Coprocessor (2026).
+- Amogh Munikote, cmpunlocker (2026).
+- Otto Bittner et al., The Forgotten Threat of Voltage Glitching: A Case Study on Nvidia Tegra X2 SoCs (2021).
+- NVIDIA, US9230678B2: Integrated circuit having an enhanced fuseless fuse structure (2016).
+- TSMC, TEF07F32X32HD18_PHRM_C180518 electrical fuse datasheet, rev. 120A (2018).
+- hexkyz and SciresM, Je Ne Sais Quoi - Falcons over the Horizon (2021).
+- TechPowerUp, NVIDIA GA100 GPU specifications.
+- GA100VFI source repository.
+
+## Footnotes
+
+1. Anecdotally, out of the 10 specimens of CMP 170HX 8 GB I have examined, only one has shipped with only 64 GB usable, the rest all have a functional framebuffer size of 80 GB. [↩](https://blog.kate.land/posts/using-voltage-glitching-to-unlock-the-a100/#user-content-fnref-1)
+2. Although the *Canary in the Crypto Mine* paper claims a stable 80 GB on the 10 GB SKU, very few, if any, cards in the wild have been able to achieve this, and solid evidence is scarce. It remains plausible that some number of 10 GB SKUs really do come shipped with 80 GB on-board, however the percentage seems very low according to the community. Most “unstable” 80 GB unlocks are explained with a combination of L2 caching and memory aliasing over a true 40 GB framebuffer. [↩](https://blog.kate.land/posts/using-voltage-glitching-to-unlock-the-a100/#user-content-fnref-2)
+3. Enabling NVLink further requires a very small hardware mod due to a missing component on the 170HX PCB, I’ll talk more about this later. [↩](https://blog.kate.land/posts/using-voltage-glitching-to-unlock-the-a100/#user-content-fnref-3)
+4. Untested. [↩](https://blog.kate.land/posts/using-voltage-glitching-to-unlock-the-a100/#user-content-fnref-4) [↩<sup>2</sup>](https://blog.kate.land/posts/using-voltage-glitching-to-unlock-the-a100/#user-content-fnref-4-2) [↩<sup>3</sup>](https://blog.kate.land/posts/using-voltage-glitching-to-unlock-the-a100/#user-content-fnref-4-3)
