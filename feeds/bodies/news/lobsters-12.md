@@ -1,696 +1,170 @@
-i was recently having a discussion online about different perspectives on
-signals. It led to a question me and someone else asked simultaneously: what if
-you could *ignore* or *handle* the absolute, unstoppable order from the kernel
-to be killed or stopped?
+That subtitle is a little bit of a mouthful, but I’ve been wanting to talk about Andrew Kensler’s `permute()` function for a while and I wanted to make it clear right off the bat why it’s useful. `permute()` is used some in the graphics community, especially in offline rendering, and the techniques are more widely known in cryptography*, but it’s applicable to so much more than graphics and cryptography.
 
-# [#](https://vulpinecitrus.info/blog/what-if-you-could-handle-sigkill/#Signals) 
-Signals
+Let’s first talk about the problem it solves. You want to iterate over \(k\) items of an array of length \(n\), in random order, where \(k \leq n\). Those \(k\) items cannot contain duplicates from the original array (they must each correspond to a unique index). Or, you want to get a random sample of \(k\) items without replacement.
 
-Signals in POSIX are a form of IPC
- that allows
-userland processes (and the kernel) to send each other simple indications of
-actions to take. The Linux kernel, at the time of writing, handles about [31 of
-those](https://elixir.bootlin.com/linux/v6.13/source/arch/x86/include/uapi/asm/signal.h#L22)
-on the x86(-64) architecture. The most frequent situation where you might
-encounter signals as a developer is when making *handlers* for these signals:
-callbacks which are to be executed upon the reception of a signal by your
-process. You may also *mask* these signals to stop them from triggering anything
-on your program.
+When I say “random”, this is obviously pseudorandom, but there are varying degrees of pseudorandomness. This is unquestionably *not* cryptographically secure, that’s not its intended use. I can’t say that I know enough about pseudorandomness to say how statistically indistiguishable from random this is or for what applications it will be random enough. It’s good enough to use for computing rendering integrals, and I’d be comfortable using it for a lot of casual statistical analysis.
 
-There are, however, two signals that cannot be stopped or handled: `SIGKILL` and
-`SIGSTOP`.
+**Update May 27, 2021:** [I saw what looks to be a nice improvement to the randomness of this](https://github.com/camel-cdr/cauldron/blob/main/tools/random/permute/README.md), and extends it to work for 64-bit integers. I recommend taking a look after reading this post!
 
-`SIGKILL` is an indication to terminate immediately and messily. Essentially,
-the process receiving this signal is abruptly ended, and marked as dead. Its
-parent must then, at some point, reap it so that resources can be freed.
+Anyway, the canonical way to randomly iterate over an array is to first shuffle it with the Fisher-Yates shuffle, and then iterate over the shuffled array.
 
-`SIGSTOP` is a weirder signal. When a process is running on a CPU and receives
-`SIGSTOP`, it is marked as blocked and removed from the running CPU (or moved in
-the background from the point of view of the user). After getting stopped, a
-process remains stuck until receiving a `SIGCONT` signal. [Multiple
-signals](https://elixir.bootlin.com/linux/v6.13/source/include/linux/signal.h#L422)
-can indicate a block, but `SIGSTOP` is the only unavoidable one of those. You
-may know that you can stop a process in a shell, via `^Z`. Shells usually do not
-throw `SIGSTOP` directly, but `SIGTSTP`, which may be caught or fail. `SIGSTOP`
-is considered “reserved” for the kernel only to throw.
+*I found [this Stack Overflow answer](https://stackoverflow.com/a/1866710/624250) from 2009 that gives the exact same idea, so I should be clear that Andrew Kensler didn't really invent the method I'll talk about here, but I think he popularized the use of it in graphics and certainly created the particular hash function I'll show at the end.
 
-So, what if we *could* ignore, or even handle `SIGKILL` and `SIGSTOP`? Surely,
-because everyone in userspace made sure to *never* register a handler on those
-signals or ignore them, things shouldn’t go wrong, right?
+# The Fisher-Yates shuffle (and its limitations)
 
-…right?
+The shuffle works something like this:
 
-# [#](https://vulpinecitrus.info/blog/what-if-you-could-handle-sigkill/#Fucking_Around:_Messing_with_Linux) 
-Fucking Around: Messing with Linux
+1. For the first item in the array, randomly swap it with any item (including itself). Whatever is now in the first position is “fixed”.
+2. For the second item in the array, randomly swap it with any of the non-fixed items (i.e. after the first item). The second item is now “fixed”.
+3. For the third item, swap it with any of the non-fixed items (i.e. after the second item).
+4. Etc. until you get to the last item.
 
-My initial idea was to go into the signal handling code of Linux and remove
-anything that treats `SIGKILL` or `SIGSTOP` differently from other signals. i
-had originally wondered what exactly makes these two signals specials. It did
-not take long to realize that Linux’s signal handling code explicitly treats
-them very differently.
+The C++ code looks something like this:
 
-## [##](https://vulpinecitrus.info/blog/what-if-you-could-handle-sigkill/#How_Linux_Handles_Firing_Signals) 
-How Linux Handles Firing Signals
-
-Let’s go through a simple overview of how signals firing are handled by the
-Linux kernel. For the sake of clarity, have a little diagram, so you can follow
-along:
-
-Linux’s implementation of signals explicitly refuses that user processes mask
-`SIGKILL` and `SIGSTOP` or handle them. About all of that logic is located in
-`kernel/signal.c` and in the appropriate `arch/$ARCH/kernel/signal(_?(32|64)?.c`
-file. i will give examples in `arch/x86/kernel/signal.c`.
-
-When the kernel is about to leave kernelspace, in `kernel/entry/common.c`’s
-[`exit_to_user_mode_loop`](https://elixir.bootlin.com/linux/v6.13/source/kernel/entry/common.c#L90),
-it checks for work left over to handle. That includes [pending
-signals](https://elixir.bootlin.com/linux/v6.13/source/kernel/entry/common.c#L111)
-to be sent or handled. When some signals are pending, Linux will next run
-[`arch_do_signal_or_restart`](https://elixir.bootlin.com/linux/v6.13/source/arch/x86/kernel/signal.c#L333)
-for the current architecture. There are essentially three steps in that
-function: *getting* the signal and *handling* the signal if a user-defined
-handler was found.
-
-[`get_signal`](https://elixir.bootlin.com/linux/v6.13/source/kernel/signal.c#L2801)
-runs a loop to dequeue signals that are not masked and process them. Right after
-dequeuing, the [potential
-handler](https://elixir.bootlin.com/linux/v6.13/source/kernel/signal.c#L2928) is
-retrieved. And, if that handler is not the default handler that ignores the
-signal (`SIG_IGN`), it is stored in a `ksignal` structure and `get_signal`
-returns. Otherwise, the code checks for, among other things, whether the target
-process is a global init and the signal can be ignored, and whether the signal
-is a kind of `stop`. If that latter case is true, we prepare the process to be
-stopped and call `do_signal_stop`, which handles *all* stop signals. Finally, if
-the signal is not a kind of stop and was not handled, its default behaviour is
-killing the process, which is done via `do_group_exit`. While scouring Linux’s
-code initially, his gave me a first intuition: the kernel *expects* that there
-is no user-set handler for `SIGSTOP` and `SIGKILL` in order to fall back on
-default behaviour. If there was a user-set handler, they would be handled like
-regular signals. Either there is logic right at the entry of handler setup code
-that explicitly removes `SIGSTOP` and `SIGKILL`, or that check is *outside of
-Linux*, which could mean having to rewrite parts of libc, or using raw syscalls.
-
-If the signal is not handled by the kernel in `get_signal`, i.e. a handler is
-set in `ksig`, the kernel then calls `handle_signal`. Just as with many other
-functions in Linux, the name is deceptive: no signal is actually handled in
-there (in fact, as far as i have seen, it is the only part of the top-level
-signal handling function `arch_do_signal_or_restart` that never handles
-signals). What `handle_signal` does is that it sets up the stack frame of the
-signal handler and sets and saves pointers to restart execution in user mode
-later. The process goes through `handle_signal` as defined in your [current
-architecture](https://elixir.bootlin.com/linux/v6.13/source/arch/x86/kernel/signal.c#L255),
-which, on x86(-64), then calls
-[`setup_rt_frame`](https://elixir.bootlin.com/linux/v6.13/source/arch/x86/kernel/signal.c#L236)
-to set up a return frame with the correct ABI
- for the signal. On x86, the state of the FPU
- is also saved and reset. Down
-at the last function in the call chain for frame setup, the instruction pointer
-[is
-set](https://elixir.bootlin.com/linux/v6.13/source/arch/x86/kernel/signal_64.c#L210)
-to `ksig->ka.sa.sa_handler`, so that when those registers are restored the
-machine immediately executes your handler. After all of that is done,
-[`signal_setup_done`](https://elixir.bootlin.com/linux/v6.13/source/kernel/signal.c#L3079)
-is called to change some internal states, and the frame setup is done.
-
-At the end of an iteration of the work loop in `exit_to_user_mode_loop`, the
-kernel [returns to user
-mode](https://elixir.bootlin.com/linux/v6.13/source/kernel/entry/common.c#L117)
-to execute the necessary work.
-
-Userspace programs use the
-[`rt_sigaction`](https://elixir.bootlin.com/linux/v6.13/source/kernel/signal.c#L4606)
-syscall as the entry point to set a handler for a signal. This one does not
-specifically exclude our signals until you look at
-[`do_sigaction`](https://elixir.bootlin.com/linux/v6.13/source/kernel/signal.c#L4285),
-which checks for something called
-[`sig_kernel_only`](https://elixir.bootlin.com/linux/v6.13/source/include/linux/signal.h#L445).
-That macro checks if the signal is one of `SIGKILL` or `SIGSTOP` and throws out
-a `-EINVAL` if that is true. This means that, as expected, there was logic
-somewhere early when the kernel receives a handler setup syscall that explicitly
-prevents setting one for `SIGKILL` or `SIGSTOP`.
-
-## [##](https://vulpinecitrus.info/blog/what-if-you-could-handle-sigkill/#Linux_and_Masked_Signals) 
-Linux and Masked Signals
-
-As for setting *masks*, the set of signals ignored for a given task, the kernel
-entry point is
-[`rt_sigprocmask`](https://elixir.bootlin.com/linux/v6.13/source/kernel/signal.c#L3320).
-It [explicitly
-prevents](https://elixir.bootlin.com/linux/v6.13/source/kernel/signal.c#L3335)
-blocking either `SIGKILL` or `SIGSTOP` before calling
-[`sigprocmask`](https://elixir.bootlin.com/linux/v6.13/source/kernel/signal.c#L3237).
-When a signal is sent, before queuing,
-[`prepare_signal`](https://elixir.bootlin.com/linux/v6.13/source/kernel/signal.c#L870)
-is called. One of its roles is checking that a signal is blocked or cannot be
-delivered (global init is the target, the target is unkillable in some way,
-etc). Surprisingly, *blocked signals are always queued*, because the signal mask
-and handling might change between queueing and dequeueing. However, if the
-signal is not masked but [no handler is
-set](https://elixir.bootlin.com/linux/v6.13/source/kernel/signal.c#L80), it will
-get
-[dropped](https://elixir.bootlin.com/linux/v6.13/source/kernel/signal.c#L1053).
-
-From reading the code that handles signals, signal masking and signal handlers,
-it’s clear that there are multiple places that explicitly exclude setting
-handlers for and masking `SIGKILL` and `SIGSTOP`.
-
-So i went in and patched them.
-
-## [##](https://vulpinecitrus.info/blog/what-if-you-could-handle-sigkill/#Patching_Linux) 
-Patching Linux
-
-There are four things i need to look at:
-
-- Allowing processes to mask (sigprocmask) both kernel signals
-- Allowing processes to handle (sigaction) both kernel signals
-- Making sure that if a handler is set for one of these two signals, or they are masked, that the default behaviour is masked
-- Patching any other instance of SIGKILL or SIGSTOP explicitly mentioned in kernel/signal.c
-
-i begin with creating a simple KConfig key in the [“Kernel
-Hacking”](https://elixir.bootlin.com/linux/v6.13/source/lib/Kconfig.debug#L2)
-menu in `lib/Kconfig.debug`. This is the first part of [my patch](https://git.vulpinecitrus.info/Lymkwi/linux/commit/3bc478b0ac9afd6274e9f90a8a024e759da1b3e4.patch):
-
-```
-config KILL_STOP_HANDLING
-	bool "Make SIGSTOP and SIGKILL handlable by regular programs"
-	help
-	  This prevents the kernel from blocking handling of SIGSTOP and SIGKILL by
-	  regular user programs.
-
-	  If unsure, say N.
-```
-
-Starting from there, i can hide or replace any part of signal handling code that
-explicitly refuses `SIGSTOP` or `SIGKILL` using something like:
-
-```
-#ifdef CONFIG_KILL_STOP_HANDLING
-    // Code that does not discriminate signals
-#else
-    // Previous code
-#endif
-```
-
-So, let’s get started.
-
-### [###](https://vulpinecitrus.info/blog/what-if-you-could-handle-sigkill/#Signal_Masking_Syscall) 
-Signal Masking Syscall
-
-Your machine enters the signal masking procedure via the
-[`rt_sigprocmask`](https://elixir.bootlin.com/linux/v6.13/source/kernel/signal.c#L3320)
-syscall (previously `sigprocmask` before real-time signals were introduced):
-
-```
-/**
- *  sys_rt_sigprocmask - change the list of currently blocked signals
- *  @how: whether to add, remove, or set signals
- *  @nset: stores pending signals
- *  @oset: previous value of signal mask if non-null
- *  @sigsetsize: size of sigset_t type
- */
-SYSCALL_DEFINE4(rt_sigprocmask, int, how, sigset_t __user *, nset,
-		sigset_t __user *, oset, size_t, sigsetsize)
-{
-```
-
-In that function, after some declarations and tests, if the `nset` argument is
-`true`, we proceed to call `sigprocmask` after copying the `new_set` of signals:
-
-```
-if (copy_from_user(&new_set, nset, sizeof(sigset_t)))
-    return -EFAULT;
-sigdelsetmask(&new_set, sigmask(SIGKILL)|sigmask(SIGSTOP));
-
-error = sigprocmask(how, &new_set, NULL);
-if (error)
-    return error;
-```
-
-If you don’t blink, you can actually catch an explicit reference to our kernel
-signals! Right before moving to the actual handler of the syscall’s operation,
-we see a call to `sigdelsetmask`, which is more or less a “remove from set”
-operation“ (a *set negation* and *store*). It is actually implemented as [`sig &= ~mask`](https://elixir.bootlin.com/linux/v6.13/source/include/linux/signal.h#L227).
-
-This little line can be easily masked:
-
-```
-#ifndef CONFIG_KILL_STOP_HANDLING
-    sigdelsetmask(&new_set, sigmask(SIGKILL)|sigmask(SIGSTOP));
-#endif
-```
-
-`sigprocmask` can actually perform different operations depending on `how`,
-which can be any of `SIG_BLOCK`, `SIG_UNBLOCK`, and `SIG_SETMASK`. The first two
-are operations over the existing mask, whereas the last one sets the mask from
-exactly what you give.
-
-The code of that function, in
-[`kernel/signal.c`](https://elixir.bootlin.com/linux/v6.13/source/kernel/signal.c#L3237)
-(again) then does the following. It sets `oldset` to the old set, and then
-dispatches over the value of `how` to perform the correct binary operation
-between the `oldset` and the `set` it is given:
-
-```
-int sigprocmask(int how, sigset_t *set, sigset_t *oldset)
-{
-	struct task_struct *tsk = current;
-	sigset_t newset;
-
-	/* Lockless, only current can change ->blocked, never from irq */
-	if (oldset)
-		*oldset = tsk->blocked;
-
-	switch (how) {
-	case SIG_BLOCK:
-		sigorsets(&newset, &tsk->blocked, set);
-		break;
-	case SIG_UNBLOCK:
-		sigandnsets(&newset, &tsk->blocked, set);
-		break;
-	case SIG_SETMASK:
-		newset = *set;
-		break;
-	default:
-		return -EINVAL;
-	}
-	// ... SNIP ...
+`1
+2
+3
+4
+5
+6
+7
+8
+template<typename T>
+void fisher_yates_shuffle(std::vector<T> *vec) {
+  int n = vec->size();
+  for (int i = 0; i < n-1; i++) {
+    int swap_idx = uniform_rand_int(i, n-1);
+    std::swap((*vec)[i], (*vec)[swap_idx]);
+  }
 }
-```
+`
 
-As the comment points out, this function will “happy block “unblockable”
-signals like SIGKILL and friends“. As such, there’s no need to keep going in the
-chain of calls. In fact, the rest of the calls only deal with taking locks,
-setting sets, and such.
+`uniform_rand_int(min, max)` is inclusive of both min and max, i.e. \(\textnormal{swap\_idx} \in \{i, i+1, \dots, n-1\}\)
 
-There are other places where `SIGSTOP` and `SIGKILL` are mentioned for masking:
+Obviously this manipulates the array in place, which may not be desirable for a bunch of reasons. In practice you might call this with an array of indices or an array of pointers.
 
-- `set_current_blocked` is meant to be a user-mode friendly entrypoint to block a given set of signals. It removes SIGKILL and SIGSTOP preventively, so we can remove that.
-- the compatibility definition of `rt_sigprocmask` also explicitly blocks our two signals, exactly the same way rt_sigprocmask does
+**There are a bunch of situations where the Fisher-Yates shuffle doesn’t work very well, because you need to store the shuffled array.**
 
-### [###](https://vulpinecitrus.info/blog/what-if-you-could-handle-sigkill/#Signal_Handler_Setup_Syscall) 
-Signal Handler Setup Syscall
+1. The rendering case, which is what motivated Kensler. This is when you’re iterating over a LOT of arrays simultaneously, like 10s of thousands or millions on one computer. Or maybe iterating over one array in a million different random orders. In other words, rather than fully iterating over one array, then the next array, etc. you want to get the i‘th shuffled value of a million arrays, then get the i+1‘th shuffled value of those arrays, etc.
+2. The case where you want to draw a “small” random sample (without replacement, i.e. no duplicates) from a huge array. Think, you want to get 10,000 unique random items from an “array” that’s a billion items long, like a database.
+3. You want to compute something, like an average, over a really large random sample from an even huger array, neither of which can fit in memory, and it’s really important that you don’t have duplicate values.
 
-Similarly to before, the syscall for entry is
-[`rt_sigaction`](https://elixir.bootlin.com/linux/v6.13/source/kernel/signal.c#L4606):
+In the latter two cases there’s obviously a lot more to think about, like the cost of just reading incoherent values from the large array. There are other good ways to solve #2 and #3 too, especially if you’re doing distributed computing. But a lot of the techniques I know share the problem that you need to scan over the entire array at least once. If you have constant-time access into the array, Kensler’s method is always linear only in the size of your random sample, not in the original array.
 
-```
-/**
- *  sys_rt_sigaction - alter an action taken by a process
- *  @sig: signal to be sent
- *  @act: new sigaction
- *  @oact: used to save the previous sigaction
- *  @sigsetsize: size of sigset_t type
- */
-SYSCALL_DEFINE4(rt_sigaction, int, sig,
-		const struct sigaction __user *, act,
-		struct sigaction __user *, oact,
-		size_t, sigsetsize)
-{
-```
+In other words, if you want to iterate over \(k\) random, unique items from an array of length \(n\), then the Fisher-Yates shuffle is \(O(n)\) time and \(O(n)\) memory. As I’ll show in a second, this can be reduced to \(O(k)\) time and \(O(k)\) memory. But `permute()` is \(O(k)\) time and \(O(1)\) memory, the best you could possibly do. Not only that, but with `permute()` you can arbitrarily query random indices in constant time, which means you can use it in parallel across multiple threads or computers.
 
-Nothing in the code explicitly talks about `SIGSTOP` or `SIGKILL`, so let us
-inspect the next step:
+## Incremental Fisher-Yates shuffle
 
-```
-ret = do_sigaction(sig, act ? &new_sa : NULL, oact ? &old_sa : NULL);
-```
+I think it’s worth mentioning you can extend the Fisher-Yates shuffle to handle #2. You use a sparse map to keep track of swapped indices rather than putting them into the array. When you swap the next index, you check your map to see if the original or swapped locations in the array have already been swapped. If so, you use the values from the map, otherwise you just use the original indices, and then you update the map. Here’s a code snippet to show what that looks like. This will select \(k\) random unique integers from the values \(\{0,1,\dots,n-1\}\).
 
-In [`do_sigaction`](https://elixir.bootlin.com/linux/v6.13/source/kernel/signal.c#L4279),
-the code goes as follows:
+`1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+std::vector<int> get_k_indices(int n, int k) {
+  std::vector<int> indices(k);
+  std::unordered_map<int, int> index_map;
+  for (int i = 0; i < k; i++) {
+    int swap_idx = uniform_rand_int(i, n-1);
 
-```
-int do_sigaction(int sig, struct k_sigaction *act, struct k_sigaction *oact)
-{
-	struct task_struct *p = current, *t;
-	struct k_sigaction *k;
-	sigset_t mask;
+    // Get the new index and the previous. If they've been swapped before
+    // they'll be in the map.
+    auto swap_val_it = index_map.find(swap_idx);
+    auto prev_val_it = index_map.find(i);
+    int swap_val = (swap_val_it == index_map.end()) 
+        ? swap_idx
+        : swap_val_it->second;
+    int prev_val = (prev_val_it == index_map.end()) ? i : prev_val_it->second;
 
-	if (!valid_signal(sig) || sig < 1 || (act && sig_kernel_only(sig)))
-		return -EINVAL;
-
-	k = &p->sighand->action[sig-1];
-
-	spin_lock_irq(&p->sighand->siglock);
-	if (k->sa.sa_flags & SA_IMMUTABLE) {
-		spin_unlock_irq(&p->sighand->siglock);
-		return -EINVAL;
-	}
-```
-
-There is a check that the signal number is not valid (too big), or inferior to 1
-(also invalid), or that there is a new `k_sigaction` to setup *and* the signal
-is *kernel only*.
-
-Kernel only, huh?
-
-[`sig_kernel_only`](https://elixir.bootlin.com/linux/v6.13/source/include/linux/signal.h#L445)
-is defined as a call to `siginmask`, with the set of signals
-`SIG_KERNEL_ONLY_MASK`, defined
-[here](https://elixir.bootlin.com/linux/v6.13/source/include/linux/signal.h#L419):
-
-```
-#define SIG_KERNEL_ONLY_MASK (\
-	rt_sigmask(SIGKILL)   |  rt_sigmask(SIGSTOP))
-```
-
-So, if we *change* that definition… we would no longer be treating `SIGKILL`
-and `SIGSTOP` differently anywhere that this is used:
-
-```
-#ifdef CONFIG_KILL_STOP_HANDLING
-#define SIG_KERNEL_ONLY_MASK 0
-#else
-#define SIG_KERNEL_ONLY_MASK (\
- 	rt_sigmask(SIGKILL)   |  rt_sigmask(SIGSTOP))
-#endif // CONFIG_KILL_STOP_HANDLING
-```
-
-Conveniently, there are multiple places in `kernel/signal.c` where
-`sig_kernel_only` is used:
-
-- in `sig_task_ignored`, when determining whether to send the signal being sent to the task if it is the global init process
-- in `get_signal`, to also prevent global init and container inits from receiving unwanted signals
-
-With this change, when a new handler is to be set from userspace, we will no
-longer reject the attempt if the target signal is `SIGKILL` or `SIGSTOP`.
-
-### [###](https://vulpinecitrus.info/blog/what-if-you-could-handle-sigkill/#Signal_Waiting) 
-Signal Waiting
-
-There is one last syscall that needs to change its behaviour regarding signals:
-`timedwait`.
-
-[`rt_sigtimedwait`](https://elixir.bootlin.com/linux/v6.13/source/kernel/signal.c#L3806)
-lets a process synchronously waits for one of the provided signals to become
-*pending* (i.e. in queue). It then performs some checks, and goes into
-[`do_sigtimedwait`](https://elixir.bootlin.com/linux/v6.13/source/kernel/signal.c#L3747).
-A process is also not allowed to *wait* for `SIGKILL` or `SIGSTOP`, because it
-is not supposed to react to these signals. Consequently, the set of signals to
-wait for is deprived of these two signals at the start of `do_sigtimedwait`:
-
-```
-static int do_sigtimedwait(const sigset_t *which, kernel_siginfo_t *info,
-		    const struct timespec64 *ts)
-{
-	ktime_t *to = NULL, timeout = KTIME_MAX;
-	struct task_struct *tsk = current;
-	sigset_t mask = *which;
-	enum pid_type type;
-	int sig, ret = 0;
-
-	if (ts) {
-		if (!timespec64_valid(ts))
-			return -EINVAL;
-		timeout = timespec64_to_ktime(*ts);
-		to = &timeout;
-	}
-
-	/*
-	 * Invert the set of allowed signals to get those we want to block.
-	 */
-	sigdelsetmask(&mask, sigmask(SIGKILL) | sigmask(SIGSTOP));
-	signotset(&mask);
-
-	spin_lock_irq(&tsk->sighand->siglock);
-	sig = dequeue_signal(&mask, info, &type);
-	// ... bla bla bla
-```
-
-The set of signals to wait for is inverted, and provided to `dequeue_signal`.
-That function waits for a signal *not* in the set, and returns it. Changing the
-line removing our two signals is all we need to remove the second to last
-reference to `SIGSTOP` in `kernel/signal.c`:
-
-```
-#ifndef CONFIG_KILL_STOP_HANDLING
-	sigdelsetmask(&mask, sigmask(SIGKILL) | sigmask(SIGSTOP));
-#endif
-```
-
-### [###](https://vulpinecitrus.info/blog/what-if-you-could-handle-sigkill/#Signal_Retrieval_Stage) 
-Signal Retrieval Stage
-
-As mentioned before, the first thing done when a signal is pending is calling
-`get_signal`. In the main loop, the handler is retrieved. If no handler is
-present, we keep applying defaults. For all stopping signals, this is done here:
-
-```
-if (sig_kernel_stop(signr)) {
-    /*
-     * The default action is to stop all threads in
-     * the thread group.  The job control signals
-     * do nothing in an orphaned pgrp, but SIGSTOP
-     * always works.  Note that siglock needs to be
-     * dropped during the call to is_orphaned_pgrp()
-     * because of lock ordering with tasklist_lock.
-     * This allows an intervening SIGCONT to be posted.
-     * We need to check for that and bail out if necessary.
-     */
-    if (signr != SIGSTOP) {
-        spin_unlock_irq(&sighand->siglock);
-
-        /* signals can be posted during this window */
-
-        if (is_current_pgrp_orphaned())
-            goto relock;
-
-        spin_lock_irq(&sighand->siglock);
-    }
-
-    if (likely(do_signal_stop(signr))) {
-        /* It released the siglock.  */
-        goto relock;
-    }
-
-    /*
-     * We didn't actually stop, due to a race
-     * with SIGCONT or something like that.
-     */
-    continue;
+    indices[i] = swap_val;
+    index_map[swap_idx] = prev_val;
+    // We don't need to set the prev_idx in the map,
+    // it will never be checked again.
+  }
+  return indices;
 }
-```
+`
 
-Here, `SIGSTOP` is treated differently from other signals because it
-*supposedly* always works. In our world, it does not, so it will have the same
-behaviour as other stop signals on those orphaned pgrps:
+But still, even this “incremental” Fisher-Yates shuffle requires \(O(k)\) memory, which makes it unsuitable for case #1 or case #3.
 
-```
-    /*
-     * The default action is to stop all threads in
-     * the thread group.  The job control signals
-     * do nothing in an orphaned pgrp, but SIGSTOP
-     * always works.  Note that siglock needs to be
-     * dropped during the call to is_orphaned_pgrp()
-     * because of lock ordering with tasklist_lock.
-     * This allows an intervening SIGCONT to be posted.
-     * We need to check for that and bail out if necessary.
-     */
-#ifndef CONFIG_KILL_STOP_HANDLING
-if (signr != SIGSTOP) {
-#endif
-    spin_unlock_irq(&sighand->siglock);
+**Update**: I believe this is equivalent to, but less elegant than, [Floyd's algorithm for random sampling without replacement](https://fermatslibrary.com/s/a-sample-of-brilliance). So if you want to use that (like if you're in case #2 and really care about good randomness), implement Floyd's algorithm, rather than the way I've framed it here.
 
-    /* signals can be posted during this window */
+# Kensler’s permute()
 
-    if (is_current_pgrp_orphaned())
-        goto relock;
+Kensler introduced `permute()` in his paper [Correlated Multi-Jittered Sampling](https://graphics.pixar.com/library/MultiJitteredSampling/). I didn’t quite understand how it worked when I first read it, so I also wanted to write this blog post to break it down and hopefully help others appreciate it. However if you just want the code, [skip to the bottom](https://andrew-helmer.github.io/permute/#final-implementation)!
 
-    spin_lock_irq(&sighand->siglock);
-#ifndef CONFIG_KILL_STOP_HANDLING
-}
-#endif
-```
+The function acts as a “stateless” pseudorandom iterator over an array. It takes in a seed value for a permutation, the length of the array, and the index you’d like to map to a different index. It looks like this:
 
-And that’s it.
+and if you wanted to use it, say to get 10 random unique values from a vector, you might do:
 
-### [###](https://vulpinecitrus.info/blog/what-if-you-could-handle-sigkill/#Building,_Booting) 
-Building, Booting
+So how do we construct this magic function?
 
-Now, with our kernel done, i just run:
+## An invertible hash function
 
-```
-./scripts/config -e CONFIG_KILL_STOP_HANDLING
-make bzImage modules
-sudo make headers_install
-sudo make modules_install INSTALL_MOD_STRIP=1
-sudo cp arch/x86_64/boot/bzImage /boot/vmlinuz-killstop
-```
+The first thing we need is a hash function that is *invertible* for a given power-of-two sized domain. What does that mean? For a given number of bits \(n\), every value from \(0\) to \(2^n-1\) will be hashed to a single unique value in the same range. It’s a one-to-one and onto mapping, i.e. a *bijective* function. Let’s give a super simple example: adding 1. Let’s say our domain is 2-bit integers. If we add one to a 2-bit number, we’ll get a unique 2-bit number.
 
-Remember, [always strip your modules in
-production](https://vulpinecitrus.info/blog/irregular-reminder-kernel-install-mod-strip/). i also
-preemptively went in to disable `CONFIG_LOCALVERSION_AUTO`, and set
-`CONFIG_LOCALVERSION` to `"-killstop"`, to better identify this kernel. i built
-[my
-mod](https://git.vulpinecitrus.info/Lymkwi/linux/src/branch/handle-kill-stop)
-over a Linux 6.13.0 tree straight from the repos of Linus Torvalds himself.
+In binary:
 
-As i am on Arch Linux, i run a good old `sudo mkinitcpio -g /boot/initramfs-killstop.img --kernelimage /boot/vmlinuz-killstop -k 6.13.0-killstop-dirty`,
-then `sudo grub-mkconfig -o /boot/grub/grub.cfg`, cross the fingers on my paws,
-and reboot.
+Adding is generally, an invertible hashing operation. Another invertible operation in binary is multiplying by an odd number, let’s say 3.  \(f(x) = (x * 3) \mod 4\), with:
 
-# [#](https://vulpinecitrus.info/blog/what-if-you-could-handle-sigkill/#Finding_Out:_Booting_My_Modded_Linux) 
-Finding Out: Booting My Modded Linux
+A **non-invertible** operation is multiplying by two or any even number:
 
-i booted. And nothing happened. Nothing dramatically exploded. Nothing stopped.
-Everything was normal. i had booted on the stock Arch Linux by accident while
-running back to my bedroom to grab the dog collar that holds my authentication
-token.
+so we can’t do that.
 
-The second time around, i booted, and nothing happened. Nothing dramatically
-exploded, nothing stopped. Everything was normal. i ran `uname -r` and was
-greeted by
+Kensler outlines more invertible operations in power-of-two domains, especially xor’s and combinations with a seed value, where different seed values give different permutations. Ultimately, we get some invertible hash function:
 
-```
-6.13.0-killstop-dirty
-```
+## Cycle-walking
 
-i was in.
+Already, we can see that this hash will allow us to randomly iterate over an array with length power-of-two. But what about arrays of other lengths? Kensler uses a technique from cryptography called “cycle walking”, which was invented in [“Ciphers with Arbitrary Finite Domains”](http://www.cs.ucdavis.edu/~rogaway/papers/subset.pdf) by Black and Rogaway. Cycle-walking is a fancy name, but the idea is simple: we just repeat the hash until the value is less than the length of the array! So we get a `permute()` function like this:
 
-Manipulating signals in Linux userland programs feel somewhat archaic. They kind
-of *are* in a sense. The functions you are supposed to use differ a lot from
-those i was taught in college. In fact, the ones i used here are much more
-convenient and stick with the conventions of the syscalls. They are found in
-`signal.h`.
+Obviously this can be really slow since it could take a lot of hashes to get to where we want, but we’ll get to that in a second. First, why does this work at all? This is where the bijective mapping comes in. We start with an index that is less than the length of the array and we hash it until we get another value less than the length of the array. Let’s visualize it like this:
 
-Now, i want to write a program that can do one of two things: mask or handle
-`SIGINT`, `SIGKILL`, `SIGSEGV`, `SIGTERM` and `SIGSTOP`. i am leaving `SIGUSR1`
-and `SIGHUP` to still have an out to kill my program. i will have a `main`, and
-i can write either `mask()` or `handle()` in it to pick what i do.
+where \(hash^3(x)\) is \(hash(hash(hash(x)))\) or, if you prefer the function composition notation, \(hash \circ hash \circ hash(x)\). In this case, I’ve bolded the first two hashes to indicate that the values are bigger than the length of the array. The last hash is our final permuted value.
 
-The `handle()` function, as well as some boilerplate for later, look like this:
+Because our hash function is invertible, we can invert the final hashed value (note that we don’t need to actually implement the inverse, this is just theoretical):
 
-```
-int forever(void) {
-    while (1) {
-        ;
-    }
-}
+By inverting the final value, which was less than the length of the array, we again get a value larger than or equal to the length of the array. So if we did this loop in reverse until we got a value less than the length of the array, we would get back the original index.
 
-void setup_handlers(void) {
-    signal(SIGINT, catch_function);
-    signal(SIGKILL, catch_function);
-    signal(SIGSEGV, catch_function);
-    signal(SIGTERM, catch_function);
-    signal(SIGSTOP, catch_function);
-    // i never actually check it worked, but, eh
-    printf("Successfully set handler for signal numbers %d, %d, %d, %d and %d\n",
-                SIGINT, SIGKILL, SIGSEGV, SIGTERM, SIGSTOP);
-}
+In other words, **our loop is also an invertible hash function**. But rather than mapping within a power-of-two sized domain, it maps within the domain of the array’s length, which is exactly what we’ve been trying to achieve.
 
-void please_kill(void) {
-    unsigned int pid = getpid();
-    printf("Please run:\n\tkill -9 %d; kill -11 %d; kill %d; kill -19 %d;\n",
-                pid, pid, pid, pid);
-}
+## Making it (average) constant-time
 
-int handle(void) {
-    setup_handler();
-    please_kill();
-    forever();
-    return EXIT_SUCCESS;
-}
-```
+We need to make this faster, specifically we don’t want a lot of loop iterations. Let’s say that we have a really good hash function such that there’s roughly a 50% probability that any bit (within our power-of-two domain) will be 1 after hashing. Now, we modify our hash function to specify the power-of-two domain. We do this by taking in a mask that limits the bits which get hashed. Here’s an example (but a bad hash function).
 
-First we setup handlers for all our signals and point to `catch_function`, shown
-below, using [`signal`(2)](https://man.archlinux.org/man/signal.2). Then, we simply get the `pid` of the process with
-[`getpid`(2)](https://man.archlinux.org/man/getpid.2) from `unistd.h`, and prompt the user to <del>wreck the shit out of</del> give all they can to kill the
-current process. Finally, we spin forever. If for some reason that loop ends, we
-exit successfully.
+If our hash domain is the two-bit (unsigned) integers, then our mask would be 11 in binary, or 0x3. If our domain is the 32-bit integers, it would be 0xFFFFFFFF.
 
-The catch function will have customized messages for every single one of the
-POSIX signals we catch:
+Now, in our `permute()` function, we’ll use a mask with all the bits set up to the most significant bit of the highest possible index (that is, `len - 1`). Here’s a really inefficient (\(O(\log n)\)) implementation for clarity:
 
-```
-static void catch_function(int signo) {
-    status = signo;
-    switch (signo) {
-        case SIGINT:
-            fputs("awawa! x3 you touched my SIGINT~\n", stderr);
-            break;
-        case SIGKILL:
-            fputs("awawawawa :3 you tried to SIGKILL me~ teehee~\n", stderr);
-            break;
-        case SIGSEGV:
-            fputs("ouchies! my memory SIGSEGVd x3!\n", stderr);
-            break;
-        case SIGTERM:
-            fputs("i'm not gonna SIGTERM, meaning! >:3c\n", stderr);
-            break;
-        case SIGSTOP:
-            fputs("owo *notices your SIGSTOP*\n", stderr);
-            break;
-        default:
-            break;
-    }
-}
-```
+However a lot of processors (e.g. x86 processors) have a single instruction that can get the number of leading zeros of an integer. In GCC you can use this with the instrisic `__builtin_clz(x)`, which even on processors that don’t have the instruction will compile to a constant-time operation. So if you use GCC you could write:
 
-For *masking*, we use `sigset_t` to create a set of signals. **It is very
-important to call
-[`sigemptyset`(3)](https://man.archlinux.org/man/sigemptyset.3) or [`sigfillset`(3)](https://man.archlinux.org/man/sigfillset.3) on it**, or you will suffer the wrath of
-uninitialized memory:
+This may not be super portable, here is how Kensler does it with bit arithmetic.
 
-```
-sigset_t mask, old;
-sigemptyset(&mask);
-sigemptyset(&old);
-```
+With this, our `permute()` function looks something like:
 
-Then, i add the signals i want in my set with [`sigaddset`(3)](https://man.archlinux.org/man/sigaddset.3):
+Because of this mask, we know that our hashing domain is less than two times the size of the array. Since our hash function has a 50/50 chance of flipping the most significant bit, or rather of hashing to a value in the lower half of its domain, we can say that *on average*, this will take less than two iterations. We’ve got our fast random iterator!
 
-```
-sigaddset(&mask, SIGINT);
-sigaddset(&mask, SIGKILL);
-sigaddset(&mask, SIGSEGV);
-sigaddset(&mask, SIGTERM);
-sigaddset(&mask, SIGSTOP);
-```
+## Final implementation
 
-i then call [`sigprocmask`(2)](https://man.archlinux.org/man/sigprocmask.2) using that set:
+We still need to make a *good* invertible hash function. As I mentioned, Kensler outlines a bunch of invertible operations, and he uses hill-climbing to find a good hash function. I won’t go into that in more detail, but here is the final code using his hash. I’ve adapted Kensler’s code to the way I’ve structured this blog post:
 
-```
-if ((res = sigprocmask(SIG_BLOCK, &mask, &old)) != 0) {
-    fprintf(stderr, "Error masking away signals: %d\n", res);
-    return -1;
-}
-```
+Okay, there’s one additional thing at the end, the `(static_cast<uint64_t>(idx) + seed) % len`, but that won’t break anything and adds a little extra randomness. The cast to 64-bit is necessary to prevent an overflow bug that could lead to repeats.
 
-i then call `please_kill()` the same way i do for signal handling before, so
-that i can prompt my user to kill my process in many colourful ways, then spin
-forever.
-
-The result, at least for signal handling, is something like
-[this](https://eldritch.cafe/@SharpLimefox/113976467185768571): a process that
-can handle, for example, `SIGKILL`. As a result, conventional means of killing a
-program are completely ineffective against it, as expected.
-
-# [#](https://vulpinecitrus.info/blog/what-if-you-could-handle-sigkill/#Conclusion) 
-Conclusion
-
-There are many things i haven’t touched on. `SIGSTOP` is actually referenced [a
-whole lot](https://elixir.bootlin.com/linux/v6.13/C/ident/SIGSTOP), and [same
-for `SIGKILL`](https://elixir.bootlin.com/linux/v6.13/C/ident/SIGKILL). i
-figured the files i touched are the part i was mostly interested in, but other
-things could be worth looking into. [`ptrace`(2)](https://man.archlinux.org/man/ptrace.2) reacts on signals, so does
-[`strace`(1)](https://man.archlinux.org/man/strace.1). There are [specific trap
-invocations](https://elixir.bootlin.com/linux/v6.13/source/kernel/signal.c#L905)
-that are supposed to notify `ptrace` upon signals being fired, and all kinds of
-things. [signalfd](https://elixir.bootlin.com/linux/v6.13/source/fs/signalfd.c)
-is something i could have looked into as well, but i did not. `kernel/ptrace.c`
-also [sometimes explicitly singles out kernel signals](https://elixir.bootlin.com/linux/v6.13/source/kernel/ptrace.c#L1089) for some actions. By all means, my patches are not complete. Yet, they will let you do
-what i set out to do when i started this: handle and mask the two signals that
-nobody is supposed to mask or handle.
-
-And you know? It turned out fine. Nothing exploded on my system. As i could
-predict, because this was otherwise *impossible*, nobody did it. The signal
-system was setup in such a way that you would most likely realize something you
-were doing was *wrong*, and not try it.
-
-To pull back further, it is interesting to notice how the rules we all take for
-granted are just *set somewhere* in code. They were written by someone, at some
-point. If there is code restricting you from doing something, someone wrote it.
-Either they did not think anyone would want to do that thing, or they
-specifically prevented you from doing it. Those rules are written somewhere, and
-you can take it in your paws to go sniff around the code, pull out the relevant
-parts, and hack around the things that bother you. For fun, learning, or
-convenience.
+I hope that you find this as elegant and useful as I have! One final note: Kensler mentions that this hash only works well up to domains of about \(2^{27}\). For larger domains you could maybe use two calls of the permute function, although if it’s not random enough, that could exacerbate correlations. Overall I really just wanted to present the ideas here.

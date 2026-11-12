@@ -1,491 +1,130 @@
-Well that was a ride, where do I start ?
+When developers explain what happens when two computers communicate, there's a very high chance Alice and Bob get involved, and I'm not going to break tradition.
 
-I am currently on a quest to build some open source networking equipment with the final boss being a full router.
+Once upon a time there was a boy called Bob and a girl called Alice. Their school gives them a literature homework assignment, and since they live too far from each other to meet up, they decide to do it in Notion, a collaborative document tool. Now both of them are editing the same document at the same time. So far it says "That flower", and Alice adds "is pretty" to the end of it.
 
-There are a lot of very valuable and less complex pieces of hardware on the way that also need building, one of them being the common networking switch.
+Just before Alice's edit reaches him, Bob's internet connection drops, and he doesn't notice. A few minutes later, still unaware of her edit, he types "shall I pick it?" in the same spot. Then his connection comes back, and his edit finally syncs.
 
-Previously I was building the infrastructure to handle ethernet packets and worked my way up to a simple three-port switch that I had taped it out via Tiny Tapeout. But a few days after that tapeout, as I was still reeling from the adrenaline of rushing to meet the deadline, an unexpected opportunity presented itself: the possibility of taping out my own full chip, free of charge!
+Now Notion has a big problem: it has to figure out what the sentence says. The obvious rule is "newest timestamp wins": Bob's clock says he typed later, so "shall I pick it?" stays and "is pretty" quietly disappears, even though Bob never saw it. That is a lost update, and it's one of the central problems of **leaderless replication**, where every copy of the data accepts writes on its own and no almighty entity decides the order.
 
-But there was one slight problem, I only had four days to design the entire thing, also known as 96 hours ( putting it in hours definitely does not make it sound less terrifying ).
+> **Before you read:** the rest of the article runs from Einstein's train to Lamport's clocks, ending at CRDTs. If you don't want the physics, skip the train and start at [Lamport's clocks](https://www.itworkslocally.dev/posts/no-effect-before-its-cause#lamport-what-if-computers-but-physics). If you want neither the physics nor the computer science history, jump straight to [what leaderless replication means](https://www.itworkslocally.dev/posts/no-effect-before-its-cause#what-leaderless-actually-means). And if leaderless replication is already familiar and you only want to know how CRDTs work, skip all of this and continue to the next article: [Part 2: how Yjs pulls this off](https://www.itworkslocally.dev/posts/yjs-internals-origins-yata-state-vectors).
 
-A few months back, I wrote that building a full matrix multiplication accelerator with some in-silicon debug infrastructure in under 2 weeks was too tight of a deadline, all around a terrible idea and should absolutely never be attempted, especially not in a corporate setting.
-Well since then I have discovered a new circle of hell: designing a full ASIC solo in 4 days.
+So how did programmers solve it? It turns out that before computers even existed, physicists ran into this exact problem more than a century ago.
 
-It’s caffeinated down here.
+## Einstein's train: one lightning storm, two perspectives
 
-But now that I have gazed upon these new depths of hell, let me tell you about the journey of building full ASICs!
+In 1905, a 26-year-old patent clerk named Albert Einstein realised something unsettling: two events can be simultaneous for one person and not simultaneous for another, and both people are right. In 1916, he explained it with a train.
 
-## Will the fab talk to me?[#](https://essenceia.github.io/projects/expresso/#will-the-fab-talk-to-me)
+Picture a train zooming along a track. Lightning strikes both ends of it. A woman is standing on the platform, exactly halfway between the two strikes. Both flashes reach her at the same moment, so she says: "Simultaneous. Obviously."
 
-No … no they won’t …
+The catch is that light doesn't add up like a thrown ball. Throw a ball forward on a moving train and someone on the platform sees it go faster, because the train's speed adds to the throw. Light travels at the same speed for everyone, moving or not.
 
-But they will talk to wafer.space, and wafer.space will talk to me.
+Now the man sitting in the middle of the train. While the light is travelling, the train carries him *toward* the front flash and *away* from the rear one, so the front flash reaches him first. Both flashes travel at the same speed, and he's sitting exactly in the middle of the train. So, as far as he's concerned, the flash that reaches him first must have happened first. He says: "The front strike happened first."
 
-Now I suspect you might be wondering: what is wafer.space again ?
+So, whose perspective is correct? Both of them. There is no master clock hanging over the universe to tell either of them they're wrong. "At the same time" is not a fact about the universe. It's a fact about whoever is watching. Einstein basically invented "it depends," and programmers have been billing for it ever since, and hopefully will for the foreseeable future.
 
-A few months ago, something happened.
-Tim Ansell, formerly part of the team at Google that got us the SkyWater 130nm and GlobalFoundries 180nm open source PDKs, left Google and started wafer.space where he opened up the possibility for mere mortals to taped out their own chip at GlobalFoundries for an affordable price.
-They offer the services of getting your chip manufactured on GlobalFoundaries 180nm and optionally get it packaged.
+This is *exactly* the problem with comparing timestamps from two servers. Every server's clock is its own little train. Clocks drift, jump, and get corrected by NTP (the network time protocol that keeps server clocks roughly in sync) at the worst possible moment. Asking "whose edit came first?" by comparing clocks is like asking the woman on the platform and the man on the train to agree on which strike came first. Each has their own point of view, so they won't agree.
 
-### Big chips and little chips[#](https://essenceia.github.io/projects/expresso/#big-chips-and-little-chips)
+So if nobody agrees on *when*, does anyone agree on anything? Yes: cause and effect. If the first flash lit a fuse that set off the second, every observer, on any platform or any train, sees the cause before the effect. People can argue about timing all day, but an effect can never show up before its cause.
 
-Chips come in all rectangular sizes with the size measured in area.
+Take any event, like a firework going off. Light spreads out from it in every direction, and nothing in the universe is faster than light, with the possible exception of bad news. That growing bubble of light splits all of spacetime into three zones:
 
-Area is one of the primary concerns of the design as it is once again a question of cold calculated economics, because, when you go to get a chip manufactured you pay per \( mm^2 \) of area.
+- The future. Everything the firework can still reach.
+- The past. Everything that could have sent news to the firework in time.
+- The elsewhere. Everything else: too far away for any news to arrive in time, in either direction. Neither event can cause or affect the other. Their news might bump into each other later, somewhere else, but they can never be cause and effect.
 
-Take for example the price quoted bellow by IHP (another fab) for their own multiwafer runs. If you participate in this run you will get back a set number of chips (40 in this case) and your final chip cost will correspond to how big your chip ultimately is.
+Quick example: two points on opposite sides of the Earth are about 12,700 km apart in a straight line through the planet, so even light needs about 42 milliseconds to connect them (and about 67 ms if it had to follow the surface, the way a cable does). Two events there one second apart could be causally linked. Ten milliseconds apart? No signal could connect them, so asking which came first has no physical answer.
 
-Yet, more area is not simply more expensive because of the direct manufacturing cost, there is a second more subtle factor inflating the price, and that is yield.
+Now, how computer scientists stumbled onto the same problem.
 
-Ultimately broken chips have no value, actually we could argue that we should ascribe negative value to broken chips because identifying which chips are broken costs money, and selling a customer a broken chip costs even more money. So maximizing the ratio of good chips to manufactured chips is of primary importance. This ratio is called the yield.
+## Lamport: "what if computers, but physics?"
 
-Chips can be broken for a plethora of reasons, but for simplicity I will put them in two different buckets. Firstly it could be a design issue, in which case all your chips are equally affected. Secondly it could be a manufacturing defect that affects your chips semi-randomly.
+In 1978, Leslie Lamport looked at a network of computers and thought, "This is basically a tiny universe." Every machine was an observer with its own clock, and there was no master clock to settle arguments. His paper, "Time, Clocks, and the Ordering of Events in a Distributed System," borrows its central idea straight from special relativity.
 
-Manufacturing defects that occur during semiconductor device fabrication can be modeled as constant defect probability per unit of area, meaning that chips with higher area have a higher probability of having a defect, and thus lower yield, leading to ultimately higher costs.
+He draws the network as a simple picture. Each computer is a vertical line, with time running along it. When one computer sends a message to another, you draw an arrow from the sender's line to the receiver's line. The arrow slants because the message takes time to travel: it leaves at one moment and lands at a later one. Messages are the light rays of this universe. They are the *only* way one machine can find out what another machine did.
 
-This doesn’t impact the price which I pay to the chip area per-se, but it affects the average net price that I will pay per functional chip.
+Read it by following the arrows. Even though c1 sits between a1 and a2 on the page, no chain of arrows connects them, so they are concurrent, whatever any clock says.
 
-This is the double reason why area optimization is such a concern when designing chips.
+From that picture, Lamport defined **happens-before**, and notice that it never mentions a clock.
 
-Now GlobaFoundaries 180nm (gf180) is not a young node, and the polite way of calling something old is *“mature”*. With node maturity comes increased expertise of the process by the foundry leading to better yields over time. So gf180 is a node with excellent yields for which area related defects are not a concern especially compared to younger leading edge nodes.
+1. they're on the same machine and A came first, or
+2. A is sending a message and B is receiving it, or
+3. there's a chain of those steps from A to B.
 
-Wafer.space now offers 4 chip sizes, commonly referred to in the community as the “full”, “half”**s** and “quarter” slots.
+If neither happens before the other, the events are **concurrent**. They're in each other's elsewhere. Martin Kleppmann sums it up in *Designing Data-Intensive Applications*: two operations are concurrent when neither knows about the other, no matter what the clock said. Concurrency isn't about doing things at the same time. It's about being clueless at the same time.
 
-For people in need of some perspective, the full slot and its nearly 13mm2 of area is the same size as the entire Tiny Tapeout gf180 shuttle chip. The same chip that is capable of accommodating unto 160 project tiles and all the Tiny Tapeout common infrastructure. For reference, my two systolic arrays (8 bit integer and bfloat16) and the original switch all fit on only 4 tiles and my largest design to date, the blake2s hashing accelerator on 8.
+> The physics here is an analogy, and it breaks in one place. Light has a fixed speed limit, so physics can say exactly what could have affected what. A network has no such limit. What counts is whether a message actually arrived, so two edits made an hour apart can still be concurrent if a connection dropped in between.
 
-### Dicing[#](https://essenceia.github.io/projects/expresso/#dicing)
+## Back to Alice and Bob
 
-But getting the silicon manufactured is only the first battle of the war.
+Now we can say exactly what went wrong during Bob's network outage. By the wall clock, Bob typed minutes after Alice. But wall-clock order is not cause-and-effect order. The key fact is this: Bob never saw "is pretty." His edit lives in Alice's elsewhere, so the two edits are concurrent. Neither came first, so neither should win just because of what a clock says.
 
-Once you get your chip onto a wafer, there are two more important steps to clear before it can actually be called a chip.
+Here's the whole drama, drawn the way Lamport would draw it. Each vertical line is a replica moving through time, and each arrow is a message.
 
-Semiconductors are manufactured on a substrate called a wafer, this is a solid silicon disk that then needs to be very precisely broken up into individual chips. This step is called dicing.
+No chain of arrows connects Alice's edit to Bob's, in either direction. They're strangers in the elsewhere. The minutes between them on the wall clock say nothing about cause and effect.
 
-So once the wafers have exited the fab and the guys at wafer.space take delivery of the full set of wafers, they call to another specialized service to dice them into individual chips along the scrible lines using a very precise diamond saw.
+## What "leaderless" actually means
 
-At that point, wafer.space offers two possibilities. The first is to mail you the diced chips directly, the second is to get the chips packaged for you.
+In practice, leaderless means there's no single source of truth everyone has to bow to. Every replica (each copy of the data, on each server or device) accepts writes on its own, online or offline, and the replicas swap updates afterwards. Databases like Amazon's Dynamo, Riak and Cassandra work this way, and so do many collaborative editors. Even when an editor has a sync server in the middle, it's just a messenger relaying updates, not a judge. The goal is that once every replica has received the same updates, they all hold exactly the same data.
 
-### Packaging ?[#](https://essenceia.github.io/projects/expresso/#packaging-)
+That sounds easy until two replicas accept conflicting writes and something has to decide which came first.
 
-Raw semiconductor silicon is beautiful but unless you are also in the habit of collecting expensive crystals to look at, they are not much use as is. After all, how do you communicate with a piece of doped silicon crystal?
+## Three ways a leaderless system can handle Bob and Alice
 
-In order to both power our chip and be able to communicate with it, we need to package it in the form in which we can connect it to a wider electronic circuit.
+This is the central problem of leaderless replication. When any replica can accept writes at any time, with no leader deciding the order, concurrent writes like Bob's and Alice's are guaranteed to happen, and every leaderless system has to decide what to do with them.
 
-That is, unless you just happen to have a micromanipulator and about 56 microprobes lying in your garage that you can use for chip bringup. In which case please do tell me if you ever need some help clearing out your garage, I have nothing planned that day.
+There are three common answers. The first trusts clocks. The other two stay on the relativity road and run on cause and effect.
 
-Chip packages come in different forms, the most common being some kind of black plastic enclosures used not only to create accessible connections to the silicon but also for protecting the delicate die and the connections from the environmental damage caused by shocks, humidity and extreme temperature fluctuations.
+- Last write wins: trust the clock and keep the newest write.
+- Keep both: store concurrent writes side by side and let the application merge them.
+- CRDTs: design the data so any two copies can be merged in any order and always give the same result, with no merge code to write.
 
-The type of package we chose also affects how we architect the IO and thus what our silicon floorplan will look like. There are two big families of packages:
+### 1. Last write wins: trust the clock
 
-- wire bonded
-- flip-chip
+Give every write a timestamp and keep the one with the latest. Cassandra does this by default. It's simple, and it's exactly the mistake Einstein and Lamport taught us to avoid. Bob's clock says "later," so "shall I pick it?" wins and "is pretty" silently disappears, even though Bob never saw it. In the worst case, if one replica's clock runs fast, its writes can beat writes that really came after them. Last write wins doesn't resolve conflicts. It hides them.
 
-In the case of flip-chips the IO pin connections will be spread out regularly all over the floorplan leading to shorter logic to pin connections, and supporting a greater pin density and count. But on the flip side (put intended), flip chips packaging requires a lot more precision and is more expensive compared to …
+### 2. Keep both and let the application merge: the Dynamo style
 
-Wire bonding works by conning your silicon to a pad in the package using a very thin fly wire made from gold or aluminium.
+This is the approach used by Amazon's Dynamo and databases like Riak. Each version of the data carries a *version vector*: a small set of counters, one per replica, recording which updates that version has already seen. If neither version has seen everything the other has, they're concurrent. The database then keeps both versions side by side (Riak calls them *siblings*) and lets the application merge them.
 
-This is done by a wire bonding machine that will physically pull a wire from a IO landing pad on the silicon and connect it to a landing pad on the package. The silicon would be placed at the center of the package and would be connected to the pads placed all around it on the package, themselves connected to the larger exterior pads.
+Story time: back in 2007, Amazon's cart had a problem, and it has documented in the Dynamo paper. Amazon wanted "add to cart" to always work, even when the network was having a bad day, so any replica could accept a write. That means two replicas can end up with different carts. One has a book. Another, which never heard about the book, has a phone. Dynamo used version vectors (it called them vector clocks) to notice that the two carts were concurrent, and it kept both. The application then merged them by taking the union: now the cart has the book and the phone. Nothing you added is ever lost. The price is that a deleted item can sometimes come back from the dead.
 
-In this case the IO pad structures of the silicon would be located towards the exterior of the chip creating two distinct zones, the padring and the core region where most of the logic is located.
+Read it top to bottom: the database never picks a winner. It keeps both carts as siblings, and the next write merges them.
 
-There are many sub-flavors of wire bonded packaging, and wafer.space decided to offer something called chip-on-board packaging (CoB), which is a bit different to how mass market chips are classically packaged but also much more cost effective for small scale fabrication.
+### 3. Make the merge automatic: CRDTs
 
-For CoB the chip is not bonded out to an enclosed package, but rather, the connections are made directly to a PCB.
+The third answer is the CRDT, short for *conflict-free replicated data type*. It's a data structure built so that replicas that have seen the same updates always end up with the same result, with nobody stepping in to decide. There are no siblings, and no merge code for you to write.
 
-Once the chip has been bonded onto the PCB, a protective epoxy layer called a globtop is deposited and hardened on top of the silicon and the bonds. Some of you might have already noticed black blobs on commercial PCBs in the past, and without even realizing it you might have been looking at a CoB packaging.
+The trick is that a CRDT never stores "put this word at position 5," because position 5 means different things on different replicas once edits start flying around. Instead it relies on three ideas:
 
-But unlike the dull black glob tops, wafer.space has opted for the rarer beautifully transparent epoxy, allowing you to directly see the chip bonded though the package.
+- Unique IDs. Every insert gets an ID, usually the replica's ID plus a counter. Alice's third edit might be alice:3.
+- Neighbours, not positions. Each insert records what it was inserted next to rather than a numeric index. "My word goes right after bob:1" stays true no matter what else happens to the document.
+- Tombstones. Deletes don't actually remove anything. They mark the item as a tombstone, so later edits that point to it still know where they belong.
 
-### Take my money ![#](https://essenceia.github.io/projects/expresso/#take-my-money-)
+For Bob and Alice, that means both words survive. Their two inserts claim the same spot, so every replica falls back on a tie-break rule they all share, something deterministic like "lower replica ID goes first." Same data plus same rule gives the same order everywhere, with no one having to coordinate. And because of how the rules are built, updates can arrive in any order, arrive twice, or arrive late, and the result doesn't change: same set of updates in, same document out.
 
-With your silicon bonded you now have what can officially be called a chip! 🥳
+Collaborative editing libraries like Yjs and Automerge are built on CRDTs, and Riak offers CRDT data types too.
 
-What wafer.space is selling : the possibility for anyone to make their own full prototype chip run for the price of an expensive vacation, is honestly revolutionary.
+Part 2 of this article goes deep on this third approach using Yjs, a JavaScript library for collaborative editing, because it's the one I have actual experience with. That experience comes from the work of [Tharaka Ariyarathna](https://lk.linkedin.com/in/tharaka-ariyarathna-578701184), an absolute legend, whose Notion-like collaborative editor for a customer success management (CSM) platform pulled me into this rabbit hole.
 
-DARPA and google gave us the tools, Tiny Tapeout offered us a chance to sharpen our skills and wafer.space gave us direct access to manufacturing.
+Read it here: [Part 2: how Yjs pulls this off with a handful of bytes per character](https://www.itworkslocally.dev/posts/yjs-internals-origins-yata-state-vectors).
 
-Once more, in the spirit of transparency, I was invited onto the shuttle for free, but this sentiment comes from a genuine belief, so much so that as soon as the following manufacturing run sales opened I put my money where my mouth is, and bought my slot outright.
+## Bonus: a 2,500-year-old footnote on Pratītyasamutpāda
 
-![](https://essenceia.github.io/projects/expresso/shut_up_and_take_my_money.png)
+It's a mouthful (roughly: pruh-TEE-tyuh-sum-oot-PAH-duh). It's a Buddhist idea usually translated as **dependent origination**, and its shortest form goes: *when this exists, that comes to be; with the arising of this, that arises.*
 
-Somehow this is still cheaper than flying back for Christmas.
+I'm not a Buddhist scholar, just as I'm not a physicist, so I'm borrowing the idea very loosely. In the suttas it's mostly about how suffering arises, not about ordering database writes. Please don't send either profession after me.
 
-## Chip architecture[#](https://essenceia.github.io/projects/expresso/#chip-architecture)
+Still, it rhymes with this article. Bob's and Alice's edits are concurrent because neither caused the other, so neither has to wait for the other. But some updates do depend on an earlier one. Say Bob reads "is pretty" and replies by typing "too" right after it. His insert says "put me right after `alice:3`", which is Alice's edit. If that update reaches a replica before Alice's does, the replica has nothing for it to point at. A CRDT doesn't freak out and declare the universe broken, and it doesn't guess a position either. It holds Bob's update in a queue until `alice:3` arrives, then applies it. When this exists, that comes to be; until then, the update sits patiently in the queue.
 
-If you are new here and this is your first time reading this blog, welcome.
+You never see a glass shatter before it falls. A CRDT works the same way: an update never takes effect before the one it depends on, however confused the clocks are. Some things come before other things because one caused the other, and no clock has to agree for that to be true.
 
-For those for whom this isn’t our first rodeo: you might be wondering how full chips differ from what I have been doing so far ?
+> **To be continued:** how Yjs actually pulls this off, with origins, YATA and state vectors. [Read Part 2: Yjs Internals →](https://www.itworkslocally.dev/posts/yjs-internals-origins-yata-state-vectors)
 
-In previous episodes, I had been taping out my designs through Tiny Tapeout. Tiny Tapeout is a shuttle chip where multiple projects share the same chip, and in doing so share a common infrastructure. That infrastructure includes handling the silicon’s IO, the power and clock distribution as well as manufacturing and sticking the chip onto a functional development boards.
+## Further reading (if you have nothing to do)
 
-All important parts that I now get the luxury of handling on my own, which also means I also get the luxury of making all the mistakes!
-
-But, after having gotten the chance to perfect my understanding and experience of the tapeout process through 9 prior Tiny Tapeout tapeouts this sounds the natural next step.
-
-With Tiny Tapeout, you don’t control the number of pins, nor do you have a precise idea of the timing of the signals arriving from the chip’s pins to the pins of your macro. Additionally, even though you can buy extra tiles on Tiny Tapeout, the smallest quarter slot chip on wafer.space still gives you more core area than the largest configuration of Tiny Tapeout has to offer.
-And finally, Tiny Tapeout only gives you one chip per dev board, whereas with wafer.space you get a minimum order lot size of 1000 chips.
-
-### Pins[#](https://essenceia.github.io/projects/expresso/#pins)
-
-For the purposes of the networking chip project, the real game changer is having control over the pin architecture, meaning I can now decide both the number and the type of the pins.
-
-Because I am comunicating with the PHY chip using an RMII interface, I care very much about pins as each Ethernet port interface requires 7 pins. This was also the reason why the initial version of the networking switch had only 3 ports: I only had 24 pins.
-
-You can refer to the previous article [Designing an Ethernet Switch ASIC](https://talesonthewire.com/projects/ethernet_switch_asic/) for an explanation on why each port needs 7 pins and each pin is used for.
-
-So now that I have a whopping 46 pins maximum to play with, we can get cooking!
-
-Anatomically pins are analog blocks with a landing pad for the wire bonded wire on one end. These are included as part of the GlobalFoundries open source foundry provided IO cell library, and although all the pins share the same height, width and landing pad sizes, each features different analog layouts according to its functionality.
-
-The most important types of pins for this design are the input pins, the bidirectional pins and the power delivery pins. Have fun playing spot the difference.
-
-![](https://essenceia.github.io/projects/expresso/io/io_in.png)
-
-*Input IO pin*
-
-![](https://essenceia.github.io/projects/expresso/io/io_bidir.png)
-
-*Bidirectional IO pin*
-
-![](https://essenceia.github.io/projects/expresso/io/io_dvdd.png)
-
-*VDD IO power pin*
-
-![](https://essenceia.github.io/projects/expresso/io/io_dvss.png)
-
-*VSS IO power pin*
-
-Interestingly, the standard library does not offer any pure output pins, so outputs are handled by bidirectional pins statically configured in output mode.
-
-Looking at the floorplans provided above you might notice that these pins have no analog components directly under the landing pad, known as a “circuit under pad” design, making them a little less compact but more structurally resilient.
-
-This is because these pins were originally designed to be compatible with a version of the GlobalFoundary 180nm process with only 3 metalization layers, but multiple levels of a metal structure must be present between the top metal layer where the pad is and the analog circuit beneath in order to help isolate it from the force applied to the pad of wedge bonding. During wedge bonding the bond is physically pressed in place requiring applying a lot of force to the silicon and potentially leading to breakages in the circuits underneath if sufficient structural support pillars aren’t present.
-
-### Padring[#](https://essenceia.github.io/projects/expresso/#padring)
-
-As discussed earlier, there are different families of packaging for chips resulting in different types of I/O design: flip-chips and wire bonding. Wire bonded chips such as mine have their pins facing the exterior of the chip organized in a structure called a pad ring.
-This is a ring surrounding the core area of the chip, connecting all the different I/O pads together. This ring is used both for noise isolation and to share power between all the different pins. Because the padring is an uninterrupted crown of pins the space between the pins is filled by very simple structures called filler cells used to close the power connections within the ring.
-
-The IO also plays a crucial role in dealing with electrostatic discharge. (To whom many electronics have perished, including my little sister’s laptop that I may or may not have murdered while upgrading her ram when I was 15. 🪦 )
-
-Each pin contains structures that will act as forward biased diodes in the event of an electrostatic discharge steering the charge though the power rails and protecting the sensitive core logic.
-
-### Power delivery[#](https://essenceia.github.io/projects/expresso/#power-delivery)
-
-So we actually have four types of power delivery pins : two for ground and two for power.
-
-The difference between the two groups is that one is used to provide power to the IO itself and the other is used to power the chip’s core logic.
-
-Thus, it is possible to run the I/O and the internal design at different voltages. The areas for which a different power source is used is called a power domain. For example, the I/O could run at 5V, accepting 5V input signals and driving 5V outputs while internally the chip core runs the logic at 3.3V.
-In this case, we would have different pins for powering the I/O and for powering the internal core. But, in the case of this networking chip, core power is shorted to IO power and both are in the same power domains.
-
-Such a setup is only made possible because the foundry provided 7 track standard cell library is, to put it mildly: rugged. The cell target operating range is between 1.62 and 5.5V voltage and -40 to 125C.
-
-So shorting the IO and core voltage and deciding to run the entire thing at 5V is just an average Tuesday.
-
-```text
-┏━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━┓
-┃                      ┃ Hold     ┃ Reg to   ┃          ┃          ┃ of which ┃ Setup     ┃ Reg to   ┃           ┃ Setup    ┃ of which  ┃          ┃           ┃
-┃                      ┃ Worst    ┃ Reg      ┃          ┃ Hold Vio ┃ reg to   ┃ Worst     ┃ Reg      ┃           ┃ Vio      ┃ reg to    ┃ Max Cap  ┃ Max Slew  ┃
-┃ Corner/Group         ┃ Slack    ┃ Paths    ┃ Hold TNS ┃ Count    ┃ reg      ┃ Slack     ┃ Paths    ┃ Setup TNS ┃ Count    ┃ reg       ┃ Violati… ┃ Violatio… ┃
-┡━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━┩
-│ Overall              │ 0.1951   │ 0.2897   │ 0.0000   │ 0        │ 0        │ -5.5684   │ -5.5684  │ -1272.41… │ 1065     │ 1060      │ 145      │ 2601      │
-│ nom_tt_025C_3v30     │ 1.0471   │ 1.0471   │ 0.0000   │ 0        │ 0        │ 3.7457    │ 7.6040   │ 0.0000    │ 0        │ 0         │ 136      │ 1204      │
-│ nom_ss_125C_3v00     │ 2.3477   │ 2.3477   │ 0.0000   │ 0        │ 0        │ -4.5534   │ -4.5534  │ -973.8862 │ 353      │ 352       │ 137      │ 2410      │
-│ nom_ff_n40C_3v60     │ 0.4488   │ 0.4878   │ 0.0000   │ 0        │ 0        │ 4.6815    │ 12.7768  │ 0.0000    │ 0        │ 0         │ 136      │ 532       │
-│ min_tt_025C_3v30     │ 1.0388   │ 1.0388   │ 0.0000   │ 0        │ 0        │ 3.7448    │ 8.0005   │ 0.0000    │ 0        │ 0         │ 130      │ 1149      │
-│ min_ss_125C_3v00     │ 2.3336   │ 2.3336   │ 0.0000   │ 0        │ 0        │ -3.7267   │ -3.7267  │ -764.3782 │ 296      │ 295       │ 131      │ 2304      │
-│ min_ff_n40C_3v60     │ 0.4466   │ 0.4826   │ 0.0000   │ 0        │ 0        │ 4.6844    │ 12.9664  │ 0.0000    │ 0        │ 0         │ 130      │ 481       │
-│ max_tt_025C_3v30     │ 1.0579   │ 1.0579   │ 0.0000   │ 0        │ 0        │ 3.7465    │ 7.0758   │ 0.0000    │ 0        │ 0         │ 141      │ 1320      │
-│ max_ss_125C_3v00     │ 2.3651   │ 2.3651   │ 0.0000   │ 0        │ 0        │ -5.5684   │ -5.5684  │ -1272.41… │ 416      │ 413       │ 142      │ 2601      │
-│ max_ff_n40C_3v60     │ 0.4527   │ 0.4945   │ 0.0000   │ 0        │ 0        │ 4.6771    │ 12.4714  │ 0.0000    │ 0        │ 0         │ 140      │ 641       │
-│ nom_tt_025C_5v00     │ 0.5200   │ 0.6317   │ 0.0000   │ 0        │ 0        │ 4.5785    │ 11.4278  │ 0.0000    │ 0        │ 0         │ 139      │ 673       │
-│ nom_ss_125C_4v50     │ 1.1099   │ 1.3887   │ 0.0000   │ 0        │ 0        │ 3.5360    │ 4.4721   │ 0.0000    │ 0        │ 0         │ 139      │ 1444      │
-│ nom_ff_n40C_5v50     │ 0.1981   │ 0.2942   │ 0.0000   │ 0        │ 0        │ 5.0271    │ 14.5140  │ 0.0000    │ 0        │ 0         │ 139      │ 249       │
-│ min_tt_025C_5v00     │ 0.5113   │ 0.6248   │ 0.0000   │ 0        │ 0        │ 4.5846    │ 11.6500  │ 0.0000    │ 0        │ 0         │ 133      │ 648       │
-│ min_ss_125C_4v50     │ 1.0892   │ 1.3768   │ 0.0000   │ 0        │ 0        │ 3.5474    │ 4.8628   │ 0.0000    │ 0        │ 0         │ 134      │ 1365      │
-│ min_ff_n40C_5v50     │ 0.1951   │ 0.2897   │ 0.0000   │ 0        │ 0        │ 5.0285    │ 14.6577  │ 0.0000    │ 0        │ 0         │ 132      │ 223       │
-│ max_tt_025C_5v00     │ 0.5316   │ 0.6407   │ 0.0000   │ 0        │ 0        │ 4.5719    │ 11.1135  │ 0.0000    │ 0        │ 0         │ 143      │ 784       │
-│ max_ss_125C_4v50     │ 1.1382   │ 1.4034   │ 0.0000   │ 0        │ 0        │ 3.5178    │ 3.8667   │ 0.0000    │ 0        │ 0         │ 145      │ 1518      │
-│ max_ff_n40C_5v50     │ 0.2026   │ 0.3003   │ 0.0000   │ 0        │ 0        │ 5.0257    │ 14.3356  │ 0.0000    │ 0        │ 0         │ 143      │ 449       │
-└──────────────────────┴──────────┴──────────┴──────────┴──────────┴──────────┴───────────┴──────────┴───────────┴──────────┴───────────┴──────────┴───────────┘
-```
-
-Example of a random timing report from another chip I am working on, with corners ranging from 3 to 5.5V and -40 to 125C. And again, this is still just a subset of all the corners there are: there are even more where this came from!
-
-For reference, this is just a tiny bit unusual.
-
-Most designs have separate power domains as modern nodes have cell libraries designed for much lower operating voltages in order to help reduce the area power density making cooling easier and to help optimize power consumption. In the case of leading edge nodes, internal logic targets operating voltages as low as 0.7 to 0.8 V. This forces having at least separate IO and core power domains, since your IO typically starts at 1.8V and above.
-
-Yet, you sometimes need separate power domains even if they operate at the same voltage, such as cases where you want to isolate a sensitive analog block from the power supply noise caused by a quickly toggling digital part. You might even prolong this separation of an analog and digital power domains to the IO, in which case rather than having a fully connected padring working within the same power domain you would be splitting the padding into analog IO power and digital IO power.
-
-Remember the filler cells I talked about earlier? Well there exists a special type of filler cell called a splitter used specially to split the pad ring in such cases. But, because of ESD concerns this splitter is not as simple as breaking the power line, but that is a discussion for another day.
-
-### Clock and reset[#](https://essenceia.github.io/projects/expresso/#clock-and-reset)
-
-The clock for this chip is supplied though a Schmitt trigger input pin and is strategically logged in the corner of the chip right next to the reset signal, and isolated from the rest of the pins by two power pins. This is done to limit the clock signal’s impact onto the neighboring pins given its toggle frequency, as well as to prevent the clock signal for the neighboring pins cross talk. The reset signal by comparison is a very stable signal producing little crosstalk of its own.
-
-From this point on the clock signal is pulled into the center of the floorplan and then distributed through a balanced clock tree throughout the chip.
-
-Such “shielding” is even more important in our case since we are doing wire bonding and we can also have cross talk between signals occurring between the fly wires, this would be less of a problem for a flip-chip package.
-
-## Zhe switch[#](https://essenceia.github.io/projects/expresso/#zhe-switch)
-
-This is a different challenge compared to what I was doing with Tiny Tapeout as I now have access to two great resources: firstly, a lot more pins to play with, and secondly, a lot more space.
-Even if I target the smallest possible chip, I am still blessed with more area than I know what to do with.
-
-Even before being invited to contribute I was already eyeing the wafer.space slots, so selecting the switch at the crown project of the ASIC was the easy choice.
-
-The problem is that the switch was initially designed for the constraints of Tiny Tapeout. As such, not only does it have an odd architecture with only three ports, but it was designed to be as space efficient as possible. Here, space is something I am swimming in, but with only 96 hours ahead of me I have no time to redesign an entirely new switch from scratch.
-So the plan is to re-adapt the existing switch to make the best use of being its own chip.
-
-The first and the most important change was to be able to make use of these abundant pins and have the switch to support more ports.
-
-No longer shall I be constrained by my pin count! 🔥 w 🔥
-
-… (Until I need more than 7 ports that is.)
-
-### Parameters[#](https://essenceia.github.io/projects/expresso/#parameters)
-
-Most of the verilog code you will see online tends to use hard coded widths like so :
-
-```verilog
-module add(
-	input wire [7:0] a_i, 
-	input wire [7:0] b_i,
-	output wire [7:0] res_o,
-	output wire carry_o
-);
-	assign {carry_o, res_o} = a_i + b_i; 
-endmodule
-```
-
-What this code gains in ease of writing it loses in flexibility.
-
-In RTL, we have a concept called parameters, which exist for an instance of a module and allow you to define, at instantiation, certain values. These values can then be used to size up buses or are macro like conditions to define which sections of the code should be included in the final hardware.
-
-```verilog
-module add#(
-	parameter W = 8
-)(
-	input wire [W-1:0] a_i, 
-	input wire [W-1:0] b_i,
-	output wire [W-1:0] res_o,
-	output wire carry_o
-);
-	assign {carry_o, res_o} = a_i + b_i; 
-endmodule
-```
-
-These generic values can then be inherited down the design hierarchy allowing dependent modules to be resized accordingly.
-
-### Complexity[#](https://essenceia.github.io/projects/expresso/#complexity)
-
-The original switch implementation was partially generic : it contained quite a few generic values, but these were mostly added out of habit to help clean up the design and keep things more readable, rather than truly making the design dimensions fully configurable.
-
-The reason for not making the design fully generic was out of a calculated decision to shy away from as much unnecessary complexity as possible. The original design was facing the hard physical constraints of Tiny Tapeout pin count, so making it fully generic to support an arbitrary amount of ports would have been an unnecessary premature optimization, and most importantly cost complexity.
-
-My grief against complexity comes from two calculated trade-offs.
-
-First, I find it is orders of magnitude cheaper to add complexity than to remove it.
-
-Secondly, complexity is especially expensive for hardware design because of the necessity to not have no have any bugs in the hardware. The only way of reaching this bug free state is through thought verification of operation under all possible scenarios. As we add complexity, we add hardware states such that the size of the space of states we need to explore grows exponentially.
-
-Now I know exponential growth might sound like an exaggeration, after all exponential growth is so fast that it is hard for our brains to conceive, but I assure you I am not.
-
-This problem is more formally called the “state explosion problem”.
-
-### Scale Up[#](https://essenceia.github.io/projects/expresso/#scale-up)
-
-So the biggest change in the switch was to move the number of supported ports from a static three to a generic number.
-
-Even if the RTL scales, and I could theoretically run a simulation with 48 ports, the logic itself still has scaling limits. After all, behind the abstraction of the code we are designing hardware logic for which physical constraints still apply.
-
-As the structures get wider, the number of logic elements on a path increases, the paths get physically longer and the timing degrades. And so, with \(1.73mm^2\) of core area available, timing is the wall I hit first.
-
-Given the switch was already quite tight on timing, scaling it too far would push it beyond the limits of the current design requiring a rethink of the architecture. Rethink that I cannot afford to execute in so little time.
-
-Lastly, I said I was scaling the number of ports, but because of how tight the timings are on the switch lookup table already was, it is not getting scaled up. And because it still only has four entries, and scaling beyond four ports would result in too much contention on the table and not enough hits, it would not make any sense to go beyond 4 ports for now.
-
-Thus, I settled on four ports for the switch.
-
-### Pin correspondance[#](https://essenceia.github.io/projects/expresso/#pin-correspondance)
-
-Given I now control the full ASICs layout I can also control exactly which signal maps to which pin on the padring.
-
-Since the switch was intended to work with a specific Microchip family of external physical-layer chips, and that these chips had a known pinout, I decided to choose the pin order based on how directly I could draw the connecting wire onto the PCB.
-
-## Beacon[#](https://essenceia.github.io/projects/expresso/#beacon)
-
-One of the best drawbacks of the switch scaling limit was that I was left with a few pins and lots of area to play with.
-
-And unlike with Tiny Tapeout where multiple projects share that same common infrastructure allowing only one project to be enabled at a time, this time I could have multiple designs working in parallel.
-And I had just the perfect project to include in parallel.
-
-A few months back I did the two things the entire Internet knows not to do: firstly I asked Reddit for advice, secondly I followed it.
-
-This project is called *“Until Heat Death Do Us Part"* and is a very serious implementation of an ethernet connected beacon that broadcasts its current time over 100 Mbit Ethernet with the ability to do so without overflow for the next \(10^{100}\) years. Also believed to be roughly the estimated heat death of the universe, give or take a few powers of 10 years.
-
-I have a full write-up about this ASIC’s here for those interested in getting the full story: [Until Heat Death Do Us Part.](https://talesonthewire.com/projects/until_heat_death_do_us_part/)
-
-## Full chip[#](https://essenceia.github.io/projects/expresso/#full-chip)
-
-![](https://essenceia.github.io/projects/expresso/full_floorplan_pretty.png)
-
-*Full chip floorplan render.*
-
-Putting it all together: this chip features two designs, the 4 port 100Mbps networking switch and the ethernet broadcast beacon. The networking switch is the denser design on the right hand side of the floorplan with the beacon being the on the left side, each designed placed next to there respective port pins.
-
-## What comes next?[#](https://essenceia.github.io/projects/expresso/#what-comes-next)
-
-It’s already been a few months since the chip has been sent to the fab. Since then the first batch of produced wafers have exited the fab and been received by the wafer.space.
-
-Andrew Wingate shared with us some absolutely gorgeous pictures of the diced wafers, and there is my little chip in the flesh sitting on the top right corner of the reticle:
-
-The dies are then picked off the diced wafer using a custom built robot and sorted per chip type into a tape reel. From there the chips will be either sent to the bond house for packaging or directly sent to the customer.
-
-And now I am like a child waiting for Christmas, impaciently awaiting a package, inside the first batch of my own full custom ASIC chips.
-
-Now, the chip doesn’t make a full networking equipment on its own, which is why I am also prototyping a PCB for the switch. Hopefully someday I can plug the chip in to get a fully functional switch.
-
-Here is to hoping the first iteration of the silicon just works !
-
-.. which anyone working in the industry can attest to, A0s are rare enough to be legendary.
-
-Manufacturing revisions of a chip are identified by a letter followed by a number.
-
-A0 is the first iteration, minor revision such as changing some of the higher metalization layers will increment the number and major revisions requiring a new mask set for the bottom layers, where the transistors are built, increment the letter and reset the number. So revisions might go: A0, A1, A2, B0, B1, B2, B3, C0, etc…
-
-Meanwhile the networking equipment project continues, chasing after building increasingly complex systems. Without going too deep into which next networking features I want to add, it is becoming quickly apparent that I will need to integrate some form of a CPU.
-
-This is because as I target more advanced networking applications the tasks my silicon needs to accomplish become increasingly varied and start featuring a large array of tasks that occur rarely enough, and have sufficiently lax performance requirements to be better suited for software than hardware.
-
-As for the matter of which CPU architecture to choose, although RISC-V is in vogue I find that, as a result of RISC-V’s architectural choices, it is just too expensive to implement in terms of area for systems like mine.
-
-My needs when selecting witch CPU architecture to use are:
-
-- be cheap to implement in hardware
-- have a pre-existing software ecosystem, meaning having C compiler and debugger support
-- not get me sued
-
-If only gcc were to maintain something like the “Status of Supported Architectures from Maintainers’ Point of View” at [https://gcc.gnu.org/backends.html](https://gcc.gnu.org/backends.html) then maybe I could know what my options where.
-
-```text
-Architecture characteristic key
------------------------------------------------------------------------
-H       A hardware implementation does not exist.
-M       A hardware implementation is not currently being manufactured.
-S       A Free simulator does not exist.
-L       Integer registers are narrower than 32 bits.
-Q       Integer registers are at least 64 bits wide.
-N       Memory is not byte addressable, and/or bytes are not eight bits.
-F       Floating point arithmetic is not included in the instruction set
-I       Architecture does not use IEEE format floating point numbers
-C       Architecture does not have a single condition code register.
-B       Architecture has delay slots.
-D       Architecture has a stack that grows upward.
-
-l       Port cannot use ILP32 mode integer arithmetic.
-q       Port can use LP64 mode integer arithmetic.
-r       Port can switch between ILP32 and LP64 at runtime.
-        (Not necessarily supported by all subtargets.)
-p       Port uses define_peephole (as opposed to define_peephole2).
-b       Port uses '"* ..."' notation for output template code.
-f       Port does not define prologue and/or epilogue RTL expanders.
-m       Port does not use define_constants.
-g       Port does not define TARGET_ASM_FUNCTION_(PRO|EPI)LOGUE.
-i       Port generates multiple inheritance thunks using
-        TARGET_ASM_OUTPUT_MI(_VCALL)_THUNK.
-a       Port uses LRA (by default, i.e. unless overridden by a switch).
-t       All insns either produce exactly one assembly instruction, or
-        trigger a define_split.
-e       <arch>-elf is not a supported target.
-s       <arch>-elf is the correct target to use with the simulator
-        in /cvs/src.
-
-          |      Characteristics
-Target     | HMSLQNFICBD lqrpbfmgiates
------------+--------------------------
-aarch64    |     Q        q  b  gia  s
-alpha      |  ?  Q   C    q    mgi  e
-arc        |          B      b  gia
-arm        |                 b   ia  s
-avr        |    L  FI    l  p   g a
-bfin       |       F            gi
-bpf        | HM  Q FIC   lq  b    a
-c6x        |   S     CB         gi
-cris       |       F  B         gia  s
-csky       |                 b   ia
-epiphany   |         C          gia  s
-fr30       | ??    FI B     pb mg    s
-frv        | ??       B      b   i   s
-gcn        |   S     C D  q       a e
-h8300      |       FI B         g a  s
-i386       |     Q        q  b   ia
-ia64       |   ? Q   C    qr b m i
-iq2000     | ???   FICB      b  g at
-lm32       |       F            g
-m32c       |    L  FI    l   b  g    s
-m32r       |       FI        b    a  s
-m68k       |                pb   i
-mcore      |  ?    FI       pb mg    s
-mep        |       F C       b  g  t s
-microblaze |         CB          ia  s
-mips       |     Q   CB   qr     ia  s
-mmix       | HM  Q   C    q      ia e
-mn10300    | ??                 gi   s
-moxie      |       F            g  t s
-msp430     |    L  FI    l   b  g    s
-nds32      |       F C           ia  s
-nios2      |         C           ia
-nvptx      |   S Q   C    q    mg   e
-pa         |     Q   CBD  qr b   i  e
-pdp11      |    L   IC    qr b      e
-pru        |    L  F              a  s
-riscv      |     Q   C    qr    gia
-rl78       |    L  F     l      g    s
-rs6000     |     Q   C    qrpb   ia
-rx         |                         s
-s390       |     Q        qr    gia e
-sh         |     Q   CB   qrp    i
-sparc      |     Q   CB   qr b   ia
-stormy16   | ???L  FIC D l   b   ia
-v850       |                    g a  s
-vax        |  M     I        b   i  e
-visium     |          B         g  t s
-xtensa     |         C
-```
-
-Behold: so many beautiful options supported that most people have never even heard of!
-
-And within this list there is one 16 bit architecture that caught my eye, at the heart of one of the longest produced systems and deeply intertwined with computer history as it saw the first version of Unix written in C.
-
-What better choice than a PDP-11?
-
-## Closing[#](https://essenceia.github.io/projects/expresso/#closing)
-
-A year ago, I started on a journey to go from being solely a hardware designer to building an entire ASIC from scratch without any institutional backing.
-
-It’s been a long road, passing though multiple smaller macro tapeouts, each allowing me to delve deeper into what it takes to make ASICs. This chip is my 10th solo tapeout, a fitting number to finally graduate into building full chips.
-
-Standing upon this mountain I can tell you the road ahead is still very long.
-
-And with my first batch of full custom ASICs landing into my mailbox in a few weeks a new risk has emergeded, leading me to proclaim a new goal: not starting a fabless semiconductor company.
-
-![](https://essenceia.github.io/projects/expresso/waffle.jpg)
-
-*Tradional celebratory Waffle House.*
-
-**Current life goals**
-
-- Have kids
-- Spend time with loved ones
-- Make chips
-- Eat waffles
-- Get a wire bonder
-- Not get a job
-- Not startting a fabless semiconductor company 🆕
-
-Thanks again to wafer.space for giving me this opportunity to join the shuttle, Tiny Tapeout for making the 9 previous tapeouts possible and the open source silicon community for building the tools making all of this possible.
-
-If you enjoyed this, I will be sipping coffee at a Silicon Valley neighborhood cafe between the 10th and 12th of November, so if you feel like nerding out over caffeine shoot me an [email](mailto:julia.desmazes@gmail.com).
+- Albert Einstein, Relativity: The Special and the General Theory (1916), the source of the train thought experiment.
+- Leslie Lamport, "Time, Clocks, and the Ordering of Events in a Distributed System" (1978).
+- Martin Kleppmann, Designing Data-Intensive Applications, Chapter 5, "Detecting Concurrent Writes."
+- Nicolaescu, Jahns, Derntl and Klamma, "Near Real-Time Peer-to-Peer Shared Editing on Extensible Data Types" (GROUP 2016), the YATA paper.
+- Yjs documentation and the Yjs source on GitHub.
+- The Dasabala Sutta (SN 12.21), which states the "when this exists, that comes to be" formula of dependent origination. For the full twelve links, see the Paṭiccasamuppāda Vibhaṅga Sutta (SN 12.2). Paṭiccasamuppāda is the Pali form of Pratītyasamutpāda.

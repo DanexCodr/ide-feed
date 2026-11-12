@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-11T13:45:03Z",
+  "updated": "2026-11-12T00:12:30Z",
   "items": [
     {
       "id": "devto-4943245",
@@ -98,27 +98,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4940821",
-      "title": "Every App Eventually Becomes a Dashboard. Please Make It Stop.",
-      "desc": "By NorthernDev | 4 min read",
-      "tag": "tutorial",
-      "published": "2026-10-29T11:53:41Z",
-      "order": 9,
-      "url": "https://dev.to/the_nortern_dev/every-app-eventually-becomes-a-dashboard-please-make-it-stop-37e9",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fbynqeuag4r77ltp1z3jo.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGQAAAgMBAAAAAAAAAAAAAAAAAQIAAwQF/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAH/2gAMAwEAAhADEAAAAegHUqmEp//EABsQAAEEAwAAAAAAAAAAAAAAAAIAARExAyEy/9oACAEBAAEFApU7HoqT0ROwDmKP/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAGRAAAgMBAAAAAAAAAAAAAAAAABABAiFh/9oACAEBAAY/AiCx14v/xAAcEAADAQACAwAAAAAAAAAAAAAAARExEEFRYcH/2gAIAQEAAT8haJUyeVS6+/hu0r04eMyQaXRhMuU//9oADAMBAAIAAwAAABCRf//EABURAQEAAAAAAAAAAAAAAAAAAAAR/9oACAEDAQE/EEf/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/ED//xAAfEAEAAgEDBQAAAAAAAAAAAAABABExECFBUWGBsdH/2gAIAQEAAT8QUZARaUCz0+zk1Jru5SwxAQF502MuiLGBrRzxBNEC/V4n/9k=",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-4982721",
       "title": "Plan Stamping, for Software",
       "desc": "By Ken W Alger | 7 min read",
       "tag": "tutorial",
       "published": "2026-11-05T14:54:25Z",
-      "order": 10,
+      "order": 9,
       "url": "https://dev.to/kenwalger/plan-stamping-for-software-4ein",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F2zo9qu20538eija6ia4c.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAgQFAf/EABUBAQEAAAAAAAAAAAAAAAAAAAEC/9oADAMBAAIQAxAAAAEyxWWhHaTT/8QAGhAAAgMBAQAAAAAAAAAAAAAAAQIAAxIxIf/aAAgBAQABBQKz0VkLW3I8bm2yZ//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABoQAAICAwAAAAAAAAAAAAAAAAABETEQICH/2gAIAQEABj8CjglpZF4//8QAGxAAAwACAwAAAAAAAAAAAAAAAAERITEQUWH/2gAIAQEAAT8hV1QiiLmGDPzjctJIySdnpKyuz//aAAwDAQACAAMAAAAQKr//xAAWEQEBAQAAAAAAAAAAAAAAAAAAESH/2gAIAQMBAT8QmI//xAAWEQEBAQAAAAAAAAAAAAAAAAARAAH/2gAIAQIBAT8QTZb/xAAcEAEAAwEAAwEAAAAAAAAAAAABABEhMUFRobH/2gAIAQEAAT8QSOReD+rHo0ZBtrk8KxPyPJtTfSxdb7nYcqGyhSP/2Q==",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4940821",
+      "title": "Every App Eventually Becomes a Dashboard. Please Make It Stop.",
+      "desc": "By NorthernDev | 4 min read",
+      "tag": "tutorial",
+      "published": "2026-10-29T11:53:41Z",
+      "order": 10,
+      "url": "https://dev.to/the_nortern_dev/every-app-eventually-becomes-a-dashboard-please-make-it-stop-37e9",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fbynqeuag4r77ltp1z3jo.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGQAAAgMBAAAAAAAAAAAAAAAAAQIAAwQF/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAH/2gAMAwEAAhADEAAAAegHUqmEp//EABsQAAEEAwAAAAAAAAAAAAAAAAIAARExAyEy/9oACAEBAAEFApU7HoqT0ROwDmKP/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAGRAAAgMBAAAAAAAAAAAAAAAAABABAiFh/9oACAEBAAY/AiCx14v/xAAcEAADAQACAwAAAAAAAAAAAAAAARExEEFRYcH/2gAIAQEAAT8haJUyeVS6+/hu0r04eMyQaXRhMuU//9oADAMBAAIAAwAAABCRf//EABURAQEAAAAAAAAAAAAAAAAAAAAR/9oACAEDAQE/EEf/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/ED//xAAfEAEAAgEDBQAAAAAAAAAAAAABABExECFBUWGBsdH/2gAIAQEAAT8QUZARaUCz0+zk1Jru5SwxAQF502MuiLGBrRzxBNEC/V4n/9k=",
       "color": "#3B49DF"
     },
     {
@@ -242,15 +242,39 @@
       "color": "#3B49DF"
     },
     {
+      "id": "devto-5004421",
+      "title": "I Used gp-grid to Build a React Food Festival App with Advanced Data Grid Features",
+      "desc": "By Hadil Ben Abdallah | 16 min read",
+      "tag": "tutorial",
+      "published": "2026-11-10T09:04:10Z",
+      "order": 21,
+      "url": "https://dev.to/hadil/i-used-gp-grid-to-build-a-react-food-festival-app-with-advanced-data-grid-features-3l22",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fn4q9jewu74jn3w6oo3yn.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAAMAAAAAAAAAAAAAAAAAAQACBP/EABYBAQEBAAAAAAAAAAAAAAAAAAIAAf/aAAwDAQACEAMQAAABwMEbA7f/xAAZEAADAAMAAAAAAAAAAAAAAAAAERIBECH/2gAIAQEAAQUCXBklD1WT/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAGxAAAwEAAwEAAAAAAAAAAAAAAAERIRAxQWH/2gAIAQEAAT8h9NE81Jjx0ipRNJwp9D//2gAMAwEAAgADAAAAEFyf/8QAFREBAQAAAAAAAAAAAAAAAAAAACH/2gAIAQMBAT8QV//EABcRAAMBAAAAAAAAAAAAAAAAAAABETH/2gAIAQIBAT8QFFp//8QAGxABAAMAAwEAAAAAAAAAAAAAAQARITFBUWH/2gAIAQEAAT8QGtgrjIpRTpqIoCfa4iGTT3UCw4zxXVTKtcxWt59n/9k=",
+      "color": "#3B49DF"
+    },
+    {
       "id": "devto-4974671",
       "title": "After 5 years, Wasp 1.0 is coming: a 6-month plan for our full-stack JS framework",
       "desc": "By Martin Šošić | 6 min read",
       "tag": "tutorial",
       "published": "2026-11-04T10:42:12Z",
-      "order": 21,
+      "order": 22,
       "url": "https://dev.to/wasp/after-5-years-wasp-10-is-coming-a-6-month-plan-for-our-full-stack-js-framework-4hlf",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto/https%3A%2F%2Fwasp.sh%2Fimg%2Fblog%2F2026-10-20-wasp-1-0-is-coming%2Fwasp-1-0-is-coming-banner.webp",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAgEABP/EABYBAQEBAAAAAAAAAAAAAAAAAAADBP/aAAwDAQACEAMQAAAB6phloqEf/8QAGBABAAMBAAAAAAAAAAAAAAAAAQACESH/2gAIAQEAAQUCh0XIdGFMq1EDD//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABoQAAICAwAAAAAAAAAAAAAAAAABERIgIWH/2gAIAQEABj8CxrsXCEf/xAAbEAEAAgMBAQAAAAAAAAAAAAABABEhMXFRYf/aAAgBAQABPyFjoZifY8kFlWnITBp3UNFfDeYZ6Cf/2gAMAwEAAgADAAAAEDTf/8QAFhEBAQEAAAAAAAAAAAAAAAAAABEh/9oACAEDAQE/EG1//8QAFxEAAwEAAAAAAAAAAAAAAAAAAAERIf/aAAgBAgEBPxDIOQ//xAAcEAACAgIDAAAAAAAAAAAAAAABEQAhYXExQVH/2gAIAQEAAT8QZUnmZVgSAlWiTYGN7DskRHc8EB208gQEqR0HcFkuCf/Z",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4828432",
+      "title": "You're Spawning Goroutines Wrong: The Visual Architecture Guide That Fixes Go Concurrency Forever",
+      "desc": "By S M Tahosin | 12 min read",
+      "tag": "tutorial",
+      "published": "2026-11-11T13:55:45Z",
+      "order": 23,
+      "url": "https://dev.to/smtahosin/youre-spawning-goroutines-wrong-the-visual-architecture-guide-that-fixes-go-concurrency-forever-1he0",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fi.imgur.com%2F2nXWUoj.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAwEE/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAH/2gAMAwEAAhADEAAAAcaFIrFF/8QAGxAAAgMAAwAAAAAAAAAAAAAAAAECERIhQUL/2gAIAQEAAQUCTL5y7jPJ3Z6R/8QAFREBAQAAAAAAAAAAAAAAAAAAEBH/2gAIAQMBAT8Bh//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABoQAAIDAQEAAAAAAAAAAAAAAAABEBExITL/2gAIAQEABj8CSo8owfNmo//EABoQAQACAwEAAAAAAAAAAAAAAAEAETFBoZH/2gAIAQEAAT8hmLCHyjaCtajV6JiALjsUwdjLLOz/2gAMAwEAAgADAAAAEJhv/8QAFhEBAQEAAAAAAAAAAAAAAAAAAAEx/9oACAEDAQE/EDK//8QAFxEAAwEAAAAAAAAAAAAAAAAAAAERMf/aAAgBAgEBPxCmqs//xAAcEAEAAwEBAQEBAAAAAAAAAAABABEhQTGRYbH/2gAIAQEAAT8QoKCmCh/Z1maoz5LELr159m4LoR2qjRZwffyerD16iFZil9RrOnQpc//Z",
       "color": "#3B49DF"
     },
     {
@@ -259,22 +283,10 @@
       "desc": "By Nnamdi Felix Ibe | 12 min read",
       "tag": "tutorial",
       "published": "2026-11-11T06:32:19Z",
-      "order": 22,
+      "order": 24,
       "url": "https://dev.to/ndcodes/part-5-the-control-that-protected-an-empty-bucket-e1j",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F1v9spk1il2i1k2pk4bfp.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAAEDBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHsugio/8QAFxABAAMAAAAAAAAAAAAAAAAAAREgIf/aAAgBAQABBQJdGb//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAUEAEAAAAAAAAAAAAAAAAAAAAw/9oACAEBAAY/Ag//xAAYEAEBAAMAAAAAAAAAAAAAAAABABEgMf/aAAgBAQABPyFREy6S42//2gAMAwEAAgADAAAAEMH/AP/EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QP//EABwQAAMAAgMBAAAAAAAAAAAAAAABETHwIUFRYf/aAAgBAQABPxBbJxjaTGDK1jG6E2R+sn1kIf/Z",
-      "color": "#3B49DF"
-    },
-    {
-      "id": "devto-5004421",
-      "title": "I Used gp-grid to Build a React Food Festival App with Advanced Data Grid Features",
-      "desc": "By Hadil Ben Abdallah | 16 min read",
-      "tag": "tutorial",
-      "published": "2026-11-10T09:04:10Z",
-      "order": 23,
-      "url": "https://dev.to/hadil/i-used-gp-grid-to-build-a-react-food-festival-app-with-advanced-data-grid-features-3l22",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fn4q9jewu74jn3w6oo3yn.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAAMAAAAAAAAAAAAAAAAAAQACBP/EABYBAQEBAAAAAAAAAAAAAAAAAAIAAf/aAAwDAQACEAMQAAABwMEbA7f/xAAZEAADAAMAAAAAAAAAAAAAAAAAERIBECH/2gAIAQEAAQUCXBklD1WT/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFBABAAAAAAAAAAAAAAAAAAAAMP/aAAgBAQAGPwIP/8QAGxAAAwEAAwEAAAAAAAAAAAAAAAERIRAxQWH/2gAIAQEAAT8h9NE81Jjx0ipRNJwp9D//2gAMAwEAAgADAAAAEFyf/8QAFREBAQAAAAAAAAAAAAAAAAAAACH/2gAIAQMBAT8QV//EABcRAAMBAAAAAAAAAAAAAAAAAAABETH/2gAIAQIBAT8QFFp//8QAGxABAAMAAwEAAAAAAAAAAAAAAQARITFBUWH/2gAIAQEAAT8QGtgrjIpRTpqIoCfa4iGTT3UCw4zxXVTKtcxWt59n/9k=",
       "color": "#3B49DF"
     },
     {
@@ -283,7 +295,7 @@
       "desc": "By Ken W Alger | 10 min read",
       "tag": "tutorial",
       "published": "2026-11-03T13:53:00Z",
-      "order": 24,
+      "order": 25,
       "url": "https://dev.to/kenwalger/rack-before-you-remember-2jl3",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fjta595mrd2d2908smur0.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAwUAAQT/xAAUAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAGwa1gsYAI//8QAGhAAAwEAAwAAAAAAAAAAAAAAAAECEQMSE//aAAgBAQABBQKn1lcuF0keslLZLWykf//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABURAQEAAAAAAAAAAAAAAAAAAAEQ/9oACAECAQE/ASf/xAAXEAEBAQEAAAAAAAAAAAAAAAAQAQJR/9oACAEBAAY/AidKZp//xAAbEAACAwADAAAAAAAAAAAAAAAAAREhQXGRof/aAAgBAQABPyGxfg7KaNxpHJ0LlESySHcFB//aAAwDAQACAAMAAAAQiO//xAAVEQEBAAAAAAAAAAAAAAAAAAABAP/aAAgBAwEBPxBJv//EABYRAAMAAAAAAAAAAAAAAAAAAAABEf/aAAgBAgEBPxBqRH//xAAdEAEAAwACAwEAAAAAAAAAAAABABEhMUFhcYGh/9oACAEBAAE/EMi1a8I6+pHYO3g4+uz7C++MATXLiaLdlgFtwa67f5P/2Q==",
@@ -295,7 +307,7 @@
       "desc": "By Harsh  | 4 min read",
       "tag": "tutorial",
       "published": "2026-11-03T13:36:07Z",
-      "order": 25,
+      "order": 26,
       "url": "https://dev.to/harsh2644/i-let-ai-build-a-feature-without-giving-it-the-full-context-6h",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fvjfvxjyuym3m70wcniah.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAGAAAAgMAAAAAAAAAAAAAAAAAAgQBAwX/xAAUAQEAAAAAAAAAAAAAAAAAAAAC/9oADAMBAAIQAxAAAAFjPOEVyGwr/8QAHBABAAIBBQAAAAAAAAAAAAAAAQACEQMQEhMh/9oACAEBAAEFAvF7LbNLEolJyM5jqWT/xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAcEAACAgIDAAAAAAAAAAAAAAABEQAQEiExMnH/2gAIAQEABj8CU5p46mgX7OtIkqf/xAAdEAEBAQABBQEAAAAAAAAAAAABEQBBITFRYZGx/9oACAEBAAE/IR6jULMCd+hMfSBzlr7DG5/Wjw/dakuHf//aAAwDAQACAAMAAAAQcX//xAAVEQEBAAAAAAAAAAAAAAAAAAAAAf/aAAgBAwEBPxBX/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPxA//8QAHRABAQACAgMBAAAAAAAAAAAAAREAITGhUWFxwf/aAAgBAQABPxCvBBVsyQnPeLNCt84pHm0aMSpIiufWAKdtl4q6+TX5jrkohHrP/9k=",
@@ -307,22 +319,10 @@
       "desc": "By asagiman | 3 min read",
       "tag": "tutorial",
       "published": "2026-11-06T07:29:45Z",
-      "order": 26,
+      "order": 27,
       "url": "https://dev.to/suirindo/when-an-ai-agent-says-done-what-exactly-has-finished-5h3p",
       "image": "https://media2.dev.to/dynamic/image/width=1200,height=627,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fn2w315486nmzhh85n8wo.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAARACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAgABBP/EABcBAAMBAAAAAAAAAAAAAAAAAAABAgP/2gAMAwEAAhADEAAAAerFrDMJrKu8NGX/xAAcEAABBAMBAAAAAAAAAAAAAAAAAQIRIRASICL/2gAIAQEAAQUCg1aQg6sUeR8Lz//EABcRAAMBAAAAAAAAAAAAAAAAAAABAhD/2gAIAQMBAT8BE8o//8QAFBEBAAAAAAAAAAAAAAAAAAAAIP/aAAgBAgEBPwEf/8QAFxAAAwEAAAAAAAAAAAAAAAAAEBEgIf/aAAgBAQAGPwJwjk//xAAeEAEAAgEEAwAAAAAAAAAAAAABABFBEDFxkSFRYf/aAAgBAQABPyEKK2nwZXh7nhEd5dHpOb1BOb5IgDDV0//aAAwDAQACAAMAAAAQSDcd/8QAGBEBAQADAAAAAAAAAAAAAAAAAQARITH/2gAIAQMBAT8QBCwO4u7/xAAWEQEBAQAAAAAAAAAAAAAAAAABABH/2gAIAQIBAT8QVGdZi//EAB4QAQADAAICAwAAAAAAAAAAAAEAESFh8BBBMVGB/9oACAEBAAE/EL2UZQxXb/2Hp/XMqlIk2GwabXeK9Qa6fXEU1dH1PhUTlV4fBn//2Q==",
-      "color": "#3B49DF"
-    },
-    {
-      "id": "devto-4966183",
-      "title": "The Postcard That Ate Six Grammars: 1980 Smalltalk-80, 1976 Make, TDD, and the Four Attractors of Agentic Coding",
-      "desc": "By Randal L. Schwartz | 43 min read",
-      "tag": "tutorial",
-      "published": "2026-11-03T02:41:46Z",
-      "order": 27,
-      "url": "https://dev.to/gde/the-postcard-that-ate-six-grammars-1980-smalltalk-80-1976-make-tdd-and-the-four-attractors-of-45me",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F5gl4u3vgt6joi8tfi99i.jpg",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAABAID/8QAFQEBAQAAAAAAAAAAAAAAAAAAAQD/2gAMAwEAAhADEAAAAS2dgxhqZv/EABgQAQEBAQEAAAAAAAAAAAAAAAExABEh/9oACAEBAAEFAlHcOEYU8G7/xAAVEQEBAAAAAAAAAAAAAAAAAAAAAf/aAAgBAwEBPwFX/8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAGBABAAMBAAAAAAAAAAAAAAAAAQARISD/2gAIAQEABj8CCZGjev/EABoQAAIDAQEAAAAAAAAAAAAAAAABESFRMaH/2gAIAQEAAT8hQdiCr0lYQXRp09F0XWVaKhDZ/9oADAMBAAIAAwAAABDtz//EABURAQEAAAAAAAAAAAAAAAAAABEQ/9oACAEDAQE/EBj/xAAWEQEBAQAAAAAAAAAAAAAAAAAAARH/2gAIAQIBAT8Q1K//xAAcEAEBAQEAAgMAAAAAAAAAAAABEQAhMUFRkcH/2gAIAQEAAT8QGp6V/M3kFnyzm+oGnXp5ruVAQ+mYUI9jwLjDYFS23Kw9HDf/2Q==",
       "color": "#3B49DF"
     },
     {

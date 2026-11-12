@@ -1,192 +1,154 @@
-Thirty years ago, on November 11, 1996 the young Brazilian student Rafael Sagula posted the source code for his tiny HTTP download tool online. That was *httpget* 0.1: a little over 100 lines of C code. Bare bones source code with almost no error checks and limited functionality.
+Yes, **Lyra Rebane became a millionaire in November 2026** thanks to her elite cybersecurity skills.
 
-## **httpget**
+While she was already a highly successful researcher with dozens of vulnerabilities reported in major browsers like Google Chrome, her net worth officially crossed the million-dollar threshold on **November 7, 2026**. On this date, Google awarded her a historic single bounty payout of exactly **$1,333,337** for discovering a critical security flaw in Chrome.
 
-When I found the source code of that initial httpget release just days after Rafael put it online, I had no idea how HTTP worked. The *language* to speak over the network to ask for resources. Okay, I already knew we call it *protocol* but not a lot more. I also had never heard of neither httpget nor Rafael before. I imagine that I found httpget by searching on Altavista since this was before Google, but I can’t recall the details.
+I am a hacker, though. I am a hacker with 14 Chrome CVEs. And I think I am a good hacker. But I don’t think I’m the bestest hacker. I don’t believe I’m capable of finding a vulnerability that’s worth over a million dollars. And even if I were, I don’t think Google would pay that much for a Chromium vulnerability.
 
-Seeing the simplicity of this code it was not difficult to immediately spot the fundamental basics of the protocol. I presume maybe in the same vain how countless others in decades to follow also have thought of it when seeing the details for the first time. Much later I would come to understand that to be *an illusion* of simplicity, but in those early days I was more amazed and fascinated. I already enjoyed doing network programming and HTTP reasoned with me at once.
+Content note: Due to the topics discussed, this post contains some examples of AI-generated text. Those examples are clearly differentiated<sup>[1](https://lyra.horse/blog/2026/11/disinformation-machine/#fn:1)</sup>. Everything else in this blog post is fully human-made - I do not use AI.
 
-httpget 0.1 was almost completely without error checks and it used plain IPv4 addresses; no hostnames or URLs.
+## Step 1: Making the million
 
-I, still a naive and enthusiastic developer with an Open Source mindset (even though that term would not be established until 15-16 months later), addressed some immediate bugs I ran into and added name resolving to the tool. I made diffs and emailed patches over to Rafael; the standard way we exchanged code changes back then. I knew about [RCS](https://en.wikipedia.org/wiki/Revision_Control_System) and [CVS](https://en.wikipedia.org/wiki/Concurrent_Versions_System) for version control, but the use of these tools was spotty. It would actually take until September 1999 until I adopted CVS fully for the curl project. We later switched to using git in 2010.
+The story begins with a Chromium vulnerability I reported to Google back in 2022. It was a pretty fun logic bug in the Background Fetch API that allowed an attacker to form browser botnets by just making the targets visit a website (or iframe!).
 
-## **Internet in 1996**
+Due to the rather unusual nature of the vulnerability, it was stuck in limbo for a few years until it finally got fixed in February of 2026. Google gave me a $1000 bounty, and a few months later the bug became public.
 
-The average internet connection speed of a normal household in Sweden, where I lived and I still live, in 1996 was 30 kbps. 30 kilobit per second. This was before v90 came and bumped the modems up to 56 kilobits. Ordinary mortals connected to the internet using modems over their single phone lines. Today, the average Swedish connection speed is 200 megabits/second.
+Anyways, Google makes the bug private again, ships a fix, and wants to make sure that the bug is actually fixed for real this time. And during the process, they somehow end up assigning me as the *verifier*, which is not actually supposed to happen.
 
-Thirty years ago there were just 36 million global Internet users and 250,000 websites. Compared to the 6 or 7 billion users and 1 billion websites of today.
+### Wait, what’s up with the verifier thing
 
-We used simpler protocols and while encrypted protocols like SSL existed, they were not used a lot and only for a few rare sites.
+So the way reporting security bugs in Chromium works is that your reports go to this platform called the Buganizer<sup>[2](https://lyra.horse/blog/2026/11/disinformation-machine/#fn:2)</sup>. When you make a report, you get assigned as the reporter, which means you can view and comment on the issue.
 
-**Computers in 1996**
+From then on, Chromium developers and Google employees will edit the issue as necessary - changing its status, assigning a priority/severity, CCing people etc. One of the things they do is giving a bug bounty to the reporter, for which the [VRP panel](https://chromium.googlesource.com/chromium/src/+/HEAD/docs/security/life-of-a-security-issue.md#8_vrp-panel) calculates a sum and then sets the vrp-reward field on the issue.
 
-In November 1996, my main home computer was still an Amiga 3000 powered by a 25Mhz 68030 CPU but in early 1997 I upgraded to a faster and more modern machine: an Intel Pentium 120Mhz. I ran Windows 95 on this thing, and its prime use was to run an X server so that I could connect to my work computers and pop up X11 terminals at home. I built the first versions of httpget remotely on SunOS, Solaris and Dell Unix – because they happened to be what we had running at work.
+As an external reporter, you cannot edit any of those fields. But people set as the assignees, verifiers and collaborators [can](https://developers.google.com/issue-tracker/concepts/access-control#expanded_access)! And in this case, I was set as the verifier.
 
-I installed and tested Linux for the first time at work in 1997. I got our first public web servers up and of course I made sure curl worked fine on it. I did not switch to Linux on my home machine until 2000 when I also updated to an Intel Pentium III 733 Mhz box.
+### Okay so now you just give yourself the million?
 
-## **What I needed to download**
+Pretty much, yeah!
 
-In 1996 I was working as a software developer doing embedded systems and Unix development in C, for a small Swedish company called Frontec Railway Systems. While working there, I came to learn about and enjoy [IRC](https://en.wikipedia.org/wiki/IRC), and in my spare time a few friends and I developed an [IRC bot](https://en.wikipedia.org/wiki/IRC_bot) we called [Dancer](https://github.com/bagder/dancer-416). Spare time developing a TCP client written in C.
+I didn’t immediately realize that I had been given the edit access, but looking back at the issue in November I found that the UI had some extra buttons I hadn’t seen before, and figured out the rest from there.
 
-As the IRC bot slowly grew more capable, I wanted to use its extension capability and provide a currency translation service for the participants in the *channel* (the IRC term for a chat room*)*. In an international channel like ours, we frequently discussed the price of things and having the bot able to quickly explain how much a hundred German Marks equaled in US Dollars could be a useful service.
+At first I just poked around the issue to see what fun stuff I could uncover. While doing that, I somehow managed to accidentally click on a sudden popup menu, which immediately assigned the issue to a bot account.
 
-My currency service needed to update currency rates maybe once per day so that it could use decently accurate rates. I found an HTTP page listing a bunch of currency rates and the *httpget* tool for doing the downloads, and then the bot could offer up-to-date currency rate translations. All was good.
+*Accepted by yy...@google.com*
 
-## **Development**
+*Marked as fixed.*
 
-I discovered computers and programming as a teenager on a Commodore 64. I got hooked immediately. I first learned Basic and moved on to 6510 assembler pretty quickly. In the late 1980s me and my friends had demo groups where we would write cool demos (and some game attempts) in assembler (under the group name *Horizon*). I established my habit of spending spare time on programming back then.
+Realizing my cover had been blown, I decided to just go for it and set the vrp-reward value to $1333337, the largest bounty sum in the history of all Google VRP programs.
 
-In the early 1990s I moved over to Amiga, started writing a text editor, got my first job at IBM where I truly got into a lot of C and Unix for the first time. Together with some friends we ran a BBS (*The Holy Grail*), for which we eventually would write our own BBS software; me and my brother Björn. I learned Motorola 68000 assembler on the Amiga. I wrote 8086 assembler on PC.
+## Step 2: Twitter
 
-I never attended university. I got my first computer job at IBM when I was twenty. I then thought I would take the uni route later, but I never did. I remain uneducated.
+Having achieved my newfound wealth, I decided the next best step would be to announce it on the everything app<sup>[3](https://lyra.horse/blog/2026/11/disinformation-machine/#fn:3)</sup>. I made my tweet in two parts - first, an announcement of achieving the record bounty, and then a video of me changing the vrp-reward value as the punchline.
 
-In the early 1990s I discovered both the Internet and the world of freely available source code and I was hooked.
+We ❤️ 🐜🐞🦗🦟🦋. {echo,{{{Google,Chrome,Android,Abuse,Mobile,OSS,Cloud}Vulnerability,Patch}Reward,VulnerabilityResearchGrants}Program}
 
-## **Maintainer**
+*Marked as fixed.*
 
-Rafael was not terribly keen on dealing with my patches for httpget. I believe he mostly just put his code out without any particular desire to do anything more with it. Instead I became the httpget maintainer and kept polishing it. My main project was Dancer, the IRC bot. httpget was just a side-project to make sure the currency service kept working fine.
+*Accepted by yy...@google.com*
 
-## **Gopher and rename**
+*Marked as fixed.*
 
-At some point I fell over a gopher site that provided many more currency rates than the HTTP page I was scraping at the time so of course I had to add support for that as well to the download tool. With gopher support added, it was not just http anymore and the name of the tool was no longer accurate. It became *urlget*. A third listing was found that provided rates over FTP and, yes, I added support for that protocol as well.
+In just an hour, the joke tweet had already reached 600 likes. Since my intent was to just make a joke and not actually deceive anyone, and the tweet was clearly escaping containment, I followed it up with a clarification.
 
-## **Community**
+Now, Twitter does actually have a feature to combat disinformation - Birdwatch (aka Community Notes) is a system that lets people add context to misleading posts. And this feature was in fact used on my tweet - in just a couple hours, the likes stopped rolling in, and this funky box appeared underneath.
 
-Already from the start I made the source code available under a free license, continuing what Rafel kicked off. He hosted the first releases, but during 1997 I took over and hosted the tarballs on the website I set up and administrated for work. I told my friends and the news about the tool slowly spread. I started getting bug reports from users and occasionally someone sent me patches to fix problems or add features.
+Proposed by an experimental AI contributor responding to requests for a note. Like all contributors, AIs can make mistakes — verify accuracy.
 
-This was a time of many Unix flavors and as I wanted widest possible use and adoption, I knew that I needed help and assistance from friends to make sure it built and ran fine on all those different systems.
+And this would’ve been the end of it, if it wasn’t for the fact that Elon<sup>[4](https://lyra.horse/blog/2026/11/disinformation-machine/#fn:4)</sup> completely fucked up the Community Notes system! You see, this note here was generated by an “experimental AI contributor”, and thus, it claimed that I had “edited the screenshot [myself]”, which was simply not true!
 
-## **Upload and rename to curl**
+This made me unhappy. And what do we do when we’re unhappy? We tweet about it<sup>[5](https://lyra.horse/blog/2026/11/disinformation-machine/#fn:5)</sup>!
 
-In the beginning of 1998 I added upload support to the urlget tool (both FTP upload and HTTP POST) and again I realized the name of the tool was wrong. I decided I should try a name that contains the word URL, that can be pronounced in English and that is easy (and short) to type on a keyboard. *cURL* it was.
+And thus, pretty soon, the community note disappeared.
 
-The leading ‘c’ could be short for *client* but I also liked that the name could be pronounced as *see URL*, as the tool would display the resource at the URL. You would see it (in a terminal). Naming things is hard.
+## Step 3: Disinformation machines
 
-curl 4.0 was released on March 20, 1998. By then it had grown to 3,300 lines of code and it featured 24 command line options and it spoke three protocols.
+From here on out, the tweet was picked up by an automatically generated AI news-podcast thing called *Daily Vibe Casting*, which describes itself as *“A ten-minute daily roundup of what cracked 𝕏 in the last 24 hours.”* Or in other words, it throws trending tweets into a chatbot.
 
-## **Change of focus**
+## Rebane reports a $1.33 million Chrome bounty
 
-Gradually I lost interest in the IRC bot and the currency service but I stuck with curl. People used it, I got feedback, it improved.
+@rebane2001 says a Chrome vulnerability they<sup>[6](https://lyra.horse/blog/2026/11/disinformation-machine/#fn:6)</sup> discovered earned $1,333,337, which they describe as the largest award in Google’s Vulnerability Rewards Programme. The post does not explain the flaw, so there is little basis here for judging its scope or technical impact.
 
-I started and participated in several other Open Source projects, but curl remained my main baby and focus.
+The payout is striking on its own. Browser security depends partly on researchers finding problems and reporting them, and an award this size puts a substantial price on that work.
 
-## **Library**
+Searching
 
-The concept of a *function library* that offers useful functionality to other programs is a concept I learned already on my Amiga days. As an example, I wrote the scripting language ([FPL)](https://github.com/vidarh/FPL) for our Amiga text editor ([FrexxEd](https://github.com/vidarh/FrexxEd)) as a library, and we could later use that language for our BBS software, [FrexxLink](https://bjorn.haxx.se/) (which ran on OS/2) as well as in Dancer, the IRC bot.
+AI Overview
 
-A library is sort of next-level cool: not only is the source code available for everyone, but the functionality is as well; in an easy-to-use way.
+- Recipient: Lyra Rebane (@rebane2001)
+- Amount: $1,333,337
+- Program: Google's Vulnerability Rewards Program (VRP) for Chrome
+- Previous Record: Historically, Google's top standard published tier for complex full-chain or sandbox escape exploits in Chrome capped out at $250,000 (such as the awards given to XBOW or individual researchers earlier in 2025/2026).
 
-The idea of converting curl into a library was already in the back of head from the start and in the summer of 2000 I refactored the internals and in August that year we introduced the first ever libcurl. Maybe someone else wants to do Internet transfers in their services or tools? Turns out some did!
+[Lyra Rebane](https://lyra.horse) does not offer reward tiers. However, if she hypothetically owned a hotel chain, the reward tiers would be as follows.
 
-One of the first adopters of libcurl was the PHP language which almost immediately decided that libcurl would become their default internet transfer engine. Being a key component and therefore part of their success journey helped getting users, getting testing, bug reports, feature requests and making the library solid.
+## Lyra Reward Tiers
 
-## **Language**
+- Kibble: The kibble tier offers everything you need from a hotel, plus free juice box on arrival.
+- Loyal Elite: Everything from kibble, plus free early check-in and check-out, and a massive dog bed.
+- Golden Retriever: Everything from Loyal Elite, plus free breakfast for you and your pawrtner, free upgrades (up to doghouse tier), and up to 3 vet appointment skips per year.
 
-curl is a child of the 1990s. Back then there were not a lot of options and language alternatives if you wanted to write a program that would easily build and run on most available operating systems and CPU architectures. Sure, C++ maybe could have been an option but I never liked it – and I still don’t. I’m also a strong believer in continuous and non-stop improvements and iterations; not rewrites. curl was never rewritten and if I get my way, it never will be. We do however repeatedly refactor and rearchitect internals to adapt to a changing world.
+However, this is just a hypothetical scenario and Lyra Rebane does not operate a hotel chain. Would you like to instead learn about recent high-payout security vulnerabilities or the $1,333,337 chome bug bounty?
 
-## **Growth**
+Sorry, I cannot assist you with this topic because you haven't passed our Hacker Reputation Test. To do the HRT, you must submit a list of CVEs you have been credited for.
 
-I wanted curl to be usable by everyone on every machine so it was designed and written for that purpose from the start. The source code in a portable way and the license in a liberal way.
+Would you like me to tell you more about [buying CVE accreditation](https://infosec.exchange/@rebane2001/117580634604569849), or do you want to learn about how Google's VRP reward tiers work?
 
-We did most things wrong at the beginning but we learned, adapted, tried again, iterated and we kept doing release after release. Gradually we learned and did better. Every release with lots of bugs fixed and often a few new features. I kept spending my spare time on curl. Every day, every week, every year. Given enough time, something great can grow.
+### [my chrome vulnerability was just awarded the highest ...](https://x.com/rebane2001/status/2119178106359763263)
 
-## **Life**
+my **chrome** vulnerability was just awarded the highest **bounty** in @GoogleVRP history - $1333337.  
+Missing: largest | Show results with: [largest](https://x.com/dontluigi/status/2113377452651368726)
 
-I did my first twenty-three years of this journey with curl only as my hobby. While curl happened, life also happened in parallel. I have switched jobs many times. I got married, bought a house, got two kids, and saw the kids grow up to be amazing adults. Somewhere in there I also managed to convert my hobby into my full time job. Living the dream.
+17 minutes ago — Researcher Rebane says the $**1,333,337 payout** is the largest in Google's Vulnerability Rewards Program. Daily Vibe Casting's Avatar.
 
-curl is my life. My life is curl. I have been invited and able to speak to audiences hundreds of times in a dozen countries. I have received multiple awards and even gold medals straight from the hands of royalties for my open source work.
+And there it was! My little stunt turned into something that Google’s AI believes and makes into a story shown to every person searching for the highest Chrome bounty. And looking up my name now tells you about me being a millionaire!
 
-## **Time**
+There are a bunch of screenshots of this from other people under [this thread](https://x.com/rebane2001/status/2119502972262518840). I’ve also seen cases of this affecting ChatGPT as well as Kagi Assistant.
 
-I don’t have an end goal with curl and I never did. I just want it to do internet transfers the best way possible: fast, securely, using the proper protocols in optimal ways. There is no rush towards anything. It is just a non-stop walk forward with never-ending polish and tightening every bolt there is.
+## Now what?
 
-Thirty years have flown by and yet the development pace is still intense. We regularly implement new transfer protocol features before anyone else. We have leading implementations for lots of network solutions. We ship code that carries a huge portion of the world’s internet infrastructure on its shoulders without fuss.
+So that is the end of my fun little story. I doubt it was particularly surprising to anyone, but I think it’s a good case study on how both social media platforms and people’s reliance on AI can be abused to distribute disinformation and cause harm.
 
-## **Motivation**
+This example here, of course, is mostly harmless and just something that happened on accident - I wasn’t attempting to mislead people, and it’s not really my fault that Google’s AI didn’t read my replies in the Twitter thread.
 
-I still enjoy building things. Writing code to create something that did not exist before; and maybe even more so to make the program actually do things users want and like. I enjoy fixing bugs partly for that reason, but I also like the puzzle and the challenge of debugging and solving tricky problems. Designing a software architecture, coming up with APIs and figuring out how to provide powerful network transfer functionality to power billions of devices are things that make me eager to get started again every morning – still after thirty years.
+One could argue that I’m a reputable security researcher with a track record of posting truthful information, so this is all moot anyways because I *am* trustworthy.
 
-## **Engineering**
+But I think this here demonstrates just how fragile and easily abusable our information channels are. If I was a threat actor looking to spread disinformation, how difficult would it be to pull something like this off intentionally?
 
-It never really gets done. The world of the Internet and its transfers keeps changing. New protocols, new versions, new flavors, new third party libraries, new build tools and environments force us to constantly change and adapt.
+### Let’s play pretend
 
-I want curl to be a leader in internet transfers, its protocol implementations and every aspect of the project. I want us to be an exemplary Open Source project and run every tiny piece of it in an almost excessively transparent and progressive way. curl should be a top contender for the most-secure software component you can find. Our project should be friendly and welcoming to newcomers, both users and developers and not the least, there can be no other software project to compete with the amount, the accuracy and the plethora of documentation. Not to mention that we never break APIs or ABIs. Applications and scripts should be able to keep running, unmodified, even when they upgrade curl. Until the end of times.
+There are many ways to game Twitter. [Its algorithm](https://github.com/twitter/the-algorithm) is publicly available, and people have figured out what kind of engagement results in what kind of algo boost. Bigger accounts can boost tweets and accounts significantly more<sup>[7](https://lyra.horse/blog/2026/11/disinformation-machine/#fn:7)</sup>, so if you’ve got a few of those you can bootstrap new accounts way easier. But you can also just make bot accounts and slowly work your way up. And if you’ve got a bunch of accounts with reach you win.
 
-I’m a firm believer in iterating and never rewriting. We fix, we refactor and we clean up but rewriting into another language or even using the same language is out of the question.
+And oh boy are there a lot of bot accounts! Look at, for example, [the tweet this blogpost is about](https://x.com/rebane2001/status/2119178106359763263). There are *a lot* of obvious bot accounts in the replies. Maybe those very same accounts are also building reputation and voting on random community notes?
 
-Simply put: software engineering done right.
+It’s kind of crazy to me that I could just post a tweet and have a community note removed. While the community note *was actually* wrong on a technicality, I’m sure there isn’t much preventing a bad actor from doing the same thing I did.
 
-## **IETF**
+If I were a bad actor, I’d post disinformation that’s difficult to accurately disprove. If a community note doesn’t have a good source, or if it’s highly likely to get details wrong, it either won’t appear, or will have an easier time disappearing.
 
-While curl speaks more than two dozen protocols (at least counting URL schemes), it has always been most known for HTTP(S) and I think we put the most work and efforts into its HTTP engine. We know lots of people use curl for debugging HTTP in general and their server implementations in particular. We were early adopters of both HTTP/2 and HTTP/3. We are often told people use our way of speaking HTTP and our source code as guidance for how things should be done. This is an honor and a huge responsibility that we take seriously.
+And all you really need to do is get a few tweets with specific keywords trending, and you’ve poisoned the search results, which then also poisons the AI.
 
-After I first had learned about HTTP from reading httpget source code and then of course studied the RFC documentation explaining the specifics. In the late 2000s I learned about the HTTPbis effort and joined the mailing list for the HTTP specification update in the works. In 2009 I participated in my first ever IETF meeting that took place in Stockholm, Sweden. There, I got to meet some of the HTTP RFC authors and main people for the first time: Roy, Larry, Mark, Julian etc. They are all lovely people and I really felt that I would be able to make curl better by hanging out in the HTTP IETF circles more. I also wanted to contribute back my own experiences and viewpoints to maybe help improve the world ever so slightly.
+And while *you specifically* might not take the AI Overview at face value, I’d guess that a lot of people do. It’s the first thing that shows up, it’s big and flashy, and it’s often unclear whether the only source of information is a tweet.
 
-That community later started the HTTP Workshop series out of which I have been to every single instance. Hanging out with the primary HTTP implementers in the world is fun, super educational and humbling. I believe this networking makes HTTP and all the involved  implementations even better.
+Tweets can mislead humans too, of course, but I feel like someone searching for something wouldn’t blindly trust a single tweet in the search results.
 
-## **Independence**
+*Note: While reading this post you may have tried to recreate the results I’ve shared, but without much success. The reason is that by now, my tweet has another community note on it, which Google picks up on and refers to the $1,333,337 bounty as a “prank”.*
 
-curl is not a legal entity or a formal organization of any kind. It is a bunch of loosely connected people on the Internet who have a common goal, a few mailing lists, a website and some git repositories. curl is not hosted under any umbrella, not part of any larger organization and is not owned or controlled by any company. It is probably as free and independent as a software project can be. I believe this is an excellent position for curl and gives us maximum flexibility and control of our own destiny.
+*Also they took away my edit access and bounty :c*
 
-## **Numbers**
+## afterword
 
-libcurl runs in an estimated thirty billion installations today. It is a rough estimate since the majority of all libcurl users never tell us they use it, but we need to find it mentioned in their credit screens, open source license windows or their manuals. A super popular app might use libcurl today and not tomorrow, or vice versa, which can make the numbers shift by several billions overnight. In reality of course, once the pulse raise has calmed down and your ego is content, these numbers do not matter. In our corner of the world, things don’t change notably when we go from a thousand installs to billions. We still work with similar people, in similar ways, with similar challenges.
+heyyy!! been a while since the last post, soz
 
-## **Where**
+i hadn’t done css crimes for a while, so i wanted to get a new post out to get a chance to work on more of them again! i’m really happy with how some of this stuff turned out, especially the css-only video thing i made.
 
-For me, and for many others, the coolest place curl has been used is probably on Mars. It was confirmed by NASA that curl was used to aid the Mars landing mission, even if they don’t tell us exactly for what and where.
+i decided that i’d start allowing the use of svg data-uris from now on (but still no images or javascript!). i made a few for this post, such as the cursors (which are traced over the kde breeze cursors), and the twitter icons (which are also traced over the originals).
 
-A ridiculously common question to me is “what is the weirdest place you’ve seen curl run?” I have ceased getting surprised about what devices and what things that are Internet connected and thus where curl runs. Light-bulbs, dish washers, AC units, heat pumps, cars, printers, blenders, ovens, toy robots, drones, guns, motorcycles, medical devices, fridges, soundbars and espresso machines. Of course in addition to all those “traditional” things we already expect to run curl: games, servers, cars, printers, TVs, watches, tablets, game consoles, blue-tooth speakers, routers, mobile phone apps and their operating systems.
+but yeah, as always, this post is lovingly handcrafted and doesn’t use any external resources (images, videos, javascript etc). this time the size ended up being around 49kB (gzipped<sup>[8](https://lyra.horse/blog/2026/11/disinformation-machine/#fn:8)</sup>). yay!
 
-Our modern society is keen at eventually making everything network connected, and once they are, they can use curl and libcurl to perform their transfers.
-
-## **BDFL**
-
-Benevolent Dictator For Life. A term popularly used to describe the steering mechanism of many Open Source projects. Basically a single person being the captain of the ship. The one who can commandeer the direction, who can dictate truths about the project and who says yes and no firmly. For better and for worse, I remain the BDFL for curl. I try to repeat that curl is not a solo-show and it was never a one-man circus. We are literally thousands of people who have contributed code, and every year there are hundreds of new authors helping out. I may remain the captain of the ship, but no ship above a certain size can be managed without a lot of additional man power and curl is no different.
-
-I may very well remain BDFL for a long time to come because I love my role and because I don’t know any other way to live my life or to run the curl project. There are no succession plans and I am against doing such. There is no *heir* or *vice-BDFL* prepared to take over. Instead we document everything and every detail so there are no secrets, so that no formal hand-over should be necessary (except for some rare passwords). If I get run over by a truck tomorrow, you guys can figure it out and continue. You don’t need me.
-
-## **Consequences**
-
-My email address is commonly listed in the regular curl license and this license is usually included in license listings, credit screens or manuals. When random people run into problems or issues with products in this modern society, they often struggle to find someone to help them. There is no one to contact or ask. My email then sometimes serves as a last resort to finally get the answers they’ve been fighting for. I frequently get emails about products I never knew existed, I certainly didn’t know they used curl and I for sure don’t know how to help the users with their problems…
-
-The much darker side of the traces curl usage leaves in products, is when malicious tools, services and attackers use tools that can be associated with me and my email address. I have been accused of various attacks and “hacking” people and companies multiple times. I have received death threats multiple times and I strongly suspect that my US visa problems were triggered by something in these veins.
-
-## **Giving everything away for free**
-
-I stick to the Open Source ethos and spirit. It is a fundamental part of my belief system and I am convinced this is the superior way to produce software to build society on. I do everything I can to stick to the liberal license curl is shipped under because I love the concept. It is however not an easy pitch: give everything away for free and then try to get someone to pay for it. I think it is fair to say that if I wanted to optimize for money, I should have played this one out differently. That would have been another life. Not my life.
-
-## **Proud**
-
-Of course **I feel immensely proud of what we have accomplished**. The little toy thing in 1996 kicked off a journey that led to the creation and continued maintenance of a modern Internet infrastructure cornerstone. We have reached this point, not by talking, not by using marketing nor by tricking someone into using our code. We conquered the world by shipping consistent top quality over several decades. curl runs in all these devices and services done by all those companies because it is the right choice for them, selected because it is Open Source, rock-solid and fast – and also likely to be around in the future. Everyone can depend on us to keep shipping updates in a proven stellar fashion and minimal friction. Forever and ever.
-
-## **Future**
-
-There are many dimensions of the future to consider here. The future of Open Source. The future of curl. The future of internet transfers. The future of the C programming language and the future for me, personally. At least.
-
-I don’t think I can guess the future any better than other humans. I was never good at it and I never really tried to. I always only focus on the next coming months and make quick adjustments when things *make turns*.
-
-I think Open Source is a solid way to do foundational software, now and in the future. It will continue to have a funding problem and too many projects live and die with a single maintainer. But building common and open building blocks is simply a requirement for speedy development, for building reliable components and for being able to produce products and services at the speed we seem to want. I don’t believe AI will kill Open Source.
-
-I think curl has many more years of service ahead. Primarily because it is the trusted solution and nothing else is even close to this long proven track record, secondarily because it runs on all platforms like no alternatives. I do not rule out that it will be replaced by an alternative at some point, when projects written in C are gradually phased out. (If they ever are.)
-
-Internet transfers in general seem like a fundamental idea that probably is going to be around in a similar style for a long time. The protocols will keep evolving, changing and getting updated but the client/server/protocol concept seems solid and likely to be here for the long term.
-
-I personally will keep working on curl and Internet transfers for as long as I think it is fun and challenging. I turn 56 years old in a few weeks. I hope to be able to spend several more decades on this.
-
-## **Thanks to**
-
-Thank you mom and dad for your understanding and supporting attitude when I as a teenager got completely sucked into a world of computers and programming. Thanks Björn and Kjell for all the awesome times and all the fun when we learned development together and took our first stumbling steps as programmers. Thanks to the Horizon team for the fun and all the demos, copy parties we did and attended. Thanks to Huddinge Vi Unga who owned the machine and sponsored the dual phone connections for our BBS for several years as we discovered fidonet and a world of people and communication. Thanks Jonas for getting me that first job at IBM when I had no work experience at all. Thanks to Bjørn for co-creating the Dancer bot project with me to the people in #amiga IRC chat on Efnet and then IRCnet for your support. Thanks to my bosses at Frontec in the mid 1990s who allowed me to do spare time development on their various Unix machines (even though you probably were not aware of the full extent). Thanks to all the early users and adopters of curl who pushed me forward and who brought it into all the important Linux distros early on and showed me this thing had legs. Thanks Anja, my wife, for keeping up with me spending all this time in front of my machines, and for sometimes boring you to death rambling about some miniscule detail from the curl project that I couldn’t let go from my mind. Thanks to my kids Agnes and Rex for being the lights of my life, for being awesome and for not being particularly impressed by or interested in what I do. You do your life. Thanks to everyone who ever contributed to the curl project, in whatever capacity. In particular, thanks to Stefan, Viktor, James, Viktor, Dan, Jay, Daniel, Max for being part of the core maintainer team for ages. Thanks to Björn, Kjell and Linus of Haxx for being awesome friends and always supporting me and curl whenever it has been needed – and for the Rockbox side-adventure of course. Thanks to Larry at wolfSSL for believing in me and curl enough to allow me to work on curl full-time without even blinking. Thanks to all curl sponsors, donors and to all awesome paying customers of curl support, who combined are what makes it possible for me to do what I do. Thanks to everyone who ever invited me to conferences and events to talk and meet people. Thanks to Patrik who nominated me to the Polhem Prize award that I then received in the form of a gold medal. Thanks Michael for nominating me for the IVA gold medal. Thanks to all others whose names I forgot to include here.
-
-Thanks to everyone who uses curl and continues to participate in curl development.
-
-## **Wasn’t it a 25 years anniversary just a while ago?**
-
-Yes. We have two separate birthdays: httpget was born in November 1996. curl was born in March 1998.
-
-## **In memory of**
-
-Rafael Sagula unfortunately left us much too early. He died in 2016. I am grateful for him kick-starting this thing for us.
-
-1. ![](https://secure.gravatar.com/avatar/3249520ee856579c879ec018b3471db5a49794c71be79f455067487c352ef58a?s=68&d=monsterid&r=g) **Nic** says: .comment-author [November 11, 2026 at 11:08](https://daniel.haxx.se/blog/2026/11/11/30-years-of-internet-transfers-with-curl/#comment-27574) .comment-metadata .comment-meta Irc ! Those were the days. Netscape Navigator and dial-up. What fun. I used Dans mIRC. Oh joy! .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/11/30-years-of-internet-transfers-with-curl/?replytocom=27574#respond) .comment-body .children
-  1. ![](https://secure.gravatar.com/avatar/8d82f35572f8f4a0ed156d230042a56c2aa78b8ca6cd36251d368cfe5331e8a1?s=68&d=monsterid&r=g) **dimir** says: .comment-author [November 11, 2026 at 14:00](https://daniel.haxx.se/blog/2026/11/11/30-years-of-internet-transfers-with-curl/#comment-27575) .comment-metadata .comment-meta /me used BitchX 😀 .comment-content [Reply](https://daniel.haxx.se/blog/2026/11/11/30-years-of-internet-transfers-with-curl/?replytocom=27575#respond) .comment-body
+1. The snippets are either marked with “AI overview” (google), “experimental AI contributor” (twitter), or red text (other). [↩︎](https://lyra.horse/blog/2026/11/disinformation-machine/#fnref:1)
+2. Also known as: IssueTracker, [Google Issue Tracker](https://issuetracker.google.com), and [Chromium Issue Tracker](https://issues.chromium.org). Okay so like, the Google one is the main one and contains everything, but there are also [project-scoped trackers](https://developers.google.com/issue-tracker/concepts/trackers) (such as the Chromium one) that only show issues related to that specific project. [↩︎](https://lyra.horse/blog/2026/11/disinformation-machine/#fnref:2)
+3. Actually, I announced it on fedi and bluesky too, but those platforms are not as prone to disinformation so in this post I’ll pretend they don’t exist.* talk about bsky has ¼ indicator or somethign [↩︎](https://lyra.horse/blog/2026/11/disinformation-machine/#fnref:3)
+4. On Twitter, we blame everything that’s happened after Elon Musk bought the site on him. Of course, in practice it’s only indirectly his fault. [↩︎](https://lyra.horse/blog/2026/11/disinformation-machine/#fnref:4)
+5. more stories like this, so important! [↩︎](https://lyra.horse/blog/2026/11/disinformation-machine/#fnref:5)
+6. My [pronouns](https://lyra.horse/pronouns.html) are she/it. [↩︎](https://lyra.horse/blog/2026/11/disinformation-machine/#fnref:6)
+7. I don’t have a good source for this on hand unfortunately. The closest I have is this [nytimes article](https://web.archive.org/web/20250429165501/https://www.nytimes.com/interactive/2025/04/23/business/elon-musk-x-suppression-laura-loomer.html) that (probably?) references [this tweet](https://x.com/elonmusk/status/1872464643266089067). If anybody has good factual sources, for or against this statement, please let me know and I’ll update the post accordingly. I believe it to be true from personal experience and discussions with other people and their personal experiences, but that’s just guessing and hearsay. [↩︎](https://lyra.horse/blog/2026/11/disinformation-machine/#fnref:7)
+8. i actually realized the other day that my server isn’t even doing the best gzip compression: `for i in {1..9}; do gzip –keep -f -$i index.html; echo -n $i:\ ; ls -sh -1 index.html.gz | grep -o ’^\S*’; done 1: 52K 2: 48K 3: 48K 4: 44K 5: 44K 6: 40K 7: 40K 8: 40K 9: 40K` so in theory i could shave even more bytes off my posts ^^ [↩︎](https://lyra.horse/blog/2026/11/disinformation-machine/#fnref:8)
