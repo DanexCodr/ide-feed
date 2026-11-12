@@ -1,19 +1,105 @@
-| [About the Book](https://letoverlambda.com/index.cl) [Table of Contents](https://letoverlambda.com/index.cl/toc) [Text Mode](https://letoverlambda.com/textmode.cl) [Reviews](https://letoverlambda.com/index.cl/reviews) [Buy It](https://letoverlambda.com/index.cl/buy) [Errata](https://letoverlambda.com/index.cl/errata) [Clarifications](https://letoverlambda.com/index.cl/clarifications) [Production Code](https://github.com/thephoeron/let-over-lambda/blob/master/let-over-lambda.lisp) [Original Code](https://letoverlambda.com/lol-orig.lisp) [References](https://letoverlambda.com/references.lisp) [![Support independent publishing: buy this book on Lulu.](https://letoverlambda.com/lulu-buy-now.png)](https://www.lulu.com/shop/doug-hoyte/let-over-lambda/paperback/product-18dzger.html) | About the Book [![](https://letoverlambda.com/small-cover.png)](https://www.lulu.com/shop/doug-hoyte/let-over-lambda/paperback/product-18dzger.html) **Let Over Lambda** (ISBN 978-1-4357-1275-1, 376+iv pp.) is one of the most [hardcore](https://hcsw.org) computer programming books out there. Starting with the fundamentals, it describes the most advanced features of the most advanced language: C<small>OMMON</small> L<small>ISP</small>. The point of this book is to expose you to ideas that you might otherwise never be exposed to. This book is about macros, that is programs that write programs. Macros are what make lisp the greatest programming language in the world. When used properly, macros enable amazing feats of abstraction, programmer productivity, and code efficiency and security that are unheard of elsewhere. Macros let you do things you simply cannot do in other languages. If you are looking for a dry coding manual that re-hashes common-sense techniques in whatever langue du jour, this book is not for you. This book is about pushing the boundaries of what we know about programming. While this book teaches useful macro skills that can help solve your programming problems today and now, it has also been designed to be entertaining and inspiring. If you have ever wondered what lisp or even programming itself is really about, this is the book you have been looking for. **2026 update:** Let Over Lambda was published in 2008, to align with the 50th anniversary of Lisp's invention in 1958. A lot has changed since then, in both Lisp and programming practice in general. Although my thinking and opinions have evolved since, I still believe the book holds up well as a tutorial and explanation of why Lisp so special. Going forward, the entire book is free to read online ([HTML](https://letoverlambda.com/index.cl/toc), [PDF](https://letoverlambda.com/lol.pdf)). Happy lisping! News [Chapter 6](https://letoverlambda.com/index.cl/guest/chap6.html) is now open. It takes a detour through anaphoric macros and culminates in what I think is a very interesting macro: **pandoric-eval**. Official Japanese translation available at [Amazon.co.jp](https://www.amazon.co.jp/-/en/%E3%83%80%E3%82%B0-%E3%83%9B%E3%82%A4%E3%83%88/dp/4434133632/) or any other fine Japanese book store. [Chapter 5](https://letoverlambda.com/index.cl/guest/chap5.html) now open. This is one of my favourite chapters. Enjoy. Added a [clarifications page](https://letoverlambda.com/index.cl/clarifications) to better explain the Let Over Lambda message. Matthew Lamari wrote a review on [Amazon](http://www.amazon.com/review/R1TP1KY78B3QFI/ref=cm_cr_rdp_perm) and gave the book 5/5 stars. Chapter 4 has been opened. Read about it in [Press Release #2](https://letoverlambda.com/pr2.txt). Adam Petersen wrote a [review](http://www.adampetersen.se/reviews/letoverlambda.htm). [Press Release #1](https://letoverlambda.com/pr1.txt) is available. It contains summaries of all the chapters. **Let Over Lambda** has an ISBN: 978-1-4357-1275-1 [References](https://letoverlambda.com/references.lisp) are available in a lispy format. The [back cover](https://letoverlambda.com/back-cover.png) is confirmed. Thanks Leo! |
-| --- | --- |
-| [About the Book](https://letoverlambda.com/index.cl) |  |
-| [Table of Contents](https://letoverlambda.com/index.cl/toc) |  |
-| [Text Mode](https://letoverlambda.com/textmode.cl) |  |
-| [Reviews](https://letoverlambda.com/index.cl/reviews) |  |
-| [Buy It](https://letoverlambda.com/index.cl/buy) |  |
-| [Errata](https://letoverlambda.com/index.cl/errata) |  |
-| [Clarifications](https://letoverlambda.com/index.cl/clarifications) |  |
-| [Production Code](https://github.com/thephoeron/let-over-lambda/blob/master/let-over-lambda.lisp) |  |
-| [Original Code](https://letoverlambda.com/lol-orig.lisp) |  |
-| [References](https://letoverlambda.com/references.lisp) |  |
-| [![Support independent publishing: buy this book on Lulu.](https://letoverlambda.com/lulu-buy-now.png)](https://www.lulu.com/shop/doug-hoyte/let-over-lambda/paperback/product-18dzger.html) |  |
-| About the Book [![](https://letoverlambda.com/small-cover.png)](https://www.lulu.com/shop/doug-hoyte/let-over-lambda/paperback/product-18dzger.html) **Let Over Lambda** (ISBN 978-1-4357-1275-1, 376+iv pp.) is one of the most [hardcore](https://hcsw.org) computer programming books out there. Starting with the fundamentals, it describes the most advanced features of the most advanced language: C<small>OMMON</small> L<small>ISP</small>. The point of this book is to expose you to ideas that you might otherwise never be exposed to. This book is about macros, that is programs that write programs. Macros are what make lisp the greatest programming language in the world. When used properly, macros enable amazing feats of abstraction, programmer productivity, and code efficiency and security that are unheard of elsewhere. Macros let you do things you simply cannot do in other languages. If you are looking for a dry coding manual that re-hashes common-sense techniques in whatever langue du jour, this book is not for you. This book is about pushing the boundaries of what we know about programming. While this book teaches useful macro skills that can help solve your programming problems today and now, it has also been designed to be entertaining and inspiring. If you have ever wondered what lisp or even programming itself is really about, this is the book you have been looking for. **2026 update:** Let Over Lambda was published in 2008, to align with the 50th anniversary of Lisp's invention in 1958. A lot has changed since then, in both Lisp and programming practice in general. Although my thinking and opinions have evolved since, I still believe the book holds up well as a tutorial and explanation of why Lisp so special. Going forward, the entire book is free to read online ([HTML](https://letoverlambda.com/index.cl/toc), [PDF](https://letoverlambda.com/lol.pdf)). Happy lisping! News [Chapter 6](https://letoverlambda.com/index.cl/guest/chap6.html) is now open. It takes a detour through anaphoric macros and culminates in what I think is a very interesting macro: **pandoric-eval**. Official Japanese translation available at [Amazon.co.jp](https://www.amazon.co.jp/-/en/%E3%83%80%E3%82%B0-%E3%83%9B%E3%82%A4%E3%83%88/dp/4434133632/) or any other fine Japanese book store. [Chapter 5](https://letoverlambda.com/index.cl/guest/chap5.html) now open. This is one of my favourite chapters. Enjoy. Added a [clarifications page](https://letoverlambda.com/index.cl/clarifications) to better explain the Let Over Lambda message. Matthew Lamari wrote a review on [Amazon](http://www.amazon.com/review/R1TP1KY78B3QFI/ref=cm_cr_rdp_perm) and gave the book 5/5 stars. Chapter 4 has been opened. Read about it in [Press Release #2](https://letoverlambda.com/pr2.txt). Adam Petersen wrote a [review](http://www.adampetersen.se/reviews/letoverlambda.htm). [Press Release #1](https://letoverlambda.com/pr1.txt) is available. It contains summaries of all the chapters. **Let Over Lambda** has an ISBN: 978-1-4357-1275-1 [References](https://letoverlambda.com/references.lisp) are available in a lispy format. The [back cover](https://letoverlambda.com/back-cover.png) is confirmed. Thanks Leo! |  |
-| [![](https://letoverlambda.com/small-cover.png)](https://www.lulu.com/shop/doug-hoyte/let-over-lambda/paperback/product-18dzger.html) | **Let Over Lambda** (ISBN 978-1-4357-1275-1, 376+iv pp.) is one of the most [hardcore](https://hcsw.org) computer programming books out there. Starting with the fundamentals, it describes the most advanced features of the most advanced language: C<small>OMMON</small> L<small>ISP</small>. The point of this book is to expose you to ideas that you might otherwise never be exposed to. |
+I have a Samsung smart TV from 2022. At some point, the Smart Hub started
+displaying ads. I think it’s absolutely disgusting that a device that I paid
+for and own, and that doesn’t use any additional Samsung “free” services is
+forcing ads on me, just to generate additional revenue for Samsung from an
+already-sold device. I was blocking the ads via my [Pi-hole](http://pi-hole.net)
+instance, until I was tinkering with my homelab and networking setup not
+that long ago and broke something. That caused the ads to start appearing
+again, which reminded me of their existence.
 
-λ
+Around the same time, the [eMudhra CA certificate fiasco](https://en.wikipedia.org/wiki/EMudhra#2026_weak_key_incident)
+took place, and the “compromised” private key was added to
+[*mitmproxy*](https://mitmproxy.org). *mitmproxy* is an open-source project for inspecting,
+replaying and modifying HTTP(S) network traffic. Normally, in order for it to
+be able to intercept TLS-encrypted traffic, the “victim” device must trust a
+custom certificate created by *mitmproxy* - this way *mitmproxy* can decrypt
+the traffic, inspect it, and then re-encrypt it using a real certificate before
+forwarding it to the intended destination. Unfortunately, some devices don’t
+allow adding custom SSL certificates to their truststore - like my Samsung TV.
 
-All material is (C) Doug Hoyte unless otherwise noted or implied. All rights reserved.
+**Mikrotik configuration (adapt to your router as needed)**
+
+```routeros
+# 192.168.0.7 is my raspberry-pi with mitmproxy
+# 192.168.0.9 is my Samsung TV
+
+/routing/table
+add name=tv-proxy fib
+
+/ip/route
+add dst-address=0.0.0.0/0 gateway=192.168.0.7 routing-table=tv-proxy
+
+/routing/rule
+add src-address=192.168.0.9/32 action=lookup-only-in-table table=tv-proxy
+
+/ip/firewall/filter
+add chain=forward action=accept src-address=192.168.0.9 connection-state=established,related
+add chain=forward action=accept dst-address=192.168.0.9 connection-state=established,related
+```
+
+**Raspberry-Pi configuration**
+
+```bash
+sudo iptables -I FORWARD 1 -s 192.168.0.9 -j ACCEPT
+sudo iptables -I FORWARD 1 -d 192.168.0.9 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+sudo iptables -t nat -A PREROUTING -i eth0 -s 192.168.0.9 -p tcp --dport 80 -j REDIRECT --to-port 8080
+sudo iptables -t nat -A PREROUTING -i eth0 -s 192.168.0.9 -p tcp --dport 443 -j REDIRECT --to-port 8080
+sudo iptables -t nat -A POSTROUTING -s 192.168.0.9/32 -o eth0 -j MASQUERADE
+```
+
+**mitmproxy configuration**
+
+```bash
+uvx --from mitmproxy mitmweb --web-port 8083 -p 8081 --emudhra --ssl-insecure --mode transparent --set stream_large_bodies=1m
+```
+
+With the *eMudhra* certificate being exposed, anyone can now create a custom
+SSL certificate for an arbitrary domain (let’s say a Samsung ad network
+domain), sign it with the compromised CA certificate, and all devices that have
+the *eMudhra* CA certificate in their truststores will trust the custom SSL
+certificate. This is why software vendors were racing (some more, some less) to
+revoke the certificate from their truststores, so that browsers, computers and
+smart phones wouldn’t be susceptible to this kind of attack. Luckily for me,
+Samsung did not yet release an update for my TV that would revoke the
+certificate. This allowed me to route all traffic from the TV through
+*mitmproxy* and get a list of all the domains and endpoints that my TV talks
+to, but also see the structure of the requests and response payloads.
+
+Turns out the flow is pretty simple: when something interesting happens on the
+TV, the TV sends a request to `https://catalyst.adgrx.com/adopportunity` with
+some details about the TV. When you return to the Smart Hub, the “home screen”
+of the TV, so to speak, the TV sends requests to
+`https://tvx.adgrx.com/impressions/tile` again with some details about the TV,
+and in response it receives either an empty JSON object (`{}`) or a JSON
+response describing an ad to display at the top of the Smart Hub.
+
+So I wrote a simple server in Rust that handles the same `/impressions/tile`
+endpoint and always returns JSON with an ad, except instead of links to an
+actual ad image, it has a link to a random photo of my family. I also included
+a simple frontend where I can manage the images that should be served.
+
+![AdSpoofer frontend](https://dvratil.cz/2026/11/hijacking-samsung-tv-smart-hub-ads/images/frontend.png)
+
+Additionally, the server blackholes any other `*.adgrx.com` request and returns
+`204 No Content` to prevent all the tracking from getting out of my home
+network.
+
+I then generated a wildcard SSL certificate for `*.adgrx.com`, signed it with
+the compromised eMudhra CA certificate and added it to the app.
+
+Finally, I configured my router to resolve `*.adgrx.com` to the IP address of
+my NAS, where I am running the ad spoofer, and now when we launch the TV, it
+looks like this:
+
+![Photo of my TV showing a spoofed ad with a custom picture](https://dvratil.cz/2026/11/hijacking-samsung-tv-smart-hub-ads/images/tv-photo.jpg)
+
+The source code for the adspoofer [is on my GitHub](https://github.com/danvratil/samsung-tv-adspoofer) in case
+anyone wants to try it out. It works with my particular model of TV, but other
+Samsung TVs might use different endpoints or expect a different shape of the
+response. If you make it work with your TV, feel free to send a patch!
+
+Obviously, this will only work as long as my TV trusts the compromised eMudhra
+certificates, which is either until the certificate expires or until Samsung
+pushes out an update, revoking the certificate. The latter I can prevent by
+blocking updates to the TV (which carries its own set of risks), but about that
+another time.

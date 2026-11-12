@@ -1,71 +1,128 @@
-If you spend enough time in online developer circles, you’ll eventually run into a specific, recurring complaint: *Software is being radicalized.*
+Dyalog v21.0 was released in November 2026 and is supported under Microsoft Windows, IBM AIX, Linux for x64 and ARM (incl. Raspberry Pi), and Apple macOS.
 
-This whole argument usually goes something like: once upon a time, open source was a pure, objective meritocracy. Code was just a utility. Tools were neutral, like hammers or electricity. But now, the SJWs (there’s always venom in the way they say SJW lmao) are making software political and ruining the careful meritocracy by bringing in things like codes of conduct and bringing attention to problematic individuals within the projects.
+Supported platforms/operating systems
 
-To a certain subset of developers, this feels like an existential crisis. A sudden, trend-driven corruption of a sacred technical sanctuary.
+Dyalog v21.0 is supported on the following platforms/operating systems:
 
-**Now, what if I told you that this nostalgia for a simpler time was never actually based in reality at all?**
+- IBM AIX:
+  - AIX 7.3 SP4 onwards with a POWER9 chip or higher
+- Linux:
+  - x86_64: Built on Ubuntu 22.04
+  - ARM64: Built on Debian GNU/Linux 13
+- macOS (Apple Silicon):
+  - macOS 26.3 (Tahoe) onwards
+- Microsoft Windows:
+  - Windows 11 version 25H2 onwards (Windows Server 2016 onwards)
+- Raspberry Pi (ARM-based):
+  - 64-bit: Raspberry Pi OS Bookworm or later (NOTE: This is installed using the Linux ARM64 package).
+  - Not supported on Raspberry Pi Pico.
 
-What people are calling the “radicalization” of software isn’t a new thing at all. I think what we’re seeing is that developers are rediscovering the foundational DNA of the software liberation movement and realizing that the “politically neutral” open source ecosystem they miss was a temporary corporate anomaly all along.
+This page discusses highlights of the Dyalog v21.0 release. For additional information regarding the features mentioned below, see:
 
-## The Great Sanitization of 1998
+- the release notes for Dyalog v21.0 (online)
+- the release notes for Link v4.2 (online)
+- the list of enhancements/fixes in Ride v4.7 (GitHub)
 
-I feel like a short history lesson is in order to fully appreciate how we got to where we are.
+## Introduction
 
-In the 1980s, when Richard Stallman launched the GNU Project and published the GNU Manifesto, the movement was ***explicitly moral, ethical, and anti-authoritarian.***
+Dyalog v21.0 is a relatively small release in terms of features that are visible to the user, with a lot of internal work being done to prepare for future improvements. However, it does include several new features that are intended to increase developer productivity, especially if your application needs to run on more than one platform.
 
-**Note:** Acknowledging RMS’s historical role in launching the Free Software movement is a matter of factual history, not an endorsement of the man.
+[![](https://dyalog.com/dyalog/dyalog-versions/uploads/images/General/youtube-play_24.png)](https://www.youtube.com/watch?v=cHGA_zMPPIo) [Video introducing Dyalog v21.0 from Dyalog Ltd’s Technical Director (CTO) Morten Kromberg](https://www.youtube.com/watch?v=cHGA_zMPPIo)
 
-History, however, requires us to document his foundational ideas while rejecting his personal conduct.
+## Key Enhancements in Dyalog v21.0
 
-Stallman built free software because he saw proprietary software as a direct threat to human freedom, individual autonomy, and social solidarity. In the FSF worldview, software freedom was a fundamental social right.
+Key enhancements in Dyalog v21.0 include the following:
 
-Then came 1998.
+- ⎕DT has been extended to validate and parse text-format datetimes.
+- ⎕SYSTEM provides information about Dyalog and the environment, including the operating system, important library versions, and the current/initial/temporary directories.
+- .NET generics are now fully supported for both .NET and .NET Framework.
+- A complete Software Bill of Materials is now included.
 
-As Linux gained traction, a group of prominent figures in the community realized that enterprise corporations - the IBMs and Microsofts of the world - were terrified of Stallman’s rhetoric. Phrases like “moral duty” and “user liberation” sounded too much like an anti-capitalist crusade to corporate boardrooms.
+### Parse and Format Dates using ⎕DT
 
-So, they engineered a rebrand. On February 3, 1998, Christine Peterson coined the term **“Open Source”**, and weeks later, Bruce Perens and Eric S. Raymond launched the [Open Source Initiative](https://opensource.org/about/history-of-the-open-source-initiative).
+⎕DT has been extended to validate and parse text-format datetimes. It now also includes formatting features prototyped as 1200⌶.
 
-The goal of this rebrand was explicit: strip away the moral, ethical, and philosophical language of Free Software and replace it with a pragmatic, business-friendly narrative. It was a textbook example of capitalism absorbing a radical critique of itself, sanitizing the politics, and repackaging it as an efficiency metric. As the OSI’s own historical account notes, the strategic pivot was designed specifically to [“distinguish it from the philosophically-and-politically-focused label ‘free software’”](https://opensource.org/about/history-of-the-open-source-initiative) and pitch the pragmatic business advantages of open development. Software wasn’t about pesky things like “human rights” or “ethics” anymore; it was about “superior engineering models”, “faster bug fixes”, and “economic efficiency”.
+Example:
 
-For twenty years, this sanitized version of open source reigned supreme. It built the modern internet. It also tricked a whole generation of developers into believing that tech had always been apolitical.
+```
+     'YYYY:MM:DD hh:mm' ¯1 ⎕DT⊂'2026:09:07 12:20'
+2026 9 7 12 20 0 0 
+      1 'Ddd YYYY:MM:DD "at" hh:mm'⎕DT 47000.33334
+Tue 2028:09:05 at 08:00
+```
 
-## The Double Standard of “Neutrality”
+### Inspect Platform Attributes using ⎕SYSTEM
 
-When you look closely at the modern nostalgia for “neutral software”, a striking double standard emerges.
+Examples:
 
-When GitHub enforces U.S. export control laws and suddenly [strips developers in sanctioned countries like Iran, Syria, or Crimea of access to their private repositories](https://www.gamedeveloper.com/programming/github-access-restricted-in-iran-syria-and-crimea-due-to-sanctions), the tech world generally shrugs. It’s treated as an unalterable reality of corporate existence: *Welp, GitHub is a U.S. corporation bound by U.S. trade laws. Business is business.*
+```
+     ⎕SYSTEM.⎕NL ¯9
+( 
+'CommandLine'
+'Directories'
+'Executable'
+'Features'  
+'Host'      
+'OS'
+'Process'
+)
 
-But when a community-funded, non-profit forge like Codeberg sets transparent, democratically decided rules - such as their [recent community membership vote banning predominantly AI-generated slop repositories](https://blog.codeberg.org/protecting-our-floss-commons-from-llms.html) to prevent severe server strain and maintain code safety - the reaction is drastically different. Suddenly, it’s labeled a “moral panic”, a “loss of software freedom”, or the “radicalization of tech”.
+      ⎕SYSTEM.Executable
+(
+Bits:64
+BuildTarget:'win'
+BuildType:'opt'
+Path:'C:\Program Files\Dyalog\Dyalog APL-64 21.0 Unicode\dyalog.exe'
+RideConnected:0
+Runtime:0
+Unicode:1
+Vendor:'Dyalog'
+Version:21 0 54393
+VersionMoniker:'210U64'
+VersionNumber:21
+)
+```
 
-Why the discrepancy?
+### APL Syntax for .NET Generics – Built for .NET 10
 
-Because for twenty years, developers were conditioned to accept corporate and state governance as an invisible default. Corporate terms of service, venture capital incentives, and state sanction laws were treated as “neutral baseline reality”, while human and community governance was labeled “political interference”.
+Dyalog v21.0 is built for .NET 10; this is the current Long-Term Support version of .NET, scheduled to be supported until November 2028. The .NET Framework continues to be supported, and there are no plans to retire Dyalog's .NET Framework interface.
 
-A platform that enforces *zero* community standards isn’t neutral. It simply chooses to prioritize the comfort of bad actors over the safety of everyone else. Total unmoderated “neutrality” on a platform just means forcing volunteer maintainers to absorb abuse, spam, and server costs for free.
+The APL language has been enhanced to provide a natural way to make use of generic methods and classes – this support is available for both the .NET and the .NET Framework interfaces.
 
-## The Return to First Principles
+Example:
 
-Regardless of what people tell you, what we are witnessing today isn’t the death of open source - it’s the collapse of the illusion that tech can exist in a vacuum separate from human labor and human consequences.
+```
+      ⎕USING←'System'
+      types←Char Int32
+      dict←⎕NEW Collections.Generic.Dictionary[types]
+      dict.Add'L' 42
+      dict.Add'P'(⌊22÷7)
+      dict['P']
+3
+```
 
-Software is built by people, maintained by people, and hosted on infrastructure funded by people. Much like art, it cannot and does not exist in a vacuum.
+### Refer to Other Settings in Any Configuration Parameter
 
-If a maintainer decides that they’re done spending their nights and weekends handing free labor to a company or user actively harming them, using “cancel culture” terms to label that is stupid. They’re exercising basic individual agency.
+A configuration parameter can refer to the value of another system parameter by naming it within square brackets, such as in **[DYALOG]/MyFile**. Prior to Dyalog v21.0, this only worked within configuration files; it now works wherever a setting is defined. On Microsoft Windows, the new **[=DOCUMENTS]** reference stands for the user's **Documents** directory. Dyalog's own settings use this, which means that they work even if a tool (for example, OneDrive or Google Drive) relocates that folder, and Dyalog does not need to be reinstalled.
 
-The same goes for platforms. A non-profit forge restricting automated slop repos isn’t “censorship”; it’s basic resource management so that their servers aren’t overwhelmed.
+### Software Bill of Materials Included
 
-Funnily enough, back when [Linux adopted the Contributor Covenant in 2018](https://www.zdnet.com/article/linux-adds-a-code-of-conduct-for-programmers/), it kicked off a discourse that was nearly identical to today’s LLM discourse with “apolitical” developers claiming that they’d be witch-hunted and driven out of developer spaces (which obviously never ended up happening, but reactionaries gonna reactionary, I guess).
+If you distribute solutions built on Dyalog, you can now use the "SBOM" delivered with Dyalog v21.0 to document any of our files that you redistribute as part of your application.
 
-In classical open source, freedom was always a two-way street. You have the absolute freedom to write and release whatever code you want, but everyone else has the exact same freedom to say “Nope, I don’t want this anywhere near me or my platform”.
+## Experimental Features
 
-## Software Was Never Just Utility
+Dyalog v21.0 contains several experimental features. If you would like to explore these and provide feedback on them, please contact us!
 
-The idea that software was once this pure, objective utility that has been ruined by modern social politics is a myth.
+### Dark Mode (Microsoft Windows only)
 
-We are not watching the corruption of an apolitical ideal (which, let’s be honest, does not exist). We are watching a generation of developers realize that the corporate-friendly, business-sanitized era of open source mostly served to extract billions in free labor for massive corporations while leaving communities defenseless against burnout, abuse, and exploitation.
+Dyalog v21.0 for Microsoft Windows includes experimental support for dark mode, and we are keen to have feedback on this new mode. For information on how to enable dark mode, please send a message to [darkmode@dyalog.com](mailto:darkmode@dyalog.com) briefly describing the experiments that you intend to perform. This feature is still under development; the implementation (and thus the appearance of individual elements) could change at any time throughout the life of Dyalog v21.0.
 
-By re-establishing boundaries, demanding ethical accountability, and taking control of community spaces, developers (and users) are simply rediscovering open source’s first principles: that software freedom is, and always has been, deeply tied to human values.
+### Thread Scheduling
 
-# Comments
+Changes have been made to the thread handling code in preparation for future improvements to the efficiency and "fairness" of thread scheduling. Although these changes are not visible to the end user, we would be grateful if you could test any of your code that uses multiple threads and report any issues to [support@dyalog.com](mailto:support@dyalog.com).
 
-You can comment on this blog post by replying to [this post](https://social.glitched.systems/notes/aqra0p1x89au007k) using any ActivityPub/Fediverse account!
+The APL thread scheduler checks that its own record of each thread's scheduling status is consistent. The temporary I-beam 4061⌶0 returns a two-element vector: the number of inconsistent thread statuses and the number of missed thread wakeups that have been detected. A non-zero count means that the interpreter detected an inconsistency in its own scheduling, not that the application is at fault.
+
+In Dyalog v21.0, the interpreter will perform consistency checks to verify that new algorithms (which will be implemented in Dyalog v22.0) perform correct scheduling. In the unlikely event that discrepancies are detected, the interpreter will write to the Status window or, if it is enabled, the log file set using 109⌶; again, we would again appreciate it if you could send such information to [support@dyalog.com](mailto:support@dyalog.com).
+
+Visit the [Documentation Centre](https://dyalog.com/documentation_210.htm) for the documentation for Dyalog v21.0.

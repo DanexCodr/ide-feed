@@ -1,220 +1,226 @@
-I’ve been using `ed25519-sk` keys with YubiKeys since practically the moment they were available. But because of some specific use-cases (and because, frankly, YubiKeys are expensive) I’ve had a few traditional on-disk keys hanging around for a while just waiting for me to finally decide to get rid of them.
+I’ve discovered a voltage fault injection vulnerability on the GA100 die, allowing an operator to blow arbitrary fuses. Utilizing this vulnerability, I’ve converted my CMP 170HX 8GB card into what is effectively an A100-80G! Further, my unlocked cards actually perform ~1.2x faster than a retail A100 by having all functional SMs enabled (~120-126, die-lottery dependent), rather than the yield-safe 108 SMs NVIDIA chose for all production A100 cards. Finally, CMP-disabled features like NVLink, PCIe Gen4, NVJPG, NVDEC, MIG are all unlockable with this approach, though I haven’t specifically tested NVJPG/NVDEC/MIG.
 
-This post documents how I’m using various secure enclaves (YubiKey, TPM, Apple Secure Enclave) to hold/encrypt SSH key material and achieve the goal of not having any unprotected key material living on-disk.
+Here’s how my “A100-80G” appears and functions.
 
-## First – Isn’t using a passphrase enough?
+NVIDIA uses fuses for product segmentation, security features, and other fun access control features - and crucially, there are several functions where blowing a fuse on an NVIDIA die can grant you *more* access, not less. In a properly secured design, a blown fuse should always induce a more restrictive state, because a blown fuse cannot be unblown in an economically feasible way. NVIDIA’s design allows one to *relax* restrictions by blowing more fuses!
 
-Probably. I don’t intend to imply that this post is the *only* way that anyone should be doing SSH keys. Using a passphrase will encrypt the key with bcrypt & AES which keeps it protected even if the on-disk keyfile leaks somehow.
+In this post, I will go over the GA100 die, its fuse controller, the use of VFI, and future research directions. I’ve decided to publish some of the work that enabled my research [here](https://github.com/kate-land/ga100vfi).
 
-And with a functioning ssh-agent, the passphrase should only need to be entered once per session, with the decrypted key material being held in RAM after that point.
+## Acknowledgements
 
-So yes, the ’traditional’ method is probably fine for most threat models. But I’m still keen to move to hardware-backed keys anyway, mostly for the satisfaction.
+My work builds on [prior research by Jon Pry](https://www.researchgate.net/publication/408132536_A_Canary_in_the_Crypto_Mine_Defeating_Stack_Protection_in_a_GPU_Secure_Coprocessor) and numerous others who have dedicated much of their time towards better understanding the GA100 die. I am disclosing my findings subsequent to another security researcher independently discovering the same vulnerability; I believe it to be in the best interest of the public to make this information publicly available. These findings were disclosed to NVIDIA’s product security team ahead of the publication of this article.
 
-## About hardware-resident keys
+## GA100 versions
 
-When I say ‘hardware-resident’ keys, I mean keys that use a secure enclave or purpose-built hardware like [YubiKeys](https://www.yubico.com/) to store or protect the key material.
+The GA100 is an NVIDIA die that has been used to power almost 20 different SKUs - the A100 being the most well-known variant. I won’t delve into [every SKU](https://www.techpowerup.com/gpu-specs/nvidia-ga100.g931), but I will present the GA100 manifestations that matter to my work, covering the different versions of the CMP 170HX and the A100.
 
-The theoretical benefit here is that the hardware used to *generate* the SSH key is needed in order to *use* the key. There’s no mechanism that allows leaking or exfiltrating keys that generated using this method. Any material that *does* exist on-disk is useless without the hardware.
+As fabbed, the GA100 die has 128 SMs, 12 FBPs, 5 NVDEC units, a PCIe Gen4 x16 controller, and depending on the framebuffer size, comes with 4-6 stacks of HBM co-packaged with the die. NVIDIA uses eFuses for yield-control and product segmentation–undifferentiated GA100s turn into more restrictive variants based on defect testing and manufacturer demand.
 
-## Goals
+In one of the most extreme manifestations of product segmentation, the CMP 170HX, an Ethereum mining card with nominally 8 or 10 GB of application-exposed framebuffer capacity, actually comes with, respectively, ~80 and ~40 GB of HBM onboard! This work chiefly centers around how to fully unlock and use that capacity. Previous work has made great strides in unlocking the GA100 via software methods; VFI takes us across the last mile.
 
-So I want to:
+| SKU | Out-of-box | Software (cmpunlocker) | GA100VFI |
+| --- | --- | --- | --- |
+| CMP 170HX 8GB |  |  |  |
+| Framebuffer | 8 GB | 64 GB | 64-80 GB<sup>[1](https://blog.kate.land/posts/using-voltage-glitching-to-unlock-the-a100/#user-content-fn-1)</sup> |
+| CMP 170HX 10GB |  |  |  |
+| Framebuffer | 10 GB | 40 GB<sup>[2](https://blog.kate.land/posts/using-voltage-glitching-to-unlock-the-a100/#user-content-fn-2)</sup> | 40-48 GB |
+| Both CMPs |  |  |  |
+| SMs | 70 | 70 | 120-128 |
+| PCIe generation | 1 | 2 | 4 |
+| NVLink | No | No | Yes<sup>[3](https://blog.kate.land/posts/using-voltage-glitching-to-unlock-the-a100/#user-content-fn-3)</sup> |
+| ECC | No | No | Yes<sup>[4](https://blog.kate.land/posts/using-voltage-glitching-to-unlock-the-a100/#user-content-fn-4)</sup> |
+| Multi-Instance GPUs | No | No | Yes<sup>[4](https://blog.kate.land/posts/using-voltage-glitching-to-unlock-the-a100/#user-content-fn-4)</sup> |
+| NVDEC | 0 | 0 | 5<sup>[4](https://blog.kate.land/posts/using-voltage-glitching-to-unlock-the-a100/#user-content-fn-4)</sup> |
 
-- Switch to using hardware-resident keys entirely
-- Do so as natively as possible, avoiding additional software where I can
-- Test these in various real-world scenarios, such as running within an LXC or noninteractively mounting an SSHFS server
+## Hardware restrictions
 
-## Hardware
+So, how does NVIDIA utilize fuses to produce both a datacenter A100 and a mining CMP card from one die? To understand this, we need to take a closer look at the fuse controller located on the GA100.
 
-I’m going to try three different hardware methods for achieving this, which I think will cover all of my needs:
+The fuse controller is a block that contains 16,384 eFuses (512 rows of 32) and a bunch of logic surrounding that raw fuse macro. Its job is to perform fuse readout and programming, protect the underlying fuses, and provide usable “option words” to the rest of the die. These option words subsequently decide how the die functions and what features are enabled.
 
-- Method 1: YubiKey
-- Method 2: TPM
-- Method 3: Apple Secure Enclave
+Each eFuse can be in one of two states (blown=1, unblown=0), and the 512 rows are divided into 4 regions:
 
-## Method 1: YubiKey
+1. Regular fuses (rows 0-221). These are straightforward; often single (pairs of) fuses will map to an option word, such as OPT_ENABLE_FUSE_PROGRAM (an option word that determines whether further fuse programming is allowed or not). Regular fuses have built-in redundancy: for example, OPT_ENABLE_FUSE_PROGRAM consists of a PRI and RED (primary and redundant) fuse, in this case the primary instance is fuse 0 of row 0, and the redundant is fuse 0 of row 1. Some option words are scalars, such as OPT_X_COORDINATE, which is 9 bits wide and ostensibly holds the x-coordinate of the die on the fabbed wafer. Importantly, if a regular fuse is blown, there is basically no remedy to persistently unblow it (save for RIR later).
+2. Fuseless fuses (rows 222-487). This is a weird one. Apparently NVIDIA got frustrated with accidentally blowing regular fuses and ruining their engineering samples, and came up with a system to encode effective option words in a JTAG chain-like format (see this patent). Think about FF as essentially a script that describes what option words should have what values. FF fuses (excuse the RAS syndrome) concern most of the functionality we can unlock using VFI. This is because FF option words can be trivially cleared by simply writing new FF rows! We’ll about this more in depth, later. For now, you should know that NVIDIA also knows this, because under normal conditions, you are strictly prevented from performing any FF fuse blows.
+3. IFF fuses (rows 487-512). These contain instructions in a different format than the FF one. They’re out of scope for this post, and they’re mainly useful for on-the-fly reprogramming of fuse controller option words. They are usually not accessible in a production card.
+4. RIR fuses (8 rows of 32 fuses, which are technically not part of the 512 rows). These are provided by the designer of the fuse macro (TSMC datasheet here) and are essentially the first party designer’s intended “fuse repair” mechanism. The RIR section on a GA100 has space for 16 repair instructions, each overriding the value of an identified single fuse in the main 512 rows. Unfortunately for us, specifically in the 8 GB 170HX SKU, 15 of the 16 RIR words are all ones, and the 16th word encodes a useless repair instruction that can only be rarely leveraged for any interesting unlock. The story is different for the 10 GB SKU, but that’s a matter for another day…
 
-With a YubiKey (5 and newer), SSH keys can be directly enrolled into the device using `ed25519-sk` (where the `-sk` stands for “Security Key”). This doesn’t require any additional software beyond OpenSSH itself.
+There are two really interesting groups of fuses for the VFI-based unlock:
 
-To store a new SSH key on a YubiKey, insert it and run:
+1. “Control fuses”. The term comes from NVIDIA’s Tegra hardware headers, they use it to refer specifically to rows 0 and 1, which specify the values of highly security-sensitive option words.
+2. Fuseless fuses, which encode all of the interesting option words that decide whether a GA100 is born to be a measly mining card or an AI datacenter workhorse.
 
-```sh
-ssh-keygen -t ed25519-sk -O resident -O application="ssh:yournamehere" -f ~/.ssh/id_ed25519-sk
-```
+Before we name some of the FF-encoded option words, we’ll have to first understand the FF record format in a bit more detail, then talk about the die blocks that govern the features we are interested in.
 
-The `application` tag set in the command is arbitrary and can be set to whatever memorable string you prefer to differentiate between multiple SSH keys if you want to create multiple keys on the same YubiKey.
+### Fuseless fuses
 
-If you have `ykman` installed, you can now inspect the list of credentials enrolled in the device:
+Each FF row is a 32-bit record. Bits 0–4 select a chain, bit 5 distinguishes FF from IFF (0 for FF), bits 6–15 select a 16-bit block, and bits 16–31 supply that block’s new value. The JTAG-chain picture from the patent is quite literal here: the controller builds the option data by replaying these records into chains. Fixed locations in each chain correspond to individual option words.
 
-```text
-$ ykman fido credentials list
-Enter your PIN: 
-Credential ID  RP ID             Username  Display name
-0f41fb61...    ssh:yournamehere  openssh   openssh
-```
+If two records address the same chain and block, the later record wins. For example, `0x0fe805c1` means chain 1, block 23, data `0x0fe8`. Appending that record can clear an *effective* bit set by an earlier FF record. No physical fuse is unblown; a new row replaces the old 16-bit block. This works for FF-backed options, not the regular control fuses in rows 0 and 1.
 
-If `ykman` complains that you haven’t set a FIDO PIN on the YubiKey yet, you can do this with `ykman fido access change-pin`.
+Now that we know how FF words are encoded, here’s a list of the interesting words and their locations. These were discovered by a particularly helpful researcher who cross-compared FF values and effective option words from different GA100 SKUs in order to differentially understand the FF chain/block to option word mappings, as there is no known official mapping.
 
-Note that you don’t actually need `ykman` to enrol or use SSH keys with a YubiKey but it does make managing the device more convenient.
+| Named option | Inferred FF location | Use |
+| --- | --- | --- |
+| `NV_FUSE_OPT_FBIO_DISABLE` | Chain 1 bits 83–106; blocks 5–6 | Memory I/O floorsweep |
+| `NV_FUSE_OPT_FBPA_DISABLE` | Chain 1 bits 107–130; blocks 6–8 | Memory subpartition floorsweep |
+| `NV_FUSE_OPT_GPC_DISABLE` | Chain 1 bits 131–138; block 8 | GPC floorsweep |
+| `NV_FUSE_OPT_TPC_GPC0_DISABLE` through `NV_FUSE_OPT_TPC_GPC7_DISABLE` | Chain 1 bits `187+8i` through `194+8i` for GPC `i`; blocks 11–15 | Eight TPC masks |
+| `NV_FUSE_OPT_PES_DISABLE` | Chain 1 bits 251–274; blocks 15–17 | PES floorsweep |
+| `NV_FUSE_OPT_FBP_DISABLE` | Chain 1 bits 307–318; block 19 | Framebuffer partition floorsweep |
+| `NV_FUSE_OPT_ROP_L2_DISABLE` | Chain 1 bits 319–342; blocks 19–21 | ROP/L2 floorsweep |
+| `NV_FUSE_OPT_NVLINK_DISABLE` | Chain 1 bits 368–370; block 23 | NVLink disable mask |
+| `NV_FUSE_OPT_DISABLE_GEN3_SPEED` | Chain 2 block 39; **which of bits 1 and 9 is unresolved** | PCIe Gen3 speed restriction |
+| `NV_FUSE_OPT_PCIE_MAGIC_BITS_D[25]` | Chain 2 block 47 bit 3 | Gen4 speed-disable flag |
+| `NV_FUSE_OPT_PCIE_BOOT_GEN23_DISABLE` | Chain 2 block 49 bit 6 | PCIe boot policy |
+| `NV_FUSE_OPT_PCIE_BOOT_GEN3_DISABLE` | Chain 2 block 49 bit 7 | PCIe boot policy |
+| `NV_FUSE_OPT_PCIE_DEVIDA` | Chain 2, bits 593–608; blocks 37–38 | Device identity |
+| `NV_FUSE_OPT_PCIE_DEVIDB` | Chain 2, bits 609–624; blocks 38–39 | Device identity |
+| `NV_FUSE_OPT_SYS_PIPE_DISABLE` | Chain 1, bits 372–379; block 23 | Multi-instance GPU enabled pipes |
 
-Once the key has been created, you can retrieve the public key from disk:
+The acronyms FBIO/FBPA/FBP/TPC/GPC/PES/ROP all refer to microarchitectural elements, please see this diagram from the GA100 whitepaper to further understand how these are related to each other:
 
-```text
-$ cat ~/.ssh/id_ed25519-sk.pub 
-sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIA9B+2GGCkQvBzpa4WobQhfC9YU5Su3pKXBmVLSXEqfRAAAAEHNzaDp5b3VybmFtZWhlcmU= alice@hostname
-```
+FBP is the internal NVIDIA term for a “framebuffer partition”, with 2 FBPs to one HBM stack. FBPAs are subpartitions, 2 FBPAs to one FBP. PES/ROP are blocks (seemingly graphics-related) that are required for an SM to function.
 
-This key can be used like any other SSH public key – added to `authorized_keys` on a host, copied with `ssh-copy-id`, or pasted into services that depend on SSH like Git forges.
+With this knowledge in hand, *what if* we could write new FF rows that set the _DISABLE words to be all zeroes, or at least, as permissive as possible given die defects? If we look at how the _DISABLE options are used in conjunction with other elements, we’ll quickly see that these _DISABLE words are the primary lever we have in preventing parts of the die from being “floorswept”. After illuminating the “what-if”, I’ll talk about the “how”: the exact application of voltage fault injection and the fuse controller safeguards we can defeat with VFI.
 
-You will also find a `~/.ssh/id_ed25519-sk` file on disk (without the `.pub` extension). Note that although this *looks* like a private key, it doesn’t actually contain the key material. This is just a handle to find the relevant key on the hardware device.
+### Floorsweeping
 
-To configure the key for authentication, it can be enrolled with `ssh-add` like a regular key, or specified directly in `~/.ssh/config`:
+NVIDIA puts these options in charge of setting floorsweep signals, which will render a die element unreachable (and likely powered down). From experiments, I believe the floorsweep lines are specified in RTL, emanating from the fuse controller and terminating in individual functional blocks and controlling some master power/clock domain switch within the block. I have observed the floorsweeping behavior to correspond with very little latency with the value of the fuse controller’s effective status words for each functional block.
 
-```text
-Host blog.infected.systems
-    IdentityFile ~/.ssh/id_ed25519-sk
-```
+Let’s take FBP floorsweeping, for example. On one of my 8 GB cards, `OPT_FBP_DISABLE` was `0x852`: FBPs 1, 4, 6, and 11 were masked. The separate `OPT_FBP_DEFECTIVE` mask was `0x840`, covering 6 and 11. After I reduced the FF-backed disable mask to `0x840` with a replacement FF row, the extra masks on 1 and 4 were gone, but the defective 6 and 11 stayed disabled. That leaves 10 of the die’s 12 FBPs in the effective mask. Functionally, FBPs 1 and 4, which refused register reads and writes when `OPT_FBP_DISABLE` was `0x852`, became responsive after this fuse write.
 
-From here, you can now SSH into the destination host as with a regular key. SSH will ask you to tap the YubiKey to confirm presence when the SSH command runs.
+Although the functional blocks can be “unfloorswept” with FF writes, this does not fully suffice to render the block fully available to an end application - the default framebuffer geometry configuration uses only a portion of each available HBM stack, for example.
 
-### Unattended YubiKey usage
+To bypass that, we can utilize what is essentially a small modification to [cmpunlocker](https://github.com/amoghmunikote/cmpunlocker)’s method. The usual driver patch for the 8 -> 64 GB unlocks writes to a particular set of feature configuration words (FBPA_CFG, SM_SPEED_SELECT, etc.). The default values are chosen to succeed for the commonly found variant of the 170HX, which has the _DISABLE FF-derived option words preventing certain functional blocks from being used (any attempt to use them will return floorswept errors). With the unlocking FF burns in place, we can write even more permissive words into the configuration registers, resulting in what is functionally an A100-80G.
 
-When using an `ed25519-sk` key created with the default settings as above, you will be asked to confirm your presence whenever the key is used by physically touching the YubiKey.
+## Achieving the FF burn
 
-It’s probably a good idea to keep this default, but if you have a specific use-case that requires unattended key usage, you can generate a `no-touch-required` key as follows:
+With the information we have, it seems straightforward that if one could blow arbitrary FF fuses, any GA100 could be fully unlocked to its maximum capability, as determined by die yield and the populated memory stacks. But how do we blow FF fuses? Let’s take a look at the fuse programming functionality of the fuse controller to understand more.
 
-```sh
-ssh-keygen -t ed25519-sk -O resident -O no-touch-required -O application="ssh:nameyourkey" -f ~/.ssh/id_ed25519-sk
-```
+To request a fuse blow, one must write to the FUSEADDR, FUSEWDATA, and FUSECTRL registers belonging to the fuse controller. Although not nominally accessible to the host or to unprivileged requesters, with the *Canary in the Crypto Mine* ROP, opening up the responsible privilege level masks is trivial. And so, many researchers have attempted to coerce the fuse controller to blow fuses in the FF region. Some of our shared observations follow:
 
-When using a `no-touch-required` key, although it isn’t possible for a malicious actor to exfiltrate the key even with root access to the host the YubiKey is plugged into, a malicious actor with access could use the key without requiring any presence detection or human interaction. So do make sure this is actually suitable for your risk appetite before doing it.
+1. The fuse controller has an internal FSM, and it indicates its current state via the FUSECTRL_STATE bits.
+2. The fuse controller enters a WRITE_PROGRAM state per each “hot” bit in the requested FUSEWDATA value. This tracks with the expected fuse programming behavior.
+3. However, unless a specific option word is cleared, writes to fuse addresses outside of the FPF range (rows 96-221) do not actually take place. Fuses in this region (believed to be “field programmable fuses” indicating a watermark of which ucode versions have run, alongside other field-relevant information) do take effect, and the fuse controller state machine behaves identically between FPF and non-FPF regions.
 
-To use a `no-touch-required` key for unattended authentication to remote servers, you need to prepend the entry in the `authorized_keys` file on the destination host with `no-touch-required`, otherwise OpenSSH’s default security settings will reject the key.
+The specific option word I am referring to is OPT_SECURED_BURN_FEATURE_ENABLE (“SBFE”), and it is set to be 1 in all production cards. When this option word is clear, fuse programming is allowed in any address. When it is set, only FPF fuses may be blown. To date, no one has found any way to burn FF fuses with SBFE=1, even when operating the fuse controller from HS contexts. It is not clear what “secured burn” truly means, I speculate that there must be a software-only way to perform non-FPF burns even with SBFE=1, and we just don’t know what the “secured” adjective really means here.
 
-For example:
+> Note
+> *PLM*, *HS*, *ucode*, …; I am delving into using a bunch of NVIDIA-specific terminology in this section as the explanation gets deeper. For a really in-depth explanation of what these mean, I refer you to other sources such as [Je Ne Sais Quoi - Falcons over the Horizon](https://hexkyz.blogspot.com/2021/11/je-ne-sais-quoi-falcons-over-horizon.html).
 
-```text
-$ cat ~/.ssh/authorized_keys 
-no-touch-required sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIA9B+2GGCkQvBzpa4WobQhfC9YU5Su3pKXBmVLSXEqfRAAAAEHNzaDp5b3VybmFtZWhlcmU= alice@hostname
-```
+Importantly, as people have figured out on more permissive cards, it is possible to perform FF burns with SBFE=0! And as it turns out, achieving this state is how we achieve the GA100 unlock. After much trial-and-error, I have resorted to inducing this state via voltage fault injection, and I was able to achieve it. Let’s talk some more about voltage glitching.
 
-## Method 2: TPM
+### Voltage fault injection
 
-YubiKeys are nice, though fairly expensive. It would be useful if we could use the TPM we already have on our host to protect key material instead. Well, it turns out we can!
+Much has been said about VFI, and I’ll leave the in-depth explanation to other sources. In short, applying brief pulses of low supply voltage will often cause unexpected behavior in integrated circuits. I asked GPT-6 Astra to design an STM32G4 based board that taps into the PWMVID signal on the CMP PCB. PWMVID is an NVIDIA standard for voltage regulators, and my glitcher intercepts the PWM signal emitted by the GA100 die, and replaces it with its own waveform fed into the MP2888B VRM driver IC. With my setup, I can induce the card’s own VRM to produce timed glitches for me, which is simpler than MOSFET-based setups and enables faster glitching than attempting to directly drive the PMBus.
 
-Unfortunately this does require additional software, but it’s a fairly minimal Golang package – [ssh-tpm-agent](https://github.com/Foxboron/ssh-tpm-agent). It can be installed with Go directly from GitHub, but is natively packaged by Ubuntu and [I’m working on packaging it for Fedora](https://bugzilla.redhat.com/show_bug.cgi?id=2565411).
+The glitcher requires two connections to the PCB, ideally done with magnet/enameled wire. One wire taps NVVDD for voltage sensing, and another wire taps the PWMVID signal. The only other required step for the glitcher to function is the removal of a 0402 0ohm resistor, which will break the connection between the GA100 output PWM pin and the VRM IC. Finding where to place the taps is trivial by tracing the pinout of the MP2888B, specifically its PWMVID and VOSEN pins (the MP2888B shares a footprint with its sibling public chip MP2888A). Test points directly adjacent to the MP2888B enable relatively easy installation of the PWMVID tap.
 
-To create a TPM-backed SSH key with a PIN, run:
+With this tap in place, a single glitch attempt involves this sequence:
 
-```sh
-ssh-tpm-keygen -N "your-pin"
-```
+1. Remove card power
+2. Apply card power
+3. Start a timer (“glitch timer”) as soon as NVVDD crosses a threshold
+4. Execute a proposed voltage waveform by issuing a PWMVID signal, aligned to the glitch timer
+5. Observe card behavior, repeat from step 1 as needed
 
-The process will ask you where to store the key. From here, once again we have a keypair with a `.pub` file that we can use in `authorized_keys` or copy however we wish.
+My setup achieves steps 1/2 with a simple ACPI S0 -> S3 -> S0 transition, which can be done in a few seconds on a modern desktop platform. More intrusive modifications or expensive rigs can probably achieve a better experiment rate, but in my experience this setup suffices to unlock cards in somewhere between 1 hour and 48 hours of glitching time using the approach described later.
 
-To use the TPM-backed key we need to use the TPM-aware SSH agent provided by the `ssh-tpm-agent` package. If you installed the native Golang package rather than something vendored by your distribution, you can enable the systemd socket unit for the agent as follows:
+For the NVVDD threshold, the Astra-authored firmware uses an STM32 comparator to detect when NVVDD crosses 225mV, after which a tight DMA loop drives the desired duties on the PWMVID pin. After S0, the host inspects the card state and decides what to do next; if it involves another glitch, the glitcher board will be commanded over USB with a glitch pattern. Then the host induces S3 with an RTC timer to wake back up in ~3s (empirically derived period for decent stability).
 
-```sh
-ssh-tpm-agent --install-user-units && systemctl --user enable --now ssh-tpm-agent.socket
-```
+Sometimes the host will fail to return to S0, I’ve remedied this with relegating bookkeeping and glitch campaign preparation to an SBC (Radxa Cubie A5E) which also can drive the motherboard power/reset button pins via GPIO if the glitch target host is unresponsive.
 
-To ensure the socket for the agent can be discovered by SSH processes run within your shell session, add the following to your `.bashrc` or the equivalent for your shell:
+More specifics are shared in the [GA100VFI repository](https://github.com/kate-land/ga100vfi) if you’re interested. For now, let’s take a look at the different interesting states we can trigger via VFI, as well as the specific glitch state that we need to burn FF rows. To help illuminate the differences between each glitch state, I have built an empirical model of how the fuse controller starts up when voltage is applied. Note that without the RTL that implements the fuse controller, all we have are guesses. Here are the hypothesized boot stages:
 
-```sh
-export SSH_AUTH_SOCK="$(ssh-tpm-agent --print-socket)"
-```
+1. Sense RIR, as required by the fuse macro
+2. Sense (from fuse macro into readout register) control rows
+3. Latch control rows into control row-derived option words
+4. Sense remaining rows
+5. Latch regular fuse values into their option words
+6. Parse FF chain
+7. Latch FF chain values into their option words
 
-Again, we can now use this key to authenticate to servers as if it were any other traditional on-disk key.
+These hypothetical stages are based on what I can actually read from the die: controller states, raw rows when `CMD_READ` works, the published option words, and whether the PRI ring can still reach the rest of the GPU. By looking at a few key values, we can tell glitch outcomes apart. Importantly, glitch patterns and outcomes are very much die-specific, so consider these example waveforms and responses to be just that, examples. Let’s take a look at 3 interesting glitch states.
 
-### Unattended TPM usage
+#### 1. All fuses sensed as zero
 
-If you want this key to be available unattended, or to services that don’t use a full shell such as [systemd mount units](https://blog.infected.systems/posts/2025-10-14-the-five-megabyte-nas/), you can create a new key without a PIN (pass `-N ""` to the `ssh-tpm-keygen` command) and specify the socket path in `~/.ssh/config` instead of relying on `SSH_AUTH_SOCK` (although this relies on the socket address being predictable – i.e. your UID being stable):
+Some glitches make almost every published option word read as zero. In one captured state, 669 of 672 named option reads were zero; the other three were error responses. The controller’s CRC status was `0x00` (not parsed yet), the PCIe ID read as `2080` (the base GA100 PCIe product ID, does not correspond to a real retail product), and the GPU’s PRI ring was held in reset.
 
-```text
-Host blog.infected.systems
-    IdentityAgent /run/user/1000/ssh-tpm-agent.sock
-    IdentityFile ~/.ssh/id_ecdsa
-```
+This state is consistent with a catastrophic failure on behalf of the fuse controller. The card comes up basically unusable, because almost all boot functions are disrupted by the all-zero state. However, interesting enough, the card trains at PCIe Gen4 natively! Some slightly altered variants may showcase sections of fuses being successfully latched, or containing garbled values instead of all-zeroes. I was not able to push any of these states towards an FF burn; in almost all of them the fuse controller is unreachable or dysfunctional.
 
-Note that `ssh-tpm-agent` does not account for the values in the TPM Platform Configuration Registers (PCRs) which record the state of the booted system – firmware versions etc, so changes of hardware/firmware/OS will not cause the system to refuse to unseal the key (unlike, say, something like BitLocker). So ensure that using a PIN-free key is appropriate for your risk model before doing so.
+#### 2. RIR read disrupted
 
-### A caveat regarding TPM keys
+Reading the RIR data on the CMP 170HX 8GB reveals its exact effect: 15 noop repair instructions, and one write that changes the value of a fuse in row 18, whose option word we can monitor. Further, because the RIR sense is consumed internally by the fuse macro instead of directly by the fuse controller, we can observe a disrupted RIR latch by attempting to read the raw row - the observed bitflip remains consistent across the flipped option word as well as the raw fuse row. This sets an interesting chronological checkpoint in investigating die boot (RIR sense must happen prior to other fuse sensing), but is not a useful glitch in itself.
 
-You will notice though that the private keyfile held on disk uses a `.tpm` extension this time. This is where an important caveat of the TPM method comes in – Unlike the YubiKey approach, the private key material *is* actually being stored on disk here. This is because TPM devices do not natively support enrolling SSH keys. So what is happening is that the private key material is being stored on disk in encrypted form, and the TPM is being used to decrypt it.
+#### 3. Goldilock’s glitch
 
-This is still a device-bound credential as the key cannot be used without the TPM device even if the keyfile is leaked or exfiltrated but it is a relevant distinction compared to device-*resident* credentials such as `-sk` keys.
+The successful three-pulse state on my first card seemed to disrupt precisely the row0/1 based option words, while leaving other fuses and option words intact. In this state, all of the row0/1 derived option words are zero. The initial readbacks look like this:
 
-## Method 3: Apple Secure Enclave
+| Signal | Initial readback |
+| --- | --- |
+| PCI ID and access | `20c2`; BAR0 and the PRI ring respond |
+| `FUSECTRL` | `0xe0040000` (`IDLE`) |
+| `CRC_STATUS` | `0x55` (both halves parsed without errors) |
+| `DISABLE_SW_OVERRIDE` | `0` |
+| `OPT_SECURED_BURN_FEATURE_ENABLE` | `0` |
+| `ENABLE_FUSE_PROGRAM` | `0` |
+| FUSECTRL/FUSEOPT privilege masks | `0xffffffff` for both |
+| Raw rows 0 and 1 | Both still `0x53557c3d`, unchanged from before the glitch |
 
-As of macOS Sequoia, the Smart Card Auth system within macOS is able to natively handle SSH keys as identities.
+At this stage, we are still not yet capable of issuing FF writes, because ENABLE_FUSE_PROGRAM=0. I am honestly not sure why ENABLE_FUSE_PROGRAM would *ever* be zero, given it’s 1 in retail boards, so this almost reads to me like a way to implement a glitch-detection canary (or at least it would be elegant to do so).
 
-We can generate one as follows:
+Fuse sensing happens one row at a time, with all 32 fuses powered for sensing with one line, meaning it is much more challenging for an attacker to make a single fuse appear as cleared or set. It would make sense, then, to include a “canary” fuse that disables security-critical features (like fuse burning) when it is cleared, because usually the attacker can only manipulate fuse sensing at the row granularity at most. So, when the row0/1 option words come up as all cleared, ENABLE_FUSE_PROGRAM=0 stops us from burning any fuses.
 
-```sh
-sc_auth create-ctk-identity -l "ssh-labelyourkey" -k p-256-ne -t bio
-```
+However, take a look at what we have in this state: DISABLE_SW_OVERRIDE=0. This word is normally 1, and it stops us from setting the EN_SW_OVERRIDE register to 1, which then lets us “shadow” most of the option words exposed by the fuse controller. Doing so involves writing to a register CTRL_OPT_*, corresponding to option word OPT_*, which then determines the effective value STATUS_OPT_*. This is what lets us shadow SBFE to be 0. But, even though we have DSOV=0, ENABLE_FUSE_PROGRAM turns out to be one of the option words that are impossible to shadow, even with DSOV=0. So it seems we’re stuck.
 
-The options above:
+At least that’s what I thought, and I banged my head against the wall in this state for a while. Then I noticed that there is one fuse controller command I haven’t tried issuing yet: SENSE_CTRL. I had refrained from issuing this, because on the face of it it seems like all of the row0/1 (control fuse) derived option words would match their fused values, which would reset SBFE, turn off software option word shadowing, and leave us unable to fuse. To my surprise, when I issued this command, all of the control-fuse-derived options went to their fused value, *except* DISABLE_SW_OVERRIDE, which remained 0!
 
-- -l labels our key. Choose a unique and useful name here as we’ll need this to find the right key handle file on disk later.
-- -k p-256-ne creates a non exportable (-ne) key. This is important to ensure we’re actually creating a key that will stay resident in the enclave.
-- -t bio requires TouchID to use the key.
+With DSOV=0, we can trivially set SBFE to 0, ENABLE_FUSE_PROGRAM is 1 because it matches its fused value, and we are off to the races! One wrinkle remains in that FUSEWDATA may have a locked down PLM, but with DSOV=0, we can just write 0 to OPT_SECURE_FUSE_WDATA_WR_SECURE to set the PLM to be all-ones, opening host access for fusing.
 
-Then we can list the key:
+At this point, all that’s left to do is to calculate _DISABLE words that match the _DEFECTIVE values for the features we are interested in, and issue FF burns. Note that the occupied FF space and defective bits differ per die, so each burn must be die-tailored.
 
-```text
-% sc_auth list-ctk-identities
+## End results
 
-Key Type Public Key Hash                          Prot Label            Common Name      Email Address Valid To          Valid 
-p-256-ne B15235464F87EC7C8DEE89BFA06399FFD6678E99 bio  ssh-labelyourkey ssh-labelyourkey               04/11/2027, 09:29 YES
-```
+### Framebuffer unlock
 
-To export a handle to disk that allows OpenSSH to use the key from the secure enclave, you can do:
+On 8 GB cards with 80 GB intact (seems to be around ~90% of 8 GB cards from my limited sample size), the unlock yields the full 80 GB as a usable framebuffer. Multiple synthetic tests (writing pseudorandom words throughout the full framebuffer and reading them back after L2 invalidation) as well as real workloads (such as vLLM and SGLand) are fully functional.
+As mentioned, one of my cards has only 64 GB intact. In this case, the hardware unlock yields no framebuffer advantage.
 
-```sh
-(cd ~/.ssh && ssh-keygen -w /usr/lib/ssh-keychain.dylib -K -N "")
-```
+### Compute unlock
 
-When prompted for a pin during export, you can leave it blank as it isn’t used here. A public key and private key handle file will be created on-disk in the `~/.ssh` directory.
+The 170HX is limited to 70 SMs out of the box. In practice, there are almost always >120 SMs non-defective on the die, and the unlock allows using them all. This results in a significant performance uplift, ~1.7x compared to the software-only 170HX unlock, and even an impressive ~1.2x over a retail A100!
 
-Note that the command above will export a key handle for *all of the SSH keys* you have enrolled in the Secure Enclave (you can create many if desired by repeating the process above). I wasn’t able to find a way to export individual key handles [despite Apple’s docs suggesting that you should be able to with KEYCHAIN_CERTIFICATES](https://keith.github.io/xcode-man-pages/ssh-keychain.8.html). Your best bet will be to use a clear label using the `-l` flag when creating the key so you can easily find the handle for it after it has been exported to disk.
+### PCIe generation
 
-Once we have our pubkey and handle file, we can process these as we normally would – copying the public key to an `authorized_keys` file on a remote host or adding it to whatever services we prefer.
+The only thing that stops [cmpunlocker](https://github.com/amoghmunikote/cmpunlocker) from advancing beyond PCIe Gen2 are the FF option words. With relevant bits cleared, Gen3/4 train and are confirmed to be fully functional. When combined with the PCIe decoupling capacitor mod, up to PCIe Gen4 x16 is attainable, matching a retail A100 PCIe variant.
 
-To use SSH keys from the Secure Enclave, we need to set `SSH_SK_PROVIDER` in our shell. We can add this to `~/.zshrc`:
+### NVLink
 
-```sh
-export SSH_SK_PROVIDER=/usr/lib/ssh-keychain.dylib
-```
+Zeroing out the OPT_NVLINK_DISABLE word is only one of the required mods for NVLink to actually work. Because the CMP 170HX PCB is missing the U11 IC (which connects PCIe 3.3v to an NVLink bridge pin), a stock board fails to bring up the reference clock generator on attached NVLink bridges. Simply bridging two of the pins on the footprint of U11 resolves this issue, although it removes whatever regulation or protection was provided by U11. Be careful if you’re bridging GPUs powered by different power supplies, as this will connect the +3.3V rails together unless you leave U11 unpopulated on some of your GPUs! The NVLink bridge works fine if you just patch U11 on one of the boards in the pair.
 
-After a restart of the shell, the key will work like any other – though you may need to specify it directly as in my case it wasn’t being autodiscovered by macOS’s SSH agent:
+On the firmware side of NVLink enablement, there is a ROM check that needs to be bypassed with additional host-side commands. I’m sure your clanker can figure it out ;)
 
-```text
-Host blog.infected.systems
-    IdentityFile ~/.ssh/id_ecdsa_sk_rk_ssh-labelyourkey
-```
+While investigating the NVLink unlock, I also found a few interesting quirks with NVIDIA’s NVLink implementation on the GA100. I will be posting a further blog post on this, so stay tuned!
 
-### Running a Mac in ‘clamshell mode’
+## Future directions
 
-If you run your Mac in what Apple calls ‘clamshell mode’ (i.e. a laptop with the lid shut), then the initial `create-ctk-identity` command will fail with an error like this:
+With arbitrary fuse burning, we mostly gain feature unlocks. Some security-sensitive options are shipped unblown by default, and burning them may lead to interesting footholds. But what’s more interesting to me are the deeper glitch states where many default-blown security-sensitive fuses sense unblown, enabling routes like debug HS execution, which grant unprecedented access to die internals.
 
-```text
-Error: Error Domain=com.apple.LocalAuthentication Code=-4 "Touch ID is not available in closed clamshell mode." UserInfo={BiometryType=1, Subcode=10, NSDebugDescription=Touch ID is not available in closed clamshell mode., NSLocalizedDescription=Authentication canceled.}
-```
+## References
 
-Unfortunately it seems that keys created with `-t bio` do actually require full TouchID in order to generate or use – unlike other operations such as unlocking the Safari Keychain or using Apple Pay which fall back to a user password when in clamshell mode.
+- Jon Pry, A Canary in the Crypto Mine: Defeating Stack Protection in a GPU Secure Coprocessor (2026).
+- Amogh Munikote, cmpunlocker (2026).
+- Otto Bittner et al., The Forgotten Threat of Voltage Glitching: A Case Study on Nvidia Tegra X2 SoCs (2021).
+- NVIDIA, US9230678B2: Integrated circuit having an enhanced fuseless fuse structure (2016).
+- TSMC, TEF07F32X32HD18_PHRM_C180518 electrical fuse datasheet, rev. 120A (2018).
+- hexkyz and SciresM, Je Ne Sais Quoi - Falcons over the Horizon (2021).
+- TechPowerUp, NVIDIA GA100 GPU specifications.
+- GA100VFI source repository.
 
-There is an option to use `-t none` to create a key without presence confirmation enabled at all. This carries the same risk as I discussed in the section about using YubiKeys unattended so you’ll have to decide whether it works for your risk model.
+## Footnotes
 
-If, like me, you use the machine in clamshell mode basically all the time there are some alternative options that still retain presence detection though:
-
-- You could buy one of Apple’s expensive bluetooth keyboards with Touch ID.
-- Or, the YubiKey 5C Nano is tiny and can sit almost flush in the side of a closed MacBook and can be used with Method 1 including presence detection.
-
-## Final note
-
-With a mix of these three approaches, I’ve finally been able to deprecate on-disk keys from all my setups.
-
-Hopefully some of the info in this post is helpful to people! It’s nothing that can’t already be found online but I’ve gathered it into one place mostly for my own convenience.
-
-The main gotcha to be aware of with hardware-resident keys is that they’re, well, hardware resident. Hardware malfunction/loss/change can render keys unusable. So it’s probably better to make sure you at least have multiple keys. Remember, `authorized_keys` can take as many keys as you care to put in it so redundancy is the best move here I think.
+1. Anecdotally, out of the 10 specimens of CMP 170HX 8 GB I have examined, only one has shipped with only 64 GB usable, the rest all have a functional framebuffer size of 80 GB. [↩](https://blog.kate.land/posts/using-voltage-glitching-to-unlock-the-a100/#user-content-fnref-1)
+2. Although the *Canary in the Crypto Mine* paper claims a stable 80 GB on the 10 GB SKU, very few, if any, cards in the wild have been able to achieve this, and solid evidence is scarce. It remains plausible that some number of 10 GB SKUs really do come shipped with 80 GB on-board, however the percentage seems very low according to the community. Most “unstable” 80 GB unlocks are explained with a combination of L2 caching and memory aliasing over a true 40 GB framebuffer. [↩](https://blog.kate.land/posts/using-voltage-glitching-to-unlock-the-a100/#user-content-fnref-2)
+3. Enabling NVLink further requires a very small hardware mod due to a missing component on the 170HX PCB, I’ll talk more about this later. [↩](https://blog.kate.land/posts/using-voltage-glitching-to-unlock-the-a100/#user-content-fnref-3)
+4. Untested. [↩](https://blog.kate.land/posts/using-voltage-glitching-to-unlock-the-a100/#user-content-fnref-4) [↩<sup>2</sup>](https://blog.kate.land/posts/using-voltage-glitching-to-unlock-the-a100/#user-content-fnref-4-2) [↩<sup>3</sup>](https://blog.kate.land/posts/using-voltage-glitching-to-unlock-the-a100/#user-content-fnref-4-3)

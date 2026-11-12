@@ -1,226 +1,376 @@
-I’ve discovered a voltage fault injection vulnerability on the GA100 die, allowing an operator to blow arbitrary fuses. Utilizing this vulnerability, I’ve converted my CMP 170HX 8GB card into what is effectively an A100-80G! Further, my unlocked cards actually perform ~1.2x faster than a retail A100 by having all functional SMs enabled (~120-126, die-lottery dependent), rather than the yield-safe 108 SMs NVIDIA chose for all production A100 cards. Finally, CMP-disabled features like NVLink, PCIe Gen4, NVJPG, NVDEC, MIG are all unlockable with this approach, though I haven’t specifically tested NVJPG/NVDEC/MIG.
+This is a sign that C++ is (still) struggling with its governance (see a
+              [previous article on cultural issues within C++ here](https://herecomesthemoon.net/2024/11/two-factions-of-cpp/)). This is a big deal even if you do not care about programming languages. C++ is arguably the most
+              important programming language in existence.
 
-Here’s how my “A100-80G” appears and functions.
+Your computer runs on C or C++. The *web browser* you are using to read this is written in C++.
+              ~All programming languages depend on C++ (often through LLVM). Likewise, ~all websites with performance
+              requirements (e.g. YouTube) depend on C++, ~all data storage, game engines, finance, etc.
 
-NVIDIA uses fuses for product segmentation, security features, and other fun access control features - and crucially, there are several functions where blowing a fuse on an NVIDIA die can grant you *more* access, not less. In a properly secured design, a blown fuse should always induce a more restrictive state, because a blown fuse cannot be unblown in an economically feasible way. NVIDIA’s design allows one to *relax* restrictions by blowing more fuses!
+In a world that is drowning in exciting new vulnerabilities in ~all software, the ability of C++ to change
+              and adjust to changing times affects you.
 
-In this post, I will go over the GA100 die, its fuse controller, the use of VFI, and future research directions. I’ve decided to publish some of the work that enabled my research [here](https://github.com/kate-land/ga100vfi).
+Let’s take a step back and get an overview. The initial source was a post by
+              [Robert Seacord on LinkedIn](https://www.linkedin.com/posts/robertseacord_balloting-has-completed-for-c26-unfortunately-share-7519795139859517440-AOth/):
 
-## Acknowledgements
+In a comment, J. Daniel García adds: “There were 12 countries that abstained. In several cases
+              because they could not reach to a common position. That is another signal of a contested draft.”
 
-My work builds on [prior research by Jon Pry](https://www.researchgate.net/publication/408132536_A_Canary_in_the_Crypto_Mine_Defeating_Stack_Protection_in_a_GPU_Secure_Coprocessor) and numerous others who have dedicated much of their time towards better understanding the GA100 die. I am disclosing my findings subsequent to another security researcher independently discovering the same vulnerability; I believe it to be in the best interest of the public to make this information publicly available. These findings were disclosed to NVIDIA’s product security team ahead of the publication of this article.
+Now, before we get into the facts: **This is not a good look for C++.**
 
-## GA100 versions
+There have been multiple fights over the future direction of the C++ language, but no C++ standard ever
+              failed to be signed off by the national bodies.
 
-The GA100 is an NVIDIA die that has been used to power almost 20 different SKUs - the A100 being the most well-known variant. I won’t delve into [every SKU](https://www.techpowerup.com/gpu-specs/nvidia-ga100.g931), but I will present the GA100 manifestations that matter to my work, covering the different versions of the CMP 170HX and the A100.
+The national body vote is considered to be *a formality*. By the time the vote reaches the national
+              bodies all disagreements should’ve been sorted out by WG21 (Working Group 21, i.e. the C++ Standards
+              Committee).
 
-As fabbed, the GA100 die has 128 SMs, 12 FBPs, 5 NVDEC units, a PCIe Gen4 x16 controller, and depending on the framebuffer size, comes with 4-6 stacks of HBM co-packaged with the die. NVIDIA uses eFuses for yield-control and product segmentation–undifferentiated GA100s turn into more restrictive variants based on defect testing and manufacturer demand.
+Truly controversial features should never make it this far, since they should never be added to the C++26
+              working draft in the first place. This is a sign of division in the C++ community, in some form or
+              another, and completely independently of whether you agree with this result or not.
 
-In one of the most extreme manifestations of product segmentation, the CMP 170HX, an Ethereum mining card with nominally 8 or 10 GB of application-exposed framebuffer capacity, actually comes with, respectively, ~80 and ~40 GB of HBM onboard! This work chiefly centers around how to fully unlock and use that capacity. Previous work has made great strides in unlocking the GA100 via software methods; VFI takes us across the last mile.
+Here, “Added to the C++26 working draft” is essentially accepting the pull request. Everyone
+              is working towards the C++26 release, and people contribute to it with papers. Papers lead to votes, which
+              then lead to amendments of the draft. Finally (this is where we are) wording passes happen, and it gets
+              signed off, rubber-stamped and released. Phrased like this, the ISO process sounds sensible enough, but
+              trust me, it’s actually kind of a nightmare.
 
-| SKU | Out-of-box | Software (cmpunlocker) | GA100VFI |
-| --- | --- | --- | --- |
-| CMP 170HX 8GB |  |  |  |
-| Framebuffer | 8 GB | 64 GB | 64-80 GB<sup>[1](https://blog.kate.land/posts/using-voltage-glitching-to-unlock-the-a100/#user-content-fn-1)</sup> |
-| CMP 170HX 10GB |  |  |  |
-| Framebuffer | 10 GB | 40 GB<sup>[2](https://blog.kate.land/posts/using-voltage-glitching-to-unlock-the-a100/#user-content-fn-2)</sup> | 40-48 GB |
-| Both CMPs |  |  |  |
-| SMs | 70 | 70 | 120-128 |
-| PCIe generation | 1 | 2 | 4 |
-| NVLink | No | No | Yes<sup>[3](https://blog.kate.land/posts/using-voltage-glitching-to-unlock-the-a100/#user-content-fn-3)</sup> |
-| ECC | No | No | Yes<sup>[4](https://blog.kate.land/posts/using-voltage-glitching-to-unlock-the-a100/#user-content-fn-4)</sup> |
-| Multi-Instance GPUs | No | No | Yes<sup>[4](https://blog.kate.land/posts/using-voltage-glitching-to-unlock-the-a100/#user-content-fn-4)</sup> |
-| NVDEC | 0 | 0 | 5<sup>[4](https://blog.kate.land/posts/using-voltage-glitching-to-unlock-the-a100/#user-content-fn-4)</sup> |
+Needless to say, the debates are raging, with comments on all sides:
+              [So](https://www.reddit.com/r/cpp/comments/1xeeevt/balloting_has_completed_for_c26_unfortunately_it/)
+[many](https://www.reddit.com/r/cpp/comments/1xr8y5c/herb_sutter_when_a_languages_creator_and_its/)
+[discussions](https://www.reddit.com/r/cpp/comments/1xpcz59/c26_dis_failed_how_does_c_survive/).
 
-## Hardware restrictions
+Quick explanation: The national bodies execute a single vote. To pass the national bodies, the draft has
+                to meet two bars:
 
-So, how does NVIDIA utilize fuses to produce both a datacenter A100 and a mining CMP card from one die? To understand this, we need to take a closer look at the fuse controller located on the GA100.
+1. At least two-thirds of the participating voting members have to vote Yes.
+2. At most one quarter of all voting members may vote No.
 
-The fuse controller is a block that contains 16,384 eFuses (512 rows of 32) and a bunch of logic surrounding that raw fuse macro. Its job is to perform fuse readout and programming, protect the underlying fuses, and provide usable “option words” to the rest of the die. These option words subsequently decide how the die functions and what features are enabled.
+*If the above posts are correct*, then the draft failed to meet both bars. Twelve isn’t
+                two-thirds of twenty, and nine is more than a quarter. Visualization:
 
-Each eFuse can be in one of two states (blown=1, unblown=0), and the 512 rows are divided into 4 regions:
+In total, there were 20 P-members, and 22 total members (ignoring abstaining). I heard that the US
+                abstained, but take that with a grain of salt.
 
-1. Regular fuses (rows 0-221). These are straightforward; often single (pairs of) fuses will map to an option word, such as OPT_ENABLE_FUSE_PROGRAM (an option word that determines whether further fuse programming is allowed or not). Regular fuses have built-in redundancy: for example, OPT_ENABLE_FUSE_PROGRAM consists of a PRI and RED (primary and redundant) fuse, in this case the primary instance is fuse 0 of row 0, and the redundant is fuse 0 of row 1. Some option words are scalars, such as OPT_X_COORDINATE, which is 9 bits wide and ostensibly holds the x-coordinate of the die on the fabbed wafer. Importantly, if a regular fuse is blown, there is basically no remedy to persistently unblow it (save for RIR later).
-2. Fuseless fuses (rows 222-487). This is a weird one. Apparently NVIDIA got frustrated with accidentally blowing regular fuses and ruining their engineering samples, and came up with a system to encode effective option words in a JTAG chain-like format (see this patent). Think about FF as essentially a script that describes what option words should have what values. FF fuses (excuse the RAS syndrome) concern most of the functionality we can unlock using VFI. This is because FF option words can be trivially cleared by simply writing new FF rows! We’ll about this more in depth, later. For now, you should know that NVIDIA also knows this, because under normal conditions, you are strictly prevented from performing any FF fuse blows.
-3. IFF fuses (rows 487-512). These contain instructions in a different format than the FF one. They’re out of scope for this post, and they’re mainly useful for on-the-fly reprogramming of fuse controller option words. They are usually not accessible in a production card.
-4. RIR fuses (8 rows of 32 fuses, which are technically not part of the 512 rows). These are provided by the designer of the fuse macro (TSMC datasheet here) and are essentially the first party designer’s intended “fuse repair” mechanism. The RIR section on a GA100 has space for 16 repair instructions, each overriding the value of an identified single fuse in the main 512 rows. Unfortunately for us, specifically in the 8 GB 170HX SKU, 15 of the 16 RIR words are all ones, and the 16th word encodes a useless repair instruction that can only be rarely leveraged for any interesting unlock. The story is different for the 10 GB SKU, but that’s a matter for another day…
+## So, what happened?
 
-There are two really interesting groups of fuses for the VFI-based unlock:
+**tl;dr**: WG21 voted to include *Contracts* in C++26. Several high-ranking members of
+              WG21 are strongly opposed to Contracts, and so are several national bodies. The national body vote was the
+              ’last resort’ place to prevent Contracts from being canonicalized as part of the C++ standard.
 
-1. “Control fuses”. The term comes from NVIDIA’s Tegra hardware headers, they use it to refer specifically to rows 0 and 1, which specify the values of highly security-sensitive option words.
-2. Fuseless fuses, which encode all of the interesting option words that decide whether a GA100 is born to be a measly mining card or an AI datacenter workhorse.
+New keywords that replace `assert` macros with a standardized way to enforce runtime checks.
+                Most importantly, you can add `pre` and `post` checks to ensure that all arguments
+                and return values fulfill certain conditions.
 
-Before we name some of the FF-encoded option words, we’ll have to first understand the FF record format in a bit more detail, then talk about the die blocks that govern the features we are interested in.
+This ends up looking roughly as follows:
 
-### Fuseless fuses
+```cpp
+int wrap_index(int i, const int size)
+    pre (size > 0)               // the caller must guarantee this
+    post (r: 0 <= r && r < size) // the function promises this; r is the return value
+{
+    int r = i % size;
+    if (r < 0) r += size;
+    contract_assert(r >= 0);     // a check inside the body
+    return r;
+}
+```
 
-Each FF row is a 32-bit record. Bits 0–4 select a chain, bit 5 distinguishes FF from IFF (0 for FF), bits 6–15 select a 16-bit block, and bits 16–31 supply that block’s new value. The JTAG-chain picture from the patent is quite literal here: the controller builds the option data by replaying these records into chains. Fixed locations in each chain correspond to individual option words.
+Looks simple, right? You’d think so, but no!
 
-If two records address the same chain and block, the later record wins. For example, `0x0fe805c1` means chain 1, block 23, data `0x0fe8`. Appending that record can clear an *effective* bit set by an earlier FF record. No physical fuse is unblown; a new row replaces the old 16-bit block. This works for FF-backed options, not the regular control fuses in rows 0 and 1.
+First, due to issues with virtual functions, Contracts for virtual functions were already cut from the
+                proposal.
 
-Now that we know how FF words are encoded, here’s a list of the interesting words and their locations. These were discovered by a particularly helpful researcher who cross-compared FF values and effective option words from different GA100 SKUs in order to differentially understand the FF chain/block to option word mappings, as there is no known official mapping.
+Second, it’s not entirely obvious how this will interact with `constexpr` or function
+                inlining.
 
-| Named option | Inferred FF location | Use |
-| --- | --- | --- |
-| `NV_FUSE_OPT_FBIO_DISABLE` | Chain 1 bits 83–106; blocks 5–6 | Memory I/O floorsweep |
-| `NV_FUSE_OPT_FBPA_DISABLE` | Chain 1 bits 107–130; blocks 6–8 | Memory subpartition floorsweep |
-| `NV_FUSE_OPT_GPC_DISABLE` | Chain 1 bits 131–138; block 8 | GPC floorsweep |
-| `NV_FUSE_OPT_TPC_GPC0_DISABLE` through `NV_FUSE_OPT_TPC_GPC7_DISABLE` | Chain 1 bits `187+8i` through `194+8i` for GPC `i`; blocks 11–15 | Eight TPC masks |
-| `NV_FUSE_OPT_PES_DISABLE` | Chain 1 bits 251–274; blocks 15–17 | PES floorsweep |
-| `NV_FUSE_OPT_FBP_DISABLE` | Chain 1 bits 307–318; block 19 | Framebuffer partition floorsweep |
-| `NV_FUSE_OPT_ROP_L2_DISABLE` | Chain 1 bits 319–342; blocks 19–21 | ROP/L2 floorsweep |
-| `NV_FUSE_OPT_NVLINK_DISABLE` | Chain 1 bits 368–370; block 23 | NVLink disable mask |
-| `NV_FUSE_OPT_DISABLE_GEN3_SPEED` | Chain 2 block 39; **which of bits 1 and 9 is unresolved** | PCIe Gen3 speed restriction |
-| `NV_FUSE_OPT_PCIE_MAGIC_BITS_D[25]` | Chain 2 block 47 bit 3 | Gen4 speed-disable flag |
-| `NV_FUSE_OPT_PCIE_BOOT_GEN23_DISABLE` | Chain 2 block 49 bit 6 | PCIe boot policy |
-| `NV_FUSE_OPT_PCIE_BOOT_GEN3_DISABLE` | Chain 2 block 49 bit 7 | PCIe boot policy |
-| `NV_FUSE_OPT_PCIE_DEVIDA` | Chain 2, bits 593–608; blocks 37–38 | Device identity |
-| `NV_FUSE_OPT_PCIE_DEVIDB` | Chain 2, bits 609–624; blocks 38–39 | Device identity |
-| `NV_FUSE_OPT_SYS_PIPE_DISABLE` | Chain 1, bits 372–379; block 23 | Multi-instance GPU enabled pipes |
+Third, there are compile flags to selectively enable or disable the enforcement. E.g. “If a
+                contract is violated, do you want to 1) kill the program, 2) call a ‘contract-violation
+                handler’ and then kill the program, 3) log an error, 4) ignore completely (and not even perform
+                the check, for performance reasons)?”
 
-The acronyms FBIO/FBPA/FBP/TPC/GPC/PES/ROP all refer to microarchitectural elements, please see this diagram from the GA100 whitepaper to further understand how these are related to each other:
+Big question: You compile your code with `enforce` and are linking a prebuilt library that
+                pulls in the same dependency as you, but with Contracts set to `ignore`. This is fine
+                according to Contracts. The linker gets to keep one of the copies. What happens? Do Contracts run or
+                not? What if a call is inlined across translation units?
 
-FBP is the internal NVIDIA term for a “framebuffer partition”, with 2 FBPs to one HBM stack. FBPAs are subpartitions, 2 FBPAs to one FBP. PES/ROP are blocks (seemingly graphics-related) that are required for an SM to function.
+Is there even a way for the user to guarantee that checks always run? (The answer is no. What? You were
+                hoping that this feature could be used to ensure certain checks guarding against Undefined Behavior
+                would *always* run, no matter what? Don’t be silly—this is C++.)
 
-With this knowledge in hand, *what if* we could write new FF rows that set the _DISABLE words to be all zeroes, or at least, as permissive as possible given die defects? If we look at how the _DISABLE options are used in conjunction with other elements, we’ll quickly see that these _DISABLE words are the primary lever we have in preventing parts of the die from being “floorswept”. After illuminating the “what-if”, I’ll talk about the “how”: the exact application of voltage fault injection and the fuse controller safeguards we can defeat with VFI.
+Oh, did I mention that code inside of predicates is just standard C++, so the compiler is allowed to
+                elide checks due to Undefined Behavior?
 
-### Floorsweeping
+But do feel free to take it from the source: The “Contracts paper” can be found
+                [here](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2025/p2900r14.pdf), and if you read closely, you’ll find some funny statements that really ruffled some feathers:
 
-NVIDIA puts these options in charge of setting floorsweep signals, which will render a die element unreachable (and likely powered down). From experiments, I believe the floorsweep lines are specified in RTL, emanating from the fuse controller and terminating in individual functional blocks and controlling some master power/clock domain switch within the block. I have observed the floorsweeping behavior to correspond with very little latency with the value of the fuse controller’s effective status words for each functional block.
+> It is ill-formed, no diagnostic required (IFNDR) if multiple first declarations for the same function
+>                   are in different translation units that do not have the same sequence of function contract specifiers.
 
-Let’s take FBP floorsweeping, for example. On one of my 8 GB cards, `OPT_FBP_DISABLE` was `0x852`: FBPs 1, 4, 6, and 11 were masked. The separate `OPT_FBP_DEFECTIVE` mask was `0x840`, covering 6 and 11. After I reduced the FF-backed disable mask to `0x840` with a replacement FF row, the extra masks on 1 and 4 were gone, but the defective 6 and 11 stayed disabled. That leaves 10 of the die’s 12 FBPs in the effective mask. Functionally, FBPs 1 and 4, which refused register reads and writes when `OPT_FBP_DISABLE` was `0x852`, became responsive after this fuse write.
+All of this leads to *so many funny issues*, some of which can be poorly summarized as
+                “Well, who even knows whether your Contracts are even going to be enforced, this is C++, the
+                compiler can do whatever it wants lol”.
 
-Although the functional blocks can be “unfloorswept” with FF writes, this does not fully suffice to render the block fully available to an end application - the default framebuffer geometry configuration uses only a portion of each available HBM stack, for example.
+If you think “Gee, this proposal looks rather complex and messy”, keep in mind that the
+                Contracts paper was explicitly designed to be a minimal viable product that everyone would be able to
+                agree on.
 
-To bypass that, we can utilize what is essentially a small modification to [cmpunlocker](https://github.com/amoghmunikote/cmpunlocker)’s method. The usual driver patch for the 8 -> 64 GB unlocks writes to a particular set of feature configuration words (FBPA_CFG, SM_SPEED_SELECT, etc.). The default values are chosen to succeed for the commonly found variant of the 170HX, which has the _DISABLE FF-derived option words preventing certain functional blocks from being used (any attempt to use them will return floorswept errors). With the unlocking FF burns in place, we can write even more permissive words into the configuration registers, resulting in what is functionally an A100-80G.
+If you only faintly paid attention to C++, you might be going into this assuming that
+              *Profiles* (aka Bjarne Stroustrup’s initiative to make C++ safer via magical fairy dust, also
+              controversial and considered to be ‘impossible to implement’ by some) are the sticking point,
+              but no,
+              [Profiles did not make it into C++26](https://herbsutter.com/2026/03/29/c26-is-done-trip-report-march-2026-iso-c-standards-meeting-london-croydon-uk/).
 
-## Achieving the FF burn
+How do we know that it’s Contracts?
 
-With the information we have, it seems straightforward that if one could blow arbitrary FF fuses, any GA100 could be fully unlocked to its maximum capability, as determined by die yield and the populated memory stacks. But how do we blow FF fuses? Let’s take a look at the fuse programming functionality of the fuse controller to understand more.
+Oh, y’know, it’s just because *that’s all everyone has been talking about*.
 
-To request a fuse blow, one must write to the FUSEADDR, FUSEWDATA, and FUSECTRL registers belonging to the fuse controller. Although not nominally accessible to the host or to unprivileged requesters, with the *Canary in the Crypto Mine* ROP, opening up the responsible privilege level masks is trivial. And so, many researchers have attempted to coerce the fuse controller to blow fuses in the FF region. Some of our shared observations follow:
+Most obviously, the pro-Contracts camp released
+              [“Do not remove Contracts from C++26”](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2026/p4433r0.pdf)
+              on Oct 23rd, i.e. around the time when the national body ballot closed. Vinnie Falco (the most outspoken
+              voice against Contracts) countered with
+              [“Do Remove Contracts From C++26”](https://raw.githubusercontent.com/cppalliance/wg21-papers/master/source/_reserve/d4420-do-remove-contracts-from-cpp26.md)
+              on the very same day<sup>[1](https://herecomesthemoon.net/2026/11/cpp26-failed-the-national-bodies/#fn:1)</sup>.
 
-1. The fuse controller has an internal FSM, and it indicates its current state via the FUSECTRL_STATE bits.
-2. The fuse controller enters a WRITE_PROGRAM state per each “hot” bit in the requested FUSEWDATA value. This tracks with the expected fuse programming behavior.
-3. However, unless a specific option word is cleared, writes to fuse addresses outside of the FPF range (rows 96-221) do not actually take place. Fuses in this region (believed to be “field programmable fuses” indicating a watermark of which ucode versions have run, alongside other field-relevant information) do take effect, and the fuse controller state machine behaves identically between FPF and non-FPF regions.
+If you’ve been paying attention, there’s a whole trail of papers and events here.
 
-The specific option word I am referring to is OPT_SECURED_BURN_FEATURE_ENABLE (“SBFE”), and it is set to be 1 in all production cards. When this option word is clear, fuse programming is allowed in any address. When it is set, only FPF fuses may be blown. To date, no one has found any way to burn FF fuses with SBFE=1, even when operating the fuse controller from HS contexts. It is not clear what “secured burn” truly means, I speculate that there must be a software-only way to perform non-FPF burns even with SBFE=1, and we just don’t know what the “secured” adjective really means here.
+We’ve got talks, and Bjarne Stroustrup, the creator of C++ himself, saying
+              [“it’s claimed to be a minimum viable product. It is not minimal. I don’t think
+                it’s viable”](https://youtu.be/tzXu5KZGMJk?t=3180).
 
-> Note
-> *PLM*, *HS*, *ucode*, …; I am delving into using a bunch of NVIDIA-specific terminology in this section as the explanation gets deeper. For a really in-depth explanation of what these mean, I refer you to other sources such as [Je Ne Sais Quoi - Falcons over the Horizon](https://hexkyz.blogspot.com/2021/11/je-ne-sais-quoi-falcons-over-horizon.html).
+We’ve got multiple papers, say
+              [“Contract Concerns”](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2025/p3573r0.pdf),
+              [“Contracts make C++ less safe — full stop!”](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2025/p3835r0.html), or
+              [“Contracts’ fundamental flaws”](https://www.stroustrup.com/Contracts_fundamental_flaws.pdf)
+              (all reasonably short) opposing the behemoth that’s the
+              [Contracts paper](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2025/p2900r14.pdf)
+              and its
+              [rationale document](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2025/p2899r1.pdf)
+              (put together, almost 300 pages).
 
-Importantly, as people have figured out on more permissive cards, it is possible to perform FF burns with SBFE=0! And as it turns out, achieving this state is how we achieve the GA100 unlock. After much trial-and-error, I have resorted to inducing this state via voltage fault injection, and I was able to achieve it. Let’s talk some more about voltage glitching.
+We’ve had multiple votes. Most importantly ([Hagenberg, Feb 15th, 2025](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2025/n5007.pdf)), the vote to formally add Contracts to the C++26 working draft, turned out 100 in favor, 14 opposed, 12
+              abstain. The multiple votes to remove Contracts from the draft all failed, most recently
+              [in Croydon](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2026/n5040.pdf), which is also when an amendment to support
+              [a mechanism to ensure mandatory contract enforcement failed](https://isocpp.org/files/papers/P4044R0.html).
 
-### Voltage fault injection
+*If your eyes are glazing over at this point, I don’t blame you!*
 
-Much has been said about VFI, and I’ll leave the in-depth explanation to other sources. In short, applying brief pulses of low supply voltage will often cause unexpected behavior in integrated circuits. I asked GPT-6 Astra to design an STM32G4 based board that taps into the PWMVID signal on the CMP PCB. PWMVID is an NVIDIA standard for voltage regulators, and my glitcher intercepts the PWM signal emitted by the GA100 die, and replaces it with its own waveform fed into the MP2888B VRM driver IC. With my setup, I can induce the card’s own VRM to produce timed glitches for me, which is simpler than MOSFET-based setups and enables faster glitching than attempting to directly drive the PMBus.
+The whole situation is a mess, and trying to keep track of it from the outside is a fool’s errand:
+              You’re basically forced to track dry meeting notes, and read between the lines looking at the
+              various drafts people are publishing. Don’t do it.
 
-The glitcher requires two connections to the PCB, ideally done with magnet/enameled wire. One wire taps NVVDD for voltage sensing, and another wire taps the PWMVID signal. The only other required step for the glitcher to function is the removal of a 0402 0ohm resistor, which will break the connection between the GA100 output PWM pin and the VRM IC. Finding where to place the taps is trivial by tracing the pinout of the MP2888B, specifically its PWMVID and VOSEN pins (the MP2888B shares a footprint with its sibling public chip MP2888A). Test points directly adjacent to the MP2888B enable relatively easy installation of the PWMVID tap.
+This is not Contracts’ first rodeo: A different version of Contracts was up for debate around 2018,
+              and was kicked out not too long after. At this point SG21 (‘Study Group 21’) was formed,
+              dedicated to revamping the Contracts concept to get us the new “Minimum Viable Product”
+              that’s currently part of the draft.
 
-With this tap in place, a single glitch attempt involves this sequence:
+The whole situation went back and forth, resulted in fourteen revisions on the Contracts paper, many
+              comments from the national bodies during the process, and finally in some people
+              [explicitly calling for the national bodies to veto C++26](https://web.archive.org/web/20260819155123/https://cppalliance.org/pdf/alliance-nb-petition.pdf). (We call that ’the nuclear option’. FYI, some of the people signing this are themselves
+              sitting on national bodies.)
 
-1. Remove card power
-2. Apply card power
-3. Start a timer (“glitch timer”) as soon as NVVDD crosses a threshold
-4. Execute a proposed voltage waveform by issuing a PWMVID signal, aligned to the glitch timer
-5. Observe card behavior, repeat from step 1 as needed
+This was then what, in fact, happened.
 
-My setup achieves steps 1/2 with a simple ACPI S0 -> S3 -> S0 transition, which can be done in a few seconds on a modern desktop platform. More intrusive modifications or expensive rigs can probably achieve a better experiment rate, but in my experience this setup suffices to unlock cards in somewhere between 1 hour and 48 hours of glitching time using the approach described later.
+## Where are we standing?
 
-For the NVVDD threshold, the Astra-authored firmware uses an STM32 comparator to detect when NVVDD crosses 225mV, after which a tight DMA loop drives the desired duties on the PWMVID pin. After S0, the host inspects the card state and decides what to do next; if it involves another glitch, the glitcher board will be commanded over USB with a glitch pattern. Then the host induces S3 with an RTC timer to wake back up in ~3s (empirically derived period for decent stability).
+What you need to understand is that the Hagenberg vote (on adding Contracts to the working draft) was
+              *strongly* in favor of Contracts. 100 in favor vs. 14 against is *not* a weak result. This
+              makes it incredibly puzzling that this final vote failed so badly (12 for, 8 against is bad).
 
-Sometimes the host will fail to return to S0, I’ve remedied this with relegating bookkeeping and glitch campaign preparation to an SBC (Radxa Cubie A5E) which also can drive the motherboard power/reset button pins via GPIO if the glitch target host is unresponsive.
+One narrative on what happened is the following:
 
-More specifics are shared in the [GA100VFI repository](https://github.com/kate-land/ga100vfi) if you’re interested. For now, let’s take a look at the different interesting states we can trigger via VFI, as well as the specific glitch state that we need to burn FF rows. To help illuminate the differences between each glitch state, I have built an empirical model of how the fuse controller starts up when voltage is applied. Note that without the RTL that implements the fuse controller, all we have are guesses. Here are the hypothesized boot stages:
+> “There’s a loud minority strongly opposing Contracts in C++26. This group includes people
+>                 with a lot of influence, e.g. Bjarne Stroustrup. Some members of this group actively lobbied the
+>                 national bodies to vote against Contracts, *even though* WG21 achieved alignment, and agrees that
+>                 Contracts should ship in their current form.”
 
-1. Sense RIR, as required by the fuse macro
-2. Sense (from fuse macro into readout register) control rows
-3. Latch control rows into control row-derived option words
-4. Sense remaining rows
-5. Latch regular fuse values into their option words
-6. Parse FF chain
-7. Latch FF chain values into their option words
+This agrees with the evidence we’ve seen (votes in favor, some people strongly opposed). Herb Sutter
+              is suggesting this in his latest paper, see
+              [here](https://isocpp.org/files/papers/P4454R0.pdf). (Herb
+              Sutter, for the record, was the chair of the C++ Committee and is (next to Bjarne) perhaps the
+              second-most-important person anyone in the C++ world listens to.)
 
-These hypothetical stages are based on what I can actually read from the die: controller states, raw rows when `CMD_READ` works, the published option words, and whether the PRI ring can still reach the rest of the GPU. By looking at a few key values, we can tell glitch outcomes apart. Importantly, glitch patterns and outcomes are very much die-specific, so consider these example waveforms and responses to be just that, examples. Let’s take a look at 3 interesting glitch states.
+This is plausible, but I don’t believe it. Not entirely, anyway. Yes, lobbying happened, and
+              Bjarne’s opinion is something people listen to. It’s possible it was the deciding factor, but
+              *if it was the deciding factor, then this is a sign that the process itself is broken, and puts undue
+                value onto status.*
 
-#### 1. All fuses sensed as zero
+Even Herb Sutter acknowledges that Contracts were contentious. In footnote 4 on his paper, anyway.
 
-Some glitches make almost every published option word read as zero. In one captured state, 669 of 672 named option reads were zero; the other three were error responses. The controller’s CRC status was `0x00` (not parsed yet), the PCIe ID read as `2080` (the base GA100 PCIe product ID, does not correspond to a real retail product), and the GPU’s PRI ring was held in reset.
+> Some of the NBs that voted Disapprove had participated and had expressed concerns about contracts
+>                 without having to be lobbied (importantly, those were the first-ever Disapprove votes on any C++ DIS).
 
-This state is consistent with a catastrophic failure on behalf of the fuse controller. The card comes up basically unusable, because almost all boot functions are disrupted by the all-zero state. However, interesting enough, the card trains at PCIe Gen4 natively! Some slightly altered variants may showcase sections of fuses being successfully latched, or containing garbled values instead of all-zeroes. I was not able to push any of these states towards an FF burn; in almost all of them the fuse controller is unreachable or dysfunctional.
+In other words, before any lobbying happened we already had a historical first, the strongest ever NB
+              disagreement with a draft.
 
-#### 2. RIR read disrupted
+Importantly, it looks to me as though the committee just repeatedly ignored the comments/feedback of the
+              national bodies throughout the process, and then ran face-first into a wall at the vote.
 
-Reading the RIR data on the CMP 170HX 8GB reveals its exact effect: 15 noop repair instructions, and one write that changes the value of a fuse in row 18, whose option word we can monitor. Further, because the RIR sense is consumed internally by the fuse macro instead of directly by the fuse controller, we can observe a disrupted RIR latch by attempting to read the raw row - the observed bitflip remains consistent across the flipped option word as well as the raw fuse row. This sets an interesting chronological checkpoint in investigating die boot (RIR sense must happen prior to other fuse sensing), but is not a useful glitch in itself.
+If you think “Oh, you are saying that the committee is just straight-up incompetent and/or evil,
+              then?” No, not really. The committee process is just such a mess that it semi-naturally leads to
+              situations like this. The people working *within* this system have become so used to the process
+              that they’re barely capable of seeing it.
 
-#### 3. Goldilock’s glitch
+(Over the years many people who did not find this process workable just left entirely. There’s a
+              huge selection bias effect.)
 
-The successful three-pulse state on my first card seemed to disrupt precisely the row0/1 based option words, while leaving other fuses and option words intact. In this state, all of the row0/1 derived option words are zero. The initial readbacks look like this:
+Part of what makes the process bad is that it’s very “all or nothing”, and the process
+              is so slow that working on the standard is painful for everyone. More on that later.
 
-| Signal | Initial readback |
-| --- | --- |
-| PCI ID and access | `20c2`; BAR0 and the PRI ring respond |
-| `FUSECTRL` | `0xe0040000` (`IDLE`) |
-| `CRC_STATUS` | `0x55` (both halves parsed without errors) |
-| `DISABLE_SW_OVERRIDE` | `0` |
-| `OPT_SECURED_BURN_FEATURE_ENABLE` | `0` |
-| `ENABLE_FUSE_PROGRAM` | `0` |
-| FUSECTRL/FUSEOPT privilege masks | `0xffffffff` for both |
-| Raw rows 0 and 1 | Both still `0x53557c3d`, unchanged from before the glitch |
+Anyway. I don’t believe that it’s all just the lobbying. The discussions were already way
+              underway. Evidence:
 
-At this stage, we are still not yet capable of issuing FF writes, because ENABLE_FUSE_PROGRAM=0. I am honestly not sure why ENABLE_FUSE_PROGRAM would *ever* be zero, given it’s 1 in retail boards, so this almost reads to me like a way to implement a glitch-detection canary (or at least it would be elegant to do so).
+### Exhibit A: Comments by National Bodies
 
-Fuse sensing happens one row at a time, with all 32 fuses powered for sensing with one line, meaning it is much more challenging for an attacker to make a single fuse appear as cleared or set. It would make sense, then, to include a “canary” fuse that disables security-critical features (like fuse burning) when it is cleared, because usually the attacker can only manipulate fuse sensing at the row granularity at most. So, when the row0/1 option words come up as all cleared, ENABLE_FUSE_PROGRAM=0 stops us from burning any fuses.
+Taking a look at
+              [“Do not remove Contracts from C++26”](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2026/p4433r0.pdf), it refers to the “23 NB comments on contract assertions”.
 
-However, take a look at what we have in this state: DISABLE_SW_OVERRIDE=0. This word is normally 1, and it stops us from setting the EN_SW_OVERRIDE register to 1, which then lets us “shadow” most of the option words exposed by the fuse controller. Doing so involves writing to a register CTRL_OPT_*, corresponding to option word OPT_*, which then determines the effective value STATUS_OPT_*. This is what lets us shadow SBFE to be 0. But, even though we have DSOV=0, ENABLE_FUSE_PROGRAM turns out to be one of the option words that are impossible to shadow, even with DSOV=0. So it seems we’re stuck.
+Taking a closer look at
+              [N5028](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2025/n5028.pdf)
+              and
+              [N5031](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2025/n5031.pdf), we see the committee rejected at least one strong anti-Contracts comment from each of the following
+              countries: Sweden, Spain, the United States, France, Romania, the Czech Republic and Finland.
 
-At least that’s what I thought, and I banged my head against the wall in this state for a while. Then I noticed that there is one fuse controller command I haven’t tried issuing yet: SENSE_CTRL. I had refrained from issuing this, because on the face of it it seems like all of the row0/1 (control fuse) derived option words would match their fused values, which would reset SBFE, turn off software option word shadowing, and leave us unable to fuse. To my surprise, when I issued this command, all of the control-fuse-derived options went to their fused value, *except* DISABLE_SW_OVERRIDE, which remained 0!
+These comments included multiple asks to not ship Contracts in their current form at all, resolve safety
+              issues, make Contracts reliably non-ignorable, fix the const issues, and change it such that standard
+              library hardening phrasing does not depend on Contracts.
 
-With DSOV=0, we can trivially set SBFE to 0, ENABLE_FUSE_PROGRAM is 1 because it matches its fused value, and we are off to the races! One wrinkle remains in that FUSEWDATA may have a locked down PLM, but with DSOV=0, we can just write 0 to OPT_SECURE_FUSE_WDATA_WR_SECURE to set the PLM to be all-ones, opening host access for fusing.
+What did the committee think? That all of these asks were completely irrelevant? Yeah,
+              *no shit* people are going to vote against something or abstain if you ignore their concerns.
 
-At this point, all that’s left to do is to calculate _DISABLE words that match the _DEFECTIVE values for the features we are interested in, and issue FF burns. Note that the occupied FF space and defective bits differ per die, so each burn must be die-tailored.
+This was preventable! People told you ahead of time that they were strongly opposed! The national bodies
+              played their part correctly here. They gave you feedback ahead of time, and then voted accordingly.
 
-## End results
+### Exhibit B: Standard Library Hardening
 
-### Framebuffer unlock
+There were at least four comments asking specifically “Please do not make the work on
+              ‘standard library hardening’ depend on the inclusion of Contracts into C++26.” As it
+              stands, this coupling is still there, i.e. the comments were ignored.
 
-On 8 GB cards with 80 GB intact (seems to be around ~90% of 8 GB cards from my limited sample size), the unlock yields the full 80 GB as a usable framebuffer. Multiple synthetic tests (writing pseudorandom words throughout the full framebuffer and reading them back after L2 invalidation) as well as real workloads (such as vLLM and SGLand) are fully functional.
-As mentioned, one of my cards has only 64 GB intact. In this case, the hardware unlock yields no framebuffer advantage.
+In fact, now that the future of Contracts is shaky, the “Do not remove Contracts” paper
+              includes the following line:
 
-### Compute unlock
+> At the time of writing, there is no wording for removing contract assertions from C++26, and producing
+>                 it is not a purely mechanical exercise. It would require:
+>
+> […]
+>
+> removing or respecifying C++26 standard-library hardening [P3471R4], which is written in terms of
+>                 contract assertions and has never had complete, reviewed wording that is independent of contract
+>                 assertions.
 
-The 170HX is limited to 70 SMs out of the box. In practice, there are almost always >120 SMs non-defective on the die, and the unlock allows using them all. This results in a significant performance uplift, ~1.7x compared to the software-only 170HX unlock, and even an impressive ~1.2x over a retail A100!
+The audacity. The national bodies were very explicit in saying that
+              *they do not want standard library hardening to depend on Contracts*.
 
-### PCIe generation
+You went and ignored those comments, and are now complaining about the effort that would be necessary to
+              walk things back? You were given all the heads-up you needed, you just ignored it!
 
-The only thing that stops [cmpunlocker](https://github.com/amoghmunikote/cmpunlocker) from advancing beyond PCIe Gen2 are the FF option words. With relevant bits cleared, Gen3/4 train and are confirmed to be fully functional. When combined with the PCIe decoupling capacitor mod, up to PCIe Gen4 x16 is attainable, matching a retail A100 PCIe variant.
+### Exhibit C: Non-ignorable Contracts
 
-### NVLink
+I quote Footnote 6 from
+              [Herb Sutter’s paper on the situation we are in](https://isocpp.org/files/papers/P4454R0.pdf). If there is an expert, it is him:
 
-Zeroing out the OPT_NVLINK_DISABLE word is only one of the required mods for NVLink to actually work. Because the CMP 170HX PCB is missing the U11 IC (which connects PCIe 3.3v to an NVLink bridge pin), a stock board fails to bring up the reference clock generator on attached NVLink bridges. Simply bridging two of the pins on the footprint of U11 resolves this issue, although it removes whatever regulation or protection was provided by U11. Be careful if you’re bridging GPUs powered by different power supplies, as this will connect the +3.3V rails together unless you leave U11 unpopulated on some of your GPUs! The NVLink bridge works fine if you just patch U11 on one of the boards in the pair.
+> P3911 is the only technical proposal that NBs told us during CD comment processing would likely prevent
+>                 multiple potential NB negative votes. It’s also a pure extension that doesn’t disturb the rest of the
+>                 contracts design or interfere with future extensions, which makes it low-cost and low-risk to adopt.
+>                 This is why in Kona I repeatedly encouraged EWG to pursue it. It addresses what several experts said was
+>                 their principal concern motivated by safety issues: to provide a way to write a contract in source code
+>                 that would be guaranteed to be enforced at execution time regardless of build mode or linking. However,
+>                 it failed to be approved in the EWG 2026-01 telecon (‘encourage more work in this direction’ failed by
+>                 8-25 for-against, with 9 neutral). Now we have the new information that NBs have rejected the DIS, and
+>                 several have again cited safety as a critical issue, so this change is likely to increase NB consensus.
 
-On the firmware side of NVLink enablement, there is a ROM check that needs to be bypassed with additional host-side commands. I’m sure your clanker can figure it out ;)
+[P3911](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2026/p3911r2.html)
+              is the paper that proposes adding a way to ensure Contracts will *always* run, and can be enforced.
 
-While investigating the NVLink unlock, I also found a few interesting quirks with NVIDIA’s NVLink implementation on the GA100. I will be posting a further blog post on this, so stay tuned!
+(Which, yes, a lot of people believe is necessary for a safety feature. If you can’t guarantee the
+              safety is even enforced, what’s the point?)
 
-## Future directions
+### Do Herb Sutter and I even disagree?
 
-With arbitrary fuse burning, we mostly gain feature unlocks. Some security-sensitive options are shipped unblown by default, and burning them may lead to interesting footholds. But what’s more interesting to me are the deeper glitch states where many default-blown security-sensitive fuses sense unblown, enabling routes like debug HS execution, which grant unprecedented access to die internals.
+Honestly, probably not. Herb Sutter is looking at the situaation from the political angle, and analyzing
+              whose beliefs have more weight based on their status.
 
-## References
+Bjarne Stroustrup’s beliefs (as the creator of C++) hold a lot of weight. This is correct.
 
-- Jon Pry, A Canary in the Crypto Mine: Defeating Stack Protection in a GPU Secure Coprocessor (2026).
-- Amogh Munikote, cmpunlocker (2026).
-- Otto Bittner et al., The Forgotten Threat of Voltage Glitching: A Case Study on Nvidia Tegra X2 SoCs (2021).
-- NVIDIA, US9230678B2: Integrated circuit having an enhanced fuseless fuse structure (2016).
-- TSMC, TEF07F32X32HD18_PHRM_C180518 electrical fuse datasheet, rev. 120A (2018).
-- hexkyz and SciresM, Je Ne Sais Quoi - Falcons over the Horizon (2021).
-- TechPowerUp, NVIDIA GA100 GPU specifications.
-- GA100VFI source repository.
+Quoting
+              [Herb Sutter’s discussion on the matter](https://isocpp.org/files/papers/P4454R0.pdf):
 
-## Footnotes
+> Over half of the NBs that voted Disapprove on the C++26 DIS had never participated in WG21 at all and/or
+>                 never before expressed any concern about contracts in C++26 (most sent no comments on the C++26 CD
+>                 comment ballot; one sent contracts-unrelated CD comments), yet voted against the DIS after being lobbied
+>                 with messages citing Bjarne’s opposition.
 
-1. Anecdotally, out of the 10 specimens of CMP 170HX 8 GB I have examined, only one has shipped with only 64 GB usable, the rest all have a functional framebuffer size of 80 GB. [↩](https://blog.kate.land/posts/using-voltage-glitching-to-unlock-the-a100/#user-content-fnref-1)
-2. Although the *Canary in the Crypto Mine* paper claims a stable 80 GB on the 10 GB SKU, very few, if any, cards in the wild have been able to achieve this, and solid evidence is scarce. It remains plausible that some number of 10 GB SKUs really do come shipped with 80 GB on-board, however the percentage seems very low according to the community. Most “unstable” 80 GB unlocks are explained with a combination of L2 caching and memory aliasing over a true 40 GB framebuffer. [↩](https://blog.kate.land/posts/using-voltage-glitching-to-unlock-the-a100/#user-content-fnref-2)
-3. Enabling NVLink further requires a very small hardware mod due to a missing component on the 170HX PCB, I’ll talk more about this later. [↩](https://blog.kate.land/posts/using-voltage-glitching-to-unlock-the-a100/#user-content-fnref-3)
-4. Untested. [↩](https://blog.kate.land/posts/using-voltage-glitching-to-unlock-the-a100/#user-content-fnref-4) [↩<sup>2</sup>](https://blog.kate.land/posts/using-voltage-glitching-to-unlock-the-a100/#user-content-fnref-4-2) [↩<sup>3</sup>](https://blog.kate.land/posts/using-voltage-glitching-to-unlock-the-a100/#user-content-fnref-4-3)
+“Look! It’s just Bjarne having a lot of status!” he says, and he is completely right in
+              saying so, but he is also acting as though putting huge pressure on members to “disagree and commit
+              :-)” hadn’t always been part of it. The C++ Standards Committee **always** voted
+              in terms of factions.
+
+It was always a political mess where Bjarne’s explicit support was absolutely critical, and where
+              “I know you may disagree with this, but you should vote in favor to get it in” was a part of
+              the process.
+
+Quoting Herb Sutter and Bjarne, yet again from Herb Sutter’s paper:
+
+> (Ed.: Bjarne added, when reviewing this paper, that one reason previous DIS ballots were unanimous was
+>                 his private and public encouragement.)
+
+Aka lobbying.
+
+Always has been.
+
+## Verdict
+
+Why is C++ in this mess?
+
+Why are Contracts authors so obsessed with getting Contracts into C++26? Why not wait for the next
+              release?
+
+Well, C++ has this funny “release train model” (also known as “[the frame rule bus stop analogy](https://www.youtube.com/watch?v=ry0grTSXMIk)” in Super Mario Bros. speedrunning). A new version of the C++ standard releases every three years.
+              If your work gets voted into the standard in time, it becomes part of it. If it doesn’t, you have to
+              wait another three years for the next release.
+
+Three years is a long time, and it’s an *especially* long time to work on a single C++
+              feature. Getting a C++ paper accepted into the standard is a process so notoriously draining that ~all of
+              the “C++ people” I know just stopped bothering, and stopped working with WG21. It’s bad.
+
+If Contracts don’t get in *this cycle*, there’s a good chance they never will. They
+              will be nitpicked over the next three years, endlessly litigated, and frankly, I think there’s a
+              good chance several of the people working on Contracts
+              *just won’t want to deal with that, and might instead drop out of the process entirely, leaving
+                Contracts dead and buried*.
+
+Until *the process itself changes*, which, god knows how that could happen considering the
+              requirements presumably imposed by ISO, it’s hard to imagine this changing.
+
+This is why the pro-Contracts side released the following statement in their paper:
+
+> If the DIS ballot has failed, we should seek another ballot without altering contract assertions or
+>                 removing them from C++26;
+
+In other words, they are playing a game of Chicken: “We believe you are going to give up
+              first.”
+
+They know full well that a failed C++26 will hurt *everyone*. But, because the WG21 process is so
+              insane that a loss here risks killing Contracts entirely, and would require another three years of endless
+              litigation and fights, the stakes are high.
+
+As far as I know, the next scheduled WG21 meeting runs Nov 16–21, 2026 in Búzios. So, you might think
+              “Ah, then it’s just a few days and they’ll sit down and sort things out, right?”
+
+Well, probably not. The WG21 + ISO process is slow and messy. Even if everyone agrees on whether Contracts
+              should/should not go in, each ballot is open for multiple weeks. So yeah, this may take another year or
+              so.
+
+So uh, good luck, C++.
+
+If C++26 fails, I’ll pour one out. Not for you, but for the many, many people who tried to make you
+              better, and failed<sup>[3](https://herecomesthemoon.net/2026/11/cpp26-failed-the-national-bodies/#fn:3)</sup>.
+
+If you've made it this far, consider signing up for
+                [e-mail notifications](https://buttondown.com/mond), following along on
+                [Substack](https://mondmondmondmon.substack.com), or adding this blog to your
+                [RSS reader](https://herecomesthemoon.net/posts/index.xml).
+
+1. It’d be slightly easier to take Vinnie’s paper seriously if it didn’t contain Claude-isms like *“The ‘purely additive’ claim turns the deferral into a dismissal”* that make my eyes glaze over. There has been an uptick in AI usage within WG21, and not all of it has been responsible. [↩︎](https://herecomesthemoon.net/2026/11/cpp26-failed-the-national-bodies/#fnref:1)
+2. Okay fine, there were some tiny concessions, P3878R1 decoupled parts of standard-library hardening from Contract observe mechanics. Still coupled to Contracts though, making it impossible to allow standard-library hardening to enter without Contracts getting in. In other words, the ‘standard-library hardening’ draft was written with the assumption that Contracts would definitely go in. [↩︎](https://herecomesthemoon.net/2026/11/cpp26-failed-the-national-bodies/#fnref:2)
+3. This, for the record, will include the Contracts people (assuming Contracts fail). I am not a big fan of Contracts (for reasons unrelated to any of the discussion here), but I understand the case for them, and the people working on them are (like everyone else) victims of the process. [↩︎](https://herecomesthemoon.net/2026/11/cpp26-failed-the-national-bodies/#fnref:3)

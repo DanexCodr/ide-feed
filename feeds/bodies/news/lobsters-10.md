@@ -1,256 +1,45 @@
-After two detailed articles (that I hope you read!), we have a great technique to connect two elements with a line you can shape using `border-shape` and `shape()`.
+AI disclosure: this story was written entirely by human hands, with AI doing proof-reading and light edits. Some tasteful imperfections kept to heighten Wabi-Sabi effect.
 
-In this article, we will explore more types of connections commonly used to create graphs and diagrams. Of course, we can’t cover them all, but the technique is generic, so if you understand it well, you can easily tweak the code to create your own connections.
+Everyone’s heard of how awesome Jane Street is. Fewer people have heard about the times something stupid nearly put it out of business and it was saved by grit and dumb luck. I was on the systems team for some of those. Jane Street didn’t do titles, and we on the systems team weren’t above getting our hands dirty. You could think of us as the firm’s blue-collar OCaml programmers: when something broke, we were the ones running through the corridors to fix it. Call this story a Star Trek: Lower Decks view of Jane Street.
 
-Before we start, let me remind you that the goal is not to invent a new or better way to create graphs with CSS. This remains an experiment to explore modern features and create things that were impossible (or very difficult) to achieve using only CSS. This can also serve as proof of concept that it’s indeed possible using CSS. If so, it can lead to a better, more intuitive implementation.
+For the longest time Jane Street insisted on having its machine room close to its trading floor. When it was 10 people it was cute. When it was 150 people it was starting to feel… odd. Part of the reason for this was intellectual property concern: they didn’t want to risk having their servers stolen by spies who would learn their precious trading strategies. Another reason was technology risk: they wanted to make sure out-of-control automated trading systems could always be shut down by running across the hall and pulling power cables.
 
-Enough talking, let’s start!
+Yes, tools existed to mitigate both of these fears. But Jane Street moved irritatingly slowly on this stuff, and they still wanted the last-resort option of yanking power cords. Their risk culture didn’t exclusively come from reading heady thinkpieces. A lot of it was instilled by a partner who’d served on a nuclear submarine, and it showed, mostly in a good way! On a sub, you don’t trust the automation unless there’s a big red-painted, mechanically connected lever you can pull to turn it off.
 
-At the time of writing, only Chrome and Edge fully support the features we’ll use.
+As the company grew this humble machine room was built out into a respectably sizable datacenter, complete with an online UPS, Computer Room Air Conditioner (CRAC) units, refrigerator-sized network switches, a subterranean diesel backup generator and about 10 rows of server cabinets, 10 cabinets deep. Oh, and it was all crammed into the middle of a skyscraper called [1 New York Plaza](https://en.wikipedia.org/wiki/1_New_York_Plaza), which was otherwise just a normal office building.
 
-## Dynamic Connection
+When I first landed my job at Jane Street I was commuting to the southern tip of Manhattan all of the way from Queens, an hour or more each way. I’d gone to a magnet high school in the city, so I’d been doing commutes like that since I was a teenager, and I was tired of it.
 
-The first connection type adjusts based on the element position and shapes. It’s similar to what we did in the previous articles, but this time we are not only connecting the centers, but we are also considering the sides.
+Now that I was making big Wall Street money I decided I’d get an apartment. A real estate agent kept trying to show me what they called “panty droppers”, but I was only interested in one thing: proximity to the office. I ended up in a 200 square foot studio that was a 9 minute commute on foot from my apartment door to my desk on the trading floor. I would weirdly boast about it to the rest of the systems team, but it also meant everyone at the office knew I was a stone’s throw away in case there was an emergency.
 
-Let’s start with a demo:
+And that day came soon enough. One evening after work, just as I was about to climb into the elevator at my apartment building, my phone rang. It was our Hong Kong office, and when Hong Kong had a New York problem, mine was (now) the number they called. The smoke alarm in our NYC datacenter had gone off.
 
-If you drag the elements around, you will notice the connection considers the closest sides to connect both elements, and if they get too close, it connects their centers. A dynamic connection!
+We had contractors working on a prep room next to the datacenter. While cutting into stuff, some dust was kicked up and it set off the smoke alarm. This is bad, but not for the reason you might think. Office buildings have sprinklers in them for fire suppression. You may have seen it go off in movies where someone just holds a lit cigarette up to the sprinkler on the ceiling and it floods the entire room. In reality they’re not quite that dumb, but it’s close.
 
-If you look closely, you’ll notice we have four different positions, and therefore four different shapes (one curved line and three straight lines).
+Firstly, the sprinklers over a machine room like ours usually aren’t kept full of water all of the time. This saves you from having to deal with any leaks that might develop overhead over the years. Secondly, the sprinkler heads don’t have smoke sensors. Instead, a different system detects the smoke, and that’s when the pipes fill with pressurized water, but they don’t spray yet. What triggers the spray is heat: each sprinkler head has its own heat-sensitive plug, which opens once the air around it becomes hot enough. The logic is that the smoke alarm must be real, whatever fire triggered it hasn’t been brought under control since it’s gotten very hot, and the sprinklers should douse it with water.
 
-![Four pairs of teal and orange rounded squares, each pair connected by a line: one S-shaped curve from side to side, and three straight lines connecting the closest sides or centers depending on how the squares are positioned.](https://i0.wp.com/blog.master.dev/wp-content/uploads/2026/11/dynamic-connection-four-shapes.png?w=876&quality=80&ssl=1)
+Of course, the ceiling of our datacenter was full of sprinklers set up exactly this way. We’re still fine because even though contractors might have set the smoke detector off by kicking up dust, there’s no actual fire producing heat, so the sprinklers wouldn’t spray, right? Well, no. One final piece of this contraption is that if the smoke alarm detects smoke, it would be absolutely terrible to keep circulating air through the room since that would help feed any fires, so the smoke alarm is wired to shut down the CRAC units(!)
 
-Did you forget a few cases? There are more positions!
+Can you see the problem now? Rooms full of computer racks have high cooling demands. If you shut down the cooling, the temperature starts climbing. If you have a bunch of sprinklers that have just become pressurized because of a smoke alarm, you now have a serious, potentially business-ending problem on your hands.
 
-Yes, but don’t forget the anchor position configuration. We have four regions where only one is visible at a time, and they are all symmetric, so the scale transformation gives us the remaining ones. If this last sentence sounds strange, go back to [the first article](https://blog.master.dev/two-circles-one-arrow-and-anchor-positioning/) to refresh your memory.
+And so my mission was made clear: as fast as I possibly could, get back to Jane Street, get into the machine room, and pull the power cord on every device in that room before the temperature climbed past 150 F and the sprinklers destroyed everything.
 
-The shape is identical to the one we used in the previous article, same as the `border-shape` code.
+I ran down the (ironically named) Water Street in the Financial District faster than probably anyone has ever run down it, mashed the elevator button in the lobby of 1 NYP, waited very impatiently for the elevator to climb the 33 floors, slammed my keycard against the reader, booked through the main office door, took a hard right turn to the machine room door, slammed my keycard against that, stepped into what felt like a sauna and went row by row, cabinet by cabinet, yanking power cables out with both hands.
 
-```css
-.link *:before {
-  border-shape: if(
-    style(condition_1): 
-      shape(from ?? ??,curve to 50% 50% with ?? ??,smooth to ?? ??);
-    style(condition_2): 
-      shape(from ?? ??,curve to 50% 50% with ?? ??,smooth to ?? ??);
-    style(condition_3): 
-      shape(from ?? ??,curve to 50% 50% with ?? ??,smooth to ?? ??);
-    else: 
-      shape(from ?? ??,curve to 50% 50% with ?? ??,smooth to ?? ??))
-    padding-box;
-}
-```
+Then I watched the temperature monitor. 141 F. 142. 143. 143.5. 143.6. Finally it stopped. A quiet I’d never heard before set in on the machine room.
 
-So far, nothing has changed compared to the previous article. We moved from two shapes to four, so we need three conditions instead of one.
+The machine room had been kept across the hall so that someone could always run in and pull the power cords. I doubt anyone had pictured doing it to save the servers from the goddamn sprinklers.
 
-Let’s start with the first condition: when both elements are close, draw a line from the center of the first element to the center of the second one. Said differently, when their distance is smaller than a specified value, we draw a line from the top-left corner to the bottom-right corner of the pseudo-element.
+Since the major NYC markets were closed for the day, the downtime from this fiasco was minimal, and we were up and running the next morning.
 
-```css
-style((hypot(100cqw,100cqh) < 200px)): 
-      shape(from 0 0,curve to 50% 50% with 50% 50%,smooth to 100% 100%);
-```
+There were a couple of meetings after that. You might picture Gordon Gekko coldly deciding whose career was over, but meetings at Jane Street were never like that. They were matter-of-fact, level-headed and honestly kind of fun, closer to engineering students in a college dorm arguing over what went wrong. The outcome of all that level-headed discussion: the sprinklers would stay, we would tighten up procedures and surveillance, and we would continue hosting servers in our office building right next to our trading floor. That is, until Hurricane Sandy smacked us upside the head, but that’s a story for another day.
 
-The `shape()` value should be clear, and if you are wondering about `hypot()`, it’s the hypotenuse math function. It calculates the diagonal of the pseudo-element, which is the distance between the centers of the two circles.
+As for me, when the next morning came around I knew what had to be done. Our Hong Kong team had only caught the problem by luck: someone happened to see on a display that server after server was popping up a climbing temperature condition. No one server was configured to alert just because it was a little hot, since that happens from time to time. But an across the board increase in temperature on many servers means there’s a generalized cooling failure.
 
-Let’s move to the second condition: when the vertical distance between the elements is smaller than a specified value, we link the right and left edges.
+What we needed was a system monitor built for this exact purpose, one we could trust to be ultimately, unfailingly reliable at the task of asking each Linux server for its temperature and computing a simple mean. Bash wouldn’t cut it for this. Nor would Perl. No, a job of this magnitude called for the most reliable and type-safe programming language imaginable. So I fired up emacs and wrote it in good old OCaml: every minute, ask every server in each location directly for the temperature from its onboard sensors, take the average, and if it’s elevated, blast an alert out to everyone on the systems team to check for datacenter overheat.
 
-See that? I simply adjusted two values compared to the previous shape. That `60px` is half the element size. It’s defined as a variable in the demo, and yes, it’s a little drawback for this type of connection since the element size needs to be known.
+Yes, we could have also alerted if the CRAC units shut down or if a dedicated temperature sensor in the room was high, but the telemetry for this stuff was nowhere near as reliable, and unknown unknowns can still ruin you, so the most durable thing sometimes really is to ask your fleet of Linux boxes for their temperature and freak out if the average is just a little too high.
 
-I suppose you got the idea, so here is the full code:
+Our team didn’t interact much with the partner with the nuclear sub experience, but I’d like to think he would have approved.
 
-```css
-.link *:before {
-  border-shape: if(
-    style((hypot(100cqw,100cqh) < 200px)): 
-      shape(from 0 0,curve to 50% 50% with 50% 50%,smooth to 100% 100%);
-    style((100cqh < 200px) and (100cqh < 100cqw)): 
-      shape(from 60px 0,curve to 50% 50% with 50% 50%,smooth to calc(100% - 60px) 100%);
-    style((100cqw < 250px) and (100cqh > 100cqw)): 
-      shape(from 0 60px,curve to 50% 50% with 50% 50%,smooth to 100% calc(100% - 60px));
-    else: 
-      shape(from 60px 0,curve to 50% 50% with 200px 0,smooth to calc(100% - 60px) 100%))
-    padding-box;
-}
-```
-
-I am adding an extra rule for the second and third conditions to illustrate that we can use `and`/`or` to create precise conditions. In this case, I want to avoid some edge cases where the connection didn’t look good to me.
-
-![A teal square above and slightly left of an orange square, connected by a short, nearly vertical straight line between their closest edges.](https://i0.wp.com/blog.master.dev/wp-content/uploads/2026/11/conditions-and-or-edge-cases.png?w=401&quality=80&ssl=1)
-
-For the extremities, it’s exactly the same logic. We keep the same `if()` structure, and we update the `shape()` values. For this reason, I wrote the following code in the demo:
-
-```css
-.link *:before,
-.link *:after {
-  border-shape: if(
-    style((hypot(100cqw,100cqh) < 200px)): 
-      var(--shape1);
-    style((100cqh < 200px) and (100cqh < 100cqw)): 
-      var(--shape2);
-    style((100cqw < 250px) and (100cqh > 100cqw)): 
-      var(--shape3);
-    else: 
-      var(--shape4))
-    padding-box;
-}
-```
-
-Then, each pseudo-element defines its own shapes.
-
-If you are wondering about the logic behind the specified values, the conditions, their numbers, etc., the answer is: there is no logic. It’s a matter of personal choices. As I said in the introduction, it’s a generic technique. I simply built on what we learned in the previous article to create a more complex-looking connection.
-
-Give it a try! Pick up a pen and paper, draw the connection, and try to code it. Start with one shape, then think about the different conditions and how you want to update it. Don’t be shy; it’s a fun exercise. Do it before moving to the next section because we are increasing the difficulty a bit.
-
-Let’s not forget that we can add as many elements as we want to create a fancy graph!
-
-![A graph of six colored nodes labeled A through F connected by curved and straight gray lines, forming a flowchart-like diagram.](https://i0.wp.com/blog.master.dev/wp-content/uploads/2026/11/dynamic-connection-graph.png?w=935&quality=80&ssl=1)
-
-## Static Connection
-
-Let’s try another type of connection. I am calling this static because the idea is to keep a line connected to the same sides, regardless of the element positions.
-
-Here is a demo to better understand:
-
-See that? We have a right-to-left connection, and the good news is that this type of connection doesn’t require us to know the element size, but we lose the symmetry.
-
-![Four pairs of teal and orange rectangles in different positions, each connected from the right side of the teal one to the left side of the orange one, with the line curving or looping around as needed.](https://i0.wp.com/blog.master.dev/wp-content/uploads/2026/11/static-connection-right-to-left.png?w=1151&quality=80&ssl=1)
-
-What symmetry? I don’t get it.
-
-Here is a better figure showing the four different regions (explained in the first article) and the shape in each one of them:
-
-![Four diagrams labeled A, B, C, and D, each showing a teal square and an orange square at opposite corners of a thin rectangle, connected by a right-to-left curved line whose shape differs between the left and right columns.](https://i0.wp.com/blog.master.dev/wp-content/uploads/2026/11/static-connection-four-regions.png?w=711&quality=80&ssl=1)
-
-A and C are still symmetric (as are B and D), but A and B are no longer symmetric (same for C and D). This means we need a different strategy than simply working on one position and flipping it to get the others.
-
-To do this, I will update the anchor position configuration. A slightly different one, better suited to this case.
-
-We update the following:
-
-```css
-.link > * {
-  position: absolute;
-  --_x: calc(anchor(--c1 inside) + anchor-size(--c1)/2);
-  --_y: calc(anchor(--c2 inside) + anchor-size(--c2)/2);
-}
-
-.link :is(a,b) {top:  var(--_x); bottom: var(--_y);}
-.link :is(a,c) {left: var(--_x); right:  var(--_y);}
-.link :is(c,d) {top:  var(--_y); bottom: var(--_x);}
-.link :is(b,d) {left: var(--_y); right:  var(--_x);}
-
-.link b {scale: -1  1} 
-.link c {scale:  1 -1} 
-.link d {scale: -1 -1} 
-```
-
-We replace it with this:
-
-```css
-.link > * {
-  position: absolute;
-  --_x: calc(anchor(var(--x) inside) + anchor-size(var(--x))/2);
-  --_y: calc(anchor(var(--y) inside) + anchor-size(var(--y))/2);
-  container-type: size;
-}
-.link :is(a,b) {top:  var(--_x); bottom: var(--_y)}
-.link :is(a,c) {left: anchor(var(--x) outside); right: anchor(var(--y) outside)}
-.link :is(c,d) {top:  var(--_y); bottom: var(--_x)}
-.link :is(b,d) {left: anchor(var(--y) inside); right: anchor(var(--x) inside)}
-
-.link :is(c,d) {scale:  1 -1}
-```
-
-The top and bottom values stay the same, but the left and right ones are updated. And only C and D need the scale for horizontal symmetry with A and B.
-
-Drag the elements in the demo below to understand the different regions. (You can compare it with [the demo](https://codepen.io/t_afif/pen/LERWyvX/e943ba53f15ff9dd70c149a6bce0cac0) of the first article.)
-
-Whatever the anchor position configuration, the important requirement is that we always have one visible region at a time. The other requirement when creating the shapes is the continuity between the regions.
-
-Continuity? What?!
-
-If we forget the implementation and play with different demos, it looks like we have a unique connection linking both elements. In reality, we have four, but thanks to the “continuity” effect, the illusion is perfect.
-
-Here is the previous example where I am using different colors:
-
-You can clearly see we have four different connections, but when moving from one to another, they share the same position/shape to create the continuity effect, making it look like it’s one. That’s why I always chose a straight line for the switch because it’s the easiest option.
-
-For this new connection, we need to have continuity between two curved lines!
-
-```css
-.link :is(a,c):before {
-  border-shape: shape(from 0   0,curve to 50% 50% with 150px 0,smooth to 100% 100%) padding-box;
-}
-.link :is(b,d):before {
-  border-shape: shape(from 100% 0,curve to 50% 50% with calc(100% + 150px) 0,smooth to 0   100%) padding-box;
-}
-```
-
-A and C still share the same shape (and B and D do too).
-
-See that? The illusion is perfect! The moment we switch between A and B, the curve is the same in both areas.
-
-Let’s add a condition to make the line straight when the vertical distance is small:
-
-```css
-.link *:before {
-  border-shape: shape(from 0 0,curve to 50% 50% with if(style(100cqh < 100px): 0;else: 150px;) 0,smooth to 100% 100%) padding-box;
-}
-.link :is(b,d):before {
-  border-shape: shape(from 100% 0,curve to 50% 50% with if(style(100cqh < 100px): 100%;else: calc(100% + 150px);) 0,smooth to 0 100%) padding-box;
-}
-```
-
-What? `if()` inside `shape()`?!
-
-Yes, we can do that. The whole `if()` block will resolve to a value, so you can place it wherever you want as long as the returned value is valid there. Since I only want to update one value, putting an `if()` inside `shape()` is more interesting and requires less code than putting two `shape()` values inside `if()`.
-
-Here is the full demo again.
-
-And that’s only one of 10 different cases! Yes, we can have all the possible connections.
-
-Left-to-left:
-
-Right-to-right:
-
-Bottom-to-left (or left-to-bottom):
-
-Bottom-to-top (or top-to-bottom):
-
-And so on.
-
-Can you do the remaining ones? Take this as homework. Study the demos I shared, then try a new one. The logic is always the same. Start by identifying a suitable anchor position configuration based on potential symmetry. Then draw the shape, keeping the continuity effect in mind.
-
-And of course, it’s even more interesting if you combine different connections into one graph.
-
-![Four colored rectangles labeled A, B, C, and D connected in a loop by curved gray lines that leave from and arrive at different sides of each block.](https://i0.wp.com/blog.master.dev/wp-content/uploads/2026/11/combined-connections-graph.png?w=886&quality=80&ssl=1)
-
-## Want More?
-
-Now that we have seen the potential of this technique, let’s push it a bit further and create some fancy demos!
-
-What about a straight line that bends when both elements get closer?
-
-Some physics using pure CSS! And the line stretches (gets thinner) if the elements are too far apart.
-
-The idea is to define a static shape, then adjust the height based on the width. When the latter gets smaller, the height increases, and vice versa.
-
-Here is a demo to better understand what’s going on. Resize the element to see how the curve behaves:
-
-And don’t ask me about the math; I had to ask [two](https://math.stackexchange.com/q/5130987/695610) [questions](https://math.stackexchange.com/q/5131829/695610) online to find a good approximation of some complex formulas.
-
-Let’s try something different: a zig-zag connector. This one is not robust, so don’t stretch it too far, or it may break. Don’t say I didn’t warn you!
-
-A double zig-zag, maybe?
-
-There are some scroll-driven animations, but don’t worry, I won’t bother you with a boring explanation. Enjoy the fun demos!
-
-And what about a spring connector? You can go wild with this one; it won’t break!
-
-Do you have another crazy connector idea? Share it in the comments. I am up for any CSS coding challenge.
-
-## Conclusion
-
-We are done! I hope you enjoyed this series. Another one packed with a lot of CSS fun. Do you remember when creating basic shapes was a nightmare?! Now, we can make graphs with complex connections that even SVG cannot easily create!
-
-Again, what we have done is not something for production (at least not yet). Use it for fun, use it to create fancy stuff, but most importantly, understand the features we have used: anchor positioning, `shape()`, `border-shape`, `if()` conditions, etc. Once they are widely available, you will definitely use them in production.
+*Got a better tale of woe? Let me know at [X](https://x.com/mbacarella/status/2120554818486104552), [Bluesky](https://bsky.app/profile/michael.bacarella.com/post/3n22khjlui223), [Hacker News](https://news.ycombinator.com/item?id=50455394) or [Lobsters](https://lobste.rs/s/ii1gzp/how_false_smoke_alarm_almost_drowned_jane).*

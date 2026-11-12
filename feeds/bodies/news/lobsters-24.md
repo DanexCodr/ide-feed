@@ -1,272 +1,170 @@
-Links to blog articles look better when they’re accompanied by an image.
-If the HTML head has a `meta` tag like this, it will happen automatically:
+That subtitle is a little bit of a mouthful, but I’ve been wanting to talk about Andrew Kensler’s `permute()` function for a while and I wanted to make it clear right off the bat why it’s useful. `permute()` is used some in the graphics community, especially in offline rendering, and the techniques are more widely known in cryptography*, but it’s applicable to so much more than graphics and cryptography.
 
-```
-<meta
-  property="og:image"
-  content="https://eaj.no/posts/graph-images-with-typst/og.png"
-/>
-```
+Let’s first talk about the problem it solves. You want to iterate over \(k\) items of an array of length \(n\), in random order, where \(k \leq n\). Those \(k\) items cannot contain duplicates from the original array (they must each correspond to a unique index). Or, you want to get a random sample of \(k\) items without replacement.
 
-My previous, tedious workflow for these kinds of images was to go to [unspash.com](https://unsplash.com),
-search for something like *structure* or *archive*, and then select an image
-I thought would fit the theme of the post. Being both boring and error-prone,
-I abandonded that process and set up a pipeline that generates image cards at build-time instead.
-They look like this:
+When I say “random”, this is obviously pseudorandom, but there are varying degrees of pseudorandomness. This is unquestionably *not* cryptographically secure, that’s not its intended use. I can’t say that I know enough about pseudorandomness to say how statistically indistiguishable from random this is or for what applications it will be random enough. It’s good enough to use for computing rendering integrals, and I’d be comfortable using it for a lot of casual statistical analysis.
 
-![The generated OpenGraph image for this blog post](https://eaj.no/posts/open-graph-images-with-typst/og.png)
+**Update May 27, 2021:** [I saw what looks to be a nice improvement to the randomness of this](https://github.com/camel-cdr/cauldron/blob/main/tools/random/permute/README.md), and extends it to work for 64-bit integers. I recommend taking a look after reading this post!
 
-Let me show you how I did it.
+Anyway, the canonical way to randomly iterate over an array is to first shuffle it with the Fisher-Yates shuffle, and then iterate over the shuffled array.
 
-## Typst
+*I found [this Stack Overflow answer](https://stackoverflow.com/a/1866710/624250) from 2009 that gives the exact same idea, so I should be clear that Andrew Kensler didn't really invent the method I'll talk about here, but I think he popularized the use of it in graphics and certainly created the particular hash function I'll show at the end.
 
-[Typst](https://typst.app) is a tool that generates high-quality documents from a simple markup language.
-A lovechild of [LaTeX](https://en.wikipedia.org/wiki/LaTeX) and [Markdown](https://en.wikipedia.org/wiki/Markdown),
-it works great for math whilst also keeping the day-to-day text formatting syntax bearable.
-As a small taste, this snippet (adapted from [the Typst README](https://github.com/typst/typst/blob/84cca406aafe7f830ed3f37f1cc6f0c8b6b65a03/README.md))
+# The Fisher-Yates shuffle (and its limitations)
 
-```
-#set page(width: 10cm, height: auto, margin: 1cm)
-#set heading(numbering: "I.")
+The shuffle works something like this:
 
-#let fib_1 = 1
-#let fib_2 = 1
+1. For the first item in the array, randomly swap it with any item (including itself). Whatever is now in the first position is “fixed”.
+2. For the second item in the array, randomly swap it with any of the non-fixed items (i.e. after the first item). The second item is now “fixed”.
+3. For the third item, swap it with any of the non-fixed items (i.e. after the second item).
+4. Etc. until you get to the last item.
 
-= The Fibonacci sequence
-The Fibonacci sequence is defined through the
-recurrence relation $F_n = F_(n-1) + F_(n-2)$,
-with $F_1 = #fib_1$ and $F_2 = #fib_2$.
-It can also be expressed in _closed form:_
+The C++ code looks something like this:
 
-$
-  F_n = round(1 / sqrt(5) phi.alt^n), quad
-  phi.alt = (1 + sqrt(5)) / 2.
-$
-```
-
-produces this fine document:
-
-![The output of typst compile --format png --ppi 144 typst-example.typ](https://eaj.no/_astro/typst-example.5LnWMFjg_Zy2nPw.webp)
-
-By default the `typst` CLI will create a PDF, but it can also make PNGs. The above image was created with the command
-
-```
-typst compile \
-    --format png \
-    --ppi 250 \
-    typst-example.typ
-```
-
-But if you’d rather create something with a bit more pizzazz, by all means. How about
-
-```
-#set page(width: 1200pt, height: 630pt, margin: 80pt, fill: rgb("#FF1493"))
-#set text(font: "Comic Sans MS", fill: white, lang: "no")
-
-#grid(
-  rows: (1fr, auto),
-  align(left + horizon, {
-    text(size: 72pt, weight: 800, "Typst very nice")
-  }),
-  text(size: 24pt, "Would typst again"),
-)
-```
-
-which yields
-
-![This is clearly much better](https://eaj.no/_astro/fancy-typst.BxEfxVjE_8ItYQ.webp)
-
-Fantastic.
-
-If all of my posts were titled *“Typst very nice”,* we’d be done, but, alas.
-Luckily, typst accepts inputs to a document with `--input key=value`,
-which is put in a `sys.inputs` dictionary for the template to read.
-So the template becomes
-
-```
-#set page(width: 1200pt, height: 630pt, margin: 80pt, fill: rgb("#FF1493"))
-#set text(font: "Comic Sans MS", fill: white, lang: "no")
-
-#let title = sys.inputs.at("title", default: "You forgot the title :(")
-// Reading the input here ☝️
-
-#grid(
-  rows: (1fr, auto),
-  align(left + horizon, {
-    text(
-      size: if title.len() > 70 { 60pt } else { 72pt },
-      weight: 800,
-      title,
-    )
-  }),
-  text(size: 24pt, "Would typst again"),
-)
-```
-
-which, when rendered with
-
-```
-typst compile \
-    --format png \
-    --ppi 144 \
-    --input title="Look ma, from the CLI!" fancy-typst-with-input.typ
-```
-
-becomes
-
-![It’s … perfect.](https://eaj.no/_astro/fancy-typst-with-input.B9yxbOiI_1D5FbV.webp)
-
-Perfection.
-
-Let’s move on to generating the images at build-time.
-
-## Astro
-
-This site is built with [Astro, a static site generator](https://astro.build).
-Articles are written in Markdown, which is then bundled into a
-[Content Collection](https://docs.astro.build/en/guides/content-collections/)
-by Astro. The details are irrelevant, what matters is that this lets me
-define metadata which I can query through a Javascript API.
-
-The source code for the page template is at `src/pages/posts/[id].astro`.
-There are a few notable things about this file path:
-
-1. That it is in the src/pages/ directory tells Astro that this should be rendered as a page.
-2. The remainder of the path, /posts/[id], tells Astro where to put the page.
-3. [id] being in brackets means id is a dynamic parameter which must be defined at build time.
-
-In other words, Astro needs to know every ID when building the site—it can’t generate infinitely many
-IDs. A function called `getStaticPaths` exported from the template defines the set:
-
-```
-import type { GetStaticPathsResult } from "astro";
-import { getCollection } from "astro:content";
-
-export async function getStaticPaths(): Promise<GetStaticPathsResult> {
-  const posts = await getCollection("posts");
-  return posts.map((post) => ({
-    params: { id: post.id },
-    props: { post },
-  }));
+`1
+2
+3
+4
+5
+6
+7
+8
+template<typename T>
+void fisher_yates_shuffle(std::vector<T> *vec) {
+  int n = vec->size();
+  for (int i = 0; i < n-1; i++) {
+    int swap_idx = uniform_rand_int(i, n-1);
+    std::swap((*vec)[i], (*vec)[swap_idx]);
+  }
 }
-```
+`
 
-That is, fetch every article, and use its `id` as the `id` parameter.
-This is the object returned for the current page:
+`uniform_rand_int(min, max)` is inclusive of both min and max, i.e. \(\textnormal{swap\_idx} \in \{i, i+1, \dots, n-1\}\)
 
-```
-{
-  params: { id: "open-graph-images-with-typst" },
-  props: { post: {
-    /* Everything the template needs to render a post */
-  }}
+Obviously this manipulates the array in place, which may not be desirable for a bunch of reasons. In practice you might call this with an array of indices or an array of pointers.
+
+**There are a bunch of situations where the Fisher-Yates shuffle doesn’t work very well, because you need to store the shuffled array.**
+
+1. The rendering case, which is what motivated Kensler. This is when you’re iterating over a LOT of arrays simultaneously, like 10s of thousands or millions on one computer. Or maybe iterating over one array in a million different random orders. In other words, rather than fully iterating over one array, then the next array, etc. you want to get the i‘th shuffled value of a million arrays, then get the i+1‘th shuffled value of those arrays, etc.
+2. The case where you want to draw a “small” random sample (without replacement, i.e. no duplicates) from a huge array. Think, you want to get 10,000 unique random items from an “array” that’s a billion items long, like a database.
+3. You want to compute something, like an average, over a really large random sample from an even huger array, neither of which can fit in memory, and it’s really important that you don’t have duplicate values.
+
+In the latter two cases there’s obviously a lot more to think about, like the cost of just reading incoherent values from the large array. There are other good ways to solve #2 and #3 too, especially if you’re doing distributed computing. But a lot of the techniques I know share the problem that you need to scan over the entire array at least once. If you have constant-time access into the array, Kensler’s method is always linear only in the size of your random sample, not in the original array.
+
+In other words, if you want to iterate over \(k\) random, unique items from an array of length \(n\), then the Fisher-Yates shuffle is \(O(n)\) time and \(O(n)\) memory. As I’ll show in a second, this can be reduced to \(O(k)\) time and \(O(k)\) memory. But `permute()` is \(O(k)\) time and \(O(1)\) memory, the best you could possibly do. Not only that, but with `permute()` you can arbitrarily query random indices in constant time, which means you can use it in parallel across multiple threads or computers.
+
+## Incremental Fisher-Yates shuffle
+
+I think it’s worth mentioning you can extend the Fisher-Yates shuffle to handle #2. You use a sparse map to keep track of swapped indices rather than putting them into the array. When you swap the next index, you check your map to see if the original or swapped locations in the array have already been swapped. If so, you use the values from the map, otherwise you just use the original indices, and then you update the map. Here’s a code snippet to show what that looks like. This will select \(k\) random unique integers from the values \(\{0,1,\dots,n-1\}\).
+
+`1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+std::vector<int> get_k_indices(int n, int k) {
+  std::vector<int> indices(k);
+  std::unordered_map<int, int> index_map;
+  for (int i = 0; i < k; i++) {
+    int swap_idx = uniform_rand_int(i, n-1);
+
+    // Get the new index and the previous. If they've been swapped before
+    // they'll be in the map.
+    auto swap_val_it = index_map.find(swap_idx);
+    auto prev_val_it = index_map.find(i);
+    int swap_val = (swap_val_it == index_map.end()) 
+        ? swap_idx
+        : swap_val_it->second;
+    int prev_val = (prev_val_it == index_map.end()) ? i : prev_val_it->second;
+
+    indices[i] = swap_val;
+    index_map[swap_idx] = prev_val;
+    // We don't need to set the prev_idx in the map,
+    // it will never be checked again.
+  }
+  return indices;
 }
-```
+`
 
-By default Astro will generate an HTML file, but it can also return other
-kinds of responses. Together with this blog post I also put
-the following snippet at `src/pages/api/build-info.json.ts`:
+But still, even this “incremental” Fisher-Yates shuffle requires \(O(k)\) memory, which makes it unsuitable for case #1 or case #3.
 
-```
-import type { APIRoute } from "astro";
+**Update**: I believe this is equivalent to, but less elegant than, [Floyd's algorithm for random sampling without replacement](https://fermatslibrary.com/s/a-sample-of-brilliance). So if you want to use that (like if you're in case #2 and really care about good randomness), implement Floyd's algorithm, rather than the way I've framed it here.
 
-export const GET = (async () => {
-  const data = await getLatestJjMetadata();
-  return new Response(JSON.stringify(data), {
-    headers: { "content-type": "application/json" },
-  });
-}) satisfies APIRoute;
+# Kensler’s permute()
 
-async function getLatestJjMetadata(): Promise<{
-  changeId: string;
-  committedAt: Date;
-}> {
-  // Implementation cut for brevity
-}
-```
+Kensler introduced `permute()` in his paper [Correlated Multi-Jittered Sampling](https://graphics.pixar.com/library/MultiJitteredSampling/). I didn’t quite understand how it worked when I first read it, so I also wanted to write this blog post to break it down and hopefully help others appreciate it. However if you just want the code, [skip to the bottom](https://andrew-helmer.github.io/permute/#final-implementation)!
 
-Note that there are no parameters in brackets, so this will create a
-single JSON file at build time:
+The function acts as a “stateless” pseudorandom iterator over an array. It takes in a seed value for a permutation, the length of the array, and the index you’d like to map to a different index. It looks like this:
 
-```
-❯ tree dist/api
-dist/api
-└── build-info.json
-```
+and if you wanted to use it, say to get 10 random unique values from a vector, you might do:
 
-And just like that, this blog [now has a JSON api](https://eaj.no/api/build-info.json).
+So how do we construct this magic function?
 
-Note that the file extension is included in the path, i.e. `.json.ts`. This is
-because when the dev server is running it sets the appropriate `content-type` header
-to let the browser know what to do with the response, but once the page is built
-the result is a file with `.ts` stripped off. The browser
-then interprets the remaining file extension to know what content to expect at the path.
+## An invertible hash function
 
-You probably see where this is going: Create an API route which takes a post ID
-as a parameter and ends in `.png.ts`, gets the post title using the Astro Content Collection API,
-generates an image, and returns it in a response with the appropriate `content-type` header.
+The first thing we need is a hash function that is *invertible* for a given power-of-two sized domain. What does that mean? For a given number of bits \(n\), every value from \(0\) to \(2^n-1\) will be hashed to a single unique value in the same range. It’s a one-to-one and onto mapping, i.e. a *bijective* function. Let’s give a super simple example: adding 1. Let’s say our domain is 2-bit integers. If we add one to a 2-bit number, we’ll get a unique 2-bit number.
 
-You got it. Here’s the open graph image endpoint in its entirety, defined at
-`src/pages/posts/[id]/og.png.ts`:
+In binary:
 
-```
-import type { APIRoute, GetStaticPaths, InferGetStaticPropsType } from "astro";
-import { getCollection } from "astro:content";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+Adding is generally, an invertible hashing operation. Another invertible operation in binary is multiplying by an odd number, let’s say 3.  \(f(x) = (x * 3) \mod 4\), with:
 
-import { OPEN_GRAPH_TEMPLATE_PATH } from "@/utils";
+A **non-invertible** operation is multiplying by two or any even number:
 
-const execFileAsync = promisify(execFile);
+so we can’t do that.
 
-export const getStaticPaths = (async () => {
-  const posts = await getCollection("posts");
-  return posts.map((post) => ({
-    params: { id: post.id },
-    props: { title: post.data.title },
-  }));
-}) satisfies GetStaticPaths;
+Kensler outlines more invertible operations in power-of-two domains, especially xor’s and combinations with a seed value, where different seed values give different permutations. Ultimately, we get some invertible hash function:
 
-type Props = InferGetStaticPropsType<typeof getStaticPaths>;
+## Cycle-walking
 
-export const GET = (async ({ props }) => {
-  const { stdout } = await execFileAsync(
-    "typst",
-    [
-      "compile",
-      OPEN_GRAPH_TEMPLATE_PATH,
-      "-",
-      "--format",
-      "png",
-      "--ppi",
-      "144",
-      "--input",
-      `title=${props.title}`,
-    ],
-    { encoding: "buffer" },
-  );
-  return new Response(new Uint8Array(stdout), {
-    headers: { "content-type": "image/png" },
-  });
-}) satisfies APIRoute<Props>;
-```
+Already, we can see that this hash will allow us to randomly iterate over an array with length power-of-two. But what about arrays of other lengths? Kensler uses a technique from cryptography called “cycle walking”, which was invented in [“Ciphers with Arbitrary Finite Domains”](http://www.cs.ucdavis.edu/~rogaway/papers/subset.pdf) by Black and Rogaway. Cycle-walking is a fancy name, but the idea is simple: we just repeat the hash until the value is less than the length of the array! So we get a `permute()` function like this:
 
-Now go to `eaj.no/posts/open-graph-images-with-typst/og.png`, et voilà:
+Obviously this can be really slow since it could take a lot of hashes to get to where we want, but we’ll get to that in a second. First, why does this work at all? This is where the bijective mapping comes in. We start with an index that is less than the length of the array and we hash it until we get another value less than the length of the array. Let’s visualize it like this:
 
-![The generated OpenGraph image from the above code](https://eaj.no/posts/open-graph-images-with-typst/og.png)
+where \(hash^3(x)\) is \(hash(hash(hash(x)))\) or, if you prefer the function composition notation, \(hash \circ hash \circ hash(x)\). In this case, I’ve bolded the first two hashes to indicate that the values are bigger than the length of the array. The last hash is our final permuted value.
 
-## Extra credit: Cache busting
+Because our hash function is invertible, we can invert the final hashed value (note that we don’t need to actually implement the inverse, this is just theoretical):
 
-When a sharing platform loads the image for an article, it might very well be cached for a long time.
-Even if you decide to completely redo your entire branding, LinkedIn might insist on displaying your
-previous hideous design unless you handle it. A simple trick is to use a throwaway
-search parameter that doesn’t do anything other than make the URL unique:
+By inverting the final value, which was less than the length of the array, we again get a value larger than or equal to the length of the array. So if we did this loop in reverse until we got a value less than the length of the array, we would get back the original index.
 
-```
-/some-image.png?v=whatever
-```
+In other words, **our loop is also an invertible hash function**. But rather than mapping within a power-of-two sized domain, it maps within the domain of the array’s length, which is exactly what we’ve been trying to achieve.
 
-A straightforward (but silly) solution for creating this parameter is to generate a random string of characters every time
-the site is built, ensuring your image is always fetched anew.
-I landed on using a hash of the typst template and the title, so that the cache key only
-changes whenever the actual content does:
+## Making it (average) constant-time
+
+We need to make this faster, specifically we don’t want a lot of loop iterations. Let’s say that we have a really good hash function such that there’s roughly a 50% probability that any bit (within our power-of-two domain) will be 1 after hashing. Now, we modify our hash function to specify the power-of-two domain. We do this by taking in a mask that limits the bits which get hashed. Here’s an example (but a bad hash function).
+
+If our hash domain is the two-bit (unsigned) integers, then our mask would be 11 in binary, or 0x3. If our domain is the 32-bit integers, it would be 0xFFFFFFFF.
+
+Now, in our `permute()` function, we’ll use a mask with all the bits set up to the most significant bit of the highest possible index (that is, `len - 1`). Here’s a really inefficient (\(O(\log n)\)) implementation for clarity:
+
+However a lot of processors (e.g. x86 processors) have a single instruction that can get the number of leading zeros of an integer. In GCC you can use this with the instrisic `__builtin_clz(x)`, which even on processors that don’t have the instruction will compile to a constant-time operation. So if you use GCC you could write:
+
+This may not be super portable, here is how Kensler does it with bit arithmetic.
+
+With this, our `permute()` function looks something like:
+
+Because of this mask, we know that our hashing domain is less than two times the size of the array. Since our hash function has a 50/50 chance of flipping the most significant bit, or rather of hashing to a value in the lower half of its domain, we can say that *on average*, this will take less than two iterations. We’ve got our fast random iterator!
+
+## Final implementation
+
+We still need to make a *good* invertible hash function. As I mentioned, Kensler outlines a bunch of invertible operations, and he uses hill-climbing to find a good hash function. I won’t go into that in more detail, but here is the final code using his hash. I’ve adapted Kensler’s code to the way I’ve structured this blog post:
+
+Okay, there’s one additional thing at the end, the `(static_cast<uint64_t>(idx) + seed) % len`, but that won’t break anything and adds a little extra randomness. The cast to 64-bit is necessary to prevent an overflow bug that could lead to repeats.
+
+I hope that you find this as elegant and useful as I have! One final note: Kensler mentions that this hash only works well up to domains of about \(2^{27}\). For larger domains you could maybe use two calls of the permute function, although if it’s not random enough, that could exacerbate correlations. Overall I really just wanted to present the ideas here.

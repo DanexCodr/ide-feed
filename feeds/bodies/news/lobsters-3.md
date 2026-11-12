@@ -1,105 +1,35 @@
-I have a Samsung smart TV from 2022. At some point, the Smart Hub started
-displaying ads. I think it’s absolutely disgusting that a device that I paid
-for and own, and that doesn’t use any additional Samsung “free” services is
-forcing ads on me, just to generate additional revenue for Samsung from an
-already-sold device. I was blocking the ads via my [Pi-hole](http://pi-hole.net)
-instance, until I was tinkering with my homelab and networking setup not
-that long ago and broke something. That caused the ads to start appearing
-again, which reminded me of their existence.
+I like Gemini. Not the Google Chatbot but the network that existed before Google named its product. If you are enough of a geek, you may want to give it a try.
 
-Around the same time, the [eMudhra CA certificate fiasco](https://en.wikipedia.org/wiki/EMudhra#2026_weak_key_incident)
-took place, and the “compromised” private key was added to
-[*mitmproxy*](https://mitmproxy.org). *mitmproxy* is an open-source project for inspecting,
-replaying and modifying HTTP(S) network traffic. Normally, in order for it to
-be able to intercept TLS-encrypted traffic, the “victim” device must trust a
-custom certificate created by *mitmproxy* - this way *mitmproxy* can decrypt
-the traffic, inspect it, and then re-encrypt it using a real certificate before
-forwarding it to the intended destination. Unfortunately, some devices don’t
-allow adding custom SSL certificates to their truststore - like my Samsung TV.
+Eoin is counting the number of "capsules" on the Gemini network. A capsule is the equivalent of a "website" on the Web or a "hole" on Gopher. It’s a personal space, a bunch of pages. Blogs become "gemlogs".
 
-**Mikrotik configuration (adapt to your router as needed)**
+Eoin’s first observation is that the number of active capsules is slowly growing. The network is healthy.
 
-```routeros
-# 192.168.0.7 is my raspberry-pi with mitmproxy
-# 192.168.0.9 is my Samsung TV
+But his second observation is really interesting: there’s absolutely no correlation between the number of new capsules in a given month and articles about the Gemini protocol being promoted on the first page of Hacker News.
 
-/routing/table
-add name=tv-proxy fib
+This is a confirmation of what I’ve been trying to explain for years: your metrics and web statistics are completely useless. The number of visitors, the number of clicks are worthless if you are not a marketer trying to extract money from a big brand. They don’t mean anything.
 
-/ip/route
-add dst-address=0.0.0.0/0 gateway=192.168.0.7 routing-table=tv-proxy
+By the way: you should really avoid Hacker News these days. The front page is heavily manipulated to promote pro-AI stuff and bury everything that might question wether fascism-capitalism is good.
 
-/routing/rule
-add src-address=192.168.0.9/32 action=lookup-only-in-table table=tv-proxy
+A Mozilla employee is leaving after 15 years and comes to a similar conclusion. Mozilla is awesome because it has always been abnormal. It is mostly used by abnormal people. This means that hiring "normal managers" who try to make it "normal" and chase "normal" metrics is, of course, a recipe for failure.
 
-/ip/firewall/filter
-add chain=forward action=accept src-address=192.168.0.9 connection-state=established,related
-add chain=forward action=accept dst-address=192.168.0.9 connection-state=established,related
-```
+I always failed to understand those marketing people who try to be "like others but a bit cheaper". While all the value is being different enough to nurture your own niche.
 
-**Raspberry-Pi configuration**
+I completely removed statistics from my blog in 2013. At the time, I had a very strong realisation that the blog posts that mattered most, those I was proudest of, and those that prompted people to mail me even years later all had mediocre statistics.
 
-```bash
-sudo iptables -I FORWARD 1 -s 192.168.0.9 -j ACCEPT
-sudo iptables -I FORWARD 1 -d 192.168.0.9 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-sudo iptables -t nat -A PREROUTING -i eth0 -s 192.168.0.9 -p tcp --dport 80 -j REDIRECT --to-port 8080
-sudo iptables -t nat -A PREROUTING -i eth0 -s 192.168.0.9 -p tcp --dport 443 -j REDIRECT --to-port 8080
-sudo iptables -t nat -A POSTROUTING -s 192.168.0.9/32 -o eth0 -j MASQUERADE
-```
+On the contrary, most of my hit, my "buzz", were quickly forgotten. But, being addicted to statistics, I was unconsciously adapting my writing style to improve those numbers. I was scrolling through social media posts that were highly popular while trying to create some myself.
 
-**mitmproxy configuration**
+Closing my social media accounts and, instead, procrastinating on Gemini had the opposite effect: making me read other ideas without caring about reactions, about popularity. Jsreed5 made the same observation while he was trying the Nostr protocol. While Nostr’s technicalities may be interesting by themselves, the content on it is similar to the one found of mainstream social networks. And our smolnet Gemini-formatted brains cannot take it anymore!
 
-```bash
-uvx --from mitmproxy mitmweb --web-port 8083 -p 8081 --emudhra --ssl-insecure --mode transparent --set stream_large_bodies=1m
-```
+We really need a simple Gemini hosting provider that would also provide a Web version, to welcome less technical-minded people who still may want to access a quieter, non-commercial, out-of-time virtual space.
 
-With the *eMudhra* certificate being exposed, anyone can now create a custom
-SSL certificate for an arbitrary domain (let’s say a Samsung ad network
-domain), sign it with the compromised CA certificate, and all devices that have
-the *eMudhra* CA certificate in their truststores will trust the custom SSL
-certificate. This is why software vendors were racing (some more, some less) to
-revoke the certificate from their truststores, so that browsers, computers and
-smart phones wouldn’t be susceptible to this kind of attack. Luckily for me,
-Samsung did not yet release an update for my TV that would revoke the
-certificate. This allowed me to route all traffic from the TV through
-*mitmproxy* and get a list of all the domains and endpoints that my TV talks
-to, but also see the structure of the requests and response payloads.
+Lot of people are trying Gemini and find that there’s no content on it, that they can’t have their news and dopamine hit on it. Well, that’s exactly the point.
 
-Turns out the flow is pretty simple: when something interesting happens on the
-TV, the TV sends a request to `https://catalyst.adgrx.com/adopportunity` with
-some details about the TV. When you return to the Smart Hub, the “home screen”
-of the TV, so to speak, the TV sends requests to
-`https://tvx.adgrx.com/impressions/tile` again with some details about the TV,
-and in response it receives either an empty JSON object (`{}`) or a JSON
-response describing an ad to display at the top of the Smart Hub.
+The fact that only a niche minority want to use it is also part of the point. Gemini might no be for you. That’s fine. The modern Web and even the real world (where every device is actively working against me and every human interaction seems to be about AI) is increasingly not for me. So let me have my strange niche space.
 
-So I wrote a simple server in Rust that handles the same `/impressions/tile`
-endpoint and always returns JSON with an ad, except instead of links to an
-actual ad image, it has a link to a random photo of my family. I also included
-a simple frontend where I can manage the images that should be served.
+UPDATE: Those Gemini hosting providers exist:
 
-![AdSpoofer frontend](https://dvratil.cz/2026/11/hijacking-samsung-tv-smart-hub-ads/images/frontend.png)
+### About the author
 
-Additionally, the server blackholes any other `*.adgrx.com` request and returns
-`204 No Content` to prevent all the tracking from getting out of my home
-network.
+I’m [Ploum](https://fr.wikipedia.org/wiki/Ploum), a writer and an engineer. I like to explore how technology impacts society. You can subscribe [by email](https://listes.ploum.net/mailman3/lists/en.listes.ploum.net/) or [by rss](https://ploum.net/atom_en.xml). I value privacy and never share your adress.
 
-I then generated a wildcard SSL certificate for `*.adgrx.com`, signed it with
-the compromised eMudhra CA certificate and added it to the app.
-
-Finally, I configured my router to resolve `*.adgrx.com` to the IP address of
-my NAS, where I am running the ad spoofer, and now when we launch the TV, it
-looks like this:
-
-![Photo of my TV showing a spoofed ad with a custom picture](https://dvratil.cz/2026/11/hijacking-samsung-tv-smart-hub-ads/images/tv-photo.jpg)
-
-The source code for the adspoofer [is on my GitHub](https://github.com/danvratil/samsung-tv-adspoofer) in case
-anyone wants to try it out. It works with my particular model of TV, but other
-Samsung TVs might use different endpoints or expect a different shape of the
-response. If you make it work with your TV, feel free to send a patch!
-
-Obviously, this will only work as long as my TV trusts the compromised eMudhra
-certificates, which is either until the certificate expires or until Samsung
-pushes out an update, revoking the certificate. The latter I can prevent by
-blocking updates to the TV (which carries its own set of risks), but about that
-another time.
+I write [science-fiction novels in French](https://pvh-editions.com/ploum). For [Bikepunk](https://bikepunk.fr), my new post-apocalyptic-cyclist book, my publisher is looking for contacts in other countries to distribute it in languages other than French. If you can help, [contact me](https://ploum.net/about.html)!
