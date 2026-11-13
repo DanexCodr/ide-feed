@@ -1,105 +1,179 @@
-Write Futhark code inline in your J programs and get automatic
-parallel execution on all CPU cores.
+Ufuk made a comment that he enjoyed my description of SSA from bytecode in
+[Aaron’s livestream with me](https://www.youtube.com/watch?v=h9_FyHYUhww).
+While filming the livestream—an intro to ZJIT internals—I got a little
+nervous that people would shy away from our 1900 line `add_iseq_to_hir`
+function. This function is responsible for converting CRuby’s stack based
+bytecode for the YARV virtual machine into a high-level SSA IR for ZJIT to
+analyze and optimize.
 
-**Download:** [futhark.ijs](https://chen.cat/j/futhark/futhark.ijs)
-(v1.7.0)
-
-The Futhark-J Bridge lets you write [Futhark](https://futhark-lang.org/) code directly in your J
-source files. Futhark is a purely functional data-parallel programming
-language that compiles to highly efficient parallel code. This bridge
-handles compilation, caching, and FFI calls automatically.
-
-```
-NB. Define a Futhark function inline
-double =: 'entry f (xs: []f64) : []f64 = map (*2) xs' fut
-
-NB. Use it like any J verb
-double 1 2 3 4 5
-   2 4 6 8 10
-```
-
-J is already excellent at array programming, but some workloads
-benefit from parallel execution across multiple CPU cores. Futhark
-excels at:
-
-The library includes benchmarks comparing native J to Futhark. Here
-are some highlights:
-
-| Workload | Max Speedup | Notes |
-| --- | --- | --- |
-| Mandelbrot escape | **1525x** | Variable iteration count per element |
-| Logistic map (1000 iters) | **14x** | High compute per element |
-| Standard deviation | **2x** | Multiple passes over data |
-| Dot product | 0.3x | Memory-bound; J wins |
-
-**Key insight**: Futhark shines when computation
-dominates memory access. For simple operations like dot product, native
-J is faster due to FFI overhead.
+It takes bytecode that looks roughly like this:
 
 ```
-NB. Load the library
-load 'futhark.ijs'
-
-NB. Array transformations
-square =: 'entry f (xs: []f64) : []f64 = map (\x -> x * x) xs' fut
-square 1 2 3 4 5
-   1 4 9 16 25
-
-NB. Reductions to scalar
-total =: 'entry f (xs: []f64) : f64 = reduce (+) 0 xs' fut
-total 1 2 3 4 5
-   15
-
-NB. Two-input (dyadic) functions
-dot =: 'entry f (xs: []f64) (ys: []f64) : f64 = reduce (+) 0 (map2 (*) xs ys)' fut
-(1 2 3) dot (4 5 6)
-   32
-
-NB. Scalar input functions (v1.6.0) - use 0 : 0 for multiline Futhark
-factors_src =: 0 : 0
-  entry f (n: i64) : []i64 =
-    let (_, _, result) =
-      loop (x, i, acc) = (n, 2i64, ([] : []i64))
-      while x > 1 do
-        if x % i == 0
-        then (x / i, i, acc ++ [i])
-        else (x, i + 1, acc)
-    in result
-)
-factors =: factors_src fut
-
-factors 12
-   2 2 3
-factors 100
-   2 2 5 5
-
-NB. Fixed-size array dimensions (v1.7.0)
-NB. Output has fixed inner dimension [3]
-triple =: 'entry f (ns: []i64) : [][3]i64 = map (\n -> [n, n*2, n*3]) ns' fut
-triple 1 2 3 4 5
-   1  2  3
-   2  4  6
-   3  6  9
-   4  8 12
-   5 10 15
+push 3
+push 4
+add
 ```
 
-Futhark entry points follow this pattern:
+into SSA form, giving an SSA value to each stack slot, ish:
 
 ```
-entry <name> (<param>: <type>) : <return_type> = <body>
+v0 = const 3
+v1 = const 4
+v2 = add v0, v1
 ```
 
-Common operations:
+While our function is 2000 lines long because it handles a lot of specific
+opcodes and weird facts about those opcodes, the core of it is small. Here is
+that core.
 
-| Futhark | J Equivalent | Description |
-| --- | --- | --- |
-| `map (*2) xs` | `2 * xs` | Element-wise transform |
-| `reduce (+) 0 xs` | `+/ xs` | Fold to scalar |
-| `scan (+) 0 xs` | `+/\ xs` | Running sum |
-| `map2 (*) xs ys` | `xs * ys` | Element-wise binary op |
-| `transpose xs` | `\\|: xs` | Matrix transpose |
-| `flatten xs` | `, xs` | Ravel to 1D |
+The bytecode assumes that when it is run, it will be operating on a stack. This
+means that every opcode has implicit stack inputs and implicit stack outputs.
 
-The context is created at definition time and persists, so there’s no
-“warmup” penalty on first execution.
+`push 3`, for example, has empty stack inputs and one stack output. By
+contrast, `add` has two stack inputs and one stack output. Some instructions
+such as `nop` are empty on both counts. As far as I can tell, all instructions
+have *at most* one output.
+
+These counts are known when looking at the bytecode: we can reason statically
+about how many inputs and outputs each opcode has. Some are variadic, such as
+`send` (call), but they come bearing an argument count in a nearby field.
+
+Let’s model how the first example runs on the VM by adding a view of the stack
+after each instruction has run. The stack will be displayed as a list
+left-to-right, where the left is the bottom and the right is the top.
+
+```
+       ; []
+push 3 ; [3]
+push 4 ; [3, 4]
+add    ; [7]
+```
+
+Because the input counts and output counts are static, when ZJIT reads through
+the bytecode, we can run the stack parts of it at compile-time.
+
+We don’t *really* need to know what the values on the stack are; we only need
+to keep track of where they came from. And when I say “where they came from”, I
+mean that we name each instruction and refer to its output by the instruction’s
+name. I like how the paper [Design of the Java HotSpot™ Client Compiler for
+Java 6](https://bernsteinbear.com/assets/img/design-hotspot-client-compiler.pdf) (PDF) puts it:
+
+> An instruction that loads or computes a value represents both the operation
+> and its result, so that operands can be represented as pointers to previous
+> instructions.
+
+Here is what that looks like for the above example. In addition to the run-time
+stack, I will also write the SSA instruction to indicate that we are generating
+new code:
+
+```
+       ; []
+push 3 ; v0 = const 3
+       ; [v0]
+push 4 ; v1 = const 4
+       ; [v0, v1]
+add    ; v2 = add v0, v1
+       ; [v2]
+```
+
+This is neat! We have transformed stack based bytecode to a form where
+instructions can directly reference their inputs. You may notice, though, that
+`v0` and `v2` both end up in the same stack slot (the first element). This is
+why I said earlier “giving an SSA value to each stack slot, *ish*”.
+
+The difference between the two is *time*. `v0` was in the operand stack at one
+point but now `v2` is. This is kind of why I describe SSA as “pushing time
+through the IR”.
+
+Alright, let’s implement it.
+
+We’ll start with the real (“concrete”) interpreter of the bytecode, which
+operates on a value stack. This gives you a simplified version of how Ruby
+internals work:
+
+```
+def interpret(bytecode)
+  stack = []
+  bytecode.each do |op|
+    case op
+    in [:push, c]
+      stack << c
+    in [:add]
+      right = stack.pop
+      left = stack.pop
+      stack << left + right
+    else
+      raise "Unknown op #{op}"
+    end
+  end
+  stack.pop
+end
+
+bytecode = [
+  [:push, 3],
+  [:push, 4],
+  [:add],
+]
+
+puts interpret(bytecode)  # 7
+```
+
+Now let’s look at the abstract intepreter, which by contrast operates on an SSA
+stack. You can see that they are quite similar looking:
+
+```
+def to_ssa(bytecode)
+  code = []
+  stack = []
+  bytecode.each do |op|
+    case op
+    in [:push, c]
+      name = :"v#{code.length}"
+      code << "#{name} = const #{c}"
+      stack << name
+    in [:add]
+      name = :"v#{code.length}"
+      right = stack.pop
+      left = stack.pop
+      code << "#{name} = add #{left}, #{right}"
+      stack << name
+    else
+      raise "Unknown op #{op}"
+    end
+  end
+  code
+end
+
+bytecode = [
+  [:push, 3],
+  [:push, 4],
+  [:add],
+]
+
+puts to_ssa(bytecode)
+# v0 = const 3
+# v1 = const 4
+# v2 = add v0, v1
+```
+
+The `name`s could be anything as long as they are unique. For simplicity and
+ease of reading, I picked the length of the `code` array, which grows
+monotonically. This is an array/vector-based analogue to the real-pointer
+approach in the HotSpot paper from above.
+
+Ta da! You have built a small abstract interpreter.
+
+Now to make it global (to handle control flow) you need some kind of
+inter-basic-block data flow mechanism such as phi nodes or basic block
+parameters. Perhaps more on that in another post, but for now, you may enjoy
+[my collection of other people’s writing](https://bernsteinbear.com/blog/ssa/) about that.
+
+I originally wanted to title this blog post “you could have invented abstract
+interpretation” or similar, but I decided that I find those titles obnoxious
+because they assume the reader is or thinks of themself as unintelligent.
+Perhaps *we* could have invented it.
+
+The title is a bit of a tongue-in-cheek nod to the “functional pearl” papers
+that I always felt should be simpler than they are but leave me confused. And
+also kind of a nicer nod to [SSA is Functional
+Programming](https://bernsteinbear.com/img/appel-basic-block-arguments.pdf) (PDF) by Andrew Appel.

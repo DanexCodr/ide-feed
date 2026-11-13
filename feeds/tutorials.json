@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-13T05:36:40Z",
+  "updated": "2026-11-13T14:07:31Z",
   "items": [
     {
       "id": "devto-4985077",
@@ -50,12 +50,24 @@
       "color": "#3B49DF"
     },
     {
+      "id": "devto-4911275",
+      "title": "AI is getting better. Here is my plan to stay ahead.",
+      "desc": "By Julien Avezou | 8 min read",
+      "tag": "tutorial",
+      "published": "2026-11-12T15:35:00Z",
+      "order": 5,
+      "url": "https://dev.to/javz/ai-is-getting-better-here-is-my-plan-to-stay-ahead-2822",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F6csfx8i2kft82mrqhcj6.png",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAQAF/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEAMQAAABzEQqP//EABcQAQADAAAAAAAAAAAAAAAAABEAECD/2gAIAQEAAQUCgYW//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFxAAAwEAAAAAAAAAAAAAAAAAABAhIP/aAAgBAQAGPwIuK//EABkQAQACAwAAAAAAAAAAAAAAAAEAMRAgcf/aAAgBAQABPyGKoTRVi9z/AP/aAAwDAQACAAMAAAAQwo//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/ED//xAAYEAEBAQEBAAAAAAAAAAAAAAABEQAQUf/aAAgBAQABPxCMszAKJQSUyeDknGhVCCrDV5//2Q==",
+      "color": "#3B49DF"
+    },
+    {
       "id": "devto-4958335",
       "title": "One Markdown File Can Hijack Your AI Coding Agent: The Hidden Cost of Blindly Trusting AGENTS.md",
       "desc": "By 𝗝𝗼𝗵𝗻 | 8 min read",
       "tag": "tutorial",
       "published": "2026-11-05T15:30:00Z",
-      "order": 5,
+      "order": 6,
       "url": "https://dev.to/johnnylemonny/one-markdown-file-can-hijack-your-ai-coding-agent-the-hidden-cost-of-blindly-trusting-agentsmd-167n",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Fgp9mzlfxjcl32v27828r.jpg",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAgMABP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHhtFIicf/EABkQAAEFAAAAAAAAAAAAAAAAABAAARESIf/aAAgBAQABBQJVwy5//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFxAAAwEAAAAAAAAAAAAAAAAAEBEgIf/aAAgBAQAGPwIaq//EABsQAQADAQADAAAAAAAAAAAAAAEAESExEHGR/9oACAEBAAE/ITkprPsAFoj3Crh2NVXkDfH/2gAMAwEAAgADAAAAECx//8QAFREBAQAAAAAAAAAAAAAAAAAAAAH/2gAIAQMBAT8QR//EABYRAQEBAAAAAAAAAAAAAAAAAAABYf/aAAgBAgEBPxC4r//EABsQAAMBAQADAAAAAAAAAAAAAAABESExYXGB/9oACAEBAAE/EEXuZ0dTbI8ILJyJyYo6kokon408n//Z",
@@ -67,7 +79,7 @@
       "desc": "By Hadil Ben Abdallah | 15 min read",
       "tag": "tutorial",
       "published": "2026-11-02T09:05:46Z",
-      "order": 6,
+      "order": 7,
       "url": "https://dev.to/hadil/gp-grid-a-free-open-source-typescript-data-grid-for-react-vue-and-angular-no-paywalled-5heb",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2Ffhh705ti5amsemyc79e9.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAgEF/8QAFgEBAQEAAAAAAAAAAAAAAAAAAQAC/9oADAMBAAIQAxAAAAHPYuhCyP/EABQQAQAAAAAAAAAAAAAAAAAAADD/2gAIAQEAAQUCD//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABYQAQEBAAAAAAAAAAAAAAAAAAAxIP/aAAgBAQAGPwJE1//EABgQAQEBAQEAAAAAAAAAAAAAAAABEWFB/9oACAEBAAE/IepeG8LPWpVrX//aAAwDAQACAAMAAAAQEZ//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAWEQEBAQAAAAAAAAAAAAAAAAAAARH/2gAIAQIBAT8QjI//xAAbEAEAAgIDAAAAAAAAAAAAAAABABExQSGB8f/aAAgBAQABPxAKC08WLOTDsiI5kwqKEVOqiqrU/9k=",
@@ -79,22 +91,10 @@
       "desc": "By Ken W Alger | 7 min read",
       "tag": "tutorial",
       "published": "2026-11-05T14:54:25Z",
-      "order": 7,
+      "order": 8,
       "url": "https://dev.to/kenwalger/plan-stamping-for-software-4ein",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F2zo9qu20538eija6ia4c.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAgQFAf/EABUBAQEAAAAAAAAAAAAAAAAAAAEC/9oADAMBAAIQAxAAAAEyxWWhHaTT/8QAGhAAAgMBAQAAAAAAAAAAAAAAAQIAAxIxIf/aAAgBAQABBQKz0VkLW3I8bm2yZ//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABoQAAICAwAAAAAAAAAAAAAAAAABETEQICH/2gAIAQEABj8CjglpZF4//8QAGxAAAwACAwAAAAAAAAAAAAAAAAERITEQUWH/2gAIAQEAAT8hV1QiiLmGDPzjctJIySdnpKyuz//aAAwDAQACAAMAAAAQKr//xAAWEQEBAQAAAAAAAAAAAAAAAAAAESH/2gAIAQMBAT8QmI//xAAWEQEBAQAAAAAAAAAAAAAAAAARAAH/2gAIAQIBAT8QTZb/xAAcEAEAAwEAAwEAAAAAAAAAAAABABEhMUFRobH/2gAIAQEAAT8QSOReD+rHo0ZBtrk8KxPyPJtTfSxdb7nYcqGyhSP/2Q==",
-      "color": "#3B49DF"
-    },
-    {
-      "id": "devto-4911275",
-      "title": "AI is getting better. Here is my plan to stay ahead.",
-      "desc": "By Julien Avezou | 8 min read",
-      "tag": "tutorial",
-      "published": "2026-11-12T15:35:00Z",
-      "order": 8,
-      "url": "https://dev.to/javz/ai-is-getting-better-here-is-my-plan-to-stay-ahead-2822",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F6csfx8i2kft82mrqhcj6.png",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAAAQAF/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEAMQAAABzEQqP//EABcQAQADAAAAAAAAAAAAAAAAABEAECD/2gAIAQEAAQUCgYW//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAwEBPwE//8QAFBEBAAAAAAAAAAAAAAAAAAAAEP/aAAgBAgEBPwE//8QAFxAAAwEAAAAAAAAAAAAAAAAAABAhIP/aAAgBAQAGPwIuK//EABkQAQACAwAAAAAAAAAAAAAAAAEAMRAgcf/aAAgBAQABPyGKoTRVi9z/AP/aAAwDAQACAAMAAAAQwo//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/ED//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/ED//xAAYEAEBAQEBAAAAAAAAAAAAAAABEQAQUf/aAAgBAQABPxCMszAKJQSUyeDknGhVCCrDV5//2Q==",
       "color": "#3B49DF"
     },
     {
@@ -230,27 +230,27 @@
       "color": "#3B49DF"
     },
     {
-      "id": "devto-4974671",
-      "title": "After 5 years, Wasp 1.0 is coming: a 6-month plan for our full-stack JS framework",
-      "desc": "By Martin Šošić | 6 min read",
-      "tag": "tutorial",
-      "published": "2026-11-04T10:42:12Z",
-      "order": 20,
-      "url": "https://dev.to/wasp/after-5-years-wasp-10-is-coming-a-6-month-plan-for-our-full-stack-js-framework-4hlf",
-      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto/https%3A%2F%2Fwasp.sh%2Fimg%2Fblog%2F2026-10-20-wasp-1-0-is-coming%2Fwasp-1-0-is-coming-banner.webp",
-      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAgEABP/EABYBAQEBAAAAAAAAAAAAAAAAAAADBP/aAAwDAQACEAMQAAAB6phloqEf/8QAGBABAAMBAAAAAAAAAAAAAAAAAQACESH/2gAIAQEAAQUCh0XIdGFMq1EDD//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABoQAAICAwAAAAAAAAAAAAAAAAABERIgIWH/2gAIAQEABj8CxrsXCEf/xAAbEAEAAgMBAQAAAAAAAAAAAAABABEhMXFRYf/aAAgBAQABPyFjoZifY8kFlWnITBp3UNFfDeYZ6Cf/2gAMAwEAAgADAAAAEDTf/8QAFhEBAQEAAAAAAAAAAAAAAAAAABEh/9oACAEDAQE/EG1//8QAFxEAAwEAAAAAAAAAAAAAAAAAAAERIf/aAAgBAgEBPxDIOQ//xAAcEAACAgIDAAAAAAAAAAAAAAABEQAhYXExQVH/2gAIAQEAAT8QZUnmZVgSAlWiTYGN7DskRHc8EB208gQEqR0HcFkuCf/Z",
-      "color": "#3B49DF"
-    },
-    {
       "id": "devto-5015013",
       "title": "Part 5: The Control That Protected an Empty Bucket",
       "desc": "By Nnamdi Felix Ibe | 13 min read",
       "tag": "tutorial",
       "published": "2026-11-11T06:32:19Z",
-      "order": 21,
+      "order": 20,
       "url": "https://dev.to/ndcodes/part-5-the-control-that-protected-an-empty-bucket-e1j",
       "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Farticles%2F1v9spk1il2i1k2pk4bfp.png",
       "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAAEDBP/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/9oADAMBAAIQAxAAAAHsugio/8QAFxABAAMAAAAAAAAAAAAAAAAAAREgIf/aAAgBAQABBQJdGb//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAEDAQE/AT//xAAUEQEAAAAAAAAAAAAAAAAAAAAQ/9oACAECAQE/AT//xAAUEAEAAAAAAAAAAAAAAAAAAAAw/9oACAEBAAY/Ag//xAAYEAEBAAMAAAAAAAAAAAAAAAABABEgMf/aAAgBAQABPyFREy6S42//2gAMAwEAAgADAAAAEMH/AP/EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QP//EABwQAAMAAgMBAAAAAAAAAAAAAAABETHwIUFRYf/aAAgBAQABPxBbJxjaTGDK1jG6E2R+sn1kIf/Z",
+      "color": "#3B49DF"
+    },
+    {
+      "id": "devto-4974671",
+      "title": "After 5 years, Wasp 1.0 is coming: a 6-month plan for our full-stack JS framework",
+      "desc": "By Martin Šošić | 6 min read",
+      "tag": "tutorial",
+      "published": "2026-11-04T10:42:12Z",
+      "order": 21,
+      "url": "https://dev.to/wasp/after-5-years-wasp-10-is-coming-a-6-month-plan-for-our-full-stack-js-framework-4hlf",
+      "image": "https://media2.dev.to/dynamic/image/width=1000,height=420,fit=cover,gravity=auto/https%3A%2F%2Fwasp.sh%2Fimg%2Fblog%2F2026-10-20-wasp-1-0-is-coming%2Fwasp-1-0-is-coming-banner.webp",
+      "preview": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wgARCAANACADASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAgEABP/EABYBAQEBAAAAAAAAAAAAAAAAAAADBP/aAAwDAQACEAMQAAAB6phloqEf/8QAGBABAAMBAAAAAAAAAAAAAAAAAQACESH/2gAIAQEAAQUCh0XIdGFMq1EDD//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8BP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8BP//EABoQAAICAwAAAAAAAAAAAAAAAAABERIgIWH/2gAIAQEABj8CxrsXCEf/xAAbEAEAAgMBAQAAAAAAAAAAAAABABEhMXFRYf/aAAgBAQABPyFjoZifY8kFlWnITBp3UNFfDeYZ6Cf/2gAMAwEAAgADAAAAEDTf/8QAFhEBAQEAAAAAAAAAAAAAAAAAABEh/9oACAEDAQE/EG1//8QAFxEAAwEAAAAAAAAAAAAAAAAAAAERIf/aAAgBAgEBPxDIOQ//xAAcEAACAgIDAAAAAAAAAAAAAAABEQAhYXExQVH/2gAIAQEAAT8QZUnmZVgSAlWiTYGN7DskRHc8EB208gQEqR0HcFkuCf/Z",
       "color": "#3B49DF"
     },
     {

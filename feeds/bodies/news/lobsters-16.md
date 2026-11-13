@@ -977,5 +977,3 @@ another day.
 I haven’t seen this problem before: it seems probable that
 ykllvm could be extended to avoid this hacky fix, but that’s a problem for
 another day.
-
-[Discuss on Hacker News](https://news.ycombinator.com/item?id=50466410)

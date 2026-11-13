@@ -1,45 +1,602 @@
-AI disclosure: this story was written entirely by human hands, with AI doing proof-reading and light edits. Some tasteful imperfections kept to heighten Wabi-Sabi effect.
+I think everyone can agree code needs to be modular.
+Modularity lets us reason locally about our code no matter how big it grows.
+However, no one seems to agree on *how* code should be modular.
+There are a bunch of different approaches and each new language seems to bring their own spin on it.
 
-Everyone’s heard of how awesome Jane Street is. Fewer people have heard about the times something stupid nearly put it out of business and it was saved by grit and dumb luck. I was on the systems team for some of those. Jane Street didn’t do titles, and we on the systems team weren’t above getting our hands dirty. You could think of us as the firm’s blue-collar OCaml programmers: when something broke, we were the ones running through the corridors to fix it. Call this story a Star Trek: Lower Decks view of Jane Street.
+Today we’re going to talk about a pretty old spin: ML Modules.
+ML here stands for Meta Language, as seen in SML and OCaml (and not machine learning).
+Despite SML first appearing in 1983, ML Modules have not caught on.
+OCaml is the sole production language you’ll find with an ML module system, and at the height of its popularity it’s niche.
 
-For the longest time Jane Street insisted on having its machine room close to its trading floor. When it was 10 people it was cute. When it was 150 people it was starting to feel… odd. Part of the reason for this was intellectual property concern: they didn’t want to risk having their servers stolen by spies who would learn their precious trading strategies. Another reason was technology risk: they wanted to make sure out-of-control automated trading systems could always be shut down by running across the hall and pulling power cables.
+This is a shame because ML modules have a lot to offer.
+We’re going to talk about what ML modules are and then touch a little on why ML modules are.
+Who better after all to explain modules, than the guy who doesn’t know [what’s in a module
+**](https://thunderseethe.dev/posts/whats-in-a-module/)?  
+…On second thought, don’t answer that.  
+…I already wrote the blog post.
 
-Yes, tools existed to mitigate both of these fears. But Jane Street moved irritatingly slowly on this stuff, and they still wanted the last-resort option of yanking power cords. Their risk culture didn’t exclusively come from reading heady thinkpieces. A lot of it was instilled by a partner who’d served on a nuclear submarine, and it showed, mostly in a good way! On a sub, you don’t trust the automation unless there’s a big red-painted, mechanically connected lever you can pull to turn it off.
+Modules exist to make our code modular, duh, but what does that mean in practice?
+I think most programmers have some intuitive sense of modularity:
 
-As the company grew this humble machine room was built out into a respectably sizable datacenter, complete with an online UPS, Computer Room Air Conditioner (CRAC) units, refrigerator-sized network switches, a subterranean diesel backup generator and about 10 rows of server cabinets, 10 cabinets deep. Oh, and it was all crammed into the middle of a skyscraper called [1 New York Plaza](https://en.wikipedia.org/wiki/1_New_York_Plaza), which was otherwise just a normal office building.
+- Bundle up related logic as one “thing”
+- Encapsulate invariants
+- Decouple from dependencies
 
-When I first landed my job at Jane Street I was commuting to the southern tip of Manhattan all of the way from Queens, an hour or more each way. I’d gone to a magnet high school in the city, so I’d been doing commutes like that since I was a teenager, and I was tired of it.
+Most languages have a way to do this, and if they don’t, one gets created for them (looking at you JavaScript).
 
-Now that I was making big Wall Street money I decided I’d get an apartment. A real estate agent kept trying to show me what they called “panty droppers”, but I was only interested in one thing: proximity to the office. I ended up in a 200 square foot studio that was a 9 minute commute on foot from my apartment door to my desk on the trading floor. I would weirdly boast about it to the rest of the systems team, but it also meant everyone at the office knew I was a stone’s throw away in case there was an emergency.
+## Modules Bundle Functions
+[**
+Link to heading](https://thunderseethe.dev/posts/ml-modules-for-mere-mortals/intro/#modules-bundle-functions)
 
-And that day came soon enough. One evening after work, just as I was about to climb into the elevator at my apartment building, my phone rang. It was our Hong Kong office, and when Hong Kong had a New York problem, mine was (now) the number they called. The smoke alarm in our NYC datacenter had gone off.
+ML modules achieves this with, you guessed it, the Module.
+ML modules, however, are a little different from the modules we know and love.
+To explain their differences, we’ll lean on a made-up Rust-inspired syntax.
+It will start off looking a little weird and gradually, as we introduce concepts, end up looking really weird (but hopefully more familiar than SML syntax).
+We’ll start by defining a module with just functions:
 
-We had contractors working on a prep room next to the datacenter. While cutting into stuff, some dust was kicked up and it set off the smoke alarm. This is bad, but not for the reason you might think. Office buildings have sprinklers in them for fire suppression. You may have seen it go off in movies where someone just holds a lit cigarette up to the sprinkler on the ceiling and it floods the entire room. In reality they’re not quite that dumb, but it’s close.
+```rust
+mod AModule {
+  fn add(a: i32, b: i32) -> i32 {
+    a + b
+  }
 
-Firstly, the sprinklers over a machine room like ours usually aren’t kept full of water all of the time. This saves you from having to deal with any leaks that might develop overhead over the years. Secondly, the sprinkler heads don’t have smoke sensors. Instead, a different system detects the smoke, and that’s when the pipes fill with pressurized water, but they don’t spray yet. What triggers the spray is heat: each sprinkler head has its own heat-sensitive plug, which opens once the air around it becomes hot enough. The logic is that the smoke alarm must be real, whatever fire triggered it hasn’t been brought under control since it’s gotten very hot, and the sprinklers should douse it with water.
+  fn sub(a: i32, b: i32) -> i32 {
+    a - b
+  }
 
-Of course, the ceiling of our datacenter was full of sprinklers set up exactly this way. We’re still fine because even though contractors might have set the smoke detector off by kicking up dust, there’s no actual fire producing heat, so the sprinklers wouldn’t spray, right? Well, no. One final piece of this contraption is that if the smoke alarm detects smoke, it would be absolutely terrible to keep circulating air through the room since that would help feed any fires, so the smoke alarm is wired to shut down the CRAC units(!)
+  // mult, div, etc...
+}
+```
 
-Can you see the problem now? Rooms full of computer racks have high cooling demands. If you shut down the cooling, the temperature starts climbing. If you have a bunch of sprinklers that have just become pressurized because of a smoke alarm, you now have a serious, potentially business-ending problem on your hands.
+`AModule` bundles together related arithmetic functions as one thing we can reason about.
+Each function can see every other function in the module.
+This is useful, but any language with namespaces offers this.
 
-And so my mission was made clear: as fast as I possibly could, get back to Jane Street, get into the machine room, and pull the power cord on every device in that room before the temperature climbed past 150 F and the sprinklers destroyed everything.
+## Modules (also) Bundle Types
+[**
+Link to heading](https://thunderseethe.dev/posts/ml-modules-for-mere-mortals/intro/#modules-also-bundle-types)
 
-I ran down the (ironically named) Water Street in the Financial District faster than probably anyone has ever run down it, mashed the elevator button in the lobby of 1 NYP, waited very impatiently for the elevator to climb the 33 floors, slammed my keycard against the reader, booked through the main office door, took a hard right turn to the machine room door, slammed my keycard against that, stepped into what felt like a sauna and went row by row, cabinet by cabinet, yanking power cables out with both hands.
+A little more unique is that ML modules will let us put not only function definitions in modules, but also type definitions:
 
-Then I watched the temperature monitor. 141 F. 142. 143. 143.5. 143.6. Finally it stopped. A quiet I’d never heard before set in on the machine room.
+```rust
+mod Set {
+  type Set = Vec<i32>;
 
-The machine room had been kept across the hall so that someone could always run in and pull the power cords. I doubt anyone had pictured doing it to save the servers from the goddamn sprinklers.
+  fn new() -> Set {
+    vec![]
+  }
 
-Since the major NYC markets were closed for the day, the downtime from this fiasco was minimal, and we were up and running the next morning.
+  fn index_of(this: &Set, ele: &i32) -> Result<usize, usize> {
+    this.binary_search(ele)
+  }
 
-There were a couple of meetings after that. You might picture Gordon Gekko coldly deciding whose career was over, but meetings at Jane Street were never like that. They were matter-of-fact, level-headed and honestly kind of fun, closer to engineering students in a college dorm arguing over what went wrong. The outcome of all that level-headed discussion: the sprinklers would stay, we would tighten up procedures and surveillance, and we would continue hosting servers in our office building right next to our trading floor. That is, until Hurricane Sandy smacked us upside the head, but that’s a story for another day.
+  fn insert(this: Set, ele: i32) -> Set {
+    match index_of(&ele) {
+      Ok(_) => {} // we're done the element is already present
+      Err(indx) => {
+        this.insert(indx, ele);
+      }
+    }
+    this
+  }
 
-As for me, when the next morning came around I knew what had to be done. Our Hong Kong team had only caught the problem by luck: someone happened to see on a display that server after server was popping up a climbing temperature condition. No one server was configured to alert just because it was a little hot, since that happens from time to time. But an across the board increase in temperature on many servers means there’s a generalized cooling failure.
+  fn contains(this: &Set, ele: &i32) -> bool {
+    index_of(this, ele).is_ok()
+  }
 
-What we needed was a system monitor built for this exact purpose, one we could trust to be ultimately, unfailingly reliable at the task of asking each Linux server for its temperature and computing a simple mean. Bash wouldn’t cut it for this. Nor would Perl. No, a job of this magnitude called for the most reliable and type-safe programming language imaginable. So I fired up emacs and wrote it in good old OCaml: every minute, ask every server in each location directly for the temperature from its onboard sensors, take the average, and if it’s elevated, blast an alert out to everyone on the systems team to check for datacenter overheat.
+  fn remove(this: Set, ele: &i32) -> Set {
+    match index_of(this, ele) {
+      Err(_) => {}, // we're done the element is already removed
+      Ok(indx) => {
+        this.remove(indx)
+      }
+    }
+    this
+  }
+}
+```
 
-Yes, we could have also alerted if the CRAC units shut down or if a dedicated temperature sensor in the room was high, but the telemetry for this stuff was nowhere near as reliable, and unknown unknowns can still ruin you, so the most durable thing sometimes really is to ask your fleet of Linux boxes for their temperature and freak out if the average is just a little too high.
+Here we have a `Set` module with a `Set` type, which is a sorted `Vec<i32>`.
+Our module’s functions can refer to the type definitions much the same way they can refer to their module’s function definitions.
+Okay but that’s not that crazy, still well within the realm of Rust modules.
 
-Our team didn’t interact much with the partner with the nuclear sub experience, but I’d like to think he would have approved.
+## The Type of a Module is a Signature
+[**
+Link to heading](https://thunderseethe.dev/posts/ml-modules-for-mere-mortals/intro/#the-type-of-a-module-is-a-signature)
 
-*Got a better tale of woe? Let me know at [X](https://x.com/mbacarella/status/2120554818486104552), [Bluesky](https://bsky.app/profile/michael.bacarella.com/post/3n22khjlui223), [Hacker News](https://news.ycombinator.com/item?id=50455394) or [Lobsters](https://lobste.rs/s/ii1gzp/how_false_smoke_alarm_almost_drowned_jane).*
+Not only can modules contain type definitions.
+Modules themselves have types.
+A module type is called a signature (so we don’t get it confused with “normal” types).
+The signature of our `Set` module is:
+
+```rust
+sig FullSetSig {
+  type Set = Vec<i32>;
+
+  fn new() -> Set;
+  fn index_of(&Set, &i32) -> Result<usize, usize>;
+  fn insert(Set, i32) -> Set;
+  fn contains(&Set, &i32) -> bool;
+  fn remove(&Set, &i32) -> Set
+}
+```
+
+A module signature declares every definition of a module alongside its type.
+This might look similar to the way we define a trait in Rust.
+That’s because much like traits act as interfaces in Rust, signatures act as interfaces in ML Modules.
+Modules having signatures is the single most important thing to understand about ML Modules.
+All the complexity and expressiveness of modules results from them having signatures and the wonderful wacky things that enables.
+
+# Signatures Support Encapsulation
+[**
+Link to heading](https://thunderseethe.dev/posts/ml-modules-for-mere-mortals/intro/#signatures-support-encapsulation)
+
+Signatures resemble the way a C/C++ implementation file conforms to its header.
+Modules, unlike `.cc` files, aren’t in a 1:1 relationship with signatures.
+Our `Set` module can conform to *any* signature that it matches.
+A module matches a signature when it defines every declaration in the signature and they agree on type.
+
+Matching a signature provides [Encapsulation
+**](https://en.wikipedia.org/wiki/Encapsulation_%28computer_programming%29), hiding internal details of our module from our public API.
+Take a look at `FullSetSig`.
+Do callers of `Set` really need to know about `index_of`?
+Encapsulation advocates shout a resounding no: `index_of` is an implementation detail of `Set.Set` being a `Vec<i32>` and not integral to our `Set` API.
+
+We can encapsulate `index_of` by matching our `Set` module to a new signature:
+
+```rust
+sig SetSig {
+  type Set = Vec<i32>;
+
+  fn new() -> Set;
+  // index_of is missing.
+  fn insert(Set, i32) -> Set;
+  fn contains(&Set, &i32) -> bool;
+  fn remove(&Set, &i32) -> Set
+}
+```
+
+`SetSig` removes `index_of`, hiding the implementation detail.
+We can then ascribe our signature to our `Set` module:
+
+```rust
+mod Set : SetSig {
+    // Our module implementation stays unchanged...
+}
+```
+
+Now the rest of our code sees `Set` as `SetSig` without `index_of`.
+Importantly, our `Set` module hasn’t changed.
+`index_of` is still available inside the module.
+Ascribing the signature only changes the public view of the module, similar to a private function in Rust.
+
+A module’s definition isn’t the only place we can ascribe a signature.
+We can also make a “new” module by matching an old module to a new signature.
+Let’s say we want an `InsertOnlySet` (never you mind why I need that):
+
+```rust
+sig InsertOnlySetSig {
+  type Set = Vec<i32>;
+
+  fn new() -> Set;
+  fn insert(Set, i32) -> Set;
+}
+```
+
+We can create that from our `Set` module purely by matching the signature:
+
+```rust
+mod InsertOnlySet: InsertOnlySetSig = Set;
+```
+
+Now `InsertOnlySet` is effectively a whole new module, despite the underlying implementation being shared with `Set`.
+This is what’s cool about modules.
+We can repurpose modules “for free” simply by giving them a different signature.
+If we want to do this in an OO language, we’d have to add a new interface in our class definitiion.
+But we can slap one of these bad boys anywhere in our codebase.
+
+## Sealed Types Seal Encapsulation
+[**
+Link to heading](https://thunderseethe.dev/posts/ml-modules-for-mere-mortals/intro/#sealed-types-seal-encapsulation)
+
+Ascribing a signature to a module lets us hide implementation details, but there’s a bit of a glaring hole here.
+Sure we’ve hidden away `index_of`, but our module broadcasts to the world that `type Set` is a `Vec<i32>`!
+Set relies on our vector being kept in sorted order, but anybody is free to write a function:
+
+```rust
+fn whoops() {
+    let mut set = Set::new();
+    // teehee
+    set.extend([3, 2, 1]);
+    // 💥
+    let uh_oh = Set::insert(set, 1);
+    // Now our set is [1, 3, 2, 1]
+}
+```
+
+Nothing but a small flesh wound in our encapsulation.
+Fortunately, ML modules foresaw this problem and provided a solution using signatures.
+
+Much the same way a signature lets us hide functions, it also lets us hide types.
+ML Modules call this an abstract type.
+If we update `SetSig` to be:
+
+```rust
+sig SetSig {
+  type Set;
+
+  fn new() -> Set;
+  fn insert(Set, i32) -> Set;
+  fn contains(&Set, &i32) -> bool;
+  fn remove(&Set, &i32) -> Set
+}
+```
+
+Our signature no longer broadcasts that `type Set` is `Vec<i32>`.
+Within the `Set` module we’re free to use `type Set` as `Vec<i32>`, but everywhere outside the module `type Set` is now some unknown type.
+Because callers know nothing about our newly abstract `Set` type, all they can do is pass it to and from the methods provided by the `Set` module.
+As long as we keep our underlying `Vec<i32>` sorted within `Set`, we know no one else is able to mess with it.
+They simply don’t know enough about the type!
+
+## Module’s Version of Generics
+[**
+Link to heading](https://thunderseethe.dev/posts/ml-modules-for-mere-mortals/intro/#modules-version-of-generics)
+
+Our Set module is nearing perfection, but it still leaves a little to be desired: it only works for `i32`.
+Now we could of course write a new module `SetU64`, `SetString`, on and on everytime we need one, but c’mon there’s gotta be a better way.
+This isn’t Go.
+
+Generics is the go-to solution for this problem.
+Heck we’ve even used it ourselves with `Vec<i32>`.
+ML Modules, however, have a more *modular* solution.
+You can parameterize a module by another a module.
+
+Think of a parameterized module as a function that takes a module and returns another module.
+To make our `Set` accept any type and not just `i32`, we parameterize it by a module that provides the type of our Set’s elements:
+
+```rust
+mod Set: SetSig (sig Elem {
+  type T
+}) {
+  type Set = Vec<Elem.T>;
+
+  fn new() -> Set {
+    vec![]
+  }
+
+  fn index_of(this: &Set, ele: &Elem.T) -> Result<usize, usize> {
+    // ...
+  }
+
+  fn insert(this: Set, ele: &Elem.T) -> Set {
+    // ...
+  }
+
+  fn contains(this: &Set, ele: &Elem.T) -> bool {
+    index_of(this, ele).is_ok()
+  }
+
+  fn remove(this: Set, ele: &Elem.T) -> Set {
+    // ...
+  }
+}
+```
+
+Our newly parameterized `Set` accepts any module that conforms to `Elem`.
+Any module can match `Elem` as long as it has at least a `T` definition.
+
+## A Teensy Problem
+[**
+Link to heading](https://thunderseethe.dev/posts/ml-modules-for-mere-mortals/intro/#a-teensy-problem)
+
+With that our `Set` module supports any type.
+Except for one teensy detail.
+I’ve deceived you with some tactical `// ...`s.
+If we actually try to implement `index_of`, we quickly encounter a problem:
+
+```rust
+fn index_of(this: &Set, ele: &Elem.T) -> Result<usize, usize> {
+  this.binary_search_by(|a| ele ??? a)
+}
+```
+
+We don’t know how to compare `T`’s.
+Rust’s `Ord` would solve this, of course, but ML modules have modules not traits.
+`Set` doesn’t take in just a type, however, it takes in a full module.
+If we need to know how to compare `T`’s, we can just ask our `Elem` module:
+
+```rust
+mod Set: SetSig (sig Elem {
+  type T;
+  fn cmp(&T, &T) -> Ordering;
+}) {
+  // ...
+}
+```
+
+Now it’s clear how to implement `index_of`:
+
+```rust
+fn index_of(this: &Set, ele: &Elem.T) -> Result<usize, usize> {
+  this.binary_search_by(|a| Elem::cmp(ele, a))
+}
+```
+
+With our parameterized module implemented, we can create new `Set` modules by applying them to new argument modules:
+
+```rust
+mod SetU32 = Set(mod U32 {
+  type T = u32;
+  fn cmp(a: &T, b: &T) { a < b }
+});
+```
+
+`SetU32.Set` is a `Vec<u32>` and provides an interface that takes and returns `u32` instead of `i32`.
+We can do it again as easy as:
+
+```rust
+mod SetString = Set(mod String {
+  type T = String;
+  fn cmp(a: &T, b: &T) { /* lexographic ordering probably... */ }
+});
+```
+
+Just like that, a whole new module.
+This time a set of Strings.
+I could do this all day.
+
+Because we accept a module, we can request anything a module can hold (even a whole other submodule or parameterized module!).
+The downside is that we have to specify the whole module every time.
+We *have* to specify `cmp` every time we apply our `Set` module.
+Rust traits let us write `Ord` for a type once and use it everywhere implicitly.
+
+## Include Keeps Modules Small
+[**
+Link to heading](https://thunderseethe.dev/posts/ml-modules-for-mere-mortals/intro/#include-keeps-modules-small)
+
+In practice, we don’t actually repeat how to order our type every time we want a `Set`.
+Recall that a signature will match *any* module that provides what it needs.
+If we make a big module called `U64`:
+
+```rust
+mod U64 {
+  type T = u64;
+
+  fn cmp(a: &u64, b: &u64) { a < b }
+
+  fn add(a: u64, b: u64) -> u64 { a + b }
+  fn sub(a: u64, b: u64) -> u64 { a - b }
+  // ...
+}
+```
+
+Then we can use that as our argument to Set:
+
+```rust
+mod SetU64 = Set(U64);
+```
+
+But hang on, we got into this whole Module business to break up our code.
+Now we’ve got to dump everything into one module just in case we need it later?
+That’s not very cash modular of us.
+
+ML modules have a final feature to get us the best of both worlds: `include`.
+`include` expands a module inline within another module.
+We’re free to split up our `U64` module into various submodules: `U64Order`, `U64Arithmetic`, etc.
+Our final `U64` module only has to include these submodules:
+
+```rust
+mod U64 {
+  type T = u64;
+
+  include U64Order;
+  include U64Arithmetic;
+  // ...
+}
+```
+
+Modules can be organized into logical components and then combined later to provide convenience (wow!).
+We’re free to cut up and reassemble modules at the whims’ of the wind.
+We can even apply a module and include it inline:
+
+```rust
+mod ABunchOfSetForSomeReason {
+  mod SetU64 = Set(U64);
+  include SetU64;
+
+  mod SetString = Set(String);
+  include SetString;
+}
+```
+
+Why do you need one module that’s a bunch of overlapping Sets?
+I don’t know!
+I’m not your supervisor.
+Either way, modules will happily let you do it.
+
+## Putting It All Together
+[**
+Link to heading](https://thunderseethe.dev/posts/ml-modules-for-mere-mortals/intro/#putting-it-all-together)
+
+We’ve covered the basics of modules.
+Let’s take a look at a more involved examples to get a sense of what modules can offer.
+We’re gonna use modules to assemble a little build executor.
+Out build step will be a parameterized module:
+
+```rust
+mod BuildStep(sig Env {
+  mod Cache: CacheSig;
+  mod Runner: RunnerSig;
+}) {
+  // ...
+}
+```
+
+Where `CacheSig` represents a cache of build steps and `RunnerSig` represents running some command:
+
+```rust
+sig CacheSig {
+  fn is_cached(inputs: &[String], output: &Path) -> bool;
+  fn store(inputes: &[String], output: &Path);
+}
+
+sig RunnerSig {
+  fn run(inputs: &[String], output: &Path);
+}
+```
+
+For brevity we’ll keep these pretty simple, but hopefully you can imagine how these might expand.
+We can then implement `BuildSet` in terms of our input modules:
+
+```rust
+mod BuildSet(...) {
+  fn run_cached(inputs: &[String], output: &Path) {
+    if !Env::Cache::is_cached(inputs, output) {
+      Env::Runner::run(inputs, output);
+      Env::Cache::store(inputs, output);
+    }
+  }
+
+  fn compile(src: String) -> String {
+    let obj = PathBuf::from(format!("{src}.o"));
+    run_cached(&[src], &obj);
+    obj.display().to_string()
+  }
+
+  fn build(srcs: &[String], output: &Path) {
+    let objs: Vec<String> = srcs.iter().map(compile).collect();
+    run_cached(objs, output)
+  }
+}
+```
+
+Our `build` functions takes a list of source files, compiles them, and then links the object files into a final binary.
+How does `run` tell when it’s compiling and when it’s linking?
+Don’t worry about it!
+Now that we’ve set that up we can toggle the functionality of our build by controlling what modules we pass to `BuildStep`.
+For a real build, we’ll want something like an in-memory cache:
+
+```rust
+mod MemCache {
+  // Pretend this works without locking for multithreading
+  static ENTRIES: Vec<(Vec<String>, PathBuf)> = vec![];
+
+  fn is_cached(inputs: &[String], output: &Path) {
+    ENTRIES.iter().any(|(cached_inputs, cached_outputs)| {
+      inputs == cached_inputs && output == cached_outputs
+    })
+  }
+
+  fn store(inputs: &[String], output: &Path) {
+    ENTRIES.push((inputs.to_vec(), PathBuf::from(output)))
+  }
+}
+```
+
+Next we’ll want something that runs our commands:
+
+```rust
+mod ShellRunner {
+  fn run(inputs: &[String], output: &Path) {
+    let cmd = // magically pick between `cc` and `lld`;
+    let output = format!("-o {}", output.display());
+    Command::new(cmd)
+      .args(inputs)
+      .args(output)
+      .output()
+      .expect("All our commands work first try");
+  }
+}
+```
+
+We can then assemble our build system via:
+
+```rust
+mod CachedBuild = BuildStep(mod Env {
+  mod Cache = MemCache;
+  mod Runner = ShellRunner;
+});
+```
+
+But maybe we don’t always want caching.
+Maybe we want a build that always reruns actions for local testing.
+We simply swap out our cache module:
+
+```rust
+mod NoCache {
+  fn is_cached(inputs: &[String], outputs: &Path) -> bool {
+    false
+  }
+
+  fn store(inputs: &[String], outputs: &Path) {
+    // nothing to do here
+  }
+}
+
+mod LocalBuild = BuildStep(mod Env {
+  mod Cache = NoCache;
+  mod Runner = ShellRunner;
+});
+```
+
+Our build system works first try.
+We wouldn’t write the code bad, of course, but just in case we might want to test it.
+A `FakeRunner` will let us do just that:
+
+```rust
+mod FakeRunner() {
+  static COMMANDS: Vec<(Vec<String>, PathBuf)> = vec![];
+
+  fn run(inputs: &[String], output: &Path) {
+    COMMANDS.push((inputs.to_vec(), PathBuf::from(output)));
+  }
+
+  // A test only helper.
+  fn contains_command(inputs: &[String], output: &Path) -> bool {
+    // ...
+  }
+}
+```
+
+Because `FakeRunner` is a parameterize module, we can create a new module (and a new empty `COMMANDS`) every time we apply it:
+
+```rust
+mod Tests {
+  mod TestRunner = FakeRunner();
+  mod TestBuild = BuildStep(mod Env {
+    mod Cache = MemCache;
+    mod Runner = TestRunner
+  });
+
+  // Write tests against TestBuild using `TestRunner::contains_command`...
+}
+```
+
+If we want to check that caching works we can extend our tests with a new fake runner and compare their commands:
+
+```rust
+mod Tests {
+  // TestBuild setup...
+
+  mod UncachedTestRunner = FakeRunner();
+  mod UncachedTestBuild = BuildStep(mod Env {
+    mod Cache = NoCache;
+    mod Runner = UncachedTestRunner;
+  })
+
+  // Compare the results of `TestRunner::contains_command` and `UncachedTestRunner::contains_command`...
+}
+```
+
+This isn’t earth shattering stuff.
+If we wanted to replicate this setup in an OO language, however, we would need runtime objects or, heaven forbid, a DI framework.
+Here we can do it all by wiring up modules statically.
+
+Hopefully this has helped you see what’s cool about modules.
+Module’s power lies in their signatures.
+What would require a newtype wrapper or a visibility change in other languages can be accomplished by simply changing the signature a module is viewed at.
+
+With abstract types, this allows for constructing webs of encapsulation where each piece knows precisely what it needs to about its neighbor and no more.
+Signatures act as this encapsulation boundary, freeing us to reason about our code modularly.
+As long as our module conforms to the expected signature we can contort and refactor it to our wildest whims and trust that it will continue to integrate into our system as expected.
+ML Modules are neat and I think they deserve more love and exploration in programming languages.

@@ -1,214 +1,32 @@
-Many<sup>[[1]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fn1)[[2]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fn2)[[3]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fn3)[[4]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fn4)[[5]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fn5)[[6]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fn6)[[7]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fn7)[[8]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fn8)[[9]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fn9)</sup> Linux distributions and package managers audit just-built binaries for non-relocatable absolute paths. If a binary contains a path `/path/from/build/machine`, it might not run on the end-user's machine.
+> So why doesn’t glue work get you promoted, if it’s so crucial to shipping projects? Are companies stupid? Are they deliberately leaving value on the table? No, I don’t think so. Companies don’t reward glue work because **they don’t want you prioritizing it.** And they don’t want you prioritizing it because they want you shipping features. Glue work is hard. If you’re capable of doing glue work well, they want you to use that ability to deliver projects instead of improving general efficiency.
 
-Now, a basic `grep` on the binary, or a slightly more sophisticated
+This is an argument to settle for mediocrity. If you’re like most people who have worked in big tech, it is plainly obvious to you that they *are* leaving value on the table. (Whether it is deliberate or not is a matter of what’s in people’s hearts.) What big tech employers want is largely incoherent. They want you delivering features. They also know that somebody’s got to do the glue work to keep the company running, and they have trouble describing or capturing its value.
 
-```
-$ strings bin/app | grep /path/from/build/machine
-```
+Here, and throughout his post, Goedecke is quite accurately describing some of the incentives presented to employees at big tech. My problem with the post is that he tells you to internalize them instead of keeping in mind that a better world is possible.
 
-using GNU binutils's `strings` will detect these paths, right?
+> The core problem is that you’re deciding for yourself what the company needs instead of doing your job. Isn’t it your job to make your team run smoother? No! **Your job is to execute the mission of your company’s leadership.**
 
-The answer is *no*, at least when using GCC and targeting `x86-64`: you should *not* assume that string constants end up literally in the binary.
+If glue work is critical to the mission of a company’s leadership, how does neglecting it serve the mission?
 
-## Basic example
+> It is better to execute that mission at 60% efficiency than to spend all your time increasing efficiency in general (or even worse, to execute some other mission at 100% efficiency). Why? For two main reasons: first, you’re inevitably going to burn out, which will be bad for everyone; second, it’s better to let your team get used to operating at the base efficiency level of the company instead of artificially removing friction for a brief period.
 
-In this C++ source we create a `std::string` from a string constant:
+There are two very different things being conflated here: saving some gas in the tank for when there are real deadlines, which is great advice, versus not trying to make your coworkers’ lives better, which is a real case of misaligned incentives.
 
-```
-#include <iostream>
-#include <string>
+Besides, the premise is fundamentally wrong: there is a lot of glue work that, if you give it the respect it deserves, removes friction *permanently*. I’m obviously biased here, but I think the [cargo-nextest](https://nexte.st/) project is a great example of glue work (running tests!) done so well that the problem mostly vanishes. More recently, at Oxide I wrote an agent skill called [flake-review](https://github.com/oxidecomputer/omicron/blob/main/.claude/skills/flake-review/SKILL.md), backed by a [catalog](https://github.com/oxidecomputer/omicron/blob/main/docs/flake-patterns.adoc) I wrote<sup>[1](https://sunshowers.io/posts/glue-work/#fn:1)</sup> over a few hours. I’ve since used the skill to fix almost a dozen test flakes, making the entire team’s lives better.
 
-#define PREFIX "/home/linuxbrew/.linuxbrew"
+> Should you never do glue work? No, you should do glue work *tactically*. That is, you should do this kind of extra work for the projects you lead — the projects whose success you’re accountable for — in order to make sure they succeed. You won’t be rewarded for the glue work specifically, but you will be rewarded for the success of the project. For other projects, you should just do your regular job.
 
-int main() {
-  std::string prefix{PREFIX};
-  std::cout << prefix << '\n';
-}
-```
+With the most emphatic of feelings, *fuck that*. I do glue work whenever I’m the best situated person to do the glue work. The idea that you shouldn’t help your peers, simply because someone in middle management has trouble articulating the value of helping your peers, should be deeply offensive to any serious professional.
 
-Compile with GCC 12 or later and run, which prints the path:
+> Is this a deeply cynical take about how to succeed in office politics? I don’t actually think so. Large tech companies operate at something like 20-60% efficiency at any given time (as they get larger, they get less efficient).
 
-```
-$ g++ -O2 main.cpp -o main
-$ ./main
-/home/linuxbrew/.linuxbrew
-```
+A large chunk of people’s working lives is wasted on solvable problems whose value organizations don’t recognize. How can one not be cynical about this kind of unnecessary waste and suffering? It baffles me.
 
-But the path occurs precisely 0 times in the binary itself:
+So, what is going on here? Any organization beyond a certain size requires [legibility](https://en.wikipedia.org/wiki/Seeing_Like_a_State) to function. The requirement for legibility pulls in all the things many people recoil at: performance reviews, OKRs, KPIs and whatnot<sup>[2](https://sunshowers.io/posts/glue-work/#fn:2)</sup>.
 
-```
-$ grep -acF /home/linuxbrew/.linuxbrew main
-0
-$ strings ./main | grep -cF /home/linuxbrew/.linuxbrew
-0
-```
+Some big tech firms have figured out ways of making some of that glue work more legible. For example, Meta has fairly large internal tools and developer infrastructure teams, where goals are set around measurable indicators like performance numbers. But there will always be some glue work that will resist all attempts to measure it, and to the extent that firms don’t care about it, they will suffer.
 
-Surely these bytes must be part of the binary *somewhere*? Let's run `strings` on it and grep just for the `/home` prefix:
+What does one do instead? Well, [getting rid of performance reviews](https://oxide.computer/blog/oxides-compensation-model-how-is-it-going) certainly helps! For the last few years of my work life at Oxide, the distinction between glue work and feature work has largely vanished; the question I’ve repeatedly asked my coworkers and manager is “how can I be helpful?”, not “what would look good on my performance review?” But I accept that larger organizations will need a greater degree of legibility. I think all the usual answers apply: don’t overhire (and certainly don’t [incentivize managers](https://www.nbcnews.com/id/wbna54928896) to hire as many people as possible), don’t require all work to be legible, and trust your employees with the rest.
 
-```
-$ strings ./main | grep /home
-/home/linuxbrew/xbrew/.linuxbrew
-```
-
-Wait, did GCC just turn
-
-```
-/home/linuxbrew/.linuxbrew
-```
-
-into an entirely *different* path
-
-```
-/home/linuxbrew/xbrew/.linuxbrew
-```
-
-with a made-up subdirectory `xbrew`? How?
-
-## Store by pieces
-
-The answer is that GCC optimizes our `std::string{PREFIX}`. The fact that we see something that looks like the prefix is merely a coincidence.
-
-GCC splits our string up into two (overlapping) pieces of 16 bytes, like so
-
-```
-/home/linuxbrew/.linuxbrew
-|--------------|..........  - constant 1
-..........|--------------|  - constant 2
-```
-
-which fit exactly in `xmm` registers, so that it can copy our string to the `std::string` buffer using vectorized move instructions.
-
-Filtering the relevant bits from `g++ -O2 -S -masm=intel`, we get
-
-```
-movdqa  xmm0, XMMWORD PTR .LC0[rip]
-movups  XMMWORD PTR [rax], xmm0
-movdqa  xmm0, XMMWORD PTR .LC1[rip]
-movups  XMMWORD PTR 10[rax], xmm0
-```
-
-and our string is stored at `.LC0` and `.LC1` as constants, which just happen to be next to each other in the binary:
-
-```
-.LC0:
-.quad 7596498784141404207
-.quad 3420313983963919726
-.LC1:
-.quad 7795220194874516088
-.quad 8603408430414524009
-```
-
-In general, this happens when a string constant is copied into a buffer, as with `std::string`, `strcpy` or `memcpy`; strings that are only passed around as pointers, like in `fopen(PREFIX "/x", "r")`, stay intact.
-
-## Deduplication
-
-Some package managers like Conda and Spack install packages into a padded prefix during their builds, with the idea that they can be “relocated” to a shorter prefix of the user's choice: the binaries are patched in-place. Conda uses a repeated string `_placehold` in a directory name to make the prefix long enough.
-
-Now, even if we pick a 256-byte path (a convenient multiple of all x86-64 register widths) by padding the path Conda-style
-
-```
-#define PREFIX "/home/conda/feedstock_root/build_artifacts/" \
-               "foo_1699999999999/_h_env" \
-               "_placehold_placehold_placehold_placehold_placehold" \
-               "_placehold_placehold_placehold_placehold_placehold" \
-               "_placehold_placehold_placehold_placehold_placehold" \
-               "_placehold_placehold_placehold_placeho/"
-```
-
-and keep our fingers crossed that GCC puts the pieces of the path contiguously in the binary, we do *not* see our prefix back in the binary. What we get instead is a much shorter string of only 176 bytes (that is 11 times 16):
-
-```
-$ strings main | grep /home
-/home/conda/feedstock_root/build_artifacts/foo_1699999999999/_h_env_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placeho/
-```
-
-This is thanks to a further optimization: since the string `_placehold` repeats every 10 bytes, the 16-byte pieces repeat every `lcm(10, 16) = 80` bytes, and GCC needs to store only 5 distinct 16-byte constants for the padding:
-
-```
-/home/conda/feed
-stock_root/build
-_artifacts/foo_1
-699999999999/_h_
-env_placehold_pl
-acehold_placehol  # note
-d_placehold_plac  # that
-ehold_placehold_  # this
-placehold_placeh  # is
-old_placehold_pl  # cyclic
-acehold_placeho/
-```
-
-## Is this optimization helpful?
-
-For string literals, I don't think so. Clang does not split strings into constants, yet it generates essentially the same instructions. For example, take a longer path, and target AVX2 with `-march=x86-64-v3`:
-
-```
-#define PREFIX "/home/linuxbrew/.linuxbrew/Cellar/foo/1.2.3/share/foo"
-```
-
-Clang simply puts the string in a section dedicated to strings, `.rodata.str1.1`:
-
-```
-.L.str:
-.asciz "/home/linuxbrew/.linuxbrew/Cellar/foo/1.2.3/share/foo"
-```
-
-and copies its 53 bytes with two overlapping 32-byte `ymm` loads and stores, at offsets 21 and 0:
-
-```
-vmovups ymm0, ymmword ptr [rip + .L.str+21]
-vmovups ymmword ptr [rax + 21], ymm0
-vmovups ymm0, ymmword ptr [rip + .L.str]
-vmovups ymmword ptr [rax], ymm0
-```
-
-That isn't particularly different from GCC's version, which loads the same two pieces from constants in `.rodata.cst32` instead:
-
-```
-vmovdqa ymm0, YMMWORD PTR .LC0[rip]
-vmovdqu YMMWORD PTR [rax], ymm0
-vmovdqa ymm0, YMMWORD PTR .LC1[rip]
-vmovdqu YMMWORD PTR 21[rax], ymm0
-```
-
-So what does GCC gain? In terms of performance, probably nothing measurable: both do the same loads and stores. With repeated pieces, GCC might have a slight edge, because a repeated piece is loaded once and stored multiple times (11 loads for 16 stores in the earlier example). It also uses aligned reads, but that matters only for ancient CPUs.
-
-In terms of size, GCC's pieces can take more space than the string itself: overlapping bytes are stored twice, and the pieces are aligned to 16, 32 or 64 bytes. The 53-byte path above takes 64 bytes as two pieces, against 54 bytes as a string. It only pays off if it results in deduplication, for example when many strings share a prefix of at least 16 bytes for SSE2, 32 bytes for AVX2, and 64 bytes for AVX-512. Presumably deduplication does not save much in practice, especially now that some distributions use AVX2 as their baseline.
-
-## Can I disable this optimization?
-
-Other than compiling with `-Os`, not really. From GCC 10 onwards (maybe older versions too?) the split-into-pieces optimization triggers for strings up to 256 bytes even without specifying `-march`. From GCC 12 it is relative to the target's vector width, so longer strings get split too: up to 512 bytes for AVX2 and 1024 bytes for AVX-512.
-
-I believe the only control you have over this is setting the maximum vector width to 128 bits (forcing `xmm` operations), by passing `-mstore-max=128`. But this merely restores old defaults, and means strings of up to 256 bytes are still stored in pieces.
-
-## Maybe post-hoc scanning is bad practice?
-
-These post-build audits for absolute paths are popular, but you could argue that they are too brittle to start with, so why expect them to work at all?
-
-Indeed, Debian goes much further than a bad-path scan. Their audit asserts that a package can be rebuilt bit for bit in different circumstances: on a different machine, with a different user, time and date, hostname, locale, etc. That is a much more reliable way to keep machine-specific details out of binaries.<sup>[[10]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fn10)</sup>
-
-I would argue that, despite that, it is *still* useful to keep string constants literally in the binary, even on Debian, because it improves interpretability of binaries. Running `strings ./binary` is such a simple and convenient way to get insight into an opaque binary blob, that it outweighs the marginal savings that come with splitting and deduplication. It is reminiscent of Fedora and Ubuntu turning frame pointers back on by default, despite the small overhead, just to make profilers and tracing tools work more reliably.
-
-Other than that, there is the argument of binary patching, which — despite being considered somewhat brittle — is common practice in Conda and Spack: upon install to a user-specified location, the absolute paths are patched in-place accordingly, through what can be seen as a glorified `sed` invocation. This only works if the path is stored in one piece.
-
-If you'd like to discuss this, a good place is the [gcc-patches thread](https://gcc.gnu.org/pipermail/gcc-patches/2026-November/738364.html) that I started recently, with an initial attempt at a patch that adds a way to opt out.
-
-[[1]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fnref1) [RPM (Fedora, RHEL, openSUSE)](https://github.com/rpm-software-management/rpm/blob/4187d693cfd4704e3ffdf6483ea91a0d56134333/scripts/check-buildroot#L30-L42): `check-buildroot` greps every installed file for the build root.
-
-[[2]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fnref2) [Arch Linux](https://gitlab.archlinux.org/pacman/pacman/-/blob/a6f7467d8c7c4d7e9cc846884e74c0ab7215c48d/scripts/libmakepkg/lint_package/build_references.sh.in#L30-L41): `makepkg` warns about references to `$srcdir` and `$pkgdir`.
-
-[[3]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fnref3) [Yocto / OpenEmbedded](https://git.openembedded.org/openembedded-core/tree/meta/classes-global/insane.bbclass?id=c2ea9568b768de7c479aba22f15520793a7dace4#n427): the `buildpaths` QA check.
-
-[[4]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fnref4) [FreeBSD ports](https://github.com/freebsd/freebsd-ports/blob/7ea5a0ba45376d1ca480b274157370705d3d01b2/Mk/Scripts/qa.sh#L201-L223): the stage QA greps for the staging directory.
-
-[[5]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fnref5) [pkgsrc](https://github.com/NetBSD/pkgsrc/blob/e9b59cbd05f2c2ab1c37f8a8524bd38b1e256de8/mk/check/check-wrkref.mk#L90-L113): `CHECK_WRKREF`, off unless a package developer turns it on.
-
-[[6]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fnref6) [Homebrew](https://github.com/Homebrew/brew/blob/8679d30f156018b0b184c64ab21a784f64b1d880/Library/Homebrew/keg_relocate.rb#L702-L775): `brew bottle` scans for the prefix to decide whether a bottle is relocatable.
-
-[[7]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fnref7) [conda-build](https://github.com/conda/conda-build/blob/7dd6a86caf822254aac3217c5fded17cb915e004/conda_build/build.py#L1014-L1080): files containing the build prefix are listed in `info/has_prefix`, to be rewritten on install.
-
-[[8]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fnref8) [rattler-build](https://github.com/prefix-dev/rattler-build/blob/0252f9ca2c5f8a9ab039b96ef09dc1d52d17de7d/crates/rattler_build_package/src/prefix/detector.rs#L15-L24): the same scheme as conda-build, with `memmem`.
-
-[[9]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fnref9) [Julia's BinaryBuilder](https://github.com/JuliaPackaging/BinaryBuilder.jl/blob/d2b11c267ef8029af0f46a88b767246d7b9df1d1/src/auditor/filesystems.jl#L25-L45): `check_absolute_paths` warns about the build prefix in any file.
-
-[[10]](https://stoppels.ch/2026/11/12/paths-in-pieces.html#fnref10) Even Debian keeps one path fixed: since early 2024 both builds use the [same build directory](https://tests.reproducible-builds.org/debian/index_variations.html), because it is recorded in the `.buildinfo` file and reused when rebuilding. So a build path embedded in a binary goes unnoticed there too.
+1. I wrote the catalog in my own words, for two reasons: to gain a deeper understanding of the kinds of test flake patterns we’ve seen in our codebase, and to not subject my peers to AI slop prose. [↩︎](https://sunshowers.io/posts/glue-work/#fnref:1)
+2. Did you know that OKR and KPI mean [slightly different things](https://www.atlassian.com/blog/teamwork/okr-vs-kpi)? Before writing this post, I did not! [↩︎](https://sunshowers.io/posts/glue-work/#fnref:2)
